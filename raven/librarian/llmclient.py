@@ -1248,6 +1248,10 @@ _GEMMA_THINK_CLOSE = "<channel|>"
 _THINK_OPEN_TO_CLOSE = {_THINK_OPEN: _THINK_CLOSE,
                         _GEMMA_THINK_OPEN: _GEMMA_THINK_CLOSE}
 _THINK_OPEN_TAGS = tuple(_THINK_OPEN_TO_CLOSE.keys())  # just the opens; `.keys()` spelled out for clarity
+# The closes on their own, for the case where no open ever arrives because the chat template supplied it.
+# A set first, because `<think>` and Gemma's form could in principle share a close spelling and the scan
+# must not be handed the same tag twice.
+_THINK_CLOSE_TAGS = tuple(sorted(set(_THINK_OPEN_TO_CLOSE.values())))
 
 # Parser states.
 _PS_TEXT = "text"          # outside any special block
@@ -1328,6 +1332,26 @@ class StreamParser:
         {"type": "content",   "text": str}
         {"type": "reasoning", "text": str}
         {"type": "tool_call", "id": str, "name": str, "arguments": str}   # `arguments` is a JSON string
+        {"type": "reasoning_retcon"}                                      # see below; carries no text
+
+    **The reasoning may arrive with no opening tag**, and then it cannot be recognized until it ends. A
+    thinking model's chat template typically puts the *open* into the prompt itself — measured 2026-08-26,
+    every Qwen in the local archive does (`investigations/chat-template-think-prefill/`) — so the model
+    begins already inside the block and generates only the close. Nothing in the stream distinguishes that
+    from an ordinary answer until the orphan `</think>` lands.
+
+    So it is reported when it lands: a `reasoning_retcon` event says *everything emitted as `content` so far
+    this stream was reasoning*. It can be emitted at most once, and only while no reasoning has been seen by
+    any other route — a stray close tag after a properly opened block, or after the native channel has
+    already delivered the thinking, says nothing about what came before it.
+
+    A backend that splits reasoning into the native channel (LM Studio) never produces one, which is why
+    normal traffic here never sees it.
+
+    A model that *quotes* a close tag in an answer, having emitted no reasoning at all, would be taken at
+    its word and lose that answer into the trace. The window is narrow and the reading is the one this
+    parser already takes everywhere else: an inline `<think>` in an answer likewise opens a block rather
+    than being shown. Tags in the stream are markers here, not text.
 
     At stream end, call `finalize(native_tool_calls)` to flush any buffered text and emit native (OpenAI
     `tool_calls` field) calls that weren't already seen inline — deduped against inline-parsed calls by
@@ -1341,12 +1365,14 @@ class StreamParser:
         self._toolcall_json = ""         # accumulates the raw JSON inside an inline <tool_call> block
         self._inline_call_keys = set()   # (name, normalized args) of inline-emitted calls, for native dedup
         self._synthetic_id_counter = 0   # inline tool calls carry no id; assign a synthetic one
+        self._may_retcon = True          # whether an orphan close tag would still mean "that was all reasoning"
 
     def feed(self, content: str, reasoning: str) -> list[dict]:
         """Feed one delta's content and reasoning_content (either may be empty). Returns the typed events produced."""
         events: list[dict] = []
         if reasoning:  # native reasoning channel: never contains inline tags
             events.append({"type": "reasoning", "text": reasoning})
+            self._may_retcon = False  # the thinking is arriving on its own channel; no tag needs inferring
         if content:
             self._buf += content
             events.extend(self._drain())
@@ -1358,13 +1384,26 @@ class StreamParser:
         while progressing and self._buf:
             progressing = False
             if self._state == _PS_TEXT:
-                emit, tag, rest = _scan_for_tags(self._buf, _THINK_OPEN_TAGS + (_TOOLCALL_OPEN,))
+                # While an orphan close would still be meaningful, watch for one as well: the model may have
+                # been put inside the block by its own chat template, in which case the close is the only
+                # marker the stream ever carries.
+                tags = _THINK_OPEN_TAGS + (_TOOLCALL_OPEN,)
+                if self._may_retcon:
+                    tags = tags + _THINK_CLOSE_TAGS
+                emit, tag, rest = _scan_for_tags(self._buf, tags)
                 if emit:
                     events.append({"type": "content", "text": emit})
                 self._buf = rest
                 if tag in _THINK_OPEN_TO_CLOSE:
                     self._state = _PS_THINK
                     self._think_close = _THINK_OPEN_TO_CLOSE[tag]  # the matching close (<think> and Gemma differ)
+                    self._may_retcon = False  # a block that was properly opened needs no inference
+                    progressing = True
+                elif tag in _THINK_CLOSE_TAGS:
+                    # The block is now closed, and we were inside it all along without knowing. Say so; the
+                    # text already emitted as content is the caller's to reclassify.
+                    events.append({"type": "reasoning_retcon"})
+                    self._may_retcon = False  # at most once per stream
                     progressing = True
                 elif tag == _TOOLCALL_OPEN:
                     self._state = _PS_TOOLCALL
@@ -1864,7 +1903,7 @@ def invoke(settings: env,
 
     def handle_event(parsed_event: dict) -> sym:
         """Accumulate one typed event into the response, notify `on_progress`, return its action (default ack)."""
-        nonlocal t_first_token, t_first_content, n_chunks_at_first_content
+        nonlocal t_first_token, t_first_content, n_chunks_at_first_content, llm_output_text
         etype = parsed_event["type"]
         # A tool call is not text and does not end prompt processing: its deltas arrive through the
         # structured accumulator, which is also why they are not counted as chunks.
@@ -1879,6 +1918,23 @@ def invoke(settings: env,
             reasoning_output_text.write(parsed_event["text"])
         elif etype == "tool_call":
             collected_tool_calls.append(parsed_event)
+        elif etype == "reasoning_retcon":
+            # The close tag arrived with no open: the model was inside the thinking block from its first
+            # token, because its chat template put it there. Move what we took for the answer into the
+            # trace, and put the phase samples back to "the answer has not started" — which is true, and
+            # the next content event is where it does start.
+            reasoning_output_text.write(llm_output_text.getvalue())
+            llm_output_text = io.StringIO()
+            t_first_content = None
+            n_chunks_at_first_content = None
+            # The stopping strings guard the visible answer, and none of that text was the visible answer.
+            last_few_chunks.clear()
+            last_few_chunks.extend([""] * 10)
+            # Deliberately not forwarded to `on_progress`: it is a correction to what a consumer was already
+            # told, and no consumer can act on one yet — the renderer would have to move text it has already
+            # drawn from the answer into a thought bubble. That is the live half of the deferred item this
+            # event exists under, and it waits for a signal that says up front whether thinking is on.
+            return action_ack
         if on_progress is not None:
             return on_progress({**parsed_event, "n_chunks": n_chunks})
         return action_ack

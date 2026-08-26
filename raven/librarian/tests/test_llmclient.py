@@ -682,6 +682,85 @@ class TestInvokeReportsPhases:
         assert out.phases is None
 
 
+class TestOrphanThinkClose:
+    """Reasoning that arrives with no opening tag, because the chat template supplied it.
+
+    Every Qwen in the local archive does this (`investigations/chat-template-think-prefill/`), so on any
+    backend that does not split reasoning into its own channel, the close tag is the only marker the stream
+    ever carries.
+    """
+    def test_the_close_tag_reclassifies_everything_before_it(self, monkeypatch, invoke_settings):
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"role": "assistant", "content": None}}]},
+            {"choices": [{"delta": {"content": "Let me work it out."}}]},
+            {"choices": [{"delta": {"content": "</think>"}}]},
+            {"choices": [{"delta": {"content": "Forty-two."}}]},
+        ])
+        out = llmclient.invoke(invoke_settings, _history("what is it?"), tools_enabled=False)
+        assert out.data["reasoning_content"] == "Let me work it out."
+        assert chatutil.content_to_text(out.data["content"]) == "Forty-two."
+
+    def test_a_close_split_across_deltas_is_still_recognized(self, monkeypatch, invoke_settings):
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "mulling"}}]},
+            {"choices": [{"delta": {"content": "</thi"}}]},
+            {"choices": [{"delta": {"content": "nk>done"}}]},
+        ])
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert out.data["reasoning_content"] == "mulling"
+        assert chatutil.content_to_text(out.data["content"]) == "done"
+
+    def test_a_properly_opened_block_is_not_reclassified(self, monkeypatch, invoke_settings):
+        # The control: with both tags present the parser was never in doubt, and the answer *before* the
+        # block must stay in the answer. Without this the retcon would swallow it.
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "Sure. "}}]},
+            {"choices": [{"delta": {"content": "<think>hmm</think>"}}]},
+            {"choices": [{"delta": {"content": "Forty-two."}}]},
+        ])
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert out.data["reasoning_content"] == "hmm"
+        assert chatutil.content_to_text(out.data["content"]) == "Sure. Forty-two."
+
+    def test_a_stray_close_after_native_reasoning_is_not_a_signal(self, monkeypatch, invoke_settings):
+        # The thinking already came on its own channel, so nothing about the answer needs inferring and a
+        # close tag in it says nothing about what preceded it.
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"reasoning_content": "thought hard"}}]},
+            {"choices": [{"delta": {"content": "a </think> tag looks like this"}}]},
+        ])
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert out.data["reasoning_content"] == "thought hard"  # not joined by the answer
+        assert "tag looks like this" in chatutil.content_to_text(out.data["content"])
+
+    def test_it_fires_at_most_once(self, monkeypatch, invoke_settings):
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "first"}}]},
+            {"choices": [{"delta": {"content": "</think>"}}]},
+            {"choices": [{"delta": {"content": "answer"}}]},
+            {"choices": [{"delta": {"content": "</think>"}}]},
+            {"choices": [{"delta": {"content": "more"}}]},
+        ])
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert out.data["reasoning_content"] == "first"  # the second close did not move "answer" as well
+        assert "answer" in chatutil.content_to_text(out.data["content"])
+
+    def test_the_thinking_phase_is_reported_for_a_reclassified_turn(self, monkeypatch, invoke_settings):
+        # The point of the whole exercise: the stored numbers come out right on a backend that leaves the
+        # tag inference to us.
+        invoke_settings.tokenizer = _FakeTokenizer()  # one 'token' per character
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "0123456789"}}]},
+            {"choices": [{"delta": {"content": "</think>"}}]},
+            {"choices": [{"delta": {"content": "ok"}}]},
+        ])
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert out.phases["thinking"]["n_tokens"] == 10
+        # The answer began at the reclassification, not at the first delta — which is what the reset of the
+        # phase samples buys. Had it not been reset, thinking would have measured as nothing at all.
+        assert out.phases["thinking"]["dt"] > 0.0
+
+
 # ---------------------------------------------------------------------------
 # Backend detection + model identity (brief 02 §0/§3/§4/§5)
 # ---------------------------------------------------------------------------
