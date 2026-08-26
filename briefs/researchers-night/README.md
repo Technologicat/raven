@@ -310,6 +310,66 @@ already exist, and treated in `briefs/design/product-identity-sketch.md:241` as 
 the aesthetic direction. It belongs beside `crt` and `dust` as impressiveness work, and is plausibly the
 cheapest of the three.
 
+### Raised 2026-08-26 — what the avatar does while a reply is being generated
+
+Three items from Juha, arriving after the 08-25 pass and therefore **unranked**: they are not in a band,
+and putting them in one is a scheduling decision of its own. They are written up together because they are
+one subject — what the avatar, the emotion detector and the TTS each do *during* a reply rather than after
+it — and because two of them want the same piece of machinery, the sentence split that already exists
+inside `DPGAvatarController.preprocess_task`.
+
+Their common shape is that each currently acts on the wrong unit of work: the whole turn where it wants the
+sentence, or the streamed text where it wants the spoken text.
+
+1. **An option to hold the avatar's video off until the answer is complete** — GPU anti-congestion.
+
+   Today the avatar wakes as soon as the user's message is sent: `DPGLinearizedChatView.build` calls
+   `avatar_controller.ping`, and `ai_turn` then wraps the whole turn in `idle_override`, so the video runs
+   for the entire generation. **That is the right behavior and stays the default** — it acknowledges
+   receipt, which is what a user needs from those seconds, and on a machine with headroom there is nothing
+   to fix.
+
+   It is wrong on a **single-GPU, low-VRAM setup**, the on-the-road configuration, where the avatar and the
+   LLM contend for the same cores and the acknowledgement is bought with generation speed. So: an option
+   that defers the wake to the point the full answer completes.
+
+2. **With TTS on, the emotion should follow the spoken words, not the streaming ones.**
+
+   `_update_avatar_emotion_from_incoming_text` fires per paragraph as text arrives, thoughts included, and
+   `on_done` updates once more from the final message. With speech off that is correct and should be kept:
+   the streaming text is what the user is reading, so it is what the face should answer to.
+
+   With speech on it is wrong, because the user is *listening*, and the face is already reacting to a
+   sentence the voice has not reached. The reply should instead settle to a neutral expression while it
+   streams — or, in thinking mode, arguably to the majority of the emotion updates seen so far, which is an
+   open question rather than a decision — and then take its updates from each sentence **as it is spoken**.
+
+   The hook exists: `send_text_to_tts` splits the batch into sentences and already emits `on_start_sentence`
+   per sentence.
+
+   **The stabilization logic is the reusable part.** The streaming path keeps a deque of recent paragraphs
+   with 75% overlap between updates, precisely because per-chunk detection is unstable; the spoken path
+   needs the same treatment for the same reason. That is a utility waiting to be extracted rather than a
+   second copy waiting to be written.
+
+3. **Start synthesizing speech while the reply is still streaming**, to cut time-to-first-spoken-word.
+
+   This matters most when **TTS runs on the CPU**, where synthesis is slow enough that the wait after the
+   answer finishes is the whole latency.
+
+   The preprocessor already precomputes audio per sentence as early as it can — its docstring says
+   `on_audio_ready` "may trigger long before the sentence is actually spoken out loud" — so the machinery
+   is there. What blocks it is *when the work is handed over*: `on_done` submits the finished reply as one
+   batch, so nothing can start until the last token has landed. Submitting each sentence as it completes
+   would let synthesis overlap generation.
+
+   **The division of concerns is what needs deciding**, and it is the reason this is not simply a smaller
+   `send_text_to_tts` call. The batch is currently the unit that `on_start_speaking` / `on_stop_speaking`
+   describe, and ordering across batches is preserved by queueing each one whole. A reply split into many
+   batches keeps its order but changes what those events mean, and anything keyed on "the reply started
+   being spoken" has to be found and re-anchored. Worth checking what subtitling and the recording hooks
+   assume before costing this.
+
 ### Two of these are power multipliers, and it is worth naming the category
 
 **All of it has landed** — drag-and-drop 2026-08-10, brief 15 on 08-12, the `FileDialog` keyboard brief on
