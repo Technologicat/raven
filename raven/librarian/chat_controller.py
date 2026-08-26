@@ -20,7 +20,7 @@ import pathlib
 import os
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Union
+from typing import Any, Callable, TYPE_CHECKING
 import urllib.parse
 import uuid
 import webbrowser
@@ -169,9 +169,9 @@ def _open_source_url(url: str) -> None:
 
 # --------------------------------------------------------------------------------
 
-def format_chat_message_for_clipboard(message_number: Optional[int],
+def format_chat_message_for_clipboard(message_number: int | None,
                                       role: str,
-                                      persona: Optional[str],
+                                      persona: str | None,
                                       text: str,
                                       add_heading: bool) -> str:
     """Format a chat message for copying to clipboard, by adding a metadata header as Markdown.
@@ -307,7 +307,7 @@ def _phase_breakdown_rows(generation_metadata: dict, *,
     prefill_dt = (phases.get("prefill") or {}).get("dt", 0.0)
     thinking = phases.get("thinking")
 
-    def row(label: str, dt: Optional[float], n_tokens: Optional[int] = None, exact: bool = True):
+    def row(label: str, dt: float | None, n_tokens: int | None = None, exact: bool = True):
         tilde = "" if exact else "~"
         time_cell = "" if dt is None else f"{dt:0.2f}"
         tokens_cell = "" if n_tokens is None else f"{tilde}{n_tokens}"
@@ -331,7 +331,7 @@ def _phase_breakdown_rows(generation_metadata: dict, *,
     rows.append(row("Total", total_dt, total_tokens))
     return rows
 
-def _scan_for_root_nodes(datastore: chattree.Forest) -> List[str]:
+def _scan_for_root_nodes(datastore: chattree.Forest) -> list[str]:
     """The O(n) scan behind `_get_all_system_prompt_node_ids`, memoized on its own so the result can be filtered.
 
     Memoized because it would otherwise run once per chat message widget created, over the whole datastore.
@@ -340,7 +340,7 @@ def _scan_for_root_nodes(datastore: chattree.Forest) -> List[str]:
     """
     return datastore.get_all_root_nodes()
 
-def _get_all_system_prompt_node_ids(datastore: chattree.Forest) -> List[str]:
+def _get_all_system_prompt_node_ids(datastore: chattree.Forest) -> list[str]:
     """As it says on the tin.
 
     There are as many as there are distinct system prompts the datastore has seen: `appstate` keeps one root
@@ -356,7 +356,7 @@ def _get_all_system_prompt_node_ids(datastore: chattree.Forest) -> List[str]:
     """
     return [node_id for node_id in _scan_for_root_nodes(datastore) if node_id in datastore.nodes]
 
-def _get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
+def _get_all_greeting_node_ids(datastore: chattree.Forest) -> list[str]:
     """As it says on the tin.
 
     Since the AI's greeting can be changed in the config, the greeting used in any given stored chat
@@ -401,7 +401,7 @@ _MARK_SLOT_W = 14
 _unmarked_theme = None  # created on first use by `_get_unmarked_theme`
 
 
-def _get_unmarked_theme() -> Union[str, int]:
+def _get_unmarked_theme() -> str | int:
     """The theme every message's mark dot wears while it is *not* the current message.
 
     One theme shared by every message, and the thing `keyboardmark.Mark` displaces on whichever message is
@@ -419,7 +419,7 @@ def _get_unmarked_theme() -> Union[str, int]:
 
 class DPGChatMessage:
     def __init__(self,
-                 gui_parent: Union[str, int],
+                 gui_parent: str | int,
                  parent_view: "DPGLinearizedChatView"):
         """Base class for a chat message displayed in the linearized chat view.
 
@@ -474,7 +474,7 @@ class DPGChatMessage:
     def _get_next_or_prev_sibling_in_datastore(self,
                                                node_id: str,
                                                direction: str = "next",
-                                               step: Optional[int] = 1) -> Optional[str]:
+                                               step: int | None = 1) -> str | None:
         """Get the next or previous sibling of `node_id` in the chat datastore.
 
         `direction`: One of "next", "prev".
@@ -517,8 +517,8 @@ class DPGChatMessage:
 
     def build(self,
               role: str,
-              persona: Optional[str],
-              node_id: Optional[str]) -> None:
+              persona: str | None,
+              node_id: str | None) -> None:
         """Build the GUI widgets for this chat message instance, thus rendering the chat message (and its buttons and such) in the GUI.
 
         `role`: One of the roles supported by `raven.librarian.llmclient`.
@@ -798,7 +798,7 @@ class DPGChatMessage:
                                        dt=thinking["dt"],
                                        exact=thinking.get("tokens_exact", False))
 
-    def _thought_bubble(self) -> Union[str, int]:
+    def _thought_bubble(self) -> str | int:
         """The container the thinking trace renders into, built on first use. Returns its DPG ID.
 
         The trace starts collapsed and the cloud button beside it toggles it, so a reply whose reasoning is
@@ -918,7 +918,7 @@ class DPGChatMessage:
                 paragraph["rendered"] = True
 
     def add_tool_call_invocation(self, index: int, name: str, arguments: str,
-                                 tool_call_id: Optional[str] = None) -> None:
+                                 tool_call_id: str | None = None) -> None:
         """Render one tool-call invocation as a visible sub-element: a meshing-cogs icon + the call signature.
 
         Raven's what-you-see-is-what-you-get design surfaces what the model did, so a tool-calling turn is not
@@ -994,7 +994,7 @@ class DPGChatMessage:
                                            duration=gui_config.acknowledgment_duration)
         return jump_to_tool_response
 
-    def _add_action_button(self, *, parent: Union[str, int], icon: str, tooltip_text: str, ok_message: str,
+    def _add_action_button(self, *, parent: str | int, icon: str, tooltip_text: str, ok_message: str,
                            action: Callable[[], None], enabled: bool = True,
                            fail_message: str = "Couldn't open — it may have moved or been deleted") -> None:
         """Add one small icon-plus-tooltip action button, wired to run `action`.
@@ -1030,7 +1030,7 @@ class DPGChatMessage:
                                        ok=ok, message=message, duration=gui_config.acknowledgment_duration)
         dpg.set_item_callback(button_id, callback)
 
-    def _add_tooltip(self, target: Union[str, int], text: str) -> gui_tooltip.Tooltip:
+    def _add_tooltip(self, target: str | int, text: str) -> gui_tooltip.Tooltip:
         """Give `target` a self-sizing tooltip, owned by this message.
 
         For a caption a flash will rewrite. A `dpg.tooltip` renders one frame at its previous size when its
@@ -1042,7 +1042,7 @@ class DPGChatMessage:
         self.owned_tooltips.append(tooltip)
         return tooltip
 
-    def _make_clickable(self, items: List[Union[str, int]], *, action: Callable[[], None]) -> None:
+    def _make_clickable(self, items: list[str | int], *, action: Callable[[], None]) -> None:
         """Make `items` respond to a left click by running `action`, as a shortcut for a button below them.
 
         Redundant with the action button it duplicates, and deliberately so: an inline thumbnail *looks*
@@ -1152,7 +1152,7 @@ class DPGChatMessage:
                 dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content (needed if rebuilding)
 
     def build_buttons(self,
-                      gui_parent: Union[str, int]) -> None:
+                      gui_parent: str | int) -> None:
         """Build the set of control buttons for a single chat message in the GUI.
 
         `gui_parent`: DPG tag or ID of the GUI widget (typically a group) to add the buttons to.
@@ -1579,7 +1579,7 @@ class DPGChatMessage:
         datastore = self.parent_view.chat_controller.datastore
         def descend(start_node_id: str) -> str:
             return chatutil.descend_to_latest(datastore, start_node_id)
-        def make_navigate_to_sibling(message_node_id: str, direction: str, step: Optional[int]) -> Callable:
+        def make_navigate_to_sibling(message_node_id: str, direction: str, step: int | None) -> Callable:
             # Pick the most recent subtree, greedily
             def navigate_to_sibling_callback():
                 node_id = self._get_next_or_prev_sibling_in_datastore(message_node_id,
@@ -1718,7 +1718,7 @@ class DPGChatMessage:
 class DPGCompleteChatMessage(DPGChatMessage):
     def __init__(self,
                  node_id: str,
-                 gui_parent: Union[str, int],
+                 gui_parent: str | int,
                  parent_view: "DPGLinearizedChatView",
                  start_thinking_open: bool = False):
         """A complete chat message displayed in the linearized chat view, linked to a node ID in the datastore.
@@ -1844,7 +1844,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                           arguments=function.get("arguments", ""),
                                           tool_call_id=tool_call.get("id"))
 
-    def _document_body(self, node_payload: Dict[str, Any]) -> Optional[str]:
+    def _document_body(self, node_payload: dict[str, Any]) -> str | None:
         """The full text of the document this message reports, or `None` if it does not report one.
 
         "Document" is the category the chat log gives a handle to, and membership is *declared*, never guessed
@@ -1885,9 +1885,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
         return None
 
     def _render_gutter_and_body(self, *,
-                                texts: List[str],
-                                document_body: Optional[str],
-                                answered_call_id: Optional[str]) -> None:
+                                texts: list[str],
+                                document_body: str | None,
+                                answered_call_id: str | None) -> None:
         """Render a tool result's text with its whole-message buttons stacked in a gutter to the left.
 
         `texts`: the message's own text parts, in order, used when there is no document body to show
@@ -2050,7 +2050,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
             if exiting_think_block:
                 inside_think_block = False
 
-    def _render_image_part(self, part: Dict[str, Any], sidecars_meta: Dict[str, Any]) -> None:
+    def _render_image_part(self, part: dict[str, Any], sidecars_meta: dict[str, Any]) -> None:
         """Render one `image_url` content-part: an inline thumbnail plus a per-image provenance cluster.
 
         In a stored message the URL is always a Raven-internal `sidecar:<filename>` reference (see
@@ -2120,7 +2120,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                     ok_message="Opened folder",
                                     action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
 
-    def _render_text_file_part(self, part: Dict[str, Any], sidecars_meta: Dict[str, Any]) -> None:
+    def _render_text_file_part(self, part: dict[str, Any], sidecars_meta: dict[str, Any]) -> None:
         """Render one `text_file` content-part: an inline file chip plus a per-document provenance cluster.
 
         The file counterpart of `_render_image_part`. A document has no thumbnail, so it renders as a chip — a
@@ -2239,7 +2239,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
 
 class DPGStreamingChatMessage(DPGChatMessage):
     def __init__(self,
-                 gui_parent: Union[str, int],
+                 gui_parent: str | int,
                  parent_view: "DPGLinearizedChatView"):
         """A chat message being streamed live from the LLM, displayed in the linearized chat view.
 
@@ -2342,9 +2342,9 @@ class TailFollowSample:
 class DPGLinearizedChatView:
     def __init__(self,
                  themes_and_fonts: env,
-                 gui_parent: Union[str, int],
+                 gui_parent: str | int,
                  chat_controller: "DPGChatController",
-                 is_any_modal_window_visible: Optional[Callable[[], bool]] = None):
+                 is_any_modal_window_visible: Callable[[], bool] | None = None):
         """A view of the current chat branch, displayed as a linear chat.
 
         `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
@@ -2378,7 +2378,7 @@ class DPGLinearizedChatView:
         # finishing — and the comparison is needed precisely in the gaps when no animation exists: sitting
         # still after a reply has finished, or deciding whether the jump-to-latest affordance belongs on
         # screen. One writer at a time either way, so the value cannot drift.
-        self._commanded_y_scroll: box = box(None)  # Optional[int] inside
+        self._commanded_y_scroll: box = box(None)  # int | None inside
         self._commanded_scroll_was_to_end = False
 
         # Bumped by every reader-initiated scroll, so that a decision taken before one can be recognized as
@@ -2427,7 +2427,7 @@ class DPGLinearizedChatView:
         # Which of the two is currently bound. Tracked so the per-frame update can rebind only on a
         # transition — and so that entering the writing state can restart the pulsation from full alpha,
         # the way an appearing indicator does.
-        self._jump_to_latest_is_pulsating: Optional[bool] = None
+        self._jump_to_latest_is_pulsating: bool | None = None
 
         with dpg.window(tag=f"chat_jump_to_latest_window_{self.gui_uuid}",  # tag
                         show=False,
@@ -2743,7 +2743,7 @@ class DPGLinearizedChatView:
         self.scroll_view(abort_if_reader_scrolled_since=sample)  # waits for the new content to lay out, so this reaches the *new* end
 
     def _set_y_scroll(self, y_scroll: int, *, to_end: bool, user_initiated: bool = False,
-                      smooth: Optional[bool] = None) -> None:
+                      smooth: bool | None = None) -> None:
         """Move the scroll position, remembering what we asked for.
 
         `y_scroll`: The target position in content coordinates — a non-negative offset from the top. It is
@@ -2816,9 +2816,9 @@ class DPGLinearizedChatView:
 
     def scroll_view(self,
                     max_wait_frames: int = 10,
-                    scroll_target_node_id: Optional[str] = None,
+                    scroll_target_node_id: str | None = None,
                     user_initiated: bool = False,
-                    abort_if_reader_scrolled_since: Optional[TailFollowSample] = None) -> None:
+                    abort_if_reader_scrolled_since: TailFollowSample | None = None) -> None:
         """Scroll this linearized chat view to the end.
 
         `abort_if_reader_scrolled_since`: A sample whose currency is re-checked at the last moment, just
@@ -2902,7 +2902,7 @@ class DPGLinearizedChatView:
 
         if scroll_target_node_id is not None:
             logger.info(f"DPGLinearizedChatView.scroll_view: Scroll target chat node is '{scroll_target_node_id}'")
-            def get_target_widget() -> Optional[Union[str, int]]:
+            def get_target_widget() -> str | int | None:
                 for dpg_chat_message in self.chat_controller.current_chat_history:
                     if dpg_chat_message.node_id == scroll_target_node_id:  # found?
                         return dpg_chat_message.gui_container_group
@@ -2977,7 +2977,7 @@ class DPGLinearizedChatView:
     # ------------------------------------------------------------
     # Reader-driven scrolling (hotkeys, and later the on-screen controls)
 
-    def scroll_to_position(self, target_y_scroll: Optional[int]) -> None:
+    def scroll_to_position(self, target_y_scroll: int | None) -> None:
         """Scroll to an absolute position, clamped into range.
 
         `target_y_scroll`: Offset from the top, in content coordinates. `None` means the end of the content —
@@ -3106,7 +3106,7 @@ class DPGLinearizedChatView:
         """
         self.scroll_to_position(dpg.get_y_scroll(self.gui_parent) + self._page_extent())
 
-    def get_chatlog_as_markdown(self, include_metadata: bool) -> Optional[str]:
+    def get_chatlog_as_markdown(self, include_metadata: bool) -> str | None:
         """Format this linearized chat as Markdown, for e.g. copying to the clipboard or saving to a file.
 
         `include_metadata`: If `True`, the output will contain the node IDs, revision timestamps (ISO format), and revision numbers.
@@ -3185,8 +3185,8 @@ class DPGLinearizedChatView:
 
     # TODO: does this `build` really belong in `DPGLinearizedChatView` or in `DPGChatController`?
     def build(self,
-              head_node_id: Optional[str] = None,
-              scroll_target_node_id: Optional[str] = None) -> None:
+              head_node_id: str | None = None,
+              scroll_target_node_id: str | None = None) -> None:
         """Build the linearized chat view in the GUI, linearizing up from `head_node_id`.
 
         `scroll_target_node_id`: If provided, scroll to this node instead of to the end.
@@ -3265,7 +3265,7 @@ class DPGChatController:
             cls._class_initialized = True
 
     def _load_instance_textures(self,
-                                avatar_image_path: Optional[Union[str, pathlib.Path]]):
+                                avatar_image_path: str | pathlib.Path | None):
         """Load instance-specific textures.
 
         `avatar_image_path`: Path to the main character image of the AI's avatar.
@@ -3292,26 +3292,26 @@ class DPGChatController:
     def __init__(self,
                  llm_settings: env,
                  datastore: chattree.Forest,
-                 retriever: Optional[hybridir.HybridIR],
+                 retriever: hybridir.HybridIR | None,
                  app_state: env,
                  avatar_controller: "DPGAvatarController",
                  avatar_record: env,
-                 avatar_image_path: Optional[Union[str, pathlib.Path]],
+                 avatar_image_path: str | pathlib.Path | None,
                  themes_and_fonts: env,
-                 chat_panel_widget: Union[str, int],
-                 chat_stop_generation_button_widget: Union[str, int],
-                 indicator_glow_animation: Optional[gui_animation.PulsatingColor],
-                 docs_indexing_glow_animation: Optional[gui_animation.PulsatingColor],
-                 think_glow_animation: Optional[gui_animation.PulsatingColor],
-                 attachment_read_indicator_widget: Union[str, int],
-                 llm_indicator_widget: Union[str, int],
-                 docs_indexing_indicator_widget: Union[str, int],
-                 docs_indexing_progress_text_widget: Union[str, int],
-                 docs_search_indicator_widget: Union[str, int],
-                 docs_search_progress_text_widget: Union[str, int],
-                 web_indicator_widget: Union[str, int],
-                 is_any_modal_window_visible: Optional[Callable[[], bool]] = None,
-                 executor: Optional[concurrent.futures.Executor] = None):
+                 chat_panel_widget: str | int,
+                 chat_stop_generation_button_widget: str | int,
+                 indicator_glow_animation: gui_animation.PulsatingColor | None,
+                 docs_indexing_glow_animation: gui_animation.PulsatingColor | None,
+                 think_glow_animation: gui_animation.PulsatingColor | None,
+                 attachment_read_indicator_widget: str | int,
+                 llm_indicator_widget: str | int,
+                 docs_indexing_indicator_widget: str | int,
+                 docs_indexing_progress_text_widget: str | int,
+                 docs_search_indicator_widget: str | int,
+                 docs_search_progress_text_widget: str | int,
+                 web_indicator_widget: str | int,
+                 is_any_modal_window_visible: Callable[[], bool] | None = None,
+                 executor: concurrent.futures.Executor | None = None):
         """Controller for LLM scaffold to GUI integration.
 
         Owns a `DPGLinearizedChatView`, which displays the current branch of the chat.
@@ -3635,14 +3635,14 @@ class DPGChatController:
         """
         return self.ai_turn_task_manager.has_tasks()
 
-    def get_last_message(self) -> Optional[DPGChatMessage]:
+    def get_last_message(self) -> DPGChatMessage | None:
         """Return the `DPGChatMessage` for the last currently displayed message. Return `None` if the view is empty."""
         if not self.current_chat_history:
             return None
         dpg_chat_message = self.current_chat_history[-1]
         return dpg_chat_message
 
-    def get_current_message(self) -> Optional[DPGChatMessage]:
+    def get_current_message(self) -> DPGChatMessage | None:
         """Return the `DPGChatMessage` the per-message hotkeys act on, or `None` if the view is empty.
 
         **The bottommost message whose button row is fully on screen**, and failing that, the bottommost
@@ -3726,7 +3726,7 @@ class DPGChatController:
         self._current_message_mark.target = target
         self._current_message_mark.lit = (target is not None)
 
-    def get_inline_image_texture(self, filename: str) -> Optional[env]:
+    def get_inline_image_texture(self, filename: str) -> env | None:
         """Return a cached DPG texture for the chat sidecar `filename`, creating it on first use.
 
         Reads the sidecar bytes, downsamples to a thumbnail that fits the inline display box
@@ -3968,8 +3968,8 @@ class DPGChatController:
         logger.info(f"DPGChatController._context_prefill_entrypoint: exact prompt size for HEAD '{task_env.head_node_id}': {reported} tokens")
         self._render_context_fill(reported, is_exact=True)
 
-    def chat_exchange(self, user_message_text: str, staged_images: Optional[List[env]] = None,
-                      staged_files: Optional[List[env]] = None) -> None:
+    def chat_exchange(self, user_message_text: str, staged_images: list[env] | None = None,
+                      staged_files: list[env] | None = None) -> None:
         """Run one exchange: the user's turn, then the AI's.
 
         `user_message_text`: What the user wrote.
@@ -4023,8 +4023,8 @@ class DPGChatController:
                          continue_=False)
         self.task_manager.submit(chat_exchange_task, env())
 
-    def user_turn(self, text: str, staged_images: Optional[List[env]] = None,
-                  staged_files: Optional[List[env]] = None) -> str:
+    def user_turn(self, text: str, staged_images: list[env] | None = None,
+                  staged_files: list[env] | None = None) -> str:
         """Run the user's turn: create the user message node, update HEAD, append it to the view.
 
         Returns the new HEAD node id.
@@ -4059,9 +4059,9 @@ class DPGChatController:
         return new_head_node_id
 
     def ai_turn(self,
-                docs_query: Optional[str],
+                docs_query: str | None,
                 continue_: bool,
-                _retry_tool_node_id: Optional[str] = None) -> None:
+                _retry_tool_node_id: str | None = None) -> None:
         """Run the AI's turn: the reply, including the whole tool loop.
 
         Spawns a background task (on its own `ai_turn_task_manager`) — deliberately, and deliberately asymmetric
@@ -4139,7 +4139,7 @@ class DPGChatController:
                             self.indicator_glow_animation.reset()  # crisp phase on appear
                         dpg.show_item(self.docs_search_indicator_widget)
 
-                def on_docs_done(matches: List[Dict]) -> None:
+                def on_docs_done(matches: list[dict]) -> None:
                     if self.gui_updates_safe:
                         dpg.hide_item(self.docs_search_indicator_widget)
                         stop_turn_data_eyes()
@@ -4184,7 +4184,7 @@ class DPGChatController:
                                                                         text=text)
                     task_env.emotion_update_calls += 1
 
-                def on_llm_progress(event: Dict[str, Any]) -> Optional[sym]:
+                def on_llm_progress(event: dict[str, Any]) -> sym | None:
                     # `invoke` is the single parser; this handler is a pure renderer dispatching on the typed
                     # event. No regex-sniffing of the text stream; the event type *is* the state.
 
@@ -4324,7 +4324,7 @@ class DPGChatController:
 
                         logger.info("ai_turn.ai_turn_task.on_done: all done.")
 
-                # def _parse_toolcall(request_record: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+                # def _parse_toolcall(request_record: dict[str, Any]) -> tuple[str | None, str | None]:
                 #     """Given a tool call request record in OpenAI format, return tool call ID and function name."""
                 #     tool_call_id = request_record["id"] if "id" in request_record else None
                 #     function_name = None
@@ -4335,12 +4335,12 @@ class DPGChatController:
                 #                 function_name = function_record["name"]
                 #     return tool_call_id, function_name
 
-                def _reaches_outside(tool_calls: List[Dict]) -> bool:
+                def _reaches_outside(tool_calls: list[dict]) -> bool:
                     """Whether any of these tools consults something beyond this conversation."""
                     names = {call.get("function", {}).get("name") for call in tool_calls}
                     return bool(names & llmclient.EXTERNAL_SOURCE_TOOL_NAMES)
 
-                def on_tools_start(tool_calls: List[Dict]) -> None:
+                def on_tools_start(tool_calls: list[dict]) -> None:
                     if self.gui_updates_safe:
                         # Only for tools that actually reach outside the conversation. A clock read or an
                         # arithmetic evaluation answers from nothing, and lighting the avatar for those
@@ -4358,7 +4358,7 @@ class DPGChatController:
                         #         self.indicator_glow_animation.reset()  # start new pulsation cycle
                         #     dpg.show_item(self.web_indicator_widget)
 
-                def on_call_lowlevel_start(tool_call_id: str, function_name: str, arguments: Dict[str, Any]) -> None:
+                def on_call_lowlevel_start(tool_call_id: str, function_name: str, arguments: dict[str, Any]) -> None:
                     if self.gui_updates_safe:
                         if function_name in web_access_tool_names:
                             if self.indicator_glow_animation is not None:
@@ -4380,7 +4380,7 @@ class DPGChatController:
                         self.view.restore_scroll_after_swap(follow_sample)
                         self.update_context_fill_indicator()  # tool result added -> context grew
 
-                def on_tools_done(tool_calls: List[Dict]) -> None:
+                def on_tools_done(tool_calls: list[dict]) -> None:
                     if self.gui_updates_safe and _reaches_outside(tool_calls):
                         # dpg.hide_item(self.web_indicator_widget)
                         stop_turn_data_eyes()
