@@ -4275,10 +4275,16 @@ class DPGChatController:
                         # been measuring all along.
                         task_env.thinking_t0 = task_env.first_chunk_t
                         if task_env.seen_content:
+                            # Clearing this re-arms the "the answer has started" trigger below, which is the
+                            # half that matters: the animation is not merely stopped here, it starts again
+                            # on the first chunk that really is the answer — which is the next one, the
+                            # close tag having ended the thinking block.
                             task_env.seen_content = False
                             if not speech_enabled:
-                                # The talking animation says the AI is writing the visible answer, and it was
-                                # started on that claim. It has not started writing one yet.
+                                # The generic talking animation — randomized mouth, no audio, used only when
+                                # TTS is off, since otherwise lipsync drives the mouth. It says the AI is
+                                # writing the visible answer, and was started on that claim. It has not
+                                # started writing one yet.
                                 _client_api().avatar_stop_talking(self.avatar_record.avatar_instance_id)
                         return llmclient.action_ack
 

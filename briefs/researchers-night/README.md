@@ -387,6 +387,17 @@ sentence, or the streamed text where it wants the spoken text.
    batch, so nothing can start until the last token has landed. Submitting each sentence as it completes
    would let synthesis overlap generation.
 
+   **It also ends the assumption that nothing is spoken until the reply is whole**, which something else
+   relies on. On a backend that leaves reasoning-tag parsing to us, a thinking model whose template opened
+   the block streams its reasoning indistinguishably from an answer until the closing tag lands; Raven
+   corrects that when it lands (`reasoning_retcon`, 2026-08-26) by moving the text into the thought bubble.
+   That correction is safe today only because the TTS batch is submitted after the whole reply — so
+   whatever was mis-shown was never spoken. Hand a sentence over as it completes, and a correction arriving
+   afterwards means the avatar has already said a "sentence" that was reasoning, with nothing able to
+   unsay it. Whoever builds this decides what to do about it: hold the first submission until the answer is
+   known to be an answer, or accept it on the grounds that the demo backend does the parsing and never
+   produces the correction at all.
+
    **The division of concerns is what needs deciding**, and it is the reason this is not simply a smaller
    `send_text_to_tts` call. The batch is currently the unit that `on_start_speaking` / `on_stop_speaking`
    describe, and ordering across batches is preserved by queueing each one whole. A reply split into many
