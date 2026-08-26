@@ -155,6 +155,9 @@
 
 *Raven-librarian*
 
+- **thinking that arrives with no opening tag is now moved into its bubble the moment the model stops thinking**, instead of staying in the answer until the whole reply finishes. Affects LLM backends that pass the model's raw stream through rather than separating the reasoning themselves — where a thinking model's chat template opens the block, so the stream carries only the close, and nothing before it says the text is a thought. In the chat log the reasoning moves into the trace and the answer starts fresh; in `raven-minichat`, which cannot unprint, the closing marker says retroactively what it covers.
+  - Not yet visible from the start of the thinking, which is the part that needs a signal the stream does not carry. Until the close arrives the reasoning is still shown as the answer.
+
 - **a crash while the chat datastore is being written can no longer destroy it.** The save serialized straight into `chat.json`, which truncates the file as its first act — so a process that died anywhere in the write left a fragment where the whole history had been, and a crash is exactly when you want that history. The new file is now written beside the old one and moved into place once it is complete and on disk, so what survives is either the previous save or the new one. Worst case you lose the current session rather than everything.
 
 - **Markdown headings now render as headings in the chat log**, instead of arriving with their `#` markers intact. A heading is a block-level construct, and the chat view used to wrap every paragraph in a colour tag before handing it to the renderer — which makes the whole thing one paragraph, and a heading cannot occur inside one. The colour is passed alongside the text now. Models that organize a long answer under headings are the ones this was costing.

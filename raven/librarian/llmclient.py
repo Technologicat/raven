@@ -1765,6 +1765,12 @@ def invoke(settings: env,
                             (both unified here). Render as a thought bubble, not as the answer.
            `{"type": "tool_call", "id": str, "name": str, "arguments": str}`: one completed tool call (emitted
                             once, deduped across inline-tag and native channels). `arguments` is a JSON string.
+           `{"type": "reasoning_retcon"}`: everything delivered as `content` so far this invocation was
+                            reasoning after all — the model's chat template opened the thinking block, so
+                            nothing marked its beginning and only its close arrived. See `StreamParser`.
+                            **Carries no `text` key**, deliberately: a handler that reads `event["text"]`
+                            unconditionally should fail here rather than quietly treat a correction as an
+                            empty chunk. A handler with nothing to correct may ignore it.
 
            `n_chunks` (on content / reasoning events) is how many chunks have been generated so far this
            invocation — useful for live UI throttling.
@@ -1969,11 +1975,9 @@ def invoke(settings: env,
             # The stopping strings guard the visible answer, and none of that text was the visible answer.
             last_few_chunks.clear()
             last_few_chunks.extend([""] * 10)
-            # Deliberately not forwarded to `on_progress`: it is a correction to what a consumer was already
-            # told, and no consumer can act on one yet — the renderer would have to move text it has already
-            # drawn from the answer into a thought bubble. That is the live half of the deferred item this
-            # event exists under, and it waits for a signal that says up front whether thinking is on.
-            return action_ack
+            # Forwarded, like every other event: a consumer that has shown the text needs to know it showed
+            # it in the wrong place. Nothing here says what to do about it — a GUI can move what it drew, a
+            # terminal can only say so afterwards — so the event carries the fact and no instruction.
         if on_progress is not None:
             return on_progress({**parsed_event, "n_chunks": n_chunks})
         return action_ack

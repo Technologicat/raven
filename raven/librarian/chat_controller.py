@@ -804,6 +804,35 @@ class DPGChatMessage:
 
         dpg.split_frame()  # ...and anything after this point runs in another frame.
 
+    def reclassify_all_paragraphs_as_thought(self) -> None:
+        """Move everything shown so far into the thought bubble, as if it had arrived as reasoning.
+
+        For the case where the model was inside its thinking block from the first token, because its chat
+        template put it there, so nothing marked the beginning and only the close arrived. Until it does,
+        the reasoning is indistinguishable from an answer, and this is the correction.
+
+        Does nothing when there is nothing shown yet.
+        """
+        with self.paragraphs_lock:
+            if not self.paragraphs:
+                return
+            for paragraph in self.paragraphs:
+                if paragraph["is_thought"]:  # already where it belongs
+                    continue
+                if "widget" in paragraph:
+                    # Same order `replace_last_paragraph` uses: drop the widget, then mark the paragraph
+                    # unrendered. `_render_text` asserts that an unrendered paragraph has no widget.
+                    dpg.delete_item(paragraph.pop("widget"))
+                paragraph["is_thought"] = True
+                paragraph["rendered"] = False
+            # The bubble is built on first use and reused after, so a whole reply's worth of paragraphs
+            # re-renders into one of it. It is appended to `gui_text_group`, which the deletions above have
+            # just emptied — so it lands ahead of the answer that is about to start, which is where the
+            # reader expects a thought that preceded it.
+            self._render_text()
+
+        dpg.split_frame()
+
     def _thinking_stats_text(self) -> str:
         """The `[900t, 22.0s, 40.9t/s]` line for this message's thinking, or `""` when there is none.
 
@@ -4204,6 +4233,7 @@ class DPGChatController:
                 task_env.current_is_thought = False  # which channel the in-progress paragraph belongs to (thought bubble vs visible answer)
                 task_env.seen_content = False  # whether any visible-answer content has arrived yet (to fire the talking animation once)
                 task_env.thinking_t0 = None  # when reasoning first arrived, for the live count on the thought bubble
+                task_env.first_chunk_t = None  # when the first generated text arrived on any channel; what `thinking_t0` becomes if it turns out all of it was reasoning
 
                 task_env.emotion_update_interval = 5  # how many lines of text to wait between emotion updates (NOTE: Qwen3 uses a double newline as its paragraph separator, so that eats an extra line)
                 task_env.emotion_recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap between updates, to stabilize the detection
@@ -4234,6 +4264,24 @@ class DPGChatController:
                         # Structured tool-call invocations render when the completed message reloads. Nothing to stream live.
                         return llmclient.action_ack
 
+                    if event_type == "reasoning_retcon":
+                        # None of what we have shown as the answer was the answer: the model was inside its
+                        # thinking block from the first token, and only the close arrived to say so. Move the
+                        # text, then undo everything the wrong reading caused.
+                        logger.info("ai_turn.ai_turn_task.on_llm_progress: reasoning arrived with no opening tag; moving the reply so far into the thought bubble.")
+                        streaming_chat_message.reclassify_all_paragraphs_as_thought()
+                        task_env.current_is_thought = True  # ...including the paragraph still being accumulated
+                        # The thinking began with the first token, which is what the live count should have
+                        # been measuring all along.
+                        task_env.thinking_t0 = task_env.first_chunk_t
+                        if task_env.seen_content:
+                            task_env.seen_content = False
+                            if not speech_enabled:
+                                # The talking animation says the AI is writing the visible answer, and it was
+                                # started on that claim. It has not started writing one yet.
+                                _client_api().avatar_stop_talking(self.avatar_record.avatar_instance_id)
+                        return llmclient.action_ack
+
                     chunk_text = event["text"]
                     n_chunks = event.get("n_chunks", 0)
                     is_thought = (event_type == "reasoning")  # reasoning -> thought bubble; content -> visible answer
@@ -4246,6 +4294,9 @@ class DPGChatController:
 
                     if self.gui_updates_safe and chunk_text:  # avoid triggering on an empty event
                         dpg.hide_item(self.llm_indicator_widget)  # hide prompt processing indicator
+
+                    if chunk_text and task_env.first_chunk_t is None:
+                        task_env.first_chunk_t = time.monotonic()
 
                     # Fire the generic talking animation once, when the model transitions from thinking to the
                     # visible answer (replaces the old "</think> seen" trigger).

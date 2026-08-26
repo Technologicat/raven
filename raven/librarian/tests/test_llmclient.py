@@ -788,6 +788,38 @@ class TestOrphanThinkClose:
         assert out.data["reasoning_content"] == "first"  # the second close did not move "answer" as well
         assert "answer" in chatutil.content_to_text(out.data["content"])
 
+    def test_the_correction_reaches_the_consumer_that_showed_the_text(self, monkeypatch, invoke_settings):
+        """A renderer has already drawn the reasoning as the answer, so it has to be told.
+
+        The event is what lets it move what it drew. Position matters as much as presence: it must arrive
+        *after* the text it reclassifies and *before* the real answer, since that is the only ordering a
+        consumer can act on without buffering.
+        """
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "mulling"}}]},
+            {"choices": [{"delta": {"content": "</think>"}}]},
+            {"choices": [{"delta": {"content": "Forty-two."}}]},
+        ])
+        seen = []
+        llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False,
+                         on_progress=lambda event: (seen.append((event["type"], event.get("text"))),
+                                                    llmclient.action_ack)[1])
+        assert seen == [("content", "mulling"),
+                        ("reasoning_retcon", None),
+                        ("content", "Forty-two.")]
+
+    def test_no_correction_is_sent_when_there_is_nothing_to_correct(self, monkeypatch, invoke_settings):
+        # The control for the test above: an ordinary reply must not make a consumer move anything. Without
+        # this, a parser that emitted the event unconditionally would satisfy the assertion above.
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"reasoning_content": "thought hard"}}]},
+            {"choices": [{"delta": {"content": "Forty-two."}}]},
+        ])
+        seen = []
+        llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False,
+                         on_progress=lambda event: (seen.append(event["type"]), llmclient.action_ack)[1])
+        assert seen == ["reasoning", "content"]
+
     def test_the_thinking_phase_is_reported_for_a_reclassified_turn(self, monkeypatch, invoke_settings):
         # The point of the whole exercise: the stored numbers come out right on a backend that leaves the
         # tag inference to us.

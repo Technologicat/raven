@@ -3538,9 +3538,29 @@ turn also needs, and that item can copy this one's branch-identity guard.
 
 Discovered during brief 02 PR-B work, reported by Juha from live LM Studio use (2026-06-04).
 
-## Streaming thinking shows as gray (not blue) for models that pre-fill the opening `<think>` tag
+## Streaming thinking is shown as the answer until the closing `</think>` arrives, for models that pre-fill the opening tag
 
-*Cluster: ? · Cost: ? · Gate: the "Enable thinking" toggle (`TODO.md`, "Thinking toggle") · Filed: 2026-06-05 · See also: "Upgrade oobabooga and re-check Raven's ooba support"*
+*Cluster: ? · Cost: M · Gate: a per-model "this template pre-fills the open tag" signal, and oobabooga to exercise any of it · Filed: 2026-06-05 · See also: "Upgrade oobabooga and re-check Raven's ooba support"*
+
+**Mostly fixed 2026-08-26, and the remainder is narrower than the original title.** The correction now
+happens live rather than at message completion: `StreamParser` emits `reasoning_retcon` on the orphan close,
+`invoke` forwards it, and the GUI moves the paragraphs it has already drawn into the thought bubble
+(`DPGChatMessage.reclassify_all_paragraphs_as_thought`), undoing the talking animation and re-anchoring the
+thinking clock to the first token. minichat, which cannot unprint, marks the boundary retroactively instead.
+
+**What is left is the interval before the close tag**, during which the reasoning is still shown as the
+answer, the cloud does not pulsate and the live "Thinking… 12.4s" count does not run. Nothing in the stream
+distinguishes that interval from an answer, so closing it needs the parser to *start* inside the block —
+which is the speculative fix below, and still gated.
+
+**Do not cost that as a one-line change.** An earlier revision of this item said the *Enable thinking*
+toggle was the missing signal and that this became one line once it existed. The toggle shipped on
+2026-08-26 and it is not: starting in `_PS_THINK` needs three facts, and the toggle supplies one of them —
+thinking is on; the backend does not split reasoning into its own channel; **and this model's template
+pre-fills the open tag**. Without the third, a model that has thinking enabled and simply does not reason
+this turn puts its entire answer in the thought bubble, with no close ever arriving to end it. That is a
+worse failure than the one being fixed, and it is why the retcon went in first: it needs no signal at all
+and cannot swallow an answer.
 
 **Every Qwen in the local model archive pre-fills `<think>\n`** — 3.5-4B, 3.5-9B, 3.6-27B, 3.6-35B-A3B and
 3.8-27B, measured 2026-08-26 by reading `tokenizer.chat_template` out of each `.gguf` and rendering it with
@@ -3567,15 +3587,24 @@ confirmed by diffing `09a88a7`. Models that emit the opening tag inline (e.g. oo
 unaffected — they stream blue correctly both before and after PR-B.
 
 The hard part is that the opening tag's *absence is the correct, expected output* for these models, so there is
-no in-stream signal until `</think>` lands — by which point the thinking has already streamed gray. Possible
-fixes, none free: (a) start the parser in `_PS_THINK` when we know the model pre-fills the tag — needs a
-per-model/backend signal we don't currently have at invoke time (the rendered prompt tail would show the open
-`<think>`, but ooba renders server-side; an `/v1/internal/...` prompt-render probe could expose it); (b) on the
-first orphan `</think>`, retroactively re-tint the already-committed streaming paragraphs as thought (recolor +
-flip `is_thought`) — correct but invasive in the streaming renderer. Related to the "bubble from the first
-token" item above, but distinct: there the thinking is *already* detected (blue, just inline); here it is *not
-detected at all* until completion. This is the `chatutil.py:827` TODO ("add the opening `<think>` while
-streaming, or to the prompt?") surfacing in the typed-event parser.
+no in-stream signal until `</think>` lands — by which point the thinking has already been shown as the answer.
+Two fixes were identified, and **(b) is the one that landed**:
+
+- **(a) Start the parser in `_PS_THINK`** when we know the model pre-fills the tag. Still open, and still
+  missing its signal: the rendered prompt tail would show the open `<think>`, but ooba renders server-side,
+  so reading it needs an `/v1/internal/...` prompt-render probe. See the warning above about what it costs
+  to guess instead.
+- **(b) On the first orphan `</think>`, re-tint what has already been shown.** Filed as "correct but
+  invasive in the streaming renderer", which was true when filed and stopped being true on 2026-08-25:
+  the hidden-thinking work made the renderer keep paragraphs as a list of dicts each carrying its own
+  `is_thought`, and `_render_text` reads that flag *per paragraph* to choose between the thought bubble and
+  the answer group. So the fix became "flip the flag on every paragraph and re-render", which is what
+  `replace_last_paragraph` was already doing for one. Landed 2026-08-26.
+
+Related to the "bubble from the first token" item above, but distinct: there the thinking is *already*
+detected (blue, just inline); here it is *not detected at all* until the close. This is the
+`chatutil.py:827` TODO ("add the opening `<think>` while streaming, or to the prompt?") surfacing in the
+typed-event parser.
 
 **Which case you are in is decided by the backend, not by the model.** Three, not two: a backend that sends
 `reasoning_content` as its own channel (LM Studio, the demo backend) never exercises tag inference at all;
@@ -3584,17 +3613,12 @@ and by the measurement above, that third case is *every model we own*, on any ba
 parsing to us. Still not exhibit-relevant, but for a narrower reason than first recorded: not because our
 models are unaffected, but because the one backend the exhibit uses does the parsing.
 
-**The "Enable thinking" toggle is the signal fix (a) is missing**, which is why it is now this item's gate.
-The toggle itself needs no parser change — it prefills into the *prompt*, after which the model generates
-plain content and the parser is correctly in `_PS_TEXT`. But it is a per-request statement of whether
-thinking is on, which is exactly what "start the parser in `_PS_THINK`" requires and has no other source.
-Once it exists, this is a one-line change rather than a design problem. (Filed as *not* linked to the
-toggle; that was right about the toggle's own needs and wrong about the direction of the dependency.)
-
-Half of this is being fixed independently, in the hidden-thinking work: `StreamParser` learns the orphan
-close so the *stored* numbers and `reasoning_content` come out right on any backend — `chatutil.scrub`'s
-recovery moved to where it can also stop a clock. That leaves what the title says, the live display, for
-the gate above.
+**Nothing here has ever been observed running**, and that has not changed. Every claim about the live
+behaviour — the old one and the fix — is reasoned from the parser and the renderer, because the only
+backend on hand splits reasoning into its own channel and therefore cannot produce the event. The unit
+tests pin the parser's output and the event's ordering; they cannot pin what a person sees. So the ooba
+upgrade is a gate on *verification* as much as on the remaining feature, and it is the cheaper half to
+schedule: it needs a backend, not a design.
 
 Discovered during the brief-02 ooba cross-backend regression test (2026-06-05).
 

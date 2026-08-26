@@ -98,6 +98,20 @@ _FLAG_COMMANDS = {"!thinking": _FlagCommand(flag="thinking_enabled",
                                         summary="Document database",
                                         detail=f"; document store at '{librarian_config.llm_docs_dir}'")}
 
+def _thought_marker(*, closing: bool, note: str = "") -> str:
+    """One end of the bracket the terminal draws around the AI's thinking.
+
+    `closing`: which end of the bracket this is.
+    `note`: parenthesized after the label, for a close that has to say something the plain one does not.
+
+    Both ends and both kinds of close are spelled here, so the bracket cannot come to look like two
+    different things depending on whether the model's chat template supplied the opening tag.
+    """
+    arrows = "⊲⊲⊲" if closing else "⊳⊳⊳"
+    label = f"Thought ({note})" if note else "Thought"
+    marker = f"{arrows}{label}{arrows}\n"
+    return colorizer.colorize(f"\n{marker}" if closing else marker, colorizer.Fore.BLUE)
+
 def _flag_command_for(user_message_text: str) -> Optional[_FlagCommand]:
     """Which flag command `user_message_text` invokes, or `None` if it invokes none.
 
@@ -589,6 +603,14 @@ def minimal_chat_client(backend_url) -> None:
                 # streamed to the terminal; they appear in the completed message / tool-result output.
                 if event["type"] == "tool_call":
                     return llmclient.action_ack
+                if event["type"] == "reasoning_retcon":
+                    # Everything printed so far this reply was reasoning. A terminal cannot take it back, so
+                    # the close says retroactively what the opening marker would have said in advance.
+                    print(_thought_marker(closing=True, note="all of the above"), end="")
+                    sys.stdout.flush()
+                    chars = 0
+                    was_thought = False
+                    return llmclient.action_ack
                 chunk_text = event["text"]
                 is_thought = (event["type"] == "reasoning")
 
@@ -596,10 +618,10 @@ def minimal_chat_client(backend_url) -> None:
                 # delimited by inline <think> tags — it arrives on its own typed channel).
                 prefix = ""
                 if is_thought and not was_thought:
-                    prefix = colorizer.colorize("⊳⊳⊳Thought⊳⊳⊳\n", colorizer.Fore.BLUE)
+                    prefix = _thought_marker(closing=False)
                     chars = 0
                 elif was_thought and not is_thought:
-                    prefix = colorizer.colorize("\n⊲⊲⊲Thought⊲⊲⊲\n", colorizer.Fore.BLUE)
+                    prefix = _thought_marker(closing=True)
                     chars = 0
                 was_thought = is_thought
 
