@@ -654,7 +654,12 @@ class DPGChatMessage:
         # Show LLM performance statistics for AI chat node, if linked to a chat node, and the chat node has them stored
         if role == "assistant" and node_id is not None:
             ai_message_node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)
-            if (generation_metadata := ai_message_node_payload.get("generation_metadata", None)) is not None:
+            # Tests for the figures rather than for the dict that would hold them: a reply still being
+            # written carries `generation_metadata` saying so and no stats yet, and a message Raven authored
+            # carries no dict at all. Both mean the same thing here — nothing to report — and the absence of
+            # the line is how each has always appeared.
+            generation_metadata = ai_message_node_payload.get("generation_metadata") or {}
+            if "n_tokens" in generation_metadata:
                 n_tokens = generation_metadata["n_tokens"]
                 dt = generation_metadata["dt"]
                 # Unchanged in meaning: the whole reply, thinking included. An old node cannot be
@@ -2388,9 +2393,12 @@ class DPGStreamingChatMessage(DPGChatMessage):
         To replace the streaming message with a completed message, call the streaming message's
         `demolish` method first. Doing so removes its widgets from the GUI.
         """
-        self.node_id = node_id  # set before `build`, which reads it
         super().__init__(gui_parent=gui_parent,
                          parent_view=parent_view)
+        # Between the base constructor and `build`: the base declares `node_id` as `None`, and `build`
+        # reads it to find the message this renders. Super init fires first here as everywhere in Raven,
+        # so a subclass assigning before that call has it silently undone.
+        self.node_id = node_id
         # A reply being generated is exactly the case the preference speaks to.
         self.start_thinking_open = parent_view.chat_controller.app_state.get("show_thinking", False)
         # What the cloud is currently saying, or `None` while nothing has been said yet. See `set_thinking`.
