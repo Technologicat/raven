@@ -588,7 +588,8 @@ The next two are about the AI's reasoning: whether it happens at all, and whethe
   - Flipping it mid-conversation is free on some model families and costs a full re-prefill on others, since they put the thinking marker at opposite ends of the prompt and only one of them can reuse what the backend already processed. On a long chat that is a second or two of extra wait on the next reply, once.
   - A model with no reasoning mode at all is unaffected either way.
 - **Show thinking**
-  - Whether a reply's reasoning trace arrives open or collapsed. **OFF** by default, so a thinking model's trace starts folded behind its cloud icon and the answer is what you see.
+  - Whether a reply's reasoning trace arrives open or collapsed. **OFF** by default, so a thinking model's trace starts folded behind its cloud icon.
+  - Collapsed is not silent: the cloud pulsates while the model is reasoning and counts up beside it (`Thinking… 12.4s, ~480t`), so you can see that something is happening and how long it has been going without the reasoning itself scrolling past.
   - It says what is *shown*; whether the AI reasons is **Thinking**, above.
   - It takes effect from the next reply onward. For a reply already on screen, click its cloud or press **Ctrl+T** — and that works whatever the toggle says, so a trace you opened stays open.
 
