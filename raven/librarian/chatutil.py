@@ -30,7 +30,7 @@ __all__ = ["format_message_number",
            "compute_auto_allowed_hosts",
            "upgrade_datastore",
            "remove_persona_from_start_of_line",
-           "get_node_message_text_without_persona",
+           "get_node_message_text_without_persona", "latest_user_message_text",
            "scrub"]
 
 import logging
@@ -1424,6 +1424,24 @@ def remove_persona_from_start_of_line(persona: Optional[str],
     _persona_at_start_of_line = re.compile(f"^{re.escape(persona)}:[ \t]*\n?", re.MULTILINE)
     text = re.sub(_persona_at_start_of_line, r"", text)
     return text
+
+def latest_user_message_text(datastore: chattree.Forest, node_id: str) -> str | None:
+    """Return the text of the newest user message at or above `node_id`, or `None` if the branch has none.
+
+    What a turn searches the document corpus for when the user did not just type something — continuing,
+    rerolling, or letting the AI take another turn. `None` means there is nothing to search for, which is
+    a chat where nobody has said anything yet.
+
+    Reads the *branch*, walking up from `node_id`, rather than whatever a view happens to be showing.
+    Those are the same thing only while the reader stays put: a frontend that scans its own display asks
+    the question of the branch the user is looking at now, which during a turn need not be the branch the
+    turn is answering on.
+    """
+    for ancestor_node_id in reversed(datastore.linearize_up(node_id)):
+        role, unused_persona, text = get_node_message_text_without_persona(datastore, ancestor_node_id)
+        if role == "user":
+            return text
+    return None
 
 def get_node_message_text_without_persona(datastore: chattree.Forest,
                                           node_id: str) -> str:

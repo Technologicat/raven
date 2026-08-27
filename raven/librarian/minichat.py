@@ -437,15 +437,6 @@ def minimal_chat_client(backend_url) -> None:
 
         def user_turn() -> Values:
             # NOTE: Rudimentary approach to RAG search, using the user's latest message text as the query. (Good enough to demonstrate the functionality. Improve later.)
-            def scan_history_for_docs_query(node_id_history: List[Dict]) -> Optional[str]:
-                """Handle the RAG query: find the latest existing user message."""
-                docs_query = None  # if no user message, send `None` as query to AI -> no docs search
-                for node_id in reversed(node_id_history):
-                    role, unused_persona, text = chatutil.get_node_message_text_without_persona(datastore, node_id)
-                    if role == "user":
-                        docs_query = text
-                        break
-                return docs_query
 
             node_id_history = datastore.linearize_up(app_state["HEAD"])
             user_message_number = len(node_id_history)
@@ -555,7 +546,7 @@ def minimal_chat_client(backend_url) -> None:
                 node_id_history = datastore.linearize_up(app_state["HEAD"])
                 chat_print_history(node_id_history)
                 print()
-                return Values(action=action_proceed, docs_query=scan_history_for_docs_query(node_id_history))
+                return Values(action=action_proceed, docs_query=chatutil.latest_user_message_text(datastore, app_state["HEAD"]))
             elif user_message_text.startswith("!") and len(user_message_text.split("\n")) == 1:
                 print(f"Unrecognized command '{user_message_text}'; use `!help` for available commands.")
                 return Values(action=action_next_exchange)
@@ -574,8 +565,8 @@ def minimal_chat_client(backend_url) -> None:
                 # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
                 docs_query = user_message_text
             else:
-                docs_query = scan_history_for_docs_query(node_id_history)
-                if docs_query is None:  # the scan's sentinel for "this chat has no user message at all"
+                docs_query = chatutil.latest_user_message_text(datastore, app_state["HEAD"])
+                if docs_query is None:  # nobody has said anything in this chat
                     # Taking another turn needs a user turn to take it *about*. With nothing said yet, the only
                     # user-role content reaching the model would be our own temporary injects — so it answers
                     # those, discussing its own instructions instead of talking to anyone.

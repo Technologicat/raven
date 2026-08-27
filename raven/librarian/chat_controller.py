@@ -1434,6 +1434,15 @@ class DPGChatMessage:
                 self.parent_view.chat_controller.mark_discontinuity()
 
                 # Rewind the linearized chat history in the GUI: this message and everything below it.
+                #
+                # TODO ("Make the canned AI greeting optional"): re-check this then. There used to be an
+                # TODO: assertion here that at least three messages survive the rewind — the system prompt,
+                # TODO: the greeting, and the user's first message — which held because reroll is offered
+                # TODO: only on assistant messages and never on the greeting, putting the earliest
+                # TODO: rerollable message at index 3. Without a greeting that becomes index 2, so the
+                # TODO: number changes even though the thing it protects does not: a rewind must never
+                # TODO: reach past the first user message. Restoring it needs a shape that does not derive
+                # TODO: the index separately from the removal, which is what made the old one racy.
                 if not self.parent_view.chat_controller.view.rewind_to(node_id):
                     return
 
@@ -3322,6 +3331,13 @@ class DPGLinearizedChatView:
         Asked rather than remembered, because a rebuild replaces the widget: whoever is streaming into a
         reply holds the node's id, not the widget, and looks it up each time. `None` is the ordinary answer
         when the user is looking at another branch — there is nothing to draw into, and nothing wrong.
+
+        Like any lookup here, the answer can go stale before the caller is done with it, and the renderer
+        does *not* hold the lock while drawing — a render is a long sequence of DPG calls, and holding the
+        view's lock across it would stall every rebuild behind it. What covers that is EAFP instead: the
+        render runs inside `guiutils.nonexistent_ok`, so the first call to find its widget gone abandons
+        the rest, which is what the render would have done had it known. Nothing is lost by giving up, the
+        text having gone into the node either way.
         """
         with self.chat_controller.current_chat_history_lock:
             for message in self.chat_controller.current_chat_history:
@@ -3886,24 +3902,22 @@ class DPGChatController:
         """
         return self.ai_turn_task_manager.has_tasks()
 
-    def get_last_message(self) -> DPGChatMessage | None:
-        """Return the `DPGChatMessage` for the last currently displayed message. Return `None` if the view is empty."""
-        # Checking and indexing must be one step: `DPGLinearizedChatView.build` empties this list before
-        # refilling it, from a background task among others, so a check that passed a moment ago says
-        # nothing about the index that follows it.
-        with self.current_chat_history_lock:
-            if not self.current_chat_history:
-                return None
-            return self.current_chat_history[-1]
-
     def get_current_message(self) -> DPGChatMessage | None:
         """Return the `DPGChatMessage` the per-message hotkeys act on, or `None` if the view is empty.
 
         **The bottommost message whose button row is fully on screen**, and failing that, the bottommost
-        message that is on screen at all. For a chat scrolled to the end both give the last message, so
-        this differs from `get_last_message` only once the reader has scrolled back — which is exactly when
-        the difference matters: a reroll aimed at a message off the bottom of the screen is an edit nobody
-        can see happening.
+        message that is on screen at all. For a chat scrolled to the end that is the last message; once the
+        reader has scrolled back it is not, which is exactly when the difference matters — a reroll aimed
+        at a message off the bottom of the screen is an edit nobody can see happening.
+
+        **The answer can go stale before you use it.** `DPGLinearizedChatView.build` may demolish the
+        returned message a moment later, from a background task, and no lock held inside here outlives the
+        return. A caller for whom that matters should hold `current_chat_history_lock` across both this
+        call and what it does with the answer; the lock is reentrant, so this taking it again is free.
+
+        Today's callers need no such thing, and for a reason worth stating rather than relying on: a
+        demolished message answers `None` for its widgets and `{}` for its button callbacks, so reading
+        either out of a stale one is a no-op rather than a stale action on a dead widget.
         """
         # **The button row is the criterion rather than the message**, because the mark that says which
         # message this is lives *in* that row. "The bottommost partially visible message" was the first
@@ -4267,7 +4281,9 @@ class DPGChatController:
         The RAG query (for document database search) is taken from the latest available user message:
 
           - `user_message_text` if not the empty string.
-          - Otherwise, automatically obtained by scanning the current chat for the user's latest message.
+          - Otherwise, the latest user message on the branch this turn answers on
+            (`chatutil.latest_user_message_text`). The *branch*, not the view: a reader who has navigated
+            away is looking at a different conversation, and this turn is still answering theirs.
 
         This spawns a background task to avoid hanging GUI event handlers,
         since the typical use case is to call `chat_exchange` from a GUI event handler.
@@ -4282,16 +4298,11 @@ class DPGChatController:
                 # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
                 docs_query = user_message_text or None  # image-only message: no text to search docs with
             else:
-                # Handle the RAG query: find the latest existing user message. Over a snapshot: this runs on
-                # a background task, and `DPGLinearizedChatView.build` empties the live list before
-                # refilling it.
-                with self.current_chat_history_lock:
-                    history_snapshot = list(self.current_chat_history)
-                for dpg_chat_message in reversed(history_snapshot):
-                    if dpg_chat_message.role == "user":
-                        docs_query = dpg_chat_message.text
-                        break
-                else:
+                # Handle the RAG query: find the latest existing user message. Asked of the *branch* rather
+                # than of the view — this turn answers on the branch HEAD names, and the view shows whatever
+                # branch the reader is on, which during a turn need not be the same one.
+                docs_query = chatutil.latest_user_message_text(self.datastore, self.app_state["HEAD"])
+                if docs_query is None:
                     # Taking another turn needs a user turn to take it *about*. With nothing said yet, the only
                     # user-role content reaching the model would be our own temporary injects — so it answers
                     # those, discussing its own instructions instead of talking to anyone. A stray Enter in an

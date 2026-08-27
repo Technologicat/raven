@@ -2068,6 +2068,14 @@ prompt / character card] is *what* the standing text should say; [System prompt 
 changing facts get substituted, and it is the one that decides whether a card can name the model without
 forking the datastore. Deciding them separately risks three answers to one question.
 
+**One place assumes the greeting exists, and it is arithmetic rather than a lookup**: reroll's rewind used
+to assert that at least three messages survive it — system prompt, greeting, first user message — which
+held because reroll is never offered on the greeting, so the earliest rerollable message sits at index 3.
+Without a greeting that becomes 2. The assertion is gone (it derived an index separately from the removal,
+which was racy against a rebuild), and `DPGCompleteChatMessage.reroll_message_callback` carries a `TODO`
+naming this item. What it protects is unchanged whatever the number is: a rewind must never reach past the
+first user message.
+
 Raised by Juha (2026-07-28).
 
 ## TTS reads arXiv IDs digit by digit

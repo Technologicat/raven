@@ -1268,3 +1268,50 @@ class TestDescendToLatest:
         f, _card1, _card2, _greeting1, greeting2, _message = two_card_forest
         assert chatutil.descend_to_latest(f, greeting2) == greeting2
         assert chatutil.descend_to_latest(f, greeting2, recursive=False) == greeting2
+
+
+class TestLatestUserMessageText:
+    """The RAG query a turn falls back on when the user did not just type something.
+
+    Reads the branch rather than any view, which is the whole reason it exists as a function: a frontend
+    scanning its own display asks the question of the branch the *reader* is on, and during a turn that
+    need not be the branch the turn is answering.
+    """
+
+    def test_finds_the_newest_user_message_above_the_node(self, chat_payload):
+        f = chattree.Forest()
+        system = f.create_node(chat_payload("system", "prompt"), parent_id=None)
+        greeting = f.create_node(chat_payload("assistant", "hello"), parent_id=system)
+        first = f.create_node(chat_payload("user", "first question"), parent_id=greeting)
+        reply = f.create_node(chat_payload("assistant", "first answer"), parent_id=first)
+        second = f.create_node(chat_payload("user", "second question"), parent_id=reply)
+        latest = f.create_node(chat_payload("assistant", "second answer"), parent_id=second)
+
+        assert chatutil.latest_user_message_text(f, latest) == "second question"
+        # Asked from further up the same branch, the answer is what was newest *there*.
+        assert chatutil.latest_user_message_text(f, reply) == "first question"
+
+    def test_a_sibling_branch_answers_from_its_own_lineage(self, chat_payload):
+        """The discriminating case: two branches whose newest user messages differ.
+
+        Without this the fixture could not tell "reads the branch" from "reads the newest user message in
+        the whole datastore", which are the same answer in a chat that never branched.
+        """
+        f = chattree.Forest()
+        system = f.create_node(chat_payload("system", "prompt"), parent_id=None)
+        shared = f.create_node(chat_payload("user", "shared question"), parent_id=system)
+        left = f.create_node(chat_payload("assistant", "left answer"), parent_id=shared)
+        left_followup = f.create_node(chat_payload("user", "left followup"), parent_id=left)
+        right = f.create_node(chat_payload("assistant", "right answer"), parent_id=shared)
+        right_followup = f.create_node(chat_payload("user", "right followup"), parent_id=right)
+
+        assert chatutil.latest_user_message_text(f, left_followup) == "left followup"
+        assert chatutil.latest_user_message_text(f, right_followup) == "right followup"
+
+    def test_a_chat_with_nothing_said_answers_none(self, chat_payload):
+        """`None` means there is nothing to search for, which the callers read as "do not search"."""
+        f = chattree.Forest()
+        system = f.create_node(chat_payload("system", "prompt"), parent_id=None)
+        greeting = f.create_node(chat_payload("assistant", "hello"), parent_id=system)
+        assert chatutil.latest_user_message_text(f, greeting) is None
+
