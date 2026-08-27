@@ -274,6 +274,13 @@ days in, of four weeks.
    following the model's newline pattern instead of the clock, and a DPG container-stack error inside a
    repaint being recorded as a backend failure over the model's text.
 
+   **Still open, and wanted for the exhibit: an incomplete stored message has to say so on screen.** A
+   reply that was cancelled, or that the backend failed partway through, is kept — that is Cancel's promise
+   — and it currently looks exactly like a reply the model chose to end there. The marker is already in the
+   node's `generation_metadata`, so this is a render-time footer (`[Cancelled by user]`, `[Error occurred]`)
+   added by the GUI build and never stored, which is what keeps the continue machinery from having to strip
+   it again. Decided 2026-08-27; see `in-progress-reply-as-a-node.md` for why storing one was rejected.
+
    **Cancel during prompt processing was the last uncovered case, and it works** (2026-08-27): a new chat
    with a fulltext PDF attached gives a prompt long enough to have a window, and Ctrl+G inside it took the
    abort path — `abandoning the backend request`, and the blocked read returned **two milliseconds** later,

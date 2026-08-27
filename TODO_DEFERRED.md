@@ -4625,6 +4625,13 @@ This is the *output* side, and distinct from the two document-reading items it s
   form.
 - Different from `.tex` ingestion, which already works — the file is read as text, and the model handles it fine.
 
+**The spoken half rides along and is not a separate item** (Juha, 2026-08-27). The avatar currently reads
+`$$2 \frac{p}{2q^2}$$` aloud as "two frac p two q squared", the speakable-text path having stripped the
+backslashes and braces from notation it does not recognize — so the same source is wrong on the screen and
+in the ear. Whatever teaches the renderer what an equation *is* gives the speakable path the same handle,
+which is why this is filed here rather than beside it: fixing the two separately would mean writing the
+parser twice.
+
 The work is in the renderer. `DearPyGui_Markdown` (vendored, and already substantially ours) knows nothing about
 math, so something has to turn a LaTeX fragment into pixels and splice it into the flow of a message: a
 typesetting pass producing a texture per equation, at the right baseline and the right size for the surrounding
@@ -5137,6 +5144,25 @@ Two halves, separable:
 - **Docs.** The root `README.md`, plus the per-app READMEs that have a matching section.
 
 Raised by Juha (2026-08-13), for discussion before building — the in-app cue is the open question.
+
+## Re-test whether `reasoning_effort` makes Qwen 3.8 usable interactively
+
+*Cluster: llm-backends · Cost: S · Gate: none — needs the maintainer at the keyboard · Filed: 2026-08-27*
+
+Qwen 3.8 thinks for so long that it is unusable for interactive chat, and `reasoning_effort: "none"` is the
+lever meant to fix that. Whether it works is still unknown, because the test that said it did not was itself
+faulty: the override went into the chat template as an *unquoted* Jinja `set`, which is a silent no-op, so
+the run measured a model that had never been told anything.
+
+So the question is open rather than answered, and it is cheap to settle: put the **quoted** prefix back, run
+the circle prompt, then remove it and run the same prompt again. Only the maintainer can do it — it needs
+the template edited in LM Studio and the model reloaded.
+
+The stake is which model the exhibit can use. A thinking model that cannot be talked out of thinking is not
+a demo model, whatever else it is good at.
+
+Raised by Juha (2026-08-26), carried across two compactions before being written down — which is why it is
+here rather than in a session note.
 
 ## A transient postprocessor effect cannot ease in or out
 
