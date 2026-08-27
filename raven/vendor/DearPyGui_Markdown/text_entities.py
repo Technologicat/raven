@@ -108,13 +108,13 @@ class AttributeController(list[Attribute]):
         if max_text_height > 0:
             spacer_height = max_text_height - get_text_size(text, font=self.font)[1]
             if spacer_height > 1:
-                with dpg.group(parent=parent) as parent_text_group:
-                    dpg.add_spacer(height=spacer_height, parent=parent_text_group)
+                parent_text_group = dpg.add_group(parent=parent)
+                dpg.add_spacer(height=spacer_height, parent=parent_text_group)
                 dpg.bind_item_theme(parent_text_group, self.dpg_group_theme)
 
-        with dpg.group(parent=parent_text_group) as dpg_text_group:
-            dpg_text = dpg.add_text(text, parent=dpg_text_group, color=self.text_color)
-            dpg.bind_item_font(dpg_text, self.font)
+        dpg_text_group = dpg.add_group(parent=parent_text_group)
+        dpg_text = dpg.add_text(text, parent=dpg_text_group, color=self.text_color)
+        dpg.bind_item_font(dpg_text, self.font)
         dpg.bind_item_theme(dpg_text_group, self.dpg_group_theme)
 
         self.render_attributes(dpg_text, dpg_text_group, self.font, attributes_group)
@@ -350,11 +350,11 @@ class TextEntity(list[StrEntity | SelfTextEntity]):
         return all_chars
 
     def render(self, parent=0, attributes_group=0, max_text_height: int | float = -1):
-        with dpg.group(horizontal=True, parent=parent) as group:
-            for item in self:
-                item.render(parent=group,
-                            attributes_group=attributes_group,
-                            max_text_height=max_text_height)
+        group = dpg.add_group(horizontal=True, parent=parent)
+        for item in self:
+            item.render(parent=group,
+                        attributes_group=attributes_group,
+                        max_text_height=max_text_height)
         dpg.bind_item_theme(group, AttributeController.dpg_group_theme)
 
 
@@ -422,11 +422,11 @@ class LineEntity(TextEntity):
     def render(self, parent=0, attributes_group=0):  # noqa
         self.post_render_queue = list()
         for item in self:
-            with dpg.group(horizontal=True, parent=parent) as group:
-                self.render_attributes(item, parent=group, attributes_group=attributes_group)
-                item.render(parent=group,
-                            attributes_group=attributes_group,
-                            max_text_height=item.get_height())
+            group = dpg.add_group(horizontal=True, parent=parent)
+            self.render_attributes(item, parent=group, attributes_group=attributes_group)
+            item.render(parent=group,
+                        attributes_group=attributes_group,
+                        max_text_height=item.get_height())
 
             dpg.bind_item_theme(group, AttributeController.dpg_group_theme)
 

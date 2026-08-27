@@ -366,9 +366,9 @@ class MarkdownText:
         '''
         print_text: text_entities.LineEntity = wrap_text_entity(self.text_entity, width=wrap)
 
-        with dpg.group(parent=parent, horizontal=True, tag=tag) as group:
-            text_group = dpg.add_group(parent=group)
-            attributes_group = dpg.add_group(parent=group)
+        group = dpg.add_group(parent=parent, horizontal=True, tag=tag)
+        text_group = dpg.add_group(parent=group)
+        attributes_group = dpg.add_group(parent=group)
 
         if not CallWhenDPGStarted.STARTUP_DONE:
             CallWhenDPGStarted.append(dpg.bind_item_theme, group, text_entities.AttributeController.dpg_group_theme)
