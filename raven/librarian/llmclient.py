@@ -2355,6 +2355,3 @@ def make_console_progress_handler(progress_symbol: str) -> Callable:
             sys.stderr.flush()
         return action_ack  # let the LLM continue generating if it wants
     return console_progress
-
-# --------------------------------------------------------------------------------
-# For tool-using LLMs: tool-calling
