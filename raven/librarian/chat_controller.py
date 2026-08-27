@@ -343,6 +343,19 @@ def _phase_breakdown_rows(generation_metadata: dict, *,
     rows.append(row("Total", total_dt, total_tokens))
     return rows
 
+def _node_is_unfinished(datastore: chattree.Forest, node_id: str) -> bool:
+    """Whether `node_id` holds a reply that never finished arriving.
+
+    True while a turn is streaming into it, and true afterwards for a reply the app was interrupted in the
+    middle of — a turn cannot outlive the process, so a node still marked this way when a datastore is read
+    back was cut short. The two are told apart by whether a turn is running, not by the node.
+
+    Written by `scaffold.ai_turn`, which creates the node before the reply and clears the marker when the
+    reply is complete.
+    """
+    generation_metadata = datastore.get_payload(node_id).get("generation_metadata") or {}
+    return generation_metadata.get("status") == "incomplete"
+
 def _scan_for_root_nodes(datastore: chattree.Forest) -> list[str]:
     """The O(n) scan behind `_get_all_system_prompt_node_ids`, memoized on its own so the result can be filtered.
 
@@ -837,6 +850,48 @@ class DPGChatMessage:
                     dpg.delete_item(paragraph.pop("widget"))
             paragraph["rendered"] = False
 
+    def _render_text_paragraphs(self, text: str) -> None:
+        """Render one text content-part: split into paragraphs and add them.
+
+        Also consolidates any inline `<think>...</think>` block into a single collapsible thought paragraph, but
+        that handling is dead code: since the June 2026 `reasoning_content` migration, thinking is separated out
+        before render (at load by `upgrade_datastore`, live by the stream parser), so `content` no longer
+        carries inline `<think>`. Leftover from the pre-June-2026 inline handling; slated for removal."""
+        paragraph_accumulator = io.StringIO()
+        inside_think_block = False
+        def commit_paragraph():
+            nonlocal paragraph_accumulator
+            text_to_commit = paragraph_accumulator.getvalue()
+            if not text_to_commit:
+                return
+            self.add_paragraph(text_to_commit,
+                               is_thought=inside_think_block)
+            paragraph_accumulator = io.StringIO()
+
+        paragraphs = text.split("\n")
+        for idx, paragraph in enumerate(paragraphs):
+            p = paragraph.strip()
+
+            # Detect think block state (rudimentary; should detect from the token stream, not re-split a string).
+            entering_think_block = (p == "<think>")
+            exiting_think_block = (p == "</think>")
+
+            if entering_think_block:
+                commit_paragraph()  # commit previous text (if any) before start of think block
+                inside_think_block = True
+
+            paragraph_accumulator.write(f"{paragraph}\n")  # regardless of if it's just a newline
+
+            # Consolidate "<think>...</think>" into one paragraph, so that we can hide/show it easily.
+            # When at last paragraph, always commit (even if incomplete think block).
+            if (inside_think_block and not exiting_think_block) and (idx < len(paragraphs) - 1):
+                continue
+
+            commit_paragraph()
+
+            if exiting_think_block:
+                inside_think_block = False
+
     def reclassify_all_paragraphs_as_thought(self) -> None:
         """Move everything shown so far into the thought bubble, as if it had arrived as reasoning.
 
@@ -1238,8 +1293,8 @@ class DPGChatMessage:
             # item>)` fails to push while still popping on exit, so DPG reports "[1009] No container to pop"
             # from wherever the rebuild happened rather than from the message that caused it.
             #
-            # Only reachable through a demolish *followed by a rebuild* of the same instance, which is what
-            # `reattach` does; a demolish before dropping the instance never asks these questions again.
+            # Only reachable when the same instance is demolished and then built again; a demolish before
+            # the instance is dropped never asks these questions.
             self.gui_thought_button = None
             self.gui_thought_group = None
             self.gui_thought_stats = None
@@ -2122,47 +2177,6 @@ class DPGCompleteChatMessage(DPGChatMessage):
         for inject_text in injects:
             self.add_paragraph(inject_text, is_thought=False)
 
-    def _render_text_paragraphs(self, text: str) -> None:
-        """Render one text content-part: split into paragraphs and add them.
-
-        Also consolidates any inline `<think>...</think>` block into a single collapsible thought paragraph, but
-        that handling is dead code: since the June 2026 `reasoning_content` migration, thinking is separated out
-        before render (at load by `upgrade_datastore`, live by the stream parser), so `content` no longer
-        carries inline `<think>`. Leftover from the pre-June-2026 inline handling; slated for removal."""
-        paragraph_accumulator = io.StringIO()
-        inside_think_block = False
-        def commit_paragraph():
-            nonlocal paragraph_accumulator
-            text_to_commit = paragraph_accumulator.getvalue()
-            if not text_to_commit:
-                return
-            self.add_paragraph(text_to_commit,
-                               is_thought=inside_think_block)
-            paragraph_accumulator = io.StringIO()
-
-        paragraphs = text.split("\n")
-        for idx, paragraph in enumerate(paragraphs):
-            p = paragraph.strip()
-
-            # Detect think block state (rudimentary; should detect from the token stream, not re-split a string).
-            entering_think_block = (p == "<think>")
-            exiting_think_block = (p == "</think>")
-
-            if entering_think_block:
-                commit_paragraph()  # commit previous text (if any) before start of think block
-                inside_think_block = True
-
-            paragraph_accumulator.write(f"{paragraph}\n")  # regardless of if it's just a newline
-
-            # Consolidate "<think>...</think>" into one paragraph, so that we can hide/show it easily.
-            # When at last paragraph, always commit (even if incomplete think block).
-            if (inside_think_block and not exiting_think_block) and (idx < len(paragraphs) - 1):
-                continue
-
-            commit_paragraph()
-
-            if exiting_think_block:
-                inside_think_block = False
 
     def _render_image_part(self, part: dict[str, Any], sidecars_meta: dict[str, Any]) -> None:
         """Render one `image_url` content-part: an inline thumbnail plus a per-image provenance cluster.
@@ -2354,17 +2368,27 @@ class DPGCompleteChatMessage(DPGChatMessage):
 class DPGStreamingChatMessage(DPGChatMessage):
     def __init__(self,
                  gui_parent: str | int,
-                 parent_view: "DPGLinearizedChatView"):
+                 parent_view: "DPGLinearizedChatView",
+                 node_id: str):
         """A chat message being streamed live from the LLM, displayed in the linearized chat view.
 
         `gui_parent`: DPG tag or ID of the GUI widget (typically child window or group) to add the chat message to.
         `parent_view`: The linearized chat view widget this chat message is rendered in (and is owned by).
+        `node_id`: The chat node this message is being written into. It exists already, carrying whatever
+                   has streamed so far — the turn creates it before the reply starts (`scaffold.ai_turn`).
 
-        Starts as blank. Use the `add_paragraph` and/or `replace_last_paragraph` methods to add text.
+                   Holding the id rather than a floating identity is what lets a rebuilt view find this
+                   message again: it is the rendering of a node, like every other message in the view, and
+                   the node is where its text lives.
+
+        Starts from whatever the node says, which is empty at the beginning of a reply and not empty for a
+        view rebuilt mid-reply. Use `add_paragraph` and `replace_last_paragraph` to extend it as more text
+        arrives.
 
         To replace the streaming message with a completed message, call the streaming message's
         `demolish` method first. Doing so removes its widgets from the GUI.
         """
+        self.node_id = node_id  # set before `build`, which reads it
         super().__init__(gui_parent=gui_parent,
                          parent_view=parent_view)
         # A reply being generated is exactly the case the preference speaks to.
@@ -2374,47 +2398,37 @@ class DPGStreamingChatMessage(DPGChatMessage):
         self.build()
 
     def build(self):
+        persona = self.parent_view.chat_controller.llm_settings.personas.get("assistant", None)
         super().build(role="assistant",  # TODO: parameterize this?
-                      persona=self.parent_view.chat_controller.llm_settings.personas.get("assistant", None),
-                      node_id=None)
+                      persona=persona,
+                      node_id=self.node_id)
 
-    def reattach(self, gui_parent: str | int) -> None:
-        """Re-render this message into a different container, keeping everything streamed into it so far.
+        # Seed from what the node already holds. Empty at the start of a reply, which is the common case and
+        # renders as nothing; not empty when a view is rebuilt mid-reply, which is the case this exists for —
+        # the words that have arrived are in the node, so they come back with it.
+        message = self.parent_view.chat_controller.datastore.get_payload(self.node_id)["message"]
+        self._seed_streamed_paragraphs(message.get("reasoning_content") or "", is_thought=True)
+        self._seed_streamed_paragraphs(
+            chatutil.remove_persona_from_start_of_line(persona=persona,
+                                                       text=chatutil.content_to_text(message.get("content", []))),
+            is_thought=False)
 
-        For the case where the view was rebuilt under a reply that is still being written — the user
-        navigated away and came back. `DPGLinearizedChatView.build` clears the message container, so this
-        message's widgets are gone while its *text* is not: the text lives in `paragraphs`, which is the
-        record the renderer works from in any case.
+    def _seed_streamed_paragraphs(self, text: str, is_thought: bool) -> None:
+        """Lay `text` out in paragraphs exactly as streaming it would have, so rendering can carry on from here.
 
-        The point of it is that returning to a branch should look like never having left, rather than like
-        a reply that vanished and reappeared when it finished.
+        Not `_render_text_paragraphs`, which is for a *finished* message and drops empty paragraphs. This
+        one keeps them, and the difference is not cosmetic: the live renderer works on the last paragraph,
+        replacing it as the current one grows and appending a fresh empty one at each newline. So the last
+        paragraph seeded here has to be the one still being written — including when that is empty, which
+        is what a reply whose text ends at a newline looks like.
+
+        Seed it wrong and the next chunk to arrive replaces a *finished* paragraph with the partial one,
+        which reads as the reply eating what it already said.
         """
-        with self.paragraphs_lock:
-            # The paragraph records are about to be dropped by `demolish`, so keep the part that is content
-            # rather than presentation. Fresh dicts, with no `widget` key: whatever those ids referred to
-            # went with the container.
-            saved_paragraphs = [{"text": paragraph["text"],
-                                 "is_thought": paragraph["is_thought"],
-                                 "rendered": False}
-                                for paragraph in self.paragraphs]
-            saved_thinking_shown = self._thinking_shown
-
-            # `demolish` rather than a per-paragraph cleanup, because it also releases the handler
-            # registries and tooltips — which live outside the container group, so the view's children-only
-            # delete did not reach them, and re-rendering without this would leak one set per return.
-            self.demolish()
-
-            self.gui_parent = gui_parent
-            self._create_container_group()
-            self.build()  # a fresh shell: role, persona, the text group the paragraphs go into
-            self.paragraphs = saved_paragraphs
-            self._render_text()
-
-        # Not part of `paragraphs`, and `set_thinking` acts on the transition only — so the remembered
-        # answer has to be forgotten before it will re-apply to the new cloud.
-        self._thinking_shown = None
-        if saved_thinking_shown is not None:
-            self.set_thinking(saved_thinking_shown)
+        if not text:
+            return
+        for piece in text.split("\n"):
+            self.add_paragraph(piece, is_thought=is_thought)
 
     def set_thinking_progress(self, dt: float, n_chunks: int) -> None:
         """Show how long the model has been reasoning, and roughly how much of it there is so far.
@@ -3298,6 +3312,51 @@ class DPGLinearizedChatView:
 
             return output_text.getvalue()
 
+    def add_streaming_message(self, node_id: str) -> "DPGStreamingChatMessage":
+        """Append a live message rendering `node_id` to the end of the view, and return it.
+
+        The node exists and carries whatever has streamed so far, so this is the same act as
+        `add_complete_message` — rendering a node — differing only in which of the two message classes
+        does it, and therefore in what the reader gets: live paragraph updates and a thinking cloud rather
+        than a button row and sibling navigation.
+        """
+        with self.chat_controller.current_chat_history_lock:
+            message = DPGStreamingChatMessage(gui_parent=self.chat_messages_container_group_widget,
+                                              parent_view=self,
+                                              node_id=node_id)
+            self.chat_controller.current_chat_history.append(message)
+        return message
+
+    def streaming_message_for(self, node_id: str) -> "DPGStreamingChatMessage | None":
+        """The live message rendering `node_id`, or `None` if this view is not showing one.
+
+        Asked rather than remembered, because a rebuild replaces the widget: whoever is streaming into a
+        reply holds the node's id, not the widget, and looks it up each time. `None` is the ordinary answer
+        when the user is looking at another branch — there is nothing to draw into, and nothing wrong.
+        """
+        with self.chat_controller.current_chat_history_lock:
+            for message in self.chat_controller.current_chat_history:
+                if isinstance(message, DPGStreamingChatMessage) and message.node_id == node_id:
+                    return message
+        return None
+
+    def remove_message_for(self, node_id: str) -> None:
+        """Take whichever message renders `node_id` off screen, if this view is showing one.
+
+        By node rather than by position, and under the lock, because the caller is usually a background
+        turn while the thing it is removing belongs to a view a *rebuild* may be replacing underneath it.
+        Indexing into the list from a turn is what makes that a crash: `build` clears it, so "the last
+        message" is briefly nothing at all.
+
+        Idempotent, and a no-op when the user is looking at another branch.
+        """
+        with self.chat_controller.current_chat_history_lock:
+            message = next((m for m in self.chat_controller.current_chat_history if m.node_id == node_id), None)
+            if message is None:
+                return
+            self.chat_controller.current_chat_history.remove(message)
+            message.demolish()
+
     def add_complete_message(self,
                              node_id: str,
                              scroll_view: bool = True,
@@ -3382,22 +3441,16 @@ class DPGLinearizedChatView:
             dpg.delete_item(self.chat_messages_container_group_widget,
                             children_only=True)  # clear old content from GUI
             for node_id in node_id_history:
-                self.add_complete_message(node_id=node_id,
-                                          scroll_view=False)  # we scroll just once, when done
-            # A reply being written into this branch goes back on the end, carrying everything streamed so
-            # far. The delete above took its widgets with the rest; its text lives in the message object,
-            # so this is a re-render rather than a recovery.
-            #
-            # Here rather than in the turn, because every way of arriving at a branch comes through this
-            # one function — sibling switch, continuation jump, new chat, reroll, resize-rebuild — so
-            # returning to a branch looks the same whichever way you did it, and no navigation path has to
-            # remember. Under the lock the turn also publishes with, which is what settles the case where a
-            # turn finishes mid-rebuild: either the message is still live and is re-attached, or it has
-            # already become a stored node and was rendered by the loop above.
-            maybe_streaming_message = self.chat_controller.streaming_message
-            if maybe_streaming_message is not None and self.chat_controller.streaming_message_head == head_node_id:
-                logger.info("DPGLinearizedChatView.build: a reply is being written into this branch; re-attaching it.")
-                maybe_streaming_message.reattach(self.chat_messages_container_group_widget)
+                # A reply still being written renders as a live message, carrying everything that has
+                # arrived so far. It is the same act as rendering any other node — the text is in the tree
+                # — which is what lets returning to a branch mid-reply look like never having left, with
+                # no navigation path having to know a turn is running. Only the tail can be unfinished: a
+                # node with a child was finished before the child was made.
+                if node_id == node_id_history[-1] and _node_is_unfinished(self.chat_controller.datastore, node_id):
+                    self.add_streaming_message(node_id)
+                else:
+                    self.add_complete_message(node_id=node_id,
+                                              scroll_view=False)  # we scroll just once, when done
         # Update avatar emotion from the final message text (use only non-thought message content)
         role, persona, text = chatutil.get_node_message_text_without_persona(self.chat_controller.datastore, head_node_id)
         if role == "assistant":
@@ -3618,16 +3671,6 @@ class DPGChatController:
                                                   on_done=self._on_indexing_done)
         self.current_chat_history = []
         self.current_chat_history_lock = threading.RLock()
-
-        # The reply currently being streamed, and the branch it belongs to — `None` when no turn is
-        # writing. Controller state rather than a local of the turn's task, because the *view* is what
-        # needs to find it: a rebuild has to put a message still being written back on screen, and it can
-        # only do that for something it can see. Both are read and written under
-        # `current_chat_history_lock`, which is the lock a rebuild already holds — that is what decides the
-        # race between a turn finishing and a rebuild happening, rather than leaving it to arrive twice or
-        # not at all.
-        self.streaming_message = None
-        self.streaming_message_head = None
 
         # The keyboard mark on the current message's button row, built on first use by
         # `update_current_message_mark`. One mark that moves, rather than one per message: a chat has as
@@ -4302,6 +4345,9 @@ class DPGChatController:
             # task may have waited in the queue, and it is the branch we are about to *read* that this turn
             # belongs to. Every later comparison is against this, updated as the turn writes (`advance_head`).
             task_env.expected_head = self.app_state["HEAD"]
+            # The node this turn's current round is writing into, set by `on_llm_start`. `None` until the
+            # first round starts, which is the window a turn cancelled while still queued dies in.
+            task_env.ai_node_id = None
 
             # A live turn supersedes any pending idle-prefill: it warms the KV cache itself and reports its own
             # exact `prompt_tokens`, so a concurrent prefill round-trip would be wasted (and would contend with
@@ -4314,13 +4360,22 @@ class DPGChatController:
             speech_enabled = self.app_state["avatar_speech_enabled"]  # grab once, in case the user toggles it while this AI turn is being processed
 
             try:
-                streaming_chat_message = None
-                def delete_streaming_chat_message():  # for replacing with completed message
-                    nonlocal streaming_chat_message
-                    if streaming_chat_message is not None:
-                        publish_streaming_message(None)  # withdraw it before it stops existing
-                        streaming_chat_message.demolish()
-                        streaming_chat_message = None
+                def streaming_widget() -> "DPGStreamingChatMessage | None":
+                    """The widget this round is streaming into, or `None` when the view is not showing it.
+
+                    Looked up per use rather than held, which is the whole point of the reply being a node:
+                    a rebuild replaces the widget, and the next chunk simply finds the new one. `None` means
+                    the user is looking at another branch — nothing to draw into, and nothing wrong.
+                    """
+                    if task_env.ai_node_id is None:  # no round has started, so there is no node to render
+                        return None
+                    return self.view.streaming_message_for(task_env.ai_node_id)
+
+                def drop_streaming_widget() -> None:
+                    """Take this round's live message off screen, wherever it ended up. Safe before one exists."""
+                    if task_env.ai_node_id is None:
+                        return
+                    self.view.remove_message_for(task_env.ai_node_id)
 
                 def turn_owns_the_view() -> bool:
                     """Whether the chat on screen is the branch this turn is writing to.
@@ -4331,22 +4386,8 @@ class DPGChatController:
 
                     "HEAD has not moved" would be the wrong question, because this turn is itself the thing
                     that moves HEAD. The comparison is against where *this turn* last left it.
-
-                    A plain comparison, so it answers `True` again when the user comes back — which is what
-                    we want everywhere now that the view puts a message still being written back on screen
-                    itself (`DPGLinearizedChatView.build`, via `publish_streaming_message`).
                     """
                     return self.app_state["HEAD"] == task_env.expected_head
-
-                def publish_streaming_message(message: "DPGStreamingChatMessage | None") -> None:
-                    """Say which reply is being written, and on which branch — or that none is.
-
-                    Under the view's own lock, so a rebuild either sees a message to put back on screen or
-                    sees that the turn has finished with it, never a half-swapped state.
-                    """
-                    with self.current_chat_history_lock:
-                        self.streaming_message = message
-                        self.streaming_message_head = task_env.expected_head if message is not None else None
 
                 def advance_head(node_id: str) -> None:
                     """Move HEAD to a node this turn has just written, and keep the guard in step with it."""
@@ -4387,7 +4428,11 @@ class DPGChatController:
                         dpg.hide_item(self.docs_search_indicator_widget)
                         stop_turn_data_eyes()
 
-                def on_llm_start() -> None:
+                def on_llm_start(node_id: str) -> None:
+                    # The node this round writes into. It exists already, carrying an empty message; the
+                    # widget below renders it, and every later lookup goes through this id.
+                    task_env.ai_node_id = node_id
+
                     # Per round, not per turn: what this arms is "the backend is reading the prompt and has
                     # sent nothing back yet", which is true again at the start of every round of the agent
                     # loop. See `abort_if_nothing_to_lose`.
@@ -4397,18 +4442,15 @@ class DPGChatController:
                         return
 
                     if self.gui_updates_safe:
-                        nonlocal streaming_chat_message
-
-                        # When continuing, delete the previous completed revision of the message from the GUI
+                        # When continuing, take the message's previous rendering off screen: the live one
+                        # added below replaces it. By node rather than by position — this runs on the turn's
+                        # thread, and a rebuild may be rewriting the view's list as we look at it.
                         if continue_:
-                            old_dpg_chat_message = self.current_chat_history.pop(-1)
-                            old_dpg_chat_message.demolish()
+                            self.view.remove_message_for(node_id)
 
                         # Sampled before the new message widget exists — creating it is itself a content change.
                         follow_sample = self.view.sample_tail_follow()
-                        streaming_chat_message = DPGStreamingChatMessage(gui_parent=self.view.chat_messages_container_group_widget,
-                                                                         parent_view=self.view)
-                        publish_streaming_message(streaming_chat_message)  # so a rebuild can put it back
+                        self.view.add_streaming_message(node_id)
                         self.view.follow_tail(follow_sample)
 
                         if self.indicator_glow_animation is not None:
@@ -4463,9 +4505,11 @@ class DPGChatController:
                     task_env.round_has_streamed = True  # the backend is answering, so co-operative stop can reach it
 
                     # Keep generating — an abandoned reader is not an abandoned turn — but stop drawing
-                    # while the user is looking at a different branch. Coming back re-attaches this message
-                    # (`DPGLinearizedChatView.build`), and rendering picks up from there.
-                    if not turn_owns_the_view() or streaming_chat_message is None:
+                    # while the user is looking at a different branch. Nothing is lost by not drawing: the
+                    # text is going into the node either way, so a view rebuilt later renders it from there
+                    # and this picks up from whatever widget that rebuild made.
+                    streaming_chat_message = streaming_widget()
+                    if streaming_chat_message is None:
                         return llmclient.action_ack
 
                     # If the task is cancelled (`stop_ai_turn` was called), interrupt the LLM, keeping the content received so far.
@@ -4596,7 +4640,7 @@ class DPGChatController:
                         # not to the view. Leaving it published outlives its content — the stored node is
                         # what the branch shows now — and `DPGLinearizedChatView.build` would faithfully
                         # re-attach the empty husk the next time the user came back to this branch.
-                        delete_streaming_chat_message()
+                        drop_streaming_widget()
                         return
                     advance_head(node_id)  # update just in case of Ctrl+C or crash during tool calls
                     if self.gui_updates_safe:
@@ -4630,7 +4674,7 @@ class DPGChatController:
                         # for, so it must not move a reader who has scrolled away any more than the chunks did.
                         # This one replaces rather than appends, so the offset is restored too, not just the pin.
                         follow_sample = self.view.sample_tail_follow()
-                        delete_streaming_chat_message()  # no-ops when there is no in-progress message in the GUI
+                        drop_streaming_widget()  # no-ops when there is no in-progress message in the GUI
                         # The reply that has just finished is the one case the `show_thinking` preference
                         # speaks to, so it survives the swap from streaming widget to stored one. Without
                         # this the trace would shut itself at the exact moment the reader reached the end
@@ -4695,7 +4739,7 @@ class DPGChatController:
                     advance_head(node_id)  # update just in case of Ctrl+C or crash during tool calls
                     if self.gui_updates_safe:
                         follow_sample = self.view.sample_tail_follow()  # a tool result also arrives on its own
-                        delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
+                        drop_streaming_widget()  # it shouldn't exist when this triggers, but robustness.
                         self.view.add_complete_message(node_id, scroll_view=False)
                         self.view.restore_scroll_after_swap(follow_sample)
                         self.update_context_fill_indicator()  # tool result added -> context grew
@@ -4767,22 +4811,18 @@ class DPGChatController:
                 # `on_llm_start` has already put an empty streaming message in the view, and the callback
                 # that would normally take it away is `on_done`, which is not going to run.
                 if self.gui_updates_safe:
-                    delete_streaming_chat_message()
+                    drop_streaming_widget()
             finally:
-                # No reply is being written any more, whatever ended the turn. Read directly rather than
-                # through the closures above, which are defined inside the `try` and so are not guaranteed
-                # to exist on every path that reaches here.
+                # A live message left over from a round that ended without `on_done` running — an abort, or
+                # a failure on a path that does not finalize. Reached through the view rather than a held
+                # reference, so it finds whichever widget a rebuild left behind, and does nothing when the
+                # user is elsewhere or the swap already happened.
                 #
-                # The backstop for the widget, not merely for the flag: any path that ends a turn without
-                # `on_done` running leaves one published, and a published widget is one a rebuild will put
-                # back on screen — empty, because whatever it was showing is a stored node now.
-                with self.current_chat_history_lock:
-                    maybe_orphaned_message = self.streaming_message
-                    self.streaming_message = None
-                    self.streaming_message_head = None
-                if maybe_orphaned_message is not None:
-                    logger.info("ai_turn.ai_turn_task: the turn ended with a streaming message still published; demolishing it.")
-                    maybe_orphaned_message.demolish()
+                # Not a matter of tidiness: the node stops being unfinished when the turn writes its final
+                # payload, so a live widget outliving that would render a message the tree now says is
+                # done, and go on saying it is being written.
+                if task_env.ai_node_id is not None:
+                    self.view.remove_message_for(task_env.ai_node_id)
                 if self.gui_updates_safe:
                     dpg.disable_item(self.chat_stop_generation_button_widget)
                     while turn_data_eyes_uses:  # release anything this turn started and did not finish

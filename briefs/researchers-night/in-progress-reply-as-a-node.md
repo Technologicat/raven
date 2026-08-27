@@ -94,9 +94,11 @@ The runtime and load-time questions never need the same answer, and neither need
 marker, because **a live turn cannot span a restart**: any node still marked incomplete when the datastore
 is read back was interrupted, by definition.
 
-*Considered and not done*: a `[Cancelled by user]` footer paragraph on the second case. It would have to be
-stripped by the continue machinery, and that complication buys little — the message reads the same to a
-person either way.
+*Reopened, and the shape that works*: a `[Cancelled by user]` or `[Error occurred]` footer, **added at
+render time in the GUI build rather than stored** (Juha, 2026-08-27). The objection to storing one was that
+the continue machinery would have to strip it again; a footer that never enters the stored text has nothing
+to strip. The marker is already in `generation_metadata`, so the renderer has what it needs to choose which
+line to add, or none.
 
 **`continue_` stays on `add_revision`.** Which is what keeps `overwrite_active_revision` down to one caller,
 so it can be scoped to the streaming case rather than designed as a general operation.
@@ -110,6 +112,20 @@ paragraph updates and a thinking cloud against a full button row and sibling nav
 exists to hold what they share. Worth stating the converse, since it is what makes the decision non-obvious:
 if the streaming class were folded away there would be no reason for a hierarchy at all, the base becoming
 the only class. The fork remaining is what keeps it.
+
+## Found on the way, to fix in its own commit
+
+**Continuing a message loses what it already said.** `serialize_history_for_wire(continue_=True)` leaves the
+assistant message in the request, and LM Studio answers that with the continuation *alone* — measured
+2026-08-27, `'\n3. Autumn\n4. Winter'` for a message reading `'1. Spring\n2. Summer'`. Nothing in `ai_turn`
+re-joins the two, so `add_revision` stores the continuation as the whole message. Reproduced end to end
+against the real `ai_turn`: a node reading `'Aria: 1. Spring\n2. Summer'` came back as
+`'Aria: 3. Autumn\n4. Winter'`, the original text gone and a second persona prefix added.
+
+Predates this work. Found because `invoke`'s docstring says a continue returns "the updated (continued)
+message" while its accumulators start empty — the code and the comment disagreed, so both were wrong. The
+docstring's claim is probably true of oobabooga, whose `continue_` request field Raven still sends and
+whose behaviour the project already records as unvalidated.
 
 ## How it gets verified
 

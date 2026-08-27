@@ -589,7 +589,9 @@ def minimal_chat_client(backend_url) -> None:
             node_id_history = datastore.linearize_up(app_state["HEAD"])  # latest history (ugh, we only need this here to get its length, for the sequential message number)
             ai_message_number = len(node_id_history)
 
-            def on_llm_start() -> None:
+            def on_llm_start(node_id: str) -> None:
+                # The node id is what a frontend that re-reads the chat needs; a terminal prints as the
+                # text arrives and never looks back, so it wants only the header.
                 nonlocal ai_message_number  # for documenting intent only
                 print(chatutil.format_message_number(ai_message_number, markup="ansi"))
 

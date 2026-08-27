@@ -380,7 +380,7 @@ class TestAITurnSimple:
 
         calls = []
         run_ai_turn(forest, llm_settings, user_head,
-                    on_llm_start=lambda: calls.append("start"),
+                    on_llm_start=lambda node_id: calls.append("start"),
                     on_llm_done=lambda nid: calls.append(("done", nid)))
         assert calls[0] == "start"
         assert calls[1][0] == "done"
