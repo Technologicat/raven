@@ -325,3 +325,57 @@ class TestNonexistentOkAndWhatDPGSaysAboutDeadItems:
                 dpg.add_text("into the void", parent=dead)
         assert "test_utils.py" in caplog.text, "the log names DPG's own wrapper instead of the code that called it"
         assert "parent gone" in caplog.text
+
+    def test_the_log_names_the_parent_that_went_away(self, probe_window, caplog):
+        """`[1011]` names the item being created, never the parent — so the value comes from the frame."""
+        parent = self._dead_item()
+        with caplog.at_level(logging.DEBUG, logger="raven.common.gui.utils"):
+            with guiutils.nonexistent_ok(parent_gone_ok=True):
+                dpg.add_text("into the void", parent=parent)
+        assert f"parent=id {parent}" in caplog.text
+        assert "[deleted]" in caplog.text
+
+
+class TestDescribeItem:
+    """Both spellings of a widget's identity in one string, for a log line."""
+
+    def test_a_tagged_widget_gives_tag_and_id(self, dpg_context):
+        with dpg.window(tag="describe_probe_window"):  # tag
+            widget = dpg.add_group(tag="describe_probe_group")  # tag
+        try:
+            described = guiutils.describe_item(widget)
+            assert "describe_probe_group" in described
+            assert str(dpg.get_alias_id("describe_probe_group")) in described  # tag
+        finally:
+            dpg.delete_item("describe_probe_window")  # tag
+
+    def test_an_untagged_widget_gives_its_number(self, dpg_context):
+        with dpg.window(tag="describe_probe_window2"):  # tag
+            widget = dpg.add_group()
+        try:
+            assert guiutils.describe_item(widget) == f"id {widget}"
+        finally:
+            dpg.delete_item("describe_probe_window2")  # tag
+
+    def test_a_deleted_widget_says_so(self, dpg_context):
+        with dpg.window(tag="describe_probe_window3"):  # tag
+            widget = dpg.add_group()
+        dpg.delete_item("describe_probe_window3")  # tag
+        described = guiutils.describe_item(widget)
+        assert described.endswith("[deleted]"), described
+
+    def test_a_deleted_widget_is_still_named_by_its_tag(self, dpg_context):
+        """The reason this helper is worth having: a dead widget can still say who it was.
+
+        DPG frees items lazily, and the alias outlives the item — so the tag is still answerable after a
+        delete, which is exactly when someone is reading the log. The liveness marker is what says the
+        widget is gone; the tag's presence is no evidence either way.
+        """
+        with dpg.window(tag="describe_probe_window4"):  # tag
+            widget = dpg.add_group(tag="describe_probe_doomed")  # tag
+        assert "[deleted]" not in guiutils.describe_item(widget), "the fixture was dead before the delete"
+        dpg.delete_item("describe_probe_window4")  # tag
+
+        described = guiutils.describe_item(widget)
+        assert "describe_probe_doomed" in described, described
+        assert "[deleted]" in described, described

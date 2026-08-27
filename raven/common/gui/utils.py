@@ -8,7 +8,7 @@ __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually wa
            "setup_default_font", "setup_icon_fonts", "setup_markdown", "setup_themes",  # granular low-level app bootup API
            "DISABLED_TEXT_COLOR", "DEFAULT_TEXT_COLOR",
            "nonexistent_ok",
-           "maybe_delete_item", "has_child_items", "item_identifiers",
+           "maybe_delete_item", "has_child_items", "item_identifiers", "describe_item",
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
            "get_mouse_relative_pos", "is_mouse_inside_widget",
            "screen_to_content", "content_to_screen", "zoom_keep_point",  # re-exported from layout_math
@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 import os
 import pathlib
 import threading
-import traceback as tb_module
 from typing import Optional, Tuple, Union
 
 from unpythonic.env import env
@@ -406,18 +405,36 @@ def _is_dpg_parent_gone(exc):
     return _exception_chain_mentions(exc, "Parent could not be deduced")
 
 def _log_suppressed_dpg_error(what: str, excvalue, traceback) -> None:
-    """Say, at DEBUG, what was swallowed and which line of ours asked for it."""
-    # Because a suppressed exception that leaves no trace is a debugging session nobody can start. The
-    # error DPG raises here names the *new* item and never the parent, so its own message cannot say which
-    # widget went away — but the deepest frame in our code names the call that asked, which is the half a
-    # reader actually needs. DEBUG rather than WARNING: on the render path this is an expected outcome of a
-    # view rebuild landing mid-draw, and at WARNING it would be a wall of noise on every branch switch.
-    frames = tb_module.extract_tb(traceback)
-    ours = [frame for frame in frames if "dearpygui" not in frame.filename]  # skip the toolkit's own wrapper
+    """Say, at DEBUG, what was swallowed, which line of ours asked for it, and — where knowable — on what."""
+    # Because a suppressed exception that leaves no trace is a debugging session nobody can start.
+    #
+    # DEBUG rather than WARNING: on the render path this is the expected outcome of a view rebuild landing
+    # mid-draw, and at WARNING it would be a wall of noise on every branch switch.
+    #
+    # The identity is the awkward half, and it is worth knowing why the line reads as it does. For a
+    # `[1005]` DPG names the item itself, so its own message is the answer. For a `[1011]` it names the item
+    # being *created* and never the parent that could not be found — so the only place that knowledge still
+    # exists is the frame that made the call, and this reads `parent` out of its locals. Best-effort by
+    # construction: it finds the value at a call site that named it `parent`, which is every `dpg.add_*`
+    # spelling in this codebase, and quietly says nothing anywhere else.
+    frames = []  # (frame, lineno), innermost last
+    while traceback is not None:
+        frames.append((traceback.tb_frame, traceback.tb_lineno))
+        traceback = traceback.tb_next
+    ours = [entry for entry in frames if "dearpygui" not in entry[0].f_code.co_filename]  # skip the toolkit's wrapper
     site = (ours or frames)[-1] if frames else None
-    where = f"{site.filename}:{site.lineno} in {site.name}: {site.line}" if site is not None else "unknown site"
+
+    if site is None:
+        where = "unknown site"
+        on_what = ""
+    else:
+        frame, lineno = site
+        where = f"{frame.f_code.co_filename}:{lineno} in {frame.f_code.co_name}"
+        maybe_parent = frame.f_locals.get("parent")
+        on_what = f", parent={describe_item(maybe_parent)}" if maybe_parent is not None else ""
+
     detail = " | ".join(str(exc).strip().replace("\n", " ") for exc in _causes(excvalue) if "Error:" in str(exc))
-    logger.debug(f"nonexistent_ok: suppressed DPG '{what}' at {where} -- {detail or excvalue}")
+    logger.debug(f"nonexistent_ok: suppressed DPG '{what}' at {where}{on_what} -- {detail or excvalue}")
 
 def _causes(exc):
     """Yield `exc` and every exception along its `__cause__` chain."""
@@ -509,6 +526,42 @@ def item_identifiers(widget: Union[str, int]) -> set:
         if alias:  # `""` when the item has none
             identifiers.add(alias)
     return identifiers
+
+def describe_item(widget: Union[str, int, None]) -> str:
+    """A widget's identity in both spellings, for a log line: `'my_tag' (id 42)`.
+
+    The reading half of `item_identifiers`: that one answers "is this the same widget", this one answers
+    "which widget is this" for a human. Reports whichever spellings DPG can supply, and says when the item
+    no longer exists.
+
+    Safe on a dead or bogus widget — every question is asked defensively, since the usual reason to be
+    describing one is that something has just gone wrong with it.
+    """
+    # The liveness marker is not decoration, and neither is asking for it separately. DPG frees items
+    # lazily, so a deleted widget goes on answering `get_item_alias` with its tag — measured 2026-08-27 —
+    # and a description that merely named it would read exactly like a description of a live one. Which is
+    # backwards from what a reader needs, since the usual reason to be describing a widget at all is that
+    # it has just gone away. `does_item_exist` is the only authority on that.
+    if widget is None:
+        return "None"
+
+    def ask(question):
+        """`question()`'s answer, or `None` if DPG declined to give one."""
+        try:
+            return question()
+        except Exception:  # noqa: BLE001 -- describing a widget must never be the thing that raises
+            return None
+
+    if isinstance(widget, str):
+        item_id = ask(lambda: dpg.get_alias_id(widget))
+        described = f"'{widget}'" + (f" (id {item_id})" if item_id else "")
+    else:
+        alias = ask(lambda: dpg.get_item_alias(widget))
+        described = (f"'{alias}' (id {widget})" if alias else f"id {widget}")
+
+    if ask(lambda: dpg.does_item_exist(widget)) is False:
+        described += " [deleted]"
+    return described
 
 # ---------------------------------------------------------------------------
 # Widget geometry
