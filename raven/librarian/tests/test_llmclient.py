@@ -8,6 +8,7 @@ The actual fetch (`api.webfetch_fetch`, HTTP to the server) is monkeypatched.
 import http.server
 import json
 import logging
+import pathlib
 import threading
 import time
 
@@ -2342,3 +2343,61 @@ class TestAbortingAnInFlightRequest:
         llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, maybe_abort=abort)
         abort.abort()  # a no-op, not an AttributeError on a dead response
         assert abort.aborted
+
+
+class TestCapturedStrayThinkReply:
+    """A real reply in which the model put a second `<think>` block on the *content* channel.
+
+    Qwen3.6-35B-A3B, captured 2026-08-27 (`data/qwen36_stray_think_reply.json`). It had already delivered
+    10.9k characters of reasoning on the native `reasoning_content` channel; it then emitted, as content,
+    `Aria: <think>` … `</think>` … the answer … and a final `</think>` that was never opened. One
+    occurrence in a day's use, and not reproducible on demand — which is why the stream is in the tree
+    rather than described in a comment.
+
+    **The capture also outruns what is understood about it.** The stored node holds that content raw, tags
+    and all, and the only writer of stored content is the parser's `content` events — yet the parser below
+    routes the inner block to `reasoning` at every chunk size from one character up. So the live run and
+    the parser disagree about the same bytes, and the artifact does not say why. These tests pin what the
+    parser does today, so that whoever resolves it can see immediately whether the answer moved.
+    """
+
+    @staticmethod
+    def _reply():
+        path = pathlib.Path(__file__).parent / "data" / "qwen36_stray_think_reply.json"
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _replay(content: str, chunk: int) -> dict[str, str]:
+        """Feed `content` through a parser that has already seen native reasoning, `chunk` characters at a time."""
+        parser = llmclient.StreamParser()
+        out = {"content": "", "reasoning": ""}
+        for event in parser.feed("", "reasoning on the native channel\n"):
+            out[event["type"]] += event["text"]
+        for i in range(0, len(content), chunk):
+            for event in parser.feed(content[i:i + chunk], ""):
+                if event["type"] in out:
+                    out[event["type"]] += event.get("text", "")
+        return out
+
+    def test_the_fixture_still_holds_the_shape_it_was_captured_for(self):
+        """A guard on the data, not on the parser: these are the three tags the rest of the class is about."""
+        content = self._reply()["content"]
+        assert content.count("<think>") == 1
+        assert content.count("</think>") == 2, "the unmatched close is the whole point of this capture"
+
+    @pytest.mark.parametrize("chunk", [1, 2, 3, 7, 8, 37, 100000])
+    def test_an_opening_tag_is_routed_however_the_stream_is_chopped(self, chunk):
+        """The open tag may straddle a chunk boundary, and the parser holds back a partial tag for that."""
+        out = self._replay(self._reply()["content"], chunk)
+        assert "<think>" not in out["content"]
+        assert "1: The multiplicative identity." in out["reasoning"], "the block's text was not routed"
+
+    def test_an_unmatched_close_is_left_in_the_answer(self):
+        """Deliberate: with reasoning arriving on its own channel, an orphan close is no longer evidence.
+
+        `_may_retcon` is off by then — the earlier text demonstrably was *not* unmarked reasoning — so
+        there is nothing to infer and nothing to move. The renderer shows the tag rather than dropping it,
+        which is what let this reply be recognized as malformed at all.
+        """
+        out = self._replay(self._reply()["content"], 37)
+        assert out["content"].rstrip().endswith("</think>")
