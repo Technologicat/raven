@@ -422,9 +422,13 @@ def _get_unmarked_theme() -> str | int:
     """
     global _unmarked_theme
     if _unmarked_theme is None:
-        with dpg.theme() as _unmarked_theme:
-            with dpg.theme_component(dpg.mvAll):
-                dpg.add_theme_color(dpg.mvThemeCol_Text, (*keyboardmark.COLOR[:3], 0))
+        # Explicit parents rather than `with`, because this is built on *first use* and its only caller is
+        # `build`, which runs on background threads. The container stack is global, so the app-init licence
+        # to use `with` does not reach here: whichever message happens to be built first pays for this, and
+        # that message is usually not on the main thread.
+        _unmarked_theme = dpg.add_theme()
+        component = dpg.add_theme_component(dpg.mvAll, parent=_unmarked_theme)
+        dpg.add_theme_color(dpg.mvThemeCol_Text, (*keyboardmark.COLOR[:3], 0), parent=component)
     return _unmarked_theme
 
 # --------------------------------------------------------------------------------
@@ -3314,6 +3318,22 @@ class DPGLinearizedChatView:
                                itself the moment the message finalizes.
         """
         with self.chat_controller.current_chat_history_lock:
+            # A linearized view shows each node once, so a node already on screen is a duplicate rather than
+            # a second occurrence. Two paths append: `build`, walking the branch out of the datastore, and a
+            # turn's own `on_done` / `on_tool_done` as each node is written. They race over a window that is
+            # narrow but real — a rebuild landing between the node being stored and the callback firing
+            # draws it, and the callback then draws it again — and flicking between branches while a turn
+            # runs is exactly how a user hits it.
+            #
+            # Guarded here rather than at each caller because this is the one place both paths pass through.
+            already_shown = next((message for message in self.chat_controller.current_chat_history
+                                  if message.node_id == node_id), None)
+            if already_shown is not None:
+                logger.info(f"DPGLinearizedChatView.add_complete_message: node '{node_id}' is already in the view; not adding it twice.")
+                if scroll_view:  # the caller still asked to be taken there, and it is on screen to be taken to
+                    self.scroll_view()
+                return already_shown
+
             dpg_chat_message = DPGCompleteChatMessage(gui_parent=self.chat_messages_container_group_widget,
                                                       parent_view=self,
                                                       node_id=node_id,
@@ -4572,6 +4592,11 @@ class DPGChatController:
                         # the branch it was generated for; what must not happen is this turn dragging the
                         # user back to it, or drawing into the chat they are now looking at.
                         logger.info(f"ai_turn.ai_turn_task.on_done: HEAD has moved off this turn's branch; leaving node '{node_id}' where it is.")
+                        # The streaming widget still goes, though: it belongs to the round that just ended,
+                        # not to the view. Leaving it published outlives its content — the stored node is
+                        # what the branch shows now — and `DPGLinearizedChatView.build` would faithfully
+                        # re-attach the empty husk the next time the user came back to this branch.
+                        delete_streaming_chat_message()
                         return
                     advance_head(node_id)  # update just in case of Ctrl+C or crash during tool calls
                     if self.gui_updates_safe:
@@ -4744,12 +4769,20 @@ class DPGChatController:
                 if self.gui_updates_safe:
                     delete_streaming_chat_message()
             finally:
-                # No reply is being written any more, whatever ended the turn. Set directly rather than
-                # through `publish_streaming_message`, which is defined inside the `try` and so is not
-                # guaranteed to exist on every path that reaches here.
+                # No reply is being written any more, whatever ended the turn. Read directly rather than
+                # through the closures above, which are defined inside the `try` and so are not guaranteed
+                # to exist on every path that reaches here.
+                #
+                # The backstop for the widget, not merely for the flag: any path that ends a turn without
+                # `on_done` running leaves one published, and a published widget is one a rebuild will put
+                # back on screen — empty, because whatever it was showing is a stored node now.
                 with self.current_chat_history_lock:
+                    maybe_orphaned_message = self.streaming_message
                     self.streaming_message = None
                     self.streaming_message_head = None
+                if maybe_orphaned_message is not None:
+                    logger.info("ai_turn.ai_turn_task: the turn ended with a streaming message still published; demolishing it.")
+                    maybe_orphaned_message.demolish()
                 if self.gui_updates_safe:
                     dpg.disable_item(self.chat_stop_generation_button_widget)
                     while turn_data_eyes_uses:  # release anything this turn started and did not finish
