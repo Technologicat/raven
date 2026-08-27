@@ -1440,9 +1440,12 @@ class DPGChatMessage:
                 # TODO: the greeting, and the user's first message — which held because reroll is offered
                 # TODO: only on assistant messages and never on the greeting, putting the earliest
                 # TODO: rerollable message at index 3. Without a greeting that becomes index 2, so the
-                # TODO: number changes even though the thing it protects does not: a rewind must never
-                # TODO: reach past the first user message. Restoring it needs a shape that does not derive
-                # TODO: the index separately from the removal, which is what made the old one racy.
+                # TODO: number changes even though the thing it protects does not: *a reroll's* rewind must
+                # TODO: never reach past the first user message, there being nothing to reroll an answer to
+                # TODO: below that. Not a rule about rewinding generally — the approve-and-retry rewind
+                # TODO: aims at a tool node deeper in the branch, and `rewind_to` imposes no constraint of
+                # TODO: its own. Restoring the check needs a shape that does not derive the index
+                # TODO: separately from the removal, which is what made the old one racy.
                 if not self.parent_view.chat_controller.view.rewind_to(node_id):
                     return
 

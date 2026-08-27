@@ -2073,8 +2073,9 @@ to assert that at least three messages survive it — system prompt, greeting, f
 held because reroll is never offered on the greeting, so the earliest rerollable message sits at index 3.
 Without a greeting that becomes 2. The assertion is gone (it derived an index separately from the removal,
 which was racy against a rebuild), and `DPGCompleteChatMessage.reroll_message_callback` carries a `TODO`
-naming this item. What it protects is unchanged whatever the number is: a rewind must never reach past the
-first user message.
+naming this item. What it protects is unchanged whatever the number is: a *reroll's* rewind must never
+reach past the first user message, there being nothing to reroll an answer to below that. Rewinding in
+general has no such rule — approve-and-retry aims at a tool node deeper in the branch.
 
 Raised by Juha (2026-07-28).
 
