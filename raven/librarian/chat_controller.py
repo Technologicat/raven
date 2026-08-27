@@ -3326,6 +3326,7 @@ class DPGLinearizedChatView:
                                               parent_view=self,
                                               node_id=node_id)
             self.chat_controller.current_chat_history.append(message)
+            self.chat_controller.publish_history_snapshot()
         return message
 
     def streaming_message_for(self, node_id: str) -> "DPGStreamingChatMessage | None":
@@ -3371,6 +3372,7 @@ class DPGLinearizedChatView:
                 return 0
             removed = history[index:]
             del history[index:]
+            self.chat_controller.publish_history_snapshot()
             for message in removed:
                 message.demolish()
             return len(removed)
@@ -3390,6 +3392,7 @@ class DPGLinearizedChatView:
             if message is None:
                 return
             self.chat_controller.current_chat_history.remove(message)
+            self.chat_controller.publish_history_snapshot()
             message.demolish()
 
     def add_complete_message(self,
@@ -3433,6 +3436,7 @@ class DPGLinearizedChatView:
                                                       node_id=node_id,
                                                       start_thinking_open=start_thinking_open)
             self.chat_controller.current_chat_history.append(dpg_chat_message)
+            self.chat_controller.publish_history_snapshot()
 
             # Disable the "continue generation" and "show chat continuation" buttons on the old messages.
             # The latest message already has them *enabled* if it should.
@@ -3473,6 +3477,9 @@ class DPGLinearizedChatView:
         node_id_history = self.chat_controller.datastore.linearize_up(head_node_id)
         with self.chat_controller.current_chat_history_lock:
             self.chat_controller.current_chat_history.clear()
+            # Republished before the widgets go, so that a reader between here and the first message of the
+            # rebuild sees an empty view rather than a list of messages about to be demolished.
+            self.chat_controller.publish_history_snapshot()
             dpg.delete_item(self.chat_messages_container_group_widget,
                             children_only=True)  # clear old content from GUI
             for node_id in node_id_history:
@@ -3706,6 +3713,15 @@ class DPGChatController:
                                                   on_done=self._on_indexing_done)
         self.current_chat_history = []
         self.current_chat_history_lock = threading.RLock()
+        # A read-only republication of the list above, for readers that **must not block**. The render
+        # thread is the one that must not: it calls `get_current_message` once per frame, and a background
+        # `DPGLinearizedChatView.build` holds the lock while doing DPG work that needs frames to complete.
+        # A render thread waiting on that lock is the three-way deadlock in `dpg-notes.md` — no frame
+        # completes, so the lock is never released, so no frame completes.
+        #
+        # A tuple, rebound under the lock by `publish_history_snapshot` after every change. Rebinding an
+        # attribute is atomic, so a reader always sees some whole past state and never a list mid-rebuild.
+        self.current_chat_history_snapshot = ()
 
         # The keyboard mark on the current message's button row, built on first use by
         # `update_current_message_mark`. One mark that moves, rather than one per message: a chat has as
@@ -3905,6 +3921,11 @@ class DPGChatController:
         """
         return self.ai_turn_task_manager.has_tasks()
 
+    def publish_history_snapshot(self) -> None:
+        """Republish `current_chat_history_snapshot`. Call under the lock, after changing the list."""
+        with self.current_chat_history_lock:
+            self.current_chat_history_snapshot = tuple(self.current_chat_history)
+
     def get_current_message(self) -> DPGChatMessage | None:
         """Return the `DPGChatMessage` the per-message hotkeys act on, or `None` if the view is empty.
 
@@ -3931,16 +3952,15 @@ class DPGChatController:
         # covers the whole view, so no button row is on screen at all and there is nothing else the keys
         # could sensibly act on. The mark is then invisible, which is honest — there is no row to put it in
         # — and it reappears as soon as one comes into view.
-        # A snapshot, not the list itself. This runs once per frame (`update_current_message_mark`, from the
-        # render loop) while `DPGLinearizedChatView.build` can be emptying and refilling the list from a
-        # background task — the debounced resize rebuild, among others. Iterating the live list would be
-        # reading it mid-rebuild.
+        # The published snapshot, read **without the lock**, because this runs once per frame from the
+        # render thread. Taking the lock here deadlocks the app: `DPGLinearizedChatView.build` holds it
+        # while doing DPG work that needs frames to complete, and a render thread waiting on it is a render
+        # thread not completing frames. Measured the hard way — the GUI came up with both panels blank, and
+        # `py-spy` put the main thread on this line.
         #
-        # Copied under the lock and then released, rather than held for the whole scan: what follows asks
-        # DPG for widget geometry per message, and a rebuild of a long chat is not something the render
-        # thread should wait out. Copying references is cheap; the widgets are shared either way.
-        with self.current_chat_history_lock:
-            history = list(self.current_chat_history)
+        # The snapshot may be an instant stale, which costs nothing: the worst case is the mark sitting on
+        # a message that was just replaced, corrected on the next frame.
+        history = self.current_chat_history_snapshot
         if not history:
             return None
 
