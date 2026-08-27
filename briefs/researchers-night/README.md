@@ -256,17 +256,29 @@ days in, of four weeks.
 
    **Returning to a branch acts as if you never left** (Juha's requirement, 2026-08-26, and the second thing
    this item grew). The first attempt let a rebuilt view drop an in-progress reply until it finished, which
-   was safe and wrong. The text was never lost — it lives in the message's own paragraph records — so the
-   fix is a re-render: `DPGLinearizedChatView.build` puts a reply still being written back on the end of
-   the branch it belongs to. The trigger lives in `build` because every way of arriving at a branch comes
-   through it, so no navigation path has to remember, and the lock a rebuild already holds is what settles
-   the case of a turn finishing mid-rebuild.
+   was safe and wrong; the second re-rendered it from the message's own paragraph records, which worked and
+   left every *other* walker of the tree unable to see the reply at all.
 
-   **Verified live 2026-08-26**, against LM Studio with the avatar and TTS running: a view rebuild forced
-   under a streaming reply re-attached it and the reply went on updating, its thinking counter still
-   running; Cancel mid-generation took the co-operative path and kept the partial reply, exactly as the
-   design distinguishes. Zero errors across the session. What the live run did *not* cover is Cancel during
-   prompt processing, which needs a branch heavy enough to have one — worth doing on a real corpus.
+   **So the reply became a node** (2026-08-27, `in-progress-reply-as-a-node.md` in this folder). The
+   assistant node is created before the request and filled in as the text arrives, which makes an
+   in-progress reply an ordinary member of the branch: `descend_to_latest` lands on it, the sibling counter
+   counts it, and `DPGLinearizedChatView.build` renders it like any other node — so a resize, a branch
+   flick and a reader scrolled away all come back to the same place, and no navigation path has to know a
+   turn is running. That deleted the publish/reattach machinery the paragraph-records version needed.
+
+   **Verified live 2026-08-26 and again 2026-08-27**, against LM Studio with the avatar and TTS running.
+   The second run drove the node-first rework end to end: a reply streaming, a resize mid-reply, a flick to
+   another branch and back with the reply still writing, a reader scrolled away while a rebuild landed, and
+   Cancel mid-generation keeping the partial reply. Three faults surfaced and were fixed there that no test
+   could have caught — the finished reply deleted by the turn's own cleanup, the thinking counter's cadence
+   following the model's newline pattern instead of the clock, and a DPG container-stack error inside a
+   repaint being recorded as a backend failure over the model's text.
+
+   **Cancel during prompt processing was the last uncovered case, and it works** (2026-08-27): a new chat
+   with a fulltext PDF attached gives a prompt long enough to have a window, and Ctrl+G inside it took the
+   abort path — `abandoning the backend request`, and the blocked read returned **two milliseconds** later,
+   against the read timeout it would have waited out before. That is the whole `netutil` mechanism
+   confirmed against a real backend rather than against a probe.
 10. **The STT silence level / autostop GUI** — see below for why it is on the path.
 11. **The avatar's expression follows the spoken words rather than the streaming ones** — ranked in on
     2026-08-26, out of the three items raised that day. It is the one of them the exhibit's own hardware
