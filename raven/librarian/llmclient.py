@@ -1700,7 +1700,7 @@ def phase_report(*,
     return phases
 
 # --------------------------------------------------------------------------------
-# The most important function - call LLM, parse result
+# Calling the LLM: shaping the request, and parsing what comes back
 
 def thinking_request_fields(*, thinking_enabled: bool) -> dict[str, Any]:
     """Return the request fields that ask a thinking model to reason, or not to.
