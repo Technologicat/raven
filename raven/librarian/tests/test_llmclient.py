@@ -2345,6 +2345,56 @@ class TestAbortingAnInFlightRequest:
         assert abort.aborted
 
 
+class TestAConsumerCallbackCannotFailTheTurn:
+    """A frontend's own fault must cost it a repaint, never the reply.
+
+    `on_progress` runs inside `invoke`, so an exception from it propagates as though the *backend* had
+    failed — and `scaffold.ai_turn`'s error path then writes an error message over the node the model has
+    been streaming into. That is how a DPG container-stack error from a view rebuilt mid-reply destroyed a
+    finished reply on 2026-08-27.
+    """
+
+    _STREAM = [{"choices": [{"delta": {"content": "hello "}}]},
+               {"choices": [{"delta": {"content": "world"}}]},
+               "[DONE]"]
+
+    def test_a_raising_progress_callback_leaves_the_reply_whole(self, monkeypatch, invoke_settings):
+        _fake_stream(monkeypatch, self._STREAM)
+
+        def raise_a_dpg_stack_error(event):
+            raise Exception("Error: [1009] Message: \tNo container to pop.")  # verbatim, as DPG spells it
+
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False,
+                               on_progress=raise_a_dpg_stack_error)
+        assert chatutil.content_to_text(out.data["content"]) == "hello world", "a repaint fault ate the reply"
+
+    def test_a_raising_partial_message_callback_leaves_the_reply_whole(self, monkeypatch, invoke_settings):
+        _fake_stream(monkeypatch, self._STREAM)
+
+        def boom(message):
+            raise RuntimeError("the store is on fire")
+
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False,
+                               on_partial_message=boom)
+        assert chatutil.content_to_text(out.data["content"]) == "hello world"
+
+    def test_an_abort_raised_from_a_callback_still_gets_through(self, monkeypatch, invoke_settings):
+        """The negative control: the guard is narrow, not a blanket `except Exception` over the callbacks.
+
+        Cancel reaches `invoke` as `netutil.Aborted` through whichever frame is on the stack at the time,
+        and a guard that swallowed it would leave the Stop button doing nothing. Without this assertion the
+        two above would pass just as well against a guard that catches everything, which is the version
+        that quietly breaks Cancel.
+        """
+        _fake_stream(monkeypatch, self._STREAM)
+
+        def cancel(event):
+            raise netutil.Aborted("the user pressed Stop")
+
+        with pytest.raises(netutil.Aborted):
+            llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, on_progress=cancel)
+
+
 class TestCapturedStrayThinkReply:
     """A real reply in which the model put a second `<think>` block on the *content* channel.
 
