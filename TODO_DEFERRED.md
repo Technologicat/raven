@@ -5147,7 +5147,7 @@ Raised by Juha (2026-08-13), for discussion before building — the in-app cue i
 
 ## Re-test whether `reasoning_effort` makes Qwen 3.8 usable interactively
 
-*Cluster: llm-backends · Cost: S · Gate: none — needs the maintainer at the keyboard · Filed: 2026-08-27*
+*Cluster: llm-backends · Cost: S · Gate: 0.2.9 or `next` — needs the maintainer at the keyboard · Filed: 2026-08-27*
 
 Qwen 3.8 thinks for so long that it is unusable for interactive chat, and `reasoning_effort: "none"` is the
 lever meant to fix that. Whether it works is still unknown, because the test that said it did not was itself
@@ -5158,8 +5158,9 @@ So the question is open rather than answered, and it is cheap to settle: put the
 the circle prompt, then remove it and run the same prompt again. Only the maintainer can do it — it needs
 the template edited in LM Studio and the model reloaded.
 
-The stake is which model the exhibit can use. A thinking model that cannot be talked out of thinking is not
-a demo model, whatever else it is good at.
+**Not exhibit work**: Qwen 3.6 is fine there (Juha, 2026-08-27). What is at stake is whether 3.8 becomes
+usable for interactive chat at all, which is worth knowing before it is the current release rather than
+after.
 
 Raised by Juha (2026-08-26), carried across two compactions before being written down — which is why it is
 here rather than in a session note.

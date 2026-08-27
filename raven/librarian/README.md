@@ -326,7 +326,9 @@ There is a configurable ceiling on how many rounds of tool calls one reply may t
 
 Past that point the tools stay on offer and any further call is answered with an error saying so, rather than being quietly taken away. Two reasons. Changing the set of tools mid-reply invalidates the backend's KV cache from that point on, so the rest of the conversation has to be reprocessed; and a conversation whose earlier messages call a tool the current request no longer declares is a shape models have seen little of in training, whereas a tool that answers "not now" is one they have seen plenty of. A refusal cannot *guarantee* the reply ends, though, so after `max_tool_call_refusal_rounds` of them the tools are withdrawn outright, which does.
 
-*Librarian* provides six tools: two on the web side, three on the document side, and a clock. The web pair needs the **Internet** mode toggle, the document trio needs **Documents**, and the clock needs neither — the current time is injected into every turn anyway, so the tool that fetches it is always on offer.
+*Librarian* provides seven tools: two on the web side, three on the document side, a clock, and a calculator. The web pair needs the **Internet** mode toggle, the document trio needs **Documents**, and the last two need neither — they answer from nothing outside the conversation, so they are always on offer.
+
+`calculate` evaluates an arithmetic expression in a sandbox ([simpleeval](https://github.com/danthedeckie/simpleeval)), which is worth having because arithmetic is the thing an LLM is worst at while looking most confident: a total, a percentage or a square root is produced by the same next-token machinery as prose, and it is right often enough to be trusted and wrong often enough to matter. With the tool on offer the model reaches for it instead — asked for `1234 * 5678`, Qwen 3.6 called the calculator rather than answering from its head.
 
 On the web side, `websearch` returns a list of results, and `webfetch` reads one page — search first, then follow a link, which is the same gesture you would make yourself. A page is fetched by *Raven-server*, which strips navigation, sidebars and footers and hands back the article; if the page builds its content by running scripts, there is nothing in the markup to read and the tool says so rather than returning an empty page as though it were the truth.
 
@@ -514,6 +516,9 @@ In the linearized chat view on the left, there are buttons below each chat messa
 - Reroll (AI messages only) (Ctrl+R)
 - Continue generating (Ctrl+U)
   - Last message of linearized view only; and only if it is an AI message.
+- Show/hide thinking trace (AI messages only, and only if the model reasoned) (Ctrl+T)
+  - Click the cloud icon beside the message, or press Ctrl+T. Whether traces *arrive* open is the **Show thinking** mode toggle; this acts on the message in front of you regardless.
+  - The cloud also carries the numbers for the reasoning alone — tokens, wall time, speed — so a trace you never open still says what it cost. While a reply is being written, it counts up.
 - Speak (AI messages only) (Ctrl+S)
   - Only works when **Speech** is enabled in the mode toggles. Upon clicking this, the avatar speaks the message through the TTS subsystem.
   - If additionally **Subtitles** is enabled in the mode toggles, the avatar's speech is subtitled (or closed-captioned) in the language set in [`raven.librarian.config`](config.py).
@@ -544,7 +549,7 @@ For the chat message actions, the **hotkeys affect the most recent message** in 
 
 ## Mode toggles
 
-Below the avatar panel at the right, there are **mode toggles**:
+Below the avatar panel at the right, there are **mode toggles**, grouped by what they govern: what the AI may reach for, what the AI does when it answers, how the chat log is shown, and what the avatar does.
 
 The first two each govern one group of tools (see [Tools](#tools) above), and neither overrides the other — all four combinations mean something. A tool belonging to neither group answers to no switch and is always offered; `get_current_time` is the one, because the current time is injected into every turn regardless of either switch.
 
@@ -573,6 +578,20 @@ The first two each govern one group of tools (see [Tools](#tools) above), and ne
       - The marker reports what was *retrieved*, not whether the reply used it. A search that returns irrelevant matches still counts as retrieval, so the absence of the marker means something came back, not that the answer rests on it. Telling those apart needs either relevance-aware retrieval scores or citations from the AI itself; both are planned, neither is built.
       - Note this is the *expected* state for a general question. Nobody's document database answers *"what is 2+2?"*, so asides get the marker, and that is the marker doing its job rather than reporting a problem.
     - With **Documents OFF** the marker does not appear at all, since it would only be telling you what you just switched off. An **attachment still counts as grounding** either way: attach a PDF with the database off, and the reply is treated as grounded in it.
+The next two are about the AI's reasoning: whether it happens at all, and whether you read it. They are separate questions, which is why they are separate switches — a model can think without showing you, and there is nothing to show if it did not think.
+
+- **Thinking**
+  - Whether a reasoning model reasons before answering. **ON** by default.
+  - Switch it **OFF** and the same model skips the reasoning step: replies arrive sooner and shorter, at the cost of the thinking that was making them good on a hard question. Useful when you want a quick factual answer, or when you are demonstrating something and do not want to wait.
+  - It applies from the next reply onward, and to every round of a tool-using turn. **Tools still work with it off** — asked for a product with reasoning switched off, Qwen 3.6 still reached for the calculator rather than answering from its head.
+  - Nothing to configure per model: it is sent as `reasoning_effort: "none"`, which the backend serves by rendering the model's *own* non-thinking branch. So a model that spells its thinking differently is covered without *Librarian* knowing how it spells it.
+  - Flipping it mid-conversation is free on some model families and costs a full re-prefill on others, since they put the thinking marker at opposite ends of the prompt and only one of them can reuse what the backend already processed. On a long chat that is a second or two of extra wait on the next reply, once.
+  - A model with no reasoning mode at all is unaffected either way.
+- **Show thinking**
+  - Whether a reply's reasoning trace arrives open or collapsed. **OFF** by default, so a thinking model's trace starts folded behind its cloud icon and the answer is what you see.
+  - It says what is *shown*; whether the AI reasons is **Thinking**, above.
+  - It takes effect from the next reply onward. For a reply already on screen, click its cloud or press **Ctrl+T** — and that works whatever the toggle says, so a trace you opened stays open.
+
 - **Speech**
 - **Subtitles**
   - The **Speech** and **Subtitles** mode toggles control features of the AI avatar. See [AI avatar and voice mode](#ai-avatar-and-voice-mode).
@@ -622,6 +641,11 @@ As explained in the main README, configuration is currently fed in as several Py
 - LLM backend URL and API key: [`raven.librarian.config`](config.py)
   - Whether you need an API key depends on your LLM.
   - By default, a local installation of [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) does **not** use an API key.
+
+- Exact context-fill counts: `llm_tokenizer_path` in [`raven.librarian.config`](config.py)
+  - The context-fill readout above the message box shows a `~` while it is estimating, because an OpenAI-compatible backend will not count tokens for text it has not been asked to generate from.
+  - Point this at the `.gguf` your backend is serving and *Librarian* counts with the model's own vocabulary, on your machine, and drops the `~`. Leave it unset and the estimate is used, which is fine for a rough sense of how full the context is and wrong by a few percent.
+  - It has to be the file for **the model you are actually running**: a tokenizer from another model builds and runs perfectly while counting wrongly, which is worse than the estimate it replaces. *Librarian* checks the file against the backend before trusting it, and falls back to estimating if they disagree.
 
 - Raven-server URL and API key: [`raven.client.config`](../client/config.py)
   - By default, *Raven-server* does **not** use an API key.
@@ -722,7 +746,6 @@ Areas to improve:
 - Add **more tools** for the AI to call
   - Explicit access to memory (once the memory feature is added)
   - Maybe (not sure if *Librarian* needs these):
-    - Calculator with [simpleeval](https://github.com/danthedeckie/simpleeval) sandbox?
     - Weather with [open-meteo](https://open-meteo.com/en/docs)?
   - Keep It Simple Stupid: too many tools → confused LLM
 - Add **source attribution** (a.k.a. *citations*) for *Librarian*'s replies
