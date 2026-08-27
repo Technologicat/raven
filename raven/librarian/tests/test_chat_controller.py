@@ -14,6 +14,7 @@ happens these tests do not run in the minimal-dependency CI job even though they
 """
 
 import threading
+import types
 
 import pytest
 
@@ -95,12 +96,9 @@ class TestFormatGenerationStats:
 class TestDemolishLeavesNoWidgetReference:
     """`demolish` must clear every widget reference `build` made, because the instance may be rebuilt.
 
-    Only reachable through demolish-then-rebuild of the same instance, which is what
-    `DPGStreamingChatMessage.reattach` does when a view rebuild takes a streaming reply's widgets away.
-    A reference that survives is not inert: `_thought_bubble` reads a non-`None` `gui_thought_group` as
-    "already built" and hands the deleted id back to the renderer, and the failure surfaces as DPG's
-    "[1009] No container to pop" from wherever the rebuild happened — nowhere near the message that
-    caused it.
+    Only reachable through demolish-then-rebuild of the same instance. A reference that survives is not
+    inert: `_thought_bubble` reads a non-`None` `gui_thought_group` as "already built" and hands the
+    deleted id back to the renderer as the parent to draw into, which cannot work.
 
     Deliberately structural rather than a rendered-widget test: it needs no DPG context, and it keeps
     holding when a future `build` adds a sixth widget attribute, which is the case a screenshot test
@@ -146,3 +144,70 @@ class TestDemolishLeavesNoWidgetReference:
         message = self._demolished_message(monkeypatch)
         assert message.gui_container_group is not None
         assert message.gui_parent is not None
+
+
+class TestRemovingAMessageByNode:
+    """A turn tidying up after its own round must name the *live* message, not merely the node.
+
+    One node is rendered by two different widgets over its lifetime: the live message while the reply
+    streams, and the stored one `on_done` swaps in when it finishes. The cleanup that follows a round runs
+    either way — a round can end without `on_done`, aborted or failed — so it cannot assume the live widget
+    is still what renders that node.
+
+    The failure is silent and reads as the reply never arriving: the finished message is created, taken off
+    screen a moment later by the turn's own epilogue, and nothing is logged because removing a message that
+    is there is not an error.
+
+    Structural rather than rendered, so it needs no DPG context: what is under test is which message the
+    search picks, and `demolish` is exactly the boundary where the view stops and the toolkit begins.
+    """
+
+    @staticmethod
+    def _message(cls, node_id: str):
+        message = object.__new__(cls)
+        message.node_id = node_id
+        return message
+
+    @staticmethod
+    def _view_showing(monkeypatch, *messages):
+        """A bare view whose chat history is `messages`, plus the list `demolish` records into."""
+        demolished = []
+        for cls in (chat_controller.DPGStreamingChatMessage, chat_controller.DPGCompleteChatMessage):
+            monkeypatch.setattr(cls, "demolish", lambda self: demolished.append(self))
+
+        view = object.__new__(chat_controller.DPGLinearizedChatView)
+        view.chat_controller = types.SimpleNamespace(current_chat_history=list(messages),
+                                                     current_chat_history_lock=threading.RLock())
+        return view, demolished
+
+    def test_the_live_message_goes(self, monkeypatch):
+        live = self._message(chat_controller.DPGStreamingChatMessage, "ai")
+        view, demolished = self._view_showing(monkeypatch, live)
+
+        view.remove_streaming_message_for("ai")
+
+        assert view.chat_controller.current_chat_history == []
+        assert demolished == [live]
+
+    def test_the_stored_message_that_replaced_it_stays(self, monkeypatch):
+        stored = self._message(chat_controller.DPGCompleteChatMessage, "ai")
+        view, demolished = self._view_showing(monkeypatch, stored)
+
+        view.remove_streaming_message_for("ai")
+
+        assert view.chat_controller.current_chat_history == [stored], "the finished reply was taken off screen"
+        assert demolished == []
+
+    def test_removing_by_node_alone_reaches_the_stored_message(self, monkeypatch):
+        """The negative control: by node alone, that same call *does* take the stored message.
+
+        Without this, a fixture in which nothing could be removed at all would satisfy the assertion above
+        for the wrong reason — and the distinction the two calls draw is the entire point of having both.
+        """
+        stored = self._message(chat_controller.DPGCompleteChatMessage, "ai")
+        view, demolished = self._view_showing(monkeypatch, stored)
+
+        view.remove_message_for("ai")
+
+        assert view.chat_controller.current_chat_history == []
+        assert demolished == [stored]

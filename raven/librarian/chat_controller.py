@@ -3383,22 +3383,40 @@ class DPGLinearizedChatView:
                 message.demolish()
             return len(removed)
 
-    def remove_message_for(self, node_id: str) -> None:
-        """Take whichever message renders `node_id` off screen, if this view is showing one.
+    def _remove_first_message(self, matches: Callable[["DPGChatMessage"], bool]) -> None:
+        """Take the first message satisfying `matches` off screen. No-op when there is none.
 
-        By node rather than by position, and under the lock, because the caller is usually a background
+        By search rather than by position, and under the lock, because the caller is usually a background
         turn while the thing it is removing belongs to a view a *rebuild* may be replacing underneath it.
         Indexing into the list from a turn is what makes that a crash: `build` clears it, so "the last
         message" is briefly nothing at all.
-
-        Idempotent, and a no-op when the user is looking at another branch.
         """
         with self.chat_controller.current_chat_history_lock:
-            message = next((m for m in self.chat_controller.current_chat_history if m.node_id == node_id), None)
+            message = next((m for m in self.chat_controller.current_chat_history if matches(m)), None)
             if message is None:
                 return
             self.chat_controller.current_chat_history.remove(message)
             message.demolish()
+
+    def remove_message_for(self, node_id: str) -> None:
+        """Take whichever message renders `node_id` off screen, if this view is showing one.
+
+        Idempotent, and a no-op when the user is looking at another branch.
+        """
+        self._remove_first_message(lambda message: message.node_id == node_id)
+
+    def remove_streaming_message_for(self, node_id: str) -> None:
+        """Take the *live* message rendering `node_id` off screen, if this view is showing one.
+
+        The narrow sibling of `remove_message_for`, and the one a turn cleaning up after its own round
+        wants: a node outlives the widget that was streaming into it. `on_done` swaps the live message for
+        a stored one rendering the same node, so a removal by node alone reaches past the widget it meant
+        and takes the finished reply off screen — which looks from the outside exactly like the reply never
+        arriving.
+
+        Idempotent, and a no-op when the user is looking at another branch.
+        """
+        self._remove_first_message(lambda message: isinstance(message, DPGStreamingChatMessage) and message.node_id == node_id)
 
     def add_complete_message(self,
                              node_id: str,
@@ -4431,10 +4449,14 @@ class DPGChatController:
                     return self.view.streaming_message_for(task_env.ai_node_id)
 
                 def drop_streaming_widget() -> None:
-                    """Take this round's live message off screen, wherever it ended up. Safe before one exists."""
+                    """Take this round's live message off screen, wherever it ended up. Safe before one exists.
+
+                    Only the live one: once `on_done` has swapped in the stored rendering of the same node,
+                    there is nothing here left to drop.
+                    """
                     if task_env.ai_node_id is None:
                         return
-                    self.view.remove_message_for(task_env.ai_node_id)
+                    self.view.remove_streaming_message_for(task_env.ai_node_id)
 
                 def turn_owns_the_view() -> bool:
                     """Whether the chat on screen is the branch this turn is writing to.
@@ -4894,8 +4916,7 @@ class DPGChatController:
                 # Not a matter of tidiness: the node stops being unfinished when the turn writes its final
                 # payload, so a live widget outliving that would render a message the tree now says is
                 # done, and go on saying it is being written.
-                if task_env.ai_node_id is not None:
-                    self.view.remove_message_for(task_env.ai_node_id)
+                drop_streaming_widget()
                 if self.gui_updates_safe:
                     dpg.disable_item(self.chat_stop_generation_button_widget)
                     while turn_data_eyes_uses:  # release anything this turn started and did not finish
