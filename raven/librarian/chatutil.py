@@ -1039,6 +1039,16 @@ def descend_to_latest(datastore: chattree.Forest, start_node_id: str, recursive:
     `recursive`: `True` (default) walks all the way down to a leaf. `False` takes exactly one step, landing
                  on the most recent child of `start_node_id` and going no further.
     """
+    # TODO: Consider a `stop_at` parameter — descend, but no further than this node. Not added because no
+    #       caller wants it, but noted because the API looks asymmetric without it: `recursive=False` is
+    #       already the crude version of the same idea ("stop after one step"), so this function has
+    #       committed to stopping early and offers only the least useful spelling of it.
+    #
+    #       It came up on 2026-08-27, when a caller genuinely did want to stop at the node an in-progress
+    #       reply was being written into — navigating back to a branch mid-reply otherwise walks past it and
+    #       lands on the previous stored sibling. That need went away by putting the reply in the tree
+    #       instead of teaching this walker about it, which is why the parameter is still hypothetical.
+    #
     # Here rather than in `chattree`, because the ordering is by a timestamp in the *message* payload, and
     # the forest is deliberately ignorant of what a payload contains (hence its injected `sidecar_extractor`).
     node_ids = datastore.get_children(start_node_id)
