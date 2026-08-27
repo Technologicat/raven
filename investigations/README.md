@@ -37,6 +37,7 @@ that stops the link decaying again, and it is worth keeping up even when the con
 | `chat-template-think-prefill/` | Whether a thinking model's chat template already opens the `<think>` block before generation starts, leaving only the close on the wire. Every Qwen we run does — so a backend that parses reasoning server-side is the only thing standing between Raven and that path |
 | `todo-sweep-2026-08-10/` | Which `TODO_DEFERRED.md` items still hold against the code. Report only, and **complete** — all 130 carry a verdict (112 confirmed, 9 stale, 6 moved, 2 superseded, 1 left unchecked on purpose). Part C of `briefs/todo-sweep-2026-08-10/` |
 | `abort-inflight-request/` | How to abandon a backend request from another thread. `Response.close()` — the obvious route — neither wakes the blocked reader nor returns to its caller, blocking it for the whole read timeout; only `socket.shutdown` does both. The expensive prompt-processing wait falls after the headers, so there is a socket to reach, and the backend does drop the abandoned work |
+| `backend-fault-injection/` | A proxy that fails a turn on demand, so what Librarian does when the backend errors *while the user is elsewhere* is testable rather than waited for. Found a streaming message widget left on screen after its turn ended away from the view — visible for a second or two, which is below what a driven screenshot catches |
 
 ## Shared instruments are pointed at, not copied
 
