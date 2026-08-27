@@ -653,36 +653,35 @@ class DPGChatMessage:
                 # rather than indexed.
                 maybe_model = generation_metadata.get("model")
                 if maybe_model is not None or breakdown_rows is not None:
-                    with dpg.tooltip(stats_widget):
-                        # Which model produced *this* message, said per message rather than once for the
-                        # app. In a branching chat the siblings of one node can come from different models,
-                        # and a chat reloaded from disk predates whatever happens to be loaded now.
-                        if maybe_model is not None:
-                            dpg.add_text(maybe_model)
-                            if breakdown_rows is not None:
-                                dpg.add_spacer(height=gui_config.margin)
+                    stats_tooltip = dpg.add_tooltip(stats_widget)
+                    # Which model produced *this* message, said per message rather than once for the
+                    # app. In a branching chat the siblings of one node can come from different models,
+                    # and a chat reloaded from disk predates whatever happens to be loaded now.
+                    if maybe_model is not None:
+                        dpg.add_text(maybe_model, parent=stats_tooltip)
                         if breakdown_rows is not None:
-                            dpg.add_text("Where this reply's time went.")
-                            dpg.add_spacer(height=gui_config.margin)
-                            # A table, because the labels differ in length and the font is proportional:
-                            # padded spaces put the figures at four different x positions, which reads as
-                            # four unrelated lines rather than as a column to compare down.
-                            with dpg.table(header_row=True, policy=dpg.mvTable_SizingFixedFit,
-                                           borders_innerH=False, borders_outerH=False,
-                                           borders_innerV=False, borders_outerV=False):
-                                dpg.add_table_column(label="")
-                                dpg.add_table_column(label="time [s]")
-                                dpg.add_table_column(label="tokens")
-                                dpg.add_table_column(label="speed [t/s]")
-                                for cells in breakdown_rows:
-                                    with dpg.table_row():
-                                        for cell in cells:
-                                            dpg.add_text(cell)
-                            dpg.add_spacer(height=gui_config.margin)
-                            dpg_markdown.add_text(_PHASE_BREAKDOWN_FOOTNOTE, wrap=_PHASE_TOOLTIP_WRAP_W)
-                            if ended_in_tool_call:
-                                dpg.add_spacer(height=gui_config.margin)
-                                dpg_markdown.add_text(_PHASE_BREAKDOWN_TOOL_CALL_NOTE, wrap=_PHASE_TOOLTIP_WRAP_W)
+                            dpg.add_spacer(height=gui_config.margin, parent=stats_tooltip)
+                    if breakdown_rows is not None:
+                        dpg.add_text("Where this reply's time went.", parent=stats_tooltip)
+                        dpg.add_spacer(height=gui_config.margin, parent=stats_tooltip)
+                        # A table, because the labels differ in length and the font is proportional:
+                        # padded spaces put the figures at four different x positions, which reads as
+                        # four unrelated lines rather than as a column to compare down.
+                        breakdown_table = dpg.add_table(header_row=True, policy=dpg.mvTable_SizingFixedFit,
+                                                        borders_innerH=False, borders_outerH=False,
+                                                        borders_innerV=False, borders_outerV=False,
+                                                        parent=stats_tooltip)
+                        for column_label in ("", "time [s]", "tokens", "speed [t/s]"):
+                            dpg.add_table_column(label=column_label, parent=breakdown_table)
+                        for cells in breakdown_rows:
+                            row = dpg.add_table_row(parent=breakdown_table)
+                            for cell in cells:
+                                dpg.add_text(cell, parent=row)
+                        dpg.add_spacer(height=gui_config.margin, parent=stats_tooltip)
+                        dpg_markdown.add_text(_PHASE_BREAKDOWN_FOOTNOTE, wrap=_PHASE_TOOLTIP_WRAP_W, parent=stats_tooltip)
+                        if ended_in_tool_call:
+                            dpg.add_spacer(height=gui_config.margin, parent=stats_tooltip)
+                            dpg_markdown.add_text(_PHASE_BREAKDOWN_TOOL_CALL_NOTE, wrap=_PHASE_TOOLTIP_WRAP_W, parent=stats_tooltip)
 
                 # Say when nothing was retrieved for this reply. Present only when the user asked to be told
                 # (speculation off); absent means there is nothing to say, which is why this tests `is False`
@@ -700,11 +699,12 @@ class DPGChatMessage:
                     grounding_marker = dpg.add_text("[no sources retrieved]",
                                                     color=(170, 145, 90),
                                                     parent=text_vertical_layout_group)
-                    with dpg.tooltip(grounding_marker):
-                        dpg.add_text("Nothing was retrieved for this reply: no document matches,\n"
-                                     "no attachments, no tool results.\n\n"
-                                     "The absence of this marker means something *was* retrieved -\n"
-                                     "not that the reply relied on it.")
+                    grounding_tooltip = dpg.add_tooltip(grounding_marker)
+                    dpg.add_text("Nothing was retrieved for this reply: no document matches,\n"
+                                 "no attachments, no tool results.\n\n"
+                                 "The absence of this marker means something *was* retrieved -\n"
+                                 "not that the reply relied on it.",
+                                 parent=grounding_tooltip)
 
         # If there is no linked chat node, this is a live streaming chat message, so the GUI widget should end here - it doesn't need the datastore control buttons or end spacers.
         # This makes the GUI look calmer while rendering a streaming message.
@@ -1103,8 +1103,7 @@ class DPGChatMessage:
         dpg.bind_item_font(button_id, self.parent_view.themes_and_fonts.icon_font_solid)
         dpg.bind_item_theme(button_id, "disablable_widget_theme")  # tag
         if not enabled:  # nothing will ever rewrite this caption, so it needs nothing that can resize
-            with dpg.tooltip(button_id):
-                dpg.add_text(tooltip_text)
+            dpg.add_text(tooltip_text, parent=dpg.add_tooltip(button_id))
             return
         tooltip = self._add_tooltip(button_id, tooltip_text)
         def callback() -> None:
@@ -2047,13 +2046,14 @@ class DPGCompleteChatMessage(DPGChatMessage):
                 button_id = dpg.add_button(label=fa.ICON_CHEVRON_UP if expanded else fa.ICON_CHEVRON_DOWN,
                                            width=gui_config.toolbutton_w, parent=gutter, callback=toggle)
                 dpg.bind_item_font(button_id, self.parent_view.themes_and_fonts.icon_font_solid)
-                with dpg.tooltip(button_id):
-                    if expanded:
-                        dpg.add_text("Show less\n(collapse back to the opening)")
-                    else:
-                        dpg.add_text(f"Show all {len(body):,} characters here\n"
-                                     "(a large document will fill the view — the button below opens it\n"
-                                     "in a separate window instead, so you keep the conversation in sight)")
+                expand_tooltip = dpg.add_tooltip(button_id)
+                if expanded:
+                    dpg.add_text("Show less\n(collapse back to the opening)", parent=expand_tooltip)
+                else:
+                    dpg.add_text(f"Show all {len(body):,} characters here\n"
+                                 "(a large document will fill the view — the button below opens it\n"
+                                 "in a separate window instead, so you keep the conversation in sight)",
+                                 parent=expand_tooltip)
 
             if answered_call_id is not None:
                 self._add_action_button(parent=gutter,
@@ -2192,9 +2192,10 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                      parent=cluster)
             archival_filename = meta.get("original_sidecar") or filename
             open_saved_copy = lambda: common_utils.open_file(datastore.sidecar_path(archival_filename))  # noqa: E731 -- shared by the click shortcut and the button below
-            with dpg.tooltip(image_id):  # original filename, and that the thumbnail itself opens it
-                dpg.add_text(f"{sidecarstore.provenance_filename_from_url(meta.get('url')) or 'attached image'}"
-                             "\n(click to open)")
+            # original filename, and that the thumbnail itself opens it
+            dpg.add_text(f"{sidecarstore.provenance_filename_from_url(meta.get('url')) or 'attached image'}"
+                         "\n(click to open)",
+                         parent=dpg.add_tooltip(image_id))
             self._make_clickable([image_id], action=open_saved_copy)
 
             # Per-image provenance actions. "Show original" resolves to the archival copy — the verbatim original
@@ -2286,12 +2287,12 @@ class DPGCompleteChatMessage(DPGChatMessage):
             # A name is text, so unlike a thumbnail it does not advertise itself as clickable. The tooltip is
             # what carries that here; a hover highlight would be better and is filed separately. It also
             # names where the document came from and when, which is what tells two same-titled fetches apart.
-            with dpg.tooltip(name_id):
-                dpg.add_text("Click to open the attached document")
-                if source_url:
-                    dpg.add_text(urllib.parse.unquote(source_url), color=(180, 180, 180))
-                if meta.get("fetched_at"):
-                    dpg.add_text(f"saved {meta['fetched_at']}", color=(180, 180, 180))
+            document_tooltip = dpg.add_tooltip(name_id)
+            dpg.add_text("Click to open the attached document", parent=document_tooltip)
+            if source_url:
+                dpg.add_text(urllib.parse.unquote(source_url), color=(180, 180, 180), parent=document_tooltip)
+            if meta.get("fetched_at"):
+                dpg.add_text(f"saved {meta['fetched_at']}", color=(180, 180, 180), parent=document_tooltip)
             self._make_clickable([name_id], action=open_saved_copy)
 
     def _render_document_reference(self, document_id: str) -> None:
@@ -2331,9 +2332,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                         ok_message="Opened folder",
                                         action=lambda: common_utils.open_in_file_manager(librarian_config.llm_docs_dir))
                 name_id = dpg.add_text(name, parent=row)
-                with dpg.tooltip(name_id):
-                    dpg.add_text("Click to open the document")
-                    dpg.add_text(str(path), color=(180, 180, 180))
+                path_tooltip = dpg.add_tooltip(name_id)
+                dpg.add_text("Click to open the document", parent=path_tooltip)
+                dpg.add_text(str(path), color=(180, 180, 180), parent=path_tooltip)
                 self._make_clickable([name_id], action=open_document)
             else:
                 self._add_action_button(parent=row,
@@ -2343,8 +2344,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                         enabled=False,
                                         action=lambda: None)
                 name_id = dpg.add_text(name, parent=row)
-                with dpg.tooltip(name_id):
-                    dpg.add_text(f"Document '{document_id}'")
+                dpg.add_text(f"Document '{document_id}'", parent=dpg.add_tooltip(name_id))
 
 
 class DPGStreamingChatMessage(DPGChatMessage):
