@@ -13,6 +13,8 @@ those is a dependency-hygiene sweep across several modules rather than a change 
 happens these tests do not run in the minimal-dependency CI job even though they would pass there.
 """
 
+import threading
+
 import pytest
 
 pytest.importorskip("raven.librarian.chat_controller")  # noqa: E402 -- still reaches the ML stack; see above
@@ -88,3 +90,59 @@ class TestFormatGenerationStats:
     def test_the_label_goes_inside_the_brackets(self):
         out = chat_controller.format_generation_stats(n_tokens=759, dt=8.79, label="Thought for")
         assert out.startswith("[Thought for 759t,")
+
+
+class TestDemolishLeavesNoWidgetReference:
+    """`demolish` must clear every widget reference `build` made, because the instance may be rebuilt.
+
+    Only reachable through demolish-then-rebuild of the same instance, which is what
+    `DPGStreamingChatMessage.reattach` does when a view rebuild takes a streaming reply's widgets away.
+    A reference that survives is not inert: `_thought_bubble` reads a non-`None` `gui_thought_group` as
+    "already built" and hands the deleted id back to the renderer, and the failure surfaces as DPG's
+    "[1009] No container to pop" from wherever the rebuild happened — nowhere near the message that
+    caused it.
+
+    Deliberately structural rather than a rendered-widget test: it needs no DPG context, and it keeps
+    holding when a future `build` adds a sixth widget attribute, which is the case a screenshot test
+    would silently stop covering.
+    """
+
+    # What `build` populates, per the declarations in `DPGChatMessage.__init__`.
+    BUILT_BY_BUILD = ("gui_text_group", "gui_thought_button", "gui_thought_group", "gui_thought_stats",
+                      "gui_keyboard_mark_widget", "gui_buttons_group")
+
+    @staticmethod
+    def _demolished_message(monkeypatch):
+        """A bare `DPGChatMessage` with every widget reference set, put through `demolish`."""
+        monkeypatch.setattr(chat_controller.dpg, "delete_item", lambda *args, **kwargs: None)
+
+        message = object.__new__(chat_controller.DPGChatMessage)
+        message.paragraphs_lock = threading.RLock()
+        message.paragraphs = [{"text": "hi", "is_thought": False, "rendered": True, "widget": 11}]
+        message.owned_handler_registries = []
+        message.owned_tooltips = []
+        message.gui_parent = "some_container"
+        message.gui_container_group = 1000
+        message.role = "assistant"
+        message.persona = "Aria"
+        message.gui_button_callbacks = {"reroll": lambda: None}
+        for n, name in enumerate(TestDemolishLeavesNoWidgetReference.BUILT_BY_BUILD):
+            setattr(message, name, 2000 + n)
+
+        message.demolish()
+        return message
+
+    def test_every_widget_reference_build_made_is_cleared(self, monkeypatch):
+        message = self._demolished_message(monkeypatch)
+        left_behind = [name for name in self.BUILT_BY_BUILD if getattr(message, name) is not None]
+        assert not left_behind, f"demolish left dangling widget references: {left_behind}"
+
+    def test_the_container_it_renders_into_survives(self, monkeypatch):
+        """The negative control: `demolish` empties the container, it does not forget where to render.
+
+        Without this, "clear everything named `gui_*`" would pass the test above while breaking every
+        rebuild — so the assertion that some references survive is what gives the one above its meaning.
+        """
+        message = self._demolished_message(monkeypatch)
+        assert message.gui_container_group is not None
+        assert message.gui_parent is not None

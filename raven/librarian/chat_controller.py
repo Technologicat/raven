@@ -1228,6 +1228,20 @@ class DPGChatMessage:
             self.persona = None
             self.paragraphs = []
             self.gui_text_group = None
+            # Every other widget reference this instance holds is dangling once the delete below runs, so
+            # none of them may survive it. `gui_thought_group` is the one that bites: `_thought_bubble`
+            # reads a non-`None` value as "already built" and hands the stale id straight back to the
+            # renderer, which parents new paragraphs onto a deleted item — and a `with dpg.tooltip(<deleted
+            # item>)` fails to push while still popping on exit, so DPG reports "[1009] No container to pop"
+            # from wherever the rebuild happened rather than from the message that caused it.
+            #
+            # Only reachable through a demolish *followed by a rebuild* of the same instance, which is what
+            # `reattach` does; a demolish before dropping the instance never asks these questions again.
+            self.gui_thought_button = None
+            self.gui_thought_group = None
+            self.gui_thought_stats = None
+            self.gui_keyboard_mark_widget = None
+            self.gui_buttons_group = None
             self.gui_button_callbacks = {}  # deleting all GUI widgets, so clear the stashed callbacks too.
             for registry in self.owned_handler_registries:  # not under the container group; see `_make_clickable`
                 with guiutils.nonexistent_ok():
