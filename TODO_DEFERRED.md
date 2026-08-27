@@ -5167,10 +5167,14 @@ an empty grey box a couple of words to the right of the text, on the same line �
 below was decorated correctly. So it is intermittent rather than systematic, which is what a settling race
 looks like from outside.
 
-**The first thing to run is a discriminator, not a fix**: force a rebuild (resize the window) and see whether
-the box snaps into place. If it does, the measurement was premature and the fix is to defer it — a frame
-callback, or `guiutils.split_frame` before measuring, mindful that this code can run on the render thread.
-If the box stays where it is, the fault is deterministic, and the question becomes which widget was measured.
+**The discriminator has been run, and it is a timing fault.** Re-rendering the same message put the box in
+its right place (Juha, 2026-08-27), so the measurement is premature rather than aimed at the wrong widget —
+which is the half of the search space that needed eliminating before any of this is worth chasing.
+
+So the work is to make the measurement wait for a settled layout: a frame callback, or `guiutils.split_frame`
+before measuring. The constraint that makes it interesting is that this code can run **on the render thread**,
+where nothing can wait for a frame — so a decoration cannot simply block until the text is placed, and the
+answer is more likely "draw it, then correct it on a later frame" than "measure later".
 
 **Probably not the same as the URL colour being one character off** — the note about that lived in
 `CLAUDE.md` and pointed here. `Url.render` calls `dpg.configure_item(dpg_text, color=...)`: it recolours the
