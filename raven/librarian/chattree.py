@@ -243,6 +243,41 @@ class Forest:
             node["next_free_revision"] += 1
         return revision_id
 
+    def overwrite_active_revision(self, node_id: str, payload: Any) -> int:
+        """Replace the payload of the *active* revision of node `node_id`, in place. Returns its revision ID.
+
+        **This is almost never what you want, and it breaks the immutability guarantee revisions are
+        built on.** Reach for `add_revision` instead, which is the ordinary way to change a node's content.
+
+        Revisioning exists so that a message can be edited after the fact — fixing a typo without losing
+        what was originally said. Revisions are immutable so that a subtree recorded earlier cannot quietly
+        change meaning: a conversation thread does not store which revision of each ancestor it was written
+        against, and arguably should not, since the whole point of a typo fix is that every thread gets it.
+        What that costs is the freedom to *replace* content — rewriting an ancestor into something
+        materially different would leave every descendant answering a question nobody now asks.
+
+        So the guarantee is not "bytes never change"; it is **no semantic change that would render an
+        existing thread invalid**. That is the bar a caller of this method has to clear, and there is
+        exactly one situation known to clear it: a reply still being streamed, whose node is created empty
+        and filled in as the text arrives. Such a node has no descendants, so nothing has been written
+        *against its content* — which is what the guarantee protects, rather than the links, its parent
+        having listed it as a child from the moment it was created. And the successive payloads are not
+        competing versions of a message but one message becoming itself; recording each as a revision would
+        bury the edit history the user is meant to read under hundreds of entries.
+
+        If you are reaching for this for any other reason, the answer is `add_revision`, or a new sibling
+        node when what you want is a different version of events rather than a correction to this one.
+
+        Raises `KeyError` if there is no such node.
+        """
+        with self.lock:
+            if node_id not in self.nodes:
+                raise KeyError(f"Forest.overwrite_active_revision: no such node '{node_id}'")
+            node = self.nodes[node_id]
+            revision_id = node["active_revision"]
+            node["data"][str(revision_id)] = payload
+        return revision_id
+
     def delete_revision(self, node_id: str, revision_id: int) -> None:
         """Delete an existing payload revision from node `node_id`."""
         with self.lock:

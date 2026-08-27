@@ -136,6 +136,44 @@ class TestRevisions:
         with pytest.raises(KeyError):
             forest.add_revision("nope", "data")
 
+    def test_overwrite_active_revision_replaces_content(self, forest):
+        nid = forest.create_node("partial", parent_id=None)
+        forest.overwrite_active_revision(nid, "complete")
+        assert forest.get_payload(nid) == "complete"
+
+    def test_overwrite_active_revision_adds_no_revision(self, forest):
+        """The point of it: a streamed reply must not fill the user's edit history with its own chunks."""
+        nid = forest.create_node("", parent_id=None)
+        for chunk in ("H", "He", "Hel", "Hell", "Hello"):
+            forest.overwrite_active_revision(nid, chunk)
+        assert forest.get_revisions(nid) == [1]
+        assert forest.get_payload(nid) == "Hello"
+
+        # The negative control, and the reason this test can tell the two apart: the ordinary way of
+        # changing a payload *does* add one, so a `overwrite_active_revision` that quietly delegated to
+        # `add_revision` would fail here rather than passing for the wrong reason.
+        forest.add_revision(nid, "Hello, world")
+        assert forest.get_revisions(nid) == [1, 2]
+
+    def test_overwrite_active_revision_targets_the_active_one(self, forest):
+        """Not "the newest": a user reading an older revision is what makes those different questions."""
+        nid = forest.create_node("v1", parent_id=None)
+        forest.add_revision(nid, "v2")
+        forest.set_revision(nid, 1)  # the reader has gone back to the original
+
+        forest.overwrite_active_revision(nid, "v1 corrected")
+        assert forest.get_payload(nid, revision_id=1) == "v1 corrected"
+        assert forest.get_payload(nid, revision_id=2) == "v2"  # untouched
+
+    def test_overwrite_active_revision_returns_the_revision_id(self, forest):
+        nid = forest.create_node("v1", parent_id=None)
+        r2 = forest.add_revision(nid, "v2")
+        assert forest.overwrite_active_revision(nid, "v2 corrected") == r2
+
+    def test_overwrite_active_revision_nonexistent_node_raises(self, forest):
+        with pytest.raises(KeyError):
+            forest.overwrite_active_revision("nope", "data")
+
     def test_set_revision(self, forest):
         nid = forest.create_node("v1", parent_id=None)
         forest.add_revision(nid, "v2")

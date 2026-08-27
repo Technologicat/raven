@@ -33,9 +33,10 @@ in-memory update until the app exits.
 
 ## What changes
 
-**`chattree`** — a way to replace the *current* revision's payload in place. `add_revision` is wrong here:
-revisions are a user-facing edit history, and a reply that streamed would leave an empty first revision in
-it. Foundation code, so it wants the usual care: under the lock, revision identity unchanged.
+**`chattree`** — `Forest.overwrite_active_revision`, replacing the current revision's payload in place.
+`add_revision` is wrong here: revisions are a user-facing edit history, and a reply that streamed would fill
+it with hundreds of entries. Foundation code, so it wants the usual care: under the lock, revision identity
+unchanged — and see *Settled* below for the warning it has to carry.
 
 **`scaffold.ai_turn`** — create the assistant node before `invoke` with an empty message and a status saying
 it is incomplete; update its payload as paragraphs arrive; write the final payload on completion. The
@@ -68,12 +69,47 @@ there.
   that is its own filed item.
 - **Sibling churn during a turn is acceptable** (Juha): the count going up when the reply starts is honest.
 
-## Open, to settle while building
+## Settled before building (Juha, 2026-08-27)
 
-- Whether an incomplete node reopened from disk should say so in the GUI, or just render as a short message.
-- Whether `continue_` (which re-revises today) should update in place instead, for consistency.
-- Whether `DPGStreamingChatMessage` stays a class or becomes a mode of `DPGCompleteChatMessage`. Keeping
-  both is the assumption; the streaming one gains a node id.
+**Overwriting a revision is allowed here, and the docstring has to say why it is not allowed elsewhere.**
+Revisions are immutable by design, and the reason is not "bytes never change" — it is that a thread does not
+record which revision of each ancestor it was written against (and arguably should not, since a typo fix is
+meant to reach every thread). So the real guarantee is **no semantic change that would render an existing
+thread invalid**, and a reply becoming itself as it streams is not one: the node has no descendants, so
+nothing has been written against its *content* — the parent has listed it as a child since it was created,
+which the guarantee does not speak to — and the successive payloads are one message arriving rather than
+competing versions of it. Recording each chunk as a revision would bury the edit history the user is meant
+to read. `Forest.overwrite_active_revision`
+carries this argument in full, because a caller who has not read it should not be using it.
+
+**"Incomplete" is three states, not one**, and only one of them is a runtime concern:
+
+| State | What it means | What to render |
+|---|---|---|
+| still streaming | a turn is live and writing this node | the streaming message |
+| cancelled by the user | arguably *complete* — the partial reply was kept, which is Cancel's promise | whatever is there |
+| the app died mid-turn | only reachable at load time | whatever is there |
+
+The runtime and load-time questions never need the same answer, and neither needs stored state beyond the
+marker, because **a live turn cannot span a restart**: any node still marked incomplete when the datastore
+is read back was interrupted, by definition.
+
+*Considered and not done*: a `[Cancelled by user]` footer paragraph on the second case. It would have to be
+stripped by the continue machinery, and that complication buys little — the message reads the same to a
+person either way.
+
+**`continue_` stays on `add_revision`.** Which is what keeps `overwrite_active_revision` down to one caller,
+so it can be scoped to the streaming case rather than designed as a general operation.
+
+*Noted, not acted on*: the multiversal-shaped answer for continuing is arguably a **sibling** rather than a
+revision — the original message is one thing that historically happened, and the continued variant is an
+alternative timeline. That is a separate question from this work, and left open.
+
+**The class hierarchy stays.** The fork between a message being streamed and a stored one is genuine — live
+paragraph updates and a thinking cloud against a full button row and sibling navigation — and the base class
+exists to hold what they share. Worth stating the converse, since it is what makes the decision non-obvious:
+if the streaming class were folded away there would be no reason for a hierarchy at all, the base becoming
+the only class. The fork remaining is what keeps it.
 
 ## How it gets verified
 
