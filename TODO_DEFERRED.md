@@ -100,7 +100,7 @@ one process, one moment, one branch — quietly generalized into a claim about t
 
 ## Ctrl+Left / Ctrl+Right cannot flick between siblings, because each switch re-picks its own target
 
-*Cluster: librarian-keyboard · Cost: S to build, the design is the work · Gate: none — **raised for Monday** (Juha, 2026-08-21) · Filed: 2026-08-21 · Updated: 2026-08-25*
+*Cluster: librarian-keyboard · Cost: S to build, the design is the work · Gate: RN2026 if time allows, else 0.2.9 (Juha, 2026-08-27) · Filed: 2026-08-21 · Updated: 2026-08-27*
 
 **When this lands, re-check the branch-switch glitch's ceiling** (Juha, 2026-08-25). The glitch extends on
 each switch and is capped from the first one — 1.5 s at present — so what the cap is *for* is a sustained
