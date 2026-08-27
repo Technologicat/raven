@@ -730,6 +730,63 @@ class TestInvokeReportsPhases:
         assert out.phases is None
 
 
+class TestPartialMessages:
+    """The reply so far, offered to a caller that stores it as it arrives.
+
+    Its purpose is that something reading the store *during* a reply sees the words that have arrived, so
+    what matters is that the partials say what the finished message would say at that point, and that they
+    arrive at a rate a store can live with.
+    """
+
+    @staticmethod
+    def _partials(monkeypatch, invoke_settings, payloads):
+        seen = []
+        _fake_stream(monkeypatch, payloads)
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False,
+                               on_partial_message=seen.append)
+        return seen, out
+
+    def test_a_partial_arrives_per_paragraph_not_per_chunk(self, monkeypatch, invoke_settings):
+        seen, out = self._partials(monkeypatch, invoke_settings, [
+            {"choices": [{"delta": {"content": "one "}}]},
+            {"choices": [{"delta": {"content": "two "}}]},
+            {"choices": [{"delta": {"content": "three\n"}}]},   # paragraph 1 ends here
+            {"choices": [{"delta": {"content": "four "}}]},
+            {"choices": [{"delta": {"content": "five\n"}}]},    # paragraph 2 ends here
+        ])
+        assert len(seen) == 2, f"expected one partial per paragraph, got {len(seen)} for 5 chunks"
+        assert chatutil.content_to_text(seen[0]["content"]) == "one two three\n"
+        assert chatutil.content_to_text(seen[-1]["content"]) == "one two three\nfour five\n"
+
+    def test_a_partial_says_what_the_finished_message_would_say(self, monkeypatch, invoke_settings):
+        """The two are assembled by the same code, so the last partial is a prefix of the final message."""
+        seen, out = self._partials(monkeypatch, invoke_settings, [
+            {"choices": [{"delta": {"content": "done\n"}}]},
+        ])
+        assert seen[-1]["role"] == out.data["role"]
+        assert chatutil.content_to_text(seen[-1]["content"]) == chatutil.content_to_text(out.data["content"])
+
+    def test_a_retcon_produces_a_partial_of_its_own(self, monkeypatch, invoke_settings):
+        """It changes what the text so far *is*, and a stored copy that missed it would keep asserting the wrong one.
+
+        Without this the next partial waits for a newline, and the store meanwhile claims the reasoning is
+        the answer — which is the very thing the retcon exists to correct.
+        """
+        seen, unused_out = self._partials(monkeypatch, invoke_settings, [
+            {"choices": [{"delta": {"content": "thinking hard"}}]},   # no newline: no partial yet
+            {"choices": [{"delta": {"content": "</think>"}}]},        # ...but this must produce one
+        ])
+        assert seen, "the retcon produced no partial, so a store would still call the reasoning an answer"
+        assert seen[-1]["reasoning_content"] == "thinking hard"
+        assert chatutil.content_to_text(seen[-1]["content"]) == ""
+
+    def test_no_callback_means_no_partials_are_built(self, monkeypatch, invoke_settings):
+        """The default costs nothing: `build_message` is not called at all for a caller that did not ask."""
+        _fake_stream(monkeypatch, [{"choices": [{"delta": {"content": "a\nb\n"}}]}, "[DONE]"])
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert chatutil.content_to_text(out.data["content"]) == "a\nb\n"  # and the reply is unaffected
+
+
 class TestOrphanThinkClose:
     """Reasoning that arrives with no opening tag, because the chat template supplied it.
 

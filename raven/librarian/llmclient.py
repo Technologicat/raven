@@ -1732,7 +1732,8 @@ def invoke(settings: env,
            max_tokens: int | None = None,
            datastore: chattree.PersistentForest | None = None,
            calibrate: bool = True,
-           maybe_abort: netutil.Abort | None = None) -> env:
+           maybe_abort: netutil.Abort | None = None,
+           on_partial_message: Callable | None = None) -> env:
     """Invoke the LLM with the given chat history.
 
     This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
@@ -1841,6 +1842,20 @@ def invoke(settings: env,
                    reach, since it is not called until the backend emits something.
 
                    `None` (default) means the call runs to completion once started.
+
+    `on_partial_message`: Called with the reply *so far*, in the same format as the finished one, at each
+                          paragraph boundary — and on a `reasoning_retcon`, which changes what the text so
+                          far *is*.
+
+                          For a caller that stores the reply as it arrives, so that something reading the
+                          store mid-reply sees the words that have arrived rather than an empty message.
+                          A frontend rendering the stream wants `on_progress` instead: this fires far less
+                          often and hands over a whole message rather than the piece that just arrived.
+
+                          Assembled by the same code that assembles the finished reply, so the two cannot
+                          drift.
+
+                          `None` (default) means no partial messages are built at all, which costs nothing.
 
     Returns an `unpythonic.env.env` WITHOUT adding the LLM's reply to `history`.
 
@@ -1966,6 +1981,25 @@ def invoke(settings: env,
     # with LM Studio's / OpenAI's incremental fragments (see `_accumulate_tool_call_delta`).
     tool_call_acc: dict[int, dict[str, str]] = {}
 
+    def build_message(text: str, reasoning: str, tool_calls: list[dict] | None = None) -> dict:
+        """Assemble a reply in `create_chat_message` format, from text that has been streamed.
+
+        The single place a message is put together, called both for the finished reply and for each partial
+        one handed to `on_partial_message`. Sharing it is the point: a second assembler somewhere else would
+        agree with this one until the day the two drift, and the symptom would be subtly wrong *stored* text
+        noticed long afterwards.
+
+        The text arrives as arguments rather than being read off the accumulators, because the finished
+        reply is not simply what accumulated: a stopping string chops it first, and that chopped text is
+        what must be stored.
+        """
+        return chatutil.create_chat_message(llm_settings=settings,
+                                            role="assistant",
+                                            text=text,
+                                            add_persona=False,
+                                            tool_calls=tool_calls,
+                                            reasoning_content=(reasoning or None))
+
     def handle_event(parsed_event: dict) -> sym:
         """Accumulate one typed event into the response, notify `on_progress`, return its action (default ack)."""
         nonlocal t_first_token, t_first_content, n_chunks_at_first_content, llm_output_text
@@ -1998,6 +2032,20 @@ def invoke(settings: env,
             # Forwarded, like every other event: a consumer that has shown the text needs to know it showed
             # it in the wrong place. Nothing here says what to do about it — a GUI can move what it drew, a
             # terminal can only say so afterwards — so the event carries the fact and no instruction.
+
+        # Offer the reply so far, at paragraph boundaries. The paragraph is the unit because it is the one
+        # the renderer already works in, and because the point of these is that something *else* can show
+        # the text — a caller storing them gives a reader who returns mid-reply the words that have arrived,
+        # rather than an empty message. Per chunk would be the same information at a hundred times the rate.
+        #
+        # A `reasoning_retcon` is a boundary too, and an important one: it moves everything shown so far
+        # from the answer into the trace, and a stored copy that missed it would keep asserting the wrong
+        # one until the next newline happened along.
+        if on_partial_message is not None:
+            if etype == "reasoning_retcon" or (etype in ("content", "reasoning") and "\n" in parsed_event["text"]):
+                on_partial_message(build_message(llm_output_text.getvalue(),
+                                                 reasoning_output_text.getvalue()))
+
         if on_progress is not None:
             return on_progress({**parsed_event, "n_chunks": n_chunks})
         return action_ack
@@ -2158,12 +2206,7 @@ def invoke(settings: env,
                           maybe_thinking_tokens=maybe_thinking_tokens,
                           thinking_tokens_exact=thinking_tokens_exact)
 
-    message = chatutil.create_chat_message(llm_settings=settings,
-                                           role="assistant",
-                                           text=llm_output_text,
-                                           add_persona=False,
-                                           tool_calls=tool_calls,
-                                           reasoning_content=(reasoning_content or None))
+    message = build_message(llm_output_text, reasoning_content, tool_calls=tool_calls)
     return env(data=message,
                model=settings.model,
                n_tokens=n_tokens,
