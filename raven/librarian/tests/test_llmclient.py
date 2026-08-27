@@ -746,17 +746,22 @@ class TestPartialMessages:
                                on_partial_message=seen.append)
         return seen, out
 
-    def test_a_partial_arrives_per_paragraph_not_per_chunk(self, monkeypatch, invoke_settings):
-        seen, out = self._partials(monkeypatch, invoke_settings, [
+    def test_a_partial_arrives_for_every_chunk(self, monkeypatch, invoke_settings):
+        """Not per paragraph, which would leave the paragraph being written out of the store.
+
+        A reader who navigates away and back would then see *less* than one who stayed, and with a model
+        that writes long paragraphs, "less" is most of the reply. Removing that asymmetry is what storing
+        the reply is for.
+        """
+        seen, unused_out = self._partials(monkeypatch, invoke_settings, [
             {"choices": [{"delta": {"content": "one "}}]},
             {"choices": [{"delta": {"content": "two "}}]},
-            {"choices": [{"delta": {"content": "three\n"}}]},   # paragraph 1 ends here
-            {"choices": [{"delta": {"content": "four "}}]},
-            {"choices": [{"delta": {"content": "five\n"}}]},    # paragraph 2 ends here
+            {"choices": [{"delta": {"content": "three\n"}}]},
+            {"choices": [{"delta": {"content": "four "}}]},   # mid-paragraph, and must still be offered
         ])
-        assert len(seen) == 2, f"expected one partial per paragraph, got {len(seen)} for 5 chunks"
-        assert chatutil.content_to_text(seen[0]["content"]) == "one two three\n"
-        assert chatutil.content_to_text(seen[-1]["content"]) == "one two three\nfour five\n"
+        assert len(seen) == 4, f"expected one partial per chunk, got {len(seen)} for 4 chunks"
+        assert chatutil.content_to_text(seen[0]["content"]) == "one "
+        assert chatutil.content_to_text(seen[-1]["content"]) == "one two three\nfour "
 
     def test_a_partial_says_what_the_finished_message_would_say(self, monkeypatch, invoke_settings):
         """The two are assembled by the same code, so the last partial is a prefix of the final message."""
@@ -767,18 +772,23 @@ class TestPartialMessages:
         assert chatutil.content_to_text(seen[-1]["content"]) == chatutil.content_to_text(out.data["content"])
 
     def test_a_retcon_produces_a_partial_of_its_own(self, monkeypatch, invoke_settings):
-        """It changes what the text so far *is*, and a stored copy that missed it would keep asserting the wrong one.
+        """It changes what the text so far *is*, so the store must hear about it as its own event.
 
-        Without this the next partial waits for a newline, and the store meanwhile claims the reasoning is
-        the answer — which is the very thing the retcon exists to correct.
+        The reason it needs saying separately, now that every chunk fires one: a `reasoning_retcon`
+        deliberately carries no `text`, so anything keyed on text having arrived would skip it — and the
+        store would go on calling the reasoning an answer until the next chunk happened along, which is
+        precisely what the retcon exists to correct.
         """
         seen, unused_out = self._partials(monkeypatch, invoke_settings, [
-            {"choices": [{"delta": {"content": "thinking hard"}}]},   # no newline: no partial yet
-            {"choices": [{"delta": {"content": "</think>"}}]},        # ...but this must produce one
+            {"choices": [{"delta": {"content": "thinking hard"}}]},
+            {"choices": [{"delta": {"content": "</think>"}}]},   # carries no text of its own
         ])
-        assert seen, "the retcon produced no partial, so a store would still call the reasoning an answer"
         assert seen[-1]["reasoning_content"] == "thinking hard"
         assert chatutil.content_to_text(seen[-1]["content"]) == ""
+        # The control: the partial *before* the retcon read the same text as an answer. Without it, a
+        # fixture whose reasoning was already in the right place would pass without the retcon firing.
+        assert chatutil.content_to_text(seen[0]["content"]) == "thinking hard"
+        assert seen[0].get("reasoning_content") is None  # absent, not `None`: no reasoning had been seen yet
 
     def test_no_callback_means_no_partials_are_built(self, monkeypatch, invoke_settings):
         """The default costs nothing: `build_message` is not called at all for a caller that did not ask."""

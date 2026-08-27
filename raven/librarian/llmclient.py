@@ -1843,17 +1843,18 @@ def invoke(settings: env,
 
                    `None` (default) means the call runs to completion once started.
 
-    `on_partial_message`: Called with the reply *so far*, in the same format as the finished one, at each
-                          paragraph boundary — and on a `reasoning_retcon`, which changes what the text so
-                          far *is*.
+    `on_partial_message`: Called with the reply *so far*, in the same format as the finished one, on every
+                          event that changes it.
 
                           For a caller that stores the reply as it arrives, so that something reading the
-                          store mid-reply sees the words that have arrived rather than an empty message.
-                          A frontend rendering the stream wants `on_progress` instead: this fires far less
-                          often and hands over a whole message rather than the piece that just arrived.
+                          store mid-reply sees every word that has arrived rather than an empty message —
+                          or, worse, a stale one. A frontend rendering the stream wants `on_progress`
+                          instead: that hands over the piece that just arrived, where this hands over the
+                          whole message each time.
 
                           Assembled by the same code that assembles the finished reply, so the two cannot
-                          drift.
+                          drift. Tool calls are the one thing a partial cannot carry, since they are
+                          materialized only when the stream ends.
 
                           `None` (default) means no partial messages are built at all, which costs nothing.
 
@@ -2033,18 +2034,22 @@ def invoke(settings: env,
             # it in the wrong place. Nothing here says what to do about it — a GUI can move what it drew, a
             # terminal can only say so afterwards — so the event carries the fact and no instruction.
 
-        # Offer the reply so far, at paragraph boundaries. The paragraph is the unit because it is the one
-        # the renderer already works in, and because the point of these is that something *else* can show
-        # the text — a caller storing them gives a reader who returns mid-reply the words that have arrived,
-        # rather than an empty message. Per chunk would be the same information at a hundred times the rate.
+        # Offer the reply so far, on every event that changes it — including `reasoning_retcon`, which
+        # changes what the text so far *is* and which is why this cannot simply test for a `text` key: that
+        # event deliberately carries none.
         #
-        # A `reasoning_retcon` is a boundary too, and an important one: it moves everything shown so far
-        # from the answer into the trace, and a stored copy that missed it would keep asserting the wrong
-        # one until the next newline happened along.
-        if on_partial_message is not None:
-            if etype == "reasoning_retcon" or (etype in ("content", "reasoning") and "\n" in parsed_event["text"]):
-                on_partial_message(build_message(llm_output_text.getvalue(),
-                                                 reasoning_output_text.getvalue()))
+        # Per event, not per paragraph: a coarser rate leaves the paragraph currently being written out of
+        # the store, so a reader who navigates away and back sees *less* than one who stayed. Some models
+        # write very long paragraphs, so "less" can be most of the reply — and an asymmetry between
+        # watching and returning is the exact thing storing the reply exists to remove.
+        #
+        # The quadratic this implies does not matter at these lengths: `getvalue` is O(n) in what has
+        # accumulated, so building every time is O(n²) over the reply, measured (2026-08-27) at 7 ms across
+        # a 10000-token reply and 113 ms across a 30000-token one — against a reply that takes tens of
+        # seconds to generate. Nothing reaches the disk either way; the datastore persists at exit.
+        if on_partial_message is not None and etype in ("content", "reasoning", "reasoning_retcon"):
+            on_partial_message(build_message(llm_output_text.getvalue(),
+                                             reasoning_output_text.getvalue()))
 
         if on_progress is not None:
             return on_progress({**parsed_event, "n_chunks": n_chunks})
