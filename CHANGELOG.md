@@ -47,6 +47,9 @@
   - Expressions are Python's, with the `math` module's functions available under their bare names — `sqrt(2)`, `pi`, `log(1000, 10)`. Nothing else is reachable: no variables, no attribute access, no statements, and no random numbers, a calculator that can answer the same question twice differently being worse than none.
   - An expression it cannot evaluate comes back as an explanation of what it does take, so the model can correct itself and answer rather than failing the turn.
 
+- **a reply that stopped early now says so.** Stopping the AI keeps what it had written, which is the point of the button — but what it keeps ends mid-sentence, and so does a model that finished tersely. A short grey line under the message now names the difference: *[Interrupted — the reply was stopped here]* for one you stopped, and *[Incomplete — Raven exited while this reply was being written]* for a chat that was closed mid-reply and reopened.
+  - The line is added when the message is drawn and never stored, so it is not part of the text the model sees if you continue the message, and not part of what an export or a script reads.
+
 - **a READING indicator**, lit while an attached document's text is being extracted. Arriving at a branch whose PDFs have not been read yet spends a second or two reading them before anything else can start, and nothing on screen said so. It gets its own row between DOCS and SYSTEM rather than sharing one of theirs: extraction is local work that happens before the backend sees anything, and what these indicators are for is saying *where* the time is going.
 
 *Raven-avatar*

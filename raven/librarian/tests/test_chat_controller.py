@@ -146,6 +146,39 @@ class TestDemolishLeavesNoWidgetReference:
         assert message.gui_parent is not None
 
 
+class TestIncompletenessNote:
+    """A reply that stopped early has to say so, because the text cannot.
+
+    What is kept when the user presses Stop is a reply ending mid-sentence — which is also what a model
+    rambling to a halt looks like, and what a reply that simply finished tersely looks like. By the next
+    session nobody remembers pressing the button.
+    """
+
+    def test_a_finished_reply_says_nothing(self):
+        assert chat_controller._incompleteness_note({"model": "m", "n_tokens": 100, "dt": 2.0}) is None
+
+    def test_a_node_with_no_metadata_at_all_says_nothing(self):
+        """A message Raven authored — a backend-error report — carries no `generation_metadata`."""
+        assert chat_controller._incompleteness_note({}) is None
+
+    def test_a_stopped_reply_says_it_was_stopped(self):
+        note = chat_controller._incompleteness_note({"n_tokens": 30, "dt": 1.0, "interrupted": True})
+        assert note is not None
+        assert "Interrupted" in note
+
+    def test_a_reply_cut_off_by_the_app_going_away_says_so_instead(self):
+        """Different event, different words: `status: incomplete` is only reachable from disk."""
+        note = chat_controller._incompleteness_note({"status": "incomplete"})
+        assert note is not None
+        assert "Interrupted" not in note, "the two cases must not collapse into one message"
+        assert "Raven exited" in note
+
+    def test_being_stopped_wins_over_the_leftover_marker(self):
+        """Belt and braces: a payload carrying both is describing a stopped reply, which is the specific one."""
+        note = chat_controller._incompleteness_note({"interrupted": True, "status": "incomplete"})
+        assert "Interrupted" in note
+
+
 class TestRemovingAMessageByNode:
     """A turn tidying up after its own round must name the *live* message, not merely the node.
 

@@ -351,6 +351,38 @@ class TestAITurnSimple:
         assert meta["dt"] == 1.5
         assert "phases" not in meta  # this reply reported none, and absent is how that is stored
 
+    def test_a_stopped_reply_is_recorded_as_stopped(self, monkeypatch, llm_settings, populated_forest):
+        """The GUI's "[Interrupted]" note reads this, and nothing in the reply's *text* could tell it.
+
+        A stopped reply is kept -- that is what Stop promises -- and what is kept ends mid-sentence, which
+        is indistinguishable from a model that finished tersely.
+        """
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings,
+                                       datastore=forest,
+                                       head_node_id=head,
+                                       user_message_text="Hello")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="Hi, I was just about to",
+                                                            interrupted=True))
+
+        final_head = run_ai_turn(forest, llm_settings, user_head)
+        assert forest.get_payload(final_head)["generation_metadata"]["interrupted"] is True
+
+    def test_a_reply_that_finished_carries_no_such_key(self, monkeypatch, llm_settings, populated_forest):
+        """The negative control, and the reason it matters: absent means "not interrupted", so every node
+        written before this was tracked has to read that way rather than as an unknown."""
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings,
+                                       datastore=forest,
+                                       head_node_id=head,
+                                       user_message_text="Hello")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="Hi!", interrupted=False))
+
+        final_head = run_ai_turn(forest, llm_settings, user_head)
+        assert "interrupted" not in forest.get_payload(final_head)["generation_metadata"]
+
     def test_phase_report_is_stored_when_there_is_one(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest
         user_head = scaffold.user_turn(llm_settings=llm_settings,

@@ -1245,6 +1245,15 @@ def ai_turn(llm_settings: env,
             payload["generation_metadata"] = {"model": out.model,
                                               "n_tokens": out.n_tokens,
                                               "dt": out.dt}
+            # Recorded only when true, like `phases` and `grounded` below: a reader tests for the key, and a
+            # node written before this was tracked then reads as "not interrupted", which is the right answer
+            # for almost all of them.
+            #
+            # Worth storing at all because the *text* cannot say it. A reply the user stopped is kept — that
+            # is what Stop promises — and what is kept is a reply that ends mid-sentence, which is also what
+            # a model rambling to a halt looks like. Without this the two are indistinguishable on reload.
+            if out.interrupted:
+                payload["generation_metadata"]["interrupted"] = True
             # Absent when there is nothing to say about the phases, which is what "the model did not think"
             # and "it generated no text at all" both look like from here. A reader tests for the key rather
             # than for a zero, so an old node from before this was recorded reads the same as a reply that

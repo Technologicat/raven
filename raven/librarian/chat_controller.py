@@ -356,6 +356,30 @@ def _node_is_unfinished(datastore: chattree.Forest, node_id: str) -> bool:
     generation_metadata = datastore.get_payload(node_id).get("generation_metadata") or {}
     return generation_metadata.get("status") == "incomplete"
 
+def _incompleteness_note(generation_metadata: dict) -> str | None:
+    """What to say under a reply that stopped early, or `None` for one that ended on its own.
+
+    `generation_metadata`: the node's, or `{}` for a node that has none.
+
+    Two ways a reply ends before the model was finished, and they are different events, so they get
+    different words. The reader needs no more than that; the *reason* a backend failed is already in the
+    message text, which is why an error is not one of the cases here.
+    """
+    # Rendered rather than stored, and that is the whole design. Storing the line would put words into the
+    # assistant's mouth: the continue machinery would then have to strip them again before sending the
+    # message back to the model, and anything else reading the stored text — a script, an export — would
+    # have to know to ignore them. A line that never enters the text has nothing to strip.
+    #
+    # Worth having at all because a stopped reply looks exactly like a finished one. Both end mid-thought
+    # often enough, and by the next session nobody remembers pressing the button.
+    if generation_metadata.get("interrupted"):
+        return "[Interrupted — the reply was stopped here]"
+    if generation_metadata.get("status") == "incomplete":
+        # Only reachable from disk: a live turn cannot outlive the process, so a node still marked this way
+        # when the datastore is read back was cut off by the app going away rather than by the user.
+        return "[Incomplete — Raven exited while this reply was being written]"
+    return None
+
 def _scan_for_root_nodes(datastore: chattree.Forest) -> list[str]:
     """The O(n) scan behind `_get_all_system_prompt_node_ids`, memoized on its own so the result can be filtered.
 
@@ -447,6 +471,11 @@ def _get_unmarked_theme() -> str | int:
 # --------------------------------------------------------------------------------
 
 class DPGChatMessage:
+    # Whether this class renders a reply that is still arriving. The one thing the shared `build` cannot
+    # decide for itself: an unfinished node means "cut short" to a stored message and "working" to a live
+    # one, and only the class knows which it is.
+    renders_live_reply = False
+
     def __init__(self,
                  gui_parent: str | int,
                  parent_view: "DPGLinearizedChatView"):
@@ -659,6 +688,17 @@ class DPGChatMessage:
             # carries no dict at all. Both mean the same thing here — nothing to report — and the absence of
             # the line is how each has always appeared.
             generation_metadata = ai_message_node_payload.get("generation_metadata") or {}
+
+            # Why a reply stops early, said under the text rather than stored in it. Suppressed while the
+            # reply is still being written: an unfinished node is what a live reply *is*, and reporting it
+            # there would put "Raven exited" under a message arriving in front of the reader.
+            if not self.renders_live_reply:
+                maybe_note = _incompleteness_note(generation_metadata)
+                if maybe_note is not None:
+                    dpg.add_text(maybe_note,
+                                 color=(120, 120, 120),  # same gray as the stats line: a caption, not an alarm
+                                 parent=text_vertical_layout_group)
+
             if "n_tokens" in generation_metadata:
                 n_tokens = generation_metadata["n_tokens"]
                 dt = generation_metadata["dt"]
@@ -2385,6 +2425,8 @@ class DPGCompleteChatMessage(DPGChatMessage):
 
 
 class DPGStreamingChatMessage(DPGChatMessage):
+    renders_live_reply = True
+
     def __init__(self,
                  gui_parent: str | int,
                  parent_view: "DPGLinearizedChatView",
