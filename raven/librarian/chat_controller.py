@@ -4492,6 +4492,20 @@ class DPGChatController:
                     # widget below renders it, and every later lookup goes through this id.
                     task_env.ai_node_id = node_id
 
+                    # HEAD moves to it now, rather than when the reply is finished. A view is built from
+                    # `linearize_up(HEAD)`, so a reply whose node is not yet on that path cannot be
+                    # rendered by a rebuild however complete the node is — which is exactly what a resize
+                    # mid-reply used to demonstrate, the message vanishing until the turn ended.
+                    #
+                    # `expected_head` follows even when the user is elsewhere, so the guard keeps naming
+                    # the node this turn is actually writing; HEAD itself only moves for a reader who is
+                    # here to see it. Navigating back lands on this node anyway, `descend_to_latest`
+                    # finding it as the newest child — so the two agree again at that moment.
+                    if turn_owns_the_view():
+                        advance_head(node_id)
+                    else:
+                        task_env.expected_head = node_id
+
                     # Per round, not per turn: what this arms is "the backend is reading the prompt and has
                     # sent nothing back yet", which is true again at the start of every round of the agent
                     # loop. See `abort_if_nothing_to_lose`.
