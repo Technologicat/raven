@@ -278,6 +278,36 @@ Circular wait: callback -> task -> main -> callback.
 holding locks that the main loop needs. Defer heavy work (image loading, task
 cancellation) to the main loop body via a pending flag.
 
+### The two-party version: a per-frame reader that takes a lock
+
+The same wait, with the callback thread left out, and easier to build by accident because each half looks
+correct on its own. A background task holds lock L while doing DPG work that needs frames to finish; the
+render loop, once per frame, wants L to read the structure L protects. The render thread then waits for a
+lock whose holder is waiting for a frame the render thread was going to produce. Two parties, same circle.
+
+It presents as **an app that never finishes starting** — panels blank, the window manager reporting it not
+responding — because the deadlock catches the *first* rebuild. `py-spy dump` names it immediately: MainThread
+sits on the `with` line, and another thread holds the GIL somewhere in `dearpygui`.
+
+**A reader that must not block cannot be made safe by blocking it.** Where a per-frame reader needs a list
+that background threads mutate, copy it without the lock: `tuple(the_list)` is a single C-level pass that
+never releases the GIL, so no other thread can mutate the list part-way through, and the reader gets a
+coherent snapshot for free. Being an instant out of date is almost always fine — a frame later it is right
+again.
+
+Iterating the live list instead does not crash (the list iterator bounds-checks, so a concurrent `clear`
+ends the loop early rather than raising), but it can be read *torn*: half from before a rebuild, half from
+after. The copy costs one allocation and removes that.
+
+The tempting third option — publishing a snapshot the writers rebuild after every change — is worse than
+both, and worth naming because it looks the most rigorous: every future mutation site has to remember to
+republish, and the one that forgets freezes the reader's view silently.
+
+Live case 2026-08-27: `chat_controller.get_current_message`, called from `update_animations`, against
+`DPGLinearizedChatView.build` running on the debounced resize task. The lock was added to fix a genuine
+race — the same function was iterating a list that `build` clears — so the hazard was real and only the
+remedy was wrong.
+
 ## `dpg.mutex()` — the atomicity tool that Raven cannot currently use
 
 `with dpg.mutex():` is what makes a multi-call sequence land in one frame, so that
