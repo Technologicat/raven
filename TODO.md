@@ -32,6 +32,36 @@ lose their claim on the next four weeks.
 6. **The fleet lint policy** — `~/.claude/TODO_DEFERRED.md`, "Whitespace checking fell out of the fleet when
    it moved to ruff". Not this repo's file, and not this repo's decision alone.
 
+## Next session, from 2026-08-27
+
+Chosen at the end of the session that finished band-2 item 9. Same purpose as the block above: the
+*selection* would otherwise live nowhere, each of these being filed in a different place or nowhere at all.
+Delete once it stops describing where the work is.
+
+1. **The `continue_` fix.** Continuing a message replaces it instead of extending it — both the text and
+   the reasoning, since `invoke`'s accumulators start empty. Reproduced end to end 2026-08-27, and the
+   diagnosis and the chosen shape are in `briefs/researchers-night/in-progress-reply-as-a-node.md` →
+   *Found on the way*. Predates the node-first work; wanted for the exhibit, since Continue is a button a
+   visitor can press.
+
+2. **Two briefs to write** — *"written or forgotten"* (Juha, 2026-08-27), both understood and neither
+   recorded anywhere a search would find:
+   - **The ooba cluster.** Three `TODO_DEFERRED.md` items sit behind one oobabooga upgrade, and a fourth
+     now takes it as a verification gate. A recognized cluster is a brief waiting to be written, and
+     nothing in the deferred-list process promotes it — which is the failure the fleet notes describe.
+   - **Containing the OpenAI wire shape.** `llmclient` both speaks the protocol and defines the shape
+     everything else stores, so the wire format has become Raven's internal format by default rather than
+     by decision. Wanted *before* the autumn work rather than during it. `briefs/design/` is the home.
+
+3. **Where token counting should live** (raised by Juha, 2026-08-27, and undecided). Exact context-fill
+   counts need the model's `.gguf` on a **local path**, which covers one of three deployments: everything
+   on one machine. Two candidate fixes, and they are not exclusive:
+   - A **Raven-server endpoint** with a client half in `raven.client.api`, covering the case where the
+     server sits beside the LLM backend and the apps are elsewhere. Takes it to two of three.
+   - **Asking the backend to count**, which `gguftokenizer.load` already does to verify itself: two short
+     probes, compared by their *difference* so the chat template's framing cancels. That reaches all three,
+     and the cost objection is weaker than it first looks — the readout updates on the idle-prefill settle,
+     not per keystroke, so two round-trips per recount is cheap. Nobody has measured it.
 
 ---
 
