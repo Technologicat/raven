@@ -127,6 +127,36 @@ message" while its accumulators start empty — the code and the comment disagre
 docstring's claim is probably true of oobabooga, whose `continue_` request field Raven still sends and
 whose behaviour the project already records as unvalidated.
 
+## Where this stands, 2026-08-27
+
+**Built, and not finished.** Twelve commits, held local and unpushed on purpose: the app currently loses a
+completed reply in one case, which is worse than what it replaces, so pushing would put a regression on
+`main` for the sake of a rule about seams.
+
+Verified live, all against the real backend:
+
+| | |
+|---|---|
+| a reply streams normally | works |
+| resize mid-reply (rebuild from the node) | works — the reply stays put and keeps updating |
+| flick to another branch and back mid-reply | works — the reply is there, still streaming |
+| the reply *completing* after such a flick | **broken — the message vanishes** |
+
+**The evidence for the broken case, so the next session need not re-derive it.** `on_done` runs in full:
+the log shows "updating chat view with final message" and "all done", no errors, and the duplicate guard in
+`add_complete_message` never fires — so a widget *is* created. But the view then shows the user message as
+the tail with no reply under it, and `max_y_scroll` drops from 7181 to 1309 across the swap.
+
+That shape says HEAD is sitting on the **user message** rather than on the reply's node, so
+`linearize_up(HEAD)` legitimately ends where the screen ends. The question to start from is why: HEAD is
+advanced to the node in `on_llm_start`, and a flick back is supposed to land on it again via
+`descend_to_latest` picking the newest child. One of those two is not happening — the timestamp
+`chatutil.create_payload` puts on the incomplete node is the first thing to check, since that is what the
+descent orders by.
+
+Two known gaps besides: the `[Cancelled by user]` / `[Error occurred]` render-time footer is not built, and
+the `continue_` bug found on the way is not fixed.
+
 ## How it gets verified
 
 Suite, then live: reroll → navigate away → back (streaming resumes, with the text so far); completion while
