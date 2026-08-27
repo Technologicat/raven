@@ -1473,7 +1473,7 @@ class StreamParser:
         return events
 
 # --------------------------------------------------------------------------------
-# The most important function - call LLM, parse result
+# Turning a stored chat into a request the backend will accept
 
 def serialize_history_for_wire(settings: env,
                                history: list[dict],
@@ -1698,6 +1698,9 @@ def phase_report(*,
                               "n_tokens": maybe_thinking_tokens,
                               "tokens_exact": thinking_tokens_exact}
     return phases
+
+# --------------------------------------------------------------------------------
+# The most important function - call LLM, parse result
 
 def thinking_request_fields(*, thinking_enabled: bool) -> dict[str, Any]:
     """Return the request fields that ask a thinking model to reason, or not to.
