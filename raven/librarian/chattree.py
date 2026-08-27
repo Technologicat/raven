@@ -1,6 +1,17 @@
 """Forest data structure, with optional persistence (as JSON).
 
 Used as branching chat history for Raven's LLM client.
+
+**Two ways to change what a node says, and they mean different things.** A *revision* is a correction: the
+same moment in the conversation, said better — a typo fixed, a phrasing tidied. Every thread through that
+node gets it, which is the point, and is why revisions are immutable in the sense that matters (see
+`Forest.overwrite_active_revision` for what that sense is). A *sibling* is an alternative history: the
+conversation going differently from the same parent, which is what a reroll or an edited question produces,
+and both versions go on existing.
+
+Choosing wrongly is not a style question. A different version of events stored as a revision silently
+rewrites the past of every thread that passed through, and a correction stored as a sibling leaves the
+mistake standing in every thread that does not happen to take the new branch.
 """
 
 __all__ = ["SIDECAR_SUFFIX", "LEGACY_SIDECAR_SUFFIX",
