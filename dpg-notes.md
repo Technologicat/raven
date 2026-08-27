@@ -299,6 +299,21 @@ Iterating the live list instead does not crash (the list iterator bounds-checks,
 ends the loop early rather than raising), but it can be read *torn*: half from before a rebuild, half from
 after. The copy costs one allocation and removes that.
 
+**And the snapshot is only half the remedy — the entries are widget ids, and those can be deleted while you
+read them.** `tuple(...)` makes the *list* safe to walk and says nothing about what the list names: a
+rebuild on another thread deletes every widget the old snapshot pointed at, and the next `get_item_rect_min`
+raises `[1005] Item not found`. On the render thread that is fatal, the exception unwinding out of the
+frame loop and taking the app with it.
+
+So a per-frame reader over a snapshot needs **both**: the copy, and `guiutils.nonexistent_ok` around what it
+does with the entries, treating the failure as *the answer expired* and skipping the frame. The rebuild that
+invalidated it is about to ask again anyway.
+
+The two failures are the same site seen from two sides, and fixing one is what exposes the other — a lock
+here deadlocks the app on startup, a bare snapshot crashes it on a branch switch. (Raven, both on
+2026-08-27: `DPGChatController.get_current_message`, deadlocked in the morning and crashed in the afternoon,
+on the same list and from the same per-frame caller.)
+
 The tempting third option — publishing a snapshot the writers rebuild after every change — is worse than
 both, and worth naming because it looks the most rigorous: every future mutation site has to remember to
 republish, and the one that forgets freezes the reader's view silently.

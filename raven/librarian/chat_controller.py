@@ -4056,6 +4056,26 @@ class DPGChatController:
         if not history:
             return None
 
+        # The snapshot is a moment old, and the widgets it names can be deleted while this reads them — a
+        # branch switch rebuilds the view from another thread, and every widget in the old list goes. Asking
+        # DPG where a deleted widget is raises, and this runs on the render thread once per frame, so an
+        # unguarded raise takes the app down with it. (Live: a sibling switch, 2026-08-27.)
+        #
+        # EAFP rather than a lock, deliberately: a lock here is what deadlocked startup, the render thread
+        # waiting on a rebuild that was itself waiting for a frame. But a snapshot is only half the remedy —
+        # it makes the *list* safe to iterate and says nothing about the widgets in it — and this is the half
+        # that was missing.
+        #
+        # Giving up costs one frame of the keyboard mark, and the rebuild that invalidated the answer is
+        # about to ask again anyway.
+        with guiutils.nonexistent_ok() as nok:
+            return self._current_message_in(history)
+        if nok.errored:
+            logger.debug("DPGChatController.get_current_message: the view was rebuilt while looking; no answer this frame.")
+        return None
+
+    def _current_message_in(self, history: tuple) -> DPGChatMessage | None:
+        """The body of `get_current_message`, over a snapshot its caller has taken. See there."""
         _, panel_y = guiutils.get_widget_pos(self.view.gui_parent)
         _, panel_h = guiutils.get_widget_size(self.view.gui_parent)
         top_y = panel_y
