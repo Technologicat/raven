@@ -734,8 +734,9 @@ class TestPartialMessages:
     """The reply so far, offered to a caller that stores it as it arrives.
 
     Its purpose is that something reading the store *during* a reply sees the words that have arrived, so
-    what matters is that the partials say what the finished message would say at that point, and that they
-    arrive at a rate a store can live with.
+    what matters is that a partial says exactly what the finished message would say at that point. A
+    partial that lags is worse than none: a consumer that renders it and then resumes streaming appends
+    what arrives next onto stale text, and the words in between are lost from what it shows.
     """
 
     @staticmethod
@@ -749,9 +750,11 @@ class TestPartialMessages:
     def test_a_partial_arrives_for_every_chunk(self, monkeypatch, invoke_settings):
         """Not per paragraph, which would leave the paragraph being written out of the store.
 
-        A reader who navigates away and back would then see *less* than one who stayed, and with a model
-        that writes long paragraphs, "less" is most of the reply. Removing that asymmetry is what storing
-        the reply is for.
+        The cost of that is a *wrong* message rather than a short one. A consumer that renders the store
+        and then resumes streaming draws the text up to the last boundary and appends what arrives from
+        there on, welding the gap shut — so the words written in between vanish from a reply that reads as
+        though they were never there, and stay vanished until something re-renders from the finished
+        message. With a model that writes long paragraphs, that span is most of the answer.
         """
         seen, unused_out = self._partials(monkeypatch, invoke_settings, [
             {"choices": [{"delta": {"content": "one "}}]},

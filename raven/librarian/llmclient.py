@@ -2041,10 +2041,14 @@ def invoke(settings: env,
         # changes what the text so far *is* and which is why this cannot simply test for a `text` key: that
         # event deliberately carries none.
         #
-        # Per event, not per paragraph: a coarser rate leaves the paragraph currently being written out of
-        # the store, so a reader who navigates away and back sees *less* than one who stayed. Some models
-        # write very long paragraphs, so "less" can be most of the reply — and an asymmetry between
-        # watching and returning is the exact thing storing the reply exists to remove.
+        # Per event, and the reason is correctness rather than completeness. A coarser rate leaves the
+        # paragraph currently being written out of the store — and a consumer that renders the store and
+        # *then* resumes streaming welds the gap shut: it draws the text up to the last boundary, then
+        # appends the tokens that arrive from here on, and the words in between are simply gone from a
+        # message that reads as though they were never written. Wrong, not merely short, and it stays
+        # wrong until something re-renders from the finished reply.
+        #
+        # Some models write very long paragraphs, so the missing span can be most of the answer.
         #
         # The quadratic this implies does not matter at these lengths: `getvalue` is O(n) in what has
         # accumulated, so building every time is O(n²) over the reply, measured (2026-08-27) at 7 ms across
