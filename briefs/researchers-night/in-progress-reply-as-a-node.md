@@ -172,3 +172,9 @@ Suite, then live: reroll → navigate away → back (streaming resumes, with the
 away (appears as the active sibling on return); Cancel mid-stream (partial reply kept); backend error (the
 node is updated, not a second node created) — that last one via
 `investigations/backend-fault-injection/faultproxy.py`, which is what found the orphaned-widget bug.
+
+**The workload to drive them with: "Count from 1 to 40, one per line, with a remark about each."** On a
+~35B Qwen it runs about a minute — some 4.7k tokens of reasoning and 0.7k of answer — which is what these
+tests need and what an ordinary question does not give you: enough runway inside a single turn to flick to
+another branch and back, scroll away from the end, and resize the window, then still be there when the
+reply finishes. Reroll it to run the same turn again.
