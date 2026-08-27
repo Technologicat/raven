@@ -122,6 +122,16 @@ re-joins the two, so `add_revision` stores the continuation as the whole message
 against the real `ai_turn`: a node reading `'Aria: 1. Spring\n2. Summer'` came back as
 `'Aria: 3. Autumn\n4. Winter'`, the original text gone and a second persona prefix added.
 
+**Both channels are lost, not just the text.** Reproduced live 2026-08-27: send, interrupt the model while
+it is still thinking, continue. The thought bubble stays on screen throughout the new generation and is
+erased the moment the message completes — because what is on screen until then is the *old* node, and the
+final payload replaces it. `reasoning_content` goes the way `content` does, and for the same reason: both
+accumulators start empty.
+
+That also says where the fix belongs. Seeding both accumulators from the message being continued makes the
+partials correct as well as the final payload, which is what would let a continue store its partials at all
+— today it is the one path that does not, precisely because they would be wrong.
+
 Predates this work. Found because `invoke`'s docstring says a continue returns "the updated (continued)
 message" while its accumulators start empty — the code and the comment disagreed, so both were wrong. The
 docstring's claim is probably true of oobabooga, whose `continue_` request field Raven still sends and
@@ -129,8 +139,8 @@ whose behaviour the project already records as unvalidated.
 
 ## Where this stands, 2026-08-27
 
-**Built, and the vanishing-reply fault is understood and fixed.** Held local and unpushed until a live run
-confirms it.
+**Built, and live-tested through.** Every case the work was for passes; the one red is the `continue_` bug
+that predates it.
 
 Verified live, against the real backend:
 
@@ -139,7 +149,10 @@ Verified live, against the real backend:
 | a reply streams normally | works |
 | resize mid-reply (rebuild from the node) | works — the reply stays put and keeps updating |
 | flick to another branch and back mid-reply | works — the reply is there, still streaming |
-| the reply *completing* | vanished a moment after appearing; fixed, awaiting a live run |
+| the reply *completing* | works — this was the vanishing-reply fault below |
+| scroll away mid-reply, then rebuild (resize or flick) | works — and the jump-to-latest pill behaves |
+| Cancel mid-stream | works — the partial reply is kept |
+| continuing a message | **red, as expected** — the `continue_` bug below, which predates this work |
 
 **What it was.** A node is rendered by two widgets over its life — the live message while the reply
 streams, and the stored one `on_done` swaps in at the end. The turn's epilogue, which runs whether or not
