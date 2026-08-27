@@ -1,12 +1,13 @@
 # The in-progress reply becomes a node
 
 **Decided 2026-08-27, and expected to be implemented immediately** rather than queued — the last outstanding
-piece of item 9, and groundwork the graph view will stand on.
+piece of *the turn-sequencing race with the abortable prefill* (`README.md` in this folder, band 2, item 9),
+and groundwork the graph view will stand on.
 
 ## The problem this closes
 
 An in-progress reply is not a node, so **nothing that reasons over the tree can see it**. Every hole found
-while testing item 9 is a place where the tree is the source of truth and the reply is not in it:
+while testing that work is a place where the tree is the source of truth and the reply is not in it:
 
 - `chatutil.descend_to_latest` follows the most recent *stored* child, so navigating back to a branch whose
   reply is still being written walks straight past the turn's insertion point and lands on the previous
