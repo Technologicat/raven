@@ -13,6 +13,7 @@ asserted is the guard, and that the two library functions with opposite policies
 is already standing on the hazardous thread.
 """
 
+import logging
 import threading
 
 import pytest
@@ -255,3 +256,72 @@ def test_a_park_has_to_be_renewed_every_frame_to_hold(mapped_dpg_context):
         assert min(renewed) >= edge, f"a renewed park was still pulled on screen: {renewed} against {edge}"
     finally:
         dpg.delete_item("park_probe")  # tag
+
+
+class TestNonexistentOkAndWhatDPGSaysAboutDeadItems:
+    """A dead item is reported two different ways, and only one of them says "not found".
+
+    Which matters because Raven's GUI code deletes widgets from background threads all the time — a view
+    rebuild ending a streaming message is the ordinary case — so "the thing I am drawing into just went
+    away" is expected rather than exceptional, and `nonexistent_ok` is what makes it survivable.
+
+    The first two tests characterize DPG rather than Raven. They exist because the distinction is invisible
+    until it costs you an afternoon: an `add_*` handed a dead parent does *not* say "Item not found", so a
+    guard matching that string sails straight past it, and the exception surfaces somewhere that has
+    nothing to do with the widget that died. If a future DPG unifies the two, these fail, and that failure
+    is the signal to go simplify the guard.
+    """
+
+    @staticmethod
+    def _dead_item():
+        """A group that existed and does not any more."""
+        item = dpg.add_group(parent="nonexistent_ok_probe_window")  # tag
+        dpg.delete_item(item)
+        return item
+
+    @pytest.fixture
+    def probe_window(self, dpg_context):
+        with dpg.window(tag="nonexistent_ok_probe_window"):  # tag
+            pass
+        yield
+        dpg.delete_item("nonexistent_ok_probe_window")  # tag
+
+    def test_operating_on_a_dead_item_says_item_not_found(self, probe_window):
+        dead = self._dead_item()
+        with pytest.raises(Exception) as excinfo:
+            dpg.set_value(dead, 1)
+        assert guiutils._is_dpg_item_not_found(excinfo.value)
+
+    def test_adding_under_a_dead_parent_says_something_else_entirely(self, probe_window):
+        dead = self._dead_item()
+        with pytest.raises(Exception) as excinfo:
+            dpg.add_text("into the void", parent=dead)
+        assert not guiutils._is_dpg_item_not_found(excinfo.value), "DPG has unified the two; the guard can be simplified"
+        assert guiutils._is_dpg_parent_gone(excinfo.value)
+
+    def test_the_plain_guard_does_not_swallow_a_dead_parent(self, probe_window):
+        """Deliberate: "parent could not be deduced" is also what a missing parent argument produces, and
+        that is a mistake in the calling code rather than a widget that went away."""
+        dead = self._dead_item()
+        with pytest.raises(Exception):
+            with guiutils.nonexistent_ok():
+                dpg.add_text("into the void", parent=dead)
+
+    def test_asking_for_it_swallows_a_dead_parent(self, probe_window):
+        dead = self._dead_item()
+        with guiutils.nonexistent_ok(parent_gone_ok=True) as nok:
+            dpg.add_text("into the void", parent=dead)
+        assert nok.errored, "the fixture's parent was alive, so this proves nothing about the suppression"
+
+    def test_what_is_swallowed_is_still_written_down(self, probe_window, caplog):
+        """A suppressed exception that leaves no trace is a debugging session nobody can start.
+
+        DPG's own message names the *new* item and never the parent, so the log line has to carry the call
+        site instead — that is the half that says whose parent went away.
+        """
+        dead = self._dead_item()
+        with caplog.at_level(logging.DEBUG, logger="raven.common.gui.utils"):
+            with guiutils.nonexistent_ok(parent_gone_ok=True):
+                dpg.add_text("into the void", parent=dead)
+        assert "test_utils.py" in caplog.text, "the log names DPG's own wrapper instead of the code that called it"
+        assert "parent gone" in caplog.text

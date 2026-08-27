@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 import os
 import pathlib
 import threading
+import traceback as tb_module
 from typing import Optional, Tuple, Union
 
 from unpythonic.env import env
@@ -388,19 +389,47 @@ def setup_themes() -> env:
 # DPG item management
 # ---------------------------------------------------------------------------
 
-def _is_dpg_item_not_found(exc):
-    """Check exception chain for DPG 'item not found' error."""
-    # The string check on "Item not found" is ugly but necessary
-    # given DPG's refusal to use a proper exception subclass.
+def _exception_chain_mentions(exc, text: str) -> bool:
+    """Whether `text` appears in `exc` or anywhere along its `__cause__` chain."""
+    # The string check is ugly but necessary given DPG's refusal to use a proper exception subclass.
+    # The chain walk is not optional: what surfaces at the call site is a `SystemError` saying only that
+    # some built-in "returned a result with an exception set", and DPG's own message is its cause.
     # TODO: tighten to a specific exception type if DPG ever provides one
+    return any(text in str(cause) for cause in _causes(exc))
+
+def _is_dpg_item_not_found(exc):
+    """Check exception chain for DPG 'item not found' error (code 1005)."""
+    return _exception_chain_mentions(exc, "Item not found")
+
+def _is_dpg_parent_gone(exc):
+    """Check exception chain for DPG's 'parent could not be deduced' error (code 1011)."""
+    return _exception_chain_mentions(exc, "Parent could not be deduced")
+
+def _log_suppressed_dpg_error(what: str, excvalue, traceback) -> None:
+    """Say, at DEBUG, what was swallowed and which line of ours asked for it."""
+    # Because a suppressed exception that leaves no trace is a debugging session nobody can start. The
+    # error DPG raises here names the *new* item and never the parent, so its own message cannot say which
+    # widget went away — but the deepest frame in our code names the call that asked, which is the half a
+    # reader actually needs. DEBUG rather than WARNING: on the render path this is an expected outcome of a
+    # view rebuild landing mid-draw, and at WARNING it would be a wall of noise on every branch switch.
+    frames = tb_module.extract_tb(traceback)
+    ours = [frame for frame in frames if "dearpygui" not in frame.filename]  # skip the toolkit's own wrapper
+    site = (ours or frames)[-1] if frames else None
+    where = f"{site.filename}:{site.lineno} in {site.name}: {site.line}" if site is not None else "unknown site"
+    detail = " | ".join(str(exc).strip().replace("\n", " ") for exc in _causes(excvalue) if "Error:" in str(exc))
+    logger.debug(f"nonexistent_ok: suppressed DPG '{what}' at {where} -- {detail or excvalue}")
+
+def _causes(exc):
+    """Yield `exc` and every exception along its `__cause__` chain."""
     while exc is not None:
-        if "Item not found" in str(exc):
-            return True
+        yield exc
         exc = exc.__cause__
-    return False
 
 class nonexistent_ok:
     """Silently ignore DPG 'item not found' errors, exiting the context at the first one.
+
+    `parent_gone_ok`: also ignore "parent could not be deduced", which is what an `add_*` says when the
+                      parent it was given no longer exists. Off by default — see below.
 
     DPG raises either `SystemError` (older versions) or `Exception` (newer)
     when operating on a nonexistent item. This wrapper catches both, using
@@ -413,14 +442,34 @@ class nonexistent_ok:
             dpg.show_item(x)
         print(nok.errored)  # whether the context exited due to an exception
     """
-    def __init__(self):
+    # Why `parent_gone_ok` is opt-in rather than simply part of the default answer:
+    #
+    # A dead item is reported two different ways depending on what you did with it. Ask DPG to *operate* on
+    # one — `set_value`, `delete_item`, `show_item` — and it says `[1005] Item not found`. Hand one to an
+    # `add_*` as the parent, and it says `[1011] Parent could not be deduced` instead, naming neither the
+    # item nor the fact that it once existed. Measured 2026-08-27; both are in `dpg-notes.md`.
+    #
+    # The trouble is that [1011] is also what you get for `add_*(parent=0)` with an empty container stack —
+    # which is a plain mistake in the calling code, and the three cases are indistinguishable from the
+    # outside. So a guard that swallowed it everywhere would silence "you forgot the parent" for good, and
+    # the symptom of *that* is a widget which never appears, with nothing logged.
+    #
+    # Hence the split: a caller that renders into a parent handed to it from elsewhere — which is the case
+    # where the parent can genuinely die mid-render — asks for it explicitly, and everyone else keeps a
+    # guard that still complains about their own mistakes.
+    def __init__(self, parent_gone_ok: bool = False):
+        self.parent_gone_ok = parent_gone_ok
         self.errored = False
     def __enter__(self):
         return self
     def __exit__(self, exctype, excvalue, traceback):
         if exctype is not None:
             self.errored = True
-            if _is_dpg_item_not_found(excvalue):  # noqa: SIM103 -- True/False are the context-manager protocol's suppress/reraise signals, not a generic boolean return
+            if _is_dpg_item_not_found(excvalue):
+                _log_suppressed_dpg_error("item not found", excvalue, traceback)
+                return True  # suppress
+            if self.parent_gone_ok and _is_dpg_parent_gone(excvalue):  # noqa: SIM103 -- True/False are the context-manager protocol's suppress/reraise signals, not a generic boolean return
+                _log_suppressed_dpg_error("parent gone", excvalue, traceback)
                 return True  # suppress
             return False  # reraise
 

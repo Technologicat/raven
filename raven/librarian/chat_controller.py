@@ -1020,10 +1020,24 @@ class DPGChatMessage:
         return self.gui_thought_group
 
     def _render_text(self) -> None:
-        """Internal method. Render any pending new paragraphs. We assume new paragraphs are added only to the end."""
-        with self.paragraphs_lock:
+        """Internal method. Render any pending new paragraphs. We assume new paragraphs are added only to the end.
+
+        A paragraph whose render is abandoned keeps its `rendered` flag clear, so the next call draws it —
+        or, if this message is gone for good, the rebuild that replaced it draws it from the chat node.
+        """
+        # EAFP, and `parent_gone_ok` is the point of it. This renders into widgets that a *view rebuild* can
+        # delete from another thread at any moment — that is the ordinary way a branch switch or a resize
+        # ends a streaming message — and the parent dying mid-render is therefore expected rather than
+        # exceptional. Checking first would be a TOCTTOU with a real window: the render is a long sequence
+        # of DPG calls, and it is the calls in the middle that find the widget gone.
+        with guiutils.nonexistent_ok(parent_gone_ok=True), self.paragraphs_lock:
             if self.gui_text_group is None:
-                assert False  # the chat message GUI widget did not fully initialize
+                # Either this instance was demolished while a render was on its way here (the race above,
+                # having lost by a hair rather than mid-render), or it never finished building. Nothing to
+                # draw into in both cases, and the log line is what tells them apart if it is ever the
+                # second one, since that would repeat for a message that never appears.
+                logger.debug(f"DPGChatMessage._render_text: no text group for chat node '{self.node_id}'; nothing to render into.")
+                return
             # dpg.delete_item(self.gui_text_group, children_only=True)  # how to clear all old text if we ever need to
             role = self.role
             role_color = role_to_colors[role]["front"] if role in role_to_colors else "#ffffff"
@@ -3356,10 +3370,10 @@ class DPGLinearizedChatView:
 
         Like any lookup here, the answer can go stale before the caller is done with it, and the renderer
         does *not* hold the lock while drawing — a render is a long sequence of DPG calls, and holding the
-        view's lock across it would stall every rebuild behind it. What covers that is EAFP instead: the
-        render runs inside `guiutils.nonexistent_ok`, so the first call to find its widget gone abandons
-        the rest, which is what the render would have done had it known. Nothing is lost by giving up, the
-        text having gone into the node either way.
+        view's lock across it would stall every rebuild behind it. What covers that is EAFP instead:
+        `_render_text` runs inside `guiutils.nonexistent_ok(parent_gone_ok=True)`, so the first call to find
+        its parent gone abandons the rest, which is what the render would have done had it known. Nothing is
+        lost by giving up, the text having gone into the node either way.
 
         Deliberately unlocked, over a snapshot: `tuple(list)` is one C-level pass that cannot observe a
         half-mutated list, and that is the whole guarantee the lock would buy a reader that already accepts
