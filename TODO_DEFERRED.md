@@ -5147,7 +5147,11 @@ Raised by Juha (2026-08-13), for discussion before building — the in-app cue i
 
 ## Markdown decorations are placed by measuring the text, and the measurement can be premature
 
-*Cluster: markdown-renderer · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-27 · See also: `raven/vendor/DearPyGui_Markdown/text_attributes.py`*
+*Cluster: markdown-renderer · Cost: ? · Gate: RN2026, with the rest of the renderer work · Filed: 2026-08-27 · See also: `raven/vendor/DearPyGui_Markdown/text_attributes.py`*
+
+**Bump to 0.2.9 if it does not fall quickly** (Juha, 2026-08-27). It rides with the renderer work because
+that is when this code is open anyway; it is not worth hunting a timing fault on its own account with the
+exhibit close. A stray grey box is cosmetic, and visitors will not know it was not meant to be there.
 
 Every decoration the renderer draws — underline, strikethrough, the inline-code background, and the two
 block variants — is a **drawlist positioned from a measurement** of the text widget it decorates:
