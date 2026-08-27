@@ -5159,10 +5159,26 @@ sibling. Reroll from 3 of 5, cancel, and the reader is left on 5 rather than bac
 Nothing is lost — every sibling is still there, one flick away — and the reader has simply been moved.
 
 This is a consequence of the near-stateless design rather than a bug in the cancel path, which is why it is
-filed on its own: the same absence will surface in anything else that has to restore a position. Fixing it
-means deciding what the app should remember — a per-parent "last visited child", or a history of HEAD, or
-something else — and where that lives, since it is view state rather than chat content and so arguably does
-not belong in the datastore at all.
+filed on its own: the same absence will surface in anything else that has to restore a position.
+
+**The shape to build is an undo history for HEAD** (Juha, 2026-08-27), rather than the narrower "remember
+the last visited child per parent". It answers every restore-a-position case at once instead of one of them,
+and it is a feature in its own right — a chat tree is easy to get lost in, and *go back to where I was* is
+the thing a reader actually wants.
+
+**The design question is which navigations count as intentional**, and it is the whole difficulty. A sibling
+flick and a jump to a continuation are moves the reader made and should be undoable. A HEAD move the *app*
+made — a turn advancing it onto the reply it is writing, this item's cancel path putting it back — is not a
+place the reader ever chose to be, and an undo stack full of those is one the reader cannot navigate.
+
+**A live entry has to follow its own conversation** (Juha, 2026-08-27, and the subtle part). Continuing a
+conversation should move that entry's HEAD *within* the stack, wherever it sits, rather than pushing a new
+one — otherwise ten replies in one branch bury the alternative branch the reader wanted to get back to
+under ten entries that are all the same place. Which makes an entry a *branch* being followed rather than a
+position visited, and the stack a list of conversations rather than of coordinates.
+
+Where the state lives is open too. It is view state rather than chat content, so it arguably does not belong
+in the datastore — but it is also the kind of thing a reader would expect to survive a restart.
 
 Discovered while fixing the cancelled-reroll case (2026-08-27).
 
