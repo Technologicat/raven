@@ -98,6 +98,23 @@ standing property: that was the *cold* ratio, measured in a fresh process before
 a running app calibrates it away. Each of the three was measured; what was wrong each time was the *scope* —
 one process, one moment, one branch — quietly generalized into a claim about the feature.
 
+## Scrolling up with the wheel does not always release the chat view's end-latch
+
+*Cluster: librarian-keyboard · Cost: ? · Gate: RN2026 · Filed: 2026-08-27*
+
+Once the chat view is pinned to the end, wheeling up does not reliably unpin it — the view snaps back to
+the bottom. The Up arrow key releases it every time, so the latch itself can be let go of; it is the wheel
+path that does not always do so.
+
+Worth knowing which way round that is, because it narrows the search: whatever reads "the reader has
+scrolled away" sees the keyboard's movement and does not always see the wheel's. `follow_tail` /
+`sample_tail_follow` and the pill's own "content arrived while unpinned" tracking are where that decision
+lives (`DPGLinearizedChatView`), and `investigations/follow-tail-drift/` is the standing write-up of this
+area. Note also that DPG surfaces the three ways a scroll position can move differently — see `dpg-notes.md`,
+"Three input paths move a scroll position".
+
+Reported by Juha while live-testing the in-progress-reply-as-a-node work (2026-08-27).
+
 ## Ctrl+Left / Ctrl+Right cannot flick between siblings, because each switch re-picks its own target
 
 *Cluster: librarian-keyboard · Cost: S to build, the design is the work · Gate: RN2026 if time allows, else 0.2.9 (Juha, 2026-08-27) · Filed: 2026-08-21 · Updated: 2026-08-27*
