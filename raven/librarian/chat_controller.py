@@ -1426,36 +1426,26 @@ class DPGChatMessage:
                     logger.info("DPGCompleteChatMessage.reroll_message_callback: a turn is already in flight; refusing.")
                     return
 
-                # Find this AI message in the chat history
-                for k, dpg_chat_message in enumerate(reversed(self.parent_view.chat_controller.current_chat_history)):
-                    if dpg_chat_message.node_id == node_id:
-                        break
-                else:  # not found
-                    return
-                # `k` is now how many messages must be popped from the end to reach this one
-                assert k < len(self.parent_view.chat_controller.current_chat_history) - 3  # should have at least the system prompt, the AI's initial greeting, and the user's first message remaining
-
                 # A reroll replaces the reply on screen with a different one - the same swap a sibling
                 # switch performs, except that the alternative is generated rather than already there.
-                # Started before the rewind, so the effect is up while the old message comes down.
+                # Started before the rewind, so the effect is up while the old message comes down. It
+                # therefore also fires on the rare path where the rewind finds nothing, which is a rebuild
+                # having taken the message first — a discontinuity either way, so nothing to apologize for.
                 self.parent_view.chat_controller.mark_discontinuity()
 
-                # Rewind the linearized chat history in the GUI
-                for _ in range(k):
-                    old_dpg_chat_message = self.parent_view.chat_controller.current_chat_history.pop(-1)
-                    old_dpg_chat_message.demolish()
+                # Rewind the linearized chat history in the GUI: this message and everything below it.
+                if not self.parent_view.chat_controller.view.rewind_to(node_id):
+                    return
 
                 # Handle the RAG query: find the latest user message (above this AI message)
                 user_message_text = None
-                for dpg_chat_message in reversed(self.parent_view.chat_controller.current_chat_history):  # ...what's remaining of the history
-                    if dpg_chat_message.role == "user":
-                        user_message_text = dpg_chat_message.text
-                        break
+                with self.parent_view.chat_controller.current_chat_history_lock:  # `build` refills this from another thread
+                    for dpg_chat_message in reversed(self.parent_view.chat_controller.current_chat_history):  # ...what's remaining of the history
+                        if dpg_chat_message.role == "user":
+                            user_message_text = dpg_chat_message.text
+                            break
 
-                # Remove the AI message from GUI
                 self.parent_view.chat_controller.app_state["HEAD"] = self.parent_view.chat_controller.datastore.get_parent(node_id)
-                old_dpg_chat_message = self.parent_view.chat_controller.current_chat_history.pop(-1)  # once more, with feeling!
-                old_dpg_chat_message.demolish()
 
                 # Generate new AI message
                 self.parent_view.chat_controller.ai_turn(docs_query=user_message_text,
@@ -1478,13 +1468,17 @@ class DPGChatMessage:
 
         if role == "assistant":
             def continue_message_callback():
-                dpg_chat_message = self.parent_view.chat_controller.current_chat_history[-1]  # latest message
-                if dpg_chat_message.node_id != node_id:  # latest message is not this message --> can't continue
+                # Both questions asked of one snapshot, and neither by bare indexing: `build` empties this
+                # list before refilling it, from a background task among others, so an emptiness check and
+                # the `[-1]` that followed it were two views of a list that need not have agreed.
+                with self.parent_view.chat_controller.current_chat_history_lock:
+                    history = list(self.parent_view.chat_controller.current_chat_history)
+                if not history or history[-1].node_id != node_id:  # not the latest message --> can't continue
                     return
 
                 # Handle the RAG query: find the latest user message (above this AI message)
                 user_message_text = None
-                for dpg_chat_message in reversed(self.parent_view.chat_controller.current_chat_history):
+                for dpg_chat_message in reversed(history):
                     if dpg_chat_message.role == "user":
                         user_message_text = dpg_chat_message.text
                         break
@@ -1712,16 +1706,10 @@ class DPGChatMessage:
                 chat_controller = self.parent_view.chat_controller
                 llmclient.approve_host_for_session(maybe_denied_host)
 
-                # Rewind the GUI to the branch point: pop every message after the denied tool result, then the
-                # denied result itself. `retry_tool_calls` re-adds the new branch via the ai_turn callbacks.
-                for k, dpg_chat_message in enumerate(reversed(chat_controller.current_chat_history)):
-                    if dpg_chat_message.node_id == node_id:
-                        break
-                else:  # not found (shouldn't happen — the button lives on this message)
+                # Rewind the GUI to the branch point: the denied tool result and every message after it.
+                # `retry_tool_calls` re-adds the new branch via the ai_turn callbacks.
+                if not chat_controller.view.rewind_to(node_id):  # not found: a rebuild got there first
                     return
-                for _ in range(k + 1):  # +1 to also pop the denied tool result itself
-                    old_dpg_chat_message = chat_controller.current_chat_history.pop(-1)
-                    old_dpg_chat_message.demolish()
 
                 # Re-run the denied fetch on a new branch and continue. HEAD is updated by the callbacks.
                 chat_controller.ai_turn(docs_query=None,
@@ -3069,9 +3057,10 @@ class DPGLinearizedChatView:
         if scroll_target_node_id is not None:
             logger.info(f"DPGLinearizedChatView.scroll_view: Scroll target chat node is '{scroll_target_node_id}'")
             def get_target_widget() -> str | int | None:
-                for dpg_chat_message in self.chat_controller.current_chat_history:
-                    if dpg_chat_message.node_id == scroll_target_node_id:  # found?
-                        return dpg_chat_message.gui_container_group
+                with self.chat_controller.current_chat_history_lock:  # `build` refills this from another thread
+                    for dpg_chat_message in self.chat_controller.current_chat_history:
+                        if dpg_chat_message.node_id == scroll_target_node_id:  # found?
+                            return dpg_chat_message.gui_container_group
                 return None
             if (target_message_widget := get_target_widget()) is not None:
                 # `get_widget_pos` reports *viewport* (on-screen) coordinates, while `set_y_scroll` wants an
@@ -3339,6 +3328,33 @@ class DPGLinearizedChatView:
                 if isinstance(message, DPGStreamingChatMessage) and message.node_id == node_id:
                     return message
         return None
+
+    def rewind_to(self, node_id: str) -> int:
+        """Take the message rendering `node_id` off screen along with every message after it. Returns how many went.
+
+        For the actions that undo part of the conversation on screen before regenerating it — reroll, and
+        the approve-and-retry override. Both used to walk backwards popping by index; the position is
+        derived and the removal performed in one step here instead, because `build` empties and refills
+        this list from a background task (the debounced resize rebuild among others), and an index derived
+        before that lands somewhere else afterwards.
+
+        Returns `0` when the message is not on screen, which is what losing that race looks like from here.
+
+        The widgets are destroyed inside the lock, with the list update, so that the two are never observed
+        disagreeing: a reader that snapshots the list between them would hold messages whose widgets are
+        about to be deleted, and ask DPG about them.
+        """
+        with self.chat_controller.current_chat_history_lock:
+            history = self.chat_controller.current_chat_history
+            index = next((i for i, message in enumerate(history) if message.node_id == node_id), None)
+            if index is None:
+                logger.info(f"DPGLinearizedChatView.rewind_to: node '{node_id}' is not on screen; nothing to rewind.")
+                return 0
+            removed = history[index:]
+            del history[index:]
+            for message in removed:
+                message.demolish()
+            return len(removed)
 
     def remove_message_for(self, node_id: str) -> None:
         """Take whichever message renders `node_id` off screen, if this view is showing one.
@@ -3872,10 +3888,13 @@ class DPGChatController:
 
     def get_last_message(self) -> DPGChatMessage | None:
         """Return the `DPGChatMessage` for the last currently displayed message. Return `None` if the view is empty."""
-        if not self.current_chat_history:
-            return None
-        dpg_chat_message = self.current_chat_history[-1]
-        return dpg_chat_message
+        # Checking and indexing must be one step: `DPGLinearizedChatView.build` empties this list before
+        # refilling it, from a background task among others, so a check that passed a moment ago says
+        # nothing about the index that follows it.
+        with self.current_chat_history_lock:
+            if not self.current_chat_history:
+                return None
+            return self.current_chat_history[-1]
 
     def get_current_message(self) -> DPGChatMessage | None:
         """Return the `DPGChatMessage` the per-message hotkeys act on, or `None` if the view is empty.
@@ -3895,7 +3914,16 @@ class DPGChatController:
         # covers the whole view, so no button row is on screen at all and there is nothing else the keys
         # could sensibly act on. The mark is then invisible, which is honest — there is no row to put it in
         # — and it reappears as soon as one comes into view.
-        history = self.current_chat_history
+        # A snapshot, not the list itself. This runs once per frame (`update_current_message_mark`, from the
+        # render loop) while `DPGLinearizedChatView.build` can be emptying and refilling the list from a
+        # background task — the debounced resize rebuild, among others. Iterating the live list would be
+        # reading it mid-rebuild.
+        #
+        # Copied under the lock and then released, rather than held for the whole scan: what follows asks
+        # DPG for widget geometry per message, and a rebuild of a long chat is not something the render
+        # thread should wait out. Copying references is cheap; the widgets are shared either way.
+        with self.current_chat_history_lock:
+            history = list(self.current_chat_history)
         if not history:
             return None
 
@@ -4254,8 +4282,12 @@ class DPGChatController:
                 # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
                 docs_query = user_message_text or None  # image-only message: no text to search docs with
             else:
-                # Handle the RAG query: find the latest existing user message
-                for dpg_chat_message in reversed(self.current_chat_history):
+                # Handle the RAG query: find the latest existing user message. Over a snapshot: this runs on
+                # a background task, and `DPGLinearizedChatView.build` empties the live list before
+                # refilling it.
+                with self.current_chat_history_lock:
+                    history_snapshot = list(self.current_chat_history)
+                for dpg_chat_message in reversed(history_snapshot):
                     if dpg_chat_message.role == "user":
                         docs_query = dpg_chat_message.text
                         break
