@@ -4525,6 +4525,9 @@ class DPGChatController:
             # The node this turn's current round is writing into, set by `on_llm_start`. `None` until the
             # first round starts, which is the window a turn cancelled while still queued dies in.
             task_env.ai_node_id = None
+            # That node's parent, remembered alongside it so HEAD has somewhere to go if the node is taken
+            # back. See `on_llm_start` and the `Aborted` handler.
+            task_env.round_parent_node_id = None
 
             # A live turn supersedes any pending idle-prefill: it warms the KV cache itself and reports its own
             # exact `prompt_tokens`, so a concurrent prefill round-trip would be wasted (and would contend with
@@ -4613,6 +4616,9 @@ class DPGChatController:
                     # The node this round writes into. It exists already, carrying an empty message; the
                     # widget below renders it, and every later lookup goes through this id.
                     task_env.ai_node_id = node_id
+                    # Where HEAD goes if this node is taken back — asked now, while the node still exists to
+                    # be asked about. See the `Aborted` handler.
+                    task_env.round_parent_node_id = self.datastore.get_parent(node_id)
 
                     # HEAD moves to it now, rather than when the reply is finished. A view is built from
                     # `linearize_up(HEAD)`, so a reply whose node is not yet on that path cannot be
@@ -5000,13 +5006,45 @@ class DPGChatController:
                     advance_head(new_head_node_id)
             except netutil.Aborted:
                 # The user cancelled before the backend had sent anything, so there is no reply to keep and
-                # nothing to finalize. HEAD stays wherever the turn's own callbacks last legitimately left
-                # it — which for a turn abandoned during its first round is where it started.
+                # nothing to finalize.
                 logger.info("ai_turn.ai_turn_task: turn abandoned before the backend answered.")
                 # `on_llm_start` has already put an empty streaming message in the view, and the callback
                 # that would normally take it away is `on_done`, which is not going to run.
                 if self.gui_updates_safe:
                     drop_streaming_widget()
+
+                # HEAD cannot stay where `on_llm_start` put it: `ai_turn` takes back a node it never wrote
+                # into, so HEAD would be naming something that no longer exists.
+                #
+                # It goes one step down from that node's parent, not to the parent itself. After a cancelled
+                # reroll the parent is the user message and the reply being rerolled is its child, so
+                # stopping at the parent would leave the view ending one message short — the reply present
+                # in the tree, correct, and not on screen. One step puts it back.
+                #
+                # One step and no further: descending greedily would follow the newest child at every level,
+                # which is a guess about which continuation the reader was in rather than a fact.
+                #
+                # The single step is not exact either, and cannot be. It lands on the newest surviving
+                # sibling, which is the one being rerolled only when the reroll was launched from the newest
+                # one — reroll from 3 of 5 and cancelling leaves the reader on 5. Nothing here can do better:
+                # which sibling the reader was on is not recorded anywhere, HEAD being the whole of the
+                # app's memory of where it is (Juha, 2026-08-27). Tracked in `TODO_DEFERRED.md`.
+                #
+                # Left alone, HEAD on a deleted node is not merely a blank view: the next thing the user does
+                # builds under it. Sending a message there put a fresh exchange beneath a node that no longer
+                # existed, stranding the rerolled reply two levels up on a branch nobody was on — with a
+                # sibling counter reading 1 / 1, which was true and looked like data loss.
+                #
+                # Asked of the datastore rather than assumed, because whether the node survives is
+                # `ai_turn`'s decision and depends on whether anything arrived before the abort landed.
+                if task_env.ai_node_id is not None and task_env.ai_node_id not in self.datastore.nodes:
+                    advance_head(chatutil.descend_to_latest(self.datastore,
+                                                            task_env.round_parent_node_id,
+                                                            recursive=False))
+                    if self.gui_updates_safe:
+                        # The branch on screen ended at the node that has just gone. Rebuilding is what puts
+                        # the reply the reroll was replacing back where it was.
+                        self.view.build()
             finally:
                 # A live message left over from a round that ended without `on_done` running — an abort, or
                 # a failure on a path that does not finalize. Reached through the view rather than a held

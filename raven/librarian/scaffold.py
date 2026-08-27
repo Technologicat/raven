@@ -126,6 +126,17 @@ def user_turn(llm_settings: env,
 # --------------------------------------------------------------------------------
 # AI's turn
 
+def _node_holds_nothing(datastore: chattree.Forest, node_id: str) -> bool:
+    """Whether `node_id`'s message is empty on every channel — no text, no reasoning, no tool calls.
+
+    True of an assistant node between its creation and the first thing the model says, and of nothing else:
+    a reply that produced even one token, or asked for a tool without saying anything, is not empty.
+    """
+    message = datastore.get_payload(node_id)["message"]
+    return not (chatutil.content_to_text(message["content"]).strip()
+                or (message.get("reasoning_content") or "").strip()
+                or message.get("tool_calls"))
+
 def _create_incomplete_ai_payload(llm_settings: env) -> dict:
     """The payload an assistant node carries between being created and its reply arriving.
 
@@ -1190,6 +1201,23 @@ def ai_turn(llm_settings: env,
             # below, which would otherwise write "the backend failed" into the chat as a rerollable message
             # — reporting the user's own Cancel back to them as an error.
             logger.info("ai_turn: abandoned")
+            # Take back the node this round made, when nothing was ever written into it.
+            #
+            # The node is created before the request, so an abort during prompt processing finds it holding
+            # nothing at all — and an empty message is worse than no message. It is the newest child, so it
+            # is what the view lands on and what the sibling counter counts, while the reply it was meant to
+            # replace sits beside it, off the linearized path and invisible to a reader with no reason to go
+            # looking. Rerolling a reply and cancelling therefore *appeared* to delete it.
+            #
+            # Emptiness is checked rather than assumed: the GUI only aborts while nothing has streamed, but
+            # `maybe_abort` belongs to the caller and may be fired at any moment. Anything that did arrive is
+            # a partial reply, which the caller is entitled to keep — that is Cancel's promise.
+            #
+            # Only this round's node, and only one it created: continuing writes into a message that was
+            # already there, and earlier rounds of this turn wrote real nodes that stay written.
+            if not continue_this_message and _node_holds_nothing(datastore, ai_message_node_id):
+                logger.info(f"ai_turn: abandoned before anything was written; removing the empty node '{ai_message_node_id}'.")
+                datastore.delete_subtree(ai_message_node_id)
             raise
         except Exception as exc:  # noqa: BLE001 -- any backend failure becomes a visible, rerollable message rather than a silent crash
             # The failure becomes the message, rerollable like any other — reroll re-runs the turn, so it

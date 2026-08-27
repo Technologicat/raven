@@ -7,6 +7,7 @@ import pytest  # noqa: F401 -- fixtures and marks below
 
 from unpythonic.env import env
 
+from raven.common import netutil
 from raven.librarian import chattree, chatutil, textfilestore, imagestore, scaffold, sidecarstore
 
 # This module used to open with an `importorskip` on `scaffold`, because importing it reached
@@ -382,6 +383,36 @@ class TestAITurnSimple:
 
         final_head = run_ai_turn(forest, llm_settings, user_head)
         assert "interrupted" not in forest.get_payload(final_head)["generation_metadata"]
+
+    def test_an_abandoned_turn_leaves_the_branch_as_it_found_it(self, monkeypatch, llm_settings, populated_forest):
+        """Cancelling before the backend answers must cost nothing that was already on the branch.
+
+        The turn creates its assistant node *before* the request, so an abort that arrives during prompt
+        processing finds a node holding nothing at all. What must not happen is that node outliving the
+        turn: an empty message becomes the newest child, so it is what the view lands on and what the
+        sibling counter counts, and the reply it sits beside is one navigation away from a reader who has
+        no reason to look for it.
+        """
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings,
+                                       datastore=forest,
+                                       head_node_id=head,
+                                       user_message_text="Hello")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="First answer."))
+        first_reply = run_ai_turn(forest, llm_settings, user_head)
+        assert forest.get_children(user_head) == [first_reply]  # the fixture, before anything is rerolled
+
+        def abort_during_prompt_processing(**kwargs):
+            raise netutil.Aborted("cancelled before the backend answered")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", abort_during_prompt_processing)
+
+        with pytest.raises(netutil.Aborted):
+            run_ai_turn(forest, llm_settings, user_head)  # a reroll: same parent, new sibling
+
+        children = forest.get_children(user_head)
+        assert first_reply in children, "the abandoned turn took the reply it was rerolling"
+        assert children == [first_reply], f"an empty node outlived the turn that abandoned it: {children}"
 
     def test_phase_report_is_stored_when_there_is_one(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest

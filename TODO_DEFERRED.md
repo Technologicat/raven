@@ -5145,6 +5145,27 @@ Two halves, separable:
 
 Raised by Juha (2026-08-13), for discussion before building — the in-app cue is the open question.
 
+## Nothing remembers which sibling the reader was on
+
+*Cluster: chat-navigation · Cost: M · Gate: 0.2.9 or `next` · Filed: 2026-08-27*
+
+HEAD is the whole of the app's memory of where it is in the chat tree, and it names a *node*, not a path
+taken to it. So any operation that has to put the reader back somewhere can only guess, and guesses by
+taking the newest child — which is right when the reader was on the newest branch and wrong otherwise.
+
+Where it shows today: **cancelling a reroll launched from a sibling that is not the newest one.** The turn's
+empty node is taken back and HEAD steps one level down from the parent, landing on the newest surviving
+sibling. Reroll from 3 of 5, cancel, and the reader is left on 5 rather than back on 3 (Juha, 2026-08-27).
+Nothing is lost — every sibling is still there, one flick away — and the reader has simply been moved.
+
+This is a consequence of the near-stateless design rather than a bug in the cancel path, which is why it is
+filed on its own: the same absence will surface in anything else that has to restore a position. Fixing it
+means deciding what the app should remember — a per-parent "last visited child", or a history of HEAD, or
+something else — and where that lives, since it is view state rather than chat content and so arguably does
+not belong in the datastore at all.
+
+Discovered while fixing the cancelled-reroll case (2026-08-27).
+
 ## Re-test whether `reasoning_effort` makes Qwen 3.8 usable interactively
 
 *Cluster: llm-backends · Cost: S · Gate: 0.2.9 or `next` — needs the maintainer at the keyboard · Filed: 2026-08-27*
