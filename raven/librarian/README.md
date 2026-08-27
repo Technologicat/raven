@@ -645,7 +645,8 @@ As explained in the main README, configuration is currently fed in as several Py
 
 - Exact context-fill counts: `llm_tokenizer_path` in [`raven.librarian.config`](config.py)
   - The context-fill readout above the message box shows a `~` while it is estimating, because an OpenAI-compatible backend will not count tokens for text it has not been asked to generate from.
-  - Point this at the `.gguf` your backend is serving and *Librarian* counts with the model's own vocabulary, on your machine, and drops the `~`. Leave it unset and the estimate is used, which is fine for a rough sense of how full the context is and wrong by a few percent.
+  - Point this at the `.gguf` your backend is serving and *Librarian* counts with the model's own vocabulary, in its own process, and drops the `~`. Leave it unset and the estimate is used, which is fine for a rough sense of how full the context is and wrong by a few percent.
+  - The file has to be reachable as a **local path** — *Librarian* opens and reads it, so a network share has to be mounted. This is the case worth checking when the LLM backend runs on another machine: the backend has the model, and that says nothing about whether this one can open it.
   - It has to be the file for **the model you are actually running**: a tokenizer from another model builds and runs perfectly while counting wrongly, which is worse than the estimate it replaces. *Librarian* checks the file against the backend before trusting it, and falls back to estimating if they disagree.
 
 - Raven-server URL and API key: [`raven.client.config`](../client/config.py)
