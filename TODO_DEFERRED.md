@@ -5145,6 +5145,40 @@ Two halves, separable:
 
 Raised by Juha (2026-08-13), for discussion before building — the in-app cue is the open question.
 
+## Markdown decorations are placed by measuring the text, and the measurement can be premature
+
+*Cluster: markdown-renderer · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-27 · See also: `raven/vendor/DearPyGui_Markdown/text_attributes.py`*
+
+Every decoration the renderer draws — underline, strikethrough, the inline-code background, and the two
+block variants — is a **drawlist positioned from a measurement** of the text widget it decorates:
+
+```python
+pos = dpg.get_item_pos(dpg_text_group)
+width, height = dpg.get_item_rect_size(dpg_text_group)
+drawlist = ...   # placed at pos, sized to the measurement
+```
+
+Six sites do this (`text_attributes.py`, around lines 94, 116, 141, 168 and 193). None of them asks whether
+the layout has settled, so all five decorations share one failure: measure before the text has been placed,
+and the decoration lands somewhere the text is not.
+
+**Observed 2026-08-27** in a chat reply, screenshot in hand: an inline-code background for `SL-CAI` drawn as
+an empty grey box a couple of words to the right of the text, on the same line — while `RL-CAI` one line
+below was decorated correctly. So it is intermittent rather than systematic, which is what a settling race
+looks like from outside.
+
+**The first thing to run is a discriminator, not a fix**: force a rebuild (resize the window) and see whether
+the box snaps into place. If it does, the measurement was premature and the fix is to defer it — a frame
+callback, or `guiutils.split_frame` before measuring, mindful that this code can run on the render thread.
+If the box stays where it is, the fault is deterministic, and the question becomes which widget was measured.
+
+**Probably not the same as the URL colour being one character off** — the note about that lived in
+`CLAUDE.md` and pointed here. `Url.render` calls `dpg.configure_item(dpg_text, color=...)`: it recolours the
+widget it was given and positions nothing, so a colour landing on the wrong character means the *text* was
+split into the wrong widgets, which is a segmentation problem and a different fault. Worth re-checking
+whether that one still reproduces at all, the colour path having been reworked since (Juha, 2026-08-27).
+The URL *underline*, on the other hand, is one of the six sites above and belongs to this item.
+
 ## Nothing remembers which sibling the reader was on
 
 *Cluster: chat-navigation · Cost: M · Gate: 0.2.9 or `next` · Filed: 2026-08-27*
