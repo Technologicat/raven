@@ -1,5 +1,6 @@
 """Unit tests for raven.common.utils."""
 
+import logging
 import os
 import pathlib
 import re
@@ -817,3 +818,44 @@ class TestUserDirectory:
         monkeypatch.setattr(sys, "platform", "linux")
         self.write_user_dirs(home, 'XDG_DOWNLOAD_DIR="$HOME/Lataukset"\n')
         assert utils.user_directory("Downloads") == home / "Lataukset"
+
+
+class TestNotify:
+    """`notify` calls an observer and refuses to be taken down by it."""
+
+    def test_the_answer_comes_back(self):
+        assert utils.notify("on_thing", lambda x, y: x + y, 1, 2) == 3
+
+    def test_arguments_pass_by_name_too(self):
+        """Raven's convention is to pass by name, so a forwarder that only forwarded positionals would
+        be unusable with most of the callbacks anyone here writes."""
+        assert utils.notify("on_thing", lambda *, a, b: f"{a}{b}", a="x", b="y") == "xy"
+
+    def test_nobody_listening_is_not_an_error(self):
+        assert utils.notify("on_thing", None, _default="fallback") == "fallback"
+
+    def test_the_wrappers_own_options_do_not_shadow_the_callbacks(self):
+        """The underscores exist for this: a callback may perfectly well take a `default` of its own."""
+        assert utils.notify("on_thing", lambda *, default: f"got {default}",
+                            default="theirs", _default="ours") == "got theirs"
+
+    def test_a_raising_observer_yields_the_default(self, caplog):
+        def boom():
+            raise RuntimeError("the observer is on fire")
+
+        with caplog.at_level(logging.ERROR):
+            assert utils.notify("on_thing", boom, _default="fallback") == "fallback"
+        assert "on_thing" in caplog.text, "the log line must name which callback failed"
+
+    def test_a_reraised_type_is_not_swallowed(self):
+        """The negative control: without a `reraise` list this is the same call as the test above.
+
+        It is what keeps `notify` from being a blanket `except Exception` wrapped around user code — a
+        cancellation reaching the caller through an observer's frame has to stay a cancellation.
+        """
+        def boom():
+            raise KeyError("control, not failure")
+
+        assert utils.notify("on_thing", boom, _default="fallback") == "fallback"  # ...swallowed without it
+        with pytest.raises(KeyError):
+            utils.notify("on_thing", boom, _default="fallback", _reraise=(KeyError,))

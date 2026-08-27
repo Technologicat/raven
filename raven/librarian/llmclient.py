@@ -63,6 +63,7 @@ from unpythonic.env import env
 
 
 from ..common import netutil
+from ..common import utils
 
 from . import chattree
 from . import chatutil
@@ -1724,38 +1725,15 @@ def thinking_request_fields(*, thinking_enabled: bool) -> dict[str, Any]:
     # quietly doing nothing would not.
     return {"reasoning_effort": "none"}
 
-def _notify(what: str, callback: Callable, *args, default: Any = None) -> Any:
+def _notify(what: str, maybe_callback: Callable | None, *args, _default: Any = None, **kwargs) -> Any:
     """Call one consumer callback, treating a failure in it as the consumer's problem, not the turn's.
 
-    `what`: the callback's parameter name, for the log line.
-    `callback`: the consumer's function. Called as `callback(*args)`.
-    `default`: what to return in place of the callback's answer when it raised.
-
-    Re-raises `netutil.Aborted` and returns `default` for anything else, having logged it with a traceback.
+    Thin local spelling of `raven.common.utils.notify`, fixing `_reraise` at the one exception this module's
+    callbacks must never be blamed for. See there for what the guard is and why.
     """
-    # These callbacks belong to whoever called `invoke` — a GUI drawing the stream, a REPL printing it —
-    # and none of them does anything the reply depends on. Letting one abort the invocation turns a
-    # cosmetic fault into a lost reply, and worse than lost: a caller that reads a raised exception as a
-    # backend failure will store *that* over text the model has already produced.
-    #
-    # Not hypothetical. A view rebuilt mid-reply can delete the widget the markdown renderer is drawing
-    # into, and DPG answers a dead container anchor with a stack error rather than a missing-item error —
-    # which the renderer's own guard does not match, so the exception leaves the progress callback and the
-    # turn dies of a repaint. Observed 2026-08-27, the model's reply replaced by an error message.
-    #
-    # Cheap to be generous with, because the reply does not live in the GUI: `on_partial_message` has
-    # already put the text in the chat node, so a consumer that misses an event has missed a *repaint*.
-    # The next event redraws from the node, and if no next event comes, the finished reply does.
-    #
-    # `Aborted` is the exception to all of it: that is the caller stopping this invocation on purpose,
-    # arriving through whichever frame happens to be on the stack, and swallowing it would defeat Cancel.
-    try:
-        return callback(*args)
-    except netutil.Aborted:
-        raise
-    except Exception:
-        logger.exception(f"_notify: the `{what}` callback raised; continuing without it. Traceback follows.")
-        return default
+    # `netutil.Aborted` is the caller stopping this invocation on purpose, arriving through whichever frame
+    # happens to be on the stack — so swallowing it here would leave Cancel doing nothing.
+    return utils.notify(what, maybe_callback, *args, _default=_default, _reraise=(netutil.Aborted,), **kwargs)
 
 def invoke(settings: env,
            history: list[dict],
@@ -2094,7 +2072,7 @@ def invoke(settings: env,
         if on_progress is not None:
             return _notify("on_progress", on_progress,
                            {**parsed_event, "n_chunks": n_chunks},
-                           default=action_ack)
+                           _default=action_ack)
         return action_ack
 
     try:

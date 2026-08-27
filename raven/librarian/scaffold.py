@@ -18,6 +18,7 @@ from unpythonic import dyn
 from unpythonic.env import env
 
 from ..common import netutil
+from ..common import utils
 
 from . import chattree
 from . import chatutil
@@ -34,6 +35,20 @@ if TYPE_CHECKING:
 
 action_ack = llmclient.action_ack
 action_stop = llmclient.action_stop
+
+def _notify(what: str, maybe_callback: Callable | None, *args, _default: Any = None, **kwargs) -> Any:
+    """Call one of a turn's observer callbacks, treating a failure in it as the observer's problem.
+
+    Thin local spelling of `raven.common.utils.notify`, fixing `_reraise` at the one exception a turn's
+    callbacks must never be blamed for, and absorbing the "nobody is listening" case. See there for what
+    the guard is and why.
+    """
+    # A turn's observers are frontends: a GUI lighting an indicator, a REPL printing a line. None of them is
+    # doing work the reply depends on, and every one of them can fail on something that has nothing to do
+    # with the model — a widget deleted by a rebuild, a terminal that went away. The turn survives all of it.
+    #
+    # `netutil.Aborted` is the exception, being the user cancelling rather than an observer failing.
+    return utils.notify(what, maybe_callback, *args, _default=_default, _reraise=(netutil.Aborted,), **kwargs)
 
 # --------------------------------------------------------------------------------
 # User's turn
@@ -720,8 +735,7 @@ def _perform_and_store_tool_calls(llm_settings: env,
                          turn declines a round.
     """
     head_node_id = parent_node_id
-    if on_tools_start is not None:
-        on_tools_start(assistant_message["tool_calls"])
+    _notify("on_tools_start", on_tools_start, assistant_message["tool_calls"])
 
     if maybe_refusal_text is None:
         tool_context.webfetch_allowed_hosts = chatutil.compute_auto_allowed_hosts(
@@ -776,11 +790,9 @@ def _perform_and_store_tool_calls(llm_settings: env,
                                                               parent_id=head_node_id)
         head_node_id = tool_response_message_node_id
 
-        if on_tool_done is not None:
-            on_tool_done(head_node_id)
+        _notify("on_tool_done", on_tool_done, head_node_id)
 
-    if on_tools_done is not None:
-        on_tools_done(assistant_message["tool_calls"])
+    _notify("on_tools_done", on_tools_done, assistant_message["tool_calls"])
     return head_node_id
 
 
@@ -1046,8 +1058,7 @@ def ai_turn(llm_settings: env,
 
     # Search document database if requested
     if documents_available and docs_query is not None:
-        if on_docs_start is not None:
-            on_docs_start()
+        _notify("on_docs_start", on_docs_start)
         docs_matches = []  # bound before the `try` so the `finally` can report it even if the search raises
         try:
             docs_matches = _search_docs(retriever=retriever,
@@ -1056,8 +1067,7 @@ def ai_turn(llm_settings: env,
         finally:
             # Ensure `on_docs_done` always fires - including when the search raises mid-flight - so GUI
             # state (e.g. `_docs_reading`) recovers cleanly.
-            if on_docs_done is not None:
-                on_docs_done(docs_matches)
+            _notify("on_docs_done", on_docs_done, docs_matches)
     else:
         if retriever is None and docs_query is not None:
             logger.warning("ai_turn: A `docs_query` was supplied without a `retriever` to search with. Ignoring the query.")
@@ -1155,8 +1165,7 @@ def ai_turn(llm_settings: env,
             # with its own tail.
             ai_message_node_id = head_node_id
 
-        if on_llm_start is not None:
-            on_llm_start(ai_message_node_id)
+        _notify("on_llm_start", on_llm_start, ai_message_node_id)
 
         def store_partial(message: dict) -> None:
             """Keep the node current with the reply as it streams. See `Forest.overwrite_active_revision`."""
@@ -1208,8 +1217,7 @@ def ai_turn(llm_settings: env,
             else:
                 datastore.add_revision(node_id=ai_message_node_id, payload=error_payload)
             head_node_id = ai_message_node_id
-            if on_llm_done is not None:
-                on_llm_done(head_node_id)
+            _notify("on_llm_done", on_llm_done, head_node_id)
             return head_node_id
         # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
 
@@ -1272,8 +1280,7 @@ def ai_turn(llm_settings: env,
                                    payload=create_ai_payload())
             continue_this_message = False  # any further messages during this AI turn should be created normally
         head_node_id = ai_message_node_id
-        if on_llm_done is not None:
-            on_llm_done(head_node_id)
+        _notify("on_llm_done", on_llm_done, head_node_id)
 
         # Handle tool calls, if any.
         #
@@ -1428,10 +1435,8 @@ def retry_tool_calls(llm_settings: env,
     #    active payload — the Forest-aware way to clone a node into a new place.
     for old_node_id in suffix_node_ids:
         head_node_id = datastore.copy_node(old_node_id, new_parent_id=head_node_id)
-        if on_tool_done is not None:
-            on_tool_done(head_node_id)
-    if on_tools_done is not None:
-        on_tools_done(assistant_message["tool_calls"])
+        _notify("on_tool_done", on_tool_done, head_node_id)
+    _notify("on_tools_done", on_tools_done, assistant_message["tool_calls"])
 
     # 4. Continue the AI turn from the rebuilt tool head.
     return ai_turn(llm_settings=llm_settings,

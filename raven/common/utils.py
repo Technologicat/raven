@@ -5,6 +5,7 @@ __all__ = ["absolutize_filename", "canonical_path",
            "user_directory",
            "open_file", "open_in_file_manager",
            "make_blank_index_array", "bail",
+           "notify",
            "bibtex_header_key", "bibtex_field_value", "bibtex_unbalanced_field_names",
            "bibtex_brace_repair_candidates",
            "format_bibtex_author", "format_bibtex_authors",
@@ -26,7 +27,7 @@ import pathlib
 import re
 import subprocess
 import sys
-from typing import Callable, Dict, List, NoReturn, Optional, Union
+from typing import Any, Callable, Dict, List, NoReturn, Optional, Union
 import unicodedata
 
 import numpy as np
@@ -248,6 +249,53 @@ def bail(exitcode: int = 0) -> NoReturn:
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(exitcode)
+
+# --------------------------------------------------------------------------------
+# Observer callbacks
+
+def notify(what: str,
+           maybe_callback: Callable | None,
+           *args,
+           _default: Any = None,
+           _reraise: tuple[type[BaseException], ...] = (),
+           **kwargs) -> Any:
+    """Call an observer callback, treating a failure in it as the observer's problem, not the caller's.
+
+    `what`: the callback's parameter name, for the log line.
+    `maybe_callback`: the observer's function, or `None` for "nobody is listening".
+    `*args`, `**kwargs`: passed to the callback.
+    `_default`: returned in place of the callback's answer when it is absent or raised.
+    `_reraise`: exception types to let through, for the ones that are not observer failures at all —
+                a cancellation arriving through whichever frame happens to be on the stack, typically.
+
+    Returns the callback's answer, or `_default`. Anything raised outside `_reraise` is logged with its
+    traceback and swallowed.
+    """
+    # The leading underscores are load-bearing. This forwards keyword arguments to somebody else's
+    # function, so every name in its own signature is a name the callback cannot use — and since Raven's
+    # convention is to pass by name, that is a real collision rather than a theoretical one: `default` is
+    # an ordinary thing for a callback to be given. The underscore marks these two as the wrapper's own.
+    # For an API that reports progress to whoever asked for the work — an event-callback protocol, of which
+    # Raven has several. The observer is watching the work; it is not doing it. So a fault in one costs its
+    # own output and nothing else, and the operation it was watching finishes and returns its result.
+    #
+    # Letting one abort the operation instead is worse than the missing notification twice over: the work is
+    # lost, and it is lost with a diagnosis pointing at whatever the operation does rather than at the
+    # listener. A caller that classifies a raised exception by *what it was doing* will then record a
+    # failure of that, which is how a chat reply came to be replaced by a backend-error message on
+    # 2026-08-27 after a GUI repaint hit a stale widget.
+    #
+    # The `reraise` list is what keeps this from being a blanket `except Exception` around user code: it is
+    # for exceptions that are *control*, not failure, and are therefore not the observer's to be blamed for.
+    if maybe_callback is None:
+        return _default
+    try:
+        return maybe_callback(*args, **kwargs)
+    except _reraise:
+        raise
+    except Exception:
+        logger.exception(f"notify: the `{what}` callback raised; continuing without it. Traceback follows.")
+        return _default
 
 # --------------------------------------------------------------------------------
 # BibTeX utilities
