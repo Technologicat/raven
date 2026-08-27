@@ -1724,6 +1724,9 @@ def update_animations():
     # chat panel from inside ImGui and raise nothing we could hook, so "the reader has left the end" is only
     # observable by looking. See `DPGLinearizedChatView.update_jump_to_latest_pill`.
     chat_controller.view.update_jump_to_latest_pill()
+    # The live thinking counter is drawn on the frame clock rather than as chunks arrive, so that it ticks
+    # at a steady rate the reader can trust. See `DPGChatController.update_thinking_readout`.
+    chat_controller.update_thinking_readout()
     # Which message the per-message hotkeys act on follows the scroll position, and is polled for the same
     # reason the pill is: nothing raises an event when the reader wheels the panel.
     chat_controller.update_current_message_mark()

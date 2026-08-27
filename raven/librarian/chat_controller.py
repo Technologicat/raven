@@ -2403,6 +2403,9 @@ class DPGStreamingChatMessage(DPGChatMessage):
         self.start_thinking_open = parent_view.chat_controller.app_state.get("show_thinking", False)
         # What the cloud is currently saying, or `None` while nothing has been said yet. See `set_thinking`.
         self._thinking_shown = None
+        # The counter line as last written, so a per-frame redraw costs a string comparison. See
+        # `set_thinking_progress`.
+        self._thinking_readout_shown = None
         self.build()
 
     def build(self):
@@ -2448,11 +2451,19 @@ class DPGStreamingChatMessage(DPGChatMessage):
 
         With the trace collapsed there is otherwise nothing on screen but a pulsating cloud, which says
         *something is happening* and not *how long you have been waiting*.
+
+        Called once per frame while the model reasons, so it writes only when the text it would write has
+        changed — which at a tenth of a second's resolution is about ten times a second, whatever the frame
+        rate happens to be.
         """
         if self.gui_thought_stats is None:
             return
+        text = f"Thinking… {dt:0.1f}s, ~{n_chunks}t"
+        if text == self._thinking_readout_shown:
+            return
+        self._thinking_readout_shown = text
         with guiutils.nonexistent_ok():
-            dpg.set_value(self.gui_thought_stats, f"Thinking… {dt:0.1f}s, ~{n_chunks}t")
+            dpg.set_value(self.gui_thought_stats, text)
 
     def set_thinking(self, is_thinking: bool) -> None:
         """Say whether the model is reasoning right now, by pulsating this message's cloud or settling it.
@@ -3349,11 +3360,16 @@ class DPGLinearizedChatView:
         render runs inside `guiutils.nonexistent_ok`, so the first call to find its widget gone abandons
         the rest, which is what the render would have done had it known. Nothing is lost by giving up, the
         text having gone into the node either way.
+
+        Deliberately unlocked, over a snapshot: `tuple(list)` is one C-level pass that cannot observe a
+        half-mutated list, and that is the whole guarantee the lock would buy a reader that already accepts
+        a stale answer. It has to be unlocked, too — `update_thinking_readout` calls this once per frame
+        from the render thread, and a render thread that can wait on a lock a worker holds while waiting for
+        a frame is a circular wait.
         """
-        with self.chat_controller.current_chat_history_lock:
-            for message in self.chat_controller.current_chat_history:
-                if isinstance(message, DPGStreamingChatMessage) and message.node_id == node_id:
-                    return message
+        for message in tuple(self.chat_controller.current_chat_history):
+            if isinstance(message, DPGStreamingChatMessage) and message.node_id == node_id:
+                return message
         return None
 
     def rewind_to(self, node_id: str) -> int:
@@ -3755,6 +3771,15 @@ class DPGChatController:
         if executor is None:
             executor = concurrent.futures.ThreadPoolExecutor()
 
+        # What the live "Thinking…" readout should say: `(node_id, t0, n_chunks)` for the reply currently
+        # reasoning, or `None` when none is. Published by the turn as the stream arrives and drawn once per
+        # frame by `update_thinking_readout` — see there for why the drawing is not done at the same place.
+        #
+        # Rebound whole, never mutated, and read without the lock: a tuple swap is one bytecode, so a frame
+        # sees either the old triple or the new one. Being one frame behind costs a thirtieth of a second
+        # on a counter showing tenths.
+        self._thinking_readout = None
+
         self.task_manager = bgtask.TaskManager(name="librarian_chat_controller",  # for most tasks
                                                mode="concurrent",
                                                executor=executor)
@@ -4017,6 +4042,25 @@ class DPGChatController:
             if message.gui_container_group == widget:
                 return message
         return history[-1]
+
+    def update_thinking_readout(self) -> None:
+        """Advance the live "Thinking… 12.4s, ~480t" counter. Call once per frame, from the render loop.
+
+        Per frame because it is a *clock*, and a clock is judged by its cadence rather than by its accuracy:
+        one that jumps by a second and then sits still for four looks broken even while every value it shows
+        is correct. The stream cannot supply that cadence — the model decides when chunks arrive, and there
+        may be seconds between them precisely when the reader most wants to see the counter move — so the
+        turn publishes the numbers and the frame clock draws them.
+
+        Cheap: a tuple read, and a `set_value` only when the tenth of a second on display actually changes.
+        """
+        readout = self._thinking_readout
+        if readout is None:
+            return
+        node_id, t0, n_chunks = readout
+        message = self.view.streaming_message_for(node_id)
+        if message is not None:
+            message.set_thinking_progress(time.monotonic() - t0, n_chunks)
 
     def update_current_message_mark(self) -> None:
         """Move the keyboard mark onto the current message's button row. Call once per frame.
@@ -4695,12 +4739,12 @@ class DPGChatController:
                     time_now = time.monotonic()
                     dt = time_now - task_env.t0  # seconds since last GUI update
                     dchunks = n_chunks - task_env.n_chunks0  # chunks since last GUI update
-                    if is_thought:
-                        # Rate-limited on the same cadence as the text below, since it is the same wait
-                        # being reported and a counter running faster than the words is its own noise.
-                        if dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):
-                            streaming_chat_message.set_thinking_progress(time_now - task_env.thinking_t0,
-                                                                         n_chunks)
+                    # The counter is *published* here and *drawn* once per frame, by
+                    # `update_thinking_readout`. Drawing it here tied its cadence to the arrival of chunks,
+                    # and through the rate limiter below to the model's newline pattern — so the seconds
+                    # advanced in steps of one to five of them, and a clock that stutters reads as a clock
+                    # that has stopped.
+                    self._thinking_readout = (task_env.ai_node_id, task_env.thinking_t0, n_chunks) if is_thought else None
                     if "\n" in chunk_text:  # start new paragraph?
                         task_env.t0 = time_now
                         task_env.n_chunks0 = n_chunks
@@ -4917,6 +4961,7 @@ class DPGChatController:
                 # payload, so a live widget outliving that would render a message the tree now says is
                 # done, and go on saying it is being written.
                 drop_streaming_widget()
+                self._thinking_readout = None  # no reply is reasoning any more, whatever ended this turn
                 if self.gui_updates_safe:
                     dpg.disable_item(self.chat_stop_generation_button_widget)
                     while turn_data_eyes_uses:  # release anything this turn started and did not finish
