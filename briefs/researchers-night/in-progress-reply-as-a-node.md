@@ -129,33 +129,42 @@ whose behaviour the project already records as unvalidated.
 
 ## Where this stands, 2026-08-27
 
-**Built, and not finished.** Twelve commits, held local and unpushed on purpose: the app currently loses a
-completed reply in one case, which is worse than what it replaces, so pushing would put a regression on
-`main` for the sake of a rule about seams.
+**Built, and the vanishing-reply fault is understood and fixed.** Held local and unpushed until a live run
+confirms it.
 
-Verified live, all against the real backend:
+Verified live, against the real backend:
 
 | | |
 |---|---|
 | a reply streams normally | works |
 | resize mid-reply (rebuild from the node) | works — the reply stays put and keeps updating |
 | flick to another branch and back mid-reply | works — the reply is there, still streaming |
-| the reply *completing* after such a flick | **broken — the message vanishes** |
+| the reply *completing* | vanished a moment after appearing; fixed, awaiting a live run |
 
-**The evidence for the broken case, so the next session need not re-derive it.** `on_done` runs in full:
-the log shows "updating chat view with final message" and "all done", no errors, and the duplicate guard in
-`add_complete_message` never fires — so a widget *is* created. But the view then shows the user message as
-the tail with no reply under it, and `max_y_scroll` drops from 7181 to 1309 across the swap.
+**What it was.** A node is rendered by two widgets over its life — the live message while the reply
+streams, and the stored one `on_done` swaps in at the end. The turn's epilogue, which runs whether or not
+the round ended tidily, removed a message *by node*, so on the ordinary path it deleted the finished reply
+`on_done` had just added.
 
-That shape says HEAD is sitting on the **user message** rather than on the reply's node, so
-`linearize_up(HEAD)` legitimately ends where the screen ends. The question to start from is why: HEAD is
-advanced to the node in `on_llm_start`, and a flick back is supposed to land on it again via
-`descend_to_latest` picking the newest child. One of those two is not happening — the timestamp
-`chatutil.create_payload` puts on the incomplete node is the first thing to check, since that is what the
-descent orders by.
+The symptom named the wrong subsystem, which is worth recording: `on_done` logged "updating chat view with
+final message" and "all done", TTS spoke the complete text, no error was raised anywhere, and the duplicate
+guard in `add_complete_message` never fired — every signal said the message had been delivered. Only the
+view disagreed, `max_y_scroll` falling from 7181 to 1309 across the swap. It reads exactly like a routing
+failure, and the first theory written down here blamed HEAD and the incomplete node's timestamp; both were
+innocent.
+
+The fix is `DPGLinearizedChatView.remove_streaming_message_for`, and the rule behind it: **a node is not a
+widget**, so a caller that means "the thing I was streaming into" has to say so.
 
 Two known gaps besides: the `[Cancelled by user]` / `[Error occurred]` render-time footer is not built, and
 the `continue_` bug found on the way is not fixed.
+
+**Still to live-test**, the tail of the list the fault interrupted: a reply completing (both plainly and
+after a flick), Cancel mid-stream keeping the partial reply, a backend error via
+`investigations/backend-fault-injection/faultproxy.py` updating the node rather than adding an empty husk,
+and how the jump-to-latest pill behaves now that a rebuild can add the streaming message — it is polled per
+frame from `is_generating`, so its label is unaffected, but `follow_tail` and `restore_scroll_after_swap`
+raise it, and both now run around widgets a rebuild may have replaced.
 
 ## How it gets verified
 
