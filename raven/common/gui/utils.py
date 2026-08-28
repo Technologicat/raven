@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 import os
 import pathlib
 import threading
-from typing import Optional, Tuple, Union
 
 from unpythonic.env import env
 
@@ -168,7 +167,7 @@ def bootup(font_size: int,
 def load_extra_font(themes_and_fonts: env,
                     font_size: int,
                     font_basename: str,
-                    variant: Optional[str]) -> Union[str, int]:
+                    variant: str | None) -> str | int:
     """Load another (non-default) font.
 
     `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
@@ -207,7 +206,7 @@ def load_extra_font(themes_and_fonts: env,
     return key, themes_and_fonts[key]
 
 def get_font_path(font_basename: str = "OpenSans",
-                  variant: Optional[str] = "Regular") -> pathlib.Path:
+                  variant: str | None = "Regular") -> pathlib.Path:
     """Get the path of a TTF font installed with Raven.
 
     `font_basename`: The part of the TTF filename before the font variant and the file extension.
@@ -491,17 +490,17 @@ class nonexistent_ok:
                 return True  # suppress
             return False  # reraise
 
-def maybe_delete_item(item: Union[str, int]) -> None:
+def maybe_delete_item(item: str | int) -> None:
     """Delete `item` (DPG ID or tag), if it exists. If not, the error is ignored."""
     logger.debug(f"maybe_delete_item: Deleting old GUI item '{item}', if it exists.")
     with nonexistent_ok():
         dpg.delete_item(item)
 
-def has_child_items(widget: Union[str, int]) -> bool:
+def has_child_items(widget: str | int) -> bool:
     """Return whether `widget` (DPG tag or ID) has child items in any of its slots."""
     return any(len(dpg.get_item_children(widget, slot=slot)) for slot in range(4))
 
-def item_identifiers(widget: Union[str, int]) -> set:
+def item_identifiers(widget: str | int) -> set:
     """Return every name DPG may answer with for `widget` — its tag and its numeric ID, whichever exist.
 
     For testing whether a widget DPG handed back *is* one you are holding, when you cannot control which
@@ -528,7 +527,7 @@ def item_identifiers(widget: Union[str, int]) -> set:
             identifiers.add(alias)
     return identifiers
 
-def describe_item(widget: Union[str, int, None]) -> str:
+def describe_item(widget: str | int | None) -> str:
     """A widget's identity in both spellings, for a log line: `'my_tag' (id 42)`.
 
     The reading half of `item_identifiers`: that one answers "is this the same widget", this one answers
@@ -585,7 +584,7 @@ DPG_FRAME_PADDING_Y = 3  # mvStyleVar_FramePadding[1] (the x component is 4, and
 DPG_SCROLLBAR_SIZE = 14  # mvStyleVar_ScrollbarSize; the width a vertical scrollbar takes off a scrollable region
 
 
-def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
+def get_widget_pos(widget: str | int) -> tuple[int, int]:
     """Return `widget`'s (DPG tag or ID) position `(x0, y0)`, in viewport coordinates.
 
     This papers over the fact that most items support `dpg.get_item_rect_min`, but windows and child
@@ -644,7 +643,7 @@ def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
             break
     return x0, y0
 
-def get_widget_size(widget: Union[str, int]) -> Tuple[int, int]:
+def get_widget_size(widget: str | int) -> tuple[int, int]:
     """Return `widget`'s (DPG tag or ID) size `(width, height)`, in pixels where DPG knows them.
 
     This papers over the fact that most items support `dpg.get_item_rect_size`,
@@ -671,8 +670,8 @@ def get_widget_size(widget: Union[str, int]) -> Tuple[int, int]:
         h = config["height"]
     return w, h
 
-def get_widget_relative_pos(widget: Union[str, int],
-                            reference: Union[str, int]) -> Tuple[int, int]:
+def get_widget_relative_pos(widget: str | int,
+                            reference: str | int) -> tuple[int, int]:
     """Return `widget`'s (DPG tag or ID) position, measured relative to the `reference` widget (DPG tag or ID).
 
     This is handy when you need child window coordinates (use the child window as `reference`).
@@ -687,13 +686,13 @@ def get_widget_relative_pos(widget: Union[str, int],
 # Mouse
 # ---------------------------------------------------------------------------
 
-def get_mouse_relative_pos(widget: Union[str, int]) -> Tuple[int, int]:
+def get_mouse_relative_pos(widget: str | int) -> tuple[int, int]:
     """Return the mouse cursor's position, measured relative to the origin of `widget` (DPG tag or ID)."""
     x0, y0 = get_widget_pos(widget)
     m = dpg.get_mouse_pos(local=False)  # in viewport coordinates
     return (m[0] - x0, m[1] - y0)
 
-def is_mouse_inside_widget(widget: Union[str, int]) -> bool:
+def is_mouse_inside_widget(widget: str | int) -> bool:
     """Return whether the mouse cursor is inside `widget` (DPG ID or tag)."""
     x0, y0 = get_widget_pos(widget)
     w, h = get_widget_size(widget)
@@ -779,7 +778,7 @@ def split_frame(*, operation: str, required: bool = True) -> bool:
         return False
     return True
 
-def wait_for_resize(widget: Union[str, int],
+def wait_for_resize(widget: str | int,
                     wait_frames_max: int = 10,
                     *,
                     park_each_frame: bool = False) -> bool:
@@ -813,7 +812,7 @@ def wait_for_resize(widget: Union[str, int],
         logger.debug(f"wait_for_resize: timeout ({wait_frames_max} frames) when waiting for resize of DPG widget {widget}")
     return False
 
-def park_offscreen(widget: Union[str, int]) -> None:
+def park_offscreen(widget: str | int) -> None:
     """Move `widget` (DPG ID or tag) to where nothing will be seen: the viewport's bottom-right corner.
 
     Its top-left corner then sits at the far corner of the visible area, so the whole of it falls outside
@@ -829,7 +828,7 @@ def park_offscreen(widget: Union[str, int]) -> None:
     """
     dpg.set_item_pos(widget, (dpg.get_viewport_client_width(), dpg.get_viewport_client_height()))
 
-def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, int], update_window_size: bool = True) -> None:
+def recenter_window(thewindow: str | int, *, reference_window: str | int, update_window_size: bool = True) -> None:
     """Reposition `thewindow` (DPG ID or tag), so that it is centered on `reference_window`.
 
     To center on viewport, pass your maximized main window as `reference_window`.
@@ -882,7 +881,7 @@ def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, 
 # Tooltips, toolbars
 # ---------------------------------------------------------------------------
 
-def snap_slider(sender: Union[str, int],
+def snap_slider(sender: str | int,
                 value: float,
                 *,
                 decimals: int = 1) -> float:
@@ -907,35 +906,48 @@ def snap_slider(sender: Union[str, int],
 
 def add_section_separator(*,
                           spacing: int = 6,
-                          parent: Optional[Union[int, str]] = None) -> Union[int, str]:
+                          tag: int | str | None = None,
+                          parent: int | str | None = None) -> int | str:
     """Add a horizontal rule with room around it, between sections of a vertical layout.
 
     `dpg.add_separator` draws its line flush against whatever sits above and below, so it reads as
     something attached to one of them rather than as a break between the two.
 
     `spacing`: pixels of blank space above and below the line.
+    `tag`: DPG tag for the group, if the caller wants to name it — to hide and show the separator with
+           a section, say. The three items inside are unnamed; nothing has business addressing them
+           separately.
     `parent`: explicit DPG parent. `None` uses the implicit container stack, which is what you want
               inside a `with dpg.window(...)` during a GUI build.
 
-    Returns the DPG item ID of the separator itself.
+    Returns the DPG item ID of the group holding the three items — so a caller can hide, show or
+    delete the whole separator as one thing, and so it reads as one node in the item registry
+    inspector rather than as three loose items among the widgets it divides.
 
     See `add_toolbar_separator` for the other axis. That one draws into a drawlist and needs the
     toolbar's cross-axis size in pixels, which a window that sizes itself to its content cannot say.
     """
     kwargs = {} if parent is None else {"parent": parent}
-    dpg.add_spacer(height=spacing, **kwargs)
-    separator = dpg.add_separator(**kwargs)
-    dpg.add_spacer(height=spacing, **kwargs)
-    return separator
+    if tag is not None:
+        kwargs["tag"] = tag
+    # `parent=` rather than `with dpg.group(...)`: the container stack is one global, and DPG lets any
+    # thread create widgets — so two builders running at once interleave their pushes and pops on it,
+    # and a `with` here can capture whatever the other thread happened to add. Naming the parent is
+    # what makes a helper safe to call from a background task.
+    group = dpg.add_group(label="section separator", **kwargs)
+    dpg.add_spacer(height=spacing, parent=group)
+    dpg.add_separator(parent=group)
+    dpg.add_spacer(height=spacing, parent=group)
+    return group
 
 def add_toolbar_separator(*,
                           horizontal: bool,
                           toolbar_extent: int,
                           size: int,
                           line: bool = True,
-                          line_offset: Optional[int] = None,
-                          color: Tuple[int, int, int, int] = (140, 140, 140, 255),
-                          parent: Optional[Union[int, str]] = None) -> Union[int, str]:
+                          line_offset: int | None = None,
+                          color: tuple[int, int, int, int] = (140, 140, 140, 255),
+                          parent: int | str | None = None) -> int | str:
     """Add a visual separator between sections in a DPG toolbar.
 
     Draws a thin dividing line via a drawlist, or an invisible spacer.
@@ -977,9 +989,9 @@ def add_toolbar_separator(*,
 # Plotter utilities
 # ---------------------------------------------------------------------------
 
-def get_pixels_per_plotter_data_unit(plot_widget: Union[str, int],
-                                     xaxis: Union[str, int],
-                                     yaxis: Union[str, int]) -> Tuple[int, int]:
+def get_pixels_per_plotter_data_unit(plot_widget: str | int,
+                                     xaxis: str | int,
+                                     yaxis: str | int) -> tuple[int, int]:
     """Estimate pixels per DPG plotter data unit, for conversion between viewport space and data space.
 
     `plot_widget`: dpg tag or ID, the plotter widget (`dpg.plot`).

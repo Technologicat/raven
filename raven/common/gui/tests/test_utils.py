@@ -387,21 +387,36 @@ class TestAddSectionSeparator:
         # to one of them rather than as a break between the two.
         with dpg.window() as window:
             dpg.add_text("above")
-            separator = guiutils.add_section_separator(spacing=6)
+            group = guiutils.add_section_separator(spacing=6)
             dpg.add_text("below")
-        kinds = [dpg.get_item_type(item) for item in dpg.get_item_children(window, slot=1)]
-        assert kinds == ["mvAppItemType::mvText",
-                         "mvAppItemType::mvSpacer",
+        kinds = [dpg.get_item_type(item) for item in dpg.get_item_children(group, slot=1)]
+        assert kinds == ["mvAppItemType::mvSpacer",
                          "mvAppItemType::mvSeparator",
-                         "mvAppItemType::mvSpacer",
-                         "mvAppItemType::mvText"], kinds
-        assert dpg.get_item_type(separator) == "mvAppItemType::mvSeparator", "the returned item is not the line"
+                         "mvAppItemType::mvSpacer"], kinds
+        dpg.delete_item(window)
+
+    def test_it_is_one_item_among_what_it_divides(self, dpg_context):
+        # Grouped so the item registry inspector shows one node rather than three loose items sitting
+        # between the widgets they separate.
+        with dpg.window() as window:
+            above = dpg.add_text("above")
+            group = guiutils.add_section_separator()
+            below = dpg.add_text("below")
+        assert dpg.get_item_children(window, slot=1) == [above, group, below]
+        assert dpg.get_item_type(group) == "mvAppItemType::mvGroup"
+        dpg.delete_item(window)
+
+    def test_a_tag_names_the_group(self, dpg_context):
+        with dpg.window() as window:
+            guiutils.add_section_separator(tag="a_named_separator")  # tag
+        assert dpg.does_item_exist("a_named_separator")  # tag
+        assert dpg.get_item_type("a_named_separator") == "mvAppItemType::mvGroup"  # tag
         dpg.delete_item(window)
 
     def test_the_spacing_is_what_was_asked_for(self, dpg_context):
         with dpg.window() as window:
-            guiutils.add_section_separator(spacing=13)
-        spacers = [item for item in dpg.get_item_children(window, slot=1)
+            group = guiutils.add_section_separator(spacing=13)
+        spacers = [item for item in dpg.get_item_children(group, slot=1)
                    if dpg.get_item_type(item) == "mvAppItemType::mvSpacer"]
         assert [dpg.get_item_configuration(item)["height"] for item in spacers] == [13, 13]
         dpg.delete_item(window)
@@ -410,9 +425,9 @@ class TestAddSectionSeparator:
         # The panel builds inside a `with dpg.window(...)`, but a caller adding to an existing container
         # after the fact has only the parent to go on.
         with dpg.window() as window:
-            group = dpg.add_group()
-        guiutils.add_section_separator(parent=group)
-        assert len(dpg.get_item_children(group, slot=1)) == 3
+            container = dpg.add_group()
+        separator = guiutils.add_section_separator(parent=container)
+        assert dpg.get_item_children(container, slot=1) == [separator]
         dpg.delete_item(window)
 
 

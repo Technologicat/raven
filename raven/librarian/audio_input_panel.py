@@ -388,114 +388,131 @@ class DPGAudioInputPanel:
     # Layout
 
     def _build_window(self) -> None:
-        """Build the panel, hidden. Built once and reused, so fixed tags are safe here."""
+        """Build the panel, hidden. Built once and reused, so fixed tags are safe here.
+
+        Every item names its parent. The container stack is one process-wide global and DPG lets any
+        thread create widgets, so a `with` is only safe while building an app's main GUI, before the
+        render loop starts and before there is a background task to race. This runs on first open,
+        which is neither.
+        """
         rec = audio_recorder.require()
         slider_w = 200
 
-        with dpg.window(label="Audio input",
-                        modal=False,
-                        show=False,
-                        no_collapse=True,
-                        autosize=True,
-                        tag="audio_input_panel_window",  # tag
-                        on_close=lambda: self.close()) as window_id:
-            self.window_id = window_id
+        window_id = dpg.add_window(label="Audio input",
+                                   modal=False,
+                                   show=False,
+                                   no_collapse=True,
+                                   autosize=True,
+                                   tag="audio_input_panel_window",  # tag
+                                   on_close=lambda: self.close())
+        self.window_id = window_id
 
-            with dpg.group(horizontal=True):
-                dpg.add_text("Microphone", color=DIM_TEXT)
-                dpg.add_combo(items=audio_recorder.get_available_devices(),
-                              default_value=rec.device_name,
-                              width=-1,
-                              callback=self._on_device_combo,
-                              tag="audio_input_device_combo")  # tag
-            dpg.add_text("", tag="audio_input_status_text", color=DIM_TEXT)  # tag
-            guiutils.add_section_separator()
+        device_row = dpg.add_group(horizontal=True, parent=window_id)
+        dpg.add_text("Microphone", color=DIM_TEXT, parent=device_row)
+        dpg.add_combo(items=audio_recorder.get_available_devices(),
+                      default_value=rec.device_name,
+                      width=-1,
+                      callback=self._on_device_combo,
+                      parent=device_row,
+                      tag="audio_input_device_combo")  # tag
+        dpg.add_text("", parent=window_id, tag="audio_input_status_text", color=DIM_TEXT)  # tag
+        guiutils.add_section_separator(parent=window_id)
 
-            with dpg.group(horizontal=True):
-                self.meter = DPGVUMeter(width=28,
-                                        height=150,
-                                        border=1,
-                                        min_value=METER_MIN,
-                                        max_value=METER_MAX,
-                                        yellow_start=METER_YELLOW_START,
-                                        red_start=METER_RED_START,
-                                        threshold_value=rec.silence_threshold,
-                                        line_thickness=2,  # one pixel is lost across a meter this wide
-                                        tooltip_text=("Microphone input level.\n"
-                                                      f"Yellow from {METER_YELLOW_START:0.6g}, red from {METER_RED_START:0.6g} dBFS.\n"
-                                                      "The gray line is the silence threshold."))
-                with dpg.group():
-                    for label, tag in (("Now", "audio_input_now_text"),  # tag
-                                       ("Peak", "audio_input_peak_text"),  # tag
-                                       (f"Loudest in {FLOOR_WINDOW:0.6g} s", "audio_input_floor_text")):  # tag
-                        with dpg.group(horizontal=True):
-                            dpg.add_text(f"{label}:", color=DIM_TEXT)
-                            dpg.add_text("—", tag=tag)
-                    dpg.add_spacer(height=8)
-                    # Icon-only button with the words beside it, as elsewhere in the constellation: the
-                    # icon font carries no Latin glyphs, so a label mixing the two renders the text as
-                    # boxes. The words stay visible rather than living only in the tooltip — this is the
-                    # control an operator who has never seen the panel has to find, in a hurry.
-                    with dpg.group(horizontal=True):
-                        dpg.add_button(label=fa.ICON_RULER,
-                                       callback=lambda: self._measure_the_room(),
-                                       width=gui_config.toolbutton_w,
-                                       tag="audio_input_measure_button")  # tag
-                        dpg.bind_item_font("audio_input_measure_button", self.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.add_text("Measure the room")
-                    # Plain DPG rather than `gui_tooltip.Tooltip`: this caption is written once and never
-                    # changes, so there is no resize for the class to protect against.
-                    with dpg.tooltip("audio_input_measure_button"):  # tag
-                        dpg.add_text(f"Set the silence threshold from the last {FLOOR_WINDOW:0.6g} seconds:\n"
-                                     f"the loudest moment in them, plus {silencegate.DEFAULT_SILENCE_MARGIN:0.6g} dB.\n\n"
-                                     "Ask the room to be quiet first. The figure it will use is\n"
-                                     f"the \"Loudest in {FLOOR_WINDOW:0.6g} s\" reading above.")
+        meter_row = dpg.add_group(horizontal=True, parent=window_id)
+        self.meter = DPGVUMeter(width=28,
+                                height=150,
+                                border=1,
+                                min_value=METER_MIN,
+                                max_value=METER_MAX,
+                                yellow_start=METER_YELLOW_START,
+                                red_start=METER_RED_START,
+                                threshold_value=rec.silence_threshold,
+                                line_thickness=2,  # one pixel is lost across a meter this wide
+                                tooltip_text=("Microphone input level.\n"
+                                              f"Yellow from {METER_YELLOW_START:0.6g}, red from {METER_RED_START:0.6g} dBFS.\n"
+                                              "The gray line is the silence threshold."),
+                                parent=meter_row)
+        readouts = dpg.add_group(parent=meter_row)
+        for label, tag in (("Now", "audio_input_now_text"),  # tag
+                           ("Peak", "audio_input_peak_text"),  # tag
+                           (f"Loudest in {FLOOR_WINDOW:0.6g} s", "audio_input_floor_text")):  # tag
+            readout_row = dpg.add_group(horizontal=True, parent=readouts)
+            dpg.add_text(f"{label}:", color=DIM_TEXT, parent=readout_row)
+            dpg.add_text("—", parent=readout_row, tag=tag)
+        dpg.add_spacer(height=8, parent=readouts)
 
-            # Peak hold sits with the meter rather than with the settings below: it governs how far back
-            # the peak line lets you see, which is a property of the readout you are looking at.
-            dpg.add_slider_float(label="Meter peak hold",
-                                 min_value=PEAK_HOLD_MIN,
-                                 max_value=PEAK_HOLD_MAX,
-                                 default_value=rec.vu_peak_hold,
-                                 format="%.1f s",
-                                 width=slider_w,
-                                 callback=self._on_peak_hold_slider,
-                                 tag="audio_input_peak_hold_slider")  # tag
+        # Icon-only button with the words beside it, as elsewhere in the constellation: the icon font
+        # carries no Latin glyphs, so a label mixing the two renders the text as boxes. The words stay
+        # visible rather than living only in the tooltip — this is the control an operator who has never
+        # seen the panel has to find, in a hurry.
+        measure_row = dpg.add_group(horizontal=True, parent=readouts)
+        dpg.add_button(label=fa.ICON_RULER,
+                       callback=lambda: self._measure_the_room(),
+                       width=gui_config.toolbutton_w,
+                       parent=measure_row,
+                       tag="audio_input_measure_button")  # tag
+        dpg.bind_item_font("audio_input_measure_button", self.themes_and_fonts.icon_font_solid)  # tag
+        dpg.add_text("Measure the room", parent=measure_row)
+        # Plain DPG rather than `gui_tooltip.Tooltip`: this caption is written once and never changes,
+        # so there is no resize for the class to protect against.
+        measure_tooltip = dpg.add_tooltip("audio_input_measure_button")  # tag
+        dpg.add_text(f"Set the silence threshold from the last {FLOOR_WINDOW:0.6g} seconds:\n"
+                     f"the loudest moment in them, plus {silencegate.DEFAULT_SILENCE_MARGIN:0.6g} dB.\n\n"
+                     "Ask the room to be quiet first. The figure it will use is\n"
+                     f"the \"Loudest in {FLOOR_WINDOW:0.6g} s\" reading above.",
+                     parent=measure_tooltip)
 
-            guiutils.add_section_separator()
+        # Peak hold sits with the meter rather than with the settings below: it governs how far back the
+        # peak line lets you see, which is a property of the readout you are looking at.
+        dpg.add_slider_float(label="Meter peak hold",
+                             min_value=PEAK_HOLD_MIN,
+                             max_value=PEAK_HOLD_MAX,
+                             default_value=rec.vu_peak_hold,
+                             format="%.1f s",
+                             width=slider_w,
+                             callback=self._on_peak_hold_slider,
+                             parent=window_id,
+                             tag="audio_input_peak_hold_slider")  # tag
 
-            dpg.add_slider_float(label="Silence level",
-                                 min_value=METER_MIN,
-                                 max_value=METER_MAX,
-                                 default_value=(rec.silence_threshold if rec.silence_threshold is not None
-                                                else silencegate.DEFAULT_SILENCE_THRESHOLD),
-                                 format="%.1f dBFS",
-                                 width=slider_w,
-                                 callback=self._on_threshold_slider,
-                                 tag="audio_input_threshold_slider")  # tag
-            dpg.add_checkbox(label="Measure at the start of each recording instead",
-                             default_value=rec.silence_threshold is None,
-                             callback=self._on_autodetect_checkbox,
-                             tag="audio_input_autodetect_checkbox")  # tag
+        guiutils.add_section_separator(parent=window_id)
 
-            dpg.add_spacer(height=6)
-            dpg.add_checkbox(label="Stop when the speaker falls silent",
-                             default_value=rec.autostop_timeout is not None,
-                             callback=self._on_autostop_checkbox,
-                             tag="audio_input_autostop_checkbox")  # tag
-            dpg.add_slider_float(label="...after",
-                                 min_value=AUTOSTOP_MIN,
-                                 max_value=AUTOSTOP_MAX,
-                                 default_value=(rec.autostop_timeout if rec.autostop_timeout is not None
-                                                else silencegate.DEFAULT_AUTOSTOP_TIMEOUT),
-                                 format="%.1f s",
-                                 width=slider_w,
-                                 callback=self._on_autostop_slider,
-                                 tag="audio_input_autostop_slider")  # tag
+        dpg.add_slider_float(label="Silence level",
+                             min_value=METER_MIN,
+                             max_value=METER_MAX,
+                             default_value=(rec.silence_threshold if rec.silence_threshold is not None
+                                            else silencegate.DEFAULT_SILENCE_THRESHOLD),
+                             format="%.1f dBFS",
+                             width=slider_w,
+                             callback=self._on_threshold_slider,
+                             parent=window_id,
+                             tag="audio_input_threshold_slider")  # tag
+        dpg.add_checkbox(label="Measure at the start of each recording instead",
+                         default_value=rec.silence_threshold is None,
+                         callback=self._on_autodetect_checkbox,
+                         parent=window_id,
+                         tag="audio_input_autodetect_checkbox")  # tag
 
-            guiutils.add_section_separator()
-            # No Close button: the window's own title-bar X does it, and `on_close` routes that through
-            # the same `close`.
-            dpg.add_button(label="Reset to configured defaults",
-                           callback=lambda: self._reset_to_configured_defaults(),
-                           tag="audio_input_reset_button")  # tag
+        dpg.add_spacer(height=6, parent=window_id)
+        dpg.add_checkbox(label="Stop when the speaker falls silent",
+                         default_value=rec.autostop_timeout is not None,
+                         callback=self._on_autostop_checkbox,
+                         parent=window_id,
+                         tag="audio_input_autostop_checkbox")  # tag
+        dpg.add_slider_float(label="...after",
+                             min_value=AUTOSTOP_MIN,
+                             max_value=AUTOSTOP_MAX,
+                             default_value=(rec.autostop_timeout if rec.autostop_timeout is not None
+                                            else silencegate.DEFAULT_AUTOSTOP_TIMEOUT),
+                             format="%.1f s",
+                             width=slider_w,
+                             callback=self._on_autostop_slider,
+                             parent=window_id,
+                             tag="audio_input_autostop_slider")  # tag
+
+        guiutils.add_section_separator(parent=window_id)
+        # No Close button: the window's own title-bar X does it, and `on_close` routes that through the
+        # same `close`.
+        dpg.add_button(label="Reset to configured defaults",
+                       callback=lambda: self._reset_to_configured_defaults(),
+                       parent=window_id,
+                       tag="audio_input_reset_button")  # tag
