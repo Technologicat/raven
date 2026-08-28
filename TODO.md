@@ -32,19 +32,25 @@ lose their claim on the next four weeks.
 6. **The fleet lint policy** — `~/.claude/TODO_DEFERRED.md`, "Whitespace checking fell out of the fleet when
    it moved to ruff". Not this repo's file, and not this repo's decision alone.
 
-## Next session, from 2026-08-27
+## Next session, from 2026-08-28
 
-Chosen at the end of the session that finished band-2 item 9. Same purpose as the block above: the
+**Band-2 item 10 — the STT silence level / autostop GUI — is what the next session starts on** (Juha,
+2026-08-28). See `briefs/researchers-night/README.md` for why it is on the path: speech input is new this
+year, so the threshold has to be tunable *in the room, on the day*, from a control rather than a config
+file. Nothing has been designed for it yet.
+
+The rest of this block is the leftover selection from 2026-08-27. Same purpose as the block above: the
 *selection* would otherwise live nowhere, each of these being filed in a different place or nowhere at all.
 Delete once it stops describing where the work is.
 
-1. ~~**The `continue_` fix.**~~ **Done 2026-08-28**, with band-2 item 9, which is now closed. The
-   accumulators are seeded from the message being continued, held apart from them so every count and reset
-   stays about the current call. Verified live in both shapes, with the stored revisions read back off disk.
-   The write-up is in `briefs/researchers-night/done/in-progress-reply-as-a-node.md` → *Found on the way*.
-   It leaves one thing open, and item 2's ooba brief is where it belongs: the seed is joined
-   unconditionally, and ooba continues through a request field of its own, so if ooba answers with the
-   *whole* message the seed now doubles it. `TODO_DEFERRED.md`'s ooba item carries the question.
+1. ~~**The `continue_` fix.**~~ **Done 2026-08-28**, with band-2 item 9, which is now closed and its brief
+   filed in `briefs/researchers-night/done/`. The accumulators are seeded from the message being continued,
+   held apart from them so every count and reset stays about the current call. Verified live in both shapes,
+   with the stored revisions read back off disk.
+   - **ooba is deliberately excluded and wants re-testing with item 2's brief.** It continues through a
+     request field of its own where LM Studio continues by prefill, and continuing worked there before the
+     seed existed — so the seed is gated on `settings.backend_supports_continue` rather than betting a
+     working path on an unmeasured guess. `TODO_DEFERRED.md`'s ooba item says which answer lifts the gate.
 
 2. **Two briefs to write** — *"written or forgotten"* (Juha, 2026-08-27), both understood and neither
    recorded anywhere a search would find:
