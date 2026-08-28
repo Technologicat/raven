@@ -58,7 +58,7 @@ import logging
 import pathlib
 import sys
 
-from bibtexparser.model import DuplicateFieldKeyBlock
+from bibtexparser.model import DuplicateFieldKeyBlock, MiddlewareErrorBlock
 
 from ..common import utils as common_utils
 from . import bibtex
@@ -102,13 +102,23 @@ def _diagnose(failed_block, key: str, line: int) -> RepairReport:
         repeated = ", ".join(sorted(failed_block.duplicate_keys))
         return RepairReport(key, line, KIND_DUPLICATE_FIELD_KEYS, f"repeats {repeated}")
 
+    # A middleware error means the record's *syntax* was fine and a middleware refused one of its values,
+    # so a brace guess is not merely unhelpful here but wrong by construction — and the parser has said
+    # precisely what it could not do. Its own words beat a guess: "Cannot split the following name
+    # `Bloggs, PhD, MSc, Joan` into parts: Too many commas" names the line to go and edit.
+    #
+    # Asked before the brace check rather than after it because that check is a line-by-line heuristic
+    # and says so: a value legitimately spanning several lines is unbalanced line by line too. Which the
+    # repairs above produce on purpose — merging repeated fields joins their values with newlines — so
+    # a record repaired for one fault and reported for another would otherwise be reported for braces
+    # that were never a problem.
+    if isinstance(failed_block, MiddlewareErrorBlock):
+        return RepairReport(key, line, KIND_UNREADABLE, str(failed_block.error).replace("\n", " "))
+
     unbalanced = common_utils.bibtex_unbalanced_field_names(failed_block.raw)
     if unbalanced:
         return RepairReport(key, line, KIND_UNBALANCED_BRACES,
                             f"suspect field(s): {', '.join(unbalanced)}")
-    # No field opens more braces than it closes, so the fault is something else the parser named itself.
-    # Its own words beat a guess here: "Cannot split the following name `Bloggs, PhD, MSc, Joan` into
-    # parts: Too many commas" says exactly which line to go and edit.
     return RepairReport(key, line, KIND_UNREADABLE, str(failed_block.error).replace("\n", " "))
 
 
@@ -117,6 +127,22 @@ def _repair(failed_block) -> str | None:
     if isinstance(failed_block, DuplicateFieldKeyBlock):
         return bibtex.repair_duplicate_field_keys(failed_block.raw, failed_block.duplicate_keys)
     return bibtex.repair_record(failed_block.raw)
+
+
+def _residual_fault(repaired: str):
+    """What `bibtexparser` still refuses in a repaired record, or `None` if it now reads cleanly.
+
+    The repairs judge themselves structurally — did this edit produce an entry — because a record can
+    carry two unrelated faults and fixing one is not failing at the other. This asks the second question:
+    does the result read under the middleware chain the rest of Raven uses?
+
+    Keeping the two apart is what lets a record be repaired *and* reported. A ProQuest export naming
+    `annote` three times and carrying an author BibTeX cannot express used to be reported for the
+    repeated fields — which the tool repairs, so the message read as a contradiction — and to have the
+    repair thrown away along with the diagnosis. Now the merge is kept and the report names the author.
+    """
+    library = bibtex.parse_string(repaired)
+    return library.failed_blocks[0] if library.failed_blocks else None
 
 
 def repair_bibtex(source: str) -> tuple[str, list[RepairReport], list[RepairReport]]:
@@ -157,14 +183,24 @@ def repair_bibtex(source: str) -> tuple[str, list[RepairReport], list[RepairRepo
     for start, failed_block in located:
         raw = failed_block.raw
         key = common_utils.bibtex_header_key(raw.lstrip().split("\n", 1)[0]) or "?"
-        report = _diagnose(failed_block, key, source.count("\n", 0, start) + 1)
+        line = source.count("\n", 0, start) + 1
         maybe_repaired = _repair(failed_block)
 
         pieces.append(source[cursor:start])
         pieces.append(raw if maybe_repaired is None else maybe_repaired)
         cursor = start + len(raw)
 
-        (unrecovered if maybe_repaired is None else recovered).append(report)
+        if maybe_repaired is None:
+            unrecovered.append(_diagnose(failed_block, key, line))
+            continue
+        # The repair went in either way; what is left decides which list this record is reported in, and
+        # under which fault. Diagnosing the *repaired* text is the point: naming a fault the tool has
+        # just fixed sends the user looking for something that is no longer there.
+        maybe_residual = _residual_fault(maybe_repaired)
+        if maybe_residual is None:
+            recovered.append(_diagnose(failed_block, key, line))
+        else:
+            unrecovered.append(_diagnose(maybe_residual, key, line))
 
     pieces.append(source[cursor:])
     return "".join(pieces), recovered, unrecovered

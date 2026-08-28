@@ -593,6 +593,29 @@ class TestConflictingClusters:
         parsed = records(source)
         assert len(dd.conflicting_clusters(dd.cluster_records(parsed))) == 1
 
+    def test_a_springer_chapter_version_pair_is_settled_by_rule(self):
+        """What the judge must not be asked about, because it gets it wrong.
+
+        The version suffix is a documented Springer convention, and a model reading the DOI cold does
+        not know it: shown four such pairs, Qwen3.6 refused all four as "separate chapters", which would
+        have split four works the project decided are one.
+        """
+        source = (entry("v1", title="Use of AI in Singapore Education: Overview", author="Zhao, L.",
+                        year="2026", doi="10.1007/978-981-96-3901-4_5-1")
+                  + entry("v2", title="Use of AI in Singapore Education: Overview", author="Zhao, L.",
+                          year="2026", doi="10.1007/978-981-96-3901-4_5-2"))
+        parsed = records(source)
+        assert dd.conflicting_clusters(dd.cluster_records(parsed)), \
+            "the pair must reach the conflict list at all, or the exclusion is not what is being tested"
+        assert dd.settled_by_rule(*parsed)
+
+    def test_an_ordinary_doi_disagreement_is_not_settled_by_rule(self):
+        source = (entry("a", title="A Study of Learning Analytics", author="Smith, Jane", year="2024",
+                        doi="10.1145/3587103.3594165")
+                  + entry("b", title="A study of learning analytics", author="Smith, Jane", year="2024",
+                          doi="10.1016/j.softx.2023.101578"))
+        assert not dd.settled_by_rule(*records(source))
+
     def test_a_cluster_that_agrees_is_not_flagged(self):
         source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x")
                   + entry("b", title="A study of learning analytics", doi="10.1234/x"))

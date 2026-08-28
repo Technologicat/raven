@@ -132,6 +132,12 @@ def repair_record(raw: str) -> str | None:
     an entry wins. The parser is the oracle. A wrong proposal fails to parse and costs nothing, which is
     what lets the proposing side stay a heuristic.
 
+    **The oracle is asked a structural question**, with the name splitting off, because a record can carry
+    two unrelated faults and repairing one is not failing at the other. Whether the result then reads
+    under Raven's full chain is a separate question, and the caller's — `raven.papers.fixbib` asks it, so
+    that a record whose braces are now balanced and whose *author* BibTeX cannot express is reported for
+    the author rather than for the braces it no longer has a problem with.
+
     Returning `None` means no proposal parsed, and the caller should treat the record as it did before —
     a record that lost a field value's *terminator*, rather than gaining a stray literal, lands here, and
     reporting it is more honest than inventing the missing brace.
@@ -145,7 +151,7 @@ def repair_record(raw: str) -> str | None:
     # level itself, which is a decision an application gets to make and a library does not.
     for candidate in common_utils.bibtex_brace_repair_candidates(raw):
         try:
-            library = parse_string(candidate)
+            library = parse_string(candidate, split_names=False)
         except Exception:  # noqa: BLE001 -- a repair that breaks the parser is just a failed repair
             continue
         if library.entries:
@@ -309,7 +315,10 @@ def repair_duplicate_field_keys(raw: str, maybe_duplicate_keys: set[str] | None 
     them keeps every character, in a field that standard BibTeX tools can read, and leaves the result
     plainly inspectable by whoever wants to split it again.
 
-    Returning `None` means the record does not scan, or names no field twice.
+    Returning `None` means the record does not scan, names no field twice, or does not read back as an
+    entry once merged. As in `repair_record`, that last check is structural — a record that still fails
+    for an unrelated reason has still had its repeated fields merged, and saying which fault remains is
+    the caller's job.
     """
     spans = _field_spans(raw)
     if not spans:
@@ -344,7 +353,7 @@ def repair_duplicate_field_keys(raw: str, maybe_duplicate_keys: set[str] | None 
     # The parser is the oracle, exactly as in `repair_record`: a repair that does not read back as an
     # entry is a failed repair, whatever the scanner made of the text.
     try:
-        library = parse_string(candidate)
+        library = parse_string(candidate, split_names=False)
     except Exception:  # noqa: BLE001 -- a repair that breaks the parser is just a failed repair
         return None
     return candidate if library.entries else None

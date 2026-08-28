@@ -435,8 +435,22 @@ class TestRepairDuplicateFieldKeys:
         assert repair_duplicate_field_keys("@article{k,\n  title = {A Study},\n}\n") is None
 
     def test_a_repair_that_does_not_read_back_as_an_entry_is_refused(self):
-        # Merging the notes leaves an author BibTeX cannot express — three commas where it allows two —
-        # so the record still does not parse. Without the parser as the oracle this would return text
-        # that looks repaired and is not.
-        raw = self.REPEATED.replace("  year = {2024},\n", "  author = {Bloggs, PhD, MSc, Joan},\n")
+        # Nothing closes the value, so no merge can produce an entry and the oracle says so.
+        raw = "@article{k,\n  annote = {a},\n  annote = {unterminated {value,\n"
         assert repair_duplicate_field_keys(raw) is None
+
+    def test_an_unrelated_fault_does_not_veto_a_good_repair(self):
+        """The oracle asks whether the *edit* worked, not whether the record is now perfect.
+
+        This record carries two independent faults: repeated fields, and an author BibTeX cannot express
+        — three commas where it allows two. Merging the fields is a complete repair of the first, and
+        judging it against a parse that also splits names would throw it away for the second. Whether
+        the result reads under Raven's full chain is the caller's question; `raven.papers.fixbib` asks
+        it, and reports the author.
+        """
+        raw = self.REPEATED.replace("  year = {2024},\n", "  author = {Bloggs, PhD, MSc, Joan},\n")
+        repaired = repair_duplicate_field_keys(raw)
+        assert repaired is not None
+        assert parse_string(repaired, split_names=False).entries[0]["annote"] == "First note\nSecond note"
+        # ...and the second fault is untouched, so the record still does not read with names split.
+        assert len(parse_string(repaired).failed_blocks) == 1

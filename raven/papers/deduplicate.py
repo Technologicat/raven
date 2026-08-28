@@ -54,7 +54,7 @@ __all__ = ["PREPRINT_DOI_PREFIXES", "GENERIC_TITLES", "MAX_YEAR_DRIFT",
            "Cluster", "cluster_records",
 
            "TITLE_SIMILARITY", "JUDGE_BATCH", "JUDGE_INSTRUCTIONS",
-           "fuzzy_candidates", "conflicting_clusters", "judge_batch", "judge_pairs",
+           "fuzzy_candidates", "settled_by_rule", "conflicting_clusters", "judge_batch", "judge_pairs",
 
            "AUDIT_COLUMNS", "AuditRow", "merge_cluster", "deduplicate", "write_audit",
 
@@ -646,6 +646,28 @@ def fuzzy_candidates(records: list[Record], clusters: list[Cluster]) -> list[tup
     return sorted(candidates, key=lambda pair: (pair[0].index, pair[1].index))
 
 
+def settled_by_rule(a: Record, b: Record) -> bool:
+    """Whether a DOI disagreement between two records is one the project has already decided.
+
+    True where either DOI carries a Springer living-reference chapter version — `..._12-1` against
+    `..._12-2`, or a versioned chapter against the book chapter it became. Those are one work, the higher
+    version preferred, which is the same thing `raven.papers.utils.deduplicate_arxiv_ids` does with arXiv
+    versions; the suffix is a documented convention rather than an inference.
+
+    Used to keep such a pair away from the judge, and that is a correction to an earlier expectation
+    rather than a precaution. The design predicted a model would simply agree with the rule, so asking
+    was merely wasteful. Measured against a real corpus on 2026-08-28 it does not agree: Qwen3.6 refused
+    all four version pairs it was shown, reasoning that "different DOI suffixes indicate separate
+    chapters" — fluent, plausible, and wrong in exactly the way a documented convention is invisible to
+    someone reading the string cold. It would have split four works the project had decided are one.
+
+    The general form is worth keeping in view when adding to what the judge sees: a rule that encodes a
+    convention is not a rule a model can be expected to rediscover from the data, so a question already
+    answered by one should not be asked.
+    """
+    return a.chapter_version is not None or b.chapter_version is not None
+
+
 def conflicting_clusters(clusters: list[Cluster]) -> list[Cluster]:
     """Merged clusters whose records do not agree on a DOI.
 
@@ -818,14 +840,19 @@ def _apply_judge(records: list[Record], clusters: list[Cluster], opts) -> list[C
     from ..librarian import config as librarian_config, llmclient
 
     fuzzy = fuzzy_candidates(records, clusters)
-    conflicts = []
+    conflicts, settled = [], 0
     for cluster in conflicting_clusters(clusters):
         base = cluster.records[0]
         for other in cluster.records[1:]:
-            if other.doi and base.doi and other.doi != base.doi:
-                conflicts.append((base, other, "conflict"))
+            if not (other.doi and base.doi and other.doi != base.doi):
+                continue
+            if settled_by_rule(base, other):
+                settled += 1
+                continue
+            conflicts.append((base, other, "conflict"))
     pairs = [(a, b, "fuzzy") for a, b in fuzzy] + conflicts
-    print(f"judge: {len(fuzzy)} near-miss pair(s), {len(conflicts)} DOI-disagreement pair(s)")
+    print(f"judge: {len(fuzzy)} near-miss pair(s), {len(conflicts)} DOI-disagreement pair(s)"
+          + (f", {settled} settled by rule and not asked about" if settled else ""))
     if not pairs:
         return clusters
 

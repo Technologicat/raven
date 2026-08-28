@@ -118,16 +118,28 @@ class TestRepairDuplicateFieldKeys:
         assert [e.key for e in bibtex.parse_string(repaired).entries] == ["good", "repeated", "alsogood"]
         assert repaired.startswith(GOOD) and repaired.endswith(GOOD.replace("good", "alsogood"))
 
-    def test_a_record_broken_twice_over_is_reported_rather_than_half_repaired(self):
-        # A ProQuest record whose author carries degrees inline. Merging the notes is not enough: BibTeX
-        # gives a name at most two commas (`von Last, Jr, First`) and this one uses three, so the record
-        # still does not parse and the honest outcome is to leave it and say why.
+    def test_a_record_broken_twice_over_is_repaired_as_far_as_it_goes_and_reported_for_the_rest(self):
+        """A ProQuest record whose author also carries degrees inline — two unrelated faults in one.
+
+        Merging the notes is a complete repair of the fault it addresses, and the record still does not
+        read, because BibTeX gives a name at most two commas (`von Last, Jr, First`) and this one uses
+        three. Both halves matter: the merge is kept, so the user does not have to redo it by hand after
+        fixing the name, and the report names *the name* — the fault that is actually left — rather than
+        the repeated fields, which the tool has just fixed and which would send them looking for
+        something that is no longer there.
+        """
         source = REPEATED.replace("    year = {2022},\n",
                                   "    author = {Bloggs, PhD, MSc, Joan},\n    year = {2022},\n")
         repaired, recovered, unrecovered = repair_bibtex(source)
+
         assert recovered == []
         assert len(unrecovered) == 1 and unrecovered[0].key == "repeated"
-        assert repaired == source
+        assert unrecovered[0].kind == KIND_UNREADABLE
+        assert "comma" in unrecovered[0].detail.lower()
+
+        assert repaired != source, "the repair the tool could make must survive into the output"
+        assert "Last updated - 2024-04-23" in repaired, "and it must be the merge, not some other edit"
+        assert "author = {Bloggs, PhD, MSc, Joan}" in repaired, "with the fault it cannot fix untouched"
 
     def test_the_two_faults_are_told_apart_in_one_file(self):
         repaired, recovered, unrecovered = repair_bibtex(BROKEN + "\n" + REPEATED)
