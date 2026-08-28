@@ -6,8 +6,6 @@ __all__ = ["get_available_devices",
 
            "DEFAULT_FRAME_LENGTH",
            "DEFAULT_VU_PEAK_HOLD",
-           "DEFAULT_SILENCE_THRESHOLD",
-           "DEFAULT_AUTOSTOP_TIMEOUT",
            "instance",
            "initialize",
            "require"]
@@ -29,7 +27,13 @@ from unpythonic.env import env
 
 from .. import bgtask
 
+from . import silencegate
 from . import utils as audio_utils
+
+# Default audio recorder settings. The silence and autostop defaults live with the gate that reads them,
+# in `raven.common.audio.silencegate`.
+DEFAULT_FRAME_LENGTH = 512  # samples at device default sample rate
+DEFAULT_VU_PEAK_HOLD = 1.0  # seconds
 
 # `pygame` doesn't support recording (although it can *list*
 # which capture devices it sees), so Raven uses `pvrecorder`
@@ -121,12 +125,13 @@ class Recorder:
 
                              See `raven.common.audio.utils.linear_to_dBFS` for explanation of dBFS.
 
-                             If `None`, autodetect background noise level from start of audio,
-                             and set the silence threshold to `background_noise + 6dB`.
+                             If `None`, autodetect background noise level from the first
+                             `silencegate.DEFAULT_SILENCE_MEASUREMENT_TIME` seconds of audio, and set
+                             the silence threshold to `background_noise + silencegate.DEFAULT_SILENCE_MARGIN` dB.
 
-                             The idea of using the first 1/20s of audio for silence level detection
-                             is that when a human presses the GUI button to start recording, they
-                             don't typically start speaking straight away, but after a very short pause.
+                             The idea of measuring the start of the audio is that when a human presses
+                             the GUI button to start recording, they don't typically start speaking
+                             straight away, but after a very short pause.
 
                              However, if the audio input has a noise gate, so that it only actually
                              starts capturing audio when a threshold level is exceeded (and sends zeroes
@@ -137,6 +142,11 @@ class Recorder:
                             When specified, automatically stop recording if the input audio level
                             stays under `silence_threshold` for this long (i.e. we then consider
                             that the user has stopped speaking).
+
+        `silence_threshold`, `autostop_timeout` and `vu_peak_hold` are plain attributes, and each is
+        re-read while a recording runs — so a GUI can offer them as live controls. Changing
+        `silence_threshold` after an autodetection has completed overrides the detected value;
+        setting it back to `None` returns to it, rather than measuring again.
         """
         silence_threshold_msg = f"{silence_threshold:0.2f}dBFS" if silence_threshold is not None else "autodetection"
         logger.info("Recorder.__init__: Initializing audio recorder.")
@@ -156,7 +166,6 @@ class Recorder:
                                               device_index=device_names.index(device_name))
 
         self.sample_rate = None  # sample rate (Hz) of last recording
-        self._start_timestamp = None  # recording start time, for initial background noise detection
 
         self.on_vu_update = None  # available to be populated later by user with `connect_vu_readout`
 
@@ -214,10 +223,13 @@ class Recorder:
                     self.data = None
                     self.recorder.start()
                     self.sample_rate = self.recorder.sample_rate  # read-only property; not sure if it's available when not recording, so let's be safe.
-                    silence_level_available = False
-                    silence_level_dBFS = -90.0
-                    silence_measurement_timeout = 0.1  # seconds
-                    self._start_timestamp = self._vu_last_peak_timestamp = last_signal_timestamp = time.monotonic_ns()  # timestamp after the recorder is really up and running
+                    # The gate is made fresh per recording, and its settings are refreshed from ours on
+                    # every frame — so a threshold moved while the user is speaking takes effect on the
+                    # next frame, which is what a live control in the GUI needs.
+                    gate = silencegate.SilenceGate(threshold=self.silence_threshold,
+                                                   autostop_timeout=self.autostop_timeout,
+                                                   name=f"instance {task_env.task_name}")
+                    self._vu_last_peak_timestamp = time.monotonic_ns()  # timestamp after the recorder is really up and running
 
                     logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Entering recording loop.")
                     while self.recorder.is_recording and not task_env.cancelled:
@@ -229,33 +241,14 @@ class Recorder:
                         else:
                             self.data = array
 
-                        time_now = time.monotonic_ns()
-                        if not silence_level_available:  # start of recording
-                            if self.silence_threshold is not None:  # explicitly specified silence level
-                                silence_level_dBFS = self.silence_threshold
-                                silence_level_available = True
-                                logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Silence level set by caller to {silence_level_dBFS:0.2f}dBFS.")
-                            else:  # autodetect silence level at start of recording
-                                recording_time_elapsed = (time_now - self._start_timestamp) / 10**9
-                                if recording_time_elapsed >= silence_measurement_timeout:
-                                    silence_level_raw_dBFS = audio_utils.linear_to_dBFS(np.max(np.abs(self.data)))  # all data so far!
-                                    silence_level_dBFS = silence_level_raw_dBFS + 6.0  # leave some margin to be safe, in case the very beginning was unusually silent
-                                    silence_level_available = True
-                                    logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Silence level measured from first {silence_measurement_timeout:0.6g}s of recorded audio as {silence_level_raw_dBFS:0.2f}dBFS.")
-
-                        else:  # silence_level_available:  # normal operation
-                            # _vu_instant for the current audio frame is updated by `_update_vu_readout`, above
-                            if self._vu_instant > silence_level_dBFS:
-                                last_signal_timestamp = time_now
-
-                            # Stop recording if the audio input stays silent and the autostop timeout is (enabled and) exceeded
-                            if self.autostop_timeout is not None:
-                                time_elapsed_since_last_signal = (time_now - last_signal_timestamp) / 10**9
-                                if time_elapsed_since_last_signal >= self.autostop_timeout:
-                                    logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Silence detected, autostopping. (Audio input level less than {silence_level_dBFS:0.2f}dBFS for {self.autostop_timeout:0.6g}s.)")
-                                    autostopped = True
-                                    self.stop()
-                                    break
+                        # _vu_instant for the current audio frame is updated by `_update_vu_readout`, above
+                        gate.threshold = self.silence_threshold
+                        gate.autostop_timeout = self.autostop_timeout
+                        if gate.update(self._vu_instant, time.monotonic_ns()):
+                            logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Silence detected, autostopping. (Audio input level less than {gate.effective_threshold:0.2f}dBFS for {self.autostop_timeout:0.6g}s.)")
+                            autostopped = True
+                            self.stop()
+                            break
                 finally:
                     logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Audio capture task exiting.")
                     with self._recording_state_lock:
@@ -377,12 +370,6 @@ class Recorder:
     vu = property(fget=_get_vu, doc="VU (voltage units) meter, in dbFS. Tuple `[instant, peak]`. The `instant` value is for the current audio frame, `peak` is for the last `vu_peak_hold` seconds. Read-only.")
 
 
-# Default audio recorder settings.
-DEFAULT_FRAME_LENGTH = 512  # samples at device default sample rate
-DEFAULT_VU_PEAK_HOLD = 1.0  # seconds
-DEFAULT_SILENCE_THRESHOLD = -40.0  # dBFS
-DEFAULT_AUTOSTOP_TIMEOUT = 1.5  # seconds
-
 # The default (singleton) `Recorder` instance. `None` until `initialize` is called.
 #
 # Pre-populated to `None` so that apps can read the attribute and decide whether to
@@ -395,8 +382,8 @@ instance: Optional["Recorder"] = None
 def initialize(frame_length: int = DEFAULT_FRAME_LENGTH,
                device_name: Optional[str] = None,
                vu_peak_hold: float = DEFAULT_VU_PEAK_HOLD,
-               silence_threshold: Optional[float] = DEFAULT_SILENCE_THRESHOLD,
-               autostop_timeout: Optional[float] = DEFAULT_AUTOSTOP_TIMEOUT,
+               silence_threshold: Optional[float] = silencegate.DEFAULT_SILENCE_THRESHOLD,
+               autostop_timeout: Optional[float] = silencegate.DEFAULT_AUTOSTOP_TIMEOUT,
                executor: Optional[concurrent.futures.Executor] = None) -> "Recorder":
     """Initialize the default audio recorder singleton.
 
