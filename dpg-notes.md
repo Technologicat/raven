@@ -1517,6 +1517,26 @@ The two are separate style vars rather than one because the distinction is load-
 `FrameBorderSize` bound to a *panel* would border every button inside it, and one carrying
 `ChildBorderSize` bound to a *group of buttons* would do nothing.
 
+## A disabled slider still drags; it just never commits the value
+
+Measured 2026-08-28 on DPG 2.3.1, by hand: `dpg.configure_item(slider, enabled=False)` does **not** make
+the widget inert. The handle follows the mouse for the whole drag, and snaps back to its previous value
+on release. So `enabled=False` on a slider withholds the *write*, not the *interaction*.
+
+Two things follow, and they pull in opposite directions.
+
+**It is safe.** A disabled slider cannot change what it is bound to, so an app that disables one while
+its setting is switched off is protected whether or not it also guards the callback. Raven's audio input
+panel guards anyway — its callbacks ask the recorder whether the setting is in effect rather than
+trusting the widget — because the guard also covers a *programmatic* write, and because writing code
+that depends on this would mean depending on a toolkit behaviour nobody had measured.
+
+**It reads badly.** The user drags a control, sees it move, and watches it jump back. That is worse than
+a control that does not move at all, because the movement promises something the release takes away.
+Where that matters, the alternatives are to hide the slider rather than disable it — at the cost of the
+layout moving — or to leave it enabled and let dragging it switch its own setting on, which turns a dead
+gesture into a meaningful one. Raven's panel currently accepts the snap-back.
+
 # Drawlists
 
 ## A drawlist's children are in slot 2, and slot 1 answers "nothing was drawn"
