@@ -7,9 +7,13 @@ the `raven-importer` CLI shell. The CLI entry point lives in `importer_cli.py`; 
 module stays free of argparse and logging configuration so the GUI can host it safely.
 """
 
-__all__ = ["init",
-           "start_task", "has_task", "cancel_task",
-           "result_successful", "result_cancelled", "result_errored",
+__all__ = ["result_successful",
+           "result_cancelled",
+           "result_errored",
+           "init",
+           "start_task",
+           "has_task",
+           "cancel_task",
            "import_bibtex"]
 
 import logging

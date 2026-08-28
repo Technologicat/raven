@@ -19,14 +19,14 @@ remote/local dispatch lives in `raven.client.mayberemote.TTS`.
 """
 
 __all__ = ["SAMPLE_RATE",
+           "dipthong_vowel_to_ipa",
            "TTSPipeline",
            "load_tts_pipeline",
            "get_voices",
+           "clean_timestamps",
+           "expand_phoneme_diphthongs",
            "synthesize_iter",
            "synthesize",
-           "clean_timestamps",
-           "dipthong_vowel_to_ipa",
-           "expand_phoneme_diphthongs",
            "finalize_metadata",
            "prepare",
            "prepare_cached",

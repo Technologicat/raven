@@ -7,9 +7,10 @@ This module is shared between `minichat` (command-line app) and `app` (Raven-lib
 
 __all__ = ["configured_defaults",
            "sidecar_refs_in_payload",
-           "load", "save",
            "refresh_system_prompt",
-           "backfill_sidecar_metadata"]
+           "load",
+           "backfill_sidecar_metadata",
+           "save"]
 
 import logging
 logger = logging.getLogger(__name__)

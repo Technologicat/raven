@@ -15,11 +15,16 @@ consults `os.getcwd()` for some of its answers and its argument for the rest is 
 agree, and reports a directory's contents with every entry misclassified when they do not.
 """
 
-__all__ = ["KIND_DIR", "KIND_FILE", "KIND_BROKEN_LINK",
-           "FileEntry", "SortKey",
-           "list_directory",
-           "format_size", "format_mtime", "format_kind",
-           "is_hidden"]
+__all__ = ["KIND_DIR",
+           "KIND_FILE",
+           "KIND_BROKEN_LINK",
+           "SortKey",
+           "FileEntry",
+           "is_hidden",
+           "format_size",
+           "format_kind",
+           "format_mtime",
+           "list_directory"]
 
 import ctypes
 import dataclasses

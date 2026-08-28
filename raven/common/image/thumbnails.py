@@ -14,7 +14,7 @@ The pipeline is managed via ``raven.common.bgtask.TaskManager`` for cooperative 
 caller moves on (a new folder, a new visible range).
 """
 
-__all__ = ["ThumbnailPipeline", "placeholder_tiles"]
+__all__ = ["placeholder_tiles", "ThumbnailPipeline"]
 
 import concurrent.futures
 import logging

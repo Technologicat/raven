@@ -21,26 +21,30 @@ Imported by `llmclient`, and not the reverse: this module reaches back into it e
 the token budget `fetch_document` has to fit its answer into.
 """
 
-__all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAMES",
-           "EXTERNAL_SOURCE_TOOL_NAMES",
-           "maybe_tool_names_for_turn",
-           "perform_tool_calls",
-           "approve_host_for_session",
+__all__ = ["TOOLS",
+           "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAMES", "EXTERNAL_SOURCE_TOOL_NAMES",
 
-           # What a tool says when it cannot do the thing. Public because the frontends and the tests
-           # recognize them: they are matched, not just displayed.
-           "CANONICAL_NOT_ON_ALLOWLIST",
-           "CANONICAL_NO_DOCUMENT_DATABASE", "CANONICAL_NO_DOCUMENT_MATCHES",
-           "CANONICAL_NO_SUCH_DOCUMENT", "CANONICAL_NOTHING_CONSULTED",
-           "CANONICAL_NO_ROOM_TO_FETCH", "CANONICAL_BAD_EXPRESSION",
+           # The tools themselves, each with the canonical text it answers with when it cannot do the
+           # thing. Those are public because the frontends and the tests *match* on them rather than only
+           # displaying them — and they are listed beside the tool they belong to, as the file defines
+           # them, which is what says which message is whose.
+           #
+           # The entrypoints are named here as well as reachable through `TOOL_ENTRYPOINTS`: the tests
+           # call them directly, and so does anything driving one tool on purpose.
+           "websearch",
+           "CANONICAL_NOT_ON_ALLOWLIST", "approve_host_for_session", "webfetch",
+           "CANONICAL_NO_DOCUMENT_DATABASE", "CANONICAL_NO_DOCUMENT_MATCHES", "search_documents",
+           "CANONICAL_NOTHING_CONSULTED", "list_consulted_documents",
+           "CANONICAL_NO_SUCH_DOCUMENT", "CANONICAL_NO_ROOM_TO_FETCH", "fetch_document",
 
            # The document helpers, which read the retriever directly rather than through a tool call.
            "document_text", "document_path", "label_documents",
 
-           # The entrypoints themselves. `TOOL_ENTRYPOINTS` is how the agent loop reaches them, but they are
-           # named here too: the tests call them directly, and so does anything driving one tool on purpose.
-           "websearch", "webfetch", "search_documents", "fetch_document",
-           "get_current_time", "calculate", "list_consulted_documents"]
+           "get_current_time",
+           "CANONICAL_BAD_EXPRESSION", "calculate",
+
+           # How the agent loop reaches all of the above.
+           "TOOL_ENTRYPOINTS", "maybe_tool_names_for_turn", "perform_tool_calls"]
 
 import logging
 logger = logging.getLogger(__name__)

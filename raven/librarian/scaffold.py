@@ -1,11 +1,13 @@
 """Scaffolding for a multi-turn conversation with automatic RAG search and tool-calling."""
 
-__all__ = ["user_turn",
-           "ai_turn", "retry_tool_calls", "action_ack", "action_stop",
+__all__ = ["action_ack", "action_stop",  # re-exported from `llmclient`
+           "user_turn",
 
            # For scripting: the prompt a turn would send, without sending it
+           "build_system_injects",  # also what the chat view shows, so the log matches what is sent
            "build_turn_prompt", "make_tool_context",
-           "build_system_injects"]  # also what the chat view shows, so the log matches what is sent
+
+           "ai_turn", "retry_tool_calls"]
 
 import logging
 logger = logging.getLogger(__name__)

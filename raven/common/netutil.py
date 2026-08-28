@@ -3,11 +3,12 @@
 This module is licensed under the 2-clause BSD license.
 """
 
-__all__ = ["multipart_x_mixed_replace_payload_extractor",
-           "pack_parameters_into_json_file_attachment", "unpack_parameters_from_json_file_attachment",
-           "extract_urls", "url_host", "host_matches_allowlist",
+__all__ = ["Aborted", "Abort",  # cancelling a request that is blocked in a read
 
-           "Abort", "Aborted"]
+           "multipart_x_mixed_replace_payload_extractor",
+           "pack_parameters_into_json_file_attachment", "unpack_parameters_from_json_file_attachment",
+
+           "extract_urls", "url_host", "host_matches_allowlist"]
 
 import _socket  # the C-level socket type, for the one close Python's wrapper will not perform; see `Abort.abort`
 import io

@@ -26,9 +26,7 @@ Mental model, worth having before reaching for this:
     dedicated thread of their own, not here. This is a work queue, not a host for actors.
 """
 
-__all__ = ["TaskManager",
-           "ManagedTask", "make_managed_task",
-           "status_stopped", "status_pending", "status_running"]
+__all__ = ["status_stopped", "status_pending", "status_running", "TaskManager", "ManagedTask", "make_managed_task"]
 
 import logging
 logger = logging.getLogger(__name__)

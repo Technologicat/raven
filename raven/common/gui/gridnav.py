@@ -13,7 +13,7 @@ always operated on a flat list of visible indices, with two-dimensional movement
 a delta of one row's width. Worth renaming when something else here is being touched anyway.
 """
 
-__all__ = ["resolve_nav_target", "resolve_undo_nav_target", "reanchor_cursor"]
+__all__ = ["resolve_nav_target", "reanchor_cursor", "resolve_undo_nav_target"]
 
 import bisect
 from typing import Any, List, Optional, Sequence, Set

@@ -15,8 +15,13 @@ laptops have enough RAM for this not to be an issue with the dataset sizes neede
 QwQ-32B wrote a very first initial rough draft outline, from which this was then manually coded.
 """
 
-__all__ = ["split_into_subqueries", "score_sharpness",
-           "init", "shutdown", "HybridIR", "HybridIRFileSystemEventHandler", "setup"]
+__all__ = ["split_into_subqueries",
+           "score_sharpness",
+           "HybridIR",
+           "init",
+           "shutdown",
+           "HybridIRFileSystemEventHandler",
+           "setup"]
 
 import logging
 logger = logging.getLogger(__name__)

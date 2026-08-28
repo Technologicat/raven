@@ -25,9 +25,10 @@ The shared sidecar mechanics (URL scheme, provenance skeleton, byte ingestion, G
     images and attached documents are seen by the mark phase.
 """
 
-__all__ = ["store_file_as_sidecar",
-           "remember_extracted_text",
-           "sidecar_to_text", "sidecar_text_if_extracted",
+__all__ = ["remember_extracted_text",
+           "store_file_as_sidecar",
+           "sidecar_to_text",
+           "sidecar_text_if_extracted",
            "sidecar_refs_in_payload"]
 
 import logging

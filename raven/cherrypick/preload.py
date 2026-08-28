@@ -10,7 +10,7 @@ they are not drawn. DPG textures are created only on ``take()``, by the
 caller (ImageView), using its texture pool for fast ``set_value`` reuse.
 """
 
-__all__ = ["PreloadCache", "donate_outgoing_image", "mip_scale_for_zoom"]
+__all__ = ["mip_scale_for_zoom", "PreloadCache", "donate_outgoing_image"]
 
 import concurrent.futures
 import logging

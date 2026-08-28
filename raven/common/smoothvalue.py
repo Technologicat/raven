@@ -20,7 +20,7 @@ the FPS-corrected value actually applied each frame (the output of
 while ``step`` varies with frame rate.
 """
 
-__all__ = ["SmoothValue", "SmoothInt", "fps_corrected_step", "CALIBRATION_FPS"]
+__all__ = ["CALIBRATION_FPS", "fps_corrected_step", "SmoothValue", "SmoothInt"]
 
 import math
 import time

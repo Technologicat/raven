@@ -8,10 +8,10 @@ __all__ = ["MaybeRemoteService",
            "Dehyphenator",
            "Embedder",
            "NLP",
-           "Postprocessor",
-           "STT",
            "Translator",
+           "STT",
            "TTS",
+           "Postprocessor",
            "Upscaler"]
 
 import logging

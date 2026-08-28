@@ -1,13 +1,14 @@
 """General framework for DPG GUI animations."""
 
-__all__ = ["Animator", "animator",  # controller and its global instance (need only one per app)
+__all__ = ["action_continue", "action_finish", "action_cancel",  # return values for `render_frame`
+           "Animator", "animator",  # controller and its global instance (need only one per app)
            "Animation", "Overlay",  # base classes
            "Dimmer",  # overlays
            "WidgetFlash", "flash_button", "highlight_widget", "set_text_under_flash",  # the flash animation, its two conveniences, and writing to a widget one has borrowed
-           "SmoothScrolling", "PulsatingColor",  # animations
-           "ScrollEndFlasher", "WHEEL_SETTLE_FRAMES",  # animated overlay, and the wheel-settle delay it uses
-           "pulsation_envelope", "pulsating_alpha",  # utilities: the curve pulsating animations follow, and the alpha it yields
-           "action_continue", "action_finish", "action_cancel"]  # return values for `render_frame`
+           "SmoothScrolling",  # animations
+           "pulsating_alpha", "pulsation_envelope",  # utilities: the alpha a pulsating animation yields, and the curve it follows
+           "PulsatingColor",  # ...which this one uses
+           "WHEEL_SETTLE_FRAMES", "ScrollEndFlasher"]  # the wheel-settle delay, and the animated overlay that uses it
 
 import logging
 logger = logging.getLogger(__name__)

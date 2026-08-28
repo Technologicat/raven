@@ -14,11 +14,12 @@ rewrites the past of every thread that passed through, and a correction stored a
 mistake standing in every thread that does not happen to take the new branch.
 """
 
-__all__ = ["SIDECAR_SUFFIX", "LEGACY_SIDECAR_SUFFIX",
-           "rename_datastore",
-           "sidecar_filename_for",
+__all__ = ["sidecar_filename_for",
+           "Forest",
 
-           "Forest", "PersistentForest"]
+           "SIDECAR_SUFFIX", "LEGACY_SIDECAR_SUFFIX",  # ...and the persistence they belong to
+           "rename_datastore",
+           "PersistentForest"]
 
 import logging
 logger = logging.getLogger(__name__)

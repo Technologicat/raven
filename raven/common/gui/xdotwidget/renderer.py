@@ -4,7 +4,7 @@ This module provides rendering functions that draw graph shapes using
 DearPyGUI's drawlist primitives.
 """
 
-__all__ = ["render_graph", "color_to_dpg", "set_dark_mode", "get_dark_mode"]
+__all__ = ["set_dark_mode", "get_dark_mode", "color_to_dpg", "render_graph"]
 
 import colorsys
 import math

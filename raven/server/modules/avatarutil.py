@@ -3,11 +3,15 @@
 This module is licensed under the 2-clause BSD license.
 """
 
-__all__ = ["posedict_keys", "posedict_key_to_index",
+__all__ = ["posedict_keys",
+           "posedict_key_to_index",
+           "supported_cels",
            "load_emotion_presets",
-           "posedict_to_pose", "pose_to_posedict",
-           "torch_load_rgba_image", "torch_image_to_numpy",
-           "supported_cels", "scan_addon_cels"]
+           "posedict_to_pose",
+           "pose_to_posedict",
+           "scan_addon_cels",
+           "torch_load_rgba_image",
+           "torch_image_to_numpy"]
 
 import logging
 logger = logging.getLogger(__name__)

@@ -10,7 +10,7 @@ The split follows the drawing order, which is why there are two hooks rather tha
 badges go on top (`draw_overlay`).
 """
 
-__all__ = ["TriageGrid", "FilterMode"]
+__all__ = ["FilterMode", "TriageGrid"]
 
 import logging
 from collections.abc import Mapping, Sequence

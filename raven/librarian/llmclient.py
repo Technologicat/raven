@@ -10,34 +10,40 @@ NOTE for oobabooga/text-generation-webui users:
 If you want to see the final prompt in instruct or chat mode, start your server in `--verbose` mode.
 """
 
-__all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAMES",
+__all__ = [# Re-exported from `llmtools`, which owns them
+           "TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAMES",
+           "perform_tool_calls",
+           "approve_host_for_session",
 
+           "action_ack", "action_stop",  # what a turn's observer may answer
+
+           # Reaching a backend and asking what it has
            "list_models",
            "test_connection",
            "detect_backend_flavor",
            "setup",
-           "configure",
 
            # For frontends that open a window whether or not a backend answers
-           "connect", "reconnect", "backend_status", "describe_backend_status",
            "backend_unreachable", "backend_has_no_model", "backend_ready",
+           "connect", "describe_backend_status", "backend_status", "reconnect",
+           "configure",
 
+           # Counting what a prompt costs
            "count_tokens",
            "image_token_cost",
-           "count_branch_tokens", "prompt_size_report_looks_whole",
+           "count_branch_tokens",
 
+           # ...and fitting things into what is left
            "budget_for_fetched_text",
            "truncate_middle",
            "fit_text_to_token_budget",
            "fit_attachments_to_context",
 
+           # Talking to the model
            "StreamParser",
-           # For scripting: the wire form of what a turn would send
-           "serialize_history_for_wire",
-           "invoke", "prefill", "action_ack", "action_stop",
-           "make_console_progress_handler",
-           "perform_tool_calls",
-           "approve_host_for_session"]
+           "serialize_history_for_wire",  # for scripting: the wire form of what a turn would send
+           "invoke", "prompt_size_report_looks_whole", "prefill",
+           "make_console_progress_handler"]
 
 import logging
 logger = logging.getLogger(__name__)

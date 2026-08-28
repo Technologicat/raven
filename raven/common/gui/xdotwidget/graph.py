@@ -14,10 +14,20 @@ Adapted from xdottir (https://github.com/Technologicat/xdottir),
 which in turn was adapted from XDot by José Fonseca.
 """
 
-__all__ = ["Pen", "Shape", "TextShape", "EllipseShape", "PolygonShape",
-           "LineShape", "BezierShape", "CompoundShape",
-           "Element", "Node", "Edge", "Graph",
-           "mix_colors", "tessellate_bezier"]
+__all__ = ["mix_colors",
+           "tessellate_bezier",
+           "Pen",
+           "Shape",
+           "TextShape",
+           "EllipseShape",
+           "PolygonShape",
+           "LineShape",
+           "BezierShape",
+           "CompoundShape",
+           "Element",
+           "Node",
+           "Edge",
+           "Graph"]
 
 from itertools import chain
 from typing import Dict, List, Optional, Set, Tuple

@@ -8,9 +8,7 @@ Similarly one may be configured as "Cancel", and pressing Esc (while the message
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["modal_dialog",
-           "modal_dialog_window_exists",
-           "is_visible"]
+__all__ = ["modal_dialog_window_exists", "is_visible", "modal_dialog"]
 
 from typing import Callable, List, Optional, Union
 

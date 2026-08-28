@@ -9,9 +9,9 @@ __all__ = ["tts_info",
            "tts_prepare",
            "tts_prepare_cached",
            "tts_prepare_decoded_cached",
-           "play_encoded_with_avatar_lipsync",
            "tts_speak",
-           "tts_speak_lipsynced"]
+           "tts_speak_lipsynced",
+           "play_encoded_with_avatar_lipsync"]
 
 import logging
 logger = logging.getLogger(__name__)

@@ -35,9 +35,7 @@ handlers reporting an error concurrently would race over it.
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["is_available", "install", "uninstall",
-           "DropRule", "make_router",
-           "by_extension", "is_directory", "all_of"]
+__all__ = ["is_available", "install", "uninstall", "by_extension", "is_directory", "all_of", "DropRule", "make_router"]
 
 import logging
 logger = logging.getLogger(__name__)

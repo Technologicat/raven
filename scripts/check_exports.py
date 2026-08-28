@@ -82,10 +82,18 @@ def definition_order(tree: ast.Module) -> list[str]:
     return order
 
 
-def has_star_import(tree: ast.Module) -> bool:
-    """Whether the module does `from x import *`, which hides where its names came from."""
-    return any(isinstance(node, ast.ImportFrom) and any(alias.name == "*" for alias in node.names)
+def supplies_names_dynamically(tree: ast.Module) -> bool:
+    """Whether the module can produce names this script cannot see, making "undefined" unanswerable.
+
+    Two ways. `from x import *` hides where a name came from. A module-level `__getattr__` (PEP 562)
+    *manufactures* one on access — `xdotwidget` uses it to hand out its widget class without importing
+    DearPyGui when the package is imported, which is a good reason and not something to report.
+    """
+    star = any(isinstance(node, ast.ImportFrom) and any(alias.name == "*" for alias in node.names)
                for node in ast.walk(tree))
+    module_getattr = any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "__getattr__"
+                         for node in tree.body)
+    return star or module_getattr
 
 
 def public_definitions(tree: ast.Module) -> list[str]:
@@ -114,7 +122,7 @@ def check(path: pathlib.Path, strict: bool) -> tuple[int, int]:
     problems = notices = 0
     order = definition_order(tree)
 
-    if not has_star_import(tree):  # a star import makes "where did this name come from" unanswerable
+    if not supplies_names_dynamically(tree):
         for name in exported:
             if name not in set(order):
                 print(f"  UNDEFINED {path}: `__all__` names {name!r}, which the module does not define or import")

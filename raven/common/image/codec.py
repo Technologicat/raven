@@ -10,8 +10,7 @@ need a specific channel layout (e.g. RGBA) apply a normalization step
 separately via `raven.common.image.utils.ensure_rgba`.
 """
 
-__all__ = ["IMAGE_EXTENSIONS", "encode", "decode",
-           "has_alpha_channel", "has_transparency"]
+__all__ = ["IMAGE_EXTENSIONS", "has_alpha_channel", "has_transparency", "decode", "encode"]
 
 import ctypes.util
 import io

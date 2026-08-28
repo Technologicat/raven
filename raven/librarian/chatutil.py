@@ -1,6 +1,14 @@
 """Utilities for formatting LLM chat messages."""
 
-__all__ = ["format_message_number",
+__all__ = [# The parts a message is made of, and reading them back
+           "text_content_part",
+           "image_content_part",
+           "text_file_content_part",
+           "normalize_content",
+           "content_to_text",
+
+           # The formatters
+           "format_message_number",
            "format_persona",
            "format_message_heading",
            "format_date_now", "format_loaded_model", "format_time_now",
@@ -16,21 +24,19 @@ __all__ = ["format_message_number",
 
            "default_formatters",  # the nine above that the model reads, as a namespace for `settings`
 
+           # Building messages and nodes
            "make_timestamp",
-           "text_content_part",
-           "image_content_part",
-           "text_file_content_part",
-           "normalize_content",
-           "content_to_text",
            "create_message_from_parts",
            "create_chat_message",
            "create_initial_system_message",
            "create_payload",
+
+           # Walking and mending a chat
            "linearize_chat", "descend_to_latest",
            "compute_auto_allowed_hosts",
            "upgrade_datastore",
            "remove_persona_from_start_of_line",
-           "get_node_message_text_without_persona", "latest_user_message_text",
+           "latest_user_message_text", "get_node_message_text_without_persona",
            "scrub"]
 
 import logging

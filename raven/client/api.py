@@ -28,7 +28,19 @@ in `raven.client.config`.
 This module is licensed under the 2-clause BSD license.
 """
 
-__all__ = ["initialize",
+__all__ = [# Re-exported: TTS was the one subsystem large enough to want its own module, and these come
+           # from it rather than from here. The rest of the client's remote mode is inlined below.
+           "tts_info",
+           "tts_list_voices",
+           "tts_prepare",
+           "tts_prepare_cached",
+           "tts_prepare_decoded_cached",
+           "tts_speak", "tts_speak_lipsynced",
+           "tts_warmup",
+
+           "require",  # ...and this one from `util`, beside `initialize`
+
+           "initialize",
            "raven_server_available", "test_connection",
            "tts_server_available",
            "modules",
@@ -52,17 +64,8 @@ __all__ = ["initialize",
            "stt_info",
            "stt_transcribe", "stt_transcribe_file", "stt_transcribe_array",
            "translate_translate",
-           "tts_info",
-           "tts_list_voices",
-           "tts_prepare",
-           "tts_prepare_cached",
-           "tts_prepare_decoded_cached",
-           "tts_speak", "tts_speak_lipsynced",
-           "tts_warmup",
            "websearch_search",
-           "webfetch_fetch",
-
-           "require"]
+           "webfetch_fetch"]
 
 import logging
 logger = logging.getLogger(__name__)
