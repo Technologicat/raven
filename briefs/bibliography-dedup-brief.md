@@ -343,8 +343,76 @@ parts and which separate credentials. But nothing is lost to it any more.
 
 ## Open
 
-- **Whether the Visualizer importer should learn the same repair.** It still loses these records with a
-  misleading reason. Deliberately left out to keep the blast radius small; raised, not filed.
+Kept here rather than in `TODO_DEFERRED.md` (Juha, 2026-08-28): these three are one another's context and
+belong with the work that raised them, where a flat backlog would charge attention rent from everyone who
+scans it and hand the eventual reader three entries that only make sense together.
+
+### The entity decoder in `unicodize_basic_markup` has far more gaps than the ampersand
+
+`&amp;` and `&nbsp;` were fixed today because they were what the corpus contained. They were not the only
+gaps, and the list is not close to complete: measured 2026-08-28, `common.utils.unicodize_basic_markup`
+resolves **13 of the 2125 named HTML5 entities and none of the numeric ones**. `&#8217;` — a right single
+quote, which database exports use constantly — passes straight through. The thirteen are a hand-maintained
+run of `str.replace` calls that grew one entity at a time as someone hit one.
+
+*Cost: S. Gate: none.* Juha's framing is the 4D principle — **dinky, dirty, dynamic data** — from a visiting
+lecturer at JYU: real inputs are small, messy and always moving, so a reader has to cope with the whole
+messy space rather than the part someone happened to meet.
+
+**On where the table should live**, since the worry is that one would bloat the module: **there is no table
+to ship.** `html.entities.html5` is in the standard library, all 2125 of them, and
+`bibtex.decode_html_entities` already uses it — that function costs a `import html.entities` and nothing
+else. So a JSON file or a data module would be carrying weight Python already carries.
+
+**A shared module is still worth it, for the rules rather than the data.** Decoding correctly is not a
+lookup: `&amp;` must resolve *after* every other entity or `&amp;lt;` silently becomes `<`; an entity naming
+an invisible character must not decode to one; a separator or control character must not change the line
+count. Those live in `bibtex.py` today and would have to be written a second time in `utils.py`. One
+`raven.common.text.entities` holding the decode-one-entity rule, with `bibtex` adding its BibTeX escaping
+on top and `unicodize_basic_markup` taking the plain-text form, is the shape — and it puts the entity
+handling beside `boilerplate.py`, which is the same kind of thing.
+
+Watch the ordering `unicodize_basic_markup` already depends on: it unescapes `\&` near the top, and resolves
+`&lt;`/`&gt;` *after* the `<sub>`/`<b>` passes so that markup written as entities is not turned into
+markup. A table-driven pass has to keep both.
+
+### `bibtexparser`'s writer destroys a split-name library, and upstream would take a patch
+
+`bibtexparser.write_string` renders an unrecognized value with `repr()`, so a library read through the
+name-splitting middleware comes back out carrying `author = {[NameParts(first=['Jane'], ...)]}` — valid
+BibTeX with every author gone, and nothing logged. `bibtex.write_string` works around it locally and pins
+the behaviour with a test.
+
+*Cost: S to report, ? to land. Gate: none. Separate session.* Juha's read is that the maintainers are
+responsive, so this is worth a minimal reproduction and a PR rather than a permanent local workaround. Two
+candidate fixes to offer: raise on a value the writer cannot serialize, or apply the inverse middleware
+automatically. The first is the smaller ask and fixes the silence, which is the actual harm.
+
+### Sanitization symmetry: which importers clean, and which demand a clean file
+
+**Raven has no uniform stance, and the asymmetry is now visible.** The Visualizer's importer sanitizes the
+`.bib` it reads — dehyphenation, markup conversion, and as of today boilerplate stripping. The arXiv chain
+does its own cleaning. `raven-deduplicate` deliberately does none, on the principle settled today that
+repair belongs in `raven-fixbib`. Three importers, three answers.
+
+*Cost: M. Gate: a decision, not a measurement.* Both ends are defensible and the middle is not:
+
+- **Every importer sanitizes.** A user drops in whatever a database gave them and it works. The cost is
+  that no tool's output is a faithful record of its input, which is exactly what the deduplicator's audit
+  depends on being able to claim.
+- **No importer sanitizes; `raven-fixbib` is a required first step.** Honest, auditable, and one more
+  command. Juha's observation is that this implies a small GUI for people who will not touch a CLI —
+  which is a real piece of work, not a footnote, and it should be counted as part of the cost of choosing
+  this branch rather than discovered afterwards.
+
+Worth noting the two are not symmetric in reversibility: sanitizing at read time leaves the user's file
+alone and can be revisited, while a required `fixbib` step rewrites their bibliography once and for good.
+
+### Smaller, and not blocking anything
+
+- **Whether the Visualizer importer should learn the duplicate-field-key repair.** It still loses those
+  records with a misleading reason. Deliberately left out to keep the blast radius small; raised, not
+  filed. This is a sub-case of the sanitization question above — answering that answers this.
 
 - **Whether `publisher_stopwords` can now be trimmed.** It exists to keep publisher names out of the word
   cloud, and with the notice removed at import there is much less for it to catch. Stale entries are

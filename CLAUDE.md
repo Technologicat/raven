@@ -643,6 +643,16 @@ This coupling limits TTS engine choices (most don't expose timestamped phoneme d
 
 Target ~700 lines per module as a guideline, not a hard limit — some modules can be longer when appropriate (e.g. lots of simple related code).
 
+**The number came from the macro projects, and it does not transfer unchanged.** `mcpyrate` and
+`unpythonic` are dense in a way Raven mostly is not: there, 700 lines is plenty because the lines are
+Kolmogorov-hard, and a longer module really is a sign that something wants splitting. Raven's frontends
+and tools are the opposite — long stretches of simple related code, and prose. So a module over the
+guideline is a prompt to look, not a finding: ask whether the *layering* has gone, which is the property
+that made `raven/librarian/` the target style, rather than whether the line count has. `chat_controller.py`
+is ~5k lines and keeps its layers, so it is fine where it is; `raven/papers/deduplicate.py` is ~1.1k of
+which a third is docstrings, and splitting it would move prose around rather than simplify anything.
+(Juha, 2026-08-28, settling exactly this question about the deduplicator.)
+
 - `raven/visualizer/app.py` - ~1.9k lines. The split into `info_panel`, `selection`, `plotter`, `annotation`, `word_cloud`, `entry_renderer` and `app_state` has landed; what remains is ordinary size rather than a god object. See `raven/visualizer/CLAUDE.md` for the module map.
 - `raven/visualizer/info_panel.py` - ~1.5k lines, the largest of the extracted modules; a candidate for further splitting, but not urgent.
 - `raven/visualizer/importer.py` - ~1.3k lines, pipeline architecture, lower priority but could benefit from stage separation
