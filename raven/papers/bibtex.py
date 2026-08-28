@@ -5,13 +5,21 @@ arXiv API search results.
 
 Reading: `parse_file` and `parse_string` wrap `bibtexparser` with the one middleware chain Raven reads
 BibTeX through, so every consumer gets the same normalization.
+
+Repairing: `repair_record` and `repair_duplicate_field_keys` each rescue one record `bibtexparser`
+refused, for the two reasons a real-world export gives it — braces that do not balance, and a field name
+that occurs twice. Both take the record's text and hand back text, so a caller may parse the result or
+write it to a file; `raven.papers.fixbib` does the latter.
 """
 
 from __future__ import annotations
 
-__all__ = ["parse_file", "parse_string", "repair_record",
+__all__ = ["parse_file", "parse_string",
+           "repair_record", "repair_duplicate_field_keys",
+
            "entries_to_bibtex"]
 
+import collections
 import pathlib
 import re
 
@@ -96,6 +104,203 @@ def repair_record(raw: str) -> str | None:
         if library.entries:
             return candidate
     return None
+
+
+# The two delimiter pairs a field value can wear. A value in neither is bare, and ends at the separator.
+_FIELD_DELIMITERS = {"{": "}", '"': '"'}
+_FIELD_NAME_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_+:.-]*")
+
+
+def _skip_whitespace(raw: str, i: int) -> int:
+    while i < len(raw) and raw[i].isspace():
+        i += 1
+    return i
+
+
+def _scan_value(raw: str, i: int) -> int | None:
+    """Return the offset one past the field value beginning at `i`, or `None` if it never ends.
+
+    Handles the three shapes a value comes in — brace-delimited, quote-delimited, and bare — and the `#`
+    concatenation that may join several of them. A backslash escapes the character after it, so the `\\}`
+    that `repair_record` writes does not close a value.
+    """
+    while True:
+        delimiter = _FIELD_DELIMITERS.get(raw[i] if i < len(raw) else "")
+        if delimiter is None:  # bare value: a number, or a string macro name
+            while i < len(raw) and raw[i] not in ",}#":
+                i += 1
+        elif delimiter == '"':
+            i += 1
+            while i < len(raw) and raw[i] != '"':
+                i += 2 if raw[i] == "\\" else 1
+            if i >= len(raw):
+                return None
+            i += 1
+        else:
+            depth = 0
+            while i < len(raw):
+                if raw[i] == "\\":
+                    i += 2
+                    continue
+                if raw[i] == "{":
+                    depth += 1
+                elif raw[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        i += 1
+                        break
+                i += 1
+            else:
+                return None
+
+        after = _skip_whitespace(raw, i)
+        if after < len(raw) and raw[after] == "#":  # concatenation: another part follows
+            i = _skip_whitespace(raw, after + 1)
+            continue
+        return i
+
+
+def _field_spans(raw: str) -> list[tuple[str, int, int, int, int]] | None:
+    """Locate the fields of the single BibTeX record `raw`. `None` if it does not scan.
+
+    Each field is reported as `(lowercased key, name start, name end, value start, value end)`, in the
+    order they appear. Offsets are into `raw`, and none of them includes the comma that separates one
+    field from the next — so a span can be cut out, or its value replaced, without disturbing the
+    punctuation around it.
+
+    This is a scanner rather than a parse, because every caller here has a record `bibtexparser` has
+    already refused; the point is to locate structure in text that is not going to become an `Entry`.
+    """
+    open_brace = raw.find("{")
+    if open_brace == -1:
+        return None
+    i = raw.find(",", open_brace)  # past the entry key, which cannot itself contain a comma
+    if i == -1:
+        return None
+    i += 1
+
+    spans = []
+    while True:
+        i = _skip_whitespace(raw, i)
+        while i < len(raw) and raw[i] == ",":  # tolerate a trailing or doubled separator
+            i = _skip_whitespace(raw, i + 1)
+        if i >= len(raw) or raw[i] == "}":
+            return spans
+
+        name = _FIELD_NAME_PATTERN.match(raw, i)
+        if name is None:
+            return None
+        after_name = _skip_whitespace(raw, name.end())
+        if after_name >= len(raw) or raw[after_name] != "=":
+            return None
+
+        value_start = _skip_whitespace(raw, after_name + 1)
+        value_end = _scan_value(raw, value_start)
+        if value_end is None:
+            return None
+        spans.append((name.group().lower(), name.start(), name.end(), value_start, value_end))
+        i = value_end
+
+
+def _undelimit(value: str) -> str:
+    """Strip one layer of `{}` or `""` from a field value, leaving anything else alone.
+
+    Anything else includes a bare value, and a `#` concatenation of several delimited parts — which opens
+    with a delimiter and closes with its mate while being no single value at all. Stripping that pair
+    would move the value's own end inwards; returning it untouched merely leaves literal braces in the
+    merged text, which is the harmless direction to be wrong in.
+    """
+    if len(value) < 2 or _FIELD_DELIMITERS.get(value[0]) != value[-1]:
+        return value
+    if value[0] == '"':
+        return value[1:-1]
+    depth, i = 0, 0
+    while i < len(value):
+        if value[i] == "\\":
+            i += 2
+            continue
+        if value[i] == "{":
+            depth += 1
+        elif value[i] == "}":
+            depth -= 1
+            if depth == 0:  # the opening brace's mate: only the last character makes this one value
+                return value[1:-1] if i == len(value) - 1 else value
+        i += 1
+    return value
+
+
+def _widen_cut(raw: str, start: int, end: int) -> tuple[int, int]:
+    """Grow the span `[start, end)` to swallow the punctuation and blank line that deleting it would leave.
+
+    Takes a following comma, and — when the field had a line to itself — the indentation before it and the
+    newline after, so that removing a field does not leave an empty line where it stood.
+    """
+    if end < len(raw) and raw[end] == ",":
+        end += 1
+    line_start = raw.rfind("\n", 0, start) + 1
+    if not raw[line_start:start].strip():
+        start = line_start
+        while end < len(raw) and raw[end] in " \t":
+            end += 1
+        if end < len(raw) and raw[end] == "\n":
+            end += 1
+    return start, end
+
+
+def repair_duplicate_field_keys(raw: str, maybe_duplicate_keys: set[str] | None = None) -> str | None:
+    """Repair one BibTeX record `raw` that names the same field twice. Returns the text, or `None`.
+
+    `maybe_duplicate_keys`: the field names to merge, if the caller already knows them —
+                            `bibtexparser`'s `DuplicateFieldKeyBlock` reports them as `.duplicate_keys`.
+                            Leave it `None` to merge every field name that repeats.
+
+    The repeats are folded into the first occurrence, their values joined by newlines, and the later
+    fields removed. Everything else in the record is left byte for byte as it was.
+
+    Merging rather than keeping one is what makes this safe to do unsupervised: a record with two `annote`
+    fields has two different notes in it, and picking one would delete somebody's data quietly. Joining
+    them keeps every character, in a field that standard BibTeX tools can read, and leaves the result
+    plainly inspectable by whoever wants to split it again.
+
+    Returning `None` means the record does not scan, or names no field twice.
+    """
+    spans = _field_spans(raw)
+    if not spans:
+        return None
+
+    positions = collections.defaultdict(list)
+    for index, span in enumerate(spans):
+        positions[span[0]].append(index)
+    repeated = {key: indices for key, indices in positions.items() if len(indices) > 1}
+    if maybe_duplicate_keys is not None:
+        wanted = {key.lower() for key in maybe_duplicate_keys}
+        repeated = {key: indices for key, indices in repeated.items() if key in wanted}
+    if not repeated:
+        return None
+
+    edits = []  # (start, end, replacement), disjoint, applied in one pass below
+    for indices in repeated.values():
+        values = [_undelimit(raw[spans[i][3]:spans[i][4]]) for i in indices]
+        keep = spans[indices[0]]
+        edits.append((keep[3], keep[4], "{" + "\n".join(values) + "}"))
+        for i in indices[1:]:
+            edits.append((*_widen_cut(raw, spans[i][1], spans[i][4]), ""))
+
+    pieces, cursor = [], 0
+    for start, end, replacement in sorted(edits):
+        pieces.append(raw[cursor:start])
+        pieces.append(replacement)
+        cursor = end
+    pieces.append(raw[cursor:])
+    candidate = "".join(pieces)
+
+    # The parser is the oracle, exactly as in `repair_record`: a repair that does not read back as an
+    # entry is a failed repair, whatever the scanner made of the text.
+    try:
+        library = parse_string(candidate)
+    except Exception:  # noqa: BLE001 -- a repair that breaks the parser is just a failed repair
+        return None
+    return candidate if library.entries else None
 
 
 def _entry_arxiv_id(entry, keep_version: bool) -> str:

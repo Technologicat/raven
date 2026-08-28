@@ -2,7 +2,9 @@
 
 from unittest.mock import MagicMock
 
-from raven.papers.bibtex import _clean_whitespace, _make_key, entries_to_bibtex, parse_file, parse_string
+from raven.papers.bibtex import (_clean_whitespace, _field_spans, _make_key, _undelimit,
+                                 entries_to_bibtex, parse_file, parse_string,
+                                 repair_duplicate_field_keys)
 
 
 def _fake_entry(
@@ -211,3 +213,87 @@ class TestParseFile:
 
         assert len(parse_file(path).entries) == 1
         assert len(parse_file(str(path)).entries) == 1
+
+
+class TestFieldSpans:
+    def test_the_three_value_shapes_are_all_located(self):
+        raw = '@article{k,\n  title = {Braced},\n  journal = "Quoted",\n  year = 2024,\n}\n'
+        assert [span[0] for span in _field_spans(raw)] == ["title", "journal", "year"]
+
+    def test_a_value_may_contain_the_separators_that_end_a_bare_one(self):
+        raw = "@article{k,\n  title = {Commas, braces {and} more},\n  year = {2024},\n}\n"
+        spans = _field_spans(raw)
+        assert [span[0] for span in spans] == ["title", "year"]
+        assert raw[spans[0][3]:spans[0][4]] == "{Commas, braces {and} more}"
+
+    def test_an_escaped_brace_does_not_close_a_value(self):
+        # This is what `repair_record` writes, so the two repairs have to agree about what they read.
+        raw = "@article{k,\n  abstract = {We require \\{0 <= rho <= 1 throughout},\n  year = {2024},\n}\n"
+        assert [span[0] for span in _field_spans(raw)] == ["abstract", "year"]
+
+    def test_a_value_that_never_ends_scans_to_nothing(self):
+        assert _field_spans("@article{k,\n  abstract = {never closes\n") is None
+
+    def test_field_names_are_lowercased_but_their_offsets_point_at_the_original(self):
+        raw = "@article{k,\n  Title = {A Study},\n}\n"
+        key, name_start, name_end, _value_start, _value_end = _field_spans(raw)[0]
+        assert key == "title" and raw[name_start:name_end] == "Title"
+
+
+class TestUndelimit:
+    def test_strips_one_layer_of_either_delimiter(self):
+        assert _undelimit("{A Study}") == "A Study"
+        assert _undelimit('"A Study"') == "A Study"
+
+    def test_leaves_a_bare_value_alone(self):
+        assert _undelimit("2024") == "2024"
+
+    def test_leaves_a_concatenation_alone_although_it_opens_and_closes_like_one_value(self):
+        # `{a} # {b}` begins with `{` and ends with `}` and is nonetheless not one braced value; stripping
+        # the pair would move the first value's end inwards and corrupt the text.
+        assert _undelimit("{a} # {b}") == "{a} # {b}"
+
+    def test_an_escaped_brace_does_not_end_the_value_early(self):
+        assert _undelimit("{a \\} b}") == "a \\} b"
+
+
+class TestRepairDuplicateFieldKeys:
+    REPEATED = ("@article{k,\n"
+                "  title = {A Study},\n"
+                "  annote = {First note},\n"
+                "  year = {2024},\n"
+                "  annote = {Second note},\n"
+                "}\n")
+
+    def test_repeats_are_merged_into_the_first_occurrence(self):
+        repaired = repair_duplicate_field_keys(self.REPEATED)
+        fields = {f.key: f.value for f in parse_string(repaired).entries[0].fields}
+        assert fields["annote"] == "First note\nSecond note"
+        assert [f.key for f in parse_string(repaired).entries[0].fields] == ["title", "annote", "year"]
+
+    def test_the_untouched_fields_keep_their_text_byte_for_byte(self):
+        repaired = repair_duplicate_field_keys(self.REPEATED)
+        assert "  title = {A Study},\n" in repaired
+        assert "  year = {2024},\n" in repaired
+
+    def test_removing_a_field_does_not_leave_the_blank_line_it_stood_on(self):
+        repaired = repair_duplicate_field_keys(self.REPEATED)
+        assert "\n\n" not in repaired
+
+    def test_only_the_named_keys_are_merged_when_the_caller_names_any(self):
+        raw = ("@article{k,\n  annote = {a},\n  keywords = {x},\n"
+               "  annote = {b},\n  keywords = {y},\n}\n")
+        repaired = repair_duplicate_field_keys(raw, {"annote"})
+        # `keywords` still repeats, so the result is still unreadable and the repair reports failure
+        # rather than handing back a record that only looks mended.
+        assert repaired is None
+
+    def test_a_record_naming_nothing_twice_is_not_a_candidate(self):
+        assert repair_duplicate_field_keys("@article{k,\n  title = {A Study},\n}\n") is None
+
+    def test_a_repair_that_does_not_read_back_as_an_entry_is_refused(self):
+        # Merging the notes leaves an author BibTeX cannot express — three commas where it allows two —
+        # so the record still does not parse. Without the parser as the oracle this would return text
+        # that looks repaired and is not.
+        raw = self.REPEATED.replace("  year = {2024},\n", "  author = {Bloggs, PhD, MSc, Joan},\n")
+        assert repair_duplicate_field_keys(raw) is None

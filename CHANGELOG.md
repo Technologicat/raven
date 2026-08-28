@@ -63,6 +63,15 @@
 
 - **an `enabled` switch on postprocessor chain entries**, default on. Set it to `false` to skip a filter while its settings stay in the chain, so a look you spent an evening tuning survives being switched off and back on. It belongs to the chain rather than to any filter, and works anywhere a postprocessor chain does.
 
+*Raven-fixbib*
+
+- **records naming the same field twice are now repaired too**, which is how a database export arrives: a ProQuest record carries a separate `annote` for its copyright statement, its last-updated date and its subject terms, and BibTeX has no way to say that, so the parser rejects the entry whole — title, authors and all. The repeats are merged into one field, values kept and joined by newlines, and everything else in the record is left character for character as it was.
+  - **This can account for a large share of a file**, and nothing previously said so more specifically than "unparseable" — so a `.bib` assembled from several databases is worth running through this before trusting a count of it.
+  - Merging rather than keeping one: each repeat holds something different, so choosing between them would be deleting your data, not repairing it.
+
+- **every report now names the fault**, so an unreadable `.bib` says what is wrong with it and not merely how much. Each line carries the record's key, its line number in *your* file, which of the two faults it is, and the specifics — which fields repeat, which look unbalanced, or the parser's own complaint where it is neither. A record whose author reads `Bloggs, PhD, MSc, Joan` is now reported as *too many commas* rather than as a suspected brace problem.
+  - `--list` names every record that was repaired, not just how many. Off by default, since a database export can need repairing a thousand times over.
+
 *Constellation-wide*
 
 - **`--qr`**, which puts a scannable "Get Raven" code in the corner of any of the six GUI apps. For running Raven where people are watching: a visitor sees a demo for a minute and walks off, and nobody writes down a URL. Off unless asked for.
