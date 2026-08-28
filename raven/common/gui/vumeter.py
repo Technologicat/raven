@@ -123,6 +123,19 @@ class DPGVUMeter:
                 self.render()
     height = property(fget=_get_height, fset=_set_height, doc="The height of the VU meter, in pixels. Read/write.")
 
+    def _get_threshold(self) -> Optional[float]:
+        return self._threshold
+    def _set_threshold(self, threshold: Optional[float]) -> None:
+        if (threshold is not None) and (not (self._min <= threshold <= self._max)):
+            raise ValueError(f"DPGVUMeter.threshold: must be between min and max; got min = {self._min:0.6g}, threshold = {threshold:0.6g}, max = {self._max:0.6g}")
+        if threshold != self._threshold:
+            with self._render_lock:
+                self._threshold = threshold
+                self._threshold_pixels = self._value_to_pixels(threshold) if threshold is not None else None
+                self.render()
+    threshold = property(fget=_get_threshold, fset=_set_threshold,
+                         doc="The signal level the threshold line is drawn at, or `None` for no line. Read/write, so a GUI can offer it as a live control — moving it redraws the meter. Must be between the meter's min and max.")
+
     def _value_to_pixels(self, value: float) -> int:
         """Data value -> pixels, measured from bottom of widget, accounting for border."""
         value = numutils.clamp(value, self._min, self._max)
