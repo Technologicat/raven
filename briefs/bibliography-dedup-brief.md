@@ -1,7 +1,16 @@
 # Deduplicating a multi-database bibliography (`raven-dedupbib`)
 
-**Status: stage 0 built, the rest designed.** `raven-fixbib` learned the duplicate-field-key repair on
-2026-08-28 (`5fd6c4eb`). `raven/papers/dedupbib.py` is designed below and not written.
+**Status: the two prerequisites are built and shipped; `dedupbib` itself is designed and not written.**
+All on 2026-08-28:
+
+| landed | what |
+|---|---|
+| `5fd6c4eb` | `raven-fixbib` repairs duplicate field keys, and every report names its fault |
+| `63bedd51` | `raven.common.text.boilerplate`, wired into the Visualizer's importer |
+| `04610fdd` | the stripper's two-tier rework, after it ate prose about copyright |
+| `51e547b1` | this brief |
+
+`raven/papers/dedupbib.py` is designed below and not written. **Where to resume is at the bottom.**
 
 Sits outside the sprint folders because it is `raven.papers` work, like `ligature-repair-brief.md` is
 `docextract` work: a bibliography tool whose consumers are whoever has a `.bib`, not a feature of any one
@@ -112,6 +121,10 @@ Stripping first collapses **537 of those 601 to exact agreement**, leaving no ch
 | agree exactly | 1006 | nothing to decide |
 | one contains the other | 69 | database truncation — 254 chars against 1494. Longest is right. |
 | genuinely different | 76 | 56 differ by under 50 characters, 11 by over 300 |
+
+The last row takes the longest too, and the audit records the value that lost — the 56 small ones are
+whitespace and encoding variants where either choice is the same abstract, and the 11 large ones are worth
+a human glance in the audit rather than a rule. Nothing here goes to the judge.
 
 So the deterministic rule covers it and the judge is not involved. Recorded because it was considered:
 *rejected — send disagreeing abstracts to the judge.* It would have been ~600 model calls to reproduce
@@ -225,3 +238,36 @@ the form everything downstream sees. Checked rather than assumed: markup convers
   cloud, and with the notice removed at import there is much less for it to catch. Stale entries are
   harmless — `nlptools.default_stopwords` says so — so this is tidying rather than a fix, and it wants doing
   after a real import has been eyeballed, not before.
+
+## Where to resume
+
+Nothing is half-finished: the tree is clean, CI is green on `04610fdd`, and the two prerequisites are
+shipped. The next unit starts from an empty file.
+
+**Write `raven/papers/dedupbib.py` and its console script**, in this order, because each stage is
+independently checkable against the corpus and the last one needs a GPU:
+
+1. **Normalization and clustering.** `normalize_doi` (lowercase, strip the resolver prefix and `doi:`,
+   fold the seven Unicode dashes), `normalize_title` (NFKD, drop combining marks, reduce to `[a-z0-9]`),
+   then union-find over DOI and over title with the degenerate-title guard. Checkable immediately: it must
+   reproduce 5161 clusters from 6932 records.
+2. **Merge and audit.** Base + fill, abstracts through `text.strip_boilerplate` before comparing, then
+   longest. The audit TSV is written here and is what everything after is judged by.
+3. **`--judge`**, opt-in, `agent.turn(..., use_character_card=False, tools_enabled=False)`. ~370 fuzzy
+   residuals plus the 13 DOI-conflict clusters. Follow `investigations/agent-batch-classification/`.
+
+**Read before starting:** the `Design` section above, and `investigations/agent-batch-classification/README.md`
+for the batch shape and its one durable lesson — escalation conditions computed in Python, never the model's
+own confidence.
+
+**The habit worth carrying over**, learned twice today at Juha's prompting and once from the tests: *a
+corpus tells you what a rule catches and nothing about what else it catches.* Both real defects in the
+boilerplate stripper — eating an abstract that discussed copyright, and trimming every abstract's final
+full stop — were invisible in statistics that looked excellent, and were found by adversarial probes and by
+an assertion about a single string. Expect the same of the deduplicator: a cluster count reproducing 5161
+says nothing about whether the 5161 are the right ones. Write the probes that try to make it merge two
+different papers.
+
+**Corpus for the work:** `00_stuff/rawdata/AOKK/multisource/tekoalyagentti_tutkimus.bib`, 6934 records,
+6932 of which parse once `raven-fixbib` has run. Not committed and not to be — it is a search export, and
+this repository is public.
