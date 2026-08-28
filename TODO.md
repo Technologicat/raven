@@ -38,11 +38,13 @@ Chosen at the end of the session that finished band-2 item 9. Same purpose as th
 *selection* would otherwise live nowhere, each of these being filed in a different place or nowhere at all.
 Delete once it stops describing where the work is.
 
-1. **The `continue_` fix.** Continuing a message replaces it instead of extending it — both the text and
-   the reasoning, since `invoke`'s accumulators start empty. Reproduced end to end 2026-08-27, and the
-   diagnosis and the chosen shape are in `briefs/researchers-night/in-progress-reply-as-a-node.md` →
-   *Found on the way*. Predates the node-first work; wanted for the exhibit, since Continue is a button a
-   visitor can press.
+1. ~~**The `continue_` fix.**~~ **Done 2026-08-28**, with band-2 item 9, which is now closed. The
+   accumulators are seeded from the message being continued, held apart from them so every count and reset
+   stays about the current call. Verified live in both shapes, with the stored revisions read back off disk.
+   The write-up is in `briefs/researchers-night/done/in-progress-reply-as-a-node.md` → *Found on the way*.
+   It leaves one thing open, and item 2's ooba brief is where it belongs: the seed is joined
+   unconditionally, and ooba continues through a request field of its own, so if ooba answers with the
+   *whole* message the seed now doubles it. `TODO_DEFERRED.md`'s ooba item carries the question.
 
 2. **Two briefs to write** — *"written or forgotten"* (Juha, 2026-08-27), both understood and neither
    recorded anywhere a search would find:

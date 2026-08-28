@@ -113,7 +113,7 @@ exists to hold what they share. Worth stating the converse, since it is what mak
 if the streaming class were folded away there would be no reason for a hierarchy at all, the base becoming
 the only class. The fork remaining is what keeps it.
 
-## Found on the way, to fix in its own commit
+## Found on the way, and fixed in its own commit (2026-08-28)
 
 **Continuing a message loses what it already said.** `serialize_history_for_wire(continue_=True)` leaves the
 assistant message in the request, and LM Studio answers that with the continuation *alone* — measured
@@ -137,10 +137,45 @@ message" while its accumulators start empty — the code and the comment disagre
 docstring's claim is probably true of oobabooga, whose `continue_` request field Raven still sends and
 whose behaviour the project already records as unvalidated.
 
-## Where this stands, 2026-08-27
+**The fix, as built.** `invoke` reads the message being continued off the wire history and holds it in two
+seed locals, joining them on in `build_message` — the one place the whole message is what is wanted.
+Everything else in the function stays about the current call: the token count is what this call generated,
+the phase samples are when this call produced its first content, the stopping-string chop cuts what this
+call emitted, and the retcon moves what this call took for the answer into the trace. Writing the seed
+*into* the accumulators would have had each of those quietly answer about two calls instead of one.
 
-**Built, and live-tested through.** Every case the work was for passes; the one red is the `continue_` bug
-that predates it.
+**Verified live 2026-08-28**, in both shapes, with the stored revisions read back off disk afterwards:
+
+| interrupted… | R1 | R2 |
+|---|---|---|
+| mid-thought (no answer yet) | 0 chars content, 2597 reasoning, `interrupted` | 2190 content, **2597 reasoning — identical** |
+| mid-answer (the reported shape) | 548 content ending mid-word at `\nJune`, 5980 reasoning | 1359 content extending it, **5980 reasoning**, one `Aria:` prefix |
+
+The persona count is the one that needed measuring rather than reasoning about: the seed carries the stored
+prefix, and `scrub` strips it from the start of *any* line before re-adding one, so the joined text comes
+out with exactly one. R2's token count is the continuation's own (152, not 1516 + 152), which is the
+accumulators-stay-about-this-call property showing up in the data.
+
+**ooba is the open question, and it is a regression risk rather than a compat check.** The seed is joined
+unconditionally, and ooba honours `continue_` as a real request field where LM Studio continues by prefill.
+Continuing worked on ooba before this change (Juha), which is what a backend returning the *whole* message
+would look like — and if it does, the seed now doubles it. There is no local install to ask.
+`TODO_DEFERRED.md`'s ooba item carries the question in the form that decides the code. Recorded there too:
+`settings.backend_supports_continue` exists and is read by nothing, the GUI gating it was built for having
+been scoped out of the LM Studio compat work and never landed — which is why Continue is pressable on LM
+Studio at all, and therefore why this bug was reachable.
+
+**Storing partials for a continuation is still not done, and is a decision rather than a consequence.** The
+partials are correct now, so the reason that comment gave has gone; what remains is that the node's active
+revision is the message as it read *before*, and writing a partial means overwriting that. Doing it means
+opening the new revision up front and streaming into it, which changes what a cancelled continuation leaves
+behind. The comment in `scaffold.ai_turn` says so where someone would look.
+
+## Closed, 2026-08-28
+
+**Built, live-tested through, and every case green.** The last red — the `continue_` bug found on the way —
+was fixed on 2026-08-28 and verified against the real backend, on both the shape it was reported in and the
+one that produced no text at all.
 
 Verified live, against the real backend:
 
@@ -152,7 +187,8 @@ Verified live, against the real backend:
 | the reply *completing* | works — this was the vanishing-reply fault below |
 | scroll away mid-reply, then rebuild (resize or flick) | works — and the jump-to-latest pill behaves |
 | Cancel mid-stream | works — the partial reply is kept |
-| continuing a message | **red, as expected** — the `continue_` bug below, which predates this work |
+| an incomplete stored message saying so | works — `[Interrupted — the reply was stopped here]`, added at render time |
+| continuing a message | works, as of 2026-08-28 — see below |
 
 **What it was.** A node is rendered by two widgets over its life — the live message while the reply
 streams, and the stored one `on_done` swaps in at the end. The turn's epilogue, which runs whether or not
@@ -169,8 +205,9 @@ innocent.
 The fix is `DPGLinearizedChatView.remove_streaming_message_for`, and the rule behind it: **a node is not a
 widget**, so a caller that means "the thing I was streaming into" has to say so.
 
-Two known gaps besides: the `[Cancelled by user]` / `[Error occurred]` render-time footer is not built, and
-the `continue_` bug found on the way is not fixed.
+Both gaps the first write-up listed are now closed. The render-time footer landed on 2026-08-27, as
+`[Interrupted — the reply was stopped here]` and `[Incomplete — Raven exited while this reply was being
+written]`; the `continue_` fix landed on 2026-08-28 and is written up below.
 
 **Still to live-test**, the tail of the list the fault interrupted: a reply completing (both plainly and
 after a flick), Cancel mid-stream keeping the partial reply, a backend error via

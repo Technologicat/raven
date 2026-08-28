@@ -154,9 +154,16 @@ known before band 3 begins.
 7. ~~**The simulated glitch on branch switch**~~ — **done 2026-08-25**, over four discontinuities rather
    than the one in its name. See below for what it needed and what is left to tune.
 
-**Band 1 is closed as of 2026-08-25**, all seven items. **Band 2's items 8 and 9 closed on 2026-08-26**, so
-the work resumes at item 10 — with the two large builds, 12 and 13, still the ones carrying unknowns. Four
-days in, of four weeks.
+**Band 1 is closed as of 2026-08-25**, all seven items. **Item 8 closed on 2026-08-26 and item 9 on
+2026-08-28**, so the work resumes at item 10 — with the two large builds, 12 and 13, still the ones carrying
+unknowns. Seven days in, of four weeks.
+
+Item 9 is worth reading as a schedule fact rather than only as a feature: it was costed as "a session each"
+and took three, because returning to a branch as if you never left turned out to require the in-progress
+reply to be a node, and making it one surfaced six faults that only a live run could find. Nothing about it
+was mis-scoped — the requirement it grew was Juha's, added once the first version was on screen and was
+merely *safe*. What that says for 12 and 13 is that the estimate covers the item as written, and a demo item
+is not fully specified until someone has watched it run.
 
 **Band 2 — a session each.**
 
@@ -264,7 +271,7 @@ days in, of four weeks.
    was safe and wrong; the second re-rendered it from the message's own paragraph records, which worked and
    left every *other* walker of the tree unable to see the reply at all.
 
-   **So the reply became a node** (2026-08-27, `in-progress-reply-as-a-node.md` in this folder). The
+   **So the reply became a node** (2026-08-27, `done/in-progress-reply-as-a-node.md`). The
    assistant node is created before the request and filled in as the text arrives, which makes an
    in-progress reply an ordinary member of the branch: `descend_to_latest` lands on it, the sibling counter
    counts it, and `DPGLinearizedChatView.build` renders it like any other node — so a resize, a branch
@@ -279,12 +286,21 @@ days in, of four weeks.
    following the model's newline pattern instead of the clock, and a DPG container-stack error inside a
    repaint being recorded as a backend failure over the model's text.
 
-   **Still open, and wanted for the exhibit: an incomplete stored message has to say so on screen.** A
-   reply that was cancelled, or that the backend failed partway through, is kept — that is Cancel's promise
-   — and it currently looks exactly like a reply the model chose to end there. The marker is already in the
-   node's `generation_metadata`, so this is a render-time footer (`[Cancelled by user]`, `[Error occurred]`)
-   added by the GUI build and never stored, which is what keeps the continue machinery from having to strip
-   it again. Decided 2026-08-27; see `in-progress-reply-as-a-node.md` for why storing one was rejected.
+   **An incomplete stored message now says so on screen** (2026-08-27). A reply that was cancelled, or that
+   the backend failed partway through, is kept — that is Cancel's promise — and it used to look exactly like
+   a reply the model chose to end there. The marker was already in the node's `generation_metadata`, so this
+   is a render-time footer added by the GUI build and never stored, which is what keeps the continue
+   machinery from having to strip it again: `[Interrupted — the reply was stopped here]` for one the user
+   stopped, `[Incomplete — Raven exited while this reply was being written]` for a chat closed mid-reply.
+
+   **And the last red is green** (2026-08-28). Continuing a message replaced it with the continuation alone,
+   both channels, because `invoke`'s accumulators start empty and the backend sends only the new text.
+   Predates this work and was found by it. Fixed by seeding the accumulators from the message being
+   continued — held apart from them, so every count and every reset stays about the current call — and
+   verified live in both shapes, with the stored revisions read back off disk. **One thing it opens: ooba is
+   unmeasured and is now a regression risk**, since it continues through a request field of its own where LM
+   Studio continues by prefill; `TODO_DEFERRED.md`'s ooba item carries the question. **Item 9 is closed**,
+   and the brief is in `done/`.
 
    **Cancel during prompt processing was the last uncovered case, and it works** (2026-08-27): a new chat
    with a fulltext PDF attached gives a prompt long enough to have a window, and Ctrl+G inside it took the
