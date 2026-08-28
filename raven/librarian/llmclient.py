@@ -808,7 +808,7 @@ def _make_backend_token_counter(settings: env) -> Callable[[str], int | None]:
         # tokens-per-character ratio they imply is far above what ordinary text costs. Letting them calibrate
         # shrinks the character budget `fit_attachments_to_context` computes from that ratio, and the
         # attachments of the branch being measured are then truncated harder than they will be when sent.
-        out = prefill(settings, probe, tools_enabled=False, calibrate=False)
+        out = prefill(settings, probe, tools_enabled=False, calibrate=False, purpose="token count")
         return (out.usage or {}).get("prompt_tokens") if out is not None else None
     return count
 
@@ -1758,7 +1758,8 @@ def invoke(settings: env,
            datastore: chattree.PersistentForest | None = None,
            calibrate: bool = True,
            maybe_abort: netutil.Abort | None = None,
-           on_partial_message: Callable | None = None) -> env:
+           on_partial_message: Callable | None = None,
+           purpose: str = "turn") -> env:
     """Invoke the LLM with the given chat history.
 
     This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
@@ -1885,6 +1886,9 @@ def invoke(settings: env,
 
                           `None` (default) means no partial messages are built at all, which costs nothing.
 
+    `purpose`: What this call is for, named in every log line this function writes. `"turn"` (default) is a
+               real generation; `prefill` passes its own.
+
     Returns an `unpythonic.env.env` WITHOUT adding the LLM's reply to `history`.
 
     The returned `env` has the following attributes:
@@ -1904,6 +1908,10 @@ def invoke(settings: env,
         `interrupted: bool`: Whether the invocation was interrupted by the `on_progress` callback.
                              This is provided for convenience.
     """
+    # Every log line below names this call's purpose as well as this function, so that a prefill and a real
+    # turn can be told apart in a log — they are otherwise identical from here down.
+    me = f"llmclient.invoke[{purpose}]"
+
     data = copy.deepcopy(settings.request_data)
 
     # Normalize message content for resend (see `serialize_history_for_wire`).
@@ -1920,7 +1928,7 @@ def invoke(settings: env,
         an SSE error event mid-stream.
         """
         for violation in template_violations:  # a candidate cause, if the backend's template is a strict one
-            logger.error(f"llmclient.invoke: {violation}")
+            logger.error(f"{me}: {violation}")
 
     # Not mentioned in the oobabooga docs, but see:
     #  `text-generation-webui/extensions/openai/script.py`, function `openai_chat_completions`
@@ -1943,19 +1951,19 @@ def invoke(settings: env,
         _notify("on_prompt_ready", on_prompt_ready, history)
 
     if not tools_enabled:
-        logger.info("llmclient.invoke: Tool calling is disabled. Stripping tool specifications from request.")
+        logger.info(f"{me}: Tool calling is disabled. Stripping tool specifications from request.")
         data.pop("tools")  # Tools? What tools? (Pretend to LLM backend we don't have any -> no tool-calls.)
     elif tool_names is None:
-        logger.info("llmclient.invoke: Tool calling is enabled. Providing tool specifications in request.")
+        logger.info(f"{me}: Tool calling is enabled. Providing tool specifications in request.")
         # The `tools` field is already in `settings.request_data`, so there's nothing to do. The backend builds
         # the tool-calling instructions from it, using the model's own chat template.
     else:
         unknown_names = set(tool_names) - {tool["function"]["name"] for tool in data["tools"]}
         if unknown_names:  # a typo here would silently switch a tool off, so say so rather than filter quietly
-            logger.warning(f"llmclient.invoke: Ignoring unknown tool name(s) {sorted(unknown_names)} in `tool_names`; "
+            logger.warning(f"{me}: Ignoring unknown tool name(s) {sorted(unknown_names)} in `tool_names`; "
                            f"available: {sorted(settings.tool_entrypoints)}.")
         data["tools"] = [tool for tool in data["tools"] if tool["function"]["name"] in tool_names]
-        logger.info(f"llmclient.invoke: Tool calling is enabled, restricted to {sorted(tool_names)}. "
+        logger.info(f"{me}: Tool calling is enabled, restricted to {sorted(tool_names)}. "
                     f"Providing {len(data['tools'])} tool specification(s) in request.")
         if not data["tools"]:  # an empty `tools` list is not the same thing as no tools; some backends reject it
             data.pop("tools")
@@ -1973,7 +1981,7 @@ def invoke(settings: env,
         maybe_abort.arm(stream_response)
 
     if stream_response.status_code != 200:  # not "200 OK"?
-        logger.error(f"LLM server returned error: {stream_response.status_code} {stream_response.reason}. Content of error response follows.")
+        logger.error(f"{me}: LLM server returned error: {stream_response.status_code} {stream_response.reason}. Content of error response follows.")
         logger.error(stream_response.text)
         report_template_violations()
         raise RuntimeError(f"While calling LLM: HTTP {stream_response.status_code} {stream_response.reason}")
@@ -2202,7 +2210,7 @@ def invoke(settings: env,
         # Everything else keeps the behaviour it had. The message is about a lost connection specifically,
         # so it stays on the error that means that, rather than being broadened along with the `except`.
         if isinstance(exc, requests.exceptions.ChunkedEncodingError):
-            logger.exception(f"invoke: Connection lost. Please check if your LLM backend is still alive (was at {settings.backend_url}). Original error message follows.")
+            logger.exception(f"{me}: Connection lost. Please check if your LLM backend is still alive (was at {settings.backend_url}). Original error message follows.")
         raise
     finally:
         if maybe_abort is not None:
@@ -2269,7 +2277,7 @@ def invoke(settings: env,
             if settings.tokenizer is not None:
                 tokenizer_count = len(settings.tokenizer.encode(prompt_content))
                 if tokenizer_count > usage["prompt_tokens"] * 1.1:
-                    logger.warning(f"invoke: local tokenizer counted {tokenizer_count} tokens for the prompt content, exceeding the backend's reported {usage['prompt_tokens']} for the full templated prompt — the configured tokenizer likely does not match the served model; token counts may be wrong.")
+                    logger.warning(f"{me}: local tokenizer counted {tokenizer_count} tokens for the prompt content, exceeding the backend's reported {usage['prompt_tokens']} for the full templated prompt — the configured tokenizer likely does not match the served model; token counts may be wrong.")
 
     maybe_thinking_tokens, thinking_tokens_exact = thinking_token_count(reasoning_content=reasoning_content,
                                                                         n_tokens=n_tokens,
@@ -2342,7 +2350,8 @@ def prefill(settings: env,
             tool_names: Collection[str] | None = None,
             datastore: chattree.PersistentForest | None = None,
             calibrate: bool = True,
-            maybe_abort: netutil.Abort | None = None) -> env | None:
+            maybe_abort: netutil.Abort | None = None,
+            purpose: str = "prefill") -> env | None:
     """Send `history` to the backend generating essentially no output. Returns the `invoke` env, or `None` on failure.
 
     Two purposes, both side effects of submitting the real prompt:
@@ -2371,6 +2380,10 @@ def prefill(settings: env,
                  conversation: a short prompt's `prompt_tokens` is mostly chat-template framing, so the ratio
                  it would imply is far too high for ordinary text.
 
+    `purpose`: passed through to `invoke`, which names it in every log line. The default says this is the
+               warm-up above; the token-size probe in `count_tokens` passes its own, being the same call
+               made for the other of the two purposes named at the top.
+
     We cap generation at one token rather than zero: a single token is negligible compute, while `max_tokens == 0` is
     below the OpenAI-documented minimum and some backends reject it. The prompt-processing pass — the part that matters
     for both the count and the cache — happens regardless of the cap.
@@ -2387,14 +2400,15 @@ def prefill(settings: env,
                       max_tokens=1,
                       datastore=datastore,
                       calibrate=calibrate,
-                      maybe_abort=maybe_abort)
+                      maybe_abort=maybe_abort,
+                      purpose=purpose)
     except netutil.Aborted:
         # Not a failure: something with a better claim on the backend asked for this speculative work to
         # stop. Logged at info, because it is a normal outcome and the estimate stands either way.
-        logger.info("prefill: abandoned; keeping the token estimate")
+        logger.info(f"prefill[{purpose}]: abandoned; keeping the token estimate")
         return None
     except Exception as exc:  # noqa: BLE001 -- best-effort; any failure just leaves the estimate in place
-        logger.warning(f"prefill: backend prefill failed; keeping the token estimate. Reason {type(exc)}: {exc}")
+        logger.warning(f"prefill[{purpose}]: backend prefill failed; keeping the token estimate. Reason {type(exc)}: {exc}")
         return None
 
 # --------------------------------------------------------------------------------
