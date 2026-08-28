@@ -49,6 +49,15 @@ index.
   is not reproducible in practice however carefully it was written. **`investigations/README.md` lists what is
   there, one line each saying which question it answers** — read that rather than an enumeration here, which
   went stale at ten of seventeen before anyone noticed.
+  - **The trigger: you are about to write a script to find out how something behaves. Read
+    `investigations/README.md` first, and then the bundle's own README if one looks close.** Same shape as
+    checking for an existing helper before writing one, and it fails the same way — the cost is not the
+    wasted hour but a *second* answer to a settled question, which the next reader has to reconcile with
+    the first. The list is seventeen lines; reading it is cheaper than one probe run.
+  - **A close bundle is usually the right home for the new probe, rather than a new directory.** These
+    accumulate: `dpg-focus/` holds six, added over a month, because each new question about focus and
+    keyboard dispatch belonged beside the table it was extending. A bundle per probe would scatter one
+    subject across the index and lose exactly the adjacency that makes the earlier answers findable.
 - **`TODO.md`** for planned work, **`TODO_DEFERRED.md`** for things noticed mid-task and set aside.
 - **`scripts/`** — repository-maintenance tooling: scripts that check *this repo*, run by a maintainer and
   not shipped in the wheel. Distinct from `raven/tools/`, which holds user-facing console scripts. Each is

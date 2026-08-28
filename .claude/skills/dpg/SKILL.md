@@ -32,8 +32,15 @@ was *invented* to justify a change and is false; "`setup_dearpygui` segfaults on
 plausible reading of a crash whose real cause was a stale class-level texture cache. Three claims, three
 one-line probes, and only the first survived.
 
+**Before writing a probe, check whether the question is already answered.** `investigations/README.md` is
+seventeen lines, one per bundle saying which question it answers; `investigations/dpg-focus/` alone holds
+six probes and a write-up covering focus versus caret, what `focus_item` does to a child window, and which
+predicate an Enter handler may be gated on. Re-measuring costs an hour; the worse outcome is a *second* answer to a settled
+question, phrased differently, for the next reader to reconcile.
+
 If a probe captures an invariant worth keeping, promote it to a test rather than leaving it in `/tmp` — see
-`raven/common/gui/tests/` for the shape.
+`raven/common/gui/tests/` for the shape. A probe that needs a click, a keystroke or a drag stays a probe,
+and belongs in the closest existing bundle rather than a new one.
 
 **A probe asking "how big can this be" is the exception, and it must climb.** The cheapness above holds for
 behavioural questions — does this fire, what does that return. It does not hold for limits: a probe that
