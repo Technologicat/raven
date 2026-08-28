@@ -33,9 +33,9 @@ plausible reading of a crash whose real cause was a stale class-level texture ca
 one-line probes, and only the first survived.
 
 **Before writing a probe, check whether the question is already answered.** `investigations/README.md` is
-seventeen lines, one per bundle saying which question it answers; `investigations/dpg-focus/` alone holds
-six probes and a write-up covering focus versus caret, what `focus_item` does to a child window, and which
-predicate an Enter handler may be gated on. Re-measuring costs an hour; the worse outcome is a *second* answer to a settled
+one line per bundle saying which question it answers; `investigations/dpg-focus/` alone holds a write-up and
+several probes covering focus versus caret, what `focus_item` does to a child window, and which predicate an
+Enter handler may be gated on. Re-measuring costs an hour; the worse outcome is a *second* answer to a settled
 question, phrased differently, for the next reader to reconcile.
 
 If a probe captures an invariant worth keeping, promote it to a test rather than leaving it in `/tmp` — see

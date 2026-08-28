@@ -50,6 +50,41 @@ the key arrives in. Raven's two GUI apps differ from each other for exactly this
 regression: switching the Visualizer's Enter gate to `is_item_active` silently killed its search, and it
 took a live test to notice, because a dead hotkey raises nothing.
 
+## A committing field and a global key handler both see the chord, and cannot be told apart
+
+Measured 2026-08-28, DPG 2.3.1, for a second send path in `raven-librarian`: the composer sends on its own
+commit callback, so the chord is dead whenever the composer is not focused — which is a real state, since a
+send parks focus on the send button, and an empty message is Librarian's "take another turn" gesture.
+
+Adding the chord to the global hotkey handler works only if the two paths can coexist. They do fire
+together:
+
+| phase | global handler sees | field's `on_enter` |
+|---|---|---|
+| auto-focused at startup, never touched | focused **True**, active False | — |
+| caret in it, typed, then the chord | focused **True**, active False | **commits** |
+| focus parked on a button | focused False, active False | — |
+
+**The first two rows are the finding.** They are the same state and want opposite answers: the untouched
+field does not commit, so the global path must send; the typed field does, so the global path must not. No
+predicate separates them, and `is_item_focused` — the right gate for a *commit* handler, per the Enter
+result above — would leave the chord dead from app start until something else is clicked. Which is the
+original bug wearing a different hat.
+
+**The global handler runs first, in the same frame.** Frames 232/232 and 602/602 across two runs, the global
+row always ahead of the field row. So it cannot consult anything the commit sets either; by the time the
+field says "I sent that", the global path has already decided.
+
+What that leaves is not a better gate but no gate: **let both paths request a send and coalesce by frame
+number.** The first request through sends, the second sees the same `get_frame_count()` and returns. Every
+row above then yields exactly one send, and the question "did the field handle this one?" is never asked.
+Two legitimate sends in one frame are not reachable — a human cannot, and `_describe_send_gate` refuses
+while a turn is in flight.
+
+Also confirms the same holds for the other setting: `send_message_key = "enter"` puts the commit on bare
+Enter (`ctrl_enter_for_new_line=True`, which names what *Ctrl+Enter* does and so reads backwards from the
+setting), and the dispatch pattern is identical.
+
 ## Holding the scrollbar does not hold your place
 
 Found separately, testing whether a reader can hold a position by dragging the scrollbar while a reply
@@ -110,6 +145,12 @@ because both land in `raven/common/gui/animation.py` and are better done togethe
   order, and auto-focus focuses without activating. Both were the obvious explanation for the flash below,
   and both are wrong. Added 2026-08-18, DPG 2.3.1. Under a second.
 
+- `commit_chord_dispatch_probe.py` — whether a global key handler also sees the keypress a text field
+  commits on, in what order, and whether the states involved can be told apart. The answer decides whether a
+  second send path can exist beside the field's own commit, and it is *no gate is possible* — see the
+  section above. Two multiline fields, one per `send_message_key` setting. Added 2026-08-28, DPG 2.3.1.
+  About fifteen seconds.
+
 - `catch_visual_flash.sh` — not a probe but the instrument that worked when three probes did not. Records a
   running app's window with `ffmpeg -f x11grab` at 60 fps and ranks the frames by how much the region of
   interest stands out, so a 25–100 ms artifact can be found and looked at. Screenshots cannot: `import`
@@ -119,7 +160,7 @@ because both land in `raven/common/gui/animation.py` and are better done togethe
     touched. That much is measured, by this script and by logging focus state per frame from the grid's
     tick thread. What puts it there is not known, and three plausible mechanisms have been falsified.
 
-All five python probes are self-driving: run them and read the table. Re-run after a DPG upgrade that might have touched focus
+The python probes are all self-driving: run one and read the table. Re-run after a DPG upgrade that might have touched focus
 handling — the send path in `raven/librarian/app.py` and the search-accept path in `raven/visualizer/app.py`
 both rest on the button result, and `FileDialog`'s choice of parking spot rests on the position result. If a
 later DPG lifts the window-to-child restriction, that probe is where it will show, and the parking spot can go
