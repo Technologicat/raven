@@ -211,6 +211,47 @@ class TestASliderStoresThePrecisionItShows:
         assert dpg.get_value(slider) == pytest.approx(expected)
 
 
+class TestTheOtherMeterIsKeptInStep:
+    """The app's toolbar carries a second VU meter drawing the same threshold line.
+
+    It is not the panel's to know about, so the panel announces the change and the app wires it up —
+    and every route to a new threshold has to go through that announcement, which is what these check.
+    Two meters disagreeing about where the threshold is would be worse than one.
+    """
+
+    @pytest.fixture
+    def announced(self, panel):
+        seen = []
+        panel.on_threshold_changed = seen.append
+        return seen
+
+    def test_dragging_the_slider_announces(self, panel, announced):
+        panel._on_threshold_slider(THRESHOLD_SLIDER, -55.0)
+        assert announced == [-55.0]
+
+    def test_measuring_the_room_announces(self, panel, announced):
+        panel._record_level(-62.0)
+        panel._measure_the_room()
+        assert announced == [-62.0 + silencegate.DEFAULT_SILENCE_MARGIN]
+
+    def test_switching_to_autodetect_announces_that_there_is_no_line(self, panel, announced):
+        panel._on_autodetect_checkbox(None, True)
+        assert announced == [None]
+
+    def test_resetting_announces(self, panel, announced):
+        panel._on_threshold_slider(THRESHOLD_SLIDER, -55.0)
+        announced.clear()
+        panel._reset_to_configured_defaults()
+        assert announced[-1] == CONFIGURED["stt_silence_threshold"]
+
+    def test_opening_announces_what_the_recorder_holds(self, panel, announced):
+        # A threshold restored from the app state file at startup, or left by a previous session: the
+        # toolbar's meter was built before the panel existed, so opening has to bring it into step.
+        panel.recorder.silence_threshold = -33.0
+        panel.open()
+        assert announced[-1] == -33.0
+
+
 class TestTheLoudestRecentlyReading:
     def test_nothing_heard_yet_reads_as_nothing(self, panel):
         assert panel.floor is None

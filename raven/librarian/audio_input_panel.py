@@ -83,6 +83,10 @@ class DPGAudioInputPanel:
                            `appstate._DEFAULT_SETTINGS`, i.e. what `client/config.py` says.
     `themes_and_fonts`: the app's `guiutils.bootup` result, for the icon font.
     `save_app_state`: optional zero-argument callable, run when the panel closes.
+    `on_threshold_changed`: optional 1-argument callable, receiving the new silence threshold in dBFS,
+                            or `None` when it is being measured per recording. For any *other* meter
+                            drawing the same line — the app's toolbar carries one, and two meters
+                            disagreeing about where the threshold is would be worse than one.
     `centering_reference_window`: DPG tag or ID to center on the first time the panel opens; the main
                                   window, normally. Later opens leave the panel where the user put it.
     """
@@ -92,11 +96,13 @@ class DPGAudioInputPanel:
                  configured_defaults: dict,
                  themes_and_fonts,
                  save_app_state: Optional[Callable] = None,
+                 on_threshold_changed: Optional[Callable] = None,
                  centering_reference_window: Optional[Union[int, str]] = None):
         self.app_state = app_state
         self.configured_defaults = dict(configured_defaults)
         self.themes_and_fonts = themes_and_fonts
         self.save_app_state = save_app_state
+        self.on_threshold_changed = on_threshold_changed
         self.centering_reference_window = centering_reference_window
 
         self.is_open = False
@@ -210,11 +216,17 @@ class DPGAudioInputPanel:
     # Each writes three places: the recorder, which reads its settings live; the app state, so the
     # value survives a restart; and — for the threshold — the meter, where it is a line to aim.
 
+    def _show_threshold(self, value: Optional[float]) -> None:
+        """Point every threshold line at `value` — ours, and any the app keeps elsewhere."""
+        if self.meter is not None:
+            self.meter.threshold = value
+        if self.on_threshold_changed is not None:
+            self.on_threshold_changed(value)
+
     def _apply_threshold(self, value: Optional[float]) -> None:
         audio_recorder.require().silence_threshold = value
         self.app_state["stt_silence_threshold"] = value
-        if self.meter is not None:
-            self.meter.threshold = value
+        self._show_threshold(value)
 
     def _apply_autostop_timeout(self, value: Optional[float]) -> None:
         audio_recorder.require().autostop_timeout = value
@@ -306,8 +318,7 @@ class DPGAudioInputPanel:
 
         dpg.set_value("audio_input_peak_hold_slider", rec.vu_peak_hold)  # tag
 
-        if self.meter is not None:
-            self.meter.threshold = threshold
+        self._show_threshold(threshold)
 
     def _set_status_text(self) -> None:
         rec = audio_recorder.require()

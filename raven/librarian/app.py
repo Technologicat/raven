@@ -2337,6 +2337,8 @@ audio_input_panel = audio_input.DPGAudioInputPanel(app_state=app_state,
                                                    configured_defaults=appstate.configured_defaults(),
                                                    themes_and_fonts=themes_and_fonts,
                                                    save_app_state=lambda: appstate.save(state_file=librarian_config.llm_state_file, state=app_state),
+                                                   # The toolbar's mini meter draws the same threshold, and is not the panel's to know about.
+                                                   on_threshold_changed=lambda value: setattr(mic_vu_meter, "threshold", value),
                                                    centering_reference_window="librarian_main_window")  # tag
 
 cleanup_dialog = DPGCleanupDialog(datastore=datastore,
