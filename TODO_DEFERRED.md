@@ -3734,6 +3734,23 @@ Discovered during brief-03 Half-2 doc pass (2026-07-16); the renderer comments a
 
 text-generation-webui (oobabooga) hasn't been pulled in a long time; its OpenAI-compat API may have drifted from what Raven's `llmclient` assumes. Upgrade the local ooba install, then re-validate the ooba code paths against the current version: backend-flavor detection (`detect_backend_flavor`), model-info resolution (`_resolve_model_info` — the `/v1/internal/model/info` shape, and whether ooba now exposes a VLM-capability field so `model_is_vlm` can be better than `None`), the `mode: "instruct"` request field, the explicit `continue_` flag, the reasoning/tool-call streaming shape, and the exact token-count endpoint. Live-test a real generation + a tool call + (if supported) an image attach through ooba.
 
+**The `continue_` flag now carries a specific question, and it is a regression risk rather than a compat
+check.** As of 2026-08-28 `invoke` seeds its accumulators from the message being continued, because LM
+Studio — where a continuation is a prefill rather than a flag — answers with the continuation alone, and
+the earlier text was being lost. Whether ooba does the same is unmeasured: it honours `continue_` as a real
+request field, and continuing **worked** there before this change (Juha), which is what a backend returning
+the *whole* message would look like. If it does, the seed is now joined onto a message that already
+contains it, and ooba gets doubled text where it used to be correct. So the check is: **does ooba's
+`continue_` return the whole message or only the continuation?** Answering it decides whether the seeding
+becomes flavor-conditional. The join is one expression, in `llmclient.invoke`'s `build_message`.
+
+**A capability flag for this exists and nothing reads it.** `settings.backend_supports_continue` is set at
+`configure` time (true for ooba only) and has no consumer anywhere in the tree — the GUI gating designed
+for it in the LM Studio compat brief was scoped out and never built, which is why Continue is pressable on
+LM Studio at all. It should not simply be wired up now: `TODO.md`'s *Enable `continue_` on LM Studio*
+records the belief behind that gate as **probed wrong**, so the flag is stale in the opposite direction and
+wants deciding rather than restoring.
+
 **New backend variables are the last thing wanted in September**, and 0.2.9 is already carrying a lot. But
 note this item **unblocks two others**: the gray-thinking bug and the Gemma inline tool-call item are both
 ooba-only and currently untestable, since the install is stale and absent from the 16 GB machine.

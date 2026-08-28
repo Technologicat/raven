@@ -1997,6 +1997,12 @@ def invoke(settings: env,
     # Read off the wire history, which under `continue_` is the message verbatim (`serialize_history_for_wire`
     # leaves the last one untouched) — so the seed is exactly the text the model was asked to continue,
     # persona prefix and all. `scrub` normalizes that prefix downstream, on the joined text.
+    #
+    # All of which was measured against LM Studio, where a continuation is a *prefill*: the request ends in
+    # an assistant message, the template emits no generation prompt, and the model resumes. ooba is the
+    # other case and is unmeasured — it honours `continue_` as a real request field, and if what comes back
+    # there is the whole message rather than its tail, this seed doubles it. `TODO_DEFERRED.md`'s ooba item
+    # carries the check; the outcome makes the seed flavor-conditional or leaves it alone.
     seed_text = ""
     seed_reasoning = ""
     if continue_ and history:

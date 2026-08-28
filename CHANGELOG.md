@@ -158,10 +158,12 @@
 
 *Raven-librarian*
 
-- **Continue no longer erases the message it was continuing.** Asking the AI to carry on from where it
-  stopped replaced the reply with the continuation alone: a message reading *1. Spring / 2. Summer* came
-  back as *3. Autumn / 4. Winter*, and the first half was gone from the chat. The backend sends only the
-  new text, and Raven was storing that as the whole message.
+- **Continue no longer erases the message it was continuing** — on LM Studio and other backends without an
+  explicit continue flag, which is where it was broken. Asking the AI to carry on from where it stopped
+  replaced the reply with the continuation alone: a message reading *1. Spring / 2. Summer* came back as
+  *3. Autumn / 4. Winter*, and the first half was gone from the chat. Those backends send only the new
+  text, and Raven was storing that as the whole message. On oobabooga, which continues through a request
+  field of its own, Continue was already working.
   - **The thinking trace went the same way**, which is what you see if you stop a model mid-thought and
     continue: the trace stayed on screen for the whole of the new generation and vanished when the message
     completed. Both halves of a reply are now carried across.
