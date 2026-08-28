@@ -367,25 +367,47 @@ class Recorder:
         self._vu_peak = -np.inf  # dBFS
         self._notify_vu_readouts()
 
-    def stop(self) -> None:
-        """Stop capturing, whether recording or monitoring.
+    def stop(self,
+             wait: bool = False,
+             timeout: float = 1.0) -> bool:
+        """Stop capturing, whether recording or monitoring. Return whether it has actually stopped.
 
-        If not capturing, do nothing.
+        If not capturing, do nothing (and return `True`).
 
-        When this function returns, it may take a small amount of time for the recorder to actually stop.
-        To be sure that the recording is actually finished, `get_recorded_audio` is only safe to call
-        after the `is_capturing` method returns `False`.
+        `wait`: Whether to wait for the capture task to actually exit before returning.
+
+                With `wait=False` (the default), the capture takes a small amount of time to wind
+                down after this returns, so `get_recorded_audio` is not yet safe to call — poll
+                `is_capturing` for that, or pass `wait=True` and read the return value.
+
+                **Never wait from the capture task itself**, which is why this defaults to `False`:
+                the autostop calls `stop` from inside the very task the wait would be waiting for.
+
+        `timeout`: seconds, for `wait=True`. On expiry this returns `False` rather than raising,
+                   because the caller is normally shutting down or about to report the failure —
+                   in neither case is an exception the useful shape.
         """
         logger.info("Recorder.stop: Stopping audio capture.")
         with self._recording_state_lock:
             if not self._is_capturing:
                 logger.info("Recorder.stop: This recorder is already stopped. Ignoring.")
-                return
+                return True
             logger.info("Recorder.stop: Stopping audio recorder.")
             self.recorder.stop()
             self._clear_vu_readout()
             self._task_manager.clear()
+        if not wait:
+            logger.info("Recorder.stop: Done.")
+            return not self.is_capturing()
+
+        deadline = time.monotonic() + timeout
+        while self.is_capturing():
+            if time.monotonic() >= deadline:
+                logger.error(f"Recorder.stop: Timed out after {timeout:0.6g}s waiting for the capture task to exit.")
+                return False
+            time.sleep(0.01)
         logger.info("Recorder.stop: Done.")
+        return True
 
     def is_capturing(self) -> bool:
         """Return whether the audio device is open, in either mode.

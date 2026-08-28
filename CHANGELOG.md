@@ -52,6 +52,13 @@
 
 - **a READING indicator**, lit while an attached document's text is being extracted. Arriving at a branch whose PDFs have not been read yet spends a second or two reading them before anything else can start, and nothing on screen said so. It gets its own row between DOCS and SYSTEM rather than sharing one of theirs: extraction is local work that happens before the backend sees anything, and what these indicators are for is saying *where* the time is going.
 
+- **an *Audio input* panel** (F9, or the sliders button beside the mic), for setting up the microphone where it will be used. The level at which the mic stops listening was previously fixed at -40 dBFS with a 1.5-second silence, which is a guess about a room — and a wrong guess costs either a recording that never ends by itself or a question cut off mid-sentence. All three settings are now controls, and what you set is remembered between runs.
+  - **While the panel is open, Librarian listens without recording**: the level is live, nothing is kept, and nothing is sent to the AI. So the room's noise floor can be read off with the room as it actually is, which is the reading the threshold depends on and the one you cannot get by asking someone to speak into a form.
+  - ***Measure the room*** does the arithmetic: it takes the loudest moment of the last few seconds — the figure shown right above the button, so the readout previews what the button will do — and puts the threshold a little above it.
+  - **The automatic stop can be switched off** entirely, leaving the mic button as the only way to end a recording. That is the fallback for a room too loud for any threshold to separate speech from noise, and it needs no restart.
+  - The panel is not modal, because the calibration that matters is watching the meter while somebody actually speaks.
+  - Both VU meters draw the threshold as a gray line, and it now moves as you set it. Starting values come from `raven.client.config`; *Reset to configured defaults* puts them back.
+
 *Raven-avatar*
 
 - **an `enabled` switch on postprocessor chain entries**, default on. Set it to `false` to skip a filter while its settings stay in the chain, so a look you spent an evening tuning survives being switched off and back on. It belongs to the chain rather than to any filter, and works anywhere a postprocessor chain does.

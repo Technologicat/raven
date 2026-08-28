@@ -85,6 +85,7 @@ with timer() as tim:
     from ..common.gui.vumeter import DPGVUMeter
 
     from . import appstate
+    from . import audio_input_panel as audio_input  # module: the panel class, and the meter scale the toolbar's VU meter shares
     from .chat_controller import DPGChatController
     from .cleanup_dialog import DPGCleanupDialog
     from . import config as librarian_config
@@ -1196,6 +1197,10 @@ with timer() as tim:
                             else:
                                 stop_recording_audio_message()
                         def start_recording_audio_message() -> None:
+                            # The microphone is one device handle, so the audio input panel has to give it up
+                            # before a message can be recorded. It takes it back in `stop_recording_audio_message`.
+                            audio_input_panel.stop_monitoring()
+
                             # Acknowledge in GUI
                             pulsating_red_text_glow.reset()  # start new pulsation cycle
                             dpg.bind_item_theme(record_audio_message_button, "my_pulsating_red_text_theme")  # tag
@@ -1211,18 +1216,20 @@ with timer() as tim:
                             # Stop recording (if still recording; we may have been triggered by autostop)
                             rec = audio_recorder.require()
                             logger.info("stop_recording_audio_message: Stopping audio recorder.")
-                            rec.stop()
-                            for _ in range(20):  # Wait until recording actually stops
-                                if not rec.is_capturing():
-                                    break
-                                time.sleep(0.05)
-                            else:
+                            if not rec.stop(wait=True):
                                 logger.error("stop_recording_audio_message: Timed out while waiting for audio recorder to respond to stop command.")
                                 return
 
                             # Get the captured audio
                             logger.info("stop_recording_audio_message: Getting recorded audio.")
                             audio_data = rec.get_recorded_audio()
+
+                            # The device is free again, so the audio input panel can have it back — before
+                            # the transcription below, which takes seconds during which the meter would
+                            # otherwise sit dead. Monitoring keeps no audio, so it cannot disturb what we
+                            # just took.
+                            audio_input_panel.start_monitoring()
+
                             if audio_data is None:
                                 logger.warning("stop_recording_audio_message: Got no audio. Cancelling.")
                                 return
@@ -1342,16 +1349,34 @@ with timer() as tim:
                             # recording starts or stops.
                             record_audio_message_tooltip = gui_tooltip.Tooltip("record_audio_message_button",  # tag
                                                                                "Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
+                            # The threshold comes from the recorder rather than from a literal here, so this
+                            # line and the audio input panel's cannot disagree about where it is.
                             mic_vu_meter = DPGVUMeter(width=gui_config.vu_meter_w,
                                                       height=gui_config.vu_meter_h,
                                                       border=1,
-                                                      min_value=-90.0,
-                                                      max_value=0.0,
-                                                      yellow_start=-24.0,
-                                                      red_start=-6.0,
-                                                      threshold_value=-40.0,  # TODO: configurable autostop threshold
-                                                      tooltip_text="Mic input level (dBFS)\nYellow = -24; red = -6; gray line = -40 (autostop threshold).")
+                                                      min_value=audio_input.METER_MIN,
+                                                      max_value=audio_input.METER_MAX,
+                                                      yellow_start=audio_input.METER_YELLOW_START,
+                                                      red_start=audio_input.METER_RED_START,
+                                                      threshold_value=audio_recorder.require().silence_threshold,
+                                                      tooltip_text=("Mic input level (dBFS)\n"
+                                                                    f"Yellow = {audio_input.METER_YELLOW_START:0.6g}; "
+                                                                    f"red = {audio_input.METER_RED_START:0.6g}; "
+                                                                    "gray line = the silence threshold.\n"
+                                                                    "Click the sliders button to set it [F9]."))
                             audio_recorder.require().connect_vu_readout(mic_vu_meter.update)
+
+                            dpg.add_button(label=fa.ICON_SLIDERS,
+                                           callback=lambda: audio_input_panel.toggle(),
+                                           width=gui_config.toolbutton_w,
+                                           tag="audio_input_panel_button")  # tag
+                            dpg.bind_item_font("audio_input_panel_button", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("audio_input_panel_button", "disablable_widget_theme")  # tag
+                            gui_tooltip.Tooltip("audio_input_panel_button",  # tag
+                                                "Set up the microphone [F9]\n\n"
+                                                "Shows the input level, and sets how quiet counts as\n"
+                                                "having stopped speaking. Worth doing in the room the\n"
+                                                "system will be used in — that is what decides the number.")
 
             with dpg.group():  # right column: AI avatar
                 avatar_panel_w, avatar_panel_h = _get_avatar_panel_base_size()
@@ -1801,6 +1826,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key=_newline_keys_label(), action_indent=0, action="Insert a new line", notes="While writing a message"),
                env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="While writing a message"),
                env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak to AI using your mic", notes=f"Device: {audio_recorder.require().device_name}"),
+               env(key_indent=1, key="F9", action_indent=0, action="Set up the microphone", notes="Input level, and when quiet means finished"),
                env(key_indent=0, key="Ctrl+Shift+O", action_indent=0, action="Attach file(s) to your message", notes="Documents; and images on a VLM"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+T", action_indent=0, action="Show/hide last thinking trace", notes="For thinking models"),
@@ -2078,6 +2104,8 @@ def librarian_hotkeys_callback(sender, app_data):
         help_window.show()
 
     # Hotkeys for main window, while no modal window is shown
+    elif key == dpg.mvKey_F9:  # a bare key, because it is reached with a microphone in one hand
+        audio_input_panel.toggle()
     elif key == dpg.mvKey_F8:  # NOTE: Shift is a modifier here
         copy_chatlog_to_clipboard_as_markdown_callback()
     # Ctrl+Shift+...
@@ -2305,6 +2333,12 @@ def _on_cleanup_committed(result: env) -> None:
                                tooltip=util_cleanup_tooltip,
                                ok=True, message=message, duration=gui_config.acknowledgment_duration)
 
+audio_input_panel = audio_input.DPGAudioInputPanel(app_state=app_state,
+                                                   configured_defaults=appstate.configured_defaults(),
+                                                   themes_and_fonts=themes_and_fonts,
+                                                   save_app_state=lambda: appstate.save(state_file=librarian_config.llm_state_file, state=app_state),
+                                                   centering_reference_window="librarian_main_window")  # tag
+
 cleanup_dialog = DPGCleanupDialog(datastore=datastore,
                                   get_roots=_get_cleanup_roots,
                                   executor=bg,  # use the same thread pool as our main task manager
@@ -2346,6 +2380,7 @@ def _gui_cancel_tasks() -> None:
     backend_status_task_manager.clear(wait=False)  # stop watching the LLM backend (it rebuilds the chat view)
     dpg_avatar_renderer.stop(wait=False)  # signal the avatar renderer's background (OpenGL) task to stop (no wait)
     avatar_controller.stop_tts()          # stop TTS playback (no wait)
+    audio_recorder.require().stop()       # the capture task writes the VU readout into DPG widgets (no wait)
 dpg.set_exit_callback(_gui_cancel_tasks)
 
 def gui_shutdown() -> None:
@@ -2365,6 +2400,10 @@ def gui_shutdown() -> None:
     # from a worker thread, and in-flight chat tasks can fire `on_docs_done` similarly — both would then call
     # `dpg.show/hide_item` on widgets that are already being torn down.
     chat_controller.disable_gui_updates()
+    # The audio capture task writes levels into DPG widgets once per audio frame, so it has to be gone
+    # before the context is destroyed under it — a DPG call into a dying context is a segfault, not an
+    # exception, so the guards on those writes cannot help here.
+    audio_recorder.require().stop(wait=True)
     # Stop the watchdog observer first so no new ingest/commit tasks land while we're tearing down,
     # then cancel any in-flight RAG indexing. `hybridir.shutdown` waits for the running commit to exit
     # its per-doc loop, partial-save what was applied, and release `datastore_lock`. This must run

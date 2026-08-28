@@ -425,7 +425,22 @@ Once you are done talking, click again, or wait until the automatic silence dete
 
 The audio is transcribed into text and sent to the LLM, just as if you had typed the message in. This is convenient for quick questions and chatting.
 
-Voice input is currently very rudimentary; for example, voice message editing is missing, and the silence detector is hardcoded to 1.5 seconds at a signal level of -40 dBFS or below (shown as a gray line on the mini VU meter). We intend to expand this later.
+Voice input is still young; voice message editing is missing, for example. We intend to expand this later.
+
+### Setting up the mic
+
+How quiet counts as "finished speaking" depends on the room, so it is a control rather than a setting you are expected to get right in advance. Click the **sliders button** (next to the mic) or press **F9** to open the **Audio input** panel.
+
+While the panel is open, *Librarian* listens to the mic without recording anything and without sending anything to the AI, so you can watch the input level with the room as it actually is.
+
+- **Silence below** is the level under which the input counts as silence. It is the gray line on both VU meters.
+- **Measure the room** sets it for you: ask the room to be quiet, then click. It takes the loudest moment of the last few seconds — the figure shown right above the button — and puts the threshold a little above it.
+- **Stop when the speaker falls silent**, and how long that silence has to last, is the automatic end-of-recording. Switch it off in a room too loud to separate speech from noise; the mic button then remains the only way to stop, which always works.
+- **Meter peak hold** is how long the meters remember a peak. It is also how far back the peak line lets you see, which is what makes it useful when choosing a threshold.
+
+A word on choosing the threshold: a single moment above it is enough to convince *Librarian* that somebody is still speaking. So in a noisy room the threshold has to sit above the occasional bang, not above the average level — which is what **Measure the room** does, and why the reading it uses is a loudest-recently rather than an average.
+
+What you set is remembered between runs. **Reset to configured defaults** puts back what [`raven.client.config`](../client/config.py) says.
 
 ## 100% privacy-first
 
@@ -507,6 +522,8 @@ The toolbar at the bottom contains **global actions**:
 - Stop the AI avatar's speaking (Ctrl+S)
 - Toggle fullscreen (F11)
 - Built-in Help card (F1)
+
+Beside the text entry field, next to the mic, the **sliders button** opens the **Audio input** panel (F9) — see [Setting up the mic](#setting-up-the-mic).
 
 ## Chat message actions
 
@@ -680,6 +697,7 @@ The AI's voice is configured in the AI avatar configuration.
   - machine translation model from English to each possible subtitle language is selected in [`raven.server.config`](../server/config.py)
     - CAUTION: Server will load all of them into VRAM! So only set up what you actually need.
 - audio devices (both input and output) are selected in [`raven.client.config`](../client/config.py); see also `raven-check-audio-devices` command-line tool to list audio devices present on your system
+- the mic's silence threshold, its automatic stop, and the VU meters' peak hold start from [`raven.client.config`](../client/config.py) too — but these are meant to be set in the GUI, from the **Audio input** panel (F9), which remembers what you set
 
 ## System prompt, AI character personality, communication style
 

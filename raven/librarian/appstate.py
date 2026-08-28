@@ -5,7 +5,8 @@ Importantly, contains the HEAD node ID of the current chat, as well as some pers
 This module is shared between `minichat` (command-line app) and `app` (Raven-librarian GUI app).
 """
 
-__all__ = ["sidecar_refs_in_payload",
+__all__ = ["configured_defaults",
+           "sidecar_refs_in_payload",
            "load", "save",
            "refresh_system_prompt",
            "backfill_sidecar_metadata"]
@@ -74,6 +75,14 @@ _RENAMED_FLAGS = {"tools_enabled": "internet_enabled"}
 # by this name if the configured one is absent, so an existing chat history is not left behind by an upgrade.
 _LEGACY_DATASTORE_FILENAME = "data.json"
 
+
+def configured_defaults() -> Dict:
+    """Return the configured starting values for the numeric per-app settings, keyed as in the app state.
+
+    This is what a *reset to defaults* control puts back — the configuration's answer, as opposed to
+    whatever the user has since tuned and the state file has since remembered.
+    """
+    return dict(_DEFAULT_SETTINGS)
 
 def _looks_like_a_chat_datastore(path: pathlib.Path) -> bool:
     """Whether `path` holds a `chattree` forest, judged by reading it rather than by its name.
