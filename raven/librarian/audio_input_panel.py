@@ -225,7 +225,11 @@ class DPGAudioInputPanel:
             # issued a millisecond after an unwaited `stop` is refused as "already capturing" — and
             # refused *quietly*, which cost a recording that the user had pressed the button for.
             rec.stop(wait=True)
-        self._set_status_text()
+        # The status is deliberately *not* refreshed here. Between this and the recording starting the
+        # recorder is genuinely idle, for about a millisecond — and rendering that showed "Not listening"
+        # for a couple of frames every time the mic button was pressed. Whoever ends the handover sets
+        # the text: a recording's first frame of levels, or `start_monitoring` if it comes back here.
+        # Until then the line keeps what it had, so there is no transition to see.
 
     def _on_vu_update(self, instant: float, peak: float) -> None:
         """Take one frame's levels from the recorder. Runs on the capture thread."""

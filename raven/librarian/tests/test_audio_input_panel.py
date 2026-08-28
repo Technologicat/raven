@@ -606,6 +606,16 @@ class TestMonitoring:
         assert "Listening" not in recording, "the panel still claims nothing is being recorded"
         assert "Recording" in recording, recording
 
+    def test_the_handover_shows_no_stopped_state(self, panel):
+        # The recorder really is idle between releasing the device and the recording starting, for about
+        # a millisecond — and rendering it put "Not listening" on screen for a couple of frames every
+        # time the mic button was pressed.
+        panel.open()
+        before = dpg.get_value("audio_input_status_text")  # tag
+        panel.stop_monitoring()
+        assert dpg.get_value("audio_input_status_text") == before, \
+            "the status flashed a stopped state during the handover"  # tag
+
     def test_monitoring_does_not_resume_while_the_panel_is_closed(self, panel):
         # What the app calls after a recording ends: the panel takes the device back only if the user
         # still has it open.
