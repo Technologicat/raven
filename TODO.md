@@ -32,19 +32,22 @@ lose their claim on the next four weeks.
 6. **The fleet lint policy** — `~/.claude/TODO_DEFERRED.md`, "Whitespace checking fell out of the fleet when
    it moved to ruff". Not this repo's file, and not this repo's decision alone.
 
-## Next session, from 2026-08-28
+## Next session, from 2026-08-31
 
-**Band-2 item 10 — the STT silence level / autostop GUI — is what the next session starts on** (Juha,
-2026-08-28). See `briefs/researchers-night/README.md` for why it is on the path: speech input is new this
-year, so the threshold has to be tunable *in the room, on the day*, from a control rather than a config
-file.
+**Band-2 item 10 is done** — designed, built, live-tested and closed on 2026-08-28, as
+`briefs/researchers-night/done/stt-audio-input-panel.md`.
 
-**Designed 2026-08-28: `briefs/researchers-night/stt-audio-input-panel.md`.** Three forks settled with Juha
-the same day — a non-modal panel rather than toolbar controls or a modal; the panel listens without sending
-a message, so the room's floor is visible without capturing a question; tuned values persist in the app
-state file, so a restart mid-evening does not cost the tuning. The engine already has every setting the
-panel needs; what is missing is that the threshold is read once per recording, the meter's threshold line
-has no setter, and there is no way to see a level without recording. Work starts at step 1 of §9.
+**Monday starts on band 2's remaining pair, and their order is a real choice** (raised 2026-08-28, not
+settled). Item 11 comes first in the band and item 12 is the one that was remembered as "the first large
+item", so it is worth deciding rather than defaulting:
+
+- **11 — the avatar's expression follows the spoken words.** Exhibit-facing in a way 12 is not: TTS is on
+  whenever the avatar speaks, so a face reacting to a sentence the voice has not reached is live all
+  evening. The design is in `briefs/researchers-night/README.md` — take the updates from
+  `on_start_sentence` as each sentence is spoken, settle neutral while the reply streams, and extract the
+  streaming path's deque-and-overlap stabilization as the shared piece.
+- **12 — block-level Markdown, the remaining steps.** The single-newline split, which fenced code and
+  multi-line lists are behind. A rendering improvement rather than an exhibit one.
 
 The rest of this block is the leftover selection from 2026-08-27. Same purpose as the block above: the
 *selection* would otherwise live nowhere, each of these being filed in a different place or nowhere at all.
@@ -703,7 +706,8 @@ every tier, chosen on measurements rather than reputation.
 
 ### STT / voice
 
-- **[High]** STT: configurable silence level, autostop timeout, VU peak hold time. Needs a GUI, not just config knobs — the noise threshold for auto-stop has to be tunable in the room, on the day. Demo-facing (Researchers' Night, 2026-09-26). **Designed: `briefs/researchers-night/stt-audio-input-panel.md`** (2026-08-28).
+- ~~**[High]** STT: configurable silence level, autostop timeout, VU peak hold time.~~ **Done 2026-08-28**, as Raven-librarian's *Audio input* panel (F9): the level, the automatic stop, the meter's peak hold and the microphone itself, all live controls, remembered between runs. `briefs/researchers-night/done/stt-audio-input-panel.md`.
+  - **What it changed about the other two STT items**: the GUI surface they were to share now exists, and it has room below the peak-hold slider. The recorder's VU readout is a listener list rather than one slot, which is the piece the wake word's "one capture fanned out to three consumers" needs.
   - **Confirmed on the exhibit path in the 2026-08-25 triage** (Juha), and the reason is worth keeping: **speech input is new this year.** Last year the operator typed the visitors' questions in, so this is the first outing in a room whose noise floor nobody can predict — which is the case this item was filed for, rather than a refinement of something already proven there.
 
 - **[Medium]** STT: input-language selector in the GUI. `api.stt_transcribe` / `stt_transcribe_array` already take `language: Optional[str]` (`None` = autodetect) and the server honours it; Librarian's only call site (`app.py`, `stop_recording_audio_message`) just never passes it. So the plumbing exists — what's missing is the control.

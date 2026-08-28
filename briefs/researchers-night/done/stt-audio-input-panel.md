@@ -202,3 +202,58 @@ Step 1 is where the work is; 2–3 are small; 4 is ordinary DPG panel building.
 - **Untested against the real device.** Everything above is designed from source. The gate is
   testable without hardware; the panel, the handover between monitoring and recording, and the
   calibration are not, and want the step-6 live test rather than confidence.
+
+---
+
+## Closed 2026-08-28
+
+Everything in §9 shipped, and the live test in step 6 ran the whole checklist against a real
+microphone. The panel is F9, or the sliders button beside the mic.
+
+**What the design got right and did not have to change**: the panel rather than config knobs;
+listening without recording, which is what makes the room's floor visible at all; the maximum rather
+than an average, which §3 derived and the room confirmed; and extracting the silence gate, which is
+the only part that could be tested without hardware and is where the logic went.
+
+**What live testing changed, all of it invisible from the desk.** Eight faults, none of which any
+amount of reading would have found:
+
+- The first *Measure the room* of a session read full scale — a device opened cold hands over a spike
+  tens of dB above the room. That poisoned the recorder's own silence autodetection too, which
+  measures the first tenth of a second.
+- The panel's own VU meter was never fed. The toolbar's works because the app connects it directly.
+- The threshold line moved on the panel's meter and not on the toolbar's.
+- *Measure the room* measured the click that started it: on a floor near −40 dBFS the mouse click read
+  −27, so the operator's own hand set the threshold 13 dB high, every time.
+- The microphone handover dropped the recording: `stop` was not waited on, the recording's `start` was
+  refused a millisecond later, and refused *quietly* — the button turned red over a recorder that was
+  not recording, the next press started rather than stopped, and speech recognition returned "Thank
+  you.", which is what Whisper says when handed a second of silence.
+- Closing the panel sometimes left the toolbar's meter showing a stale level, because the readout was
+  cleared before the capture task had stopped delivering frames.
+- Pressing the mic button flashed "Not listening" for a couple of frames — twice over, from two
+  sources, the second found by a test written for something else.
+- Reset put back three of the four configured values and left the microphone, so the state file, the
+  recorder and the combo disagreed about which one was in use.
+
+**What Juha asked for that was not in the brief**, and is now in: choosing the microphone (which is
+how a noisy room is told from a noisy microphone), an `[unavailable]` tag for a device the system no
+longer reports, keyboard access to everything but the sliders with the blue mark on the same set, and
+hotkey names in the tooltips.
+
+**Findings that outlived the item**, all in `dpg-notes.md`: a disabled DPG slider still renders the
+drag and only withholds the write, which is why dragging one now switches its setting on rather than
+snapping back; and `len(signature.parameters)` counts keyword-only parameters, so a general-purpose
+helper cannot be bound as a callback directly.
+
+**The lesson worth keeping is about the stub.** It stands in for the audio device, and it earned its
+keep three times in an hour — but only after it was made to *mirror the real class's asynchrony*: an
+unwaited `stop` leaves the device open, a `start` over it is refused, and a capture reports silence as
+it exits. A stub that did the obvious thing instead kept 65 tests green straight through two of the
+bugs above. What makes a stub worth anything is the awkward parts of the real thing, not the
+convenient ones.
+
+**Still open, deliberately.** The hold-off lever in §10 — requiring *N* consecutive frames above the
+threshold — is unbuilt, because there is nothing to tune it against until the room exists. It is a
+counter in `SilenceGate`, so it stays cheap. And sliders have no keyboard story anywhere in Raven;
+that is filed in `TODO_DEFERRED.md` as a decision for the constellation rather than for this panel.

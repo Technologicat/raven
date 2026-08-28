@@ -17,7 +17,6 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 
 | Brief | What | Status |
 |---|---|---|
-| `stt-audio-input-panel.md` | Band-2 item 10: the silence threshold, autostop and peak hold as a panel rather than as config knobs | Researchers' Night, **in progress**. Written 2026-08-28. Speech input is new this year, so there is no default to ship — only a value to find on the night. Also the surface the other two STT items would join, which is what `TODO.md` means by designing the three together |
 | `markdown-block-rendering-brief.md` | Band-2 item 12: block-level Markdown in the chat view | Researchers' Night. Steps 1 and 5 landed 2026-08-25; what remains is behind the single-newline split, which is also what fenced code and multi-line lists are waiting on |
 | `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Step zero is that `XDotWidget.set_graph` has no callers and no tests |
 | `crt-display.md` | Avatar postprocessor: CRT look | Researchers' Night |
@@ -35,6 +34,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `done/filedialog-thumbnails-brief.md` | Image previews in the file dialog, as a toggled grid view | 2026-08-14 |
 | `done/filedialog-keyboard-brief.md` | Operating the file dialog without a pointing device, and saying where the keyboard is | 2026-08-21 |
 | `done/in-progress-reply-as-a-node.md` | Band-2 item 9: the reply is a node in the datastore while it streams, so an interrupted one survives | 2026-08-28 |
+| `done/stt-audio-input-panel.md` | Band-2 item 10: the microphone set up where it will be used — level, automatic stop, peak hold and the device itself, as a panel rather than as config knobs | 2026-08-28. Written and closed the same day. Its closing section is worth reading for the eight faults live testing found that no desk testing would have, and for what it took to make the test stub worth anything |
 
 The keyboard brief's last item became a constellation-wide component — `raven.common.gui.keyboardmark`, the
 blue pulse that says *the keyboard is here* — so its closing section is worth reading outside the file
@@ -310,7 +310,12 @@ is not fully specified until someone has watched it run.
    abort path — `abandoning the backend request`, and the blocked read returned **two milliseconds** later,
    against the read timeout it would have waited out before. That is the whole `netutil` mechanism
    confirmed against a real backend rather than against a probe.
-10. **The STT silence level / autostop GUI** — see below for why it is on the path.
+10. ~~**The STT silence level / autostop GUI**~~ — **done 2026-08-28**, designed and closed in a day,
+    as `done/stt-audio-input-panel.md`. The reason it was on the path held up: speech input is new
+    this year, and the number it exists to set is one only the room can supply. What the day actually
+    demonstrated is narrower and worth keeping — **the eight faults that mattered were all invisible
+    from the desk**, and every one of them came out of driving the thing with a real microphone. Read
+    the brief's closing section before assuming any other GUI item is finished when its tests pass.
 11. **The avatar's expression follows the spoken words rather than the streaming ones** — ranked in on
     2026-08-26, out of the three items raised that day. It is the one of them the exhibit's own hardware
     does not excuse: TTS is on every time the avatar speaks, so a face reacting to a sentence the voice has
