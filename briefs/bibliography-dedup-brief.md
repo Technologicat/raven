@@ -271,3 +271,32 @@ different papers.
 **Corpus for the work:** `00_stuff/rawdata/AOKK/multisource/tekoalyagentti_tutkimus.bib`, 6934 records,
 6932 of which parse once `raven-fixbib` has run. Not committed and not to be — it is a search export, and
 this repository is public.
+
+### A second session runs alongside this one
+
+Monday has two agents on the same tree: this work, and `researchers-night/` item 11, avatar and TTS
+integration. **Do not assume the commit this brief names is anywhere near `HEAD`** — fetch and look. The
+same held on 2026-08-28, when the other session landed a dozen commits between one push here and the next.
+
+The subsystems really are independent, and that is what makes the pairing safe: `raven/papers/`,
+`raven/common/text/` and the Visualizer importer on this side; `raven/avatar/`, `raven/common/audio/`, the
+TTS layers and Librarian's avatar integration on the other. Nothing in the design below reaches into any of
+those.
+
+**But subsystem independence is not what actually collided on Friday.** What did was a *tree-wide sweep* —
+the other session put every `__all__` in file order and made never-API names private, which touched
+`raven/papers/bibtex.py` and renamed `importer.parse_input_files` to `_parse_input_files` underneath work in
+progress here. It was harmless, because it was committed and pushed promptly and picked up by a fetch. The
+lesson is that a sweep crosses every boundary by definition, so the protection is *cadence*, not scope:
+
+- **Push at each seam** rather than at the end, so the other session's next fetch has your work in it.
+- **Fetch before asserting anything** about the tree, and treat a "changed on disk" notice as real.
+- **Stage by name.** Never `git add -A`, `-u`, `.` or `raven/` — on Friday that would have swept up the other
+  session's in-flight edits to `recorder.py` and `audio_input_panel.py` along with the three `config.py`
+  overrides this repo always carries.
+- **`CHANGELOG.md` is the one file both sessions certainly touch.** Read it immediately before editing, and
+  check `git diff --stat` afterwards for hunks that are not yours. The component headers keep the entries
+  apart — *Raven-visualizer* and *Raven-fixbib* here, *Raven-avatar* and *Raven-librarian* there — so the
+  conflict risk is low and the review risk of not looking is not.
+- **`scripts/check_exports.py`** now fails a public name missing from `__all__`, so anything added here is
+  checked against the convention the other session established. Run it before pushing.
