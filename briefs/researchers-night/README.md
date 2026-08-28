@@ -17,6 +17,8 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 
 | Brief | What | Status |
 |---|---|---|
+| `stt-audio-input-panel.md` | Band-2 item 10: the silence threshold, autostop and peak hold as a panel rather than as config knobs | Researchers' Night, **in progress**. Written 2026-08-28. Speech input is new this year, so there is no default to ship — only a value to find on the night. Also the surface the other two STT items would join, which is what `TODO.md` means by designing the three together |
+| `markdown-block-rendering-brief.md` | Band-2 item 12: block-level Markdown in the chat view | Researchers' Night. Steps 1 and 5 landed 2026-08-25; what remains is behind the single-newline split, which is also what fenced code and multi-line lists are waiting on |
 | `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Step zero is that `XDotWidget.set_graph` has no callers and no tests |
 | `crt-display.md` | Avatar postprocessor: CRT look | Researchers' Night |
 | `atmospheric-dust.md` | Avatar postprocessor: dust | Researchers' Night, and **the schedule's slack** — lands only if time remains. Ranked behind 16 on 2026-08-05. Safe to drop: nothing depends on it, and it borrows its priority-band scheme *from* `crt-display.md` rather than the other way round |
@@ -32,6 +34,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `done/15_headless-agent-driver-brief.md` | A scripting surface over the scaffold — `raven.librarian.agent`, plus the backend-status work and the per-variety system prompt storage that came out of it | 2026-08-12, v0.2.9 |
 | `done/filedialog-thumbnails-brief.md` | Image previews in the file dialog, as a toggled grid view | 2026-08-14 |
 | `done/filedialog-keyboard-brief.md` | Operating the file dialog without a pointing device, and saying where the keyboard is | 2026-08-21 |
+| `done/in-progress-reply-as-a-node.md` | Band-2 item 9: the reply is a node in the datastore while it streams, so an interrupted one survives | 2026-08-28 |
 
 The keyboard brief's last item became a constellation-wide component — `raven.common.gui.keyboardmark`, the
 blue pulse that says *the keyboard is here* — so its closing section is worth reading outside the file

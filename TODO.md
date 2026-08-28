@@ -37,7 +37,14 @@ lose their claim on the next four weeks.
 **Band-2 item 10 — the STT silence level / autostop GUI — is what the next session starts on** (Juha,
 2026-08-28). See `briefs/researchers-night/README.md` for why it is on the path: speech input is new this
 year, so the threshold has to be tunable *in the room, on the day*, from a control rather than a config
-file. Nothing has been designed for it yet.
+file.
+
+**Designed 2026-08-28: `briefs/researchers-night/stt-audio-input-panel.md`.** Three forks settled with Juha
+the same day — a non-modal panel rather than toolbar controls or a modal; the panel listens without sending
+a message, so the room's floor is visible without capturing a question; tuned values persist in the app
+state file, so a restart mid-evening does not cost the tuning. The engine already has every setting the
+panel needs; what is missing is that the threshold is read once per recording, the meter's threshold line
+has no setter, and there is no way to see a level without recording. Work starts at step 1 of §9.
 
 The rest of this block is the leftover selection from 2026-08-27. Same purpose as the block above: the
 *selection* would otherwise live nowhere, each of these being filed in a different place or nowhere at all.
@@ -696,7 +703,7 @@ every tier, chosen on measurements rather than reputation.
 
 ### STT / voice
 
-- **[High]** STT: configurable silence level, autostop timeout, VU peak hold time. Needs a GUI, not just config knobs — the noise threshold for auto-stop has to be tunable in the room, on the day. Demo-facing (Researchers' Night, 2026-09-26).
+- **[High]** STT: configurable silence level, autostop timeout, VU peak hold time. Needs a GUI, not just config knobs — the noise threshold for auto-stop has to be tunable in the room, on the day. Demo-facing (Researchers' Night, 2026-09-26). **Designed: `briefs/researchers-night/stt-audio-input-panel.md`** (2026-08-28).
   - **Confirmed on the exhibit path in the 2026-08-25 triage** (Juha), and the reason is worth keeping: **speech input is new this year.** Last year the operator typed the visitors' questions in, so this is the first outing in a room whose noise floor nobody can predict — which is the case this item was filed for, rather than a refinement of something already proven there.
 
 - **[Medium]** STT: input-language selector in the GUI. `api.stt_transcribe` / `stt_transcribe_array` already take `language: Optional[str]` (`None` = autodetect) and the server honours it; Librarian's only call site (`app.py`, `stop_recording_audio_message`) just never passes it. So the plumbing exists — what's missing is the control.
