@@ -395,7 +395,39 @@ automatically. The first is the smaller ask and fixes the silence, which is the 
 does its own cleaning. `raven-deduplicate` deliberately does none, on the principle settled today that
 repair belongs in `raven-fixbib`. Three importers, three answers.
 
-*Cost: M. Gate: a decision, not a measurement.* Both ends are defensible and the middle is not:
+**Before deciding, though, two distinctions that may dissolve most of it.** Offered as a reading of the
+code rather than as a decision — the decision is Juha's — but if it holds, the stance is nearly uniform
+already and what is left is one gap rather than a policy question.
+
+*First, repairing to read is not the same act as cleaning what reads fine.*
+
+- **Repair-to-read** is what makes a record visible at all: escaping stray braces, merging repeated
+  fields. Without it a quarter of this corpus does not exist. The Visualizer importer already does the
+  brace half (`_recover_failed_block` → `bibtex.repair_record`) and `raven-deduplicate` does both, by
+  reading through `fixbib`. So this is *already* the uniform stance, with exactly one gap: the importer
+  does not know about the duplicate-field-key repair, which landed after it. **Juha, 2026-08-28: it
+  should learn it.** That is closing a gap in a position the importer already holds, not adopting a new
+  one — which is why the answer is cheap.
+- **Clean-the-text** is dehyphenation, markup conversion, boilerplate stripping. Genuinely a policy
+  question, and the one below.
+
+*Second, what a tool emits decides how free it is to clean.*
+
+- The Visualizer importer produces a **dataset**, not a bibliography: it cleans `title` and `abstract` in
+  memory on the way to embeddings and a word cloud, and never writes a `.bib`. Nothing it does can reach
+  the user's file, so cleaning there is free and reversible — re-import and it is undone.
+- `raven-deduplicate` produces a **bibliography the user cites from**, so faithfulness is the whole
+  contract and cleaning would break the audit.
+- The arXiv chain produces a bibliography too, but from **API metadata rather than from a file**, so it
+  is generating records rather than altering anyone's — its `_clean_whitespace` is formatting what it is
+  about to write for the first time.
+
+If that reading holds, the principle is already there and merely unstated: **a tool that rewrites your
+bibliography is faithful; a tool that builds an analysis artifact from it cleans freely.** Which would
+leave no policy question at all, only the one importer gap above.
+
+*Cost: M. Gate: a decision, not a measurement.* If the distinctions above do *not* hold — if cleaning
+should be uniform regardless of what a tool emits — both ends are defensible and the middle is not:
 
 - **Every importer sanitizes.** A user drops in whatever a database gave them and it works. The cost is
   that no tool's output is a faithful record of its input, which is exactly what the deduplicator's audit
@@ -410,9 +442,11 @@ alone and can be revisited, while a required `fixbib` step rewrites their biblio
 
 ### Smaller, and not blocking anything
 
-- **Whether the Visualizer importer should learn the duplicate-field-key repair.** It still loses those
-  records with a misleading reason. Deliberately left out to keep the blast radius small; raised, not
-  filed. This is a sub-case of the sanitization question above — answering that answers this.
+- **The Visualizer importer should learn the duplicate-field-key repair** (Juha, 2026-08-28). It still
+  loses those records with a misleading reason. Deliberately left out of the `fixbib` commit to keep the
+  blast radius small. Gated on the sanitization question only in the weak sense that it is the same
+  subject — under the repair-to-read reading above it is a gap in a stance the importer already holds,
+  and does not wait on anything.
 
 - **Whether `publisher_stopwords` can now be trimmed.** It exists to keep publisher names out of the word
   cloud, and with the notice removed at import there is much less for it to catch. Stale entries are
