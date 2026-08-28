@@ -399,6 +399,19 @@ class DPGAudioInputPanel:
         rec.silence_threshold = self.app_state["stt_silence_threshold"]
         rec.autostop_timeout = self.app_state["stt_autostop_timeout"]
         rec.vu_peak_hold = self.app_state["stt_vu_peak_hold"]
+
+        # The microphone too: it is one of the configured values, and a reset that put back three of the
+        # four would be the kind of asymmetry a reader has to stop and explain. It can fail where the
+        # others cannot — the configured device may be unplugged, or a recording may be in progress —
+        # so the app state is then corrected to name the device actually in use rather than the wish.
+        try:
+            rec.set_device(self.app_state["stt_capture_audio_device"])
+        except ValueError:
+            logger.warning(f"DPGAudioInputPanel._reset_to_configured_defaults: configured microphone "
+                           f"'{self.app_state['stt_capture_audio_device']}' is not present; staying on '{rec.device_name}'.")
+        self.app_state["stt_capture_audio_device"] = rec.device_name
+
+        self._refresh_device_list()
         self._sync_widgets_from_recorder()
 
     def _sync_widgets_from_recorder(self) -> None:

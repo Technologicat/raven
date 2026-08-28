@@ -445,7 +445,7 @@ While the panel is open, *Librarian* listens to the mic without recording anythi
 
 A word on choosing the threshold: a single moment above it is enough to convince *Librarian* that somebody is still speaking. So in a noisy room the threshold has to sit above the occasional bang, not above the average level — which is what **Measure the room** does, and why the reading it uses is a loudest-recently rather than an average.
 
-What you set is remembered between runs, the microphone included. If that microphone is not plugged in next time, *Librarian* falls back to the configured one, and to the first available input if that is missing too — it will not refuse to start over an absent microphone, and the log says which one it settled for. **Reset to configured defaults** puts back what [`raven.client.config`](../client/config.py) says.
+What you set is remembered between runs, the microphone included. If that microphone is not plugged in next time, *Librarian* falls back to the configured one, and to the first available input if that is missing too — it will not refuse to start over an absent microphone, and the log says which one it settled for. **Reset to configured defaults** puts back what [`raven.client.config`](../client/config.py) says — the microphone included, unless that one is not plugged in, in which case you keep the one you have.
 
 ## 100% privacy-first
 

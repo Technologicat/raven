@@ -574,6 +574,23 @@ class TestResetToConfiguredDefaults:
         assert panel.recorder.vu_peak_hold == CONFIGURED["stt_vu_peak_hold"]
         assert panel.app_state == CONFIGURED
 
+    def test_it_restores_the_microphone_too(self, panel):
+        # It is one of the configured values, and putting back three of the four would be an asymmetry
+        # a reader has to stop and explain.
+        panel._on_device_combo(DEVICE_COMBO, DEVICES[1])
+        assert panel.recorder.device_name == DEVICES[1]
+        panel._reset_to_configured_defaults()
+        assert panel.recorder.device_name == CONFIGURED["stt_capture_audio_device"]
+        assert dpg.get_value(DEVICE_COMBO) == CONFIGURED["stt_capture_audio_device"]
+
+    def test_a_configured_microphone_that_is_gone_leaves_the_state_honest(self, panel, monkeypatch):
+        # The one configured value whose restoration can fail. Whatever survives is what the app state
+        # must name, or the file records a wish rather than a device.
+        monkeypatch.setitem(panel.configured_defaults, "stt_capture_audio_device", "Microphone That Went Away")
+        panel._reset_to_configured_defaults()
+        assert panel.recorder.device_name == DEVICES[0], "a missing microphone took the current one with it"
+        assert panel.app_state["stt_capture_audio_device"] == DEVICES[0]
+
     def test_it_restores_a_switched_off_autostop(self, panel):
         panel._on_autostop_checkbox(None, False)
         assert panel.recorder.autostop_timeout is None
