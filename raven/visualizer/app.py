@@ -116,7 +116,7 @@ selection.reset_undo_history(_update_gui=False)  # GUI not initialized yet. This
 # Modal window related utilities
 
 def enter_modal_mode():
-    """Prepare the GUI for showing a modal window: hide annotation, disable current item button glow, ...
+    """Prepare the GUI for showing a modal window: hide annotation, take the current item's keyboard mark off, ...
 
     Call this AFTER showing your modal so that the window detects as being shown in any functionality that checks that.
     This automatically waits for one frame for the window to actually render.
@@ -127,7 +127,7 @@ def enter_modal_mode():
     info_panel.scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so the keyboard mark comes off
 
 def exit_modal_mode():
-    """Restore the GUI to main window mode (when a modal is closed): show annotation if relevant, enable current item button glow, ...
+    """Restore the GUI to main window mode (when a modal is closed): show annotation if relevant, put the current item's keyboard mark back, ...
 
     Call this AFTER hiding your modal so that the window detects as being hidden in any functionality that checks that.
     This automatically waits for one frame for the window to actually render.
@@ -306,7 +306,7 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
 def show_open_file_dialog():
     """Button callback. Show the open file dialog, for the user to pick a dataset to open.
 
-    (And prepare the GUI for it: hide annotation, disable current item button glow, ...)
+    (And prepare the GUI for it: hide annotation, take the current item's keyboard mark off, ...)
     If you need to close it programmatically, call `filedialog_open.cancel()` so it'll trigger the callback (necessary to restore the GUI back into main window mode).
     """
     logger.debug("show_open_file_dialog: Showing open file dialog.")
@@ -1355,7 +1355,7 @@ def render_help_extras(self: helpcard.HelpWindow,
     column_width = self.content_width // 2
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f"- {self.c_txt}**Current item**: The topmost item **fully** visible in the info panel. The controls of the current item glow slightly.{self.c_end}",
+    dpg_markdown.add_text(f"- {self.c_txt}**Current item**: The topmost item **fully** visible in the info panel. A pulsating blue dot marks it.{self.c_end}",
                           parent=g1, wrap=column_width)
     dpg_markdown.add_text(f"- {self.c_txt}**Current cluster**: The cluster the current item belongs to. Clusters are auto-detected by a linguistic analysis.{self.c_end}",
                           parent=g1, wrap=column_width)

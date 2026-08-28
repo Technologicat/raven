@@ -141,6 +141,7 @@ build_number = 0  # Sequence number of last completed info panel build, so callb
 entry_title_widgets = {}  # `data_idx` (index in `sorted_xxx`) -> DPG ID of GUI widget for the title container group of that entry in the info panel
 widget_to_data_idx = {}  # reverse lookup: DPG ID of entry title GUI widget -> `data_idx`
 widget_to_display_idx = {}  # reverse lookup: DPG ID of entry title GUI widget -> insertion order in `entry_title_widgets`. Used in scroll anchoring.
+_entry_dot_widgets = {}  # DPG ID of entry title container group -> DPG ID of the keyboard mark's dot in that entry. Private: only the mark reads it.
 
 search_result_widgets = []  # DPG IDs of entry title container group widgets that match the current search, for the "scroll to next/previous match" buttons.
 search_result_widget_to_display_idx = {}  # reverse lookup: DPG ID -> index in `search_result_widgets`
@@ -794,7 +795,7 @@ def select_current_cluster():
 # Current-item tracking (moves the keyboard mark onto whatever the hotkeys would act on)
 
 def update_current_item_info():
-    """Move the keyboard mark onto the current item's buttons.
+    """Move the keyboard mark onto the current item's dot.
 
     Called per-frame by `update_current_search_result_status` (which already holds
     `content_lock`, avoiding unnecessary release/re-lock).
@@ -804,11 +805,14 @@ def update_current_item_info():
     """
     with content_lock:
         if app_state.is_any_modal_window_visible():
-            current_item = None
+            dot = None
         else:
-            current_item = _get_current_item()
-    _get_current_item_mark().target = current_item
-    _get_current_item_mark().lit = (current_item is not None)
+            # `_get_current_item` answers with the entry's title container group, which is what every other
+            # consumer of "the current item" wants; the mark wants the dot inside it. Read under the lock,
+            # with the group it came from, since a rebuild replaces both together.
+            dot = _entry_dot_widgets.get(_get_current_item())
+    _get_current_item_mark().target = dot
+    _get_current_item_mark().lit = (dot is not None)
 
 
 def clear_current_item_info():
@@ -817,7 +821,7 @@ def clear_current_item_info():
 
 
 def _get_current_item_mark():
-    """The mark on the current item's buttons, built on first use.
+    """The mark on the current item's dot, built on first use.
 
     One mark that moves, rather than one per entry: how many entries the panel holds is the user's
     selection, with no upper bound short of the dataset, so a theme apiece would be a DPG theme per
@@ -828,13 +832,17 @@ def _get_current_item_mark():
     the dimmer that covers this panel during a rebuild — and needed the modal check above to stay off the
     modals as well. A theme is part of the widget, so both cases answer themselves.
 
-    The marked widget is the entry's *title container group*, which is what `_get_current_item` returns.
-    Its framed descendants are exactly the two columns of tool buttons beside the title — the title itself
-    is text, which has no frame to border — so marking the group marks the buttons.
+    **A dot rather than a border, matching Librarian.** Marking the entry's title container group with a
+    `FRAME` bordered every framed descendant, which here is the four tool buttons in their two columns —
+    four pulsating outlines for a mark that means one thing. `MarkKind`'s own note is the argument: a
+    pulsating outline's claim on the eye scales with its perimeter, where a dot's is constant whatever it
+    marks. The same mark says the same thing in the same shape in both apps.
     """
     global _current_item_mark
     if _current_item_mark is None:
-        _current_item_mark = keyboardmark.Mark(None)
+        _current_item_mark = keyboardmark.Mark(None,
+                                               kind=keyboardmark.MarkKind.DOT,
+                                               tooltip="Item-specific hotkeys go to this item")
     return _current_item_mark
 
 
@@ -1115,6 +1123,7 @@ def _update_info_panel(*, task_env=None, env=None):
         entry_title_widgets_new = {}
         widget_to_data_idx_new = {}
         widget_to_display_idx_new = {}
+        entry_dot_widgets_new = {}
         search_result_widgets_new = []
         search_result_widget_to_display_idx_new = {}
         cluster_ids_in_selection_new = []
@@ -1252,6 +1261,11 @@ def _update_info_panel(*, task_env=None, env=None):
                 # Containers
                 entry_container_group = dpg.add_group(parent=info_panel_content_target, tag=f"cluster_{cluster_id}_entry_{data_idx}_build{env.internal_build_number}")
                 entry_title_container_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_entry_{data_idx}_header_group_build{env.internal_build_number}", parent=entry_container_group)
+
+                # Where the keyboard mark goes when this is the entry the hotkeys would act on. First in the
+                # row, so it reads as belonging to the entry rather than to any one button.
+                entry_dot_widgets_new[entry_title_container_group] = keyboardmark.add_dot(parent=entry_title_container_group,
+                                                                                          tag=f"cluster_{cluster_id}_entry_{data_idx}_keyboard_mark_build{env.internal_build_number}")  # tag
 
                 # Per-item buttons, column 1
                 entry_buttons_column_1_group = dpg.add_group(horizontal=False, tag=f"cluster_{cluster_id}_entry_{data_idx}_header_button_column_1_group_build{env.internal_build_number}", parent=entry_title_container_group)
@@ -1444,6 +1458,8 @@ def _update_info_panel(*, task_env=None, env=None):
                 widget_to_data_idx.update(widget_to_data_idx_new)
                 widget_to_display_idx.clear()
                 widget_to_display_idx.update(widget_to_display_idx_new)
+                _entry_dot_widgets.clear()
+                _entry_dot_widgets.update(entry_dot_widgets_new)
                 search_result_widgets.clear()
                 search_result_widgets.extend(search_result_widgets_new)
                 search_result_widget_to_display_idx.clear()
