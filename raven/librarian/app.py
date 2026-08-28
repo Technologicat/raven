@@ -917,25 +917,25 @@ def _request_send() -> None:
     only the global hotkey handler hears anything. Hence both, coalesced.
 
     Measured in `investigations/dpg-focus/commit_chord_dispatch_probe.py`, and coalescing is what that
-    measurement leaves rather than what it was looking for. Both handlers fire on the same keypress in the
-    same frame, the global one first — and at the moment it runs, a composer that has just committed and one
-    that was auto-focused at startup and never touched read *identically* (focused, not active) while
-    wanting opposite answers. So no predicate separates them, and the frame number does not have to: the
-    first request through sends, the second finds the frame already spent.
+    measurement leaves rather than what it was looking for. Both handlers fire on the same keypress, the
+    global one first — and at the moment it runs, a composer that has just committed and one that was
+    auto-focused at startup and never touched read *identically* (focused, not active) while wanting
+    opposite answers. So no predicate separates them, and none has to: the first request through sends and
+    the second arrives too soon after it to be a second send.
 
     Not locked, and deliberately: DPG runs every Python callback on one dedicated callback thread, so the
     two arrive in sequence rather than concurrently and there is no interleaving to protect against.
 
-    **The window is one frame rather than the same frame, because the same frame cannot be relied on.** The
-    two callbacks run on the callback thread while the *main* thread goes on incrementing the frame counter,
-    so a frame boundary can fall between them and equality would then miss — a double send, from a race that
-    reproduces about as often as one asks it to. The probe saw them agree twice, which is evidence about the
-    usual case and not about the worst one.
+    **What the two share is a very short interval, not a frame number.** They run back to back on that one
+    thread, microseconds apart against a frame of roughly sixteen milliseconds. The probe saw both report
+    the same `get_frame_count()`, but that follows from the gap rather than bounding it: the main thread
+    advances the counter independently, so a boundary can fall between the two reads and an equality test
+    would then miss — a double send, from a race that reproduces about as often as one asks it to.
 
-    One frame is enough because the two run back to back on the same thread, microseconds apart against a
-    frame of roughly sixteen milliseconds: what can land in that gap is one boundary, not two. And it cannot
-    swallow anything real, because two *legitimate* sends one frame apart are not reachable — a human cannot
-    produce them, and `_describe_send_gate` refuses while a turn is in flight.
+    Hence a window of one frame, which is the interval expressed in the only clock available here. One is
+    enough because a gap that short admits at most one boundary. And it cannot swallow anything real: two
+    *legitimate* sends that close together are not reachable — a human cannot produce them, and
+    `_describe_send_gate` refuses while a turn is in flight.
     """
     global _last_send_frame
     frame = dpg.get_frame_count()

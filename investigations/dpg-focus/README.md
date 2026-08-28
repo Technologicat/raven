@@ -71,16 +71,20 @@ predicate separates them, and `is_item_focused` — the right gate for a *commit
 result above — would leave the chord dead from app start until something else is clicked. Which is the
 original bug wearing a different hat.
 
-**The global handler runs first, and in the same frame as the commit** — 232/232 and 602/602 across two
-runs, the global row always ahead of the field row. So it cannot consult anything the commit sets either; by
-the time the field could say "I sent that", the global path has already decided.
+**The global handler runs first, and the two run a very short interval apart** — back to back on DPG's
+single callback thread, with nothing between them but the global handler's own body. So it cannot consult
+anything the commit sets either; by the time the field could say "I sent that", the global path has already
+decided.
 
-**But same-frame is what was observed, not what is guaranteed**, and the difference decides the fix. Both
-callbacks run on DPG's single callback thread while the *main* thread goes on incrementing the frame
-counter, so nothing stops a frame boundary from falling between the two reads. Two agreeing samples say the
-gap is small; they say nothing about the tail. What bounds it is that the two run back to back on that one
-thread, microseconds apart against a frame of roughly sixteen milliseconds — so at most **one** boundary can
-land between them.
+**The interval is what was measured; the frame number is not a property of it.** Both runs happened to
+report the same `get_frame_count()` from each callback — 232/232 and 602/602 — but that is a consequence of
+the gap being far shorter than a frame, not a guarantee about it. The *main* thread goes on incrementing
+that counter independently of the callback thread, so nothing stops a boundary from falling between the two
+reads; two agreeing samples say the gap is small and say nothing about the tail.
+
+Which is why the fix keys on an interval rather than on equality. What bounds it is the gap itself —
+microseconds against a frame of roughly sixteen milliseconds — so at most **one** boundary can land between
+them, however the counter happens to fall.
 
 What that leaves is not a better gate but no gate: **let both paths request a send, and drop a request that
 arrives within one frame of the last.** Every row above then yields exactly one send, and the question "did
