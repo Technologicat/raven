@@ -57,6 +57,12 @@ class StubRecorder:
         self.starts = []
         self.refused_starts = []  # a `start` that arrived while the device was still open
         self.stops = []  # the `wait` each `stop` was given
+        self.settled = True  # what `is_settled` answers
+
+    def is_settled(self):
+        # The real one is unsettled for the first moments of a capture; tests that feed levels want them
+        # believed, and the one about settling says otherwise for itself.
+        return self.settled
 
     def is_capturing(self):
         return self.recording or self.monitoring
@@ -471,6 +477,23 @@ class TestTheLoudestRecentlyReading:
         # be trusted, and a dash is the honest answer.
         panel._record_level(-40.0)
         assert panel.floor is None
+
+    def test_an_unsettled_level_is_shown_but_not_believed(self, panel):
+        """A device opened cold reports a spike tens of dB above the room in its first frames.
+
+        Showing it costs nothing — a meter twitching for a frame — and keeping it out of the floor is
+        what stops "Measure the room" from reading it back. Before this the frames were withheld
+        entirely, which also left both meters dark for a third of a second on every open.
+        """
+        panel.recorder.settled = False
+        panel._on_vu_update(-5.0, -5.0)  # the cold-open spike
+        age_history(panel)
+        assert panel.floor is None, "an unsettled level reached the floor"
+
+        panel.recorder.settled = True
+        panel._on_vu_update(-45.0, -45.0)
+        age_history(panel)
+        assert panel.floor == -45.0, "this fixture cannot tell a disbelieved level from a dropped one"
 
     def test_a_level_older_than_the_window_is_forgotten(self, panel):
         # Timestamps come from `time.monotonic_ns` inside `_record_level`, so age the samples by

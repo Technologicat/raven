@@ -44,15 +44,11 @@ DEFAULT_VU_PEAK_HOLD = 1.0  # seconds
 # one at -84, settling by 220 ms. On the same machine in Raven-librarian that spike reached full scale.
 # A device already warm shows none of it.
 #
-# The frames are still recorded — it is only the *levels* that are wrong, and they feed two things that
-# both take a maximum: the VU meter's peak, and the silence autodetection, which measures the first
-# tenth of a second and would otherwise measure exactly this.
-#
-# **Only a cold device waits.** The same measurement found a *warm* open — the device opened before in
-# this process — free of it, starting at the room's level on its first frame. Applying the wait to every
-# capture cost a visible 0.3 s of dark meters each time a GUI opened one, for an artifact that was not
-# going to arrive. What is unmeasured is whether a long enough gap between captures chills a device
-# again; if a spike ever reappears mid-session, that is the assumption to suspect.
+# **The frames are captured, and reported, and simply not believed.** They go to the VU meters, so a
+# meter is live from the first frame rather than dark for a third of a second; what they stay out of is
+# anything that takes a *maximum* over them — the meter's peak hold, the silence autodetection (which
+# measures the first tenth of a second, and would otherwise measure exactly this), and any floor a
+# caller accumulates. `is_settled` is how a caller asks.
 DEFAULT_SETTLING_TIME = 0.3  # seconds
 
 # `pygame` doesn't support recording (although it can *list*
@@ -227,9 +223,7 @@ class Recorder:
 
         self._is_capturing = False
         self._is_monitoring = False
-        # Whether this device has been opened before in this process, which decides whether a capture
-        # waits out the settling period. Reset by `set_device`, which opens a genuinely new one.
-        self._device_is_warm = False
+        self._is_settled = False  # whether the running capture is past its settling period
         self._recording_state_lock = threading.RLock()
 
         # `TaskManager` requires an executor and now says so at construction. Making one here is what
@@ -323,9 +317,7 @@ class Recorder:
                                                                         autostop_timeout=self.autostop_timeout,
                                                                         name=f"instance {task_env.task_name}")
                     self._vu_last_peak_timestamp = time.monotonic_ns()  # timestamp after the recorder is really up and running
-                    settling = DEFAULT_SETTLING_TIME if not self._device_is_warm else 0.0
-                    settled_at_ns = self._vu_last_peak_timestamp + int(settling * 10**9)
-                    self._device_is_warm = True
+                    settled_at_ns = self._vu_last_peak_timestamp + int(DEFAULT_SETTLING_TIME * 10**9)
 
                     logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Entering recording loop.")
                     while self.recorder.is_recording and not task_env.cancelled:
@@ -339,11 +331,10 @@ class Recorder:
                                 self.data = np.concatenate([self.data, array])
                             else:
                                 self.data = array
-                        if time.monotonic_ns() < settled_at_ns:
-                            continue
-
+                        # Reported either way; believed only once settled. See `DEFAULT_SETTLING_TIME`.
+                        self._is_settled = time.monotonic_ns() >= settled_at_ns
                         self._update_vu_readout(array)
-                        if monitor:
+                        if monitor or not self._is_settled:
                             continue
 
                         # _vu_instant for the current audio frame is updated by `_update_vu_readout`, above
@@ -362,6 +353,7 @@ class Recorder:
                     with self._recording_state_lock:
                         self._is_capturing = False
                         self._is_monitoring = False
+                        self._is_settled = False  # the next capture starts unsettled, on any device
                     if autostopped and on_autostop is not None:
                         logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Calling custom `on_autostop`.")
                         on_autostop()  # do this last, after no longer in recording state
@@ -405,7 +397,6 @@ class Recorder:
         self.recorder = pvrecorder.PvRecorder(frame_length=self.frame_length,
                                               device_index=get_available_devices().index(device_name))
         self.device_name = device_name
-        self._device_is_warm = False  # a different device, opened for the first time
         # The old handle goes only once nothing can reach it — the capture task reads `self.recorder`,
         # and it is stopped above, but a `delete` before the rebind would leave a window where that
         # attribute names a freed device.
@@ -482,7 +473,10 @@ class Recorder:
         peak = audio_utils.linear_to_dBFS(np.max(np.abs(array)))  # latest buffer (or whatever we were received)
         self._vu_instant = peak
         time_now = time.monotonic_ns()
-        if (peak > self._vu_peak) or ((time_now - self._vu_last_peak_timestamp) / 10**9 >= self.vu_peak_hold):
+        # The held peak is a maximum, so a settling frame would stick in it for `vu_peak_hold` seconds.
+        # The instant reading above is not, and goes out either way: it is what makes a meter live from
+        # the first frame. See `DEFAULT_SETTLING_TIME`.
+        if self._is_settled and ((peak > self._vu_peak) or ((time_now - self._vu_last_peak_timestamp) / 10**9 >= self.vu_peak_hold)):
             self._vu_peak = peak
             self._vu_last_peak_timestamp = time_now
         self._notify_vu_readouts()
@@ -541,6 +535,18 @@ class Recorder:
             time.sleep(0.01)
         logger.info("Recorder.stop: Done.")
         return True
+
+    def is_settled(self) -> bool:
+        """Return whether the running capture is past the point where its levels can be believed.
+
+        `False` for the first `DEFAULT_SETTLING_TIME` of a capture, and while nothing is capturing.
+
+        Ask this before letting a level into anything that takes a *maximum* over time — a noise floor,
+        a calibration. A device opened cold reports a spike tens of dB above the room in its first
+        frames, and a maximum keeps it. The levels are still delivered to the VU readout throughout, so
+        a meter has something to show; it is only the believing that waits.
+        """
+        return self._is_settled
 
     def is_capturing(self) -> bool:
         """Return whether the audio device is open, in either mode.

@@ -233,7 +233,10 @@ class DPGAudioInputPanel:
 
     def _on_vu_update(self, instant: float, peak: float) -> None:
         """Take one frame's levels from the recorder. Runs on the capture thread."""
-        self._record_level(instant)
+        # The floor is a maximum, so a level from a device that has not settled would stick in it — and
+        # be exactly what "Measure the room" then read. The meter below gets the frame regardless.
+        if audio_recorder.require().is_settled():
+            self._record_level(instant)
         with guiutils.nonexistent_ok():
             # The panel's meter, unlike the toolbar's, has no other feed: the app connects that one to
             # the readout directly, and this one is ours to drive.
