@@ -71,15 +71,22 @@ predicate separates them, and `is_item_focused` — the right gate for a *commit
 result above — would leave the chord dead from app start until something else is clicked. Which is the
 original bug wearing a different hat.
 
-**The global handler runs first, in the same frame.** Frames 232/232 and 602/602 across two runs, the global
-row always ahead of the field row. So it cannot consult anything the commit sets either; by the time the
-field says "I sent that", the global path has already decided.
+**The global handler runs first, and in the same frame as the commit** — 232/232 and 602/602 across two
+runs, the global row always ahead of the field row. So it cannot consult anything the commit sets either; by
+the time the field could say "I sent that", the global path has already decided.
 
-What that leaves is not a better gate but no gate: **let both paths request a send and coalesce by frame
-number.** The first request through sends, the second sees the same `get_frame_count()` and returns. Every
-row above then yields exactly one send, and the question "did the field handle this one?" is never asked.
-Two legitimate sends in one frame are not reachable — a human cannot, and `_describe_send_gate` refuses
-while a turn is in flight.
+**But same-frame is what was observed, not what is guaranteed**, and the difference decides the fix. Both
+callbacks run on DPG's single callback thread while the *main* thread goes on incrementing the frame
+counter, so nothing stops a frame boundary from falling between the two reads. Two agreeing samples say the
+gap is small; they say nothing about the tail. What bounds it is that the two run back to back on that one
+thread, microseconds apart against a frame of roughly sixteen milliseconds — so at most **one** boundary can
+land between them.
+
+What that leaves is not a better gate but no gate: **let both paths request a send, and drop a request that
+arrives within one frame of the last.** Every row above then yields exactly one send, and the question "did
+the field handle this one?" is never asked. The window is one frame rather than zero for the reason above;
+it cannot swallow anything real, since two legitimate sends that close are not reachable — a human cannot
+produce them, and `_describe_send_gate` refuses while a turn is in flight.
 
 Also confirms the same holds for the other setting: `send_message_key = "enter"` puts the commit on bare
 Enter (`ctrl_enter_for_new_line=True`, which names what *Ctrl+Enter* does and so reads backwards from the

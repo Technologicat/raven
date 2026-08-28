@@ -158,6 +158,12 @@
 
 *Raven-librarian*
 
+- **the send key now works when the composer does not have the cursor.** Ctrl+Enter (or Enter, depending on
+  your `send_message_key` setting) only sent while you were actually typing in the message field — so after
+  a send, or after clicking anywhere else, the key did nothing and the Send button was the only way. Most
+  visible when you want to send an *empty* message, which is how you ask the AI to take another turn on its
+  own: there was nothing to type, so there was nothing to press.
+
 - **Continue no longer erases the message it was continuing** — on LM Studio and other backends without an
   explicit continue flag, which is where it was broken. Asking the AI to carry on from where it stopped
   replaced the reply with the continuation alone: a message reading *1. Spring / 2. Summer* came back as

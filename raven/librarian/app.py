@@ -903,6 +903,47 @@ def _refresh_send_gate() -> None:
         dpg.configure_item("chat_send_button", enabled=(reason is None))  # tag
     chat_send_tooltip.text = reason if reason is not None else f"Send to AI [{_send_key_label()}]"
 
+
+# The frame a send was last requested in, so that the two key paths into one keypress produce one send.
+# `None` before the first, which no frame number equals.
+_last_send_frame: int | None = None
+
+def _request_send() -> None:
+    """Send the composer's message, at most once per frame. The entry point for both key paths.
+
+    The chord that sends reaches two handlers, and which of them is the right one depends on state that
+    cannot be read at the time. ImGui owns the chord while the composer is active and commits the edit
+    itself, so the field's own callback is what sends — but the composer is often *not* active, and then
+    only the global hotkey handler hears anything. Hence both, coalesced.
+
+    Measured in `investigations/dpg-focus/commit_chord_dispatch_probe.py`, and coalescing is what that
+    measurement leaves rather than what it was looking for. Both handlers fire on the same keypress in the
+    same frame, the global one first — and at the moment it runs, a composer that has just committed and one
+    that was auto-focused at startup and never touched read *identically* (focused, not active) while
+    wanting opposite answers. So no predicate separates them, and the frame number does not have to: the
+    first request through sends, the second finds the frame already spent.
+
+    Not locked, and deliberately: DPG runs every Python callback on one dedicated callback thread, so the
+    two arrive in sequence rather than concurrently and there is no interleaving to protect against.
+
+    **The window is one frame rather than the same frame, because the same frame cannot be relied on.** The
+    two callbacks run on the callback thread while the *main* thread goes on incrementing the frame counter,
+    so a frame boundary can fall between them and equality would then miss — a double send, from a race that
+    reproduces about as often as one asks it to. The probe saw them agree twice, which is evidence about the
+    usual case and not about the worst one.
+
+    One frame is enough because the two run back to back on the same thread, microseconds apart against a
+    frame of roughly sixteen milliseconds: what can land in that gap is one boundary, not two. And it cannot
+    swallow anything real, because two *legitimate* sends one frame apart are not reachable — a human cannot
+    produce them, and `_describe_send_gate` refuses while a turn is in flight.
+    """
+    global _last_send_frame
+    frame = dpg.get_frame_count()
+    if _last_send_frame is not None and frame - _last_send_frame <= 1:
+        return
+    _last_send_frame = frame
+    send_message_to_ai_callback()
+
 def _attach_callback(selected_files) -> None:
     """FileDialog callback: route each selected file to image or document staging by its extension.
 
@@ -1185,18 +1226,22 @@ with timer() as tim:
                             logger.info("stop_recording_audio_message: Sending transcribed text to AI, as the user's message.")
                             chat_controller.chat_exchange(user_message_text)
 
-                        # Sending is the field's *own* commit action, not a global hotkey, because ImGui
-                        # already owns this chord and will not hand it over. A multiline `InputText`
-                        # natively validates on Ctrl+Enter and inserts a newline on Enter;
-                        # `ctrl_enter_for_new_line` swaps the two. Validating also deactivates and unfocuses
-                        # the field, so a global key handler sees the chord only after the state it would
-                        # have gated on is gone — which is exactly how the first attempt at a configurable
-                        # send key failed, silently, in both `is_item_active` and `is_item_focused` forms.
+                        # Sending is the field's own commit action *and* a global hotkey, and it has to be
+                        # both. ImGui owns this chord while the field is active and will not hand it over: a
+                        # multiline `InputText` natively validates on Ctrl+Enter and inserts a newline on
+                        # Enter, `ctrl_enter_for_new_line` swaps the two, and validating deactivates the
+                        # field — so a global handler gated on `is_item_active` or `is_item_focused` sees
+                        # the chord only after the state it would have gated on is gone. Using the flag
+                        # instead means the toolkit decides what "commit" is and `on_enter` reports it.
                         #
-                        # Using the flag instead means the toolkit decides what "commit" is and `on_enter`
-                        # tells us when it happened. Note the widget offers exactly these two chords and no
-                        # third one — Shift+Enter does nothing, whatever other chat apps have trained into
-                        # the reader's fingers, so nothing user-facing should promise it.
+                        # But the field only commits while it holds the caret, which leaves the chord dead
+                        # everywhere else — including right after a send, which parks focus on the send
+                        # button. Hence the second path in `librarian_hotkeys_callback`, and `_request_send`
+                        # to keep one keypress from becoming two sends when both fire.
+                        #
+                        # Note the widget offers exactly these two chords and no third one — Shift+Enter
+                        # does nothing, whatever other chat apps have trained into the reader's fingers, so
+                        # nothing user-facing should promise it.
                         #
                         # **`ctrl_enter_for_new_line` reads backwards**, so mind the mapping. It names what
                         # *Ctrl+Enter* does, not what sends: `True` means Ctrl+Enter inserts a newline and
@@ -1209,7 +1254,7 @@ with timer() as tim:
                                            on_enter=True,  # fire the callback on whichever chord commits
                                            # `True` <=> Enter sends; `False` (default) <=> Ctrl+Enter sends
                                            ctrl_enter_for_new_line=(librarian_config.send_message_key == "enter"),
-                                           callback=lambda: send_message_to_ai_callback(),
+                                           callback=lambda: _request_send(),
                                            width=_get_chat_field_base_width(),
                                            height=gui_config.chat_field_h)
                         # ImGui renders `hint` (placeholder text) for single-line inputs only, so a multiline
@@ -1739,7 +1784,7 @@ def update_animations():
 # Built-in help window
 
 hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus the message composer", notes=""),
-               env(key_indent=1, key=_send_key_label(), action_indent=0, action="Send message to AI", notes="While writing a message"),
+               env(key_indent=0, key=_send_key_label(), action_indent=0, action="Send message to AI", notes="Empty message = let the AI continue"),
                env(key_indent=1, key=_newline_keys_label(), action_indent=0, action="Insert a new line", notes="While writing a message"),
                env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="While writing a message"),
                env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak to AI using your mic", notes=f"Device: {audio_recorder.require().device_name}"),
@@ -2049,6 +2094,10 @@ def librarian_hotkeys_callback(sender, app_data):
     elif ctrl_pressed:
         if key == dpg.mvKey_Spacebar:
             dpg.focus_item("chat_field")  # tag
+        # The send chord, when it is the composer that is *not* holding the caret. While it is, the field
+        # commits and this fires on the same keypress; `_request_send` is what makes that one send.
+        elif key == dpg.mvKey_Return and librarian_config.send_message_key == "ctrl+enter":
+            _request_send()
         elif key == dpg.mvKey_R:
             fire_event_if_exists("reroll")
         elif key == dpg.mvKey_T:
@@ -2092,11 +2141,20 @@ def librarian_hotkeys_callback(sender, app_data):
         elif key in (518, dpg.mvKey_Next):  # Page Down
             chat_controller.view.page_down()
 
-        # Sending has no branch here on purpose. It is the composer's own commit action, wired at the widget
-        # (`on_enter` + `ctrl_enter_for_new_line`, where the field is created) rather than as a global
-        # hotkey, because ImGui consumes the commit chord itself and deactivates *and* unfocuses the field
-        # before a handler at this level runs — so neither an `is_item_active` nor an `is_item_focused` gate
-        # can catch it. Both were tried and both failed silently.
+        # The send chord, under the setting that puts it on bare Enter. Sending is *also* the composer's own
+        # commit action, wired at the widget (`on_enter` + `ctrl_enter_for_new_line`), because ImGui
+        # consumes the chord itself while the field holds the caret. This branch is for every other moment —
+        # notably just after a send, which parks focus on the send button, where an empty message is the
+        # "let the AI take another turn" gesture and nothing was pressable.
+        #
+        # It sits above the `is_item_active` branch below so that it is reached while typing too. That costs
+        # nothing: by the time this handler runs the commit has already deactivated the field, so the branch
+        # below would not have caught the key anyway, and `_request_send` collapses the two into one send.
+        #
+        # Under the *other* setting Enter inserts a newline and must not send, which is what the config test
+        # is for — not a redundant guard on a key that only means one thing.
+        elif key == dpg.mvKey_Return and librarian_config.send_message_key == "enter":
+            _request_send()
 
         # *Active*, not *focused*, and the distinction is the whole reason the navigation keys work at all.
         # ImGui hands nav focus to the first navigable item of a newly focused window on its own, so the
