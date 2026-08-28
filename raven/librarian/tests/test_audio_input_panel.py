@@ -32,6 +32,8 @@ SECOND = 10**9  # ns, as `_record_level` timestamps in
 THRESHOLD_SLIDER = "audio_input_threshold_slider"  # tag
 AUTOSTOP_SLIDER = "audio_input_autostop_slider"  # tag
 PEAK_HOLD_SLIDER = "audio_input_peak_hold_slider"  # tag
+AUTODETECT_CHECKBOX = "audio_input_autodetect_checkbox"  # tag
+AUTOSTOP_CHECKBOX = "audio_input_autostop_checkbox"  # tag
 
 DEVICES = ["Built-in Microphone", "Webcam Microphone", "Monitor of Built-in Audio"]
 
@@ -90,6 +92,10 @@ class StubRecorder:
         if not wait:
             return False
         self.monitoring = self.recording = False
+        # The real one's capture task reports silence as it exits, which is what leaves every connected
+        # meter dark. A stub that just stopped would let a panel forget to arrange for that.
+        for listener in tuple(self.listeners):
+            listener(-math.inf, -math.inf)
         return True
 
     def set_device(self, device_name):
@@ -163,36 +169,48 @@ class TestTheStubResemblesTheRealRecorder:
         assert name in inspect.signature(audio_recorder.Recorder.__init__).parameters
 
 
-class TestASliderOnlyEditsASettingThatIsInEffect:
-    """A slider whose switch is off must not switch it back on.
+class TestDraggingASliderTurnsItsSettingOn:
+    """A slider whose switch is off is not inert: dragging it switches the setting on at that value.
 
-    The panel refuses this by asking the recorder, not by trusting that DPG withholds input from a
-    disabled widget — so these hold whatever the toolkit does with a disabled slider.
+    They were disabled instead, at first, and DPG renders a disabled slider's drag and only withholds
+    the write — so the control moved under the mouse and undid itself on release. Honouring the drag
+    turns a dead gesture into a meaningful one, and the checkbox moves with it, so nothing about it is
+    silent.
     """
 
-    def test_the_autostop_slider_does_nothing_while_autostop_is_off(self, panel):
-        panel._on_autostop_checkbox(None, False)
+    def test_dragging_the_autostop_slider_switches_autostop_on(self, panel):
+        panel._on_autostop_checkbox(AUTOSTOP_CHECKBOX, False)
         assert panel.recorder.autostop_timeout is None
-        panel._on_autostop_slider(AUTOSTOP_SLIDER,4.0)
-        assert panel.recorder.autostop_timeout is None, "moving the slider switched autostop back on"
+        panel._on_autostop_slider(AUTOSTOP_SLIDER, 4.0)
+        assert panel.recorder.autostop_timeout == 4.0, "the drag was refused instead of being honoured"
+        assert dpg.get_value(AUTOSTOP_CHECKBOX) is True, "the checkbox does not show what the drag did"
 
-    def test_the_autostop_slider_works_while_autostop_is_on(self, panel):
-        # The control for the test above: with the switch on, this very call does change the setting,
-        # so that test is about the switch rather than about the slider being inert in general.
-        panel._on_autostop_checkbox(None, True)
-        panel._on_autostop_slider(AUTOSTOP_SLIDER,4.0)
-        assert panel.recorder.autostop_timeout == 4.0
-
-    def test_the_threshold_slider_does_nothing_while_autodetect_is_on(self, panel):
-        panel._on_autodetect_checkbox(None, True)
+    def test_dragging_the_threshold_slider_cancels_per_recording_measurement(self, panel):
+        panel._on_autodetect_checkbox(AUTODETECT_CHECKBOX, True)
         assert panel.recorder.silence_threshold is None
-        panel._on_threshold_slider(THRESHOLD_SLIDER,-55.0)
-        assert panel.recorder.silence_threshold is None, "moving the slider cancelled the autodetection"
+        panel._on_threshold_slider(THRESHOLD_SLIDER, -55.0)
+        assert panel.recorder.silence_threshold == -55.0, "the drag was refused instead of being honoured"
+        assert dpg.get_value(AUTODETECT_CHECKBOX) is False, "the checkbox does not show what the drag did"
 
-    def test_the_threshold_slider_works_while_autodetect_is_off(self, panel):
-        panel._on_autodetect_checkbox(None, False)
-        panel._on_threshold_slider(THRESHOLD_SLIDER,-55.0)
-        assert panel.recorder.silence_threshold == -55.0
+    def test_a_switch_still_switches(self, panel):
+        # The control: the checkboxes remain the way to turn a setting *off*, which a slider now cannot
+        # do. Without this, the tests above would pass against a panel that ignored the checkboxes.
+        panel._on_threshold_slider(THRESHOLD_SLIDER, -55.0)
+        panel._on_autodetect_checkbox(AUTODETECT_CHECKBOX, True)
+        assert panel.recorder.silence_threshold is None
+
+        panel._on_autostop_slider(AUTOSTOP_SLIDER, 4.0)
+        panel._on_autostop_checkbox(AUTOSTOP_CHECKBOX, False)
+        assert panel.recorder.autostop_timeout is None
+
+    def test_the_sliders_are_never_disabled(self, panel):
+        # The premise of all of the above: a disabled slider is what the snap-back came from.
+        for slider in (THRESHOLD_SLIDER, AUTOSTOP_SLIDER, PEAK_HOLD_SLIDER):
+            assert dpg.get_item_configuration(slider)["enabled"], f"{slider} is disabled"
+        panel._on_autodetect_checkbox(AUTODETECT_CHECKBOX, True)
+        panel._on_autostop_checkbox(AUTOSTOP_CHECKBOX, False)
+        for slider in (THRESHOLD_SLIDER, AUTOSTOP_SLIDER):
+            assert dpg.get_item_configuration(slider)["enabled"], f"{slider} was disabled by its checkbox"
 
 
 class TestTheControlsWriteEverywhereTheyHaveTo:
@@ -594,6 +612,24 @@ class TestMonitoring:
 
         panel.recorder.start(monitor=False)
         assert panel._on_vu_update in panel.recorder.listeners
+
+    def test_closing_leaves_every_meter_dark(self, panel):
+        """The toolbar keeps a meter of its own, connected for the app's whole life.
+
+        Closing the panel has to end with a silence reading, or that meter is left showing a level from
+        a microphone nobody is listening to. Live case 2026-08-28, and intermittent: `Recorder.stop`
+        cleared the readout before waiting for the capture task, so a frame already in flight could
+        repaint a live level over the silence — and then it stuck.
+        """
+        seen = []
+        panel.recorder.connect_vu_readout(lambda instant, peak: seen.append((instant, peak)))
+        panel.open()
+        panel._on_vu_update(-30.0, -20.0)  # something to be left behind
+        seen.clear()
+
+        panel.close()
+        assert seen, "closing the panel told the other meters nothing"
+        assert seen[-1] == (-math.inf, -math.inf), f"the last thing the meters heard was {seen[-1]}"
 
     def test_the_status_says_which_it_is(self, panel):
         panel.open()

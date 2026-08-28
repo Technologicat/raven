@@ -244,7 +244,12 @@ class DPGAudioInputPanel:
             dpg.set_value("audio_input_floor_text", format_dBFS(self.floor))  # tag
             # Here rather than only at the mode changes, because the mic button changes the mode without
             # telling the panel. One more `set_value` on a line that already writes three.
-            self._set_status_text()
+            #
+            # Except on the silence a capture reports as it exits: that arrives mid-handover, when the
+            # device has been released and the recording has not started, and rendering it put "Not
+            # listening" on screen for a couple of frames. Whoever ends the handover sets the text.
+            if instant != -math.inf:
+                self._set_status_text()
 
     def _record_level(self, level: float) -> None:
         """Add one level to the recent history, and drop what has aged out of the window."""
@@ -296,34 +301,36 @@ class DPGAudioInputPanel:
         audio_recorder.require().vu_peak_hold = value
         self.app_state["stt_vu_peak_hold"] = value
 
-    # A slider only edits a value that is currently in effect, and it asks the recorder whether that is
-    # so rather than asking its own checkbox. Two assumptions drop out that way: that DPG withholds
-    # input from a disabled widget, and that a checkbox's widget value is in step with the `app_data`
-    # its callback was handed. Neither has been measured here, and what a wrong guess switches back on
-    # is precisely the setting the user turned off.
     def _quantize(self, sender, app_data) -> float:
         """Round a slider's value to the precision its `format` displays, and snap the handle onto it."""
         return guiutils.snap_slider(sender, app_data, decimals=_SLIDER_DECIMALS)
 
+    # Dragging a slider whose setting is switched off switches it on, rather than being refused.
+    #
+    # The sliders were disabled instead, at first. DPG renders a disabled slider's drag and only withholds
+    # the write — so the user moved a control, watched it move, and watched it undo itself on release,
+    # which reads worse than a control that does not move at all: the movement promises what the release
+    # takes away. A drag is a statement of intent, and honouring it makes a dead gesture meaningful.
+    #
+    # Nothing is silent about it, which was the objection to letting a slider re-enable its own setting:
+    # the checkbox moves in the same frame, and the user is the one who moved the slider.
     def _on_threshold_slider(self, sender, app_data) -> None:
-        if audio_recorder.require().silence_threshold is None:
-            return  # measuring per recording; the slider is only saying what a fixed threshold would be
-        self._apply_threshold(self._quantize(sender, app_data))
+        value = self._quantize(sender, app_data)
+        dpg.set_value("audio_input_autodetect_checkbox", False)  # tag  # a level chosen is not a level measured
+        self._apply_threshold(value)
 
     def _on_autodetect_checkbox(self, sender, app_data) -> None:
         autodetect = bool(app_data)
-        dpg.configure_item("audio_input_threshold_slider", enabled=not autodetect)  # tag
         self._apply_threshold(None if autodetect else float(dpg.get_value("audio_input_threshold_slider")))  # tag
 
     def _on_autostop_checkbox(self, sender, app_data) -> None:
         enabled = bool(app_data)
-        dpg.configure_item("audio_input_autostop_slider", enabled=enabled)  # tag
         self._apply_autostop_timeout(float(dpg.get_value("audio_input_autostop_slider")) if enabled else None)  # tag
 
     def _on_autostop_slider(self, sender, app_data) -> None:
-        if audio_recorder.require().autostop_timeout is None:
-            return  # autostop is off; the slider is only saying how long it would wait
-        self._apply_autostop_timeout(self._quantize(sender, app_data))
+        value = self._quantize(sender, app_data)
+        dpg.set_value("audio_input_autostop_checkbox", True)  # tag  # setting how long to wait means wanting to wait
+        self._apply_autostop_timeout(value)
 
     def _on_peak_hold_slider(self, sender, app_data) -> None:
         self._apply_peak_hold(self._quantize(sender, app_data))
@@ -378,7 +385,6 @@ class DPGAudioInputPanel:
         threshold = numutils.clamp(floor + silencegate.DEFAULT_SILENCE_MARGIN, METER_MIN, METER_MAX)
         logger.info(f"DPGAudioInputPanel._measure_the_room: loudest of the last {FLOOR_WINDOW:0.6g}s was {floor:0.2f}dBFS, setting the threshold to {threshold:0.2f}dBFS.")
         dpg.set_value("audio_input_autodetect_checkbox", False)  # tag
-        dpg.configure_item("audio_input_threshold_slider", enabled=True)  # tag
         dpg.set_value("audio_input_threshold_slider", threshold)  # tag  # a programmatic set fires no callback
         self._apply_threshold(threshold)
 
@@ -399,13 +405,11 @@ class DPGAudioInputPanel:
         threshold = rec.silence_threshold
         autodetect = threshold is None
         dpg.set_value("audio_input_autodetect_checkbox", autodetect)  # tag
-        dpg.configure_item("audio_input_threshold_slider", enabled=not autodetect)  # tag
         if not autodetect:
             dpg.set_value("audio_input_threshold_slider", threshold)  # tag
 
         autostop = rec.autostop_timeout
         dpg.set_value("audio_input_autostop_checkbox", autostop is not None)  # tag
-        dpg.configure_item("audio_input_autostop_slider", enabled=autostop is not None)  # tag
         if autostop is not None:
             dpg.set_value("audio_input_autostop_slider", autostop)  # tag
 

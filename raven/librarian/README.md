@@ -441,6 +441,7 @@ While the panel is open, *Librarian* listens to the mic without recording anythi
 - **Measure the room** sets it for you: ask the room to be quiet, then click. It takes the loudest moment of the last few seconds — the figure shown right above the button — and puts the threshold a little above it.
   - That window stops just short of the present, so the sound of clicking the button is not what it measures. On a quiet laptop the click alone reads some 13 dB above the room.
 - **Stop when the speaker falls silent**, and how long that silence has to last, is the automatic end-of-recording. Switch it off in a room too loud to separate speech from noise; the mic button then remains the only way to stop, which always works.
+  - Dragging a slider whose checkbox is off switches that setting back on at the value you dragged to — setting how long to wait means wanting to wait. The checkboxes are what turn a setting off.
 
 A word on choosing the threshold: a single moment above it is enough to convince *Librarian* that somebody is still speaking. So in a noisy room the threshold has to sit above the occasional bang, not above the average level — which is what **Measure the room** does, and why the reading it uses is a loudest-recently rather than an average.
 

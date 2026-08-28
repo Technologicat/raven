@@ -345,6 +345,9 @@ class Recorder:
                             break
                 finally:
                     logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Audio capture task exiting.")
+                    # Silence, as the last thing this capture reports: nothing else can deliver a
+                    # frame once this task is gone, so this is what leaves every connected meter dark.
+                    self._clear_vu_readout()
                     with self._recording_state_lock:
                         self._is_capturing = False
                         self._is_monitoring = False
@@ -508,7 +511,11 @@ class Recorder:
                 return True
             logger.info("Recorder.stop: Stopping audio recorder.")
             self.recorder.stop()
-            self._clear_vu_readout()
+            # The VU readout is *not* cleared here. A frame already in flight can be delivered after
+            # this returns, and it would repaint a live level over the silence — leaving a meter
+            # showing a reading from a microphone nobody is listening to, until something else moved
+            # it. The capture task clears it from its own `finally` instead, which is the only point
+            # after which no further frame can arrive.
             self._task_manager.clear()
         if not wait:
             logger.info("Recorder.stop: Done.")
