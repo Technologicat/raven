@@ -1,6 +1,7 @@
 """A simple mono audio recorder for STT (speech to text), with background operation, autostop on silence, and VU metering in dBFS."""
 
 __all__ = ["get_available_devices",
+           "is_monitoring_device",
            "validate_capture_device",
            "Recorder",
 
@@ -35,6 +36,18 @@ from . import utils as audio_utils
 DEFAULT_FRAME_LENGTH = 512  # samples at device default sample rate
 DEFAULT_VU_PEAK_HOLD = 1.0  # seconds
 
+# How long to disbelieve the signal level at the start of a capture.
+#
+# A device opened cold hands over a few unusable frames first: measured 2026-08-28 on a USB webcam
+# microphone at 16 kHz, two all-zero frames, then one at -18.8 dBFS against a room floor near -45, then
+# one at -84, settling by 220 ms. On the same machine in Raven-librarian that spike reached full scale.
+# A device already warm shows none of it.
+#
+# The frames are still recorded — it is only the *levels* that are wrong, and they feed two things that
+# both take a maximum: the VU meter's peak, and the silence autodetection, which measures the first
+# tenth of a second and would otherwise measure exactly this.
+DEFAULT_SETTLING_TIME = 0.3  # seconds
+
 # `pygame` doesn't support recording (although it can *list*
 # which capture devices it sees), so Raven uses `pvrecorder`
 # for recording audio for its STT (speech to text) features.
@@ -67,6 +80,16 @@ def get_available_devices(refresh: bool = False) -> List[str]:
             _available_devices = list(pvrecorder.PvRecorder.get_available_devices())
         return list(_available_devices)  # a copy: the caller must not be able to edit the cache
 
+def is_monitoring_device(device_name: str) -> bool:
+    """Return whether `device_name` names a monitoring capture device.
+
+    A monitoring device records what is being *played* rather than what a microphone hears, so it is
+    never what someone means by "the microphone": pointed at one, speech recognition would transcribe
+    the AI's own voice. `pvrecorder` lists them alongside real inputs — `pygame` does not see them at
+    all — and the only thing distinguishing them is the name.
+    """
+    return "monitor of" in device_name.lower()
+
 def validate_capture_device(device_name: Optional[str]) -> str:
     """Validate `device_name` against list of audio capture devices detected on the system.
 
@@ -94,7 +117,7 @@ def validate_capture_device(device_name: Optional[str]) -> str:
         logger.debug(f"validate_capture_device: Using audio capture device '{device_name}'.")
     else:  # Find first NON-monitoring audio capture device
         for device_name in device_names:
-            if "monitor of" not in device_name.lower():
+            if not is_monitoring_device(device_name):
                 break
         else:
             error_msg = "validate_capture_device: No NON-monitoring audio capture device found on this system. If you want to use a MONITORING device for recording, please select it explicitly."
@@ -199,6 +222,14 @@ class Recorder:
         self._is_monitoring = False
         self._recording_state_lock = threading.RLock()
 
+        # `TaskManager` requires an executor and now says so at construction. Making one here is what
+        # this class has always documented, and it is what lets a script record without first building
+        # a thread pool; remember that it is ours, so teardown does not close a caller's.
+        self._own_executor = None
+        if executor is None:
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1,
+                                                             thread_name_prefix=f"Recorder_0x{id(self):x}")
+            self._own_executor = executor
         self._task_manager = bgtask.TaskManager(name=f"Recorder_0x{id(self):x}",
                                                 mode="concurrent",
                                                 executor=executor)
@@ -212,6 +243,14 @@ class Recorder:
         except Exception:
             pass
         self.recorder = None
+        # Only ours; an executor the caller lent us is the caller's to close, and shutting it down here
+        # would take their other background work with it.
+        if getattr(self, "_own_executor", None) is not None:
+            try:
+                self._own_executor.shutdown(wait=False)
+            except Exception:
+                pass
+            self._own_executor = None
 
     def start(self,
               on_autostop: Optional[Callable] = None,
@@ -270,18 +309,26 @@ class Recorder:
                                                                         autostop_timeout=self.autostop_timeout,
                                                                         name=f"instance {task_env.task_name}")
                     self._vu_last_peak_timestamp = time.monotonic_ns()  # timestamp after the recorder is really up and running
+                    settled_at_ns = self._vu_last_peak_timestamp + int(DEFAULT_SETTLING_TIME * 10**9)
 
                     logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Entering recording loop.")
                     while self.recorder.is_recording and not task_env.cancelled:
                         frame = self.recorder.read()  # -> List[int] (s16, mono)
                         array = np.array(frame, dtype=np.int16)
+                        # The audio is kept from the very first frame; only its *level* is disbelieved
+                        # while the device settles. See `DEFAULT_SETTLING_TIME` for what is being
+                        # waited out, and why a maximum taken across it is the thing that suffers.
+                        if not monitor:
+                            if self.data is not None:
+                                self.data = np.concatenate([self.data, array])
+                            else:
+                                self.data = array
+                        if time.monotonic_ns() < settled_at_ns:
+                            continue
+
                         self._update_vu_readout(array)
                         if monitor:
                             continue
-                        if self.data is not None:
-                            self.data = np.concatenate([self.data, array])
-                        else:
-                            self.data = array
 
                         # _vu_instant for the current audio frame is updated by `_update_vu_readout`, above
                         gate.threshold = self.silence_threshold

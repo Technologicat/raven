@@ -66,6 +66,25 @@ def enumerations(monkeypatch):
     return calls
 
 
+class TestSpottingAMonitoringDevice:
+    """A monitoring device records what is being *played*, so speech recognition pointed at one would
+    transcribe the AI's own voice. Only the name distinguishes them, which is why this is a function
+    rather than a flag from the audio backend.
+    """
+
+    @pytest.mark.parametrize("name", ["Monitor of Built-in Audio",
+                                      "monitor of built-in audio",
+                                      "Monitor of Webcam C930e Analog Stereo"])
+    def test_a_monitoring_device_is_spotted_whatever_its_case(self, name):
+        assert audio_recorder.is_monitoring_device(name)
+
+    @pytest.mark.parametrize("name", ["Built-in Microphone",
+                                      "Webcam C930e Analog Stereo",
+                                      "Studio Monitor Interface"])  # a *speaker* brand, not a monitoring input
+    def test_an_ordinary_input_is_not(self, name):
+        assert not audio_recorder.is_monitoring_device(name)
+
+
 class TestTheDeviceListIsCached:
     def test_the_second_call_does_not_ask_again(self, enumerations):
         assert audio_recorder.get_available_devices() == DEVICES

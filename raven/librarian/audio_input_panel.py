@@ -15,6 +15,7 @@ device, and is verified by hand.
 """
 
 __all__ = ["format_dBFS",
+           "device_label", "device_name_from_label",
            "DPGAudioInputPanel"]
 
 import logging
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 import collections
 import math
 import time
+from collections.abc import Sequence
 from typing import Callable, Optional, Union
 
 import dearpygui.dearpygui as dpg
@@ -61,6 +63,23 @@ PEAK_HOLD_MAX = 5.0  # seconds
 _SLIDER_DECIMALS = 1
 
 DIM_TEXT = (180, 180, 180)
+
+# Appended to a microphone the panel lists although the OS no longer reports it — one that was
+# unplugged, or one named in the configuration that is not here today. Listing it silently would
+# leave the reader wondering why it does not work; leaving it out is a one-way door.
+UNAVAILABLE_SUFFIX = "  [unavailable]"
+
+
+def device_label(device_name: str, available: Sequence[str]) -> str:
+    """The combo entry for `device_name`, tagged if it is not among `available`."""
+    return device_name if device_name in available else f"{device_name}{UNAVAILABLE_SUFFIX}"
+
+
+def device_name_from_label(label: str) -> str:
+    """Recover a microphone's real name from a combo entry `device_label` produced."""
+    if label.endswith(UNAVAILABLE_SUFFIX):
+        return label[:-len(UNAVAILABLE_SUFFIX)]
+    return label
 
 
 def format_dBFS(value: Optional[float]) -> str:
@@ -272,13 +291,16 @@ class DPGAudioInputPanel:
     def _on_device_combo(self, sender, app_data) -> None:
         """Switch microphones, and start metering the new one straight away."""
         rec = audio_recorder.require()
+        chosen = device_name_from_label(str(app_data))
         try:
-            switched = rec.set_device(str(app_data))
+            switched = rec.set_device(chosen)
         except ValueError:  # unplugged between the list being offered and the choice being made
-            logger.warning(f"DPGAudioInputPanel._on_device_combo: '{app_data}' is no longer there; staying on '{rec.device_name}'.")
+            logger.warning(f"DPGAudioInputPanel._on_device_combo: '{chosen}' is no longer there; staying on '{rec.device_name}'.")
             switched = False
         if not switched:
-            dpg.set_value(sender, rec.device_name)  # put the combo back on the device actually in use
+            # Rebuild rather than just putting the value back: the OS is worth re-asking after a switch
+            # that did not take, and it is what decides which entries carry the unavailable tag.
+            self._refresh_device_list()
             return
         self.app_state["stt_capture_audio_device"] = rec.device_name
         self._levels.clear()  # the reading belongs to the microphone that produced it
@@ -286,12 +308,26 @@ class DPGAudioInputPanel:
 
     def _refresh_device_list(self) -> None:
         """Re-ask the OS which microphones exist, and offer those. Called each time the panel opens."""
-        devices = audio_recorder.get_available_devices(refresh=True)
+        # Monitoring devices record what is being played, so offering one by default would invite
+        # transcribing the AI's own voice back into the chat. They are kept out of the list — except
+        # for two that a user has already named, and would otherwise be unable to get back to:
+        #
+        #   - the one the recorder holds, so the combo shows the recorder's own answer rather than
+        #     appearing to be set to some other device;
+        #   - the configured one, because filtering that away is a one-way door. Switch off it once
+        #     and it is gone from the combo, and going back means editing `client/config.py`.
+        #
+        # The first also covers a device the OS has stopped listing. What happens to a capture whose
+        # device is unplugged mid-recording is not known here — the sound server may move the stream,
+        # or reads may start failing — so the panel reports what it was asked for and does not guess.
+        available = audio_recorder.get_available_devices(refresh=True)
+        devices = [name for name in available if not audio_recorder.is_monitoring_device(name)]
         current = audio_recorder.require().device_name
-        if current not in devices:  # unplugged while we were not looking; still the device in use
-            devices = devices + [current]
-        dpg.configure_item("audio_input_device_combo", items=devices)  # tag
-        dpg.set_value("audio_input_device_combo", current)  # tag
+        for name in (current, self.configured_defaults.get("stt_capture_audio_device")):
+            if name is not None and name not in devices:
+                devices.append(name)
+        dpg.configure_item("audio_input_device_combo", items=[device_label(name, available) for name in devices])  # tag
+        dpg.set_value("audio_input_device_combo", device_label(current, available))  # tag
 
     def _measure_the_room(self) -> None:
         """Set the threshold from what has been heard recently, plus a margin."""
@@ -415,9 +451,20 @@ class DPGAudioInputPanel:
                                      "Ask the room to be quiet first. The figure it will use is\n"
                                      f"the \"Loudest in {FLOOR_WINDOW:0.6g} s\" reading above.")
 
+            # Peak hold sits with the meter rather than with the settings below: it governs how far back
+            # the peak line lets you see, which is a property of the readout you are looking at.
+            dpg.add_slider_float(label="Meter peak hold",
+                                 min_value=PEAK_HOLD_MIN,
+                                 max_value=PEAK_HOLD_MAX,
+                                 default_value=rec.vu_peak_hold,
+                                 format="%.1f s",
+                                 width=slider_w,
+                                 callback=self._on_peak_hold_slider,
+                                 tag="audio_input_peak_hold_slider")  # tag
+
             dpg.add_separator()
 
-            dpg.add_slider_float(label="Silence below",
+            dpg.add_slider_float(label="Silence level",
                                  min_value=METER_MIN,
                                  max_value=METER_MAX,
                                  default_value=(rec.silence_threshold if rec.silence_threshold is not None
@@ -446,21 +493,9 @@ class DPGAudioInputPanel:
                                  callback=self._on_autostop_slider,
                                  tag="audio_input_autostop_slider")  # tag
 
-            dpg.add_spacer(height=6)
-            dpg.add_slider_float(label="Meter peak hold",
-                                 min_value=PEAK_HOLD_MIN,
-                                 max_value=PEAK_HOLD_MAX,
-                                 default_value=rec.vu_peak_hold,
-                                 format="%.1f s",
-                                 width=slider_w,
-                                 callback=self._on_peak_hold_slider,
-                                 tag="audio_input_peak_hold_slider")  # tag
-
             dpg.add_separator()
-            with dpg.group(horizontal=True):
-                dpg.add_button(label="Reset to configured defaults",
-                               callback=lambda: self._reset_to_configured_defaults(),
-                               tag="audio_input_reset_button")  # tag
-                dpg.add_button(label="Close",
-                               callback=lambda: self.close(),
-                               tag="audio_input_close_button")  # tag
+            # No Close button: the window's own title-bar X does it, and `on_close` routes that through
+            # the same `close`.
+            dpg.add_button(label="Reset to configured defaults",
+                           callback=lambda: self._reset_to_configured_defaults(),
+                           tag="audio_input_reset_button")  # tag

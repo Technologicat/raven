@@ -79,7 +79,13 @@ class TaskManager:
         `executor`: A `ThreadPoolExecutor` that actually manages the concurrent execution.
         """
         if mode not in ("concurrent", "sequential"):
-            raise ValueError(f"Unknown mode '{mode}'; valid values: 'concurrent', 'sequential'.")
+            raise ValueError(f"TaskManager '{name}': unknown mode '{mode}'; valid values: 'concurrent', 'sequential'.")
+        # Refused here rather than at the first `submit`, which is where it used to surface: as
+        # `AttributeError: 'NoneType' object has no attribute 'submit'`, from inside the manager, at
+        # whatever unrelated moment the owning object first did some work. The construction is where the
+        # mistake is, so it is where the complaint belongs.
+        if executor is None:
+            raise ValueError(f"TaskManager '{name}': `executor` is required; got `None`. Pass a `ThreadPoolExecutor` — the app's shared one, if it has one.")
 
         self.name = name  # used in generated task names
         self.mode = mode

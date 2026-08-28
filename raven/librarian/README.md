@@ -434,10 +434,12 @@ How quiet counts as "finished speaking" depends on the room, so it is a control 
 While the panel is open, *Librarian* listens to the mic without recording anything and without sending anything to the AI, so you can watch the input level with the room as it actually is.
 
 - **Microphone** picks which input to record from. The list is re-read each time you open the panel, so something plugged in while *Librarian* was running is there. Switching takes effect immediately, and the meter follows — which is how you compare two microphones, or tell a noisy room from a noisy mic.
-- **Silence below** is the level under which the input counts as silence. It is the gray line on both VU meters.
+  - Monitoring inputs are left out: those record what is being *played*, so one would transcribe the AI's own voice. If you have named one in the configuration, it stays in the list so you can get back to it.
+  - An entry marked `[unavailable]` is one *Librarian* is listing although the system does not currently report it — an unplugged microphone, or one named in your configuration that is not attached today.
+- **Meter peak hold** is how long the meters remember a peak. It is also how far back the peak line lets you see, which is what makes it useful when choosing a level.
+- **Silence level** is the level under which the input counts as silence. It is the gray line on both VU meters.
 - **Measure the room** sets it for you: ask the room to be quiet, then click. It takes the loudest moment of the last few seconds — the figure shown right above the button — and puts the threshold a little above it.
 - **Stop when the speaker falls silent**, and how long that silence has to last, is the automatic end-of-recording. Switch it off in a room too loud to separate speech from noise; the mic button then remains the only way to stop, which always works.
-- **Meter peak hold** is how long the meters remember a peak. It is also how far back the peak line lets you see, which is what makes it useful when choosing a threshold.
 
 A word on choosing the threshold: a single moment above it is enough to convince *Librarian* that somebody is still speaking. So in a noisy room the threshold has to sit above the occasional bang, not above the average level — which is what **Measure the room** does, and why the reading it uses is a loudest-recently rather than an average.
 

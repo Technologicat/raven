@@ -53,7 +53,7 @@
 - **a READING indicator**, lit while an attached document's text is being extracted. Arriving at a branch whose PDFs have not been read yet spends a second or two reading them before anything else can start, and nothing on screen said so. It gets its own row between DOCS and SYSTEM rather than sharing one of theirs: extraction is local work that happens before the backend sees anything, and what these indicators are for is saying *where* the time is going.
 
 - **an *Audio input* panel** (F9, or the sliders button beside the mic), for setting up the microphone where it will be used. The level at which the mic stops listening was previously fixed at -40 dBFS with a 1.5-second silence, which is a guess about a room — and a wrong guess costs either a recording that never ends by itself or a question cut off mid-sentence. All three settings are now controls, and what you set is remembered between runs.
-  - **The microphone itself is one of the controls**, and switching takes effect at once with the meter following — which is how you tell a noisy room from a noisy microphone, or compare two of them. The list is re-read each time the panel opens, so one plugged in mid-session appears.
+  - **The microphone itself is one of the controls**, and switching takes effect at once with the meter following — which is how you tell a noisy room from a noisy microphone, or compare two of them. The list is re-read each time the panel opens, so one plugged in mid-session appears. Monitoring inputs are left out of it, since recording one would transcribe whatever is being played, the AI's own voice included.
   - **While the panel is open, Librarian listens without recording**: the level is live, nothing is kept, and nothing is sent to the AI. So the room's noise floor can be read off with the room as it actually is, which is the reading the threshold depends on and the one you cannot get by asking someone to speak into a form.
   - ***Measure the room*** does the arithmetic: it takes the loudest moment of the last few seconds — the figure shown right above the button, so the readout previews what the button will do — and puts the threshold a little above it.
   - **The automatic stop can be switched off** entirely, leaving the mic button as the only way to end a recording. That is the fallback for a room too loud for any threshold to separate speech from noise, and it needs no restart.
@@ -181,6 +181,8 @@
 **Fixed**:
 
 *Raven-librarian*
+
+- **the mic's VU meter no longer shows a spurious peak when a recording starts.** A capture device opened cold hands over a few unusable frames before it settles — measured here as two silent ones, then a spike more than 25 dB above the room, gone by 220 ms. The meter showed that spike as the peak, and it was the first thing the new *Measure the room* button measured. Levels are now disbelieved for the first 0.3 s of a capture; the audio itself is kept from the first frame, since it is only the *level* that is wrong.
 
 - **the send key now works when the composer does not have the cursor.** Ctrl+Enter (or Enter, depending on
   your `send_message_key` setting) only sent while you were actually typing in the message field — so after

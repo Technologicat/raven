@@ -314,14 +314,53 @@ class TestChoosingAMicrophone:
         panel.open()
         assert "Microphone Plugged In Just Now" in dpg.get_item_configuration(DEVICE_COMBO)["items"]
 
-    def test_a_microphone_in_use_but_unplugged_still_appears(self, panel, monkeypatch):
-        # Otherwise the combo would show some other device as selected while this one is still the one
-        # being recorded from, which is worse than listing something that is gone.
+    def test_monitoring_devices_are_kept_out(self, panel):
+        # DEVICES[2] is "Monitor of Built-in Audio". Pointing speech recognition at one would
+        # transcribe whatever is being played, the AI's own voice included.
+        panel.open()
+        items = dpg.get_item_configuration(DEVICE_COMBO)["items"]
+        assert DEVICES[2] not in items
+        assert DEVICES[0] in items and DEVICES[1] in items, "the filter took the real microphones too"
+
+    def test_a_configured_monitoring_device_stays_offerable_after_switching_away(self, panel, monkeypatch):
+        # Filtering it away unconditionally is a one-way door: switch off it once and going back means
+        # editing the configuration file.
+        monkeypatch.setitem(panel.configured_defaults, "stt_capture_audio_device", DEVICES[2])
+        panel.recorder.device_name = DEVICES[2]
+        panel.open()
+        assert DEVICES[2] in dpg.get_item_configuration(DEVICE_COMBO)["items"]
+
+        panel.close()
+        panel.recorder.device_name = DEVICES[0]  # the user picks a real microphone
+        panel.open()
+        assert DEVICES[2] in dpg.get_item_configuration(DEVICE_COMBO)["items"], \
+            "the configured microphone is no longer reachable from the panel"
+
+    def test_a_microphone_in_use_but_unplugged_is_listed_and_tagged(self, panel, monkeypatch):
+        # Dropping it would leave the combo showing some other device as selected; listing it silently
+        # would leave the reader wondering why it does not work.
         monkeypatch.setattr(audio_recorder, "get_available_devices", lambda refresh=False: DEVICES[1:])
         panel.open()
         items = dpg.get_item_configuration(DEVICE_COMBO)["items"]
-        assert DEVICES[0] in items
+        tagged = aip.device_label(DEVICES[0], DEVICES[1:])
+        assert tagged in items
+        assert tagged.startswith(DEVICES[0]) and tagged != DEVICES[0], "the entry is not marked as unavailable"
+        assert dpg.get_value(DEVICE_COMBO) == tagged
+
+    def test_a_present_microphone_is_not_tagged(self, panel):
+        # The control for the test above: the tag has to mean something, so it must not be on everything.
+        panel.open()
         assert dpg.get_value(DEVICE_COMBO) == DEVICES[0]
+        assert aip.UNAVAILABLE_SUFFIX not in "".join(dpg.get_item_configuration(DEVICE_COMBO)["items"])
+
+    def test_choosing_a_tagged_entry_asks_for_the_real_name(self, panel, monkeypatch):
+        # The combo hands its callback the label it displays, tag and all; what reaches the recorder
+        # has to be the microphone's actual name.
+        monkeypatch.setattr(audio_recorder, "get_available_devices", lambda refresh=False: DEVICES[1:])
+        panel.open()
+        panel.recorder.device_name = DEVICES[1]  # move off it, so switching back is a real change
+        panel._on_device_combo(DEVICE_COMBO, aip.device_label(DEVICES[0], DEVICES[1:]))
+        assert panel.recorder.device_name == DEVICES[0]
 
 
 class TestTheLoudestRecentlyReading:

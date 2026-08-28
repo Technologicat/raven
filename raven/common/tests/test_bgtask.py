@@ -10,10 +10,15 @@ import concurrent.futures
 import threading
 import time
 
+import pytest
+
 from unpythonic import box
 from unpythonic.env import env
 
 from raven.common import bgtask
+
+# For construction tests that never submit anything, so it need not be a real pool of workers.
+DUMMY_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
 
 def _make_env(**kwargs) -> env:
@@ -22,6 +27,30 @@ def _make_env(**kwargs) -> env:
     e.task_name = "test_task"
     e.cancelled = False
     return e
+
+
+class TestTaskManagerConstruction:
+    """Construction is where a bad argument should be reported, not the first `submit` afterwards."""
+
+    def test_a_missing_executor_is_refused_at_construction(self):
+        # It used to be accepted, and surfaced later as `AttributeError: 'NoneType' object has no
+        # attribute 'submit'` from inside the manager — at whatever unrelated moment the owning object
+        # first did some work, which for an audio recorder was the first recording of the session.
+        with pytest.raises(ValueError, match="executor"):
+            bgtask.TaskManager(name="test_manager", mode="concurrent", executor=None)
+
+    def test_an_unknown_mode_is_refused(self):
+        with pytest.raises(ValueError, match="mode"):
+            bgtask.TaskManager(name="test_manager", mode="simultaneous", executor=DUMMY_EXECUTOR)
+
+    @pytest.mark.parametrize("failing", ["executor", "mode"])
+    def test_the_message_names_the_manager(self, failing):
+        # These are constructed inside whatever object owns them, so an error that does not say which
+        # manager sends the reader looking through every one in the app.
+        kwargs = {"name": "the_manager_at_fault", "mode": "concurrent", "executor": DUMMY_EXECUTOR}
+        kwargs[failing] = None if failing == "executor" else "nonsense"
+        with pytest.raises(ValueError, match="the_manager_at_fault"):
+            bgtask.TaskManager(**kwargs)
 
 
 class TestManagedTaskPendingWait:
