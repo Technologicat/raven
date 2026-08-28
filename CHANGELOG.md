@@ -163,7 +163,7 @@
   replaced the reply with the continuation alone: a message reading *1. Spring / 2. Summer* came back as
   *3. Autumn / 4. Winter*, and the first half was gone from the chat. Those backends send only the new
   text, and Raven was storing that as the whole message. On oobabooga, which continues through a request
-  field of its own, Continue was already working.
+  field of its own, Continue was already working and is untouched.
   - **The thinking trace went the same way**, which is what you see if you stop a model mid-thought and
     continue: the trace stayed on screen for the whole of the new generation and vanished when the message
     completed. Both halves of a reply are now carried across.

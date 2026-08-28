@@ -156,14 +156,22 @@ prefix, and `scrub` strips it from the start of *any* line before re-adding one,
 out with exactly one. R2's token count is the continuation's own (152, not 1516 + 152), which is the
 accumulators-stay-about-this-call property showing up in the data.
 
-**ooba is the open question, and it is a regression risk rather than a compat check.** The seed is joined
-unconditionally, and ooba honours `continue_` as a real request field where LM Studio continues by prefill.
-Continuing worked on ooba before this change (Juha), which is what a backend returning the *whole* message
-would look like — and if it does, the seed now doubles it. There is no local install to ask.
-`TODO_DEFERRED.md`'s ooba item carries the question in the form that decides the code. Recorded there too:
-`settings.backend_supports_continue` exists and is read by nothing, the GUI gating it was built for having
-been scoped out of the LM Studio compat work and never landed — which is why Continue is pressable on LM
-Studio at all, and therefore why this bug was reachable.
+**ooba is excluded, on purpose** (Juha, 2026-08-28). It continues through a request field of its own where
+LM Studio continues by prefill, and continuing worked there before the seed existed — which is what a
+backend returning the *whole* message would look like, in which case the seed would double it. Nobody has
+measured which, and there is no local install to ask, so the seed is gated on
+`settings.backend_supports_continue`: **a previously-tested-working shape is safer to leave in than an
+assumed one**, particularly when the measurement waits on the ooba cluster, which is not near-term. That
+also puts ooba's path in the shape the cluster wants to re-test — unchanged, so a difference found then is
+a difference in ooba rather than in us. `TODO_DEFERRED.md`'s ooba item carries the question and says which
+answer lifts the gate and which keeps it.
+
+Two things that fell out of gating on that flag, both recorded on the same item. It **had no use site at
+all** — set at `configure` time since the LM Studio compat work and read by nothing, the GUI gating designed
+for it there having been scoped out and never built, which is why Continue is pressable on LM Studio and
+therefore why this bug was reachable. And its **docstring was wrong**: it read as "can this backend
+continue", which is true of every OpenAI-compatible backend, where what it actually answers is *which
+mechanism* — the distinction `invoke` now depends on.
 
 **Storing partials for a continuation is still not done, and is a decision rather than a consequence.** The
 partials are correct now, so the reason that comment gave has gone; what remains is that the node's active

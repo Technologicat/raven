@@ -355,8 +355,19 @@ def setup(backend_url: str,
                                       `False` from `connect` when the backend was down. Read it through
                                       `backend_status`, which folds it together with `model_is_loaded`.
 
-        `backend_supports_continue: bool`: Whether the backend supports continuing an existing assistant message
-                                           (ooba does, via an explicit flag; lmstudio/generic don't).
+        `backend_supports_continue: bool`: Whether the backend has a request field of its own for continuing
+                                           an existing assistant message. True for ooba, false for
+                                           lmstudio/generic.
+
+                                           **Not "can this backend continue at all"**, which is what the
+                                           name suggests and what it was built to mean: every
+                                           OpenAI-compatible backend continues, because a request ending in
+                                           an assistant message makes the template emit no generation
+                                           prompt, and that is a property of the template rather than of
+                                           the server (probed 2026-07-27 against LM Studio). So this reads
+                                           as *which mechanism*, and `invoke` uses it that way — the two
+                                           mechanisms differ in what comes back, and only the prefill one
+                                           is known to return the continuation alone.
 
         `system_prompt: str`: Currently empty. Used to be a generic system prompt for the LLM (the LLaMA 3 preset from SillyTavern), to make it follow the character card.
 
@@ -1998,14 +2009,22 @@ def invoke(settings: env,
     # leaves the last one untouched) — so the seed is exactly the text the model was asked to continue,
     # persona prefix and all. `scrub` normalizes that prefix downstream, on the joined text.
     #
-    # All of which was measured against LM Studio, where a continuation is a *prefill*: the request ends in
-    # an assistant message, the template emits no generation prompt, and the model resumes. ooba is the
-    # other case and is unmeasured — it honours `continue_` as a real request field, and if what comes back
-    # there is the whole message rather than its tail, this seed doubles it. `TODO_DEFERRED.md`'s ooba item
-    # carries the check; the outcome makes the seed flavor-conditional or leaves it alone.
+    # All of which was measured against a backend that continues by *prefill*: the request ends in an
+    # assistant message, the template emits no generation prompt, and the model resumes. That is LM Studio
+    # and any generic OpenAI-compatible server, and it is the case the seed is for.
+    #
+    # **A backend with an explicit continue flag is left exactly as it was**, which is what
+    # `backend_supports_continue` gates — ooba, today. It honours `continue_` as a real request field, and
+    # continuing worked there before the seed existed; whether it answers with the whole message or only
+    # its tail is unmeasured, and there is no install on hand to ask. Seeding regardless would be betting
+    # the working case on the guess. `TODO_DEFERRED.md`'s ooba item carries the measurement, and until it
+    # is made, an untested change is the thing not to ship into the tested path.
+    #
+    # Note the condition is about the *mechanism*, not about a vendor: a backend continues by prefill
+    # exactly when it has no flag of its own, which is the same question this attribute already answers.
     seed_text = ""
     seed_reasoning = ""
-    if continue_ and history:
+    if continue_ and history and not settings.backend_supports_continue:
         seed_text = chatutil.content_to_text(history[-1]["content"])
         seed_reasoning = history[-1].get("reasoning_content") or ""
     collected_tool_calls: list[dict] = []  # `tool_call` events in arrival order -> message["tool_calls"]

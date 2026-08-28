@@ -3734,22 +3734,36 @@ Discovered during brief-03 Half-2 doc pass (2026-07-16); the renderer comments a
 
 text-generation-webui (oobabooga) hasn't been pulled in a long time; its OpenAI-compat API may have drifted from what Raven's `llmclient` assumes. Upgrade the local ooba install, then re-validate the ooba code paths against the current version: backend-flavor detection (`detect_backend_flavor`), model-info resolution (`_resolve_model_info` — the `/v1/internal/model/info` shape, and whether ooba now exposes a VLM-capability field so `model_is_vlm` can be better than `None`), the `mode: "instruct"` request field, the explicit `continue_` flag, the reasoning/tool-call streaming shape, and the exact token-count endpoint. Live-test a real generation + a tool call + (if supported) an image attach through ooba.
 
-**The `continue_` flag now carries a specific question, and it is a regression risk rather than a compat
-check.** As of 2026-08-28 `invoke` seeds its accumulators from the message being continued, because LM
-Studio — where a continuation is a prefill rather than a flag — answers with the continuation alone, and
-the earlier text was being lost. Whether ooba does the same is unmeasured: it honours `continue_` as a real
-request field, and continuing **worked** there before this change (Juha), which is what a backend returning
-the *whole* message would look like. If it does, the seed is now joined onto a message that already
-contains it, and ooba gets doubled text where it used to be correct. So the check is: **does ooba's
-`continue_` return the whole message or only the continuation?** Answering it decides whether the seeding
-becomes flavor-conditional. The join is one expression, in `llmclient.invoke`'s `build_message`.
+**The `continue_` flag now carries a specific question, and answering it lifts a gate rather than fixing a
+bug.** As of 2026-08-28 `invoke` seeds its accumulators from the message being continued, because a backend
+that continues by *prefill* — LM Studio, and any generic OpenAI-compatible server — answers with the
+continuation alone, and the earlier text was being lost. **ooba is deliberately excluded**, gated on
+`settings.backend_supports_continue`, because it continues through a request field of its own and
+continuing **worked** there before the seed existed (Juha). Leaving a previously-tested-working shape in
+place beats an assumed one when the measurement is months away.
 
-**A capability flag for this exists and nothing reads it.** `settings.backend_supports_continue` is set at
-`configure` time (true for ooba only) and has no consumer anywhere in the tree — the GUI gating designed
-for it in the LM Studio compat brief was scoped out and never built, which is why Continue is pressable on
-LM Studio at all. It should not simply be wired up now: `TODO.md`'s *Enable `continue_` on LM Studio*
-records the belief behind that gate as **probed wrong**, so the flag is stale in the opposite direction and
-wants deciding rather than restoring.
+So the check is: **does ooba's `continue_` return the whole message or only the continuation?**
+
+- **Only the continuation** → drop the gate; the seed is right for both, and one mechanism serves everything.
+- **The whole message** → the gate is right and should stay, with the answer written beside it so nobody
+  re-opens it.
+
+The gate is one clause in `llmclient.invoke`, beside the seed; the join is one expression in its
+`build_message`. `test_a_backend_with_a_continue_flag_of_its_own_is_left_alone` pins the current behaviour
+and is the test to change.
+
+**This gave `settings.backend_supports_continue` its first use site**, having been set at `configure` time
+since the LM Studio compat work and read by nothing — the GUI gating designed for it there was scoped out
+and never built, which is why Continue is pressable on LM Studio at all, and therefore why the bug above
+was reachable. **Its docstring was wrong and is fixed**: it does not mean "can this backend continue",
+which is true of all of them, but "does this backend have a continue field of its own" — i.e. *which
+mechanism*, which is what `invoke` needs. The GUI gating still should not simply be built: `TODO.md`'s
+*Enable `continue_` on LM Studio* records the belief behind it as **probed wrong**.
+
+**The name still says the old thing.** `backend_supports_continue` reads as a capability question whose
+answer is now always yes; `backend_has_continue_flag` would say what it means. Not renamed unilaterally
+because the old name appears in the LM Studio compat brief's specified-but-unbuilt GUI gating and in the
+`TODO.md` item above, and a rename would leave both arguing about a name that no longer exists.
 
 **New backend variables are the last thing wanted in September**, and 0.2.9 is already carrying a lot. But
 note this item **unblocks two others**: the gray-thinking bug and the Gemma inline tool-call item are both
