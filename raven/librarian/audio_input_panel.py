@@ -14,8 +14,8 @@ recorder and unit-tested on its own; this module is the part that needs a render
 device, and is verified by hand.
 """
 
-__all__ = ["format_dBFS",
-           "device_label", "device_name_from_label",
+__all__ = ["device_label", "device_name_from_label",
+           "format_dBFS",
            "DPGAudioInputPanel"]
 
 import logging

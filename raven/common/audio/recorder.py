@@ -1,12 +1,13 @@
 """A simple mono audio recorder for STT (speech to text), with background operation, autostop on silence, and VU metering in dBFS."""
 
-__all__ = ["get_available_devices",
+__all__ = ["DEFAULT_FRAME_LENGTH",
+           "DEFAULT_VU_PEAK_HOLD",
+
+           "get_available_devices",
            "is_monitoring_device",
            "validate_capture_device",
            "Recorder",
 
-           "DEFAULT_FRAME_LENGTH",
-           "DEFAULT_VU_PEAK_HOLD",
            "instance",
            "initialize",
            "require"]

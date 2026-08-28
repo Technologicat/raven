@@ -5,12 +5,12 @@ the recorder feeds it signal levels, and anything else can too — a test, a pro
 tuning the threshold against recorded levels.
 """
 
-__all__ = ["SilenceGate",
-
-           "DEFAULT_SILENCE_THRESHOLD",
+__all__ = ["DEFAULT_SILENCE_THRESHOLD",
            "DEFAULT_AUTOSTOP_TIMEOUT",
            "DEFAULT_SILENCE_MEASUREMENT_TIME",
-           "DEFAULT_SILENCE_MARGIN"]
+           "DEFAULT_SILENCE_MARGIN",
+
+           "SilenceGate"]
 
 import logging
 logger = logging.getLogger(__name__)
