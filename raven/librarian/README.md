@@ -512,12 +512,26 @@ The toolbar at the bottom contains **global actions**:
 
 In the linearized chat view on the left, there are buttons below each chat message, for **chat message actions**:
 
+**The blue dot says which message the keyboard is on.** Every hotkey in this section acts on one message,
+and the dot at the left of that message's button row is where it will land — the same blue that marks the
+keyboard's position everywhere else in Raven, breathing at the same rate.
+
+- **It follows the scroll position, not the mouse.** The marked message is the *bottommost* one whose whole
+  button row is on screen; if a message is tall enough to fill the panel with no row showing, the dot is
+  simply absent, because there is nothing on screen it could honestly point at.
+- **So scrolling to the end (End) puts it on the last message**, which is the quickest way to aim a hotkey
+  at the reply you just received.
+- The reason it is the *bottommost* row rather than the topmost: a reroll aimed at a message below the fold
+  is an edit nobody can see happening.
+
+Hover the dot and it says so.
+
 - Copy chat message to clipboard
 - Reroll (AI messages only) (Ctrl+R)
 - Continue generating (Ctrl+U)
   - Last message of linearized view only; and only if it is an AI message.
 - Show/hide thinking trace (AI messages only, and only if the model reasoned) (Ctrl+T)
-  - Click the cloud icon beside the message, or press Ctrl+T. Whether traces *arrive* open is the **Show thinking** mode toggle; this acts on the message in front of you regardless.
+  - Click the cloud icon beside the message, or press Ctrl+T for the message the blue dot is on. Whether traces *arrive* open is the **Show thinking** mode toggle; this acts on the one message regardless.
   - The cloud also carries the numbers for the reasoning alone — tokens, wall time, speed — so a trace you never open still says what it cost. While a reply is being written, it counts up.
 - Speak (AI messages only) (Ctrl+S)
   - Only works when **Speech** is enabled in the mode toggles. Upon clicking this, the avatar speaks the message through the TTS subsystem.

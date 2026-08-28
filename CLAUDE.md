@@ -429,6 +429,20 @@ What stays here is the short list that has to fire **before** the decision to la
 
 **Why these four stay and the recipes go.** The costs are asymmetric: forgetting a recipe wastes a run of your own, while forgetting to announce spends the human's keystrokes on whatever the app makes of them. A rule that protects *someone else* cannot be demand-loaded, because the moment it is needed is the moment before the task has been recognised as the kind that needs it.
 
+**A per-message hotkey needs the blue dot on the right message first — press End.** In Librarian the
+per-message keys (Ctrl+T, Ctrl+R, Ctrl+U, Ctrl+S) act on *the message the keyboard mark is on*, which is
+the bottommost message whose whole button row is on screen. A driven test that scrolls to look at something
+and then presses one of these aims it wherever it happens to have stopped, and `End` is the one-key way to
+put the mark on the last message. `raven/librarian/README.md` → *Chat message actions* states the rule for
+users; this is the operational half.
+
+The failure is silent in a way worth naming, because it looks like a bug in the feature: the key is
+delivered, the handler runs, it acts on a message that is off screen or is the *user's* rather than the
+AI's, and the visible result is nothing at all. (Live case 2026-08-28: Ctrl+T twice reported as "the trace
+will not expand", with the app behaving correctly both times — the mark was on the user message, because
+the previous step had scrolled up to read.) So before concluding that a hotkey does not work, check where
+the mark is; a screenshot shows it, and costs no focus.
+
 ### DPG Pitfalls
 
 **Before editing any DPG code, invoke the `dpg` skill** (`.claude/skills/dpg/`), which indexes the reference by
