@@ -461,7 +461,8 @@ class TestNumericSettings:
         a restart, and editing the configuration afterwards does not silently undo it.
         """
         _, state, _, state_path = _load(tmp_path, llm_settings)
-        tuned = -12.5 if key == "stt_silence_threshold" else 4.25
+        tuned = {"stt_silence_threshold": -12.5,
+                 "stt_capture_audio_device": "Some Other Microphone"}.get(key, 4.25)
         assert tuned != appstate._DEFAULT_SETTINGS[key], \
             "the tuned value equals the default, so this fixture cannot tell a stored value from a filled-in one"
         state[key] = tuned

@@ -391,12 +391,30 @@ def _apply_stored_audio_capture_settings() -> None:
 
     `audio.initialize` ran before the state file could be read, so the recorder started on the
     configured values; these are the remembered ones, which take precedence over them.
+
+    The microphone is the one setting that can stop existing between runs, so it resolves in three
+    steps: the one chosen in the GUI if it is plugged in, else the configured one if it is, else the
+    first available. The last two are `audio.initialize`'s doing and have already happened by now;
+    this only adds the first, and writes back whichever survived so the state file stops naming a
+    microphone nobody has.
     """
     rec = audio_recorder.require()
     rec.silence_threshold = app_state["stt_silence_threshold"]
     rec.autostop_timeout = app_state["stt_autostop_timeout"]
     rec.vu_peak_hold = app_state["stt_vu_peak_hold"]
-    logger.info(f"_apply_stored_audio_capture_settings: silence threshold {rec.silence_threshold}dBFS, autostop timeout {rec.autostop_timeout}s, VU peak hold {rec.vu_peak_hold}s.")
+
+    # The microphone the user last chose may not be plugged in this time, and a missing one must not
+    # stop the app from starting: fall back to whatever `audio.initialize` already opened, and write
+    # that back so the state file names a device that exists.
+    stored_device = app_state["stt_capture_audio_device"]
+    if stored_device is not None and stored_device != rec.device_name:
+        try:
+            rec.set_device(stored_device)
+        except ValueError:
+            logger.warning(f"_apply_stored_audio_capture_settings: audio capture device '{stored_device}' from the app state is not present; staying on '{rec.device_name}'.")
+    app_state["stt_capture_audio_device"] = rec.device_name
+
+    logger.info(f"_apply_stored_audio_capture_settings: device '{rec.device_name}', silence threshold {rec.silence_threshold}dBFS, autostop timeout {rec.autostop_timeout}s, VU peak hold {rec.vu_peak_hold}s.")
 
 logger.info("Loading RAG (retrieval-augmented generation) document store.")
 with timer() as tim:

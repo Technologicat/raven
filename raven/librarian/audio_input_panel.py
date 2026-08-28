@@ -127,6 +127,7 @@ class DPGAudioInputPanel:
 
         if self.window_id is None:
             self._build_window()
+        self._refresh_device_list()  # a microphone may have been plugged in since the last look
         self._sync_widgets_from_recorder()
         self.is_open = True
 
@@ -276,6 +277,30 @@ class DPGAudioInputPanel:
     def _on_peak_hold_slider(self, sender, app_data) -> None:
         self._apply_peak_hold(self._quantize(sender, app_data))
 
+    def _on_device_combo(self, sender, app_data) -> None:
+        """Switch microphones, and start metering the new one straight away."""
+        rec = audio_recorder.require()
+        try:
+            switched = rec.set_device(str(app_data))
+        except ValueError:  # unplugged between the list being offered and the choice being made
+            logger.warning(f"DPGAudioInputPanel._on_device_combo: '{app_data}' is no longer there; staying on '{rec.device_name}'.")
+            switched = False
+        if not switched:
+            dpg.set_value(sender, rec.device_name)  # put the combo back on the device actually in use
+            return
+        self.app_state["stt_capture_audio_device"] = rec.device_name
+        self._levels.clear()  # the reading belongs to the microphone that produced it
+        self._set_status_text()
+
+    def _refresh_device_list(self) -> None:
+        """Re-ask the OS which microphones exist, and offer those. Called each time the panel opens."""
+        devices = audio_recorder.get_available_devices(refresh=True)
+        current = audio_recorder.require().device_name
+        if current not in devices:  # unplugged while we were not looking; still the device in use
+            devices = devices + [current]
+        dpg.configure_item("audio_input_device_combo", items=devices)  # tag
+        dpg.set_value("audio_input_device_combo", current)  # tag
+
     def _measure_the_room(self) -> None:
         """Set the threshold from what has been heard recently, plus a margin."""
         floor = self.floor
@@ -348,7 +373,13 @@ class DPGAudioInputPanel:
                         on_close=lambda: self.close()) as window_id:
             self.window_id = window_id
 
-            dpg.add_text(f"Microphone: {rec.device_name}", color=DIM_TEXT)
+            with dpg.group(horizontal=True):
+                dpg.add_text("Microphone", color=DIM_TEXT)
+                dpg.add_combo(items=audio_recorder.get_available_devices(),
+                              default_value=rec.device_name,
+                              width=-1,
+                              callback=self._on_device_combo,
+                              tag="audio_input_device_combo")  # tag
             dpg.add_text("", tag="audio_input_status_text", color=DIM_TEXT)  # tag
             dpg.add_separator()
 

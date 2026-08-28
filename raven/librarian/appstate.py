@@ -56,7 +56,11 @@ _DEFAULT_FLAGS = {# Whether a thinking model may reason before it answers. On by
 # across a restart, and a user who edits the config file has to reset to see it take effect.
 _DEFAULT_SETTINGS = {"stt_silence_threshold": client_config.stt_silence_threshold,  # dBFS, or `None` to measure the room per recording
                      "stt_autostop_timeout": client_config.stt_autostop_timeout,  # seconds, or `None` to never stop by itself
-                     "stt_vu_peak_hold": client_config.stt_vu_peak_hold}  # seconds
+                     "stt_vu_peak_hold": client_config.stt_vu_peak_hold,  # seconds
+                     # The capture device is the one setting here that can stop existing between runs —
+                     # a microphone gets unplugged. Whoever applies it has to survive that; see
+                     # `raven.librarian.app`, which falls back rather than refusing to start.
+                     "stt_capture_audio_device": client_config.stt_capture_audio_device}  # a name from `recorder.get_available_devices`, or `None` for the first non-monitoring one
 
 # Flags that used to exist, dropped from a state file on load so they do not sit there forever confusing
 # whoever reads it next. Removable once no state file in the wild still carries them.

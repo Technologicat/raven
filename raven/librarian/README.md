@@ -433,6 +433,7 @@ How quiet counts as "finished speaking" depends on the room, so it is a control 
 
 While the panel is open, *Librarian* listens to the mic without recording anything and without sending anything to the AI, so you can watch the input level with the room as it actually is.
 
+- **Microphone** picks which input to record from. The list is re-read each time you open the panel, so something plugged in while *Librarian* was running is there. Switching takes effect immediately, and the meter follows — which is how you compare two microphones, or tell a noisy room from a noisy mic.
 - **Silence below** is the level under which the input counts as silence. It is the gray line on both VU meters.
 - **Measure the room** sets it for you: ask the room to be quiet, then click. It takes the loudest moment of the last few seconds — the figure shown right above the button — and puts the threshold a little above it.
 - **Stop when the speaker falls silent**, and how long that silence has to last, is the automatic end-of-recording. Switch it off in a room too loud to separate speech from noise; the mic button then remains the only way to stop, which always works.
@@ -440,7 +441,7 @@ While the panel is open, *Librarian* listens to the mic without recording anythi
 
 A word on choosing the threshold: a single moment above it is enough to convince *Librarian* that somebody is still speaking. So in a noisy room the threshold has to sit above the occasional bang, not above the average level — which is what **Measure the room** does, and why the reading it uses is a loudest-recently rather than an average.
 
-What you set is remembered between runs. **Reset to configured defaults** puts back what [`raven.client.config`](../client/config.py) says.
+What you set is remembered between runs, the microphone included. If that microphone is not plugged in next time, *Librarian* falls back to the configured one, and to the first available input if that is missing too — it will not refuse to start over an absent microphone, and the log says which one it settled for. **Reset to configured defaults** puts back what [`raven.client.config`](../client/config.py) says.
 
 ## 100% privacy-first
 

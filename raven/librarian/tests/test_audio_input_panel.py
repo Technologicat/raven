@@ -32,16 +32,19 @@ THRESHOLD_SLIDER = "audio_input_threshold_slider"  # tag
 AUTOSTOP_SLIDER = "audio_input_autostop_slider"  # tag
 PEAK_HOLD_SLIDER = "audio_input_peak_hold_slider"  # tag
 
+DEVICES = ["Built-in Microphone", "Webcam Microphone", "Monitor of Built-in Audio"]
+
 CONFIGURED = {"stt_silence_threshold": -40.0,
               "stt_autostop_timeout": 1.5,
-              "stt_vu_peak_hold": 1.0}
+              "stt_vu_peak_hold": 1.0,
+              "stt_capture_audio_device": DEVICES[0]}
 
 
 class StubRecorder:
     """Everything the panel asks of a recorder, and no audio device."""
 
     def __init__(self):
-        self.device_name = "Stub capture device"
+        self.device_name = DEVICES[0]
         self.silence_threshold = CONFIGURED["stt_silence_threshold"]
         self.autostop_timeout = CONFIGURED["stt_autostop_timeout"]
         self.vu_peak_hold = CONFIGURED["stt_vu_peak_hold"]
@@ -76,6 +79,20 @@ class StubRecorder:
         self.monitoring = self.recording = False
         return True
 
+    def set_device(self, device_name):
+        # Mirrors the real one: refuses mid-recording, raises for a device that is not there, and
+        # resumes monitoring on the new device.
+        if self.recording:
+            return False
+        if device_name not in DEVICES:
+            raise ValueError(f"No such audio capture device {device_name!r}")
+        was_monitoring = self.monitoring
+        self.stop()
+        self.device_name = device_name
+        if was_monitoring:
+            self.start(monitor=True)
+        return True
+
 
 @pytest.fixture(scope="module")
 def dpg_context():
@@ -97,6 +114,7 @@ def panel(dpg_context, themes_and_fonts, monkeypatch):
     """A built panel, with a stub recorder in place of the singleton. Not open, so nothing captures."""
     stub = StubRecorder()
     monkeypatch.setattr(audio_recorder, "instance", stub)
+    monkeypatch.setattr(audio_recorder, "get_available_devices", lambda refresh=False: list(DEVICES))
     thepanel = aip.DPGAudioInputPanel(app_state=dict(CONFIGURED),
                                       configured_defaults=dict(CONFIGURED),
                                       themes_and_fonts=themes_and_fonts)
@@ -245,11 +263,65 @@ class TestTheOtherMeterIsKeptInStep:
         assert announced[-1] == CONFIGURED["stt_silence_threshold"]
 
     def test_opening_announces_what_the_recorder_holds(self, panel, announced):
-        # A threshold restored from the app state file at startup, or left by a previous session: the
-        # toolbar's meter was built before the panel existed, so opening has to bring it into step.
+        # Not because the toolbar's meter would otherwise start out wrong — the app applies the stored
+        # settings before it builds that meter, so a session that never opens the panel is already
+        # right. This is so that the panel never *introduces* a disagreement: it announces what it
+        # finds, so the two are in step from the first open onward, whatever set the threshold before.
         panel.recorder.silence_threshold = -33.0
         panel.open()
         assert announced[-1] == -33.0
+
+
+DEVICE_COMBO = "audio_input_device_combo"  # tag
+
+
+class TestChoosingAMicrophone:
+    def test_choosing_one_switches_the_recorder_and_is_remembered(self, panel):
+        panel._on_device_combo(DEVICE_COMBO, DEVICES[1])
+        assert panel.recorder.device_name == DEVICES[1]
+        assert panel.app_state["stt_capture_audio_device"] == DEVICES[1]
+
+    def test_the_reading_does_not_carry_over_from_the_previous_microphone(self, panel):
+        panel._record_level(-20.0)
+        assert panel.floor == -20.0
+        panel._on_device_combo(DEVICE_COMBO, DEVICES[1])
+        assert panel.floor is None, "the loudest-recently reading still describes the old microphone"
+
+    def test_switching_is_refused_while_a_message_is_being_recorded(self, panel):
+        panel.recorder.recording = True
+        panel._on_device_combo(DEVICE_COMBO, DEVICES[1])
+        assert panel.recorder.device_name == DEVICES[0], "a recording was split across two microphones"
+        assert dpg.get_value(DEVICE_COMBO) == DEVICES[0], "the combo is offering a device that is not in use"
+        assert panel.app_state["stt_capture_audio_device"] != DEVICES[1]
+
+    def test_a_device_that_vanished_between_offer_and_click_is_survived(self, panel):
+        panel._on_device_combo(DEVICE_COMBO, "Microphone That Went Away")
+        assert panel.recorder.device_name == DEVICES[0]
+        assert dpg.get_value(DEVICE_COMBO) == DEVICES[0]
+
+    def test_monitoring_follows_to_the_new_microphone(self, panel):
+        panel.open()
+        assert panel.recorder.is_monitoring()
+        panel._on_device_combo(DEVICE_COMBO, DEVICES[1])
+        assert panel.recorder.is_monitoring(), "the meter went dead after switching microphones"
+        assert panel.recorder.device_name == DEVICES[1]
+
+    def test_opening_re_asks_which_microphones_exist(self, panel, monkeypatch):
+        # A microphone plugged in while the app was running is the whole reason to re-ask; the answer
+        # from startup would never mention it.
+        monkeypatch.setattr(audio_recorder, "get_available_devices",
+                            lambda refresh=False: DEVICES + ["Microphone Plugged In Just Now"])
+        panel.open()
+        assert "Microphone Plugged In Just Now" in dpg.get_item_configuration(DEVICE_COMBO)["items"]
+
+    def test_a_microphone_in_use_but_unplugged_still_appears(self, panel, monkeypatch):
+        # Otherwise the combo would show some other device as selected while this one is still the one
+        # being recorded from, which is worse than listing something that is gone.
+        monkeypatch.setattr(audio_recorder, "get_available_devices", lambda refresh=False: DEVICES[1:])
+        panel.open()
+        items = dpg.get_item_configuration(DEVICE_COMBO)["items"]
+        assert DEVICES[0] in items
+        assert dpg.get_value(DEVICE_COMBO) == DEVICES[0]
 
 
 class TestTheLoudestRecentlyReading:

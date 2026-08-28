@@ -23,7 +23,6 @@ import numpy as np
 # `pvrecorder` is imported where a device is actually opened, not here. It is the only dependency in this
 # module that a machine may not have, and importing it at module level made everything that *mentions* a
 # recorder — a GUI panel, a test with a stub in place of the device — need it as well.
-from unpythonic import memoize
 from unpythonic.env import env
 
 from .. import bgtask
@@ -48,11 +47,25 @@ DEFAULT_VU_PEAK_HOLD = 1.0  # seconds
 # that record the audio that is going to an audio output),
 # while `pvrecorder` does.
 #
-@memoize
-def get_available_devices() -> List[str]:
-    """Return a list of the names of available audio capture devices."""
-    import pvrecorder  # noqa: PLC0415 -- deferred on purpose; see the note at the imports
-    return list(pvrecorder.PvRecorder.get_available_devices())
+_available_devices = None  # cached answer for `get_available_devices`
+_available_devices_lock = threading.Lock()
+
+def get_available_devices(refresh: bool = False) -> List[str]:
+    """Return a list of the names of available audio capture devices.
+
+    The answer is cached, since setting a device up asks for it several times over.
+
+    `refresh`: Ask the OS again instead of answering from the cache.
+
+               Plugging a microphone in or unplugging one changes this list, so anything offering the
+               user a choice of device wants a fresh answer rather than the one from app startup.
+    """
+    global _available_devices
+    with _available_devices_lock:
+        if refresh or _available_devices is None:
+            import pvrecorder  # noqa: PLC0415 -- deferred on purpose; see the note at the imports
+            _available_devices = list(pvrecorder.PvRecorder.get_available_devices())
+        return list(_available_devices)  # a copy: the caller must not be able to edit the cache
 
 def validate_capture_device(device_name: Optional[str]) -> str:
     """Validate `device_name` against list of audio capture devices detected on the system.
@@ -74,7 +87,7 @@ def validate_capture_device(device_name: Optional[str]) -> str:
     if device_name is not None:  # User-specified device name -> device index as used by `pvrecorder`
         try:
             device_names.index(device_name)  # we just want to check if it's there
-        except IndexError:
+        except ValueError:  # what `list.index` raises for a name that is not in the list
             error_msg = f"validate_capture_device: No such audio capture device '{device_name}'."
             logger.error(error_msg)
             raise ValueError(error_msg)
@@ -290,6 +303,50 @@ class Recorder:
             self._task_manager.submit(record_task, env())
             logger.info("Recorder.start: Audio capture task submitted.")
 
+    def set_device(self, device_name: Optional[str]) -> bool:
+        """Switch to another audio capture device. Return whether the switch happened.
+
+        `device_name`: as for the constructor — a name from `get_available_devices`, or `None` for the
+                       first non-monitoring device.
+
+        The recorder keeps its identity across the switch: connected VU readouts stay connected, and
+        the silence and peak-hold settings carry over. Only the device handle underneath is replaced,
+        which is what lets a GUI offer this as a control rather than as a restart.
+
+        **Monitoring resumes on the new device; a recording is not resumed.** Splicing a message
+        together from two microphones is not a thing anyone wants, so switching mid-recording is
+        refused outright, and the caller gets `False`. `ValueError` still means the device is not there.
+        """
+        if self.is_recording():
+            logger.warning(f"Recorder.set_device: a message is being recorded on '{self.device_name}'; not switching.")
+            return False
+
+        get_available_devices(refresh=True)  # switching should act on what is plugged in now
+        device_name = validate_capture_device(device_name)  # raises if there is no such device
+        if device_name == self.device_name:
+            logger.debug(f"Recorder.set_device: already on '{device_name}'. Ignoring.")
+            return True
+
+        was_monitoring = self.is_monitoring()
+        if was_monitoring:
+            self.stop(wait=True)
+
+        import pvrecorder  # noqa: PLC0415 -- deferred on purpose; see the note at the imports
+
+        logger.info(f"Recorder.set_device: switching from '{self.device_name}' to '{device_name}'.")
+        old_recorder = self.recorder
+        self.recorder = pvrecorder.PvRecorder(frame_length=self.frame_length,
+                                              device_index=get_available_devices().index(device_name))
+        self.device_name = device_name
+        # The old handle goes only once nothing can reach it — the capture task reads `self.recorder`,
+        # and it is stopped above, but a `delete` before the rebind would leave a window where that
+        # attribute names a freed device.
+        old_recorder.delete()
+
+        if was_monitoring:
+            self.start(monitor=True)
+        return True
+
     def connect_vu_readout(self, on_vu_update: Callable) -> None:
         """Connect a VU ("voltage units"; input audio level) readout to the recorder.
 
@@ -494,6 +551,13 @@ def initialize(frame_length: int = DEFAULT_FRAME_LENGTH,
     `device_name`: One of the Capture device names listed by `raven-check-audio-devices`,
                    or `None` for the first available non-monitoring capture device.
 
+                   **A named device that is not present falls back to that first one, with a
+                   warning, rather than raising.** This is an app's entry point, and a microphone
+                   that was unplugged since the configuration was written should cost the user a
+                   different microphone, not a program that will not start. Construct a `Recorder`
+                   directly to get the strict behaviour, which is the right one for a library
+                   caller who has a particular device in mind.
+
     `executor`: Used for the recording background task. If `None`, `Recorder` creates its own.
 
     Returns the `Recorder` instance.
@@ -505,6 +569,11 @@ def initialize(frame_length: int = DEFAULT_FRAME_LENGTH,
 
     if device_name is not None:
         logger.info(f"initialize: Validating audio capture device '{device_name}'.")
+        try:
+            validate_capture_device(device_name)
+        except ValueError:
+            logger.warning(f"initialize: Audio capture device '{device_name}' is not present on this system; falling back to the first available non-monitoring device. See `raven/client/config.py`, and run `raven-check-audio-devices` for the current choices.")
+            device_name = None
     else:
         logger.info("initialize: Using first available audio capture device. If you want to use another device, see `raven/client/config.py`, and run `raven-check-audio-devices` to get available choices.")
 
