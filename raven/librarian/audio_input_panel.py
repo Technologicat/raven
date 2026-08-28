@@ -35,6 +35,10 @@ from ..common.gui.vumeter import DPGVUMeter
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 
+from . import config as librarian_config
+
+gui_config = librarian_config.gui_config  # shorthand, as in `chat_controller`
+
 # The meter's range. 0 dBFS is full scale, and -90 is about as quiet as 16-bit audio gets.
 METER_MIN = -90.0
 METER_MAX = 0.0
@@ -51,6 +55,10 @@ AUTOSTOP_MIN = 0.2  # seconds
 AUTOSTOP_MAX = 10.0  # seconds
 PEAK_HOLD_MIN = 0.1  # seconds
 PEAK_HOLD_MAX = 5.0  # seconds
+
+# Decimals every slider here displays, and — via `_quantize` — the precision it actually stores.
+# Keep in step with the `format=` strings below, which are all `%.1f`.
+_SLIDER_DECIMALS = 1
 
 DIM_TEXT = (180, 180, 180)
 
@@ -221,10 +229,22 @@ class DPGAudioInputPanel:
     # input from a disabled widget, and that a checkbox's widget value is in step with the `app_data`
     # its callback was handed. Neither has been measured here, and what a wrong guess switches back on
     # is precisely the setting the user turned off.
+    def _quantize(self, sender, app_data) -> float:
+        """Round a slider's value to what its `format` displays, and snap the slider onto it.
+
+        ImGui's float slider has no step: `format="%.1f s"` changes what the number *looks* like and not
+        what it is, so a drag hands over 1.5327194213867188 and shows "1.5". Left alone, that is the
+        figure that reaches the app state file, where the next reader finds seventeen digits under a
+        control that offered one.
+        """
+        value = round(float(app_data), _SLIDER_DECIMALS)
+        dpg.set_value(sender, value)  # snap the handle too, so the widget and the setting agree
+        return value
+
     def _on_threshold_slider(self, sender, app_data) -> None:
         if audio_recorder.require().silence_threshold is None:
             return  # measuring per recording; the slider is only saying what a fixed threshold would be
-        self._apply_threshold(float(app_data))
+        self._apply_threshold(self._quantize(sender, app_data))
 
     def _on_autodetect_checkbox(self, sender, app_data) -> None:
         autodetect = bool(app_data)
@@ -239,10 +259,10 @@ class DPGAudioInputPanel:
     def _on_autostop_slider(self, sender, app_data) -> None:
         if audio_recorder.require().autostop_timeout is None:
             return  # autostop is off; the slider is only saying how long it would wait
-        self._apply_autostop_timeout(float(app_data))
+        self._apply_autostop_timeout(self._quantize(sender, app_data))
 
     def _on_peak_hold_slider(self, sender, app_data) -> None:
-        self._apply_peak_hold(float(app_data))
+        self._apply_peak_hold(self._quantize(sender, app_data))
 
     def _measure_the_room(self) -> None:
         """Set the threshold from what has been heard recently, plus a margin."""
@@ -330,6 +350,7 @@ class DPGAudioInputPanel:
                                         yellow_start=METER_YELLOW_START,
                                         red_start=METER_RED_START,
                                         threshold_value=rec.silence_threshold,
+                                        line_thickness=2,  # one pixel is lost across a meter this wide
                                         tooltip_text=("Microphone input level.\n"
                                                       f"Yellow from {METER_YELLOW_START:0.6g}, red from {METER_RED_START:0.6g} dBFS.\n"
                                                       "The gray line is the silence threshold."))
@@ -341,11 +362,24 @@ class DPGAudioInputPanel:
                             dpg.add_text(f"{label}:", color=DIM_TEXT)
                             dpg.add_text("—", tag=tag)
                     dpg.add_spacer(height=8)
-                    measure_button = dpg.add_button(label=f"{fa.ICON_RULER}  Measure the room",
-                                                    callback=lambda: self._measure_the_room(),
-                                                    tag="audio_input_measure_button")  # tag
-                    dpg.bind_item_font(measure_button, self.themes_and_fonts.icon_font_solid)
-                    dpg.add_text("Sets the threshold just above\nthe loudest of those seconds.", color=DIM_TEXT)
+                    # Icon-only button with the words beside it, as elsewhere in the constellation: the
+                    # icon font carries no Latin glyphs, so a label mixing the two renders the text as
+                    # boxes. The words stay visible rather than living only in the tooltip — this is the
+                    # control an operator who has never seen the panel has to find, in a hurry.
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label=fa.ICON_RULER,
+                                       callback=lambda: self._measure_the_room(),
+                                       width=gui_config.toolbutton_w,
+                                       tag="audio_input_measure_button")  # tag
+                        dpg.bind_item_font("audio_input_measure_button", self.themes_and_fonts.icon_font_solid)  # tag
+                        dpg.add_text("Measure the room")
+                    # Plain DPG rather than `gui_tooltip.Tooltip`: this caption is written once and never
+                    # changes, so there is no resize for the class to protect against.
+                    with dpg.tooltip("audio_input_measure_button"):  # tag
+                        dpg.add_text(f"Set the silence threshold from the last {FLOOR_WINDOW:0.6g} seconds:\n"
+                                     f"the loudest moment in them, plus {silencegate.DEFAULT_SILENCE_MARGIN:0.6g} dB.\n\n"
+                                     "Ask the room to be quiet first. The figure it will use is\n"
+                                     f"the \"Loudest in {FLOOR_WINDOW:0.6g} s\" reading above.")
 
             dpg.add_separator()
 

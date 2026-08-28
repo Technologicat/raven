@@ -450,10 +450,21 @@ the font's natural ascender space.
 
 ## An autosize window is one frame behind its content — and whether that shows depends on the window's age
 
-**If you came here about a tooltip, the answer is `raven.common.gui.tooltip.Tooltip` and the rest of this
-section is why.** It is the packaged form of everything below, and Raven's tooltips that change their text
-already use it. Read on if you are building something else that resizes itself, or if you need to know what
-the component is protecting you from.
+**If you came here about a tooltip whose text changes after it is built, the answer is
+`raven.common.gui.tooltip.Tooltip` and the rest of this section is why.** It is the packaged form of
+everything below, and Raven's tooltips that change their text already use it. Read on if you are building
+something else that resizes itself, or if you need to know what the component is protecting you from.
+
+**For a caption written once and never touched, use `dpg.add_tooltip`.** The glitch cannot reach it — see
+the second table below: a window ImGui has not laid out before is withheld for a frame and appears already
+fitted, which is why a static tooltip has never been seen to flash on first hover. `Tooltip` there costs a
+registration and a sweeper visit and buys nothing. The trigger for reaching for the class is *the text
+changes*, and most sharply *the number of lines changes*, since that is what moves the window's edges.
+
+So, at a call site: `record_audio_message_tooltip` says what a click does *now* and changes each time
+recording starts or stops → `Tooltip`. `DPGVUMeter`'s caption explains what the colours mean and never
+changes → `dpg.add_tooltip`. Anything passed as `flash_button(tooltip=...)` has a flashed message swapped
+into it → `Tooltip`.
 
 **Except inside a modal, which cannot spawn a window — and being a window is exactly what makes that class
 work.** A modal's tooltips stay `dpg.tooltip` and keep the glitch, and there is currently nothing to be done

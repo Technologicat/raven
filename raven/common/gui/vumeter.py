@@ -24,6 +24,7 @@ class DPGVUMeter:
                  yellow_start: float,
                  red_start: float,
                  threshold_value: Optional[float] = None,
+                 line_thickness: int = 1,
                  tooltip_text: Optional[str] = None,
                  parent: Optional[Union[int, str]] = None):
         """A simple, minimalistic VU ("voltage units", audio level) meter.
@@ -52,6 +53,12 @@ class DPGVUMeter:
                            Useful e.g. for a silence autostop threshold in an audio recorder.
 
                            If `None`, no threshold is shown.
+
+        `line_thickness`: Thickness, in pixels, of the threshold and peak lines drawn across the meter.
+
+                          One pixel reads clearly on a meter a few pixels wide, and disappears on a large
+                          one — the wider the meter, the longer the line, and the thinner it looks against
+                          it. So this scales with the widget rather than being a style choice.
 
         `tooltip_text`: Text for tooltip if the user mouses over the VU meter.
                         Can be used for explaining what this meter is showing
@@ -87,6 +94,7 @@ class DPGVUMeter:
         self._yellow_start = yellow_start
         self._red_start = red_start
         self._threshold = threshold_value
+        self._line_thickness = line_thickness
 
         self._render_lock = threading.RLock()
         self.parent = parent if (parent is not None) else dpg.top_container_stack()  # behave like `with dpg.*` by default, but allow explicitly specifying the parent (DPG "runtime adding" mode).
@@ -251,9 +259,9 @@ class DPGVUMeter:
                 # Threshold (if set)
                 if self._threshold is not None:
                     dpg.draw_line((b, threshold_y), (w, threshold_y),
-                                  color=threshold_color, thickness=1, parent=self.drawlist)
+                                  color=threshold_color, thickness=self._line_thickness, parent=self.drawlist)
 
                 # Peak value (if specified)
                 if self._peak is not None:
                     dpg.draw_line((b, peak_y), (w, peak_y),
-                                  color=peak_color, thickness=1, parent=self.drawlist)
+                                  color=peak_color, thickness=self._line_thickness, parent=self.drawlist)

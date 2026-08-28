@@ -76,7 +76,7 @@ commentary in a trailing `(…)`. `·` separates targets. That shape is not deco
 | scroll programmatically, or follow a growing log | *Scrolling* → Three input paths move a scroll position, and DPG surfaces them differently · *Scrolling* → `max_y_scroll` moves when content is added |
 | set a window's size, or a tooltip's padding, or fight z-order | *Window sizing* (all of it) |
 | park a window offscreen to measure it before placing it | *Window sizing* → An offscreen park lasts exactly one frame — ImGui pulls the window back (re-park per frame; a modal comes back *fully* on screen) |
-| give a widget a tooltip whose text changes, or wonder why one flickers when it does | *Window sizing* → An autosize window is one frame behind its content — and whether that shows depends on the window's age (the answer is `raven.common.gui.tooltip.Tooltip`; the section is why) |
+| give a widget a tooltip at all — which of `dpg.add_tooltip` and `raven.common.gui.tooltip.Tooltip` — or wonder why one flickers when its text changes | *Window sizing* → An autosize window is one frame behind its content — and whether that shows depends on the window's age (short version: changing text wants the class, a caption written once wants plain DPG, and a modal cannot have the class at all) |
 | touch fonts, icons, super/subscripts or `dpg_markdown` | *Font atlas limits* (all of it) |
 | size a drawlist, or build anything that scrolls over a lot of content | *Drawlists* → Never size a drawlist to a scroll extent — it will take the X session down |
 | place a drawn shape at a particular spot inside a window | *Drawlists* → A drawlist ignores `pos`, and reports back the position it was asked for (there is no floating drawlist; reach for a theme or an overlay window) |

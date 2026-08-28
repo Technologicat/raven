@@ -51,11 +51,16 @@ def make_meter(dpg_context):
     return build
 
 
-def line_ys(meter):
-    """The y coordinates of every horizontal line the meter has drawn."""
-    return [dpg.get_item_configuration(item)["p1"][1]
+def lines(meter):
+    """Every horizontal line the meter has drawn, as its DPG configuration."""
+    return [dpg.get_item_configuration(item)
             for item in dpg.get_item_children(meter.drawlist, slot=2)
             if dpg.get_item_type(item) == "mvAppItemType::mvDrawLine"]
+
+
+def line_ys(meter):
+    """The y coordinates of every horizontal line the meter has drawn."""
+    return [line["p1"][1] for line in lines(meter)]
 
 
 class TestTheThresholdLine:
@@ -97,6 +102,24 @@ class TestTheThresholdLine:
         with pytest.raises(ValueError):
             meter.threshold = bad
         assert meter.threshold == -45.0, "the refused value was applied anyway"
+
+
+class TestLineThickness:
+    def test_the_lines_are_one_pixel_by_default(self, make_meter):
+        meter = make_meter(threshold_value=-45.0)
+        meter.update(instant=-90.0, peak=-20.0)
+        assert [line["thickness"] for line in lines(meter)] == [1.0, 1.0]
+
+    def test_a_thicker_setting_reaches_both_lines(self, dpg_context):
+        # Both, not just the threshold: they are the same kind of overlay, and one pixel is lost across
+        # a wide meter whichever line it is.
+        with dpg.window() as window:
+            meter = DPGVUMeter(width=28, height=HEIGHT, border=BORDER,
+                               min_value=-90.0, max_value=0.0,
+                               yellow_start=-24.0, red_start=-6.0,
+                               threshold_value=-45.0, line_thickness=2, parent=window)
+        meter.update(instant=-90.0, peak=-20.0)
+        assert [line["thickness"] for line in lines(meter)] == [2.0, 2.0]
 
 
 class TestThePeakLine:

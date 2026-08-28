@@ -1,5 +1,22 @@
 """A tooltip that resizes without ever rendering a frame at the wrong size.
 
+**Reach for this when the text changes after the tooltip is built** — especially when the number of
+lines changes, since that is what moves the window's edges. `dpg.add_tooltip` shows one frame at the
+old size when its content changes, and on a tooltip that is already on screen the reader sees it: the
+new text clipped by the old window. Raven's self-sizing captions are the case — a button whose tooltip
+says what a click does *now*, or one carrying a flashed acknowledgment.
+
+**For a caption that is written once and never touched again, `dpg.add_tooltip` is the right call.**
+The glitch cannot reach it: a window ImGui has not laid out before is withheld for a frame and appears
+already fitted, so a static tooltip has never been seen to flash on first hover. Using this class for
+one costs a registration and a sweeper visit and buys nothing.
+
+**Inside a modal, `dpg.add_tooltip` is the only option regardless.** A modal cannot spawn a window,
+and being a window is exactly what makes this class work — so a modal's tooltips keep the glitch, and
+there is currently nothing to be done about it.
+
+The reasoning, and the measurements behind it, are in `dpg-notes.md` under *Window sizing*.
+
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 

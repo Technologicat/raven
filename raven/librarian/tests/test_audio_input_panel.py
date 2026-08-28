@@ -25,6 +25,13 @@ from raven.librarian import audio_input_panel as aip  # noqa: E402 -- ditto
 
 SECOND = 10**9  # ns, as `_record_level` timestamps in
 
+# The sliders, by tag. A callback is handed the widget that fired it, and the panel writes the
+# quantized value back through it — so a test passing `None` as the sender would exercise a path
+# no drag ever takes.
+THRESHOLD_SLIDER = "audio_input_threshold_slider"  # tag
+AUTOSTOP_SLIDER = "audio_input_autostop_slider"  # tag
+PEAK_HOLD_SLIDER = "audio_input_peak_hold_slider"  # tag
+
 CONFIGURED = {"stt_silence_threshold": -40.0,
               "stt_autostop_timeout": 1.5,
               "stt_vu_peak_hold": 1.0}
@@ -135,31 +142,31 @@ class TestASliderOnlyEditsASettingThatIsInEffect:
     def test_the_autostop_slider_does_nothing_while_autostop_is_off(self, panel):
         panel._on_autostop_checkbox(None, False)
         assert panel.recorder.autostop_timeout is None
-        panel._on_autostop_slider(None, 4.0)
+        panel._on_autostop_slider(AUTOSTOP_SLIDER,4.0)
         assert panel.recorder.autostop_timeout is None, "moving the slider switched autostop back on"
 
     def test_the_autostop_slider_works_while_autostop_is_on(self, panel):
         # The control for the test above: with the switch on, this very call does change the setting,
         # so that test is about the switch rather than about the slider being inert in general.
         panel._on_autostop_checkbox(None, True)
-        panel._on_autostop_slider(None, 4.0)
+        panel._on_autostop_slider(AUTOSTOP_SLIDER,4.0)
         assert panel.recorder.autostop_timeout == 4.0
 
     def test_the_threshold_slider_does_nothing_while_autodetect_is_on(self, panel):
         panel._on_autodetect_checkbox(None, True)
         assert panel.recorder.silence_threshold is None
-        panel._on_threshold_slider(None, -55.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER,-55.0)
         assert panel.recorder.silence_threshold is None, "moving the slider cancelled the autodetection"
 
     def test_the_threshold_slider_works_while_autodetect_is_off(self, panel):
         panel._on_autodetect_checkbox(None, False)
-        panel._on_threshold_slider(None, -55.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER,-55.0)
         assert panel.recorder.silence_threshold == -55.0
 
 
 class TestTheControlsWriteEverywhereTheyHaveTo:
     def test_the_threshold_reaches_the_recorder_the_state_and_the_meter(self, panel):
-        panel._on_threshold_slider(None, -52.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER,-52.0)
         assert panel.recorder.silence_threshold == -52.0
         assert panel.app_state["stt_silence_threshold"] == -52.0
         assert panel.meter.threshold == -52.0
@@ -170,14 +177,38 @@ class TestTheControlsWriteEverywhereTheyHaveTo:
         assert panel.meter.threshold is None
 
     def test_the_autostop_timeout_reaches_the_recorder_and_the_state(self, panel):
-        panel._on_autostop_slider(None, 2.5)
+        panel._on_autostop_slider(AUTOSTOP_SLIDER,2.5)
         assert panel.recorder.autostop_timeout == 2.5
         assert panel.app_state["stt_autostop_timeout"] == 2.5
 
     def test_peak_hold_reaches_the_recorder_and_the_state(self, panel):
-        panel._on_peak_hold_slider(None, 3.0)
+        panel._on_peak_hold_slider(PEAK_HOLD_SLIDER,3.0)
         assert panel.recorder.vu_peak_hold == 3.0
         assert panel.app_state["stt_vu_peak_hold"] == 3.0
+
+
+class TestASliderStoresThePrecisionItShows:
+    """ImGui's float slider has no step, so `format="%.1f"` changes what the number looks like and not
+    what it is. Left alone, a drag stores seventeen digits under a control that offered one.
+    """
+
+    # Values with digits past the format's, as a real drag produces — each inside its own slider's range.
+    DRAGGED = [(THRESHOLD_SLIDER, "_on_threshold_slider", "silence_threshold", -42.5327194213867188, -42.5),
+               (AUTOSTOP_SLIDER, "_on_autostop_slider", "autostop_timeout", 2.5327194213867188, 2.5),
+               (PEAK_HOLD_SLIDER, "_on_peak_hold_slider", "vu_peak_hold", 2.5327194213867188, 2.5)]
+
+    @pytest.mark.parametrize("slider,callback_name,setting,dragged,expected", DRAGGED)
+    def test_a_dragged_value_is_rounded_to_one_decimal(self, panel, slider, callback_name, setting, dragged, expected):
+        assert dragged != expected, "this fixture cannot tell a rounded value from an unrounded one"
+        getattr(panel, callback_name)(slider, dragged)
+        assert getattr(panel.recorder, setting) == expected
+
+    @pytest.mark.parametrize("slider,callback_name,setting,dragged,expected", DRAGGED)
+    def test_the_handle_snaps_onto_the_stored_value(self, panel, slider, callback_name, setting, dragged, expected):
+        # Otherwise the widget keeps the unrounded value and the next drag starts from a number the
+        # panel never stored — a drift the display would hide, since it rounds either way.
+        getattr(panel, callback_name)(slider, dragged)
+        assert dpg.get_value(slider) == pytest.approx(expected)
 
 
 class TestTheLoudestRecentlyReading:
@@ -235,14 +266,14 @@ class TestMeasureTheRoom:
         assert panel.recorder.silence_threshold == aip.METER_MAX
 
     def test_nothing_heard_yet_leaves_the_threshold_alone(self, panel):
-        panel._on_threshold_slider(None, -33.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER,-33.0)
         panel._measure_the_room()
         assert panel.recorder.silence_threshold == -33.0
 
     def test_digital_silence_leaves_the_threshold_alone(self, panel):
         # An input sending nothing at all is a broken microphone, not a very quiet room, and -inf plus
         # a margin is still -inf. Better to leave the last usable value than to write that in.
-        panel._on_threshold_slider(None, -33.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER,-33.0)
         panel._record_level(-math.inf)
         panel._measure_the_room()
         assert panel.recorder.silence_threshold == -33.0
@@ -250,9 +281,9 @@ class TestMeasureTheRoom:
 
 class TestResetToConfiguredDefaults:
     def test_it_restores_every_setting(self, panel):
-        panel._on_threshold_slider(None, -55.0)
-        panel._on_autostop_slider(None, 4.0)
-        panel._on_peak_hold_slider(None, 3.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER,-55.0)
+        panel._on_autostop_slider(AUTOSTOP_SLIDER,4.0)
+        panel._on_peak_hold_slider(PEAK_HOLD_SLIDER,3.0)
         panel._reset_to_configured_defaults()
         assert panel.recorder.silence_threshold == CONFIGURED["stt_silence_threshold"]
         assert panel.recorder.autostop_timeout == CONFIGURED["stt_autostop_timeout"]
@@ -296,6 +327,6 @@ class TestMonitoring:
         saved = []
         panel.save_app_state = lambda: saved.append(dict(panel.app_state))
         panel.open()
-        panel._on_threshold_slider(None, -47.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER,-47.0)
         panel.close()
         assert saved and saved[-1]["stt_silence_threshold"] == -47.0
