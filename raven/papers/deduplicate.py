@@ -55,7 +55,7 @@ decoded. The input file is not modified; use `raven-fixbib` to repair the file i
 
 from __future__ import annotations
 
-__all__ = ["PREPRINT_DOI_PREFIXES", "GENERIC_TITLES", "MAX_YEAR_DRIFT",
+__all__ = ["PREPRINT_DOI_PREFIXES", "GENERIC_TITLES", "MAX_YEAR_DRIFT", "RIGHTS_FIELD",
            "normalize_doi", "normalize_title", "is_generic_title",
 
            "Record", "read_records",
@@ -136,6 +136,9 @@ GENERIC_TITLES = frozenset(["editorial", "editorials", "introduction", "preface"
 # its published version routinely straddle a New Year, and two databases can disagree about which year an
 # online-first article belongs to. Two is a different paper.
 MAX_YEAR_DRIFT = 1
+
+# Where `raven-fixbib` puts a rights notice it moves out of an abstract, and so where this looks for one.
+RIGHTS_FIELD = "copyright"
 
 # The seven Unicode dashes, folded to ASCII `-` in a DOI. Publishers' exports disagree about which one a
 # DOI containing a hyphen should use, and two records whose DOIs differ by an en-dash are one paper.
@@ -1019,9 +1022,12 @@ def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
     nothing happened to it.
 
     The base is `cluster.records[0]`; every field it lacks is filled from the first twin that has one, in
-    the same preference order. A field the base already has is never overwritten — with one exception,
-    the abstract, which is chosen across the whole cluster by `_best_abstract` because the base being the
-    most complete record does not make its abstract the least truncated one.
+    the same preference order. A field the base already has is never overwritten, with two exceptions:
+
+      - **the abstract**, chosen across the whole cluster by `_best_abstract`, because the base being the
+        most complete record does not make its abstract the least truncated one;
+      - **`copyright`**, unioned across the cluster rather than chosen, since a merged record came from
+        several exports and each notice names one of them.
 
     The entry that comes back shares no `Field` objects with the input, so a caller may write it out
     without the merge having disturbed the records it drew from.
@@ -1041,6 +1047,17 @@ def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
     if maybe_abstract is not None:
         fields["abstract"] = maybe_abstract
 
+    # `copyright` is unioned rather than chosen, because a merged record genuinely came from several
+    # exports and each notice names one of them — which is most of what a rights notice is worth here,
+    # since nobody redistributes a bibliography pulled out of a paywalled aggregator. Picking one would
+    # throw away the only thing saying where the other copy came from. Joined the way
+    # `bibtex.repair_duplicate_field_keys` joins repeated fields, for the same reason and so that the two
+    # read alike.
+    notices = list(dict.fromkeys(value for record in cluster.records
+                                 if (value := record.field(RIGHTS_FIELD)) is not None))
+    if notices:
+        fields[RIGHTS_FIELD] = "\n".join(notices)
+
     # Field order follows the base's own, so a merged record still reads like the record it came from,
     # with whatever was filled in from its twins after it.
     base_order = [field.key for field in base.entry.fields]
@@ -1055,7 +1072,8 @@ def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
         for field in record.entry.fields:
             value = _field_value(record.entry, field.key)
             kept = fields.get(field.key)
-            if value is not None and kept is not None and value != kept and field.key != "abstract":
+            if (value is not None and kept is not None and value != kept
+                    and field.key not in ("abstract", RIGHTS_FIELD)):
                 differences.append(f"{field.key}: kept {_clip(kept)} / dropped {_clip(value)}")
 
     dois = sorted({record.doi for record in cluster.records if record.doi})

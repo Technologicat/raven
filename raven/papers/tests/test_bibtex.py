@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from raven.papers.bibtex import (_clean_whitespace, _field_spans, _make_key, _undelimit,
                                  decode_html_entities, entries_to_bibtex, parse_file, parse_string,
-                                 repair_duplicate_field_keys, write_string)
+                                 relocate_rights_notices, repair_duplicate_field_keys, write_string)
 
 
 def _fake_entry(
@@ -356,6 +356,66 @@ class TestDecodeHtmlEntities:
         fields = {f.key: f.value for f in parse_string(decoded, split_names=False).entries[0].fields}
         assert fields["title"] == r"Synchronous \& Remote"
         assert fields["author"] == "Häkkinen, P."
+
+
+class TestRelocateRightsNotices:
+    WITH_NOTICE = ("@article{a,\n"
+                   "  title = {A Study},\n"
+                   "  abstract = {We study things. © 2024 Elsevier Ltd. All rights reserved.},\n"
+                   "  year = {2024},\n"
+                   "}\n")
+
+    def test_the_notice_moves_into_a_field_of_its_own(self):
+        moved, count = relocate_rights_notices(self.WITH_NOTICE)
+        assert count == 1
+        fields = {f.key: f.value for f in parse_string(moved, split_names=False).entries[0].fields}
+        assert fields["abstract"] == "We study things."
+        assert fields["copyright"] == "© 2024 Elsevier Ltd. All rights reserved."
+
+    def test_nothing_is_lost_in_the_move(self):
+        """A move rather than a delete: the notice still says which export a record came from."""
+        moved, _count = relocate_rights_notices(self.WITH_NOTICE)
+        assert "Elsevier" in moved and "All rights reserved" in moved
+
+    def test_the_new_field_matches_the_records_own_indentation(self):
+        moved, _count = relocate_rights_notices(self.WITH_NOTICE)
+        assert "\n  copyright = {" in moved
+
+    def test_a_record_with_no_notice_is_untouched_byte_for_byte(self):
+        source = "@article{b,\n  title = {B},\n  abstract = {No notice here at all.},\n}\n"
+        assert relocate_rights_notices(source) == (source, 0)
+
+    def test_a_record_with_no_abstract_is_untouched(self):
+        source = "@article{b,\n  title = {B},\n  year = {2024},\n}\n"
+        assert relocate_rights_notices(source) == (source, 0)
+
+    def test_an_existing_field_is_never_clobbered(self):
+        source = ("@article{c,\n  title = {C},\n  abstract = {Body. © 2024 Someone.},\n"
+                  "  copyright = {something the user wrote},\n}\n")
+        assert relocate_rights_notices(source) == (source, 0)
+
+    def test_the_records_around_it_are_untouched_byte_for_byte(self):
+        untouched = "@article{b,\n  title = {Untouched},\n  abstract = {No notice.},\n}"
+        source = f"{self.WITH_NOTICE}\n{untouched}\n"
+        moved, count = relocate_rights_notices(source)
+        assert count == 1
+        assert untouched in moved
+
+    def test_a_split_that_would_unbalance_the_braces_is_refused(self):
+        """Cheap to check, and the alternative is writing a file that does not parse."""
+        source = "@article{d,\n  abstract = {Body {group © 2024 Someone} more},\n}\n"
+        moved, count = relocate_rights_notices(source)
+        assert count == 0 and moved == source
+
+    def test_the_field_name_is_the_callers_to_choose(self):
+        moved, _count = relocate_rights_notices(self.WITH_NOTICE, field="rights")
+        fields = {f.key: f.value for f in parse_string(moved, split_names=False).entries[0].fields}
+        assert "rights" in fields and "copyright" not in fields
+
+    def test_the_result_parses_and_the_run_is_idempotent(self):
+        once, count = relocate_rights_notices(self.WITH_NOTICE)
+        assert count == 1
+        assert relocate_rights_notices(once) == (once, 0)
 
 
 class TestFieldSpans:

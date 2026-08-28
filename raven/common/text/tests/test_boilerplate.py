@@ -1,6 +1,6 @@
 """Tests for `raven.common.text.boilerplate` — removing a publisher's rights notice from an abstract."""
 
-from ..boilerplate import TAIL_BUDGET, find_rights_notice, strip_boilerplate
+from ..boilerplate import TAIL_BUDGET, find_rights_notice, split_rights_notice, strip_boilerplate
 
 # A plausible abstract tail, long enough that a notice appended to it still leaves the abstract's own
 # closing sentence outside a naive fixed-length window.
@@ -108,10 +108,38 @@ class TestFindRightsNotice:
         assert find_rights_notice(pushed_out) is None
 
 
+class TestSplitRightsNotice:
+    """Both halves, for a caller writing a bibliography back out rather than analyzing text."""
+
+    def test_it_hands_back_the_body_and_the_notice(self):
+        body, notice = split_rights_notice(f"{BODY} © 2025 Elsevier Ltd.")
+        assert body == BODY
+        assert notice == "© 2025 Elsevier Ltd."
+
+    def test_nothing_is_lost_between_the_two_halves(self):
+        """The property that makes this safe to use for a move rather than a delete."""
+        text = f"{BODY} © 2025 Elsevier Ltd."
+        body, notice = split_rights_notice(text)
+        assert set(text.split()) == set(body.split()) | set(notice.split())
+
+    def test_text_with_no_notice_comes_back_whole_and_unaccompanied(self):
+        assert split_rights_notice(BODY) == (BODY, None)
+
+    def test_a_leading_label_is_dropped_rather_than_returned(self):
+        # The one thing here that really is noise: no exporter means `Abstract:` as content.
+        body, notice = split_rights_notice(f"Abstract: {BODY} © 2025 Elsevier Ltd.")
+        assert body == BODY and notice is not None
+
+    def test_strip_boilerplate_is_the_first_half(self):
+        for text in (f"{BODY} © 2025 Elsevier Ltd.", BODY, f"Abstract: {BODY}", "", "   "):
+            assert strip_boilerplate(text) == split_rights_notice(text)[0]
+
+
 class TestShapes:
     def test_empty_and_whitespace_survive_without_raising(self):
         assert strip_boilerplate("") == ""
         assert strip_boilerplate("   \n  ") == ""
+        assert split_rights_notice("") == ("", None)
 
     def test_an_abstract_that_is_only_a_notice_reduces_to_nothing(self):
         # Degenerate but real: a record whose "abstract" is the copyright line and nothing else. Better

@@ -423,6 +423,57 @@ class TestMergedAbstracts:
         assert not any("abstract" in difference for difference in row.differences)
 
 
+class TestMergedRightsNotices:
+    """`copyright` is unioned across a cluster, not chosen — the plural case is the point.
+
+    A merged record genuinely came from several exports, and each notice names one of them. Since nobody
+    redistributes a bibliography pulled out of a paywalled aggregator, saying *which of your own exports*
+    a record came from is most of what the notice is worth here, and picking one would delete it.
+    """
+
+    def _merged(self, source):
+        merged, row = dd.merge_cluster(dd.cluster_records(records(source))[0])
+        return {field.key: field.value for field in merged.fields}, row
+
+    def test_two_exports_notices_both_survive_the_merge(self):
+        source = (entry("scopus", title="A Study of Learning Analytics", doi="10.1234/x",
+                        copyright="© 2024 Elsevier Ltd.")
+                  + entry("springer", title="A study of learning analytics", doi="10.1234/x",
+                          copyright="© The Author(s) 2024, Springer Nature."))
+        fields, _row = self._merged(source)
+        assert fields["copyright"] == "© 2024 Elsevier Ltd.\n© The Author(s) 2024, Springer Nature."
+
+    def test_the_same_notice_twice_is_kept_once(self):
+        source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x",
+                        copyright="© 2024 Elsevier Ltd.")
+                  + entry("b", title="A study of learning analytics", doi="10.1234/x",
+                          copyright="© 2024 Elsevier Ltd."))
+        fields, _row = self._merged(source)
+        assert fields["copyright"] == "© 2024 Elsevier Ltd."
+
+    def test_a_union_is_not_reported_as_a_dropped_value(self):
+        """Nothing was dropped, so nothing belongs in the audit — the row would be noise."""
+        source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x",
+                        copyright="© 2024 Elsevier Ltd.")
+                  + entry("b", title="A study of learning analytics", doi="10.1234/x",
+                          copyright="© The Author(s) 2024."))
+        _fields, row = self._merged(source)
+        assert not any("copyright" in difference for difference in row.differences)
+
+    def test_a_record_without_one_contributes_nothing(self):
+        source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x",
+                        copyright="© 2024 Elsevier Ltd.")
+                  + entry("b", title="A study of learning analytics", doi="10.1234/x", keywords="k"))
+        fields, _row = self._merged(source)
+        assert fields["copyright"] == "© 2024 Elsevier Ltd."
+
+    def test_a_cluster_with_no_notices_gains_no_field(self):
+        source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x")
+                  + entry("b", title="A study of learning analytics", doi="10.1234/x", keywords="k"))
+        fields, _row = self._merged(source)
+        assert "copyright" not in fields
+
+
 class TestAudit:
     SOURCE = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x", author="Smith, Jane",
                     year="2024")

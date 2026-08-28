@@ -225,6 +225,8 @@ def main() -> None:  # pragma: no cover
                         help="Name every record that was repaired, not just how many. A database export can need this a thousand times over, so the list is off by default.")
     parser.add_argument("--keep-entities", dest="keep_entities", action="store_true", default=False,
                         help="Leave HTML character entities in the field values. They come from a database that exported its web page rather than its record, and are decoded by default.")
+    parser.add_argument("--keep-notices", dest="keep_notices", action="store_true", default=False,
+                        help="Leave a publisher's rights notice inside the `abstract`. By default it is moved to a `copyright` field of its own, where it is still yours to read but is out of the way of anything treating the abstract as prose.")
     parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="myreferences.bib",
                         help="BibTeX file(s) to repair.")
     opts = parser.parse_args()
@@ -235,7 +237,7 @@ def main() -> None:  # pragma: no cover
     # decision an application gets to make and a library does not.
     logging.getLogger("bibtexparser").setLevel(logging.ERROR)
 
-    total_recovered = total_unrecovered = total_decoded = 0
+    total_recovered = total_unrecovered = total_decoded = total_moved = 0
     for filename in opts.filenames:
         path = pathlib.Path(filename).expanduser().resolve()
         try:
@@ -248,10 +250,13 @@ def main() -> None:  # pragma: no cover
         # decoding cannot change how many lines the file has -- a separator or control character becomes
         # a space rather than itself -- so the line numbers reported below still point into the user's
         # own file.
-        decoded = 0
+        decoded = moved = 0
         if not opts.keep_entities:
             source, decoded = bibtex.decode_html_entities(source)
+        if not opts.keep_notices:
+            source, moved = bibtex.relocate_rights_notices(source)
         total_decoded += decoded
+        total_moved += moved
 
         repaired, recovered, unrecovered = repair_bibtex(source)
         total_recovered += len(recovered)
@@ -268,11 +273,13 @@ def main() -> None:  # pragma: no cover
 
         if decoded:
             print(f"{path.name}: decoded {decoded} HTML character entit{'y' if decoded == 1 else 'ies'}.")
+        if moved:
+            print(f"{path.name}: moved {moved} rights notice(s) out of `abstract` into `copyright`.")
         if recovered:
             print(f"{path.name}: repaired {len(recovered)} record(s) — {_summarize_by_kind(recovered)}.")
         if unrecovered:
             print(f"{path.name}: {len(unrecovered)} record(s) still unreadable — {_summarize_by_kind(unrecovered)}.")
-        if not recovered and not decoded:
+        if not recovered and not decoded and not moved:
             if not unrecovered:
                 print(f"{path.name}: nothing to repair.")
             continue
@@ -290,9 +297,10 @@ def main() -> None:  # pragma: no cover
         # Those are answerable, but not from the file alone, so they are named and left alone.
         print(f"\n{total_unrecovered} record(s) need a look by hand: what would fix them is not "
               f"recoverable from the text.", file=sys.stderr)
-    if total_recovered or total_unrecovered or total_decoded:
-        entities = f", {total_decoded} entities decoded" if total_decoded else ""
-        print(f"Total: {total_recovered} repaired, {total_unrecovered} left for you{entities}.")
+    if total_recovered or total_unrecovered or total_decoded or total_moved:
+        extras = "".join([f", {total_decoded} entities decoded" if total_decoded else "",
+                          f", {total_moved} rights notices moved" if total_moved else ""])
+        print(f"Total: {total_recovered} repaired, {total_unrecovered} left for you{extras}.")
 
 
 if __name__ == "__main__":  # pragma: no cover

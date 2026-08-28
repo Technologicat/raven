@@ -17,9 +17,9 @@ API, so callers can `from raven.common import text` and use `text.normalize(...)
 
 from .normalize import normalize  # noqa: F401 -- re-export submodule public API
 from .speakable import is_speakable  # noqa: F401 -- re-export submodule public API
-from .boilerplate import find_rights_notice, strip_boilerplate  # noqa: F401 -- re-export submodule public API
+from .boilerplate import find_rights_notice, split_rights_notice, strip_boilerplate  # noqa: F401 -- re-export submodule public API
 
 __all__ = ["normalize",
            "is_speakable",
 
-           "find_rights_notice", "strip_boilerplate"]
+           "find_rights_notice", "split_rights_notice", "strip_boilerplate"]

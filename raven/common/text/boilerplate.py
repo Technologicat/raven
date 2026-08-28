@@ -53,7 +53,7 @@ corpus to hand uses them.
 """
 
 __all__ = ["TAIL_BUDGET", "UNMISTAKABLE", "NOTICE_OPENER", "LEADING_LABEL",
-           "find_rights_notice", "strip_boilerplate"]
+           "find_rights_notice", "split_rights_notice", "strip_boilerplate"]
 
 import re
 
@@ -134,18 +134,35 @@ def find_rights_notice(text: str) -> int | None:
     return min(candidates) if candidates else None
 
 
+def split_rights_notice(text: str) -> tuple[str, str | None]:
+    """Split `text` into `(what it says, the publisher's rights notice)`, the second `None` if absent.
+
+    Both halves come back, because the notice is **metadata in the wrong field rather than noise**: it
+    says who holds the rights, which is worth keeping where a reader would look for it. A caller writing
+    a bibliography back out should move it to a field of its own; one about to run text analysis wants
+    only the first half, and `strip_boilerplate` is that call.
+
+    A leading `Abstract:` label is removed from the first half. That one really is noise \u2014 no exporter
+    means it as content, and nothing is lost by dropping it.
+    """
+    text = LEADING_LABEL.sub("", text.strip())
+    notice_start = find_rights_notice(text)
+    if notice_start is None:
+        return text.strip(), None
+    # What is left dangling at the cut is a *separator* \u2014 the comma or dash that joined the notice on.
+    # A full stop is not one: it ends the abstract's own last sentence and was there before any publisher
+    # appended anything, so it stays. Getting this backwards silently shortens every abstract in a corpus
+    # by a character, which no aggregate statistic will show.
+    body = re.sub(r"[\s,;:\u2013\u2014-]+$", "", text[:notice_start].rstrip())
+    return body, text[notice_start:].strip() or None
+
+
 def strip_boilerplate(text: str) -> str:
     """Return `text` without a leading `Abstract:` label or a trailing publisher's rights notice.
 
     Returns the text unchanged when it carries neither, which is the common case for an abstract that
     reached the file from somewhere other than a database export.
+
+    `split_rights_notice` where the notice itself is wanted rather than discarded.
     """
-    text = LEADING_LABEL.sub("", text.strip())
-    notice_start = find_rights_notice(text)
-    if notice_start is None:
-        return text.strip()
-    # What is left dangling at the cut is a *separator* \u2014 the comma or dash that joined the notice on.
-    # A full stop is not one: it ends the abstract's own last sentence and was there before any publisher
-    # appended anything, so it stays. Getting this backwards silently shortens every abstract in a corpus
-    # by a character, which no aggregate statistic will show.
-    return re.sub(r"[\s,;:\u2013\u2014-]+$", "", text[:notice_start].rstrip())
+    return split_rights_notice(text)[0]

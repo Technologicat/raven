@@ -10,15 +10,18 @@ out wants `split_names=False`, and `write_string` either way — see below.
 Repairing: `repair_record` and `repair_duplicate_field_keys` each rescue one record `bibtexparser`
 refused, for the two reasons a real-world export gives it — braces that do not balance, and a field name
 that occurs twice. Both take the record's text and hand back text, so a caller may parse the result or
-write it to a file; `raven.papers.fixbib` does the latter. `decode_html_entities` is text-to-text as
-well, and fixes what is *inside* records a parser is perfectly happy with: HTML a database left in the
-field values.
+write it to a file; `raven.papers.fixbib` does the latter.
+
+`decode_html_entities` and `relocate_rights_notices` are text-to-text as well, and fix what is *inside*
+records a parser is perfectly happy with: HTML a database left in the field values, and a publisher's
+rights notice appended to an abstract that is metadata in the wrong field.
 """
 
 from __future__ import annotations
 
 __all__ = ["parse_file", "parse_string", "write_string",
            "repair_record", "repair_duplicate_field_keys", "decode_html_entities",
+           "relocate_rights_notices",
 
            "entries_to_bibtex"]
 
@@ -33,6 +36,7 @@ from bibtexparser.model import Entry, Field
 from bibtexparser import Library
 
 from ..common import utils as common_utils
+from ..common.text import boilerplate
 
 from . import identifiers
 from .utils import bibtex_escape
@@ -430,6 +434,103 @@ def decode_html_entities(source: str) -> tuple[str, int]:
     """
     counter = [0]
     return _HTML_ENTITY_PATTERN.sub(lambda match: _decode_one_entity(match, counter), source), counter[0]
+
+
+def _braces_balance(text: str) -> bool:
+    """Whether `text` could stand alone inside a `{...}` field value."""
+    depth, i = 0, 0
+    while i < len(text):
+        if text[i] == "\\":
+            i += 2
+            continue
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth < 0:
+                return False
+        i += 1
+    return depth == 0
+
+
+def _relocate_in_record(raw: str, field: str) -> str | None:
+    """Move the rights notice out of one record's `abstract` into `field`. `None` if nothing to do."""
+    spans = _field_spans(raw)
+    if not spans:
+        return None
+    by_key = {span[0]: span for span in spans}
+    if field in by_key or "abstract" not in by_key:
+        return None  # never clobber a field the record already has
+
+    _key, _name_start, _name_end, value_start, value_end = by_key["abstract"]
+    body, maybe_notice = boilerplate.split_rights_notice(_undelimit(raw[value_start:value_end]))
+    if maybe_notice is None or not body:
+        return None
+    # A notice sits at the tail, so cutting there normally leaves both halves whole — but a value like
+    # `{Body {group (c) 2024} more}` would split a brace pair and produce two field values that are not
+    # values. Cheap to check, and the alternative is writing a file that does not parse.
+    if not (_braces_balance(body) and _braces_balance(maybe_notice)):
+        return None
+
+    # Match the record's own indentation, so the new field looks like the ones around it rather than
+    # announcing which tool wrote it.
+    line_start = raw.rfind("\n", 0, by_key["abstract"][1]) + 1
+    indent = raw[line_start:by_key["abstract"][1]]
+    candidate = (raw[:value_start] + "{" + body + "}"
+                 + f",\n{indent}{field} = {{{maybe_notice}}}"
+                 + raw[value_end:])
+
+    # The parser is the oracle here as everywhere else in this module, and it is checked against the
+    # values rather than merely against "an entry came back": a repair that parses into the wrong text
+    # is not a repair.
+    try:
+        library = parse_string(candidate, split_names=False)
+    except Exception:  # noqa: BLE001 -- an edit that breaks the parser is just a failed edit
+        return None
+    if not library.entries:
+        return None
+    entry = library.entries[0]
+    try:
+        if entry["abstract"] != body or entry[field] != maybe_notice:
+            return None
+    except KeyError:
+        return None
+    return candidate
+
+
+def relocate_rights_notices(source: str, field: str = "copyright") -> tuple[str, int]:
+    """Move each publisher's rights notice out of an `abstract` into a field of its own.
+
+    Returns `(text, how many were moved)`.
+
+    A rights notice appended to an abstract is metadata in the wrong field: it is not what the paper says,
+    and anything reading the abstract as prose has to cope with it — it is why a publisher's name turns up
+    in a word cloud. Moved rather than deleted, because it does say something the record otherwise does
+    not, and in a bibliography merged from several exports it is often the only thing identifying which
+    export a record came from.
+
+    `field`: where to put it. `copyright` by default: absent from real-world exports, so it collides with
+             nothing, and not typeset by standard BibTeX styles, so it cannot appear in a reference list.
+
+    A record already having that field is left alone rather than merged into, and so is one whose braces
+    would not survive the split. Everything outside a moved notice is left byte for byte as it was.
+    """
+    library = parse_string(source, split_names=False)
+    pieces, cursor, moved = [], 0, 0
+    for entry in library.entries:
+        raw = entry.raw
+        start = source.find(raw, cursor)
+        if start == -1:  # should not happen; skip rather than corrupt the file on a guess
+            continue
+        candidate = _relocate_in_record(raw, field)
+        if candidate is None:
+            continue
+        pieces.append(source[cursor:start])
+        pieces.append(candidate)
+        cursor = start + len(raw)
+        moved += 1
+    pieces.append(source[cursor:])
+    return "".join(pieces), moved
 
 
 def _entry_arxiv_id(entry, keep_version: bool) -> str:

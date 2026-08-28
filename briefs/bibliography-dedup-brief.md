@@ -421,12 +421,43 @@ entity decoding as much as the structural rescue. Half of it was arbitrary — t
 rewrote records that were never merged, so nothing about the output had been byte-for-byte anyway, and the
 half-measure bought an asymmetry against `raven-arxiv2bib` and nothing else.
 
-**Where the remaining line falls, and it is a real one.** `fixbib` repairs *encoding and structure* —
-things that are broken. It does not strip rights notices, and the Visualizer's importer does, at read
-time, for the analysis it is about to run. Whether a rights notice counts as useful metadata in a citable
-`.bib` is the one part still open; the argument for leaving it is that it is text the publisher genuinely
-put there rather than a mis-encoding, and the argument against is that nobody wants it in an abstract
-field. **Not decided.**
+**And where the line falls for a rights notice. Decided by Juha, 2026-08-28:**
+
+> It doesn't [count as useful metadata]. Humans would also strip it off before analyzing the abstracts.
+> Arguably doesn't even belong in the *abstract* field — it's separate metadata.
+
+So `fixbib` should strip it from the abstract, and the second sentence is the part that shapes the
+implementation: the notice is **metadata in the wrong field**, not noise. That argues for *relocating* it
+rather than deleting it — which also keeps `fixbib` honest, since unlike the Visualizer's importer it
+rewrites the user's own file, where dropping content outright is a heavier act than dropping it from an
+in-memory dataset that a re-import regenerates.
+
+Note this reverses a stated non-goal in `common/text/boilerplate.py`, whose docstring says it does not
+record what the notice said and points a caller at "the record's own fields, where an exporter that knows
+it puts it". Measured over the corpus, that pointer is half-right and half-circular: **1598 records do
+carry the rights statement in a field of its own — `annote`** — and 1658 abstracts carry one anyway, often
+the same record doing both. So the exporters that know do put it somewhere, and it is still in the abstract
+as well.
+
+**Decided: it moves to `copyright`** (Juha, 2026-08-28). Absent from real exports so it collides with
+nothing, and not typeset by standard BibTeX styles so it cannot reach a reference list. `annote` had the
+precedent here but is already three kinds of thing merged into one value; `note` is typeset.
+
+**And the reason the notice is worth keeping at all is narrower than "it is metadata"**, which is Juha's
+correction and the thing that sizes the feature: nobody is going to redistribute a `.bib` pulled out of a
+paywalled aggregator — that runs into the rights in a *collection* rather than in the items — and personal
+use is fine under the same laws. So the notice is not being preserved for legal reasons. Its one real use
+is **provenance: telling the user which of their own exports an item came from.**
+
+Which is why it is *plural*. A merged record came from several exports, so `raven-deduplicate` unions
+`copyright` across a cluster rather than choosing one, joined with newlines the way
+`repair_duplicate_field_keys` joins repeated fields — same reason, and the two read alike. Picking one
+would throw away the only thing saying where the other copy came from, and a union means nothing was
+dropped, so no audit row is needed for it.
+
+Shipped the same day: `boilerplate.split_rights_notice` returns both halves, `bibtex.relocate_rights_notices`
+does the move at text level so records with no notice stay byte-identical and the diff shows exactly which
+abstracts changed, and `raven-fixbib` runs it by default with `--keep-notices` to opt out.
 
 **Superseded below.** The either/or that follows is kept for the record only — it was the shape of the
 question before the framing above dissolved it, and nothing is gated on it any more.
