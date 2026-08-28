@@ -13,6 +13,11 @@ This allows easily continuing later, if there are lots of input files. A file is
 successfully processed, AFTER printing its bibtex entry.
 """
 
+__all__ = ["full_output_trace", "extract", "setup_prompts",
+
+           "listpdf", "process_one", "process_abstracts",
+
+           "main"]
 
 import logging
 logger = logging.getLogger(__name__)
