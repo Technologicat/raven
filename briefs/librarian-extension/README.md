@@ -1,5 +1,10 @@
 # Summer 2026 Librarian extension
 
+*A sprint README is the sprint's decision log, not an introduction to it: what was scheduled and in which
+order, what was cut and on what argument, what was learned while building each item. Most of it is here
+because it produced no diff and would otherwise be re-decided from scratch. Read it when taking stock or
+picking the next item; it is not a document anyone reads through.*
+
 Implementation briefs for the Librarian work of summer 2026. Completed briefs move to `done/`; live
 probes shared across briefs live in `manual_tests/`.
 

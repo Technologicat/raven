@@ -14,6 +14,13 @@ what stops "done" from being applied to something that was never going to be fin
   its own `README.md` for ordering and its own `done/` for the ones that have closed. A sprint folder is a
   working set, so it also holds unnumbered briefs and its session records.
 
+  **A sprint `README.md` is the sprint's decision log**, which is a different document from the folder
+  introduction the name suggests: the schedule and the argument for it, what was cut and why, what each
+  item turned out to need. It reads as an odd sort of README because most of what is in it produced no
+  diff — a decision that produced a commit is recorded by that commit's message, and a decision that did
+  not is recorded here or nowhere. Consulted when taking stock or picking the next item, rather than read
+  through. Both sprint READMEs say so at the top.
+
   **Numbering is discontinued.** The 01–16 run is historical and keeps its numbers; new briefs are named for
   what they are. The numbers recorded the order briefs were *written*, which is not the order they are read,
   built or closed in — `researchers-night/` inherited 11–16 from that run and its own contents are ordered by
