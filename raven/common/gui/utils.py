@@ -3,24 +3,35 @@
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually want these two for app bootup
+# In the order the definitions appear below, so a reader can predict where to look for one — including
+# the constants, which are not all in one place: the colours sit at the top and the default-theme metrics
+# in the middle, next to the geometry helpers that need them.
+__all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-exported from `layout_math`
+           "compute_zoom_to_fit", "compute_tooltip_position_scalar",  # ...ditto
+
+           "DISABLED_TEXT_COLOR", "DEFAULT_TEXT_COLOR", "DEFAULT_BUTTON_BG_COLOR",  # what the default theme draws
+           "SECTION_SEPARATOR_SPACING",  # the constellation's vertical rhythm
+
+           "bootup", "load_extra_font",  # high-level bootup API, you usually want these two for app bootup
            "get_font_path",  # mostly internal, but available for exotic use cases
            "setup_default_font", "setup_icon_fonts", "setup_markdown", "setup_themes",  # granular low-level app bootup API
-           "DISABLED_TEXT_COLOR", "DEFAULT_TEXT_COLOR",
+
            "nonexistent_ok",
            "maybe_delete_item", "has_child_items", "item_identifiers", "describe_item",
+
+           "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y", "DPG_SCROLLBAR_SIZE",  # default-theme metrics Raven has to know
+
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
            "get_mouse_relative_pos", "is_mouse_inside_widget",
-           "screen_to_content", "content_to_screen", "zoom_keep_point",  # re-exported from layout_math
-           "compute_zoom_to_fit",  # re-exported from layout_math
+
            "is_render_thread", "split_frame",  # frame waiting, guarded against deadlock
            "wait_for_resize",
            "park_offscreen", "recenter_window",
-           "compute_tooltip_position_scalar",  # re-exported from layout_math
+
            "snap_slider",
-           "SECTION_SEPARATOR_SPACING", "add_section_separator", "add_toolbar_separator",
-           "get_pixels_per_plotter_data_unit",
-           "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y", "DPG_SCROLLBAR_SIZE"]  # default-theme metrics Raven has to know
+           "add_section_separator", "add_toolbar_separator",
+
+           "get_pixels_per_plotter_data_unit"]
 
 import logging
 logger = logging.getLogger(__name__)
