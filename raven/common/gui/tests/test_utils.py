@@ -413,6 +413,16 @@ class TestAddSectionSeparator:
         assert dpg.get_item_type("a_named_separator") == "mvAppItemType::mvGroup"  # tag
         dpg.delete_item(window)
 
+    def test_the_default_spacing_matches_the_chat_log(self, dpg_context):
+        # The rule that ends a chat message has this much room on each side. A panel using a different
+        # number reads as a different app, and nothing else would notice the drift.
+        with dpg.window() as window:
+            group = guiutils.add_section_separator()
+        spacers = [item for item in dpg.get_item_children(group, slot=1)
+                   if dpg.get_item_type(item) == "mvAppItemType::mvSpacer"]
+        assert [dpg.get_item_configuration(item)["height"] for item in spacers] == [4, 4]
+        dpg.delete_item(window)
+
     def test_the_spacing_is_what_was_asked_for(self, dpg_context):
         with dpg.window() as window:
             group = guiutils.add_section_separator(spacing=13)

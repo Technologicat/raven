@@ -18,7 +18,7 @@ __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually wa
            "park_offscreen", "recenter_window",
            "compute_tooltip_position_scalar",  # re-exported from layout_math
            "snap_slider",
-           "add_section_separator", "add_toolbar_separator",
+           "SECTION_SEPARATOR_SPACING", "add_section_separator", "add_toolbar_separator",
            "get_pixels_per_plotter_data_unit",
            "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y", "DPG_SCROLLBAR_SIZE"]  # default-theme metrics Raven has to know
 
@@ -72,6 +72,13 @@ DEFAULT_TEXT_COLOR = (255, 255, 255)
 # so the fade ran to a colour a shade too dark and snapped at the end. Declaring it is what stops a
 # transcription of a default from drifting away from the default.
 DEFAULT_BUTTON_BG_COLOR = (51, 51, 55)
+
+# Blank space above and below a horizontal rule that divides one block of GUI from the next.
+#
+# Matched to Raven-librarian's chat log, where the rule ending a message has exactly this much room on
+# each side — that is the constellation's rhythm for this shape, and a panel using a different number
+# reads as a different app. Named rather than left as a default so the two can be compared.
+SECTION_SEPARATOR_SPACING = 4
 
 # ---------------------------------------------------------------------------
 # Fonts & themes
@@ -905,7 +912,7 @@ def snap_slider(sender: str | int,
     return value
 
 def add_section_separator(*,
-                          spacing: int = 6,
+                          spacing: int = SECTION_SEPARATOR_SPACING,
                           tag: int | str | None = None,
                           parent: int | str | None = None) -> int | str:
     """Add a horizontal rule with room around it, between sections of a vertical layout.
@@ -913,7 +920,7 @@ def add_section_separator(*,
     `dpg.add_separator` draws its line flush against whatever sits above and below, so it reads as
     something attached to one of them rather than as a break between the two.
 
-    `spacing`: pixels of blank space above and below the line.
+    `spacing`: pixels of blank space above and below the line. Defaults to `SECTION_SEPARATOR_SPACING`.
     `tag`: DPG tag for the group, if the caller wants to name it — to hide and show the separator with
            a section, say. The three items inside are unnamed; nothing has business addressing them
            separately.
