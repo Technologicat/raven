@@ -127,8 +127,16 @@ excellent throughout. What surfaced them was listing the largest cuts and readin
 The rule that survives: a notice must *look like a notice* — `©`, `(c) YYYY`, `copyright` followed by a
 year or symbol or `held by`, `all rights reserved`, `this work is published/licensed/distributed under`,
 `licensee <Name>`, `creative commons attribution` — and it counts only in the last 400 characters, since a
-rights notice sits at the end and a discussion of rights may be anywhere. Trailing punctuation is trimmed
-only after an actual cut.
+rights notice sits at the end and a discussion of rights may be anywhere.
+
+A third failure, caught by the unit tests rather than by the corpus: trimming trailing punctuation after a
+cut also removed the abstract's own closing full stop. What dangles at a cut is the *separator* that joined
+the notice on — a comma, a dash — and a full stop is not one. The corpus statistics could not show this
+either; only an assertion that an abstract ends the way it was written.
+
+**It lives in `raven.common.text.boilerplate`**, not in the deduplicator, and the Visualizer's importer runs
+every abstract through it at import time (decided by Juha, 2026-08-28). See below for why that was more than
+a tidiness preference.
 
 **Audit TSV**, stamped with `raven.__version__`. One row per cluster: surviving key, merged-away keys,
 which rule fired, the model's reason where one was consulted. A scoping review has to report duplicates
@@ -158,6 +166,24 @@ versions this way, so the toolkit behaves the same way about versions wherever t
 - *Rejected: treat versioned chapters as distinct works.* Conservative, and it leaves visible
   near-duplicates that a reviewer will notice.
 
+### Why the stripper is shared rather than the deduplicator's own
+
+The copyright line that ends an abstract was already a known nuisance elsewhere in Raven, patched
+downstream instead of removed. `nlptools.default_stopwords` documents that "Elsevier" lemmatizes to
+"elsevi" *because* it sits in that line, where spaCy's tagger reads it as an adjective and strips what looks
+like a comparative `-er`; and the Visualizer carries a `publisher_stopwords` list to keep publisher names out
+of the word cloud, with a docstring saying it needs re-checking after every spaCy model bump.
+
+That is a workaround for text that should not have reached the NLP stage. Measured over the 6934-record
+export, running the importer's own sequence: occurrences of `©` reaching spaCy fall from 1650 to 1,
+*All rights reserved* from 241 to 0, *Springer* from 337 to 11, *Elsevier* from 59 to 2. *MDPI* stays at 4,
+which is the reassuring number — those are genuine mentions inside an abstract's body, and nothing touched
+them.
+
+It runs last in the importer's abstract pipeline, after `unicodize_basic_markup`, so the notice is seen in
+the form everything downstream sees. Checked rather than assumed: markup conversion does *not* turn
+`\copyright` or `&copy;` into `©`, so the stripper matches those spellings itself.
+
 ## Open
 
 - **The two unrepairable records** (`Surname, MSc, RN, Given`) need a human edit deciding which commas
@@ -167,14 +193,7 @@ versions this way, so the toolkit behaves the same way about versions wherever t
   misleading reason. Deliberately left out of the `fixbib` commit to keep the blast radius small; raised,
   not filed.
 
-- **Where the abstract boilerplate stripper should live, and who else wants it.** Written for the merge, but
-  the copyright line that ends an abstract is a known nuisance elsewhere in Raven: `nlptools.default_stopwords`
-  documents that "Elsevier" lemmatizes to "elsevi" *because* it sits in that line, and the Visualizer carries
-  a `publisher_stopwords` list to keep publisher names out of the word cloud — a downstream patch for text
-  that could have been removed at ingest, and one whose docstring says it needs re-checking after every spaCy
-  model bump.
-
-  So this may belong in `raven.common.text` rather than in `dedupbib`, with the Visualizer importer as a
-  second consumer. Not decided, and not to be decided while writing the deduplicator: changing what the
-  importer feeds spaCy changes existing word clouds, which is its own call. Raised here so the connection is
-  not lost.
+- **Whether `publisher_stopwords` can now be trimmed.** It exists to keep publisher names out of the word
+  cloud, and with the notice removed at import there is much less for it to catch. Stale entries are
+  harmless — `nlptools.default_stopwords` says so — so this is tidying rather than a fix, and it wants doing
+  after a real import has been eyeballed, not before.

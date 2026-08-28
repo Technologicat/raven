@@ -43,6 +43,7 @@ from ..client import mayberemote
 from ..common import bgtask
 from ..common import deviceinfo
 from ..common import nlptools
+from ..common import text as textutil
 from ..common import utils as common_utils
 
 from ..papers import bibtex
@@ -263,6 +264,10 @@ def parse_input_files(*filenames):
                                                                     device_string=visualizer_config.devices["sanitize"]["device_string"])
                         abstract = dehyphenator.dehyphenate(abstract)
                     abstract = common_utils.unicodize_basic_markup(abstract)
+                    # Last, so the notice is seen in the same form everything downstream will see. Markup
+                    # conversion does not produce the copyright sign, but it does strip the grouping braces
+                    # around `{\copyright}`, and the stripper knows that spelling too.
+                    abstract = textutil.strip_boilerplate(abstract)
                 else:
                     abstract = None
 

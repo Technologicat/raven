@@ -134,6 +134,11 @@
 
 - a blue dot now marks the current info panel item — the same mark, in the same shape, that Raven-librarian puts beside the chat message its hotkeys will act on, in place of the glow the item's buttons used to have. It is drawn as part of the panel, so whatever covers the panel covers it too; the old glow floated on top of the word cloud window.
 
+- **the importer now strips the publisher's rights notice off an abstract**, so `© 2022 IEEE.` and `This article is distributed under the terms of the Creative Commons Attribution 4.0 License` stop being treated as part of what a paper says. A database export appends one to most abstracts it carries, and everything downstream then reads it as prose.
+  - **The word cloud is where you will see it.** Across one 6934-record export, the words reaching the NLP stage went from 1650 occurrences of `©` to 1, from 241 of *All rights reserved* to 0, and from 337 of *Springer* to 11 — the survivors being genuine mentions in the body of an abstract, which are left alone. `publisher_stopwords` is still there and still works; it now has much less to do.
+  - **A notice has to look like one, and has to sit at the end.** An abstract closing on "copyright concerns, bias mitigation, computational demands" keeps every word: a bare *copyright* is not a notice, and only the last 400 characters are examined, because a rights notice goes at the end while a discussion of rights can be anywhere.
+  - Available as `raven.common.text.strip_boilerplate` for anything else reading a database-exported abstract, with `find_rights_notice` for a caller that wants to show what it removed rather than discard it.
+
 - the importer's two LLM steps — cluster keyword extraction and abstract summarization — no longer run as a conversation with the assistant character. Both outputs are parsed by the importer rather than read by a person, while the character card asks for Markdown, for a reported train of thought, and for conversational prose — all of which had to be undone before the result could be used. Each of the two prompts already states its own task, so what the character contributed was only the part working against it. Expect cleaner keyword lists, and summaries that start with the summary.
 
 *Raven-avatar*
