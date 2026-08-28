@@ -11,6 +11,7 @@ did that needed real audio would fail here rather than passing quietly, since th
 sound.
 """
 
+import collections
 import inspect
 import math
 
@@ -249,6 +250,7 @@ class TestTheOtherMeterIsKeptInStep:
 
     def test_measuring_the_room_announces(self, panel, announced):
         panel._record_level(-62.0)
+        age_history(panel)
         panel._measure_the_room()
         assert announced == [-62.0 + silencegate.DEFAULT_SILENCE_MARGIN]
 
@@ -283,6 +285,7 @@ class TestChoosingAMicrophone:
 
     def test_the_reading_does_not_carry_over_from_the_previous_microphone(self, panel):
         panel._record_level(-20.0)
+        age_history(panel)
         assert panel.floor == -20.0
         panel._on_device_combo(DEVICE_COMBO, DEVICES[1])
         assert panel.floor is None, "the loudest-recently reading still describes the old microphone"
@@ -363,6 +366,19 @@ class TestChoosingAMicrophone:
         assert panel.recorder.device_name == DEVICES[0]
 
 
+def age_history(panel, seconds=None):
+    """Pretend everything currently in the panel's level history happened `seconds` ago.
+
+    The floor's window ends `FLOOR_LAG` before now, so a level just recorded is deliberately not in it
+    yet — see `test_the_sound_of_pressing_the_button_is_not_measured`. Tests that want a level counted
+    have to let it age in, and sleeping through half a second each time is not the way.
+    """
+    if seconds is None:
+        seconds = aip.FLOOR_LAG + 0.1
+    shift = int(seconds * SECOND)
+    panel._levels = collections.deque((timestamp - shift, level) for timestamp, level in panel._levels)
+
+
 def meter_line_ys(panel):
     """The y coordinates of the lines the panel's VU meter has drawn — its peak and threshold."""
     return [dpg.get_item_configuration(item)["p1"][1]
@@ -398,21 +414,52 @@ class TestTheLoudestRecentlyReading:
     def test_it_is_the_maximum_rather_than_the_last_or_the_mean(self, panel):
         for level in (-70.0, -62.0, -68.0):
             panel._record_level(level)
+        age_history(panel)
         assert panel.floor == -62.0
 
+    def test_the_sound_of_pressing_the_button_is_not_measured(self, panel):
+        """Pressing *Measure the room* makes a noise the microphone hears, so the window ends before now.
+
+        Live case 2026-08-28: a room floor near -40 dBFS, and the mouse click alone read -27 — the
+        operator's own hand setting the threshold 13 dB high, every time, since clicking that button is
+        the whole gesture.
+        """
+        panel._record_level(-40.0)  # the room
+        age_history(panel)  # ...a moment ago
+        panel._record_level(-27.0)  # the click, just now
+        assert panel.floor == -40.0, "the click set the floor"
+
+    def test_a_level_inside_the_window_is_still_measured(self, panel):
+        # The control: the same sample, old enough to have aged in, does count. Without this the test
+        # above would pass against a floor that ignored everything.
+        panel._record_level(-27.0)
+        age_history(panel)
+        assert panel.floor == -27.0
+
+    def test_nothing_has_aged_in_yet_reads_as_nothing(self, panel):
+        # Monitoring started less than the lag ago: there is a reading, but none of it is old enough to
+        # be trusted, and a dash is the honest answer.
+        panel._record_level(-40.0)
+        assert panel.floor is None
+
     def test_a_level_older_than_the_window_is_forgotten(self, panel):
-        # Timestamps come from `time.monotonic_ns` inside `_record_level`, so age the old sample by
+        # Timestamps come from `time.monotonic_ns` inside `_record_level`, so age the samples by
         # reaching into the history rather than by sleeping through the window.
         panel._record_level(-20.0)
         panel._record_level(-70.0)
-        assert panel.floor == -20.0
+        age_history(panel)
+        assert panel.floor == -20.0, "this fixture cannot tell a forgotten level from one never counted"
+
+        # Push the loud one out of the far end of the window, leaving the quiet one inside it.
         stale_ns, level = panel._levels[0]
         panel._levels[0] = (stale_ns - int((aip.FLOOR_WINDOW + 1.0) * SECOND), level)
         panel._record_level(-70.0)  # any append trims the window
+        age_history(panel)
         assert panel.floor == -70.0, "a level older than the window is still being counted"
 
     def test_digital_silence_reads_as_a_dash(self, panel):
         panel._record_level(-math.inf)
+        age_history(panel)
         assert panel.floor == -math.inf
         assert aip.format_dBFS(panel.floor) == "—"
 
@@ -421,6 +468,7 @@ class TestMeasureTheRoom:
     def test_it_sets_the_threshold_a_margin_above_the_loudest_recently(self, panel):
         for level in (-70.0, -62.0, -68.0):
             panel._record_level(level)
+        age_history(panel)
         panel._measure_the_room()
         assert panel.recorder.silence_threshold == -62.0 + silencegate.DEFAULT_SILENCE_MARGIN
 
@@ -429,18 +477,21 @@ class TestMeasureTheRoom:
         # move the threshold, since one frame above it is enough to hold a recording open.
         for level in (-62.0, -70.0, -70.0):  # loudest first, so "latest" and "maximum" disagree
             panel._record_level(level)
+        age_history(panel)
         panel._measure_the_room()
         assert panel.recorder.silence_threshold == -62.0 + silencegate.DEFAULT_SILENCE_MARGIN
 
     def test_it_cancels_autodetect(self, panel):
         panel._on_autodetect_checkbox(None, True)
         panel._record_level(-62.0)
+        age_history(panel)
         panel._measure_the_room()
         assert panel.recorder.silence_threshold is not None
         assert dpg.get_value("audio_input_autodetect_checkbox") is False  # tag
 
     def test_it_stays_inside_the_meter(self, panel):
         panel._record_level(-1.0)  # + the margin would be above full scale
+        age_history(panel)
         panel._measure_the_room()
         assert panel.recorder.silence_threshold == aip.METER_MAX
 
@@ -454,6 +505,7 @@ class TestMeasureTheRoom:
         # a margin is still -inf. Better to leave the last usable value than to write that in.
         panel._on_threshold_slider(THRESHOLD_SLIDER,-33.0)
         panel._record_level(-math.inf)
+        age_history(panel)
         panel._measure_the_room()
         assert panel.recorder.silence_threshold == -33.0
 

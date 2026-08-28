@@ -51,6 +51,17 @@ METER_RED_START = -6.0
 # "Measure the room" measures over. That way the readout is a preview of what the button will do.
 FLOOR_WINDOW = 3.0  # seconds
 
+# ...and how long before *now* that window ends.
+#
+# The window has to stop short of the present because pressing the button makes a noise: a mouse click is
+# a sharp transient a few tens of milliseconds before the callback, and the microphone hears it. Measured
+# 2026-08-28 on a laptop with a room floor near -40 dBFS, the click alone read -27 — so without this the
+# operator's own hand sets the threshold, 13 dB too high, every time.
+#
+# The readout lags by the same amount, which keeps it an honest preview of the button. It is a maximum
+# over three seconds, so half a second of lag is not visible in it.
+FLOOR_LAG = 0.5  # seconds
+
 # What the sliders will let the user ask for. The autostop range runs high because a speaker pausing
 # to think is a real case, and cutting them off mid-question is the failure that reads as breakage.
 AUTOSTOP_MIN = 0.2  # seconds
@@ -219,7 +230,7 @@ class DPGAudioInputPanel:
         """Add one level to the recent history, and drop what has aged out of the window."""
         now_ns = time.monotonic_ns()
         self._levels.append((now_ns, level))
-        cutoff = now_ns - int(FLOOR_WINDOW * 10**9)
+        cutoff = now_ns - int((FLOOR_WINDOW + FLOOR_LAG) * 10**9)  # the lag's worth is kept, waiting to age in
         while self._levels and self._levels[0][0] < cutoff:
             self._levels.popleft()
 
@@ -230,7 +241,12 @@ class DPGAudioInputPanel:
         levels = tuple(self._levels)
         if not levels:
             return None
-        return max(level for _, level in levels)
+        # The window ends `FLOOR_LAG` ago rather than now — see `FLOOR_LAG` for the noise that keeps out.
+        ends_at = time.monotonic_ns() - int(FLOOR_LAG * 10**9)
+        in_window = [level for timestamp, level in levels if timestamp <= ends_at]
+        if not in_window:
+            return None  # nothing has aged in yet; monitoring started less than the lag ago
+        return max(in_window)
     floor = property(fget=_get_floor,
                      doc="The loudest the input has been within the recent-history window, in dBFS, or `None` with nothing heard yet. Read-only.")
 
@@ -463,7 +479,9 @@ class DPGAudioInputPanel:
         dpg.add_text(f"Set the silence threshold from the last {FLOOR_WINDOW:0.6g} seconds:\n"
                      f"the loudest moment in them, plus {silencegate.DEFAULT_SILENCE_MARGIN:0.6g} dB.\n\n"
                      "Ask the room to be quiet first. The figure it will use is\n"
-                     f"the \"Loudest in {FLOOR_WINDOW:0.6g} s\" reading above.",
+                     f"the \"Loudest in {FLOOR_WINDOW:0.6g} s\" reading above.\n\n"
+                     f"The window ends {FLOOR_LAG:0.6g} s ago, so the sound of\n"
+                     "clicking this button does not set the level.",
                      parent=measure_tooltip)
 
         # Peak hold sits with the meter rather than with the settings below: it governs how far back the
