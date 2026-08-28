@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock
 
 from raven.papers.bibtex import (_clean_whitespace, _field_spans, _make_key, _undelimit,
-                                 entries_to_bibtex, parse_file, parse_string,
+                                 decode_html_entities, entries_to_bibtex, parse_file, parse_string,
                                  repair_duplicate_field_keys, write_string)
 
 
@@ -283,6 +283,79 @@ class TestWriteString:
         # take the no-merge path rather than fall off the end of `any()` into an error.
         written = write_string(parse_string("@book{b, title={No author at all}, year={2024}}"))
         assert "No author at all" in written
+
+
+class TestDecodeHtmlEntities:
+    def test_an_escaped_ampersand_entity_becomes_an_escaped_ampersand(self):
+        """How this actually arrives: HTML exported into a `.bib`, with the `&` escaped on the way in.
+
+        The escape in front belongs to the entity's own `&`, which is syntax, so it goes with it — and
+        the decoded `&` needs an escape of its own, which is why this is not simply a text decode.
+        """
+        assert decode_html_entities(r"Q\&amp;A") == (r"Q\&A", 1)
+
+    def test_an_unescaped_ampersand_entity_gains_the_escape_it_needs(self):
+        assert decode_html_entities("Bell &amp; Howell") == (r"Bell \& Howell", 1)
+
+    def test_an_even_backslash_run_is_left_alone(self):
+        # `\\` is an escaped backslash — content, not an escape for what follows.
+        assert decode_html_entities(r"a\\&amp;b") == (r"a\\\&b", 1)
+
+    def test_a_named_entity_becomes_its_character(self):
+        assert decode_html_entities("H&auml;kkinen") == ("Häkkinen", 1)
+
+    def test_a_numeric_entity_becomes_its_character(self):
+        assert decode_html_entities("Students&#8217; views") == ("Students’ views", 1)
+        assert decode_html_entities("&#x2014;dash") == ("—dash", 1)
+
+    def test_an_entity_naming_nothing_is_left_alone_and_not_counted(self):
+        """The count is what a caller reports to a user, so it must be decodes and not matches.
+
+        `re.subn` would have said 1 here, having substituted the text with itself.
+        """
+        assert decode_html_entities("&foo;") == ("&foo;", 0)
+
+    def test_an_ampersand_that_is_not_an_entity_is_left_alone(self):
+        """HTML5 also defines entities without the trailing semicolon, and honouring those here would
+        rewrite `AT&T` at the first opportunity."""
+        assert decode_html_entities("AT&T") == ("AT&T", 0)
+
+    def test_an_escaped_entity_decodes_only_once(self):
+        # `&amp;lt;` is how a source writes a literal `&lt;`; the result must still say that.
+        assert decode_html_entities("&amp;lt;") == (r"\&lt;", 1)
+
+    def test_an_invisible_character_never_reaches_the_file(self):
+        """A decode that puts something unseeable in a bibliography is worse than the entity was.
+
+        A no-break space is the dangerous one: it looks exactly like a space, so a title carrying one
+        reads correctly and stops splitting into the words it contains.
+        """
+        for source, expected in ((r"1)\&nbsp;more", "1) more"),        # no-break space
+                                 ("narrow&#8239;space", "narrow space"),   # narrow no-break space
+                                 ("a&zwj;b", "ab"),                    # zero-width joiner, a format char
+                                 ("&NoBreak;x", "x")):                 # word joiner
+            decoded, _count = decode_html_entities(source)
+            assert decoded == expected
+
+    def test_the_line_count_cannot_change(self):
+        """`raven-fixbib` reports faults by line number in the user's own file, and decodes before
+        repairing — so an entity naming a newline must not move every line after it."""
+        source = "@article{k,\n  title = {line&#10;break},\n  year = {2024},\n}\n"
+        decoded, _count = decode_html_entities(source)
+        assert decoded.count("\n") == source.count("\n")
+
+    def test_text_with_no_entities_is_returned_unchanged(self):
+        source = "@article{k,\n  title = {A perfectly ordinary title},\n}\n"
+        assert decode_html_entities(source) == (source, 0)
+
+    def test_the_result_still_parses_and_says_what_it_should(self):
+        source = ("@article{k,\n  title = {Synchronous \\&amp; Remote},\n"
+                  "  author = {H\\&auml;kkinen, P.},\n  year = {2024},\n}\n")
+        decoded, count = decode_html_entities(source)
+        assert count == 2
+        fields = {f.key: f.value for f in parse_string(decoded, split_names=False).entries[0].fields}
+        assert fields["title"] == r"Synchronous \& Remote"
+        assert fields["author"] == "Häkkinen, P."
 
 
 class TestFieldSpans:

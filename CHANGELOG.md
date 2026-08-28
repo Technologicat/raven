@@ -75,6 +75,11 @@
 - **every report now names the fault**, so an unreadable `.bib` says what is wrong with it and not merely how much. Each line carries the record's key, its line number in *your* file, which of the two faults it is, and the specifics — which fields repeat, which look unbalanced, or the parser's own complaint where it is neither. A record whose author reads `Bloggs, PhD, MSc, Joan` is now reported as *too many commas* rather than as a suspected brace problem.
   - `--list` names every record that was repaired, not just how many. Off by default, since a database export can need repairing a thousand times over.
 
+- **HTML left in the field values is now decoded**, which is the one fault here that afflicts records a parser is perfectly happy with — so nothing previously reported it at all. A database that exports its web page rather than its record leaves entities behind, and a title meaning `Q&A` reaches your citations, your word cloud and your typeset bibliography as `Q\&amp;A`.
+  - The result is BibTeX rather than plain text: a decoded character that BibTeX reserves is escaped on the way out, so `&amp;` becomes `\&` and the file stays as readable as it was.
+  - **An entity naming an invisible character is not decoded to one.** A no-break space is the one that matters — it looks exactly like a space, so a title carrying it reads correctly and quietly stops splitting into the words it contains. Those become ordinary spaces, and zero-width joiners and the like are dropped.
+  - Everything outside an entity is left byte for byte as it was, and an entity naming nothing is left alone. `--keep-entities` switches the whole thing off.
+
 *Raven-deduplicate*
 
 - **a new tool, `raven-deduplicate`**, for the bibliography a multi-database literature search leaves behind. Search Scopus, Web of Science, ProQuest, Springer and arXiv for the same question and concatenate what they give you, and the file holds every paper once per database that indexes it — each copy in that database's dialect, with a different subset of the fields filled in. This finds those copies and merges them into one record.

@@ -1,4 +1,4 @@
-"""Repair BibTeX records that a parser refuses, and say what was wrong with the ones that stay refused.
+r"""Repair BibTeX records that a parser refuses, and say what was wrong with the ones that stay refused.
 
 Two faults are repaired, and they come from opposite ends of the toolchain.
 
@@ -27,6 +27,12 @@ one, since each holds something different and choosing between them is not a rep
 
 The second fault is worth knowing about for how *much* of a file it can take: 1598 of the 6934 records in
 one real multi-database export, none of them reported as anything more specific than "unparseable".
+
+A third fault needs no rescuing, because the records carrying it parse perfectly well: **HTML left in the
+field values** by a database that exported its web page rather than its record. A title meaning `Q&A`
+arrives as `Q\&amp;A` and stays that way through every tool downstream — a citation, a word cloud, a
+typeset bibliography. The entities are decoded and re-escaped for BibTeX, and everything around them is
+left byte for byte as it was. `--keep-entities` switches it off.
 
 Whatever is left is described rather than guessed at, one line per record, naming the fault and the fields
 that carry it. A record whose author is written `Bloggs, PhD, MSc, Joan` cannot be repaired here — BibTeX
@@ -171,7 +177,7 @@ def _summarize_by_kind(reports: list[RepairReport]) -> str:
 
 
 def main() -> None:  # pragma: no cover
-    parser = argparse.ArgumentParser(description="""Repair BibTeX records a parser refuses to read: field values whose braces do not balance, and entries naming the same field twice. Writes a new file unless asked to edit in place.""",
+    parser = argparse.ArgumentParser(description="""Repair a BibTeX file: records a parser refuses to read — field values whose braces do not balance, entries naming the same field twice — and HTML character entities left in the field values of records that read perfectly well. Writes a new file unless asked to edit in place.""",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("-o", "--output-suffix", dest="output_suffix", default="_fixed", type=str, metavar="suf",
@@ -182,6 +188,8 @@ def main() -> None:  # pragma: no cover
                         help="Report what would be repaired, and write nothing.")
     parser.add_argument("-l", "--list", dest="list_repairs", action="store_true", default=False,
                         help="Name every record that was repaired, not just how many. A database export can need this a thousand times over, so the list is off by default.")
+    parser.add_argument("--keep-entities", dest="keep_entities", action="store_true", default=False,
+                        help="Leave HTML character entities in the field values. They come from a database that exported its web page rather than its record, and are decoded by default.")
     parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="myreferences.bib",
                         help="BibTeX file(s) to repair.")
     opts = parser.parse_args()
@@ -192,7 +200,7 @@ def main() -> None:  # pragma: no cover
     # decision an application gets to make and a library does not.
     logging.getLogger("bibtexparser").setLevel(logging.ERROR)
 
-    total_recovered = total_unrecovered = 0
+    total_recovered = total_unrecovered = total_decoded = 0
     for filename in opts.filenames:
         path = pathlib.Path(filename).expanduser().resolve()
         try:
@@ -200,6 +208,15 @@ def main() -> None:  # pragma: no cover
         except OSError as exc:
             print(f"{path}: cannot read ({type(exc).__name__}: {exc})", file=sys.stderr)
             continue
+
+        # Entities first, so the record repairs run on the text that will actually be written. The
+        # decoding cannot change how many lines the file has -- a separator or control character becomes
+        # a space rather than itself -- so the line numbers reported below still point into the user's
+        # own file.
+        decoded = 0
+        if not opts.keep_entities:
+            source, decoded = bibtex.decode_html_entities(source)
+        total_decoded += decoded
 
         repaired, recovered, unrecovered = repair_bibtex(source)
         total_recovered += len(recovered)
@@ -214,11 +231,13 @@ def main() -> None:  # pragma: no cover
         for report in unrecovered:
             print(f"{path.name}: could not repair {report.describe()}", file=sys.stderr)
 
+        if decoded:
+            print(f"{path.name}: decoded {decoded} HTML character entit{'y' if decoded == 1 else 'ies'}.")
         if recovered:
             print(f"{path.name}: repaired {len(recovered)} record(s) — {_summarize_by_kind(recovered)}.")
         if unrecovered:
             print(f"{path.name}: {len(unrecovered)} record(s) still unreadable — {_summarize_by_kind(unrecovered)}.")
-        if not recovered:
+        if not recovered and not decoded:
             if not unrecovered:
                 print(f"{path.name}: nothing to repair.")
             continue
@@ -236,8 +255,9 @@ def main() -> None:  # pragma: no cover
         # Those are answerable, but not from the file alone, so they are named and left alone.
         print(f"\n{total_unrecovered} record(s) need a look by hand: what would fix them is not "
               f"recoverable from the text.", file=sys.stderr)
-    if total_recovered or total_unrecovered:
-        print(f"Total: {total_recovered} repaired, {total_unrecovered} left for you.")
+    if total_recovered or total_unrecovered or total_decoded:
+        entities = f", {total_decoded} entities decoded" if total_decoded else ""
+        print(f"Total: {total_recovered} repaired, {total_unrecovered} left for you{entities}.")
 
 
 if __name__ == "__main__":  # pragma: no cover
