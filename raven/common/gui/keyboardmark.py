@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 import enum
 import threading
-from typing import Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
 
 from unpythonic import sym
 
@@ -84,7 +84,7 @@ _pulse = None  # gui_animation.PulsatingColor, while at least one mark is lit
 # So the lock guards the decision, and the animator is called after it is released.
 
 
-def join_pulse(theme_color_widget: Union[str, int]) -> None:
+def join_pulse(theme_color_widget: str | int) -> None:
     """Have `theme_color_widget` breathe with every other keyboard mark on screen.
 
     Starts the shared animation if this is the first widget to join it.
@@ -105,7 +105,7 @@ def join_pulse(theme_color_widget: Union[str, int]) -> None:
         gui_animation.animator.add(to_register)
 
 
-def leave_pulse(theme_color_widget: Union[str, int]) -> None:
+def leave_pulse(theme_color_widget: str | int) -> None:
     """Stop `theme_color_widget` breathing, and make it invisible.
 
     Stops the shared animation once the last widget has left it, so an app with nothing marked is not
@@ -152,7 +152,7 @@ DOT_SLOT_W = 14
 _unlit_dot_theme = None  # created on first use by `_get_unlit_dot_theme`
 
 
-def _get_unlit_dot_theme() -> Union[str, int]:
+def _get_unlit_dot_theme() -> str | int:
     """The theme every dot wears while its widget is not the marked one.
 
     One theme shared by every dot in the process, and the thing a `DOT` `Mark` displaces on whichever dot is
@@ -170,8 +170,8 @@ def _get_unlit_dot_theme() -> Union[str, int]:
 
 
 def add_dot(*,
-            parent: Union[str, int],
-            tag: Optional[Union[str, int]] = None) -> Union[str, int]:
+            parent: str | int,
+            tag: str | int | None = None) -> str | int:
     """Add the glyph a `DOT` `Mark` lights, unlit, at the current end of `parent`.
 
     `parent`: the container to add it to. Explicit rather than taken from the container stack, because the
@@ -220,12 +220,12 @@ _BORDER_SIZE_STYLE = {MarkKind.FRAME: dpg.mvStyleVar_FrameBorderSize,
 
 class Mark:
     def __init__(self,
-                 target: Union[str, int],
+                 target: str | int,
                  kind: MarkKind = MarkKind.FRAME,
                  item_type: int = dpg.mvAll,
                  thickness: int = 2,
-                 padding: Optional[Tuple[int, int]] = None,
-                 tooltip: Optional[str] = None):
+                 padding: tuple[int, int] | None = None,
+                 tooltip: str | None = None):
         """The blue pulse that says *the keyboard is here*, on one widget, switched by `lit`.
 
         `target`: DPG tag or ID of the widget to mark.
@@ -328,11 +328,11 @@ class Mark:
             if self._previous_theme is not None:
                 logger.warning(f"Mark.__init__: target '{target}' already has a theme, which this mark displaces until detached. Mark the enclosing group instead, so the two compose.")
 
-    def _get_target(self) -> Optional[Union[str, int]]:
+    def _get_target(self) -> str | int | None:
         """Which widget currently wears this mark, or `None`."""
         return self._target
 
-    def _set_target(self, target: Optional[Union[str, int]]) -> None:
+    def _set_target(self, target: str | int | None) -> None:
         """Move the mark to another widget, giving the old one back the theme it had."""
         with self._lock:
             if target == self._target:
@@ -418,7 +418,7 @@ class Mark:
         guiutils.maybe_delete_item(self._theme)
 
 
-def install_focus_follower(widgets: Sequence[Union[str, int]],
+def install_focus_follower(widgets: Sequence[str | int],
                            kind: MarkKind = MarkKind.FRAME,
                            thickness: int = 2) -> gui_animation.Animation:
     """Mark whichever of `widgets` currently holds DPG's focus. One call per app.
