@@ -17,18 +17,25 @@ never content either.
 
 ## How a notice is recognized
 
-Two conditions, and both must hold. Neither is sufficient alone, which is the whole design.
+**Every candidate must sit within the last `TAIL_BUDGET` characters.** A rights notice goes at the end; a
+discussion of rights may be anywhere. That is the one condition both tiers share.
 
-**It must look like the opening of a notice, not a mention of the subject.** The alternatives are the
-copyright sign in its several spellings, `copyright` followed by something that makes it a notice (a year,
-a sign, `held by`), `all rights reserved`, a licence-grant clause, `licensee <Name>`, or a Creative
-Commons attribution. Deliberately absent: a bare `copyright`. An abstract may *discuss* copyright — one
-about AI-generated work closes on "copyright concerns, bias mitigation, computational demands" — and a
-bare-word match eats the end of it.
+Beyond it, the markers fall into two tiers, and the split is the whole design — because the hard case is
+not an abstract that *has* a notice, it is an abstract *about copyright*, which a corpus on AI in
+education has plenty of.
 
-**It must sit within the last `TAIL_BUDGET` characters.** A rights notice goes at the end; a discussion of
-rights may be anywhere. Position is what separates them when the wording alone cannot, and it is the
-condition that makes the first one safe to relax slightly.
+- **`UNMISTAKABLE` — not English.** The copyright sign and `(c) 2025`, in the spellings that survive
+  markup conversion. Nobody writes these mid-sentence while arguing about licensing, so they are trusted
+  anywhere in the window. This tier finds essentially every real notice.
+- **`NOTICE_OPENER` — ordinary English, trusted only at a sentence boundary.** `All rights reserved` is a
+  phrase a paper may quote and analyse; `copyright held by` is a clause a paper may argue about; a
+  licence-grant clause is a sentence a paper may write about its own subject. Appended boilerplate opens
+  its own sentence. A mention inside an argument does not, and that distinction is what tells
+  `Copyright 2024, Society of Petroleum Engineers.` from `The Copyright 1976 settlement still governs
+  derivative works.`
+
+A bare `copyright` is in neither tier. An abstract may close on "copyright concerns, bias mitigation,
+computational demands", and a bare-word match eats the end of it.
 
 Trailing punctuation is trimmed only after an actual cut, so an abstract nothing matched keeps its final
 full stop.
@@ -45,29 +52,69 @@ through markup conversion can still carry them. They are here for that reason ra
 corpus to hand uses them.
 """
 
-__all__ = ["TAIL_BUDGET", "RIGHTS_NOTICE", "LEADING_LABEL",
+__all__ = ["TAIL_BUDGET", "UNMISTAKABLE", "NOTICE_OPENER", "LEADING_LABEL",
            "find_rights_notice", "strip_boilerplate"]
 
 import re
 
-# How far from the end a notice may begin. Generous enough for the longest real ones -- a Creative Commons
-# grant with its URL runs to about 400 characters -- and short enough that an abstract's own closing
-# sentences are out of reach. The longest genuine notice measured in a 6934-record multi-database export
-# was 397 characters.
-TAIL_BUDGET = 400
+# How far from the end a notice may begin. A full Creative Commons grant -- the clause, the licence name,
+# the URL, and the permissions sentence after it -- runs past 400 characters, and a budget cut to fit the
+# *typical* notice silently misses the longest ones, which are the ones carrying the most junk. 600 still
+# means "the end" for an abstract of any normal length, and the sentence-opening test below is what
+# actually discriminates for the tier that needs discriminating.
+TAIL_BUDGET = 600
 
-RIGHTS_NOTICE = re.compile(r"""(?ix)
+# Markers that are not English. Nobody writes these in the middle of a sentence about copyright law, so
+# they are trusted wherever they fall in the tail window. This tier does essentially all the work.
+UNMISTAKABLE = re.compile(r"""(?ix)
       ©  |  \\copyright\b  |  &copy;  |  &\#169;      # the sign, and the spellings markup conversion leaves
     | \(\s*c\s*\)\s* \d{4}                            # (c) 2025
-    | \bcopyright\s* (?: ©|\(c\)|\d{4}|held\s+by|by\s+the|[-\u2013\u2014]\s )
-    | \ball\s+rights\s+reserved\b
-    | \bthis\s+ (?:work|article|content|review|publication)\s+ is\s+
-      (?:published|licensed|distributed|made\s+available)\s+ under
-    | \blicensee\s+ [A-Z]                             # "Licensee MDPI", "licensee CEDTECH"
-    | \bcreative\s+commons\s+ attribution\b
 """)
 
+# Markers that are ordinary English and therefore say nothing on their own. `All rights reserved` is a
+# phrase a paper may quote and discuss; `copyright held by` is a clause a paper may argue about. These are
+# trusted only when they *open a sentence*, which is what an appended notice does and what a mention
+# inside an argument does not.
+NOTICE_OPENER = re.compile(r"""(?ix)
+      \bcopyright\s* (?: ©|\(c\)|\d{4}|held\s+by|by\s+the|[-\u2013\u2014]\s )
+    | \ball\s+rights\s+reserved\b
+    | \bthis\s+ (?:is\s+an?\s+)? (?:\w+\s+){0,3}? (?:work|article|content|review|publication|paper)\s+
+      (?:is\s+)? (?:published|licensed|distributed|made\s+available)\s+ (?:to\s+you\s+)? under\b
+    | \blicensee\s+ [A-Z]                             # "Licensee MDPI", "licensee CEDTECH"
+""")
+
+# Deliberately not a marker: `Creative Commons Attribution` on its own. It is a proper noun that starts
+# sentences in prose -- "Creative Commons was found to be a popular licensing model" -- so even the
+# sentence-opening test cannot save it, and an AI-in-education corpus contains papers about open
+# licensing. Measured over a 6934-record export it was the sole evidence for 2 notices out of 1656, both
+# of which the licence-grant clause above now reaches instead.
+
 LEADING_LABEL = re.compile(r"^\s*(?:abstract|summary)\s*[:.\u2013\u2014-]\s+", re.IGNORECASE)
+
+# What a sentence ends with: the stop, optionally a closing quote or bracket, and optionally a short
+# bracketed aside before the next sentence starts. The aside is there because publishers put one exactly
+# where it breaks a naive test -- `...within the domain. (CC BY-NC 4.0) This article is licensed to you
+# under a ...` is one sentence ending and another beginning, with a licence tag wedged between them.
+_SENTENCE_END = re.compile(r"""(?x)
+    [.!?] ['"\u2019\u201d)\]]? \s*
+    (?: (?P<aside> [(\[] [^()\[\]]{0,48} [)\]] ) \s* )?
+    $""")
+
+
+def _sentence_start_at(text: str, position: int) -> int | None:
+    """Where the notice at `position` begins, or `None` if `position` sits mid-sentence.
+
+    Usually `position` itself. It is earlier when a bracketed aside stands between the previous full stop
+    and the notice, because the aside belongs to the boilerplate rather than to the prose — a dangling
+    `(CC BY-NC 4.0)` left behind by cutting at the marker is exactly the text this reclaims.
+    """
+    before = text[:position]
+    if not before.strip():
+        return 0
+    match = _SENTENCE_END.search(before)
+    if match is None:
+        return None
+    return match.start("aside") if match.group("aside") else position
 
 
 def find_rights_notice(text: str) -> int | None:
@@ -77,10 +124,14 @@ def find_rights_notice(text: str) -> int | None:
     discard it — an audit trail wanting to say what was removed needs the text, not just the absence.
     """
     window_start = max(0, len(text) - TAIL_BUDGET)
-    for match in RIGHTS_NOTICE.finditer(text):
-        if match.start() >= window_start:
-            return match.start()
-    return None
+    candidates = [match.start() for match in UNMISTAKABLE.finditer(text) if match.start() >= window_start]
+    for match in NOTICE_OPENER.finditer(text):
+        if match.start() < window_start:
+            continue
+        start = _sentence_start_at(text, match.start())
+        if start is not None:
+            candidates.append(start)
+    return min(candidates) if candidates else None
 
 
 def strip_boilerplate(text: str) -> str:

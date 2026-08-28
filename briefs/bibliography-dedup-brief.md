@@ -124,10 +124,38 @@ bare `copyright` cut 284 characters of real content from an abstract whose closi
 having stripped every trailing full stop. Both were invisible in the collapse statistics, which looked
 excellent throughout. What surfaced them was listing the largest cuts and reading them.
 
-The rule that survives: a notice must *look like a notice* — `©`, `(c) YYYY`, `copyright` followed by a
-year or symbol or `held by`, `all rights reserved`, `this work is published/licensed/distributed under`,
-`licensee <Name>`, `creative commons attribution` — and it counts only in the last 400 characters, since a
-rights notice sits at the end and a discussion of rights may be anywhere.
+**The hard case is not an abstract with a notice, it is an abstract about copyright** — and a corpus on AI
+in education has those. Raised by Juha, 2026-08-28, with the sentence *"Copyright remains a widely debated
+field of law, and further research into the topic is encouraged."* That one survived; eight of nine
+sibling probes did not. `Creative Commons Attribution licences are increasingly common in open education`
+lost 81 characters, `We show the phrase All rights reserved has no legal effect` lost 64.
+
+The rule that survives has two tiers, and the split is the design:
+
+- **Unmistakable, trusted anywhere in the tail window**: the copyright sign and `(c) YYYY`, in the
+  spellings that survive markup conversion. Not English — nobody writes them mid-argument. Measured over
+  the corpus, this tier alone accounts for 1587 of 1658 detections.
+- **Ordinary English, trusted only where it opens a sentence**: `copyright` qualified by a year or
+  `held by`, `all rights reserved`, a licence-grant clause, `licensee <Name>`. Appended boilerplate starts
+  its own sentence; a clause inside an argument does not. That is what separates
+  `Copyright 2024, Society of Petroleum Engineers.` from `The Copyright 1976 settlement still governs
+  derivative works.`
+
+`creative commons attribution` is in **neither** tier. It is a proper noun that opens sentences in prose,
+so the sentence test cannot save it, and it was the sole evidence for 2 detections out of 1658. Widening
+the licence-grant clause reaches both of those instead.
+
+Both were found by *adversarial probes rather than by the corpus*, which is the transferable part: the
+corpus contains the notices, so measuring against it says how many are caught and nothing about what else
+would be. The probes are now `TestPapersAboutCopyright` in the test module, ten prose endings that must
+survive whole.
+
+Two further corrections came out of chasing them, and both were real notices being missed: a bracketed
+aside between the full stop and the notice (`... domain. (CC BY-NC 4.0) This article is licensed to you
+under ...`) defeated the sentence test, and a full Creative Commons grant with its URL and permissions
+sentence runs past 400 characters, so the window was cutting off the longest notices — which are the ones
+carrying the most junk. The budget is 600, and the aside is now taken with the notice rather than left
+dangling.
 
 A third failure, caught by the unit tests rather than by the corpus: trimming trailing punctuation after a
 cut also removed the abstract's own closing full stop. What dangles at a cut is the *separator* that joined

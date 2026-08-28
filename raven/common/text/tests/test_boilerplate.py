@@ -28,20 +28,54 @@ class TestRealNotices:
     def test_copyright_qualified_by_a_year_opens_a_notice(self):
         assert strip_boilerplate(f"{BODY} Copyright 2024 by the authors.") == BODY
 
+    def test_a_publisher_named_after_a_year_opens_a_notice(self):
+        assert strip_boilerplate(f"{BODY} Copyright 2024, Society of Petroleum Engineers.") == BODY
+
+    def test_an_open_access_grant_opens_a_notice(self):
+        text = (f"{BODY} This is an open access article distributed under the terms of the Creative "
+                "Commons Attribution 4.0 License.")
+        assert strip_boilerplate(text) == BODY
+
+    def test_a_licence_tag_wedged_before_the_notice_goes_with_it(self):
+        # Publishers put a bracketed tag exactly where it breaks a naive sentence test, and cutting at
+        # the marker alone leaves it dangling on the end of the abstract.
+        text = (f"{BODY} (CC BY-NC 4.0) This article is licensed to you under a Creative Commons "
+                "Attribution-NonCommercial 4.0 International License.")
+        assert strip_boilerplate(text) == BODY
+        assert "CC BY-NC" not in strip_boilerplate(text)
+
     def test_a_leading_label_is_removed(self):
         assert strip_boilerplate(f"Abstract: {BODY}") == BODY
 
 
+class TestPapersAboutCopyright:
+    """The hard case, and the reason for the two tiers.
+
+    A corpus on AI in education contains papers about copyright and open licensing, so the phrases a
+    notice is made of also occur as the *subject* of an abstract. Every ending here is prose and must
+    survive whole. Each shipped as a false positive in some version of this module.
+    """
+
+    ENDINGS = [
+        "Copyright remains a widely debated field of law, and further research into the topic is encouraged.",
+        "Creative Commons was found to be a popular licensing model, and adoption is rising.",
+        "Creative Commons Attribution licences are increasingly common in open education.",
+        "The Copyright 1976 settlement still governs derivative works in this domain.",
+        "We revisit the Copyright Act of 1976 in light of generative models.",
+        "We show the phrase All rights reserved has no legal effect in these jurisdictions.",
+        "We argue this work is licensed under terms too permissive for student data.",
+        "Whether copyright held by an institution serves students remains unclear.",
+        "The question of copyright by the author versus the publisher is unsettled.",
+        "Remaining challenges include copyright concerns, bias mitigation and computational demands.",
+    ]
+
+    def test_prose_about_rights_is_not_a_rights_notice(self):
+        for ending in self.ENDINGS:
+            text = f"{BODY} {ending}"
+            assert strip_boilerplate(text) == text, f"ate an abstract's own words: {ending!r}"
+
+
 class TestWhatMustSurvive:
-    """The false positives. Both of these shipped in a first version and were caught by measurement."""
-
-    def test_an_abstract_discussing_copyright_keeps_its_ending(self):
-        # The case that motivated dropping a bare `copyright` from the pattern: an abstract about
-        # AI-generated work whose closing sentence names copyright as a concern, not as a notice.
-        text = (f"{BODY} Remaining challenges include copyright concerns, bias mitigation, computational "
-                "demands, and the need for robust regulatory frameworks.")
-        assert strip_boilerplate(text) == text
-
     def test_an_abstract_with_no_notice_keeps_its_full_stop(self):
         # A first version trimmed trailing punctuation unconditionally, silently shortening every
         # abstract in the corpus by one character. Trimming happens only after an actual cut.
@@ -49,13 +83,10 @@ class TestWhatMustSurvive:
         assert strip_boilerplate(BODY).endswith(".")
 
     def test_a_notice_quoted_early_in_a_long_abstract_is_left_alone(self):
-        # Position is half the test. Deep inside the text this is the abstract discussing its subject.
-        text = "Our corpus study of the phrase 'All rights reserved' in scholarly abstracts. " + BODY * 4
+        # Position is the condition both tiers share. Deep inside the text this is an abstract
+        # discussing its subject, whatever it says.
+        text = "Our corpus study of the phrase 'All rights reserved' in scholarly abstracts. " + BODY * 6
         assert strip_boilerplate(text) == text.strip()
-
-    def test_the_word_copyright_alone_is_not_a_notice(self):
-        text = f"{BODY} We argue that copyright law lags behind generative models."
-        assert strip_boilerplate(text) == text
 
 
 class TestFindRightsNotice:
