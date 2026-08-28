@@ -525,7 +525,7 @@ class TestNothingDisappears:
 
 class TestReadRecords:
     def test_a_record_naming_a_field_twice_is_read(self):
-        """Read through the repair: a ProQuest export's repeated `annote` would otherwise take the
+        """Read through the repair: a database export's repeated `annote` would otherwise take the
         whole record with it, title, authors and all."""
         source = ("@article{k,\n  title = {A Study},\n  annote = {First note},\n"
                   "  annote = {Second note},\n  year = {2024},\n}\n")
@@ -778,8 +778,8 @@ class TestWholeRun:
 
         merged = {field.key: field.value for field in library.entries[0].fields}
         assert merged["doi"] == "10.1234/abc-def"      # the en-dash copy matched, and lost
-        assert merged["annote"] == "Copyright note"    # filled in from the ProQuest twin
-        # The ProQuest abstract wins on stripped length and arrives as its source wrote it, notice and
+        assert merged["annote"] == "Copyright note"    # filled in from the twin that had one
+        # That twin's abstract wins on stripped length and arrives as its source wrote it, notice and
         # all — the comparison is what stripping is for.
         assert merged["abstract"].startswith("We study things.")
         assert merged["abstract"].endswith("All rights reserved.")

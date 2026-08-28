@@ -20,9 +20,9 @@ Which of the two braces went missing decides what happens next, and the two fail
 
 So the tool sees only the first kind, since the second never reaches `failed_blocks` to be repaired.
 
-**A field named twice** is what a database export produces: a ProQuest record carries a separate `annote`
-for its copyright statement, its last-updated date and its subject terms, and BibTeX has no way to say
-that, so the parser rejects the entry whole. The repeats are merged into one field rather than thinned to
+**A field named twice** is what a database export produces: a record carries a separate `annote` for its
+copyright statement, its last-updated date and its subject terms, and BibTeX has no way to say that, so
+the parser rejects the entry whole. The repeats are merged into one field rather than thinned to
 one, since each holds something different and choosing between them is not a repair.
 
 The second fault is worth knowing about for how *much* of a file it can take: 1598 of the 6934 records in
@@ -136,10 +136,9 @@ def _residual_fault(repaired: str):
     carry two unrelated faults and fixing one is not failing at the other. This asks the second question:
     does the result read under the middleware chain the rest of Raven uses?
 
-    Keeping the two apart is what lets a record be repaired *and* reported. A ProQuest export naming
-    `annote` three times and carrying an author BibTeX cannot express used to be reported for the
-    repeated fields — which the tool repairs, so the message read as a contradiction — and to have the
-    repair thrown away along with the diagnosis. Now the merge is kept and the report names the author.
+    Keeping the two apart is what lets a record be repaired *and* reported: one naming `annote` three
+    times and carrying an author BibTeX cannot express keeps the merge, and is reported for the author. Diagnosing the repaired text rather than the original is the point — naming a fault
+    the tool has just fixed would send the reader looking for something that is no longer there.
     """
     library = bibtex.parse_string(repaired)
     return library.failed_blocks[0] if library.failed_blocks else None

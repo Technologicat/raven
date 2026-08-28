@@ -19,15 +19,18 @@ usually means something ordinary — a preprint beside its published version, a 
 journal's own, an en-dash where the other has a double hyphen. So a title match is not overridden by a DOI
 mismatch; the disagreement is recorded in the audit instead.
 
-**Every value written came from the input, unchanged.** Nothing normalized or stripped is ever written
-out — those forms exist to decide *which* value to keep, and the value kept is the one the source wrote.
-`Ä` stays `Ä`, LaTeX braces stay where the source put them, and a publisher's rights notice stays on the
-abstract it came with. So a merge only ever *chooses* among the values in front of it: what comes out is
-one of the copies, never an edit of one.
+**The output is meant to be citable, and the input is not.** A concatenation of database exports is not a
+document anyone would cite from — it is unusable as it stands, which is why this tool exists — so there is
+no provenance in its bytes worth preserving. What is worth preserving is *which records were merged into
+which*, and that is what the audit is for.
 
-Cleaning up what a database wrote is a different job with a different tool. `raven-fixbib` repairs the
-file; the Visualizer's importer strips rights notices as it reads. Keeping that out of here is what lets
-the audit account for the whole difference between input and output.
+So the values are read through `raven-fixbib`'s repair before anything else happens: braces escaped,
+repeated fields merged, HTML character entities decoded. `Ä` stays `Ä` and LaTeX braces stay where the
+source put them, because none of that is broken; `Q\\&amp;A` does not, because it is.
+
+**Normalization is a separate thing and never reaches the output.** Normalized titles and stripped
+abstracts exist to decide *which* value to keep. The value kept is then whichever copy won, as `fixbib`
+would leave it — so a merge chooses among the records in front of it rather than composing a new one.
 
 `--judge` adds an opt-in LLM pass over what the deterministic keys could not settle — near-miss titles
 that no exact key joined. It needs a backend, so it is off by default and everything above works without
@@ -45,9 +48,9 @@ the actual output here and the `.bib` is what you get to use afterwards.
 
 ## Reading
 
-Input is read through `raven.papers.fixbib`'s repair, so a record that `bibtexparser` refuses — a ProQuest
-export naming `annote` three times, most often — is still seen. The input file is not modified; use
-`raven-fixbib` to repair the file itself.
+Input is read through `raven.papers.fixbib`'s repair, so a record that `bibtexparser` refuses — one naming
+`annote` three times, most often — is still seen, and the HTML a database left in the field values is
+decoded. The input file is not modified; use `raven-fixbib` to repair the file itself.
 """
 
 from __future__ import annotations
@@ -346,9 +349,11 @@ def read_records(source: str) -> tuple[list[Record], list[fixbib.RepairReport]]:
     Returns `(records, unreadable)`, the second a list of `fixbib.RepairReport` naming the records that
     could not be read even after repair, so a caller can report how much of the input it is speaking for.
 
-    The repair is `fixbib.repair_bibtex`, and it is applied to a copy — the caller's file is untouched.
-    `raven-fixbib` is the tool for repairing the file itself.
+    The repair is **all of what `raven-fixbib` does** — the entity decoding as much as the structural
+    rescue — applied to a copy, so the caller's file is untouched. `raven-fixbib` remains the tool for
+    repairing the file itself, and running it first changes nothing about the result.
     """
+    source, _decoded = bibtex.decode_html_entities(source)
     repaired, _recovered, unrecovered = fixbib.repair_bibtex(source)
     # Read without name splitting, which serves two ends at once: the library can be written back out
     # (see `bibtex.write_string`), and a record whose author BibTeX cannot express — `Bloggs, PhD, MSc,
@@ -660,12 +665,10 @@ def settled_by_rule(a: Record, b: Record) -> bool:
     version preferred, which is the same thing `raven.papers.utils.deduplicate_arxiv_ids` does with arXiv
     versions; the suffix is a documented convention rather than an inference.
 
-    Used to keep such a pair away from the judge, and that is a correction to an earlier expectation
-    rather than a precaution. The design predicted a model would simply agree with the rule, so asking
-    was merely wasteful. Measured against a real corpus on 2026-08-28 it does not agree: Qwen3.6 refused
-    all four version pairs it was shown, reasoning that "different DOI suffixes indicate separate
-    chapters" — fluent, plausible, and wrong in exactly the way a documented convention is invisible to
-    someone reading the string cold. It would have split four works the project had decided are one.
+    Used to keep such a pair away from the judge, which is a guard and not a saving. Measured 2026-08-28:
+    shown four version pairs, Qwen3.6 refused all four, reasoning that "different DOI suffixes indicate
+    separate chapters" — fluent, plausible, and wrong in the way a documented convention is invisible to
+    a reader seeing the string cold. Acting on that would have split four works into eight.
 
     The general form is worth keeping in view when adding to what the judge sees: a rule that encodes a
     convention is not a rule a model can be expected to rediscover from the data, so a question already

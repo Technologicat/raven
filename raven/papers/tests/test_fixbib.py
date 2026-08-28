@@ -20,7 +20,7 @@ BROKEN = ("@article{broken,\n"
           "and report the results below.},\n"
           "}\n")
 
-# A field named three times, as a ProQuest export writes it — one `annote` per kind of note. BibTeX has
+# A field named three times, as a database export writes it — one `annote` per kind of note. BibTeX has
 # no way to say that, so the parser rejects the entry whole, title and all.
 REPEATED = ("@article{repeated,\n"
             "    title = {A Record From A Database Export},\n"
@@ -119,7 +119,7 @@ class TestRepairDuplicateFieldKeys:
         assert repaired.startswith(GOOD) and repaired.endswith(GOOD.replace("good", "alsogood"))
 
     def test_a_record_broken_twice_over_is_repaired_as_far_as_it_goes_and_reported_for_the_rest(self):
-        """A ProQuest record whose author also carries degrees inline — two unrelated faults in one.
+        """A record whose author also carries degrees inline — two unrelated faults in one.
 
         Merging the notes is a complete repair of the fault it addresses, and the record still does not
         read, because BibTeX gives a name at most two commas (`von Last, Jr, First`) and this one uses

@@ -395,39 +395,43 @@ automatically. The first is the smaller ask and fixes the silence, which is the 
 does its own cleaning. `raven-deduplicate` deliberately does none, on the principle settled today that
 repair belongs in `raven-fixbib`. Three importers, three answers.
 
-**Before deciding, though, two distinctions that may dissolve most of it.** Offered as a reading of the
-code rather than as a decision — the decision is Juha's — but if it holds, the stance is nearly uniform
-already and what is left is one gap rather than a policy question.
+**Decided by Juha, 2026-08-28, and the framing is the decision.** The question above is posed wrongly, and
+so was the reading of it offered here first — which proposed that a tool writing a `.bib` should be
+faithful to the bytes it read, while a tool building a dataset could clean freely. That is an asymmetry,
+which is almost as bad as the one it replaced: two tools writing bibliographies would produce different
+qualities of the same record, and the reader would have to know which had touched theirs.
 
-*First, repairing to read is not the same act as cleaning what reads fine.*
+**The framing that resolves it: the input is not a document, and the output is.**
 
-- **Repair-to-read** is what makes a record visible at all: escaping stray braces, merging repeated
-  fields. Without it a quarter of this corpus does not exist. The Visualizer importer already does the
-  brace half (`_recover_failed_block` → `bibtex.repair_record`) and `raven-deduplicate` does both, by
-  reading through `fixbib`. So this is *already* the uniform stance, with exactly one gap: the importer
-  does not know about the duplicate-field-key repair, which landed after it. **Juha, 2026-08-28: it
-  should learn it.** That is closing a gap in a position the importer already holds, not adopting a new
-  one — which is why the answer is cheap.
-- **Clean-the-text** is dehyphenation, markup conversion, boilerplate stripping. Genuinely a policy
-  question, and the one below.
+> A `.bib` concatenated from several databases, with duplicates and broken records mixed in, is unusable
+> as it stands. There is no useful provenance to record about it — except which items were merged, which
+> is what the audit is for. The point of deduplicating and repairing is to get *something citable* out.
+> The tools only need to give the user a useful copy of the metadata, as a `.bib` file.
 
-*Second, what a tool emits decides how free it is to clean.*
+That answers the policy question outright: **every tool that produces a `.bib` produces the most usable
+metadata it can**, and no tool needs to defend the byte-level shape of an input nobody could cite from.
+The asymmetry goes because there is nothing on the other side of it.
 
-- The Visualizer importer produces a **dataset**, not a bibliography: it cleans `title` and `abstract` in
-  memory on the way to embeddings and a word cloud, and never writes a `.bib`. Nothing it does can reach
-  the user's file, so cleaning there is free and reversible — re-import and it is undone.
-- `raven-deduplicate` produces a **bibliography the user cites from**, so faithfulness is the whole
-  contract and cleaning would break the audit.
-- The arXiv chain produces a bibliography too, but from **API metadata rather than from a file**, so it
-  is generating records rather than altering anyone's — its `_clean_whitespace` is formatting what it is
-  about to write for the first time.
+Worth noting what was *not* in question, since it is the reason one might have hesitated: whether a study
+is sound is orthogonal to any of this, and is Retraction Watch's job rather than a bibliography tool's. We
+are handling metadata, not adjudicating literature.
 
-If that reading holds, the principle is already there and merely unstated: **a tool that rewrites your
-bibliography is faithful; a tool that builds an analysis artifact from it cleans freely.** Which would
-leave no policy question at all, only the one importer gap above.
+**What that changed in the code**, same day: `raven-deduplicate` reads through the whole of `fixbib`, the
+entity decoding as much as the structural rescue. Half of it was arbitrary — the structural half already
+rewrote records that were never merged, so nothing about the output had been byte-for-byte anyway, and the
+half-measure bought an asymmetry against `raven-arxiv2bib` and nothing else.
 
-*Cost: M. Gate: a decision, not a measurement.* If the distinctions above do *not* hold — if cleaning
-should be uniform regardless of what a tool emits — both ends are defensible and the middle is not:
+**Where the remaining line falls, and it is a real one.** `fixbib` repairs *encoding and structure* —
+things that are broken. It does not strip rights notices, and the Visualizer's importer does, at read
+time, for the analysis it is about to run. Whether a rights notice counts as useful metadata in a citable
+`.bib` is the one part still open; the argument for leaving it is that it is text the publisher genuinely
+put there rather than a mis-encoding, and the argument against is that nobody wants it in an abstract
+field. **Not decided.**
+
+**Superseded below.** The either/or that follows is kept for the record only — it was the shape of the
+question before the framing above dissolved it, and nothing is gated on it any more.
+
+*Cost: was M, now closed.* For the record, the two ends that were being weighed:
 
 - **Every importer sanitizes.** A user drops in whatever a database gave them and it works. The cost is
   that no tool's output is a faithful record of its input, which is exactly what the deduplicator's audit
@@ -477,6 +481,35 @@ asserting what was wrong.
 rule a model can rediscover from the data. See the Springer correction above. The judge is a proposer here
 and never a decider, which is what made that survivable — a verdict contradicted by the records themselves
 is dropped in Python, so the worst a confident wrong answer costs is a missed merge.
+
+Juha's generalization, 2026-08-28, and it is the standing rule for this kind of work:
+
+> **Do algorithmically what we can, and invoke the judge only as needed.**
+
+Which is both a cost argument and a correctness one, and the second is the surprising half. The cheap
+reading is that model calls are slow and a rule is free. The Springer case says something stronger: on the
+inputs a rule *can* settle, asking is not merely wasteful but actively worse, because the model answers
+anyway and its answer can be wrong in a direction the rule never is.
+
+**His second thought — "prime the judge with relevant information" — splits into a part that generalizes
+and a part that does not**, and the split is worth keeping straight:
+
+- **Priming with a domain convention does not generalize.** Telling the model that `_12-1` is a Springer
+  living-reference version suffix would have fixed that case, and buys nothing for the next convention
+  nobody anticipated. It is the same problem as trying to enumerate generic titles: you are back to
+  needing the list in advance, which is what the rule already gives you more reliably.
+- **Priming with what your own deterministic layer computed does generalize**, because you already have
+  it and it costs nothing to include. Here `_judge_admits` computes an author disagreement and a year gap
+  and uses them only to *veto* an answer after the fact; `_describe_for_judge` shows the model the raw
+  fields and not the title similarity, nor which question the pair came from (a near-miss, or a DOI
+  disagreement). Showing those is a concrete, untried improvement. **Untested** — the corpus offers 14
+  pairs, far too few to tell whether it helps, so it is recorded as a design rather than a finding.
+
+There is precedent for the second working. `investigations/agent-batch-classification/` found that adding
+*"an identifier is not a description — do not claim to recognize which paper an arXiv id refers to"* turned
+confident fabrications into correct low-confidence answers. That is priming with a **stance** rather than a
+fact, and it is available whenever you can articulate the failure mode, which you generally can once you
+have seen it once.
 
 ## Where this leaves the corpus
 
