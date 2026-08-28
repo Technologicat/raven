@@ -47,6 +47,12 @@ DEFAULT_VU_PEAK_HOLD = 1.0  # seconds
 # The frames are still recorded — it is only the *levels* that are wrong, and they feed two things that
 # both take a maximum: the VU meter's peak, and the silence autodetection, which measures the first
 # tenth of a second and would otherwise measure exactly this.
+#
+# **Only a cold device waits.** The same measurement found a *warm* open — the device opened before in
+# this process — free of it, starting at the room's level on its first frame. Applying the wait to every
+# capture cost a visible 0.3 s of dark meters each time a GUI opened one, for an artifact that was not
+# going to arrive. What is unmeasured is whether a long enough gap between captures chills a device
+# again; if a spike ever reappears mid-session, that is the assumption to suspect.
 DEFAULT_SETTLING_TIME = 0.3  # seconds
 
 # `pygame` doesn't support recording (although it can *list*
@@ -221,6 +227,9 @@ class Recorder:
 
         self._is_capturing = False
         self._is_monitoring = False
+        # Whether this device has been opened before in this process, which decides whether a capture
+        # waits out the settling period. Reset by `set_device`, which opens a genuinely new one.
+        self._device_is_warm = False
         self._recording_state_lock = threading.RLock()
 
         # `TaskManager` requires an executor and now says so at construction. Making one here is what
@@ -314,7 +323,9 @@ class Recorder:
                                                                         autostop_timeout=self.autostop_timeout,
                                                                         name=f"instance {task_env.task_name}")
                     self._vu_last_peak_timestamp = time.monotonic_ns()  # timestamp after the recorder is really up and running
-                    settled_at_ns = self._vu_last_peak_timestamp + int(DEFAULT_SETTLING_TIME * 10**9)
+                    settling = DEFAULT_SETTLING_TIME if not self._device_is_warm else 0.0
+                    settled_at_ns = self._vu_last_peak_timestamp + int(settling * 10**9)
+                    self._device_is_warm = True
 
                     logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Entering recording loop.")
                     while self.recorder.is_recording and not task_env.cancelled:
@@ -394,6 +405,7 @@ class Recorder:
         self.recorder = pvrecorder.PvRecorder(frame_length=self.frame_length,
                                               device_index=get_available_devices().index(device_name))
         self.device_name = device_name
+        self._device_is_warm = False  # a different device, opened for the first time
         # The old handle goes only once nothing can reach it — the capture task reads `self.recorder`,
         # and it is stopped above, but a `delete` before the rebind would leave a window where that
         # attribute names a freed device.
