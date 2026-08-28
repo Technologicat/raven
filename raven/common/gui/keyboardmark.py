@@ -30,6 +30,7 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 
 __all__ = ["COLOR", "PULSE_SECONDS",  # the vocabulary
            "join_pulse", "leave_pulse", "pulse_is_running",  # the one rhythm, for a widget that paints itself
+           "DOT_GLYPH", "DOT_SLOT_W", "add_dot",  # the glyph a DOT mark lights
            "MarkKind", "Mark", "install_focus_follower"]  # the mark as a component
 
 import logging
@@ -130,6 +131,64 @@ def pulse_is_running() -> bool:
     """Whether the shared pulse animation is currently registered with the animator."""
     with _pulse_lock:
         return _pulse is not None
+
+
+# --------------------------------------------------------------------------------
+# The glyph a DOT mark lights
+
+# A bullet in the ordinary text font rather than an icon: measured 2026-08-21 at the font size every app in
+# the constellation uses, it is 6 px wide against 20 px for FontAwesome's filled circle, which read as a
+# blob beside a row of 28 px buttons. It also costs no font atlas space, where a second icon font at a
+# smaller size would.
+#
+# The other small glyphs are not options: `●` U+25CF, `▪` U+25AA and `∙` U+2219 all came back as the
+# missing-glyph box, so they are outside the ranges Raven's font loads. `·` U+00B7 does render, at 4 px.
+DOT_GLYPH = "•"  # U+2022 BULLET
+
+# How much room the dot takes in a row: the glyph's 6 px plus DPG's 8 px of item spacing. A layout that
+# right-aligns its buttons takes this off the aligning spacer, so adding a dot moves nothing.
+DOT_SLOT_W = 14
+
+_unlit_dot_theme = None  # created on first use by `_get_unlit_dot_theme`
+
+
+def _get_unlit_dot_theme() -> Union[str, int]:
+    """The theme every dot wears while its widget is not the marked one.
+
+    One theme shared by every dot in the process, and the thing a `DOT` `Mark` displaces on whichever dot is
+    current and gives back when it moves on.
+    """
+    global _unlit_dot_theme
+    if _unlit_dot_theme is None:
+        # Explicit parents rather than `with`, because this is built on *first use* and its callers build
+        # widgets on background threads. The container stack is global, so a `with` here would splice this
+        # theme into whatever container that thread happened to be filling.
+        _unlit_dot_theme = dpg.add_theme()
+        component = dpg.add_theme_component(dpg.mvAll, parent=_unlit_dot_theme)
+        dpg.add_theme_color(dpg.mvThemeCol_Text, _INVISIBLE, parent=component)
+    return _unlit_dot_theme
+
+
+def add_dot(*,
+            parent: Union[str, int],
+            tag: Optional[Union[str, int]] = None) -> Union[str, int]:
+    """Add the glyph a `DOT` `Mark` lights, unlit, at the current end of `parent`.
+
+    `parent`: the container to add it to. Explicit rather than taken from the container stack, because the
+              callers build their rows on background threads.
+
+    `tag`: a DPG tag for the dot, or `None` (default) to let DPG assign an id.
+
+    Returns the dot's widget id, which is what to assign to a `Mark`'s `target`.
+
+    **Present on every candidate and invisible on all but one**, which is why this returns a widget rather
+    than adding one only where the mark currently is: hiding a dot would take its width out of the row and
+    repack the row's contents every time the mark moved.
+    """
+    kwargs = {"tag": tag} if tag is not None else {}
+    dot = dpg.add_text(DOT_GLYPH, parent=parent, **kwargs)
+    dpg.bind_item_theme(dot, _get_unlit_dot_theme())
+    return dot
 
 
 # --------------------------------------------------------------------------------

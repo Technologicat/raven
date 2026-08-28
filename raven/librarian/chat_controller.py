@@ -432,42 +432,6 @@ def _get_all_greeting_node_ids(datastore: chattree.Forest) -> list[str]:
     return greeting_node_ids
 
 # --------------------------------------------------------------------------------
-# The keyboard mark's slot in a message's button row
-
-# The mark's dot. A bullet in the ordinary text font rather than an icon: measured 2026-08-21 at the font
-# size every app in the constellation uses, it is 6 px wide against 20 px for FontAwesome's filled circle,
-# which read as a blob beside a row of 28 px buttons. It also costs no font atlas space, where a second
-# icon font at a smaller size would.
-#
-# The other small glyphs are not options: `●` U+25CF, `▪` U+25AA and `∙` U+2219 all came back as the
-# missing-glyph box, so they are outside the ranges Raven's font loads. `·` U+00B7 does render, at 4 px.
-_MARK_GLYPH = "•"  # U+2022 BULLET
-
-# How much room it takes at the left of the row, taken off the spacer that right-aligns the buttons so that
-# adding the dot did not move them: the glyph's 6 px plus DPG's 8 px of item spacing.
-_MARK_SLOT_W = 14
-
-_unmarked_theme = None  # created on first use by `_get_unmarked_theme`
-
-
-def _get_unmarked_theme() -> str | int:
-    """The theme every message's mark dot wears while it is *not* the current message.
-
-    One theme shared by every message, and the thing `keyboardmark.Mark` displaces on whichever message is
-    current and gives back when it moves on. Transparent rather than hidden: hiding the dot would take its
-    width out of the row and repack the buttons as the reader scrolls.
-    """
-    global _unmarked_theme
-    if _unmarked_theme is None:
-        # Explicit parents rather than `with`, because this is built on *first use* and its only caller is
-        # `build`, which runs on background threads. The container stack is global, so the app-init licence
-        # to use `with` does not reach here: whichever message happens to be built first pays for this, and
-        # that message is usually not on the main thread.
-        _unmarked_theme = dpg.add_theme()
-        component = dpg.add_theme_component(dpg.mvAll, parent=_unmarked_theme)
-        dpg.add_theme_color(dpg.mvThemeCol_Text, (*keyboardmark.COLOR[:3], 0), parent=component)
-    return _unmarked_theme
-
 # --------------------------------------------------------------------------------
 
 class DPGChatMessage:
@@ -788,7 +752,7 @@ class DPGChatMessage:
         self.gui_buttons_group = buttons_horizontal_layout_group
         number_of_message_buttons = 14
         chat_text_w = self.get_chat_text_width()
-        dpg.add_spacer(width=chat_text_w - number_of_message_buttons * (gui_config.toolbutton_w + 8) - 64 - _MARK_SLOT_W,  # 8 = DPG outer margin; 64 = some space for sibling counter
+        dpg.add_spacer(width=chat_text_w - number_of_message_buttons * (gui_config.toolbutton_w + 8) - 64 - keyboardmark.DOT_SLOT_W,  # 8 = DPG outer margin; 64 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
 
         # Where the keyboard mark goes when this is the message the per-message hotkeys would act on. A dot
@@ -796,13 +760,8 @@ class DPGChatMessage:
         # its perimeter: fourteen bordered buttons is far more motion than a combo elsewhere in the
         # constellation gets for a mark that means the same thing.
         #
-        # Present on every message and invisible on all but one. Hiding it instead would repack the row as
-        # the reader scrolls, so it wears a theme that colours it transparent, and the mark displaces that
-        # theme on whichever message is current.
-        self.gui_keyboard_mark_widget = dpg.add_text(_MARK_GLYPH,
-                                                     tag=f"chat_keyboard_mark_{self.gui_uuid}",
-                                                     parent=buttons_horizontal_layout_group)
-        dpg.bind_item_theme(self.gui_keyboard_mark_widget, _get_unmarked_theme())
+        self.gui_keyboard_mark_widget = keyboardmark.add_dot(parent=buttons_horizontal_layout_group,
+                                                             tag=f"chat_keyboard_mark_{self.gui_uuid}")  # tag
 
         self.build_buttons(gui_parent=buttons_horizontal_layout_group)
 
