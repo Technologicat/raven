@@ -158,9 +158,14 @@ Tests to write:
   must be able to tell that from the old behaviour.
 - Autodetect fires once and holds; an explicit threshold set later overrides it.
 - `autostop_timeout=None` never stops.
-- Monitor mode: no accumulation, no autostop.
 - App state: numbers round-trip, missing keys fill in from config, an old state file without them
   loads.
+
+**What stays untested, and why it is not an oversight.** Monitor mode and the VU listener list are
+`Recorder` behaviour, and constructing a `Recorder` opens an audio device — so they cannot run in CI,
+which does not install `pvrecorder`, and cannot run unattended on a dev machine either. They are
+covered by the step-6 live test. That is also the argument for the extraction above: the part with
+the logic worth pinning is the part that needed no device.
 
 ## 8. What this is not, and what it leaves room for
 

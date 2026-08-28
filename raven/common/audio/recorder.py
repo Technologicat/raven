@@ -166,14 +166,20 @@ class Recorder:
                                               device_index=device_names.index(device_name))
 
         self.sample_rate = None  # sample rate (Hz) of last recording
+        self.data = None  # last recording, as an s16 mono `np.array`; `get_recorded_audio` reads this
 
-        self.on_vu_update = None  # available to be populated later by user with `connect_vu_readout`
+        # Populated later by users with `connect_vu_readout`. A list rather than one slot because the
+        # level stream has several consumers at once: a VU meter in the toolbar, a tuning panel while
+        # it is open, and — eventually — a wake-word detector.
+        self._vu_listeners = []
+        self._vu_listeners_lock = threading.Lock()
 
         self.vu_peak_hold = vu_peak_hold  # seconds
         self._vu_last_peak_timestamp = time.monotonic_ns()
         self._clear_vu_readout()
 
-        self._is_recording = False
+        self._is_capturing = False
+        self._is_monitoring = False
         self._recording_state_lock = threading.RLock()
 
         self._task_manager = bgtask.TaskManager(name=f"Recorder_0x{id(self):x}",
@@ -191,12 +197,13 @@ class Recorder:
         self.recorder = None
 
     def start(self,
-              on_autostop: Optional[Callable] = None) -> None:
-        """Start recording audio.
+              on_autostop: Optional[Callable] = None,
+              monitor: bool = False) -> None:
+        """Start capturing audio.
 
-        This automatically spawns a background task to handle the recording.
+        This automatically spawns a background task to handle the capture.
 
-        If already recording, do nothing.
+        If already capturing, do nothing.
 
         `on_autostop`: 0-argument callable. Return value is ignored.
 
@@ -204,13 +211,25 @@ class Recorder:
 
                        The main use case is so that the caller can do the same things
                        it would do when the recording is manually stopped.
+
+        `monitor`: If `True`, capture for the VU readout only: keep no audio, and never autostop.
+
+                   This is how a GUI shows the input level while nobody is dictating anything —
+                   to let the user see the room's background noise while setting the silence
+                   threshold, for example. Monitoring has no end of its own, which is why it
+                   keeps nothing: an accumulating buffer would grow for as long as the window
+                   is open.
+
+                   `get_recorded_audio` is unaffected: a monitoring pass neither produces
+                   audio nor discards what a previous recording produced.
         """
-        logger.info("Recorder.start: Starting audio capture.")
+        logger.info(f"Recorder.start: Starting audio capture{' (monitoring only)' if monitor else ''}.")
         with self._recording_state_lock:
-            if self._is_recording:
-                logger.info("Recorder.stop: This recorder is already recording. Ignoring.")
+            if self._is_capturing:
+                logger.info("Recorder.start: This recorder is already capturing. Ignoring.")
                 return
-            self._is_recording = True
+            self._is_capturing = True
+            self._is_monitoring = monitor
 
             def record_task(task_env: env) -> None:
                 try:
@@ -220,15 +239,19 @@ class Recorder:
                         logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Audio capture task cancelled while in queue.")
                         return
                     logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Starting audio recorder.")
-                    self.data = None
+                    if not monitor:
+                        self.data = None
                     self.recorder.start()
                     self.sample_rate = self.recorder.sample_rate  # read-only property; not sure if it's available when not recording, so let's be safe.
                     # The gate is made fresh per recording, and its settings are refreshed from ours on
                     # every frame — so a threshold moved while the user is speaking takes effect on the
                     # next frame, which is what a live control in the GUI needs.
-                    gate = silencegate.SilenceGate(threshold=self.silence_threshold,
-                                                   autostop_timeout=self.autostop_timeout,
-                                                   name=f"instance {task_env.task_name}")
+                    #
+                    # Monitoring has no gate: the state it exists to show is silence, so autostopping
+                    # on silence would end it the moment it became useful.
+                    gate = None if monitor else silencegate.SilenceGate(threshold=self.silence_threshold,
+                                                                        autostop_timeout=self.autostop_timeout,
+                                                                        name=f"instance {task_env.task_name}")
                     self._vu_last_peak_timestamp = time.monotonic_ns()  # timestamp after the recorder is really up and running
 
                     logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Entering recording loop.")
@@ -236,6 +259,8 @@ class Recorder:
                         frame = self.recorder.read()  # -> List[int] (s16, mono)
                         array = np.array(frame, dtype=np.int16)
                         self._update_vu_readout(array)
+                        if monitor:
+                            continue
                         if self.data is not None:
                             self.data = np.concatenate([self.data, array])
                         else:
@@ -252,7 +277,8 @@ class Recorder:
                 finally:
                     logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Audio capture task exiting.")
                     with self._recording_state_lock:
-                        self._is_recording = False
+                        self._is_capturing = False
+                        self._is_monitoring = False
                     if autostopped and on_autostop is not None:
                         logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Calling custom `on_autostop`.")
                         on_autostop()  # do this last, after no longer in recording state
@@ -260,8 +286,8 @@ class Recorder:
             self._task_manager.submit(record_task, env())
             logger.info("Recorder.start: Audio capture task submitted.")
 
-    def connect_vu_readout(self, on_vu_update: Optional[Callable]) -> None:
-        """Connect the recorder to a VU ("voltage units"; input audio level) readout.
+    def connect_vu_readout(self, on_vu_update: Callable) -> None:
+        """Connect a VU ("voltage units"; input audio level) readout to the recorder.
 
         You'll only need this if you want to display a VU meter (input audio level)
         in your GUI.
@@ -270,6 +296,9 @@ class Recorder:
         in realtime from the `vu` property. This is just provided for the event-based
         push convenience: your event handler is called automatically when the values change.
 
+        Any number of readouts can be connected at once; each is called in turn. To remove one,
+        see `disconnect_vu_readout`.
+
         `on_vu_update`: 2-argument callable, signature `(instant: float, peak: float)`.
                         Values are in dBFS.
 
@@ -277,28 +306,57 @@ class Recorder:
 
                             `peak` is the held peak signal level, with the `peak_vu_hold` time.
 
-                        Return value is ignored.
+                        Return value is ignored, and an exception is logged and swallowed —
+                        a readout that has gone away (a deleted GUI widget, say) must not take
+                        the capture down with it.
 
                         When first connected, called once for initialization purposes.
-                        While recording, called once per audio frame with the new signal level data.
-                        When recording stops, called once more (with -∞ dBFS, indicating silence).
+                        While capturing, called once per audio frame with the new signal level data.
+                        When the capture stops, called once more (with -∞ dBFS, indicating silence).
 
-                        If you want to disconnect, use `on_vu_update=None`.
+                        Connecting the same callable twice does nothing the second time.
         """
-        self.on_vu_update = on_vu_update
-        if self.on_vu_update is not None:
-            self.on_vu_update(self._vu_instant, self._vu_peak)
+        with self._vu_listeners_lock:
+            if on_vu_update in self._vu_listeners:
+                return
+            self._vu_listeners.append(on_vu_update)
+        on_vu_update(self._vu_instant, self._vu_peak)
+
+    def disconnect_vu_readout(self, on_vu_update: Callable) -> None:
+        """Disconnect a VU readout connected by `connect_vu_readout`.
+
+        Disconnecting something that is not connected does nothing.
+        """
+        with self._vu_listeners_lock:
+            try:
+                self._vu_listeners.remove(on_vu_update)
+            except ValueError:
+                pass
+
+    def _notify_vu_readouts(self) -> None:
+        """Send the current VU values to every connected readout."""
+        # Snapshot rather than lock: this runs once per audio frame on the capture thread, and a
+        # readout is typically a GUI widget whose owner connects and disconnects from another
+        # thread. `tuple(...)` of a list is one C-level pass, so it cannot observe a half-mutated
+        # list; what it can be is an instant out of date, which for a level meter is free.
+        #
+        # And a snapshot only makes the list safe to walk, not its entries safe to call: a readout
+        # may be a widget that was deleted between the copy and the call, so each call is guarded.
+        for on_vu_update in tuple(self._vu_listeners):
+            try:
+                on_vu_update(self._vu_instant, self._vu_peak)
+            except Exception as exc:
+                logger.warning(f"Recorder._notify_vu_readouts: VU readout {on_vu_update} raised, ignoring: {type(exc)}: {exc}")
 
     def _update_vu_readout(self, array: np.array) -> None:
-        """Update the VU meter data. Called automatically once per audio frame when recording."""
+        """Update the VU meter data. Called automatically once per audio frame when capturing."""
         peak = audio_utils.linear_to_dBFS(np.max(np.abs(array)))  # latest buffer (or whatever we were received)
         self._vu_instant = peak
         time_now = time.monotonic_ns()
         if (peak > self._vu_peak) or ((time_now - self._vu_last_peak_timestamp) / 10**9 >= self.vu_peak_hold):
             self._vu_peak = peak
             self._vu_last_peak_timestamp = time_now
-        if self.on_vu_update is not None:
-            self.on_vu_update(self._vu_instant, self._vu_peak)
+        self._notify_vu_readouts()
 
     def _clear_vu_readout(self) -> None:
         """Clear the VU meter data, setting both instant and peak values to silence (-∞ dBFS).
@@ -307,21 +365,20 @@ class Recorder:
         """
         self._vu_instant = -np.inf  # dBFS
         self._vu_peak = -np.inf  # dBFS
-        if self.on_vu_update is not None:
-            self.on_vu_update(self._vu_instant, self._vu_peak)
+        self._notify_vu_readouts()
 
     def stop(self) -> None:
-        """Stop recording.
+        """Stop capturing, whether recording or monitoring.
 
-        If not recording, do nothing.
+        If not capturing, do nothing.
 
         When this function returns, it may take a small amount of time for the recorder to actually stop.
         To be sure that the recording is actually finished, `get_recorded_audio` is only safe to call
-        after the `is_recording` method returns `False`.
+        after the `is_capturing` method returns `False`.
         """
         logger.info("Recorder.stop: Stopping audio capture.")
         with self._recording_state_lock:
-            if not self._is_recording:
+            if not self._is_capturing:
                 logger.info("Recorder.stop: This recorder is already stopped. Ignoring.")
                 return
             logger.info("Recorder.stop: Stopping audio recorder.")
@@ -330,10 +387,28 @@ class Recorder:
             self._task_manager.clear()
         logger.info("Recorder.stop: Done.")
 
-    def is_recording(self) -> bool:
-        """Return whether this audio recorder is currently capturing audio."""
+    def is_capturing(self) -> bool:
+        """Return whether the audio device is open, in either mode.
+
+        This is the one to wait on after `stop`, and the one that answers whether `start`
+        would do anything.
+        """
         with self._recording_state_lock:
-            return self._is_recording
+            return self._is_capturing
+
+    def is_recording(self) -> bool:
+        """Return whether this audio recorder is currently keeping the audio it captures.
+
+        `False` while monitoring, which captures for the VU readout only — so a GUI can ask this
+        to decide whether a stop would produce a recording to transcribe.
+        """
+        with self._recording_state_lock:
+            return self._is_capturing and not self._is_monitoring
+
+    def is_monitoring(self) -> bool:
+        """Return whether this audio recorder is currently capturing for the VU readout only."""
+        with self._recording_state_lock:
+            return self._is_capturing and self._is_monitoring
 
     def get_recorded_audio(self, clear: bool = True) -> Optional[np.array]:
         """Return the recorded audio as an `np.array`.

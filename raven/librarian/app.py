@@ -1200,7 +1200,7 @@ with timer() as tim:
                             logger.info("stop_recording_audio_message: Stopping audio recorder.")
                             rec.stop()
                             for _ in range(20):  # Wait until recording actually stops
-                                if not rec.is_recording():
+                                if not rec.is_capturing():
                                     break
                                 time.sleep(0.05)
                             else:
