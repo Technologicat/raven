@@ -210,6 +210,7 @@ on the Librarian backend).
 | `raven-arxiv2id` | parse arXiv identifiers out of filenames or BibTeX; `--strip-versions` discards the pinned version, which is how a collection gets refreshed to latest |
 | `raven-arxiv2bib` | arXiv identifiers → BibTeX (records the version arXiv *returned*) |
 | `raven-arxiv-download` | fetch fulltext PDFs for identifiers; `--save-bib` writes the BibTeX from metadata it already fetched, so the two runs cost one set of politeness delays |
+| `raven-deduplicate` | merge the duplicate records a multi-database literature search leaves. Matches on DOI and on normalized title, writes an audit TSV of every merge, and reads through `fixbib`'s repair so the count is honest. `--judge` adds an opt-in LLM pass over the near-misses |
 | `raven-burstbib` | split a multi-entry BibTeX file into one file per entry |
 | `raven-wos2bib`, `raven-csv2bib`, `raven-pdf2bib` | bibliography converters from Web of Science exports, CSV, and PDF metadata |
 | `raven-dehyphenate` | undo line-break hyphenation in extracted text |
@@ -225,10 +226,11 @@ to watch.
 - **`--debug` is not a logging flag.** In `raven-cherrypick` it turns on debug *overlays* — pan/zoom
   coordinates, click positions — and does nothing to the log level. Reaching for it and finding an empty
   log is a two-minute detour that has been taken at least once.
-- **Twelve of the twenty-four console scripts still lack them**, all of them the smaller CLI tools:
+- **Twelve of the twenty-five console scripts still lack them**, all of them the smaller CLI tools:
   `raven-indexer`, the arXiv four, `raven-burstbib`, `raven-fixbib`, `raven-dehyphenate`, `raven-qoi2png`,
   the two `raven-check-*`, and `raven-pdf2bib` (which has `--log-level` but not `--log`). Audited
-  2026-08-17. That is a gap to close rather than a convention with exceptions.
+  2026-08-17; `raven-deduplicate` arrived 2026-08-28 with both, so the gap is not growing. That is a gap
+  to close rather than a convention with exceptions.
 
 **To point an app at a different endpoint — or at nothing — use `--backend-url` and `--server-url`**
 (2026-08-20). `raven-librarian` takes both (the LLM backend and the Raven server); `raven-visualizer` takes

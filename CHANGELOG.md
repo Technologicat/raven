@@ -75,6 +75,23 @@
 - **every report now names the fault**, so an unreadable `.bib` says what is wrong with it and not merely how much. Each line carries the record's key, its line number in *your* file, which of the two faults it is, and the specifics — which fields repeat, which look unbalanced, or the parser's own complaint where it is neither. A record whose author reads `Bloggs, PhD, MSc, Joan` is now reported as *too many commas* rather than as a suspected brace problem.
   - `--list` names every record that was repaired, not just how many. Off by default, since a database export can need repairing a thousand times over.
 
+*Raven-deduplicate*
+
+- **a new tool, `raven-deduplicate`**, for the bibliography a multi-database literature search leaves behind. Search Scopus, Web of Science, ProQuest, Springer and arXiv for the same question and concatenate what they give you, and the file holds every paper once per database that indexes it — each copy in that database's dialect, with a different subset of the fields filled in. This finds those copies and merges them into one record.
+
+  ```
+  raven-deduplicate search.bib -o deduped.bib --audit audit.tsv
+  ```
+
+  - **Two keys decide, and neither is a guess**: the DOI, and the title reduced until two databases' spellings of one title agree. Matching is transitive, so a record sharing a DOI with one twin and a title with another brings all three together — which is what makes the two keys complementary, since neither is present on every record.
+  - **DOI equality is conclusive; DOI *inequality* is not.** A paper carrying two different DOIs usually means something ordinary — a preprint beside its published version, a repository deposit beside the journal's own, a hyphen typed as an en-dash. So a title match is not overruled by a DOI mismatch, and the disagreement goes in the audit for you to look at.
+  - **The merge keeps everything**, rather than keeping the best record. The surviving copy is the most complete one — preferring the version of record over a preprint, and the higher version of a Springer living-reference chapter — and every field it lacks is filled in from a twin that has one. Where two copies disagree about a field, the audit records the value that lost.
+  - **Abstracts get the publisher's rights notice removed before they are compared.** Two databases' copies of one abstract usually differ *only* by that notice, so taking the longest without stripping first would graft a copyright line onto most merged records.
+  - **The audit TSV is the real output.** A scoping review has to report how many duplicates it removed and stand behind the number, and this is what that number is computed from: one row per merge, naming what was kept, what was merged away, which key matched, and every value that differed. It carries Raven's version, so a method section can cite a tool rather than somebody's script.
+  - **Nothing is written unless you ask.** Without `-o` it reports what it would do; the input file is never modified. It reads through the same repair `raven-fixbib` applies, so records the parser would refuse are still counted — you do not have to run the two in sequence to get an honest number.
+  - **`--judge`** additionally asks an LLM about near-miss titles that no exact key joined, and about merges whose records disagree about the DOI. Off by default, since it needs a backend. The model proposes and Raven disposes: a "same work" verdict contradicted by the records themselves is dropped, so a confident wrong answer cannot create a merge the ordinary rules would have refused. The run is resumable, and its answers are kept in a JSONL beside the audit.
+  - **It errs toward leaving duplicates rather than making them up.** A missed merge leaves a visible duplicate that a reviewer can act on; a false merge deletes a paper from the review and nothing downstream can notice. So two records carrying the same genre label — `Editorial`, `Book Review` — are merged only if they agree about the author and the year, and two authorless records carrying a serial's recurring section heading are not merged when their DOIs disagree.
+
 *Constellation-wide*
 
 - **`--qr`**, which puts a scannable "Get Raven" code in the corner of any of the six GUI apps. For running Raven where people are watching: a visitor sees a demo for a minute and walks off, and nobody writes down a URL. Off unless asked for.

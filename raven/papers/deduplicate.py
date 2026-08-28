@@ -1,0 +1,1144 @@
+"""Merge the duplicate records in a bibliography assembled from several databases.
+
+A literature search run across Scopus, Web of Science, ProQuest, Springer and arXiv, then concatenated,
+holds every paper once per database that indexes it — each copy in that database's own dialect, with a
+different subset of the fields filled in. This tool finds those copies and merges them into one record.
+
+    raven-deduplicate search.bib -o deduped.bib --audit audit.tsv
+
+## What decides that two records are the same paper
+
+Two deterministic keys, unioned transitively, so a record matching one twin by DOI and another by title
+brings all three together:
+
+  - **The DOI**, normalized. Equality here is conclusive.
+  - **The title**, normalized to the point where two databases' spellings of one title agree.
+
+**DOI equality is evidence; DOI inequality is not.** A paper carrying two different DOIs is common and
+usually means something ordinary — a preprint beside its published version, a Zenodo deposit beside the
+journal's own, an en-dash where the other has a double hyphen. So a title match is not overridden by a DOI
+mismatch; the disagreement is recorded in the audit instead.
+
+**Normalization is for matching only.** Nothing normalized is ever written out. Output values keep the
+bytes the input had: `Ä` stays `Ä`, LaTeX braces stay where the source put them. A merge only ever *adds*
+a field to the record it kept.
+
+`--judge` adds an opt-in LLM pass over what the deterministic keys could not settle — near-miss titles
+that no exact key joined. It needs a backend, so it is off by default and everything above works without
+one.
+
+## What it does with the records it merges
+
+The surviving record is the most complete copy, preferring the version of record over a preprint or
+repository deposit; every field it lacks is filled from a twin that has one. Nothing is dropped silently:
+each merge writes a row to the audit TSV naming what was merged away, which key matched, and every value
+that differed from the one kept.
+
+A scoping review has to report how many duplicates it removed and stand behind the number, so the audit is
+the actual output here and the `.bib` is what you get to use afterwards.
+
+## Reading
+
+Input is read through `raven.papers.fixbib`'s repair, so a record that `bibtexparser` refuses — a ProQuest
+export naming `annote` three times, most often — is still seen. The input file is not modified; use
+`raven-fixbib` to repair the file itself.
+"""
+
+from __future__ import annotations
+
+__all__ = ["PREPRINT_DOI_PREFIXES", "GENERIC_TITLES", "MAX_YEAR_DRIFT",
+           "normalize_doi", "normalize_title", "is_generic_title",
+
+           "Record", "read_records",
+
+           "Cluster", "cluster_records",
+
+           "TITLE_SIMILARITY", "JUDGE_BATCH", "JUDGE_INSTRUCTIONS",
+           "fuzzy_candidates", "conflicting_clusters", "judge_batch", "judge_pairs",
+
+           "AUDIT_COLUMNS", "AuditRow", "merge_cluster", "deduplicate", "write_audit",
+
+           "main"]
+
+import argparse
+import collections
+import dataclasses
+import difflib
+import json
+import logging
+import pathlib
+import re
+import sys
+import unicodedata
+
+from bibtexparser import Library
+from bibtexparser.model import Entry, Field
+
+from .. import __version__
+
+from ..common import text as textutil
+
+from . import bibtex
+from . import fixbib
+
+logger = logging.getLogger(__name__)
+
+# DOI registrants that host copies rather than publish versions of record: the preprint servers, and the
+# general-purpose repositories a paper gets deposited in beside its journal. Used only to decide which
+# copy of a merged pair is the base — a record whose DOI starts with one of these loses to a record whose
+# DOI does not, whatever else is true of them.
+#
+# Deliberately a short list of registrant prefixes rather than a guess from the venue name. Demoting a
+# real journal record by mistake would put the wrong DOI on a merged entry, which is the one outcome
+# nothing downstream can detect.
+PREPRINT_DOI_PREFIXES = ("10.48550/",   # arXiv
+                         "10.5281/",    # Zenodo
+                         "10.2139/",    # SSRN
+                         "10.1101/",    # bioRxiv, medRxiv
+                         "10.21203/",   # Research Square
+                         "10.31234/",   # PsyArXiv (OSF)
+                         "10.31219/",   # OSF Preprints
+                         "10.20944/")   # Preprints.org
+
+# Titles that name a genre rather than a work. Two unrelated papers can carry one and often do —
+# `Editorial` alone put a 2022 paper and a 2024 one in the same cluster — so a title normalizing to one of
+# these carries no evidence of its own, and `_title_edge_holds` requires the corroboration to come from
+# somewhere else.
+#
+# A curated list rather than a length threshold, which was tried first and is the wrong axis: it caught
+# nothing on a 6934-record corpus that this list did not already catch, while rejecting `Reportronic` — a
+# real and thoroughly distinctive title — for being eleven characters long. Distinctiveness is not length.
+# `Generative AI`, which is thirteen, is the better cautionary example: longer than the title the rule
+# rejected, and far likelier to head two different editorials.
+GENERIC_TITLES = frozenset(["editorial", "editorials", "introduction", "preface", "foreword",
+                            "afterword", "correction", "corrections", "corrigendum", "erratum",
+                            "errata", "retraction", "retractionnotice", "comment", "commentary",
+                            "reply", "response", "discussion", "letter", "letters",
+                            "lettertotheeditor", "bookreview", "bookreviews", "review", "reviews",
+                            "bookprofile", "frontmatter", "backmatter", "tableofcontents", "contents",
+                            "index", "abstract", "abstracts", "acknowledgements", "acknowledgments",
+                            "authorindex", "subjectindex", "titlepage", "coverimage", "conclusion",
+                            "conclusions", "summary", "references", "bibliography", "glossary",
+                            "appendix", "notes", "news", "obituary", "announcement", "announcements",
+                            "callforpapers", "aboutthisjournal", "aboutthecontributors",
+                            "issueinformation", "masthead", "untitled", "notitle", "na"])
+
+# How far two records' years may sit apart while still being one paper. One year, because a preprint and
+# its published version routinely straddle a New Year, and two databases can disagree about which year an
+# online-first article belongs to. Two is a different paper.
+MAX_YEAR_DRIFT = 1
+
+# The seven Unicode dashes, folded to ASCII `-` in a DOI. Publishers' exports disagree about which one a
+# DOI containing a hyphen should use, and two records whose DOIs differ by an en-dash are one paper.
+_DASHES = "‐‑‒–—―−"
+_DASH_TABLE = str.maketrans({dash: "-" for dash in _DASHES})
+
+# Everything a database might put in front of the DOI itself.
+_DOI_PREFIX_PATTERN = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*|info:doi/)+", re.IGNORECASE)
+
+# A Springer living-reference-work chapter carries its version in the DOI: `..._12-1`, `..._12-2`. The
+# suffix is a documented convention rather than a guess, which is why a rule reads it instead of a model.
+_CHAPTER_VERSION_PATTERN = re.compile(r"_(\d+)-(\d+)$")
+
+# Markup a database wraps title fragments in. Dropped before the title is reduced, so that a record
+# writing `<i>Plasmodium</i>` matches the one writing `Plasmodium` rather than gaining an `i`.
+_TAG_PATTERN = re.compile(r"</?[a-z][a-z0-9]{0,9}\s*/?>", re.IGNORECASE)
+
+# `&amp;` and `&#8217;` are how one exporter writes what another writes literally. Resolved to the
+# character before reduction, so the two spellings normalize alike.
+_ENTITY_PATTERN = re.compile(r"&(#\d{1,6}|#x[0-9a-f]{1,5}|[a-z]{2,8});", re.IGNORECASE)
+_NAMED_ENTITIES = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "apos": "'", "nbsp": " ",
+                   "ndash": "-", "mdash": "-", "rsquo": "'", "lsquo": "'", "rdquo": '"', "ldquo": '"'}
+
+
+def normalize_doi(maybe_raw: str | None) -> str | None:
+    """The comparison key for a DOI, or `None` if the value is not one.
+
+    Lowercased, stripped of whatever resolver prefix the exporting database put in front of it, with the
+    Unicode dashes folded to ASCII and trailing sentence punctuation removed.
+
+    Returns `None` for anything that does not look like a DOI, which a `doi` field regularly holds — an
+    empty string, `n/a`, a publisher's landing-page URL. Those must not become a match key: they are
+    equal to each other across unrelated records, and would merge papers that have nothing to do with
+    one another.
+    """
+    if not maybe_raw:
+        return None
+    value = _DOI_PREFIX_PATTERN.sub("", str(maybe_raw).strip().strip("{}").strip())
+    value = value.translate(_DASH_TABLE).lower()
+    value = "".join(value.split())  # a DOI has no internal whitespace; a line-wrapped export has some
+    value = value.rstrip(".,;:")
+    # A DOI is `10.`, a registrant code of four or more digits, a slash, and a non-empty suffix
+    # (ISO 26324). No upper bound on the digits, there being none in the standard — the corpus this was
+    # built against uses four and five. Anything else in a `doi` field is something other than a DOI,
+    # whatever the field is called.
+    if not re.match(r"^10\.\d{4,}/\S+$", value):
+        return None
+    return value
+
+
+def normalize_title(maybe_raw: str | None) -> str | None:
+    """The comparison key for a title, or `None` if there is nothing left of it.
+
+    Reduced hard, because the same title reaches this function in as many spellings as there are
+    databases: markup and character entities resolved, compatibility-decomposed, combining marks dropped,
+    then everything that is not a letter or a digit removed. `Peer-Reviewed AI: A Study` and
+    `Peer reviewed AI - a study` both become `peerreviewedaiastudy`.
+
+    Dropping the spaces along with the punctuation is what makes that work, and it is why this is a key
+    and not a display value — the result is not readable and is not meant to be.
+    """
+    if not maybe_raw:
+        return None
+    text = str(maybe_raw)
+    text = _TAG_PATTERN.sub(" ", text)
+    text = _ENTITY_PATTERN.sub(_resolve_entity, text)
+    # NFKD splits an accented letter into base + combining mark, so dropping the marks leaves the base:
+    # `Ä` and `A` agree, as do `é` and the TeX `\'{e}` once the backslash and braces go. Compatibility
+    # decomposition also flattens the ligatures and full-width forms that PDF-derived records carry.
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = re.sub(r"[^a-z0-9]+", "", text.lower())
+    return text or None
+
+
+def _resolve_entity(match: re.Match) -> str:
+    """One HTML character entity as its character, or a space if it names nothing known."""
+    body = match.group(1)
+    if body.startswith("#"):
+        try:
+            code = int(body[2:], 16) if body[1:2].lower() == "x" else int(body[1:])
+        except ValueError:
+            return " "
+        return chr(code) if 0 < code < 0x110000 else " "
+    return _NAMED_ENTITIES.get(body.lower(), " ")
+
+
+def is_generic_title(maybe_normalized: str | None) -> bool:
+    """Whether a normalized title names a genre rather than a work — `Editorial`, `Book Review`.
+
+    A record whose title is generic is still deduplicated. What changes is how much its title is allowed
+    to prove on its own: see `_title_edge_holds`.
+    """
+    return bool(maybe_normalized) and maybe_normalized in GENERIC_TITLES
+
+
+@dataclasses.dataclass(frozen=True)
+class Record:
+    """One bibliography record, with the derived values clustering and merging read.
+
+    Frozen and a dataclass rather than this codebase's usual `env`, for `fixbib.RepairReport`'s reason:
+    these are counted, sorted and grouped, and a mistyped attribute should fail rather than arrive as
+    `None` and quietly change a tally.
+
+    Fields:
+
+    `index`: Position in the input, counting every input file as one stream. Decides output order, and
+             breaks every tie in base selection, so a run is reproducible.
+    `entry`: The `bibtexparser` `Entry`, read without name splitting so that it can be written back out.
+    `key`: The record's BibTeX key.
+    `doi`: Normalized DOI, or `None`. A match key.
+    `title`: Normalized title, or `None` where the record has none. A match key, subject to
+             `_title_edge_holds`.
+    `display_title`: The title as the file has it, for the audit and for the judge's prompt.
+    `year`: Publication year as an integer, or `None`. Blocks the fuzzy pass; never a match key on its
+            own, since two databases can disagree about the year of one paper.
+    `surname`: Normalized first-author surname, or `None`. Blocks the fuzzy pass.
+    `chapter_version`: Springer living-reference chapter version from the DOI, or `None`.
+    `is_preprint`: Whether the DOI names a preprint server or a general repository.
+    """
+    index: int
+    entry: Entry
+    key: str
+    doi: str | None
+    title: str | None
+    display_title: str
+    year: int | None
+    surname: str | None
+    chapter_version: int | None
+    is_preprint: bool
+
+    def field(self, name: str) -> str | None:
+        """The value of field `name`, or `None` if the record does not have one worth reading."""
+        return _field_value(self.entry, name)
+
+
+def _field_value(entry: Entry, name: str) -> str | None:
+    """The text of `entry`'s field `name`, or `None` when it is absent or empty."""
+    try:
+        value = entry[name]
+    except KeyError:
+        return None
+    if not isinstance(value, str):  # a library read with name splitting; not what this module reads
+        return None
+    return value.strip() or None
+
+
+def _first_surname(maybe_author: str | None) -> str | None:
+    """The first author's surname, reduced the way `normalize_title` reduces a title.
+
+    Reads the author string directly rather than asking `bibtexparser` to split it, because this module
+    reads without the name-splitting middleware — the split cannot be undone faithfully enough to write
+    the library back out, and the surname is wanted for blocking rather than for display.
+
+    Handles the two orders BibTeX allows, `Surname, Given` and `Given Surname`, and gives up on anything
+    else by returning `None`. Blocking is all this feeds, so a miss costs a comparison rather than a
+    wrong answer.
+    """
+    if not maybe_author:
+        return None
+    first = re.split(r"\s+and\s+", maybe_author.strip(), maxsplit=1)[0].strip().strip("{}")
+    if not first:
+        return None
+    if "," in first:
+        surname = first.split(",", 1)[0]
+    else:
+        # "Ludwig van Beethoven" — take the last token, and the particle before it if there is one, so
+        # that this agrees with the comma form for the same person.
+        tokens = first.split()
+        if not tokens:
+            return None
+        surname = tokens[-1]
+    return normalize_title(surname)
+
+
+def _year_of(maybe_year: str | None) -> int | None:
+    """The four-digit year in a `year` field, or `None`. Exports write `2024`, `2024-06`, and `c2024`."""
+    if not maybe_year:
+        return None
+    match = re.search(r"(1[6-9]\d{2}|20\d{2}|21\d{2})", maybe_year)
+    return int(match.group()) if match else None
+
+
+def _make_record(index: int, entry: Entry) -> Record:
+    """Derive a `Record` from one parsed entry."""
+    doi = normalize_doi(_field_value(entry, "doi"))
+    if doi is None:
+        # arXiv records often carry the identifier and no DOI. The registered form is derivable and is
+        # what the published copy's own `doi` field will say if it has one, so deriving it here is what
+        # lets a preprint match its twin at all.
+        eprint = _field_value(entry, "eprint")
+        if eprint and _field_value(entry, "archiveprefix"):
+            doi = normalize_doi(f"10.48550/arXiv.{eprint.strip()}")
+
+    version_match = _CHAPTER_VERSION_PATTERN.search(doi) if doi else None
+    return Record(index=index,
+                  entry=entry,
+                  key=entry.key,
+                  doi=doi,
+                  title=normalize_title(_field_value(entry, "title")),
+                  display_title=_field_value(entry, "title") or "",
+                  year=_year_of(_field_value(entry, "year")),
+                  surname=_first_surname(_field_value(entry, "author")),
+                  chapter_version=int(version_match.group(2)) if version_match else None,
+                  is_preprint=doi is not None and doi.startswith(PREPRINT_DOI_PREFIXES))
+
+
+def read_records(source: str) -> tuple[list[Record], list[fixbib.RepairReport]]:
+    """Read BibTeX text into `Record`s, repairing what the parser would otherwise refuse.
+
+    Returns `(records, unreadable)`, the second a list of `fixbib.RepairReport` naming the records that
+    could not be read even after repair, so a caller can report how much of the input it is speaking for.
+
+    The repair is `fixbib.repair_bibtex`, and it is applied to a copy — the caller's file is untouched.
+    `raven-fixbib` is the tool for repairing the file itself.
+    """
+    repaired, _recovered, unrecovered = fixbib.repair_bibtex(source)
+    # Read without name splitting, which serves two ends at once: the library can be written back out
+    # (see `bibtex.write_string`), and a record whose author BibTeX cannot express — `Bloggs, PhD, MSc,
+    # Joan`, three commas where the format allows two — is read rather than refused. Merging such a
+    # record is unaffected by the fault, since its author string is only ever copied.
+    library = bibtex.parse_string(repaired, split_names=False)
+    records = [_make_record(index, entry) for index, entry in enumerate(library.entries)]
+    return records, [report for report in unrecovered
+                     if report.kind != fixbib.KIND_UNREADABLE or _still_missing(report, library)]
+
+
+def _still_missing(report: fixbib.RepairReport, library: Library) -> bool:
+    """Whether a record `fixbib` could not repair is genuinely absent from `library`.
+
+    `fixbib` parses with name splitting and this module does not, so a record refused only for an
+    unsplittable author is reported by `fixbib` and read here perfectly well. Reporting it as lost would
+    be a lie about the corpus, in the direction that makes a coverage figure look worse than it is.
+    """
+    return not any(entry.key == report.key for entry in library.entries)
+
+
+@dataclasses.dataclass(frozen=True)
+class Cluster:
+    """A set of records taken to be one paper, and how they came to be one.
+
+    `records`: In merge preference order, so `records[0]` is the base. See `_merge_rank`.
+    `rules`: Which keys joined this cluster — `"doi"`, `"title"`, `"judge"`. More than one is ordinary:
+             a cluster of three can be held together by a DOI at one end and a title at the other.
+    """
+    records: tuple[Record, ...]
+    rules: tuple[str, ...]
+
+    def __len__(self) -> int:
+        return len(self.records)
+
+
+def _merge_rank(record: Record) -> tuple:
+    """Sort key putting the record that should be the base of a merge first.
+
+    In order: the version of record beats a preprint or repository deposit; a higher Springer chapter
+    version beats a lower one; more fields beats fewer; and the earlier record in the input breaks the
+    remaining ties, so that a re-run picks the same base.
+
+    Publication status leads deliberately. Ranking by field count first usually picks the same record and
+    sometimes picks the deposit, which leaves a Zenodo DOI on a paper that has a journal one — wrong in a
+    bibliography in a way that is invisible once written.
+    """
+    return (record.is_preprint,
+            -(record.chapter_version or 0),
+            -len(record.entry.fields),
+            record.index)
+
+
+def _disagree_on_author(a: Record, b: Record) -> bool:
+    """Whether both records name a first author and the two are different people.
+
+    Absence is never disagreement: a record with no `author` field agrees with everything, because the
+    alternative is treating a database that omits authors as evidence against a merge.
+    """
+    return bool(a.surname and b.surname and a.surname != b.surname)
+
+
+def _disagree_on_year(a: Record, b: Record) -> bool:
+    """Whether both records give a year and the two are more than `MAX_YEAR_DRIFT` apart."""
+    return bool(a.year and b.year and abs(a.year - b.year) > MAX_YEAR_DRIFT)
+
+
+def _title_edge_holds(a: Record, b: Record) -> bool:
+    """Whether two records sharing a normalized title may be merged on that evidence.
+
+    Not every equal title means one paper, so a title match is weighed against what else the two records
+    say — and how much weighing it needs depends on how much else there is:
+
+      - **A generic title** — `Editorial`, `Book Review` — proves nothing by itself, so it is accepted
+        only where the records positively *agree*: the same first author, and years within
+        `MAX_YEAR_DRIFT`. Silence is not agreement here; a record with no author is not merged into
+        another `Editorial` on the strength of the word.
+      - **Where neither record names an author**, the title is the only evidence there is, so a
+        disagreement about the DOI is enough to overrule it.
+      - **Otherwise** the title is distinctive enough to carry a merge on its own, and is refused only
+        where the records positively contradict each other: a different first author *and* a year too far
+        apart to be one paper appearing twice. Both are required. Databases disagree about author order
+        often enough that a surname mismatch alone is weak evidence, and a preprint and its published
+        version straddling a New Year make a year gap alone weaker still. Together they are conclusive.
+
+    The authorless clause is the one that came from a corpus rather than from first principles, and it is
+    worth knowing what it catches: a serial's recurring section headings. `II Political Science: Method
+    and Theory` and `Abstracts Abstracts` head an item in every issue of their journals, carry no author,
+    and are ordinary titles by every other test — so the title alone merged four issues into one record.
+    Of the 36 authorless merges in that corpus, the three where the DOIs disagreed were the three that
+    were wrong, and the 33 where they agreed were all right.
+
+    Applied per pair rather than per title, which is what lets four records carrying one heading come
+    apart into the two pairs that are each one item.
+    """
+    if is_generic_title(a.title):
+        return (a.surname is not None and a.surname == b.surname
+                and a.year is not None and b.year is not None
+                and abs(a.year - b.year) <= MAX_YEAR_DRIFT)
+    if a.surname is None and b.surname is None:
+        return not (a.doi and b.doi and a.doi != b.doi)
+    return not (_disagree_on_author(a, b) and _disagree_on_year(a, b))
+
+
+def cluster_records(records: list[Record],
+                    maybe_judgements: dict[tuple[int, int], bool] | None = None) -> list[Cluster]:
+    """Group `records` into clusters of one paper each, by exact DOI and exact normalized title.
+
+    `maybe_judgements`: the judge's verdicts, keyed by a pair of record indices in ascending order, or
+                        `None` when the judge did not run. True adds an edge the exact keys missed; False
+                        withdraws a *title* edge between that pair, which is how a rejected merge comes
+                        apart. A DOI match is never withdrawn — equality there is conclusive, and the
+                        judge is not asked to overrule it.
+
+    Every record comes back in exactly one cluster, singletons included, ordered by where the cluster's
+    base sat in the input — so the output of a whole run stays in reading order.
+
+    Matching is transitive: a record sharing a DOI with one twin and a title with another puts all three
+    in one cluster. That is what makes the two keys complementary rather than two passes, since neither
+    key is present on every record. A title match must additionally satisfy `_title_edge_holds`.
+    """
+    judgements = maybe_judgements or {}
+    parent = list(range(len(records)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]  # path halving
+            i = parent[i]
+        return i
+
+    def union(i: int, j: int) -> None:
+        root_i, root_j = find(i), find(j)
+        if root_i != root_j:
+            parent[max(root_i, root_j)] = min(root_i, root_j)
+
+    edges = []  # (index, index, rule), kept so the audit can say which key matched
+
+    doi_groups = collections.defaultdict(list)
+    for index, record in enumerate(records):
+        if record.doi is not None:
+            doi_groups[record.doi].append(index)
+    for indices in doi_groups.values():
+        for other in indices[1:]:
+            edges.append((indices[0], other, "doi"))
+            union(indices[0], other)
+
+    title_groups = collections.defaultdict(list)
+    for index, record in enumerate(records):
+        if record.title is not None:
+            title_groups[record.title].append(index)
+    for indices in title_groups.values():
+        # Every pair, not a chain from the first: an edge that `_title_edge_holds` refuses must not take
+        # the rest of the group down with it, and which record happens to be first is an accident of the
+        # input order. Groups are small — the largest in a 6934-record corpus holds six.
+        for position, i in enumerate(indices):
+            for j in indices[position + 1:]:
+                if judgements.get((i, j)) is False:
+                    continue  # the judge looked at this one and said the two are different works
+                if _title_edge_holds(records[i], records[j]):
+                    edges.append((i, j, "title"))
+                    union(i, j)
+
+    for (i, j), same in judgements.items():
+        if same:
+            edges.append((i, j, "judge"))
+            union(i, j)
+
+    return _clusters_from(records, find, edges)
+
+
+def _clusters_from(records: list[Record], find, edges: list[tuple[int, int, str]]) -> list[Cluster]:
+    """Assemble `Cluster` objects once the union-find is settled."""
+    members = collections.defaultdict(list)
+    for index in range(len(records)):
+        members[find(index)].append(index)
+
+    rules = collections.defaultdict(set)
+    for i, _j, rule in edges:
+        rules[find(i)].add(rule)
+
+    clusters = []
+    for root, indices in members.items():
+        ordered = tuple(sorted((records[i] for i in indices), key=_merge_rank))
+        clusters.append(Cluster(records=ordered, rules=tuple(sorted(rules[root]))))
+    return sorted(clusters, key=lambda cluster: cluster.records[0].index)
+
+
+# How alike two normalized titles must be before the judge is asked about them. Chosen to catch the
+# near-misses an exact key cannot — a subtitle one database kept and another dropped, a word order fixed
+# between the preprint and the published version — without asking about every pair of papers on a common
+# subject, which in a topical corpus is most of them.
+TITLE_SIMILARITY = 0.86
+
+# Pairs per model call. Smaller than the 40 filenames `investigations/agent-batch-classification/` used,
+# because each item here carries two full records rather than one filename.
+JUDGE_BATCH = 12
+
+JUDGE_INSTRUCTIONS = """\
+You are deduplicating a bibliography assembled from several literature databases. The same paper is \
+often exported by each database that indexes it, with the fields spelled differently, so two records that \
+look slightly different are frequently one paper.
+
+For each numbered item you are given two bibliography records. Decide whether they describe THE SAME \
+WORK.
+
+Treat as the same work:
+  - the same paper exported by two databases, with different capitalization, punctuation, markup or \
+field coverage
+  - a preprint and the published version of the same paper
+  - two versions of the same book chapter or living reference work entry
+  - the same paper with a subtitle present in one record and absent in the other
+
+Treat as different works:
+  - different papers by the same authors on a related topic
+  - a paper and its own correction, erratum, comment or editorial
+  - different chapters of the same book, or different papers in the same proceedings
+  - a conference paper and a substantially different journal article, where the titles genuinely differ \
+in what they claim
+
+For each item, answer:
+  "i"      the item's number, copied exactly
+  "same"   true if the two records describe the same work, false otherwise
+  "why"    at most fifteen words, the evidence you used
+
+IMPORTANT: judge only from what the records actually say. Do not claim to recognize a DOI, an identifier \
+or a paper from memory; you cannot, and a guess dressed as recognition is worse than saying the records \
+do not settle it. If the two records do not give you enough to tell, answer false — leaving two records \
+that are one paper is recoverable, and merging two different papers is not.
+
+Answer with a JSON array of objects and nothing else. One object per item, in order, no commentary, no \
+markdown fences.
+
+Items:
+{items}
+"""
+
+
+def _describe_for_judge(record: Record) -> str:
+    """One record as the few lines the judge is asked to read.
+
+    Deliberately narrow. Everything here is something a bibliography record states about itself; the
+    abstract is left out because two databases' copies of one abstract differ in ways that have nothing to
+    do with whether the papers are the same, and it would be most of the prompt.
+    """
+    parts = [f"title: {record.display_title or '(none)'}"]
+    for label, name in (("authors", "author"), ("year", "year"), ("venue", "journal"),
+                        ("booktitle", "booktitle"), ("publisher", "publisher"), ("doi", "doi")):
+        value = record.field(name)
+        if value:
+            parts.append(f"{label}: {_tsv_cell(value)[:200]}")
+    return "\n".join(f"    {part}" for part in parts)
+
+
+def _title_similarity(a: str, b: str) -> float:
+    """How alike two normalized titles are, on `difflib`'s 0..1 scale.
+
+    Guarded by `difflib`'s own two cheap upper bounds, which is what keeps a quadratic pass over a
+    blocking group affordable: both are O(len) where `ratio` is O(len²).
+    """
+    matcher = difflib.SequenceMatcher(None, a, b)
+    if matcher.real_quick_ratio() < TITLE_SIMILARITY or matcher.quick_ratio() < TITLE_SIMILARITY:
+        return 0.0
+    return matcher.ratio()
+
+
+def fuzzy_candidates(records: list[Record], clusters: list[Cluster]) -> list[tuple[Record, Record]]:
+    """Pairs of records that look like one paper but that no exact key joined.
+
+    Blocked by first-author surname and by year within `MAX_YEAR_DRIFT`, then filtered by
+    `TITLE_SIMILARITY`. Blocking is what makes this tractable — comparing all pairs of a 7000-record
+    corpus is 24 million comparisons, and comparing within a surname is a few thousand.
+
+    The cost of blocking is what it cannot see: a record with no author or no year is in no block, and
+    two databases spelling the first author differently put one paper in two blocks. Both are missed
+    merges, which is the direction to fail in — the deterministic keys have already found everything that
+    agrees exactly, so what is left here is a bonus rather than a floor.
+    """
+    cluster_of = {}
+    for position, cluster in enumerate(clusters):
+        for record in cluster.records:
+            cluster_of[record.index] = position
+
+    blocks = collections.defaultdict(list)
+    for record in records:
+        if record.surname and record.year and record.title:
+            for year in range(record.year - MAX_YEAR_DRIFT, record.year + MAX_YEAR_DRIFT + 1):
+                blocks[(record.surname, year)].append(record)
+
+    seen, candidates = set(), []
+    for members in blocks.values():
+        for position, a in enumerate(members):
+            for b in members[position + 1:]:
+                if cluster_of[a.index] == cluster_of[b.index]:
+                    continue  # already one paper; nothing for the judge to add
+                pair = (min(a.index, b.index), max(a.index, b.index))
+                if pair in seen:
+                    continue  # a pair reachable from two adjacent year blocks is still one pair
+                seen.add(pair)
+                if _title_similarity(a.title, b.title) >= TITLE_SIMILARITY:
+                    candidates.append((a, b) if a.index < b.index else (b, a))
+    return sorted(candidates, key=lambda pair: (pair[0].index, pair[1].index))
+
+
+def conflicting_clusters(clusters: list[Cluster]) -> list[Cluster]:
+    """Merged clusters whose records do not agree on a DOI.
+
+    Not an error — a preprint beside its published version, or a Zenodo deposit beside the journal's own,
+    is the usual reason — but it is the one shape of merge that a title match made on its own where the
+    records had a way to contradict it. Worth a second opinion when one is available.
+    """
+    return [cluster for cluster in clusters
+            if len(cluster) > 1 and len({record.doi for record in cluster.records if record.doi}) > 1]
+
+
+def _parse_json_payload(text: str):
+    """The JSON in a model reply, tolerating code fences and stray prose around it."""
+    text = text.strip()
+    fenced = re.search(r"```(?:json)?\s*(.+?)\s*```", text, re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    for opener, closer in (("[", "]"), ("{", "}")):
+        start, end = text.find(opener), text.rfind(closer)
+        if start != -1 and end > start:
+            try:
+                return json.loads(text[start:end + 1])
+            except json.JSONDecodeError:
+                continue
+    raise ValueError(f"no JSON found in reply: {text[:200]!r}")
+
+
+def _ask_judge(llm_settings, prompt: str) -> str:
+    """One stateless turn: no character, no tools, no retrieval, no history."""
+    from ..librarian import agent
+    record = agent.turn(llm_settings,
+                        prompt,
+                        use_character_card=False,
+                        tools_enabled=False,
+                        internet_enabled=False,
+                        docs_enabled=False,
+                        markup=None)
+    if record.generation is None:
+        raise RuntimeError("the backend returned no generation")
+    return record.reply or ""
+
+
+def judge_batch(llm_settings, batch: list[tuple[str, str, str]]) -> dict[int, dict]:
+    """Ask about one batch of `(pair id, description, description)`. Returns `{position: answer}`.
+
+    Answers whose index does not resolve are dropped rather than trusted, and a batch that comes back
+    short simply leaves those pairs unanswered — which is also what makes a re-run the recovery path for
+    a failed batch. Following `investigations/agent-batch-classification/`, where a batch of forty did
+    come back with thirty-nine.
+    """
+    items = "\n\n".join(f"{position}.\n  RECORD A:\n{a}\n  RECORD B:\n{b}"
+                        for position, (_pair_id, a, b) in enumerate(batch))
+    answers = _parse_json_payload(_ask_judge(llm_settings, JUDGE_INSTRUCTIONS.format(items=items)))
+    if not isinstance(answers, list):
+        raise ValueError(f"expected a JSON array, got {type(answers).__name__}")
+
+    resolved = {}
+    for answer in answers:
+        if not isinstance(answer, dict) or "i" not in answer:
+            continue
+        try:
+            position = int(answer["i"])
+        except (TypeError, ValueError):
+            continue
+        if 0 <= position < len(batch):
+            resolved[position] = {"same": answer.get("same") is True,
+                                  "why": str(answer.get("why") or "").strip()}
+    return resolved
+
+
+def _judge_admits(a: Record, b: Record) -> bool:
+    """Whether a "same work" verdict may be acted on, decided in Python rather than by the model.
+
+    The one durable lesson of `investigations/agent-batch-classification/`: a model's own confidence must
+    never be the thing that decides whether to look harder, because the case where the self-report is
+    wrong is exactly the case that then goes unexamined. Here the same idea makes the model a proposer and
+    not a decider — it may suggest a merge the exact keys missed, and a suggestion contradicted by what
+    the records themselves say is dropped whatever the model said about it.
+
+    The condition is the one an ordinary title match already has to clear: a different first author *and*
+    a year too far apart cannot be one paper.
+    """
+    return not (_disagree_on_author(a, b) and _disagree_on_year(a, b))
+
+
+def _load_judge_state(path: pathlib.Path) -> dict[str, dict]:
+    """Answers already recorded, keyed by pair id."""
+    state = {}
+    if not path.exists():
+        return state
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            answer = json.loads(line)
+        except json.JSONDecodeError:
+            continue  # a run killed mid-write leaves a partial last line; the pair is simply re-asked
+        if isinstance(answer, dict) and "pair" in answer:
+            state[answer["pair"]] = answer
+    return state
+
+
+def _pair_id(a: Record, b: Record) -> str:
+    """A stable name for a pair, so a resumed run recognizes what it already asked.
+
+    Built from the BibTeX keys rather than from the record indices, which shift the moment the input
+    files are given in a different order — and a resumable file that silently answers a different
+    question after an argument is reordered would be worse than no resumability at all.
+    """
+    return "\t".join(sorted((a.key, b.key)))
+
+
+def judge_pairs(llm_settings,
+                pairs: list[tuple[Record, Record, str]],
+                maybe_state_path: pathlib.Path | None = None,
+                on_progress=None) -> dict[tuple[int, int], bool]:
+    """Ask the judge about `pairs`, returning the verdicts clustering can act on.
+
+    `pairs`: `(record, record, why_asked)`, the last naming which question this pair came from —
+             `"fuzzy"` for a near-miss the exact keys did not join, `"conflict"` for a merge whose
+             records disagree about the DOI.
+
+    `maybe_state_path`: a JSONL appended to as answers arrive. A re-run skips what is already there, so
+                        a backend that falls over two-thirds of the way through costs the batch in
+                        flight rather than the run.
+
+    A verdict of "same" is kept only where `_judge_admits` agrees, which is where this stops being a
+    model deciding and becomes a model proposing. A pair the model does not answer at all is simply
+    absent from the result and stays unmerged.
+    """
+    done = _load_judge_state(maybe_state_path) if maybe_state_path else {}
+    todo = [(a, b, why) for a, b, why in pairs if _pair_id(a, b) not in done]
+
+    for start in range(0, len(todo), JUDGE_BATCH):
+        chunk = todo[start:start + JUDGE_BATCH]
+        batch = [(_pair_id(a, b), _describe_for_judge(a), _describe_for_judge(b)) for a, b, _why in chunk]
+        try:
+            answers = judge_batch(llm_settings, batch)
+        except Exception as exc:  # noqa: BLE001 -- a failed batch is a result: re-running is the retry
+            logger.warning(f"judge_pairs: batch at {start} failed, {type(exc)}: {exc}")
+            answers = {}
+        for position, (a, b, why) in enumerate(chunk):
+            if position not in answers:
+                continue
+            answer = dict(answers[position], pair=_pair_id(a, b), asked=why,
+                          keys=[a.key, b.key], titles=[a.display_title, b.display_title])
+            done[answer["pair"]] = answer
+            if maybe_state_path is not None:
+                with maybe_state_path.open("a", encoding="utf-8") as stream:
+                    stream.write(json.dumps(answer, ensure_ascii=False) + "\n")
+        if on_progress is not None:
+            on_progress(min(start + JUDGE_BATCH, len(todo)), len(todo))
+
+    verdicts = {}
+    for a, b, _why in pairs:
+        answer = done.get(_pair_id(a, b))
+        if answer is None:
+            continue
+        same = bool(answer.get("same")) and _judge_admits(a, b)
+        verdicts[(min(a.index, b.index), max(a.index, b.index))] = same
+    return verdicts
+
+
+def _apply_judge(records: list[Record], clusters: list[Cluster], opts) -> list[Cluster]:
+    """Run the opt-in judge pass and return the re-clustered result. CLI glue for `judge_pairs`."""
+    from ..librarian import config as librarian_config, llmclient
+
+    fuzzy = fuzzy_candidates(records, clusters)
+    conflicts = []
+    for cluster in conflicting_clusters(clusters):
+        base = cluster.records[0]
+        for other in cluster.records[1:]:
+            if other.doi and base.doi and other.doi != base.doi:
+                conflicts.append((base, other, "conflict"))
+    pairs = [(a, b, "fuzzy") for a, b in fuzzy] + conflicts
+    print(f"judge: {len(fuzzy)} near-miss pair(s), {len(conflicts)} DOI-disagreement pair(s)")
+    if not pairs:
+        return clusters
+
+    backend_url = opts.backend_url or librarian_config.llm_backend_url
+    # Stop here rather than at the first batch: this run can take a while, and a precise diagnosis now
+    # beats the same failure once per batch for the rest of the corpus. Reachable and
+    # reachable-with-a-model are separate questions, and the second is the one that reads as a bug when
+    # it is not checked — the backend answers, so nothing looks wrong until every verdict is empty.
+    if not llmclient.test_connection(backend_url):
+        print(f"judge: cannot reach an LLM backend at {backend_url}.", file=sys.stderr)
+        sys.exit(1)
+    llm_settings = llmclient.setup(backend_url=backend_url, quiet=True)
+    if (status := llmclient.backend_status(llm_settings)) is llmclient.backend_has_no_model:
+        headline, advice = llmclient.describe_backend_status(status, backend_url)
+        print(f"judge: {headline} {advice}", file=sys.stderr)
+        sys.exit(1)
+    print(f"judge: {llm_settings.model} at {backend_url}")
+
+    state_path = pathlib.Path(opts.judge_state).expanduser().resolve() if opts.judge_state else None
+    verdicts = judge_pairs(llm_settings, pairs, state_path,
+                           on_progress=lambda done, total: print(f"  judged {done}/{total}", flush=True))
+
+    was_together = {}
+    for position, cluster in enumerate(clusters):
+        for record in cluster.records:
+            was_together[record.index] = position
+    merges = sum(1 for (i, j), same in verdicts.items()
+                 if same and was_together[i] != was_together[j])
+    splits = sum(1 for same in verdicts.values() if not same)
+    print(f"judge: {merges} pair(s) newly merged, {splits} pair(s) refused")
+    if state_path is not None:
+        print(f"judge: answers in {state_path}")
+    return cluster_records(records, verdicts)
+
+
+AUDIT_COLUMNS = ("kept", "removed", "matched_by", "size", "title", "dois", "differences")
+
+
+@dataclasses.dataclass(frozen=True)
+class AuditRow:
+    """What one merge did, in the form the audit TSV records it.
+
+    A scoping review reports the number of duplicates it removed and has to be able to stand behind it,
+    so this is the tool's real output — enough per merge for a reader to disagree with it.
+
+    Fields:
+
+    `kept`: BibTeX key of the surviving record.
+    `removed`: Keys of the records merged into it, in merge preference order.
+    `matched_by`: Which keys joined the cluster.
+    `size`: How many records the cluster held.
+    `title`: The surviving record's title, as written.
+    `dois`: Every distinct normalized DOI in the cluster. More than one is a disagreement worth seeing,
+            not an error — see the module docstring.
+    `differences`: Every field where a merged-away record held a different non-empty value than the one
+                   kept, as `field: kept … / dropped …`. Values are truncated; this says what was
+                   dropped, and the input file remains the place to read it in full.
+    """
+    kept: str
+    removed: tuple[str, ...]
+    matched_by: tuple[str, ...]
+    size: int
+    title: str
+    dois: tuple[str, ...]
+    differences: tuple[str, ...]
+
+    def to_row(self) -> tuple[str, ...]:
+        """The cells of this row, in `AUDIT_COLUMNS` order, safe to join with tabs."""
+        return tuple(_tsv_cell(cell) for cell in (self.kept,
+                                                  "; ".join(self.removed),
+                                                  "+".join(self.matched_by),
+                                                  str(self.size),
+                                                  self.title,
+                                                  "; ".join(self.dois),
+                                                  " | ".join(self.differences)))
+
+
+# Long enough to recognize a value and to see how two of them differ; short enough that a row holding
+# two abstracts stays a row. The input file is where anyone reads one in full.
+_AUDIT_VALUE_CHARS = 300
+
+
+def _tsv_cell(value: str) -> str:
+    """One TSV cell: no tabs, no newlines, no carriage returns, since those end a cell or a row."""
+    return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def _clip(value: str) -> str:
+    """`value` shortened to something an audit row can carry."""
+    value = _tsv_cell(value)
+    return value if len(value) <= _AUDIT_VALUE_CHARS else value[:_AUDIT_VALUE_CHARS - 1] + "…"
+
+
+def _best_abstract(cluster: Cluster) -> tuple[str | None, list[tuple[Record, str]]]:
+    """The abstract to keep, and the ones that lost while saying something different.
+
+    Every candidate goes through `text.strip_boilerplate` first, and that is what makes "keep the longest"
+    the right rule rather than a coin toss. Databases append their own rights notice to the abstracts they
+    export, so on raw text the longest copy is usually just the one carrying the most boilerplate, and
+    taking it would graft a publisher's copyright line onto the majority of merged records. Stripped, most
+    of these copies become the same string and there is nothing left to choose.
+
+    What remains after that is either a database's truncation of the same abstract — where the longest is
+    plainly right — or a handful of genuinely different texts, where it is the least bad rule and the
+    audit records what it passed over.
+    """
+    candidates = []
+    for record in cluster.records:
+        raw = record.field("abstract")
+        if raw:
+            stripped = textutil.strip_boilerplate(raw)
+            if stripped:
+                candidates.append((record, stripped))
+    if not candidates:
+        return None, []
+    best_record, best = max(candidates, key=lambda pair: (len(pair[1]), -pair[0].index))
+    losers = [(record, text) for record, text in candidates
+              if record is not best_record and text != best]
+    return best, losers
+
+
+def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
+    """Merge one cluster into a single entry, and say what that cost.
+
+    Returns `(entry, maybe_audit_row)`. A cluster of one is returned unchanged with no audit row, since
+    nothing happened to it.
+
+    The base is `cluster.records[0]`; every field it lacks is filled from the first twin that has one, in
+    the same preference order. A field the base already has is never overwritten — with one exception,
+    the abstract, which is chosen across the whole cluster by `_best_abstract` because the base being the
+    most complete record does not make its abstract the least truncated one.
+
+    The entry that comes back shares no `Field` objects with the input, so a caller may write it out
+    without the merge having disturbed the records it drew from.
+    """
+    base = cluster.records[0]
+    if len(cluster.records) == 1:
+        return base.entry, None
+
+    fields: dict[str, str] = {}
+    for record in cluster.records:
+        for field in record.entry.fields:
+            value = _field_value(record.entry, field.key)
+            if value is not None and field.key not in fields:
+                fields[field.key] = value
+
+    maybe_abstract, abstract_losers = _best_abstract(cluster)
+    if maybe_abstract is not None:
+        fields["abstract"] = maybe_abstract
+
+    # Field order follows the base's own, so a merged record still reads like the record it came from,
+    # with whatever was filled in from its twins after it.
+    base_order = [field.key for field in base.entry.fields]
+    ordered = base_order + sorted(key for key in fields if key not in base_order)
+    merged = Entry(entry_type=base.entry.entry_type,
+                   key=base.key,
+                   fields=[Field(key, fields[key]) for key in ordered if key in fields])
+
+    differences = [f"abstract: kept {_clip(maybe_abstract or '')} / dropped {_clip(text)}"
+                   for _record, text in abstract_losers]
+    for record in cluster.records[1:]:
+        for field in record.entry.fields:
+            value = _field_value(record.entry, field.key)
+            kept = fields.get(field.key)
+            if value is not None and kept is not None and value != kept and field.key != "abstract":
+                differences.append(f"{field.key}: kept {_clip(kept)} / dropped {_clip(value)}")
+
+    dois = sorted({record.doi for record in cluster.records if record.doi})
+    row = AuditRow(kept=base.key,
+                   removed=tuple(record.key for record in cluster.records[1:]),
+                   matched_by=cluster.rules,
+                   size=len(cluster.records),
+                   title=_tsv_cell(base.display_title),
+                   dois=tuple(dois),
+                   differences=tuple(differences))
+    return merged, row
+
+
+def deduplicate(records: list[Record],
+                clusters: list[Cluster]) -> tuple[Library, list[AuditRow]]:
+    """Merge every cluster, returning the deduplicated library and the audit rows for what merged.
+
+    `records` is taken only for its length, which the caller has already counted — the clusters carry the
+    records themselves. Passing it keeps the signature honest about what this operates on.
+    """
+    del records  # the clusters hold everything; named so the call site reads as the whole corpus
+    library = Library()
+    rows = []
+    for cluster in clusters:
+        entry, maybe_row = merge_cluster(cluster)
+        library.add(entry)
+        if maybe_row is not None:
+            rows.append(maybe_row)
+    return library, rows
+
+
+def write_audit(path: pathlib.Path, rows: list[AuditRow], sources: list[str]) -> None:
+    """Write the audit TSV, preceded by comment lines naming the tool version and the inputs.
+
+    The version stamp is what makes the file citable: a method section says which tool produced these
+    numbers, and "the script said so" is not a method section.
+    """
+    lines = [f"# raven-deduplicate {__version__}",
+             f"# input: {'; '.join(sources)}",
+             f"# clusters merged: {len(rows)}",
+             f"# records removed: {sum(len(row.removed) for row in rows)}",
+             "\t".join(AUDIT_COLUMNS)]
+    lines += ["\t".join(row.to_row()) for row in rows]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _report(records: list[Record],
+            clusters: list[Cluster],
+            unreadable: list[fixbib.RepairReport]) -> None:
+    """Print what the run found, in the shape a method section asks for."""
+    merged = [cluster for cluster in clusters if len(cluster) > 1]
+    removed = sum(len(cluster) - 1 for cluster in merged)
+    print(f"read {len(records)} record(s)"
+          + (f", {len(unreadable)} unreadable" if unreadable else ""))
+    print(f"  {len(records) - removed} unique, {removed} duplicate(s) merged away "
+          f"from {len(merged)} cluster(s)")
+
+    # A `doi` field holding something that is not a DOI is treated as no DOI at all, which is the safe
+    # reading and a silent one — those records then match on title alone, and nothing would say why.
+    # Cheap to count, and the answer is either zero or a data-quality problem the user wants to know
+    # about. (Not hypothetical: the fixtures written for this tool's own tests contained five.)
+    rejected = sum(1 for record in records if record.doi is None and record.field("doi"))
+    if rejected:
+        print(f"    {rejected} record(s) have a `doi` field that is not a DOI; matched on title only")
+
+    by_rule = collections.Counter("+".join(cluster.rules) for cluster in merged)
+    for rule, count in by_rule.most_common():
+        print(f"    matched by {rule}: {count} cluster(s)")
+
+    sizes = collections.Counter(len(cluster) for cluster in merged)
+    if sizes:
+        shape = ", ".join(f"{count}×{size}" for size, count in sorted(sizes.items()))
+        print(f"    cluster sizes: {shape}")
+
+    conflicted = [cluster for cluster in merged
+                  if len({record.doi for record in cluster.records if record.doi}) > 1]
+    if conflicted:
+        print(f"    {len(conflicted)} cluster(s) hold more than one DOI (see the audit)")
+
+
+def main() -> None:  # pragma: no cover
+    parser = argparse.ArgumentParser(description="""Merge the duplicate records in a bibliography assembled from several databases. Matches on DOI and on title; writes an audit of every merge. Reads through the repair `raven-fixbib` applies, so records the parser would refuse are still seen; the input file is never modified.""",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument("-o", "--output", dest="output", default=None, type=str, metavar="deduped.bib",
+                        help="Where to write the deduplicated bibliography. Without it, the run reports what it would do and writes nothing.")
+    parser.add_argument("-a", "--audit", dest="audit", default=None, type=str, metavar="audit.tsv",
+                        help="Where to write the audit of every merge: what was kept, what was merged away, which key matched, and every value that differed from the one kept.")
+    parser.add_argument("--judge", dest="judge", action="store_true", default=False,
+                        help="Also ask an LLM about near-miss titles that no exact key joined. Needs a backend; off by default.")
+    parser.add_argument("--judge-state", dest="judge_state", default=None, type=str, metavar="PATH",
+                        help="Resumable JSONL of the judge's answers (default: beside the output). A re-run skips what is already there.")
+    parser.add_argument("--backend-url", dest="backend_url", default=None, type=str, metavar="URL",
+                        help="LLM backend to judge with, overriding the configured one.")
+    parser.add_argument("--log", metavar="PATH", default=None,
+                        help="Mirror the log to this file (overwritten each run).")
+    parser.add_argument("--log-level", default="INFO",
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+                        help="Root logger level.")
+    parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="search.bib",
+                        help="BibTeX file(s) to deduplicate. Several are read as one corpus, which is what a multi-database search produces.")
+    opts = parser.parse_args()
+
+    from ..common import logsetup
+    logsetup.configure(level=getattr(logging, opts.log_level), logfile=opts.log)
+
+    # `bibtexparser` logs a warning per record it cannot read, and this tool reports the same records
+    # itself with a line number. Two accounts of one problem, interleaved, is worse than one. Set here
+    # rather than in a library function, because muting someone else's logger is an application's
+    # decision to make.
+    logging.getLogger("bibtexparser").setLevel(logging.ERROR)
+
+    sources, pieces = [], []
+    for filename in opts.filenames:
+        path = pathlib.Path(filename).expanduser().resolve()
+        try:
+            pieces.append(path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            print(f"{path}: cannot read ({type(exc).__name__}: {exc})", file=sys.stderr)
+            sys.exit(1)
+        sources.append(path.name)
+
+    records, unreadable = read_records("\n".join(pieces))
+    for report in unreadable:
+        print(f"unreadable: {report.describe()}", file=sys.stderr)
+    if not records:
+        print("no records to deduplicate.", file=sys.stderr)
+        sys.exit(1)
+
+    clusters = cluster_records(records)
+    if opts.judge:
+        clusters = _apply_judge(records, clusters, opts)
+
+    _report(records, clusters, unreadable)
+
+    library, rows = deduplicate(records, clusters)
+
+    if opts.audit:
+        audit_path = pathlib.Path(opts.audit).expanduser().resolve()
+        write_audit(audit_path, rows, sources)
+        print(f"audit written to {audit_path}")
+    if not opts.output:
+        print("nothing written (no -o/--output given).")
+        return
+    out_path = pathlib.Path(opts.output).expanduser().resolve()
+    out_path.write_text(bibtex.write_string(library), encoding="utf-8")
+    print(f"written to {out_path}")
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
