@@ -1834,7 +1834,9 @@ def invoke(settings: env,
                  The new message is returned.
 
                  If `True`, continue an incomplete AI message. The last message in `history` should be the AI message
-                 that you want the AI to continue. The updated (continued) message is returned.
+                 that you want the AI to continue. The updated (continued) message is returned: what that
+                 message already said, plus what the model added, on both channels — the backend sends only
+                 the continuation, so the whole message exists nowhere else.
 
     `max_tokens`: If given, override the configured generation length cap (`config.llm_sampler_config["max_tokens"]`)
                   for this one call. The main use is `prefill`, which sets it to a minimal value to measure the
@@ -1978,6 +1980,28 @@ def invoke(settings: env,
     parser = StreamParser()
     llm_output_text = io.StringIO()       # accumulates `content` events -> message["content"]
     reasoning_output_text = io.StringIO()  # accumulates `reasoning` events -> message["reasoning_content"]
+
+    # What the model is adding to, when continuing. A continuation's stream carries only the *new* text —
+    # measured 2026-08-27 against LM Studio, which answers a request ending in an assistant message with
+    # `'\n3. Autumn\n4. Winter'` for a message reading `'1. Spring\n2. Summer'` — so a reply assembled from
+    # the accumulators alone is the tail presented as the whole message, and the earlier text is gone.
+    # Both channels, since both accumulators start empty: the thinking trace of the message being continued
+    # disappears the same way its text does.
+    #
+    # Held apart from the accumulators rather than written into them, because everything else here is about
+    # *this call*: the token count is what this call generated, the phase samples are when this call
+    # produced its first content, a stopping string chops what this call emitted, and the retcon moves what
+    # this call took for the answer into the trace. Joining happens in `build_message`, which is where the
+    # whole message is what is wanted.
+    #
+    # Read off the wire history, which under `continue_` is the message verbatim (`serialize_history_for_wire`
+    # leaves the last one untouched) — so the seed is exactly the text the model was asked to continue,
+    # persona prefix and all. `scrub` normalizes that prefix downstream, on the joined text.
+    seed_text = ""
+    seed_reasoning = ""
+    if continue_ and history:
+        seed_text = chatutil.content_to_text(history[-1]["content"])
+        seed_reasoning = history[-1].get("reasoning_content") or ""
     collected_tool_calls: list[dict] = []  # `tool_call` events in arrival order -> message["tool_calls"]
     last_few_chunks = collections.deque([""] * 10)  # ring buffer over recent *content* for stopping-string checks; prepopulate with empties since `popleft` needs an element
     n_chunks = 0
@@ -2007,13 +2031,17 @@ def invoke(settings: env,
         The text arrives as arguments rather than being read off the accumulators, because the finished
         reply is not simply what accumulated: a stopping string chops it first, and that chopped text is
         what must be stored.
+
+        On a continuation the message is what was there plus what arrived, so the seed is joined on here,
+        where the whole message is what is wanted. Everything upstream — the chop included — stays about
+        what this call emitted.
         """
         return chatutil.create_chat_message(llm_settings=settings,
                                             role="assistant",
-                                            text=text,
+                                            text=seed_text + text,
                                             add_persona=False,
                                             tool_calls=tool_calls,
-                                            reasoning_content=(reasoning or None))
+                                            reasoning_content=((seed_reasoning + reasoning) or None))
 
     def handle_event(parsed_event: dict) -> sym:
         """Accumulate one typed event into the response, notify `on_progress`, return its action (default ack)."""

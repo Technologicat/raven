@@ -158,6 +158,15 @@
 
 *Raven-librarian*
 
+- **Continue no longer erases the message it was continuing.** Asking the AI to carry on from where it
+  stopped replaced the reply with the continuation alone: a message reading *1. Spring / 2. Summer* came
+  back as *3. Autumn / 4. Winter*, and the first half was gone from the chat. The backend sends only the
+  new text, and Raven was storing that as the whole message.
+  - **The thinking trace went the same way**, which is what you see if you stop a model mid-thought and
+    continue: the trace stayed on screen for the whole of the new generation and vanished when the message
+    completed. Both halves of a reply are now carried across.
+  - Continuing still records a new revision, so the message as it read before is kept in its edit history.
+
 - **an AI reply in progress no longer follows you into a different chat.** Starting a new chat, switching a
   message's siblings, or jumping to where a branch continues while the AI was writing left that reply
   running, and it then delivered itself into whatever conversation you had moved to — appearing as a reply

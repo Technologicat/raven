@@ -1170,10 +1170,13 @@ def ai_turn(llm_settings: env,
                                                        parent_id=head_node_id)
         else:
             # Continuing keeps its existing shape: one new revision, written when the reply is complete.
-            # A continuation's stream carries only what the model added — measured 2026-08-27 against LM
-            # Studio, which answers a request ending in an assistant message with the continuation alone —
-            # while the node holds the whole message. So a partial written here would replace the message
-            # with its own tail.
+            #
+            # Not because a partial would be wrong — `invoke` seeds its accumulators from the message being
+            # continued, so a partial carries the whole message here as it does anywhere else. It is that
+            # the node's active revision is the message as it read *before*, and the way to write a partial
+            # is to overwrite that. Storing partials for a continuation therefore means opening the new
+            # revision up front and streaming into it, which changes what a cancelled continuation leaves
+            # behind; that is a decision, not a consequence of this one.
             ai_message_node_id = head_node_id
 
         _notify("on_llm_start", on_llm_start, ai_message_node_id)
