@@ -2,33 +2,14 @@
 
 Based on:
 
-    https://github.com/SillyTavern/SillyTavern-WebSearch-Selenium/blob/main/src/index.ts
+    https://github.com/SillyTavern/SillyTavern-WebSearch-Selenium/blob/_main/src/index.ts
 
 and its old Python implementation:
 
-    https://github.com/SillyTavern/SillyTavern-Extras/blob/main/modules/websearch/script.py
+    https://github.com/SillyTavern/SillyTavern-Extras/blob/_main/modules/websearch/script.py
 """
 
-__all__ = ["create_directory",
-           "is_colab",
-           "get_driver",
-           "init_module",
-           "is_available",
-           "encodeURIComponent",
-           "wait_for_id",
-           "wait_for_selector",
-           "get_page_height",
-           "wait_for_page_height_increase",
-           "click_element",
-           "find_first_element_by_id",
-           "get_content_by_selector",
-           "get_attr_by_selector",
-           "debug_dump",
-           "format_results",
-           "search_google",
-           "search_duckduckgo",
-           "search",
-           "main"]
+__all__ = ["get_driver", "init_module", "is_available", "search"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -66,11 +47,11 @@ dump_filename = None
 # See `navigator.userAgent` in a web browser's JavaScript console (to access it, try pressing F12 or Ctrl+Shift+C)
 user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
-def create_directory(path: Union[str, pathlib.Path]) -> None:
+def _create_directory(path: Union[str, pathlib.Path]) -> None:
     p = pathlib.Path(path).expanduser().resolve()
     pathlib.Path.mkdir(p, parents=True, exist_ok=True)
 
-def is_colab():
+def _is_colab():
     """False. We never run inside colab. Provided for compatibility only."""
     return False
 
@@ -86,7 +67,7 @@ def get_driver():
         options.add_argument("--lang=en-GB")
         options.add_argument(f"--user-agent={user_agent}")
 
-        if is_colab():
+        if _is_colab():
             return webdriver.Chrome('chromedriver', options=options)
         else:
             chromeService = ChromeService()
@@ -123,7 +104,7 @@ def init_module(config_module_name: str):
         server_config = importlib.import_module(config_module_name)  # contains `server_userdata_dir`, for saving debug dumps
         dump_dir = pathlib.Path(server_config.server_userdata_dir).expanduser().resolve() / "websearch"
         dump_filename = dump_dir / "debug.html"
-        create_directory(dump_dir)
+        _create_directory(dump_dir)
     else:
         driver = None
         dump_dir = None
@@ -137,7 +118,7 @@ def is_available() -> bool:
 # --------------------------------------------------------------------------------
 # Utilities
 
-def encodeURIComponent(text: str) -> str:
+def _encodeURIComponent(text: str) -> str:
     """Rough Python equivalent for JavaScript's `encodeURIComponent`.
 
     See:
@@ -145,7 +126,7 @@ def encodeURIComponent(text: str) -> str:
     """
     return urllib.parse.quote(text, safe="!~*'()")
 
-def wait_for_id(element_id: str, delay: float = 5.0) -> None:
+def _wait_for_id(element_id: str, delay: float = 5.0) -> None:
     """Wait until an element with id `element_id` appears in the page being loaded by the web driver.
 
     Give up after `delay` seconds, and return anyway.
@@ -153,9 +134,9 @@ def wait_for_id(element_id: str, delay: float = 5.0) -> None:
     try:
         WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.ID, element_id)))
     except Exception:
-        logger.info(f"wait_for_id: Element with id '{element_id}' not found, proceeding without.")
+        logger.info(f"_wait_for_id: Element with id '{element_id}' not found, proceeding without.")
 
-def wait_for_selector(selector: str, delay: float = 5.0) -> None:
+def _wait_for_selector(selector: str, delay: float = 5.0) -> None:
     """Wait until an element matching the CSS selector `selector` appears in the page being loaded by the web driver.
 
     Give up after `delay` seconds, and return anyway.
@@ -163,13 +144,13 @@ def wait_for_selector(selector: str, delay: float = 5.0) -> None:
     try:
         WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
     except Exception:
-        logger.info(f"wait_for_id: Element matching selector '{selector}' not found, proceeding without.")
+        logger.info(f"_wait_for_selector: Element matching selector '{selector}' not found, proceeding without.")
 
-def get_page_height() -> int:
+def _get_page_height() -> int:
     """Get the current height of the page in the web driver, in pixels."""
     return driver.execute_script("return document.body.scrollHeight")
 
-def wait_for_page_height_increase(old_height: int) -> int:
+def _wait_for_page_height_increase(old_height: int) -> int:
     """Wait until the page height in the web driver changes to a value different from `old_height`.
 
     Returns the new height.
@@ -177,13 +158,13 @@ def wait_for_page_height_increase(old_height: int) -> int:
     Times out after 5 seconds. Returns whatever the height is at that moment.
     """
     for k in range(5):
-        page_height = get_page_height()
+        page_height = _get_page_height()
         if page_height > old_height:
             return page_height
         time.sleep(1.0)
     return old_height
 
-def click_element(element: WebElement) -> None:
+def _click_element(element: WebElement) -> None:
     """Click a web element in the page in the web driver.
 
     Can be used to dismiss popups and such.
@@ -195,7 +176,7 @@ def click_element(element: WebElement) -> None:
     else:
         element.click()
 
-def find_first_element_by_id(element_id: str) -> Optional[WebElement]:
+def _find_first_element_by_id(element_id: str) -> Optional[WebElement]:
     """Find the first element with id `element_id` in the page in the web driver.
 
     Return the element if found, else return `None`.
@@ -208,7 +189,7 @@ def find_first_element_by_id(element_id: str) -> Optional[WebElement]:
     else:
         return element
 
-def get_content_by_selector(selector: str) -> List[str]:
+def _get_content_by_selector(selector: str) -> List[str]:
     """Return a list of the `text` of each element matching the CSS selector `selector` in the page in the web driver."""
     collected = []
     for el in driver.find_elements(By.CSS_SELECTOR, selector):
@@ -216,7 +197,7 @@ def get_content_by_selector(selector: str) -> List[str]:
             collected.append(f"{el.text}")
     return collected
 
-def get_attr_by_selector(selector: str, attr: str) -> List[str]:
+def _get_attr_by_selector(selector: str, attr: str) -> List[str]:
     """Return a list of the attribute `attr` of each element matching the CSS selector `selector` in the page in the web driver.
 
     This can be used to extract link destinations (by matching "a" elements, and `attr="href"`).
@@ -227,7 +208,7 @@ def get_attr_by_selector(selector: str, attr: str) -> List[str]:
             collected.append(el.get_attribute(attr))
     return collected
 
-def debug_dump() -> None:
+def _debug_dump() -> None:
     """Dump the page from the web driver to an HTML file, for debugging."""
     with open(dump_filename, "w", encoding='utf-8') as html_file:
         html_file.write(driver.page_source)
@@ -237,7 +218,7 @@ def debug_dump() -> None:
 #
 # We use memoization to cache results for each unique query during the same session.
 
-def format_results(texts: List[str],
+def _format_results(texts: List[str],
                    titles: Optional[List[str]] = None,
                    links: Optional[List[str]] = None) -> str:
     """Format search results.
@@ -287,57 +268,57 @@ def format_results(texts: List[str],
     return preformatted_text, results
 
 @memoize
-def search_google(query: str, max_links: int = 10) -> Tuple[str, Dict]:
+def _search_google(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     # The query is the user's question in their own words, so it is counted rather than quoted; likewise
     # the results, which say what was asked about as plainly as the query does. Diagnosing a scraper that
     # a site's markup change has broken needs the *counts* - zero results parsed is the symptom - and
     # anything beyond that is better asked for as a reproduction than harvested from everyone's searches.
-    logger.info(f"search_google: searching Google, {len(query)} character query, max_links {max_links}.")
-    driver.get(f"https://google.com/search?hl=en&q={encodeURIComponent(query)}&num={max_links}")
-    wait_for_id("res")
-    debug_dump()
+    logger.info(f"_search_google: searching Google, {len(query)} character query, max_links {max_links}.")
+    driver.get(f"https://google.com/search?hl=en&q={_encodeURIComponent(query)}&num={max_links}")
+    _wait_for_id("res")
+    _debug_dump()
 
     # Accept cookies
-    if element := find_first_element_by_id("L2AGLb"):
-        click_element(element)
+    if element := _find_first_element_by_id("L2AGLb"):
+        _click_element(element)
 
     # TODO: add these back?
     # # Answer box
-    # text.write("\n".join(get_content_by_selector(selector=".wDYxhc")))
+    # text.write("\n".join(_get_content_by_selector(selector=".wDYxhc")))
     # # Knowledge panel
-    # text.write("\n".join(get_content_by_selector(selector=".hgKElc")))
+    # text.write("\n".join(_get_content_by_selector(selector=".hgKElc")))
 
     # Page snippets
-    texts = get_content_by_selector(selector=".r025kc.lVm3ye")
-    # texts_old = get_content_by_selector(selector=".yDYNvb.lyLwlc"))  # Old selectors for page snippets (for compatibility)
-    links = get_attr_by_selector(selector=".yuRUbf a", attr="href")
+    texts = _get_content_by_selector(selector=".r025kc.lVm3ye")
+    # texts_old = _get_content_by_selector(selector=".yDYNvb.lyLwlc"))  # Old selectors for page snippets (for compatibility)
+    links = _get_attr_by_selector(selector=".yuRUbf a", attr="href")
 
-    preformatted_text, results = format_results(texts=texts, links=links)
-    logger.info(f"search_google: {len(results)} result(s), {len(preformatted_text)} characters.")
+    preformatted_text, results = _format_results(texts=texts, links=links)
+    logger.info(f"_search_google: {len(results)} result(s), {len(preformatted_text)} characters.")
     return preformatted_text, results
 
 @memoize
-def search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
-    logger.info(f"search_duckduckgo: searching DuckDuckGo, {len(query)} character query, max_links {max_links}.")
+def _search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
+    logger.info(f"_search_duckduckgo: searching DuckDuckGo, {len(query)} character query, max_links {max_links}.")
     driver.get(f"https://duckduckgo.com/?kl=wt-wt&kp=-2&kav=1&kf=-1&kac=-1&kbh=-1&ko=-1&k1=-1&kv=n&kz=-1&kat=-1&kbg=-1&kbe=0&kpsb=-1&q={query}")
-    wait_for_id("web_content_wrapper")
-    debug_dump()
+    _wait_for_id("web_content_wrapper")
+    _debug_dump()
 
-    links = get_attr_by_selector(selector='[data-testid="result-title-a"]', attr="href")
+    links = _get_attr_by_selector(selector='[data-testid="result-title-a"]', attr="href")
 
     # Scroll down to load more results if needed
-    page_height = get_page_height()
+    page_height = _get_page_height()
     if len(links) < max_links:
         for k in range(5):
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
-            page_height = wait_for_page_height_increase(page_height)
-            links = get_attr_by_selector(selector='[data-testid="result-title-a"]', attr="href")
+            page_height = _wait_for_page_height_increase(page_height)
+            links = _get_attr_by_selector(selector='[data-testid="result-title-a"]', attr="href")
             if len(links) >= max_links:
                 break
-    texts = get_content_by_selector('[data-result="snippet"]')
+    texts = _get_content_by_selector('[data-result="snippet"]')
 
-    preformatted_text, results = format_results(texts=texts, links=links)
-    logger.info(f"search_duckduckgo: {len(results)} result(s), {len(preformatted_text)} characters.")
+    preformatted_text, results = _format_results(texts=texts, links=links)
+    logger.info(f"_search_duckduckgo: {len(results)} result(s), {len(preformatted_text)} characters.")
     return preformatted_text, results
 
 # # StartPage. Doesn't work yet. Likely missing some magic parameters from query.
@@ -365,26 +346,26 @@ def search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
 # @memoize
 # def search_startpage(query: str, max_links: int = 10) -> Tuple[str, Dict]:
 #     logger.info(f"search_startpage: Searching StartPage for {query}...")
-#     driver.get(f"https://www.startpage.com/sp/search?q={encodeURIComponent(query)}")
-#     wait_for_selector(".w-gl.css-oerspo")
-#     debug_dump()
+#     driver.get(f"https://www.startpage.com/sp/search?q={_encodeURIComponent(query)}")
+#     _wait_for_selector(".w-gl.css-oerspo")
+#     _debug_dump()
 #
 #     # Page snippets
-#     titles = get_content_by_selector(".wgl-title.css-i3irj7")
-#     links = get_attr_by_selector(".wgl-display-url.css-u4i8t0 a")
-#     texts = get_content_by_selector(".description.css-1507v2l")
+#     titles = _get_content_by_selector(".wgl-title.css-i3irj7")
+#     links = _get_attr_by_selector(".wgl-display-url.css-u4i8t0 a")
+#     texts = _get_content_by_selector(".description.css-1507v2l")
 #
 #     # TODO: number of links - here we likely need to click on the next page link.
 #
-#     preformatted_text, results = format_results(texts=texts, titles=titles, links=links)
+#     preformatted_text, results = _format_results(texts=texts, titles=titles, links=links)
 #     logger.debug(f"search_startpage: Found: {preformatted_text}")
 #     return preformatted_text, results
 
 def search(query: str, engine: str = "duckduckgo", max_links: int = 10) -> Tuple[str, Dict]:
     if engine == "duckduckgo":
-        return search_duckduckgo(query, max_links)
+        return _search_duckduckgo(query, max_links)
     elif engine == "google":
-        return search_google(query, max_links)
+        return _search_google(query, max_links)
     # elif engine == "startpage":
     #     return search_startpage(query, max_links)
     assert False
@@ -392,19 +373,19 @@ def search(query: str, engine: str = "duckduckgo", max_links: int = 10) -> Tuple
 # --------------------------------------------------------------------------------
 # Example
 
-def main():
-    preformatted_text, results = search_duckduckgo("sharon apple")
+def _main():
+    preformatted_text, results = _search_duckduckgo("sharon apple")
     print(preformatted_text)
     for result in results:
         print(result)
 
 if __name__ == "__main__":
-    main()
+    _main()
 
 # Example result:
 #
 # INFO:__main__:get_driver: Initializing Chrome driver...
-# INFO:__main__:search_duckduckgo: Searching DuckDuckGo for sharon%20apple...
+# INFO:__main__:_search_duckduckgo: Searching DuckDuckGo for sharon%20apple...
 # https://macross.fandom.com/wiki/Sharon_Apple
 #
 # Sharon Apple (シャロン・アップル, Sharon Appuru) is a virtual idol and one of the antagonists of the Macross Plus OVA and its theatrical adaptation, Macross Plus Movie Edition. She also appeared in the short-lived manga adaptation, Macross Plus: TAC Name. She is an artificially created idol singer whose voice and thoughts are provided by Myung Fang Lone. manifests herself ...

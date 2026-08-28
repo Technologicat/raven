@@ -91,7 +91,7 @@ def repair_record(raw: str) -> str | None:
     """
     # A rejected candidate makes `bibtexparser` log a warning, which is noise -- it is the mechanism
     # working, not a problem. Silencing it would mean setting a level on a logger this function does not
-    # own, and `parse_input_files` runs on a background thread, so two overlapping parses could restore
+    # own, and `importer._parse_input_files` runs on a background thread, so two overlapping parses could restore
     # each other's level and leave the parser muted for the rest of the process. Not worth it for the
     # traffic involved: candidates are generated only for a record that has already failed, and the
     # pruning gets that down to one candidate on real data. An application that wants quiet can set the

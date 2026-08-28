@@ -7,25 +7,8 @@ the `raven-importer` CLI shell. The CLI entry point lives in `importer_cli.py`; 
 module stays free of argparse and logging configuration so the GUI can host it safely.
 """
 
-__all__ = ["update_status_and_log",
-           "parse_input_files",
-           "get_highdim_semantic_vectors",
-           "cluster_highdim_semantic_vectors",
-           "reduce_dimension",
-           "cluster_lowdim_data",
-           "format_entry_for_keyword_extraction",
-           "extract_keywords",
-           "collect_cluster_keywords",
-           "summarize",
-           "result_successful",
-           "result_cancelled",
-           "result_errored",
-           "Progress",
-           "discard_message",
-           "init",
-           "start_task",
-           "has_task",
-           "cancel_task",
+__all__ = ["result_successful", "result_cancelled", "result_errored",
+           "init", "start_task", "has_task", "cancel_task",
            "import_bibtex"]
 
 import logging
@@ -120,7 +103,7 @@ extended_stopwords.update(x.lower() for x in visualizer_config.custom_stopwords)
 # --------------------------------------------------------------------------------
 # Common helpers
 
-def update_status_and_log(msg, *, log_indent=0):
+def _update_status_and_log(msg, *, log_indent=0):
     """Log `msg` at info level.
 
     Additionally, if the optional GUI status update function has been set,
@@ -205,14 +188,14 @@ def _report_unparseable_records(filename, library):
 
     for failed_block, entry in recovered:
         library.add(entry)
-        logger.warning(f"parse_input_files: recovered record '{entry.key}' at line {failed_block.start_line} "
+        logger.warning(f"_parse_input_files: recovered record '{entry.key}' at line {failed_block.start_line} "
                        f"of {filename} by escaping unbalanced braces in a field value. The file itself is "
                        f"unchanged; `raven-fixbib` writes the repair back.")
 
     if not lost:
         return
     plural_s = "s" if len(lost) != 1 else ""
-    logger.warning(f"parse_input_files: {len(lost)} record{plural_s} in {filename} could not "
+    logger.warning(f"_parse_input_files: {len(lost)} record{plural_s} in {filename} could not "
                    f"be parsed as BibTeX, and will be missing from the dataset. Usual cause: unbalanced "
                    f"braces in a field value.")
     for failed_block, _ in lost:
@@ -222,10 +205,10 @@ def _report_unparseable_records(filename, library):
         key = common_utils.bibtex_header_key(header_line) or "?"
         unbalanced = common_utils.bibtex_unbalanced_field_names(failed_block.raw)
         suspects = f" Suspect field(s): {', '.join(unbalanced)}." if unbalanced else ""
-        logger.warning(f"parse_input_files: unparseable record '{key}' at line {failed_block.start_line} "
+        logger.warning(f"_parse_input_files: unparseable record '{key}' at line {failed_block.start_line} "
                        f"of {filename}.{suspects}")
 
-def parse_input_files(*filenames):
+def _parse_input_files(*filenames):
     """Read in and parse BibTeX files `filenames`, and return an `unpythonic.env` containing the parsed data."""
     resolved_filenames = list(uniqify(str(pathlib.Path(fn).expanduser().resolve()) for fn in filenames))
 
@@ -233,7 +216,7 @@ def parse_input_files(*filenames):
     bibtex_entries_by_filename = {}
     with timer() as tim:
         for j, filename in enumerate(resolved_filenames, start=1):
-            update_status_and_log(f"[{j} out of {len(resolved_filenames)}] Reading {filename}...", log_indent=1)
+            _update_status_and_log(f"[{j} out of {len(resolved_filenames)}] Reading {filename}...", log_indent=1)
             filename = str(pathlib.Path(filename).expanduser().resolve())
             library = bibtex.parse_file(filename)
             _report_unparseable_records(filename, library)
@@ -247,7 +230,7 @@ def parse_input_files(*filenames):
         n_total_entries = sum(len(entries) for entries in bibtex_entries_by_filename.values())
         progress.set_micro_count(n_total_entries)
         for j, (filename, entries) in enumerate(bibtex_entries_by_filename.items(), start=1):
-            update_status_and_log(f"[{j} out of {len(bibtex_entries_by_filename)}] Extracting data from {filename}...", log_indent=1)
+            _update_status_and_log(f"[{j} out of {len(bibtex_entries_by_filename)}] Extracting data from {filename}...", log_indent=1)
             parsed_data_by_filename[filename] = []
             for entry in entries:
                 fields = entry.fields_dict
@@ -308,10 +291,10 @@ def parse_input_files(*filenames):
                resolved_filenames=resolved_filenames)
 
 
-def get_highdim_semantic_vectors(input_data):
+def _get_highdim_semantic_vectors(input_data):
     """Compute (or read from disk cache) the semantic embedding vectors for the given dataset.
 
-    `input_data`: output of `parse_input_files`, which see.
+    `input_data`: output of `_parse_input_files`, which see.
 
     NOTE: The semantic vectors produced by the embedder live on the surface of the unit hypersphere
     in the high-dimensional space - i.e., each vector is a direction in that space. If you need to
@@ -329,7 +312,7 @@ def get_highdim_semantic_vectors(input_data):
         if _is_cancelled():
             return
 
-        update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] Preparing semantic vectors for {filename}...", log_indent=1)
+        _update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] Preparing semantic vectors for {filename}...", log_indent=1)
 
         # TODO: clear memory between input files to avoid running out of RAM/VRAM when we have lots of files
 
@@ -397,10 +380,10 @@ def get_highdim_semantic_vectors(input_data):
     return all_vectors
 
 
-def cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
+def _cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
     """Cluster the semantic vectors in the high-dimensional space.
 
-    `all_vectors`: output of `get_highdim_semantic_vectors`, which see.
+    `all_vectors`: output of `_get_highdim_semantic_vectors`, which see.
 
     `max_n`: int, maximum number of vectors to use for clustering.
 
@@ -424,7 +407,7 @@ def cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
 
     Raises `RuntimeError` if the high-dimensional vectors are so spread out that not even one cluster is detected.
     """
-    update_status_and_log("Detecting semantic clusters...", log_indent=1)
+    _update_status_and_log("Detecting semantic clusters...", log_indent=1)
     logger.info(f"        Full dataset has {len(all_vectors)} data points.")
     with timer() as tim:
         # The semantic vectors represent directions in the latent space, so we can compare them using the cosine metric.
@@ -465,12 +448,12 @@ def cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
     return unique_vs, n_clusters
 
 
-def reduce_dimension(unique_vs, n_clusters, all_vectors):
+def _reduce_dimension(unique_vs, n_clusters, all_vectors):
     """Reduce the dimensionality of the semantic vectors from the high-dimensional space into 2D.
 
-    `unique_vs`: output of `cluster_highdim_semantic_vectors`, which see.
-    `n_clusters`: output of `cluster_highdim_semantic_vectors`, which see.
-    `all_vectors`: output of `get_highdim_semantic_vectors`, which see.
+    `unique_vs`: output of `_cluster_highdim_semantic_vectors`, which see.
+    `n_clusters`: output of `_cluster_highdim_semantic_vectors`, which see.
+    `all_vectors`: output of `_get_highdim_semantic_vectors`, which see.
 
     Returns `lowdim_data`, a rank-2 `np.array` of shape `[N, 2]`, containing a 2D point for each entry.
     In the 2D representation, semantically similar entries are mapped near each other, facilitating
@@ -488,7 +471,7 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
     The dimension reducer runs in a single thread on CPU and may take a long time (minutes).
     """
     logger.info("Dimension reduction for visualization...")
-    update_status_and_log(f"Loading dimension reduction library for '{visualizer_config.vis_method}'...", log_indent=1)
+    _update_status_and_log(f"Loading dimension reduction library for '{visualizer_config.vis_method}'...", log_indent=1)
     progress.set_micro_count(3)  # load library, train mapping, apply mapping
     with timer() as tim:
         if visualizer_config.vis_method == "tsne":
@@ -558,7 +541,7 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
         return
 
     with timer() as tim:
-        update_status_and_log(f"Learning dimension reduction into 2D from the detected {n_clusters} semantic clusters, using {len(unique_vs)} representative points...", log_indent=1)
+        _update_status_and_log(f"Learning dimension reduction into 2D from the detected {n_clusters} semantic clusters, using {len(unique_vs)} representative points...", log_indent=1)
         trans = trans.fit(unique_vs)
         # trans = trans.fit(all_vectors)  # DEBUG: high quality result, but extremely expensive! (several minutes for 5k points)
     progress.tick()
@@ -568,7 +551,7 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
         return
 
     with timer() as tim:
-        update_status_and_log(f"Applying learned dimension reduction to full dataset [n = {len(all_vectors)}]...", log_indent=1)
+        _update_status_and_log(f"Applying learned dimension reduction to full dataset [n = {len(all_vectors)}]...", log_indent=1)
         lowdim_data = trans.transform(all_vectors)
         # lowdim_reprs = trans.transform(unique_vs)  # DEBUG: where did our representative points end up in the 2D representation?
     progress.tick()
@@ -577,11 +560,11 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
     return lowdim_data
 
 
-def cluster_lowdim_data(input_data, lowdim_data):
+def _cluster_lowdim_data(input_data, lowdim_data):
     """Cluster the low-dimensional (2D) data.
 
-    `input_data`: output of `parse_input_files`, which see.
-    `lowdim_data`: output of `reduce_dimension`, which see.
+    `input_data`: output of `_parse_input_files`, which see.
+    `lowdim_data`: output of `_reduce_dimension`, which see.
 
     Returns (`vis_data`, `labels`, `n_vis_clusters`, `n_vis_outliers`), where:
         - `vis_data`: list, concatenated entries from all input files in `input_data` (this is what the visualizer reads)
@@ -594,7 +577,7 @@ def cluster_lowdim_data(input_data, lowdim_data):
     # Judging by paper titles in the test dataset, the initial high-dimensional clustering (and then training the dimension reduction using those points)
     # seems to "seed" the 2D clusters reasonably, so that the t-SNE fit, using the representative points only, maps the full dataset into the 2D space
     # in a semantically sensible manner.
-    update_status_and_log("Detecting clusters in 2D semantic map...", log_indent=1)
+    _update_status_and_log("Detecting clusters in 2D semantic map...", log_indent=1)
 
     # Concatenate data from individual input files into one large dataset. This is what we will visualize.
     vis_data = list(itertools.chain.from_iterable(input_data.parsed_data_by_filename.values()))
@@ -615,7 +598,7 @@ def cluster_lowdim_data(input_data, lowdim_data):
     return vis_data, vis_clusterer.labels_, n_vis_clusters, n_vis_outliers
 
 
-def format_entry_for_keyword_extraction(entry: env) -> str:
+def _format_entry_for_keyword_extraction(entry: env) -> str:
     """Format a BibTeX entry into plain text for the keyword extraction step.
 
     Output format:
@@ -645,20 +628,20 @@ def format_entry_for_keyword_extraction(entry: env) -> str:
     else:
         return entry.title
 
-def extract_keywords(input_data, max_vis_kw=6):
+def _extract_keywords(input_data, max_vis_kw=6):
     """Extract keywords for the dataset.
 
     This is based on a combination of word frequency analysis (ignoring stopwords) and named entity recognition (NER),
     the latter powered by a NLP model.
 
-    `input_data`: output of `parse_input_files`, which see.
+    `input_data`: output of `_parse_input_files`, which see.
     `max_vis_kw`: how many highest-frequency keywords (after ignoring stopwords) to keep for `item.vis_keywords` (see below).
 
     Returns a `dict`: `{keyword0: count0, ...}`, sorted by number of occurrences, descending.
     The counts are measured across the whole dataset.
 
     Additionally, `input_data` is mutated to add the keyword fields to each item:
-        `item.keywords` is in the same format as the return value of `extract_keywords` (but for keywords of that one item).
+        `item.keywords` is in the same format as the return value of `_extract_keywords` (but for keywords of that one item).
         `item.entities` is a `set` of `str`, because entities do not have the number of occurrences available.
         `item.vis_keywords` is a `list` of `str`, which contains the `max_vis_kw` highest-frequency keywords in that item,
                             and all detected named entities that did not already occur among those highest-frequency keywords.
@@ -678,7 +661,7 @@ def extract_keywords(input_data, max_vis_kw=6):
         if _is_cancelled():
             return
 
-        update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)
+        _update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)
 
         nlp_cache_filename = nlp_cache_filenames[filename]
         cache_state = "unknown"
@@ -709,16 +692,16 @@ def extract_keywords(input_data, max_vis_kw=6):
             logger.info(f"        No cached NLP data '{nlp_cache_filename}', reason: {cache_state}")
             logger.info("        Extracting keywords...")
             if nlp is None:
-                update_status_and_log("Loading NLP pipeline for keyword analysis...", log_indent=2)
+                _update_status_and_log("Loading NLP pipeline for keyword analysis...", log_indent=2)
                 nlp = mayberemote.NLP(allow_local=True,
                                       model_name=visualizer_config.spacy_model,
                                       device_string=visualizer_config.devices["nlp"]["device_string"])
-                update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
+                _update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
 
             logger.info("        Computing keyword set...")
             logger.info(f"            Running NLP pipeline for data from {filename}...")
             with timer() as tim:
-                all_texts_for_nlp_for_this_file = [format_entry_for_keyword_extraction(entry) for entry in entries]
+                all_texts_for_nlp_for_this_file = [_format_entry_for_keyword_extraction(entry) for entry in entries]
 
                 # The pipe-batched version processed about 25 entries per second on an RTX 3070 Ti mobile GPU.
                 # TODO: Can we minibatch the NLP pipelining to save VRAM when using the Transformers model?
@@ -762,7 +745,7 @@ def extract_keywords(input_data, max_vis_kw=6):
                         return
 
                     # This is essentially just dumb occurrence counting, aided by an extended list of stopwords manually tuned for scientific texts.
-                    # Everything smarter occurs further below, in `collect_cluster_keywords`, where we actually analyze this data to ignore uselessly
+                    # Everything smarter occurs further below, in `_collect_cluster_keywords`, where we actually analyze this data to ignore uselessly
                     # common words (when determining keywords for clusters).
 
                     # Frequency analysis.
@@ -806,7 +789,7 @@ def extract_keywords(input_data, max_vis_kw=6):
 
     # Merge the keyword data from all input files.
     #
-    update_status_and_log("Combining keywords from all input files...", log_indent=1)
+    _update_status_and_log("Combining keywords from all input files...", log_indent=1)
     with timer() as tim:
         all_keywords = collections.defaultdict(lambda: 0)
         for filename, kws in all_keywords_by_filename.items():
@@ -827,7 +810,7 @@ def extract_keywords(input_data, max_vis_kw=6):
     #
     # TODO: Currently the visualization keywords for individual entries (`entry.vis_keywords`) are unused. We use vis keywords for clusters, computed further below.
     #
-    update_status_and_log("Tagging data with visualization keywords...", log_indent=1)
+    _update_status_and_log("Tagging data with visualization keywords...", log_indent=1)
     with timer() as tim:
         for filename, entries in input_data.parsed_data_by_filename.items():
             logger.info(f"        Tagging visualization keywords for {filename}...")
@@ -860,15 +843,15 @@ def extract_keywords(input_data, max_vis_kw=6):
 
     return all_keywords
 
-def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=6, fraction=0.1):
+def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=6, fraction=0.1):
     """Collect a set of keywords for each visualization cluster (2D), based on the per-entry detected keywords.
 
-    `vis_data`: output of `cluster_lowdim_data`, which see.
-    `n_vis_clusters`: output of `cluster_lowdim_data`, which see.
+    `vis_data`: output of `_cluster_lowdim_data`, which see.
+    `n_vis_clusters`: output of `_cluster_lowdim_data`, which see.
 
     `all_keywords`: Used when `config.clusters_keyword_method == "frequencies"`.
 
-                    Output of `extract_keywords`, which see.
+                    Output of `_extract_keywords`, which see.
 
     `max_vis_kw`: how many keywords to keep for each cluster.
 
@@ -879,7 +862,7 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
     Returns `vis_keywords_by_cluster`, a list, where the `k`th item is a list of keywords (`str`) for cluster ID `k`.
     For each cluster, the keywords are sorted by number of occurrences (descending) across the whole dataset.
     """
-    update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
+    _update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
 
     if visualizer_config.clusters_keyword_method == "frequencies":
         with timer() as tim:
@@ -888,7 +871,7 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
             for entry in vis_data:
                 if entry.cluster_id >= 0:  # not an outlier
                     # Update cluster keyword counters from this entry.
-                    # NOTE: We operate on the already-filtered data that excludes stopwords (see `extract_keywords` for details).
+                    # NOTE: We operate on the already-filtered data that excludes stopwords (see `_extract_keywords` for details).
                     # TODO: We could also use `entry.cluster_probability` for something here.
                     # TODO: Including entities would be nice, but they don't currently have frequency information.
                     keywords_by_cluster[entry.cluster_id].update(entry.keywords)  # inject keywords of this entry to the keywords of the cluster this entry belongs to
@@ -911,7 +894,7 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
         for cluster_id, entries in sorted(entries_by_cluster.items()):  # default sort is fine, since the key is the cluster ID
             logger.info(f"        Extracting keywords for cluster #{cluster_id} (number of clusters: {len(entries_by_cluster.items())}); {eta_estimator.formatted_eta}")
             # Use two blank lines as an entry separator (works also when the abstract has paragraph breaks; also clearly associates which title goes with which abstract).
-            cluster_texts = "\n\n\n".join(format_entry_for_keyword_extraction(entry).strip() for entry in entries)
+            cluster_texts = "\n\n\n".join(_format_entry_for_keyword_extraction(entry).strip() for entry in entries)
             prompt = f"{visualizer_config.clusters_llm_keyword_extraction_prompt}\n-----\n\n{cluster_texts}"
 
             logger.info(f"        LLM prompt for cluster #{cluster_id}:\n{prompt}")
@@ -943,18 +926,18 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
             eta_estimator.tick()
     else:
         error_msg = f"Unknown cluster keyword method '{visualizer_config.clusters_keyword_method}'; valid: 'frequencies', 'llm'. Please check your `raven.visualizer.config`."
-        logger.error(f"collect_cluster_keywords: {error_msg}")
+        logger.error(f"_collect_cluster_keywords: {error_msg}")
         raise ValueError(error_msg)
 
     return vis_keywords_by_cluster
 
 
-def summarize(input_data):
+def _summarize(input_data):
     """Summarize each item of the dataset, using an LLM.
 
     Requires an LLM backend and `visualizer_config.summarize = True`.
 
-    `input_data`: output of `parse_input_files`, which see.
+    `input_data`: output of `_parse_input_files`, which see.
 
     No return value.
 
@@ -973,12 +956,12 @@ def summarize(input_data):
                     return
 
                 if entry.abstract:
-                    update_status_and_log(f"[input file {k} out of {len(input_data.parsed_data_by_filename)}] Summarizing entry {j} out of {len(entries)}: {entry.author} ({entry.year}): {entry.title}",
+                    _update_status_and_log(f"[input file {k} out of {len(input_data.parsed_data_by_filename)}] Summarizing entry {j} out of {len(entries)}: {entry.author} ({entry.year}): {entry.title}",
                                           log_indent=2)
                     entry_text = f"Title: {entry.title}\n\nAbstract: {entry.abstract}"
                     prompt = f"{visualizer_config.summarize_llm_prompt}\n-----\n\n{entry_text}"
 
-                    # As in `collect_cluster_keywords`: the summary goes into a dataset field, not into a
+                    # As in `_collect_cluster_keywords`: the summary goes into a dataset field, not into a
                     # chat, and the failure sentinel below has to arrive verbatim.
                     record = agent.turn(llm_settings,
                                         prompt,
@@ -992,12 +975,12 @@ def summarize(input_data):
                     logger.info(f"        LLM output (final answer):\n{scrubbed_output_text}")
 
                     if scrubbed_output_text.strip().lower() == "summarization failed":
-                        logger.warning(f"        The LLM could not summarize entry: {entry.author} ({entry.year}): {entry.title}")
+                        logger.warning(f"        The LLM could not _summarize entry: {entry.author} ({entry.year}): {entry.title}")
                         summary = None
                     else:
                         summary = scrubbed_output_text.strip()
                 else:
-                    update_status_and_log(f"[input file {k} out of {len(input_data.parsed_data_by_filename)}] Skipping entry {j} out of {len(entries)} (no abstract to summarize): {entry.author} ({entry.year}): {entry.title}",
+                    _update_status_and_log(f"[input file {k} out of {len(input_data.parsed_data_by_filename)}] Skipping entry {j} out of {len(entries)} (no abstract to _summarize): {entry.author} ({entry.year}): {entry.title}",
                                           log_indent=2)
                     summary = None
                 entry.summary = summary
@@ -1016,15 +999,15 @@ result_successful = sym("successful")
 result_cancelled = sym("cancelled")
 result_errored = sym("errored")
 
-class Progress:
+class _Progress:
     def __init__(self) -> None:
-        """Progress counter for currently running importer task."""
+        """_Progress counter for currently running importer task."""
         self.reset()
 
     def reset(self) -> None:
         """Reset the progress counter."""
         self._macrosteps_done = 0
-        self._macrosteps_count = 8  # parse, hiD vectors, hiD cluster, reduce, 2D cluster, entry keywords, cluster keywords, LLM summarize.
+        self._macrosteps_count = 8  # parse, hiD vectors, hiD cluster, reduce, 2D cluster, entry keywords, cluster keywords, LLM _summarize.
 
         # Microsteps take place within the current macrostep.
         self._microsteps_done = 0
@@ -1051,12 +1034,12 @@ class Progress:
             # that can be used to provide smoother motion (when progress information inside a given macrostep is available).
             return (self._macrosteps_done + (self._microsteps_done / self._microsteps_count)) / self._macrosteps_count
         return None
-    value = property(_get, doc="Progress of currently running import task as a float in [0, 1], or `None` when no task is running.")
-progress = Progress()
+    value = property(_get, doc="_Progress of currently running import task as a float in [0, 1], or `None` when no task is running.")
+progress = _Progress()
 
-def discard_message(new_msg):
+def _discard_message(new_msg):
     pass
-make_dynvar(maybe_update_status=discard_message)
+make_dynvar(maybe_update_status=_discard_message)
 
 bg = None
 task_manager = None
@@ -1230,19 +1213,19 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
 
     No return value.
 
-    Filenames are automatically converted to absolute paths via `parse_input_files`,
+    Filenames are automatically converted to absolute paths via `_parse_input_files`,
     which see.
     """
     if status_update_callback is not None:
         maybe_update_status = status_update_callback
     else:
-        maybe_update_status = discard_message
+        maybe_update_status = _discard_message
 
     with dyn.let(maybe_update_status=maybe_update_status):  # dynamic assignment is the clean solution to pass the status update function to anything we call while this block is running.
         # --------------------------------------------------------------------------------
         # Prepare input data
 
-        input_data = parse_input_files(*input_filenames)
+        input_data = _parse_input_files(*input_filenames)
         progress.tock()
 
         if _is_cancelled():
@@ -1259,7 +1242,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
         # --------------------------------------------------------------------------------
         # Prepare the high-dimensional semantic space (embedding space, latent space)
 
-        all_vectors = get_highdim_semantic_vectors(input_data)
+        all_vectors = _get_highdim_semantic_vectors(input_data)
         progress.tock()
 
         if _is_cancelled():
@@ -1268,15 +1251,15 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
         # --------------------------------------------------------------------------------
         # Dimension reduction hiD -> 2D
 
-        unique_vs, n_clusters = cluster_highdim_semantic_vectors(all_vectors)  # find a stratified sample in the high-dimensional space, for training
+        unique_vs, n_clusters = _cluster_highdim_semantic_vectors(all_vectors)  # find a stratified sample in the high-dimensional space, for training
         progress.tock()
         if _is_cancelled():
             return False
-        lowdim_data = reduce_dimension(unique_vs, n_clusters, all_vectors)  # train the dimension reduction mapping, map the full dataset
+        lowdim_data = _reduce_dimension(unique_vs, n_clusters, all_vectors)  # train the dimension reduction mapping, map the full dataset
         progress.tock()
         if _is_cancelled():
             return False
-        vis_data, labels, n_vis_clusters, n_vis_outliers = cluster_lowdim_data(input_data, lowdim_data)  # find visualization clusters in 2D
+        vis_data, labels, n_vis_clusters, n_vis_outliers = _cluster_lowdim_data(input_data, lowdim_data)  # find visualization clusters in 2D
         progress.tock()
         if _is_cancelled():
             return False
@@ -1285,7 +1268,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
         # Find representative keywords via NLP analysis over the whole dataset
 
         if visualizer_config.extract_keywords:
-            all_keywords = extract_keywords(input_data)
+            all_keywords = _extract_keywords(input_data)
         else:
             logger.info("Keyword extraction disabled, skipping NLP analysis.")
             all_keywords = {}
@@ -1297,7 +1280,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
         # Find a set of keywords for each cluster
 
         if visualizer_config.extract_keywords:
-            vis_keywords_by_cluster = collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords)
+            vis_keywords_by_cluster = _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords)
         else:
             vis_keywords_by_cluster = []
         progress.tock()
@@ -1308,7 +1291,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
         # Write LLM summary for each item
 
         if visualizer_config.summarize:
-            summarize(input_data)  # mutates its input
+            _summarize(input_data)  # mutates its input
         else:
             logger.info("LLM summarization disabled, skipping.")
         progress.tock()
@@ -1320,7 +1303,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
 
         logger.info(f"Saving visualization datafile {output_filename}...")
 
-        # Be sure to save the values of any settings that affect data availability and interpretation! (E.g. `extract_keywords` -> whether annotations and word cloud can be plotted from this data.)
+        # Be sure to save the values of any settings that affect data availability and interpretation! (E.g. `_extract_keywords` -> whether annotations and word cloud can be plotted from this data.)
 
         output_file_version = 1  # must be a version supported by the visualizer
         with timer() as tim:
