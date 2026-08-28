@@ -4,7 +4,7 @@ This module provides functions for determining which graph element
 (if any) is under the mouse cursor.
 """
 
-__all__ = ["hit_test", "hit_test_screen"]
+__all__ = ["hit_test", "get_node", "get_edge", "hit_test_screen", "get_node_screen", "get_edge_screen"]
 
 from typing import List, Optional
 

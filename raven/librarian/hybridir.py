@@ -15,10 +15,14 @@ laptops have enough RAM for this not to be an issue with the dataset sizes neede
 QwQ-32B wrote a very first initial rough draft outline, from which this was then manually coded.
 """
 
-__all__ = ["split_into_subqueries",
+__all__ = ["format_chunk_full_id",
+           "split_into_subqueries",
            "score_sharpness",
+           "reciprocal_rank_fusion",
+           "merge_contiguous_spans",
            "HybridIR",
            "init",
+           "has_pending_work",
            "shutdown",
            "HybridIRFileSystemEventHandler",
            "setup"]

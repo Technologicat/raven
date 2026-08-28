@@ -17,7 +17,7 @@ This also supports setting an optional backdrop image, shown behind the avatar. 
 # TODO: robustness: don't crash if the server suddenly goes down
 # TODO: support non-square avatar video stream (after server-side crop filter); should get image width/height per-frame from video stream and monitor for changes
 
-__all__ = ["DPGAvatarRenderer"]
+__all__ = ["ResultFeedReader", "DPGAvatarRenderer"]
 
 import logging
 logger = logging.getLogger(__name__)

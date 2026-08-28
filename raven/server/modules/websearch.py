@@ -9,7 +9,26 @@ and its old Python implementation:
     https://github.com/SillyTavern/SillyTavern-Extras/blob/main/modules/websearch/script.py
 """
 
-__all__ = ["init_module", "is_available", "search"]
+__all__ = ["create_directory",
+           "is_colab",
+           "get_driver",
+           "init_module",
+           "is_available",
+           "encodeURIComponent",
+           "wait_for_id",
+           "wait_for_selector",
+           "get_page_height",
+           "wait_for_page_height_increase",
+           "click_element",
+           "find_first_element_by_id",
+           "get_content_by_selector",
+           "get_attr_by_selector",
+           "debug_dump",
+           "format_results",
+           "search_google",
+           "search_duckduckgo",
+           "search",
+           "main"]
 
 import logging
 logger = logging.getLogger(__name__)

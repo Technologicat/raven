@@ -6,7 +6,14 @@ that controls chatting with the AI.
 
 # TODO: check if we need to shuffle the abstraction levels around - e.g. if there are many references to `self.parent_view.chat_controller.something`, does `something` really belong to the controller level?
 
-__all__ = ["DPGChatController"]
+__all__ = ["format_chat_message_for_clipboard",
+           "format_generation_stats",
+           "DPGChatMessage",
+           "DPGCompleteChatMessage",
+           "DPGStreamingChatMessage",
+           "TailFollowSample",
+           "DPGLinearizedChatView",
+           "DPGChatController"]
 
 import logging
 logger = logging.getLogger(__name__)

@@ -34,7 +34,7 @@ __all__ = [# The parts a message is made of, and reading them back
            # Walking and mending a chat
            "linearize_chat", "descend_to_latest",
            "compute_auto_allowed_hosts",
-           "upgrade_datastore",
+           "upgrade_datastore", "factory_reset_datastore",
            "remove_persona_from_start_of_line",
            "latest_user_message_text", "get_node_message_text_without_persona",
            "scrub"]

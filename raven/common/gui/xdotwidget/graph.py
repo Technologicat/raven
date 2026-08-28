@@ -16,6 +16,8 @@ which in turn was adapted from XDot by José Fonseca.
 
 __all__ = ["mix_colors",
            "tessellate_bezier",
+           "set_highlight_colors",
+           "get_highlight_colors",
            "Pen",
            "Shape",
            "TextShape",

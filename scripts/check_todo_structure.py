@@ -22,7 +22,7 @@ import pathlib
 import re
 import sys
 
-__all__ = ["check"]
+__all__ = ["check", "main"]
 
 TODO_PATH = pathlib.Path(__file__).resolve().parent.parent / "TODO_DEFERRED.md"
 

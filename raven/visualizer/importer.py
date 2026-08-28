@@ -7,9 +7,21 @@ the `raven-importer` CLI shell. The CLI entry point lives in `importer_cli.py`; 
 module stays free of argparse and logging configuration so the GUI can host it safely.
 """
 
-__all__ = ["result_successful",
+__all__ = ["update_status_and_log",
+           "parse_input_files",
+           "get_highdim_semantic_vectors",
+           "cluster_highdim_semantic_vectors",
+           "reduce_dimension",
+           "cluster_lowdim_data",
+           "format_entry_for_keyword_extraction",
+           "extract_keywords",
+           "collect_cluster_keywords",
+           "summarize",
+           "result_successful",
            "result_cancelled",
            "result_errored",
+           "Progress",
+           "discard_message",
            "init",
            "start_task",
            "has_task",

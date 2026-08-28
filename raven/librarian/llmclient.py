@@ -37,11 +37,14 @@ __all__ = [# Re-exported from `llmtools`, which owns them
            "budget_for_fetched_text",
            "truncate_middle",
            "fit_text_to_token_budget",
+           "attachment_budget_kind",  # which budget a content part is charged against
            "fit_attachments_to_context",
 
            # Talking to the model
            "StreamParser",
            "serialize_history_for_wire",  # for scripting: the wire form of what a turn would send
+           "thinking_token_count", "phase_report",  # reading a finished turn's numbers back
+           "thinking_request_fields",  # ...and asking for the reasoning in the first place
            "invoke", "prompt_size_report_looks_whole", "prefill",
            "make_console_progress_handler"]
 

@@ -7,8 +7,10 @@ up in a diff of the change that caused it:
 
   - **The order drifts.** A name is appended where it was convenient rather than where its definition
     sits, or a group is rearranged thematically, and afterwards the list no longer predicts anything.
-  - **A name is missing.** `guiutils.DEFAULT_BUTTON_BG_COLOR` was absent from its `__all__` while
-    `animation.py` imported it — so `from ... import *` did not bring it, and nothing said why.
+  - **A name is missing.** Raven follows the plain Python convention: a top-level name without a
+    leading underscore is public, so it belongs in `__all__`. One left out is not brought by
+    `from ... import *`, and nothing says why — `guiutils.DEFAULT_BUTTON_BG_COLOR` sat outside its
+    list while `animation.py` imported it by name.
 
 **This reports; it never rewrites.** `__all__` carries comments, and their prose is positional — a
 line reading `# ...ditto` means nothing once it has been moved, and a group heading describes the names
@@ -20,10 +22,13 @@ Only a literal `__all__` can be checked. A computed one (`__all__ = _something()
 is skipped, as is a module with no `__all__` — adding one everywhere is a judgement about what is API,
 not something to enforce from here.
 
-Exits 1 if any list is misordered or names something the module does not define. Public definitions
-*absent* from `__all__` are reported as notices and do not fail the run, since a public-looking name is
-not necessarily API — a DPG callback bound by name, or a parser's internal classes, legitimately stay
-out. `--strict` fails on those too.
+Exits 1 if any list is misordered, names something the module does not define, or leaves out a public
+definition.
+
+**A name that should not be API wants an underscore, not an exemption.** That is the one thing this
+cannot decide for you: it reports that a public name is unexported, and the fix is either to export it
+or to rename it private. Both are real answers; which one is right is a judgement about the module's
+surface, and it is the reason this reports rather than repairs.
 """
 
 import argparse
@@ -103,23 +108,23 @@ def public_definitions(tree: ast.Module) -> list[str]:
             and not node.name.startswith("_")]
 
 
-def check(path: pathlib.Path, strict: bool) -> tuple[int, int]:
-    """Check one module. Return `(problems, notices)`."""
+def check(path: pathlib.Path) -> int:
+    """Check one module. Return how many problems it has."""
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
     except (SyntaxError, UnicodeDecodeError) as exc:
         print(f"  UNPARSED  {path}: {type(exc).__name__}: {exc}")
-        return (1, 0)
+        return 1
 
     assignment = find_all_assignment(tree)
     if assignment is None:
-        return (0, 0)
+        return 0
     try:
         exported = list(ast.literal_eval(assignment.value))
     except ValueError:  # computed rather than written out; nothing to compare against
-        return (0, 0)
+        return 0
 
-    problems = notices = 0
+    problems = 0
     order = definition_order(tree)
 
     if not supplies_names_dynamically(tree):
@@ -141,22 +146,17 @@ def check(path: pathlib.Path, strict: bool) -> tuple[int, int]:
 
     missing = [name for name in public_definitions(tree) if name not in set(exported)]
     if missing:
-        label = "MISSING  " if strict else "notice   "
-        print(f"  {label} {path}: defined and public, but not in `__all__`: {', '.join(missing)}")
-        if strict:
-            problems += 1
-        else:
-            notices += 1
+        print(f"  MISSING   {path}: defined and public, but not in `__all__`: {', '.join(missing)}")
+        print("              export them, or rename the ones that were never meant as API with a leading underscore")
+        problems += 1
 
-    return (problems, notices)
+    return problems
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("paths", nargs="*", default=["raven"],
                         help="files or directories to check (default: raven)")
-    parser.add_argument("--strict", action="store_true",
-                        help="also fail when a public definition is absent from `__all__`")
     opts = parser.parse_args()
 
     files: list[pathlib.Path] = []
@@ -167,22 +167,14 @@ def main() -> int:
         elif path.suffix == ".py":
             files.append(path)
 
-    problems = notices = 0
-    for path in files:
-        found, noticed = check(path, opts.strict)
-        problems += found
-        notices += noticed
+    problems = sum(check(path) for path in files)
 
     print()
     if problems:
-        print(f"{problems} problem(s) in {len(files)} module(s). Move the lines by hand, comments attached —")
-        print("their prose is positional, which is why nothing here rewrites the list for you.")
+        print(f"{problems} problem(s) in {len(files)} module(s). Fix them by hand, comments attached —")
+        print("their prose is positional, which is why nothing here rewrites a list for you.")
         return 1
-    if notices:
-        print(f"No ordering problems in {len(files)} module(s); {notices} module(s) have a public definition "
-              "outside `__all__`, which may well be deliberate. `--strict` treats those as problems.")
-        return 0
-    print(f"Every `__all__` in {len(files)} module(s) follows its file and names only what the module has.")
+    print(f"Every `__all__` in {len(files)} module(s) follows its file and names everything public in it.")
     return 0
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = ["bibtex_escape", "bibtex_unescape", "deduplicate_arxiv_ids"]
+__all__ = ["deduplicate_arxiv_ids", "bibtex_escape", "bibtex_unescape"]
 
 
 from . import identifiers

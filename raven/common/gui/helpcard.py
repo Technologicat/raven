@@ -1,7 +1,6 @@
 """Generic single-screen GUI help window for DPG apps, intended mainly as a hotkey reference."""
 
-__all__ = ["hotkey_new_column", "hotkey_blank_entry",
-           "HelpWindow"]
+__all__ = ["hotkey_new_column", "hotkey_blank_entry", "helpcard_hotkeys_callback", "HelpWindow"]
 
 import logging
 logger = logging.getLogger(__name__)

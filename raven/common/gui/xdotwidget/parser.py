@@ -8,7 +8,17 @@ substantially. Copyright 2008 Jose Fonseca, 2012-2019 Juha Jeronen, and the xdot
 LGPL-3.0-or-later, not Raven's usual BSD - see the package docstring in `__init__.py` and `LICENSE`.
 """
 
-__all__ = ["ParseError", "XDotParser", "parse_xdot"]
+__all__ = ["ParseError",
+           "Token",
+           "Scanner",
+           "Lexer",
+           "Parser",
+           "DotScanner",
+           "DotLexer",
+           "DotParser",
+           "XDotAttrParser",
+           "XDotParser",
+           "parse_xdot"]
 
 import logging
 logger = logging.getLogger(__name__)

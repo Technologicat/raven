@@ -7,7 +7,7 @@ This module is relicensed by its author (Juha Jeronen) under the
 2-clause BSD license.
 """
 
-__all__ = ["isotropic_noise", "vhs_noise", "vhs_noise_pool", "Postprocessor"]
+__all__ = ["isotropic_noise", "vhs_noise", "vhs_noise_pool", "HistogramEqualizer", "with_metadata", "Postprocessor"]
 
 from collections import defaultdict
 from functools import wraps

@@ -10,16 +10,26 @@ If you want to edit THA3 expressions in a standalone GUI app, see `raven.avatar.
 If you want to test your AI character and edit postprocessor settings in a GUI app, see `raven.avatar.settings_editor.app`.
 """
 
-__all__ = ["init_module", "is_available",
-           "load", "reload", "unload",
+__all__ = ["init_module",
+           "is_available",
+           "shutdown",
+           "load",
+           "reload",
+           "unload",
            "load_emotion_templates",
            "load_animator_settings",
-           "start", "stop",
-           "start_talking", "stop_talking",
+           "start",
+           "stop",
+           "start_talking",
+           "stop_talking",
            "set_emotion",
-           "set_overrides", "modify_overrides",
-           "start_data_eyes", "stop_data_eyes",
-           "result_feed"]
+           "set_overrides",
+           "modify_overrides",
+           "start_data_eyes",
+           "stop_data_eyes",
+           "result_feed",
+           "Animator",
+           "Encoder"]
 
 import atexit
 import copy

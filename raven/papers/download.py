@@ -16,10 +16,10 @@ __all__ = [
     "format_filename",
 
     "parse_metadata_response",
+    "metadata_to_feed_entry",
     "get_paper_metadata",
     "parse_metadata_responses",
     "get_papers_metadata",
-    "metadata_to_feed_entry",
 
     "download_papers",
     "extract_ids_from_bib",
