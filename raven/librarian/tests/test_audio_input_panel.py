@@ -363,6 +363,33 @@ class TestChoosingAMicrophone:
         assert panel.recorder.device_name == DEVICES[0]
 
 
+def meter_line_ys(panel):
+    """The y coordinates of the lines the panel's VU meter has drawn — its peak and threshold."""
+    return [dpg.get_item_configuration(item)["p1"][1]
+            for item in dpg.get_item_children(panel.meter.drawlist, slot=2)
+            if dpg.get_item_type(item) == "mvAppItemType::mvDrawLine"]
+
+
+class TestThePanelsOwnMeterIsFed:
+    """The toolbar's meter is connected to the recorder by the app; this one is the panel's to drive,
+    and nothing else does it. Asserted through what the meter draws rather than through its state.
+    """
+
+    def test_a_level_reaches_the_meter(self, panel):
+        before = meter_line_ys(panel)
+        panel._on_vu_update(-30.0, -20.0)
+        after = meter_line_ys(panel)
+        assert after != before, "the meter drew the same thing after a new level arrived"
+
+    def test_the_peak_line_follows_the_peak(self, panel):
+        panel._on_vu_update(-90.0, -80.0)
+        low = meter_line_ys(panel)
+        panel._on_vu_update(-90.0, -10.0)
+        high = meter_line_ys(panel)
+        # y counts down from the top, so a louder peak sits at a smaller y.
+        assert min(high) < min(low), f"a louder peak did not move the line up: {low} then {high}"
+
+
 class TestTheLoudestRecentlyReading:
     def test_nothing_heard_yet_reads_as_nothing(self, panel):
         assert panel.floor is None

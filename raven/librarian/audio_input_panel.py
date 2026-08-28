@@ -207,6 +207,10 @@ class DPGAudioInputPanel:
         """Take one frame's levels from the recorder. Runs on the capture thread."""
         self._record_level(instant)
         with guiutils.nonexistent_ok():
+            # The panel's meter, unlike the toolbar's, has no other feed: the app connects that one to
+            # the readout directly, and this one is ours to drive.
+            if self.meter is not None:
+                self.meter.update(instant, peak)
             dpg.set_value("audio_input_now_text", format_dBFS(instant))  # tag
             dpg.set_value("audio_input_peak_text", format_dBFS(peak))  # tag
             dpg.set_value("audio_input_floor_text", format_dBFS(self.floor))  # tag
