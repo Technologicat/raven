@@ -37,17 +37,14 @@ lose their claim on the next four weeks.
 **Band-2 item 10 is done** — designed, built, live-tested and closed on 2026-08-28, as
 `briefs/researchers-night/done/stt-audio-input-panel.md`.
 
-**Monday starts on band 2's remaining pair, and their order is a real choice** (raised 2026-08-28, not
-settled). Item 11 comes first in the band and item 12 is the one that was remembered as "the first large
-item", so it is worth deciding rather than defaulting:
+**Monday starts on item 11 — the avatar's expression follows the spoken words** (Juha, 2026-08-28).
+Exhibit-facing in a way the rest of the band is not: TTS is on whenever the avatar speaks, so a face
+reacting to a sentence the voice has not reached is live all evening. The design is already written, in
+`briefs/researchers-night/README.md` — take the updates from `on_start_sentence` as each sentence is
+spoken, settle neutral while the reply streams, and extract the streaming path's deque-and-overlap
+stabilization as the shared piece rather than writing a second copy of it.
 
-- **11 — the avatar's expression follows the spoken words.** Exhibit-facing in a way 12 is not: TTS is on
-  whenever the avatar speaks, so a face reacting to a sentence the voice has not reached is live all
-  evening. The design is in `briefs/researchers-night/README.md` — take the updates from
-  `on_start_sentence` as each sentence is spoken, settle neutral while the reply streams, and extract the
-  streaming path's deque-and-overlap stabilization as the shared piece.
-- **12 — block-level Markdown, the remaining steps.** The single-newline split, which fenced code and
-  multi-line lists are behind. A rendering improvement rather than an exhibit one.
+Then items 12–15, in the order and at the sizes recorded under *Ordering* in that README.
 
 The rest of this block is the leftover selection from 2026-08-27. Same purpose as the block above: the
 *selection* would otherwise live nowhere, each of these being filed in a different place or nowhere at all.

@@ -54,6 +54,28 @@ not settled, and the two sensible axes disagree — closure rate (smallest first
 they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
 deadline actually binds; everything else could slip past September without anything breaking.
 
+### Sized 2026-08-28 — what the last four weeks hold
+
+Juha's sizing of what is left, with 29 days to the deadline. Recorded because it is a scheduling
+judgement that produced no diff, and because two of the three are large enough that discovering their
+size in week four would be discovering it too late:
+
+| | |
+|---|---|
+| **11 — avatar expression follows the spoken words** | Monday's, and the design is already written below. Exhibit-facing: TTS is on whenever the avatar speaks |
+| **12 — block-level Markdown, remaining steps** | **may eat a week** |
+| **13 — the graph view** (brief 16) | **may eat a week** |
+| **14 `crt-display` + 15 `atmospheric-dust`** | self-contained, and semi-quick. They are postprocessor filters over machinery that exists |
+
+**Two week-eaters and a quick one, against four weeks.** That fits, and it fits without slack, which is
+the thing to know now rather than in September. `atmospheric-dust` remains the declared slack (see the
+2026-08-05 ranking below) — it is the one item nothing depends on, so it is what gives if a week runs
+long.
+
+The ordering that follows from this is 11, then 12 and 13 in either order, with 14 and 15 last because
+they are the ones that can be compressed. Note this reverses nothing: it is the band order already
+recorded, now with sizes against it.
+
 ### Decided 2026-08-07 — what Monday starts on
 
 1. **Triage `TODO.md` and `TODO_DEFERRED.md` first** (Juha, partly via claude.ai). A two-part plan: a
