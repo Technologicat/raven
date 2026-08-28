@@ -277,19 +277,19 @@ class Dimmer(Overlay):
 
             if self.window is None:  # create only once ("rebuild" here actually means "reconfigure")
                 logger.debug(f"Dimmer.build: frame {dpg.get_frame_count()}: instance '{self.tag}' creating overlay")
-                with dpg.window(show=False, modal=False, no_title_bar=True, tag=self.tag,
-                                pos=pos,
-                                width=w, height=h,
-                                min_size=[1, 1],  # DPG's ~[100, 100] floor clamps explicit sizes too, and would overflow a small target
-                                no_collapse=True,
-                                no_focus_on_appearing=True,
-                                # no_bring_to_front_on_focus=True,  # for some reason, prevents displaying the window at all
-                                no_resize=True,
-                                no_move=True,
-                                no_background=True,
-                                no_scrollbar=True,
-                                no_scroll_with_mouse=True) as self.window:
-                    self.drawlist = dpg.add_drawlist(width=w, height=h)
+                self.window = dpg.add_window(show=False, modal=False, no_title_bar=True, tag=self.tag,
+                                             pos=pos,
+                                             width=w, height=h,
+                                             min_size=[1, 1],  # DPG's ~[100, 100] floor clamps explicit sizes too, and would overflow a small target
+                                             no_collapse=True,
+                                             no_focus_on_appearing=True,
+                                             # no_bring_to_front_on_focus=True,  # for some reason, prevents displaying the window at all
+                                             no_resize=True,
+                                             no_move=True,
+                                             no_background=True,
+                                             no_scrollbar=True,
+                                             no_scroll_with_mouse=True)
+                self.drawlist = dpg.add_drawlist(width=w, height=h, parent=self.window)
                 rebuild = True
 
             if rebuild:
@@ -571,26 +571,30 @@ class WidgetFlash(Animation):
 
     def _make_theme(self) -> None:
         """Build the animated theme shared by every flashed widget that has a background."""
-        with dpg.theme(tag=f"acknowledgement_highlight_theme_{type(self).id_counter}") as self.theme:  # create unique DPG ID each time
-            with dpg.theme_component(dpg.mvAll):
-                # The label of a widget whose background is flashing. It fades to the resting text color
-                # while the background fades to the resting background — so the two move *apart* over the
-                # flash, and the label is at its most readable exactly where the background is dimmest.
-                # Fading it toward the *background's* destination is what would hide it mid-flash.
-                text_color = dpg.add_theme_color(dpg.mvThemeCol_Text, self.text_color)
-                # button
-                button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color)
-                hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color)
-                active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color)
-                # tooltip — either kind: a `dpg.tooltip` is a popup, and a `tooltip.Tooltip` is a window
-                popupbg_color = dpg.add_theme_color(dpg.mvThemeCol_PopupBg, self.flash_color)
-                windowbg_color = dpg.add_theme_color(dpg.mvThemeCol_WindowBg, self.flash_color)
-            # Button in disabled state (see also "disablable_widget_theme" in `raven.common.gui.utils`)
-            with dpg.theme_component(dpg.mvButton, enabled_state=False):
-                dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.DISABLED_TEXT_COLOR, category=dpg.mvThemeCat_Core)
-                disabled_button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color, category=dpg.mvThemeCat_Core)
-                disabled_hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color, category=dpg.mvThemeCat_Core)
-                disabled_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color, category=dpg.mvThemeCat_Core)
+        # Explicit parents, no `with`: a flash theme is built whenever a widget is flashed, which happens
+        # mid-session and off the main thread. DPG's container stack is one process-wide global, shared by
+        # themes and widgets alike. See `dpg-notes.md`, "DPG parent management".
+        self.theme = dpg.add_theme(tag=f"acknowledgement_highlight_theme_{type(self).id_counter}")  # create unique DPG ID each time
+        component = dpg.add_theme_component(dpg.mvAll, parent=self.theme)
+        # The label of a widget whose background is flashing. It fades to the resting text color while the
+        # background fades to the resting background — so the two move *apart* over the flash, and the
+        # label is at its most readable exactly where the background is dimmest. Fading it toward the
+        # *background's* destination is what would hide it mid-flash.
+        text_color = dpg.add_theme_color(dpg.mvThemeCol_Text, self.text_color, parent=component)
+        # button
+        button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color, parent=component)
+        hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color, parent=component)
+        active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color, parent=component)
+        # tooltip — either kind: a `dpg.tooltip` is a popup, and a `tooltip.Tooltip` is a window
+        popupbg_color = dpg.add_theme_color(dpg.mvThemeCol_PopupBg, self.flash_color, parent=component)
+        windowbg_color = dpg.add_theme_color(dpg.mvThemeCol_WindowBg, self.flash_color, parent=component)
+
+        # Button in disabled state (see also "disablable_widget_theme" in `raven.common.gui.utils`)
+        disabled_component = dpg.add_theme_component(dpg.mvButton, enabled_state=False, parent=self.theme)
+        dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.DISABLED_TEXT_COLOR, category=dpg.mvThemeCat_Core, parent=disabled_component)
+        disabled_button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color, category=dpg.mvThemeCat_Core, parent=disabled_component)
+        disabled_hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color, category=dpg.mvThemeCat_Core, parent=disabled_component)
+        disabled_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color, category=dpg.mvThemeCat_Core, parent=disabled_component)
         type(self).id_counter += 1
 
         # Every background in the theme fades together, so `render_frame` walks this rather than naming
@@ -1532,18 +1536,18 @@ class ScrollEndFlasher(Overlay, Animation):
             # We create these just once.
             if self.window_top is None:
                 logger.debug(f"ScrollEndFlasher.build: frame {dpg.get_frame_count()}: instance '{self.tag}' creating overlay (top)")
-                with dpg.window(show=False, modal=False, no_title_bar=True, tag=f"{self.tag}_window_top",
-                                pos=pos,
-                                width=w, height=48,
-                                min_size=[1, 1],  # or DPG silently makes this 100 tall; see note below
-                                no_collapse=True,
-                                no_focus_on_appearing=True,
-                                no_resize=True,
-                                no_move=True,
-                                no_background=True,
-                                no_scrollbar=True,
-                                no_scroll_with_mouse=True) as self.window_top:
-                    self.drawlist_top = dpg.add_drawlist(width=w, height=48)
+                self.window_top = dpg.add_window(show=False, modal=False, no_title_bar=True, tag=f"{self.tag}_window_top",
+                                                 pos=pos,
+                                                 width=w, height=48,
+                                                 min_size=[1, 1],  # or DPG silently makes this 100 tall; see note below
+                                                 no_collapse=True,
+                                                 no_focus_on_appearing=True,
+                                                 no_resize=True,
+                                                 no_move=True,
+                                                 no_background=True,
+                                                 no_scrollbar=True,
+                                                 no_scroll_with_mouse=True)
+                self.drawlist_top = dpg.add_drawlist(width=w, height=48, parent=self.window_top)
             if self.window_bottom is None:
                 logger.debug(f"ScrollEndFlasher.build: frame {dpg.get_frame_count()}: instance '{self.tag}' creating overlay (bottom)")
                 # `min_size` matters more here than it looks. It defaults to about [100, 100] and clamps an
@@ -1553,18 +1557,18 @@ class ScrollEndFlasher(Overlay, Animation):
                 # the top band, and 52 px past its bottom edge from this one, for as long as a flash lasted.
                 # Which is the very thing splitting this overlay into two windows was meant to avoid.
                 # Measured 2026-08-03; see `investigations/dpg-overlays/`.
-                with dpg.window(show=False, modal=False, no_title_bar=True, tag=f"{self.tag}_window_bottom",
-                                pos=[pos[0], pos[1] + h - 48],
-                                width=w, height=48,
-                                min_size=[1, 1],
-                                no_collapse=True,
-                                no_focus_on_appearing=True,
-                                no_resize=True,
-                                no_move=True,
-                                no_background=True,
-                                no_scrollbar=True,
-                                no_scroll_with_mouse=True) as self.window_bottom:
-                    self.drawlist_bottom = dpg.add_drawlist(width=w, height=48)
+                self.window_bottom = dpg.add_window(show=False, modal=False, no_title_bar=True, tag=f"{self.tag}_window_bottom",
+                                                    pos=[pos[0], pos[1] + h - 48],
+                                                    width=w, height=48,
+                                                    min_size=[1, 1],
+                                                    no_collapse=True,
+                                                    no_focus_on_appearing=True,
+                                                    no_resize=True,
+                                                    no_move=True,
+                                                    no_background=True,
+                                                    no_scrollbar=True,
+                                                    no_scroll_with_mouse=True)
+                self.drawlist_bottom = dpg.add_drawlist(width=w, height=48, parent=self.window_bottom)
 
             # logger.debug(f"Dimmer.build: frame {dpg.get_frame_count()}: instance '{self.tag}' updating geometry and drawing")  # too spammy
 

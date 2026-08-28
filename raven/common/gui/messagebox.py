@@ -24,12 +24,15 @@ def _init():
     global _modal_dialog_initialized
     if _modal_dialog_initialized:
         return
-    with dpg.window(label="Modal dialog title", autosize=True, modal=True, show=False, tag="modal_dialog_window"):
-        dpg.add_text("Modal dialog message", wrap=600, tag="modal_dialog_message")
-        dpg.add_separator()
-        dpg.add_group(horizontal=True, tag="modal_dialog_button_group")
-    with dpg.handler_registry(tag="modal_dialog_handler_registry"):  # global (whole viewport)
-        dpg.add_key_press_handler(tag="modal_dialog_hotkeys_handler", callback=modal_dialog_hotkeys_callback)
+    # Explicit parents, no `with`: this runs on first use rather than at app start, so the render loop is
+    # already going and something else may be building widgets. DPG's container stack is one process-wide
+    # global. See `dpg-notes.md`, "DPG parent management".
+    window = dpg.add_window(label="Modal dialog title", autosize=True, modal=True, show=False, tag="modal_dialog_window")  # tag
+    dpg.add_text("Modal dialog message", wrap=600, parent=window, tag="modal_dialog_message")  # tag
+    dpg.add_separator(parent=window)
+    dpg.add_group(horizontal=True, parent=window, tag="modal_dialog_button_group")  # tag
+    registry = dpg.add_handler_registry(tag="modal_dialog_handler_registry")  # tag  # global (whole viewport)
+    dpg.add_key_press_handler(parent=registry, tag="modal_dialog_hotkeys_handler", callback=modal_dialog_hotkeys_callback)  # tag
     _modal_dialog_initialized = True
 
 def modal_dialog_window_exists():

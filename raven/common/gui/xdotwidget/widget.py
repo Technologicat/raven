@@ -152,9 +152,12 @@ class XDotWidget(gui_animation.Animation):
             no_focus_on_appearing=True,
             min_size=[1, 1])
         # Tight padding so the tooltip doesn't have excess whitespace.
-        with dpg.theme() as tooltip_theme:
-            with dpg.theme_component(dpg.mvAll):
-                dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 6, 0, category=dpg.mvThemeCat_Core)
+        # Explicit parents, no `with`: a widget is built mid-session, and DPG's container stack is one
+        # process-wide global shared by themes and widgets alike. See `dpg-notes.md`, "DPG parent
+        # management".
+        tooltip_theme = dpg.add_theme()
+        tooltip_theme_component = dpg.add_theme_component(dpg.mvAll, parent=tooltip_theme)
+        dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 6, 0, category=dpg.mvThemeCat_Core, parent=tooltip_theme_component)
         dpg.bind_item_theme(self._tooltip_window, tooltip_theme)
         self._tooltip_group = dpg.add_group(tag=f"xdot_tooltip_group_{self.gui_uuid}",
                                             parent=self._tooltip_window)
@@ -181,15 +184,17 @@ class XDotWidget(gui_animation.Animation):
         self.drawlist = dpg.add_drawlist(width=width, height=height, parent=self.group)
 
         # Register mouse handlers
-        with dpg.handler_registry() as self._handler_registry:
-            dpg.add_mouse_move_handler(callback=self._on_mouse_move)
-            dpg.add_mouse_click_handler(callback=self._on_mouse_click)
+        self._handler_registry = dpg.add_handler_registry()
+        dpg.add_mouse_move_handler(callback=self._on_mouse_move, parent=self._handler_registry)
+        dpg.add_mouse_click_handler(callback=self._on_mouse_click, parent=self._handler_registry)
 
-            dpg.add_mouse_wheel_handler(callback=self._on_mouse_wheel)
-            dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Left,
-                                       callback=self._on_mouse_drag)
-            dpg.add_mouse_release_handler(button=dpg.mvMouseButton_Left,
-                                          callback=self._on_mouse_release)
+        dpg.add_mouse_wheel_handler(callback=self._on_mouse_wheel, parent=self._handler_registry)
+        dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Left,
+                                   callback=self._on_mouse_drag,
+                                   parent=self._handler_registry)
+        dpg.add_mouse_release_handler(button=dpg.mvMouseButton_Left,
+                                      callback=self._on_mouse_release,
+                                      parent=self._handler_registry)
 
         # Register to Raven's GUI animator. This handles calling the frame update.
         gui_animation.animator.add(self)

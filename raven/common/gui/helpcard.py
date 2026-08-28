@@ -57,9 +57,10 @@ class HelpWindow:
                 return
             cls._class_initialized = True
 
-            # register our hotkey handler
-            with dpg.handler_registry(tag="helpcard_handler_registry"):  # global (whole viewport)
-                dpg.add_key_press_handler(tag="helpcard_hotkeys_handler", callback=helpcard_hotkeys_callback)
+            # Register our hotkey handler. Explicit parent, no `with`: DPG's container stack is one
+            # process-wide global. See `dpg-notes.md`, "DPG parent management".
+            registry = dpg.add_handler_registry(tag="helpcard_handler_registry")  # tag  # global (whole viewport)
+            dpg.add_key_press_handler(parent=registry, tag="helpcard_hotkeys_handler", callback=helpcard_hotkeys_callback)  # tag
 
     def __init__(self,
                  hotkey_info: List[env],

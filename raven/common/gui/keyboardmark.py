@@ -303,17 +303,21 @@ class Mark:
         self._tooltip = None  # the DPG item, which belongs to whichever widget currently wears the mark
         self._lock = threading.RLock()  # `target` and `lit` reach each other
 
-        with dpg.theme() as theme:
-            with dpg.theme_component(item_type):
-                if kind is MarkKind.DOT:
-                    self._color_widget = dpg.add_theme_color(dpg.mvThemeCol_Text, _INVISIBLE)
-                else:
-                    self._color_widget = dpg.add_theme_color(dpg.mvThemeCol_Border, _INVISIBLE)
-                    dpg.add_theme_style(_BORDER_SIZE_STYLE[kind], thickness)
-                # Set once and left alone, unlike the colour: it is layout, and a layout that changed with
-                # the caret would make the panel's contents jump every time the keys moved.
-                if padding is not None:
-                    dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, *padding)
+        # Explicit parents throughout, no `with`. A `Mark` is built whenever one is needed — mid-session,
+        # and from whichever thread is building the widget it will sit on — and DPG's container stack is
+        # one process-wide global shared by themes and widgets alike, so a `with` here can capture what
+        # another thread is adding. See `dpg-notes.md`, "DPG parent management".
+        theme = dpg.add_theme()
+        component = dpg.add_theme_component(item_type, parent=theme)
+        if kind is MarkKind.DOT:
+            self._color_widget = dpg.add_theme_color(dpg.mvThemeCol_Text, _INVISIBLE, parent=component)
+        else:
+            self._color_widget = dpg.add_theme_color(dpg.mvThemeCol_Border, _INVISIBLE, parent=component)
+            dpg.add_theme_style(_BORDER_SIZE_STYLE[kind], thickness, parent=component)
+        # Set once and left alone, unlike the colour: it is layout, and a layout that changed with the
+        # caret would make the panel's contents jump every time the keys moved.
+        if padding is not None:
+            dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, *padding, parent=component)
         self._theme = theme
 
         if target is not None:

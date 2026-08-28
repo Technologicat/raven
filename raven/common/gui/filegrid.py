@@ -406,8 +406,10 @@ class FileGrid(ThumbnailGrid):
             if len(flat_rgba) != ts * ts * 4:
                 return  # stale: the tile size changed while this was in flight
             tag = _next_tag()
-            with dpg.texture_registry():
-                dpg.add_static_texture(ts, ts, default_value=flat_rgba, tag=tag)
+            # Explicit parent, no `with`: this runs on the thumbnail decoding task, and DPG's container
+            # stack is one process-wide global. See `dpg-notes.md`, "DPG parent management".
+            registry = dpg.add_texture_registry()
+            dpg.add_static_texture(ts, ts, default_value=flat_rgba, tag=tag, parent=registry)
             # A path decoded twice would otherwise strand the first texture: nothing else refers to it, and
             # the cache is the only thing that would have deleted it.
             previous = self._thumbnail_cache.get(path)

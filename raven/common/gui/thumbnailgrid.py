@@ -242,12 +242,16 @@ class ThumbnailGrid:
 
         # Mouse handlers.
         self._handler_tag = _next_tag("handlers")
-        with dpg.handler_registry(tag=self._handler_tag):
-            dpg.add_mouse_click_handler(button=dpg.mvMouseButton_Left,
-                                        callback=self._on_click)
-            dpg.add_mouse_double_click_handler(button=dpg.mvMouseButton_Left,
-                                               callback=self._on_double_click_handler)
-            dpg.add_mouse_wheel_handler(callback=self._on_wheel)
+        # Explicit parents, no `with`: a grid is built mid-session, and tiles arrive on a background task.
+        # DPG's container stack is one process-wide global. See `dpg-notes.md`, "DPG parent management".
+        registry = dpg.add_handler_registry(tag=self._handler_tag)
+        dpg.add_mouse_click_handler(button=dpg.mvMouseButton_Left,
+                                    callback=self._on_click,
+                                    parent=registry)
+        dpg.add_mouse_double_click_handler(button=dpg.mvMouseButton_Left,
+                                           callback=self._on_double_click_handler,
+                                           parent=registry)
+        dpg.add_mouse_wheel_handler(callback=self._on_wheel, parent=registry)
 
         self._last_click_idx: int = -1  # for shift+click range selection
         self.input_enabled: bool = True
@@ -340,10 +344,11 @@ class ThumbnailGrid:
                 dpg.set_value(self._textures[idx], flat_rgba)
             else:
                 tex_tag = _next_tag("thumb_tex")
-                with dpg.texture_registry():
-                    dpg.add_dynamic_texture(ts, ts,
-                                            default_value=flat_rgba,
-                                            tag=tex_tag)
+                registry = dpg.add_texture_registry()  # explicit parent; see the note at the handler registry
+                dpg.add_dynamic_texture(ts, ts,
+                                        default_value=flat_rgba,
+                                        tag=tex_tag,
+                                        parent=registry)
                 self._textures[idx] = tex_tag
 
             # Redraw tile if it's currently visible in the grid.
@@ -402,8 +407,8 @@ class ThumbnailGrid:
             ts = self._tile_size
             for flat in tiles:
                 tag = _next_tag("noise_tex")
-                with dpg.texture_registry():
-                    dpg.add_dynamic_texture(ts, ts, default_value=flat, tag=tag)
+                registry = dpg.add_texture_registry()  # explicit parent; see the note at the handler registry
+                dpg.add_dynamic_texture(ts, ts, default_value=flat, tag=tag, parent=registry)
                 self._noise_textures.append(tag)
             logger.info(f"ThumbnailGrid.set_noise_pool: instance 0x{id(self):x}: {len(tiles)} tiles loaded")
 
@@ -802,8 +807,8 @@ class ThumbnailGrid:
             tile_labels[vis_pos] = label_tag
 
             # Tooltip with the full label (on the tile group, not the drawlist).
-            with dpg.tooltip(tile_tag):
-                dpg.add_text(self._labels[idx])
+            tooltip = dpg.add_tooltip(tile_tag)  # explicit parent; see the note at the handler registry
+            dpg.add_text(self._labels[idx], parent=tooltip)
 
             # Draw tile contents.
             self._draw_tile(idx, dl_tag)

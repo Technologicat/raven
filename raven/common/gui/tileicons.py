@@ -156,8 +156,10 @@ class TileIconCache:
                                     bg_value=(0.0, 0.0, 0.0, 0.0), allow_upscale=True)
         flat = imageutils.tensor_to_dpg_flat(tile)
         tag = _next_tag()
-        with dpg.texture_registry():
-            dpg.add_static_texture(ts, ts, default_value=flat, tag=tag)
+        # Explicit parent, no `with`: icons are built on demand, off the main thread, and DPG's container
+        # stack is one process-wide global. See `dpg-notes.md`, "DPG parent management".
+        registry = dpg.add_texture_registry()
+        dpg.add_static_texture(ts, ts, default_value=flat, tag=tag, parent=registry)
         logger.debug(f"TileIconCache._build: instance 0x{id(self):x}: '{name}' {width}x{height} -> {ts}x{ts}")
         return tag
 

@@ -181,27 +181,31 @@ class Tooltip:
         self._settle_countdown = 0  # ...and placed once this many further frames have gone by offscreen
         self._text_lock = threading.Lock()
 
-        with dpg.window(show=False,
-                        modal=False,
-                        no_title_bar=True,
-                        no_collapse=True,
-                        no_scrollbar=True,
-                        no_resize=True,
-                        no_move=True,
-                        no_focus_on_appearing=True,
-                        autosize=True,
-                        # Without this the window is at least ~100x100 whatever it holds, and autosize will
-                        # not shrink past it. A short tooltip then carries a skirt of empty window — which
-                        # is worse than it looks, because a DPG window takes the mouse across its whole
-                        # rect, so the skirt becomes a dead zone over whatever is beneath.
-                        min_size=[1, 1],
-                        **({"tag": tag} if tag is not None else {})) as self.window:
-            self.caption = dpg.add_text(text, wrap=wrap)
+        # Explicit parents, no `with`: Raven-librarian builds a tooltip per chat message, from background
+        # threads, and DPG's container stack is one process-wide global. See `dpg-notes.md`, "DPG parent
+        # management".
+        self.window = dpg.add_window(show=False,
+                                     modal=False,
+                                     no_title_bar=True,
+                                     no_collapse=True,
+                                     no_scrollbar=True,
+                                     no_resize=True,
+                                     no_move=True,
+                                     no_focus_on_appearing=True,
+                                     autosize=True,
+                                     # Without this the window is at least ~100x100 whatever it holds, and
+                                     # autosize will not shrink past it. A short tooltip then carries a
+                                     # skirt of empty window — which is worse than it looks, because a DPG
+                                     # window takes the mouse across its whole rect, so the skirt becomes a
+                                     # dead zone over whatever is beneath.
+                                     min_size=[1, 1],
+                                     **({"tag": tag} if tag is not None else {}))
+        self.caption = dpg.add_text(text, wrap=wrap, parent=self.window)
 
         # DPG has `add_item_hover_handler` and no un-hover counterpart, so appearing is event-driven and
         # disappearing is swept. Both halves are needed: a handler alone never learns that the mouse left.
-        with dpg.item_handler_registry() as self.handler_registry:
-            dpg.add_item_hover_handler(callback=self._on_hover)
+        self.handler_registry = dpg.add_item_handler_registry()
+        dpg.add_item_hover_handler(callback=self._on_hover, parent=self.handler_registry)
         with guiutils.nonexistent_ok():
             dpg.bind_item_handler_registry(target, self.handler_registry)
 
