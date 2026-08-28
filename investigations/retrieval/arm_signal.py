@@ -109,7 +109,7 @@ def main() -> None:  # pragma: no cover
         del argv[at:at + 2]
     corpus = argv[0] if argv else "hydrogen"
     if db_dir is None:
-        db_dir = pathlib.Path.home() / f".config/raven/llmclient/rag_index_{corpus}"
+        db_dir = pathlib.Path.home() / f".config/raven/librarian/rag_index_{corpus}"
 
     items, note = sharpness.build_workload(corpus)
     items = [i for i in items if i["on_corpus"] and i["gold"]]

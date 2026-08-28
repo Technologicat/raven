@@ -17,25 +17,27 @@ from ..client.config import Timeout  # `(connect, read)` timeout tuple with name
 
 from ..common.video import colorspace
 
-llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
+# Named for the app, not for the module that happened to write here first: a user browsing
+# `~/.config/raven/` should recognize the folder as Raven-librarian's.
+librarian_userdata_dir = global_config.toplevel_userdata_dir / "librarian"
 
 # The two files the chat frontends persist to. Config rather than per-frontend literals because the GUI and
 # the CLI are meant to share one chat history: they did, but only because two separately written pairs of
 # filenames happened to agree, with nothing enforcing it and nothing to notice if one drifted.
-llm_datastore_file = llmclient_userdata_dir / "chat.json"  # chat node datastore
-llm_state_file = llmclient_userdata_dir / "state.json"  # important node IDs for the chat client state
+llm_datastore_file = librarian_userdata_dir / "chat.json"  # chat node datastore
+llm_state_file = librarian_userdata_dir / "state.json"  # important node IDs for the chat client state
 # Attachment sidecars live beside the datastore, in a directory derived from its name — see
 # `chattree.PersistentForest.sidecar_dir`.
 
 # URL used to connect to the LLM API.
 #
 # This has been tested with local LLMs only, but theoretically cloud LLMs should work, too.
-# To set your API key, see the setting `llm_save_dir` above, and create a file "api_key.txt" in that directory.
+# To set your API key, create a file "api_key.txt" in `librarian_userdata_dir` (see `llm_api_key_file` below).
 # Its contents will be automatically set as the Authorization field of the HTTP headers when `llmclient` starts.
 #
 # llm_backend_url = "http://localhost:5000"  # oobabooga default OAI compatible port
 llm_backend_url = "http://localhost:1234"  # LM Studio default OAI compatible port
-llm_api_key_file = llmclient_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
+llm_api_key_file = librarian_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
 
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.
 # Separate from `raven.client.config.network_timeout` because the LLM backend is a distinct service
@@ -430,7 +432,7 @@ max_consulted_documents_listed = 30
 
 # Magic directory: put your RAG documents here.
 # Add/modify/delete a file in this directory to trigger a document database index auto-update in Librarian and Minichat.
-llm_docs_dir = llmclient_userdata_dir / "documents"
+llm_docs_dir = librarian_userdata_dir / "documents"
 
 # File types ingested into the document database. Plain-text formats are read verbatim; the rest have their text
 # layer extracted (born-digital PDFs; a scanned/image-only PDF has no text to extract and is skipped, as does an
@@ -445,7 +447,7 @@ llm_docs_exts = [".txt", ".md", ".rst", ".org", ".bib", ".tex", ".pdf",
 llm_docs_dir_recursive = False
 
 # Where to store the search indices for the RAG database (machine-readable).
-llm_database_dir = llmclient_userdata_dir / "rag_index"
+llm_database_dir = librarian_userdata_dir / "rag_index"
 
 # Where to store the search indices for the `HybridIR` API usage example / demo (raven.librarian.tests.test_hybridir)
 hybridir_demo_save_dir = global_config.toplevel_userdata_dir / "hybridir_demo"

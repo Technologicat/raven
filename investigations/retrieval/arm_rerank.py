@@ -69,7 +69,7 @@ def main():
                           raven_api_key_file=client_config.raven_api_key_file, executor=ex)
     hybridir.init(executor=ex)
     db_dir = (pathlib.Path(DB_DIR).expanduser() if DB_DIR
-              else pathlib.Path.home() / f".config/raven/llmclient/rag_index_{CORPUS}")
+              else pathlib.Path.home() / f".config/raven/librarian/rag_index_{CORPUS}")
     r = hybridir.HybridIR(datastore_base_dir=db_dir,
                           embedding_model_name=librarian_config.qa_embedding_model)
 

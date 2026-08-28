@@ -292,8 +292,13 @@ python investigations/retrieval/build_fulltext_corpus.py assemble
 
 ### The active slot is a pair of symlinks, and they are flipped together
 
+**That folder was `~/.config/raven/llmclient/` until 0.2.9**, and the scripts here have been updated to the
+new name so they still run. The stored results have not: a `.json` in this directory naming the old path is
+recording where the measurement actually read from, which is the one thing a result file must not be edited
+about.
+
 Librarian has one configured documents directory and one configured index (`llm_docs_dir`,
-`llm_database_dir` — `~/.config/raven/llmclient/documents` and `rag_index`). Five corpora share that one
+`llm_database_dir` — `~/.config/raven/librarian/documents` and `rag_index`). Five corpora share that one
 slot, and the old arrangement was to rename directories into and out of it, which loses a corpus whenever a
 run dies partway through the dance.
 
@@ -633,7 +638,7 @@ the generic questions and the specific ones separately against an unrelated inde
 ## Corpus state: the arXiv fulltext index (built 2026-08-06)
 
 **Complete, at the full 1268 documents.** `raven-indexer` over
-`~/.config/raven/llmclient/documents_arxiv_fulltext` into `rag_index_arxiv_fulltext`; 4123 s for the bulk
+`~/.config/raven/librarian/documents_arxiv_fulltext` into `rag_index_arxiv_fulltext`; 4123 s for the bulk
 of it, index 2.6 GB. The document set matches the abstract corpus one-for-one under the same identifiers,
 which is what lets the two be compared and lets the existing gold labels transfer unchanged.
 

@@ -25,7 +25,7 @@ Usage:
 
     python make_subcorpus.py hydrogen "photocatalytic water splitting" --size 2500 --name photocat
 
-Writes `~/.config/raven/llmclient/documents_<source><SUFFIX>/`, ready for `raven-indexer`. The source
+Writes `~/.config/raven/librarian/documents_<source><SUFFIX>/`, ready for `raven-indexer`. The source
 documents are copied, not moved; the original corpus is untouched.
 """
 
@@ -97,7 +97,7 @@ def main() -> None:  # pragma: no cover
     from raven.librarian import hybridir
     import concurrent.futures
 
-    base = pathlib.Path("~/.config/raven/llmclient").expanduser()
+    base = pathlib.Path("~/.config/raven/librarian").expanduser()
     source_docs = base / f"documents_{source}"
     target_docs = base / f"documents_{source}_{name}"
     if target_docs.exists():

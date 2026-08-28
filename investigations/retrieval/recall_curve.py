@@ -8,7 +8,7 @@ a candidate set that does not contain the gold document cannot do anything but r
 Reads the `per_query` records `sharpness.py` writes, so it needs no index, no server and no GPU. Run
 the sweep once at a depth you will not want to exceed, then read every shallower k off the same file:
 
-    python sharpness.py hydrogen 200 --db-dir ~/.config/raven/llmclient/rag_index_hydrogen
+    python sharpness.py hydrogen 200 --db-dir ~/.config/raven/librarian/rag_index_hydrogen
     python recall_curve.py sharpness_results_hydrogen.json
 
 **Only on-corpus questions count.** A negative has no gold document by construction, so including one

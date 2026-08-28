@@ -93,6 +93,9 @@
 
 *Raven-librarian*
 
+- **the user data folder is now `~/.config/raven/librarian/`**, where it was `~/.config/raven/llmclient/` — named after the app you run rather than after the module that first wrote there. It holds your chat history, your attachments, your document drop folder and its RAG index, so it is a folder people look at.
+  - **Move it by hand if you have one**: `mv ~/.config/raven/llmclient ~/.config/raven/librarian`. Nothing migrates it for you, and a Librarian that finds neither starts a fresh chat history rather than saying anything is wrong. Done now, while Librarian has no outside users, precisely so the migration code never has to exist.
+
 - the **Tools** mode toggle is now **Internet**, and it no longer overrides **Documents**. Each switch governs one group of tools outright — *Internet* the two that reach the network (`websearch`, `webfetch`), *Documents* the three that read your document database — so all four combinations mean something. Previously *Tools* sat above both: with it off and *Documents* on, you had switched your documents on and the AI still could not search them, and nothing about a switch named "Tools" suggested it overruled the one named after the thing it was overruling.
   - **Your setting carries over.** A stored *Tools* preference becomes the *Internet* setting on first start, which keeps the intent: the old switch governed web access too, so a user who had tools off gets the network off.
   - `get_current_time` answers to neither switch and is always available. The current time is injected into every reply regardless of both toggles, so withholding the tool would leave the AI reading a call it could not resolve.

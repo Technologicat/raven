@@ -132,7 +132,7 @@ Each layer only imports from layers below it. No circular dependencies.
 
 ## Where the data lives on disk
 
-Everything sits under `librarian_config.llmclient_userdata_dir` — `~/.config/raven/llmclient/` by default. The paths are config (`llm_datastore_file`, `llm_state_file`), read by both frontends, so the GUI and the CLI share one chat history by construction rather than by two literals happening to agree:
+Everything sits under `librarian_config.librarian_userdata_dir` — `~/.config/raven/librarian/` by default. It was `llmclient/` before 0.2.9, named for the module that first wrote there; there is deliberately no auto-migration, since Librarian has no outside users yet and a rename is cheaper than the code to survive one. The paths are config (`llm_datastore_file`, `llm_state_file`), read by both frontends, so the GUI and the CLI share one chat history by construction rather than by two literals happening to agree:
 
 | Path | What |
 |---|---|

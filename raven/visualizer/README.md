@@ -390,7 +390,7 @@ As is well known, LLMs may make things up (confabulate / "hallucinate"), may res
 
 #### LLM requirements for the PDF converter
 
-Note that `raven-pdf2bib` has only been tested with a locally hosted LLM. Here "locally hosted" means "on the same LAN as Raven" (can even be on the same machine). A cloud LLM with an OpenAI compatible API *might* work if you put an API key to `~/.config/raven/llmclient/api_key.txt`, and set the URL in `raven.librarian.config`. This is however not a development priority.
+Note that `raven-pdf2bib` has only been tested with a locally hosted LLM. Here "locally hosted" means "on the same LAN as Raven" (can even be on the same machine). A cloud LLM with an OpenAI compatible API *might* work if you put an API key to `~/.config/raven/librarian/api_key.txt`, and set the URL in `raven.librarian.config`. This is however not a development priority.
 
 For locally hosting an LLM, we recommend [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui), which Raven is tested with. Other LLM backends such as [AnythingLLM](https://anythingllm.com/) might also work, but have not been tested. We use the OpenAI-compatible API of `text-generation-webui`. However, in general, there are different dialects that consider themselves *OAI compatible*, so it may be that some features do not work with other backends.
 

@@ -88,7 +88,7 @@ CORPORA = {
     # Note the asymmetry in `docs_dir`: hydrogen reads the *live* Librarian docs slot, which now rotates
     # between three corpora, so generating for it while another one is swapped in silently draws from the
     # wrong collection. arXiv reads a stable path and cannot. Check what is in the slot before regenerating.
-    "hydrogen": {"docs_dir": pathlib.Path("~/.config/raven/llmclient/documents").expanduser(),
+    "hydrogen": {"docs_dir": pathlib.Path("~/.config/raven/librarian/documents").expanduser(),
                  "out_path": HERE / "questions.json",
                  "sibling_topic": "hydrogen production",
                  "description": "Web of Science hydrogen-production records, local to the developer "
@@ -130,14 +130,14 @@ CORPORA = {
     # It needs its own questions rather than a filtered subset of hydrogen's: those were drawn from the
     # whole corpus, so most of their gold documents are outside the ball, and a synthesis question needs
     # all four of its gold documents inside — which essentially never happens by chance.
-    "hydrogen-photocat": {"docs_dir": pathlib.Path("~/.config/raven/llmclient/documents_hydrogen_photocat").expanduser(),
+    "hydrogen-photocat": {"docs_dir": pathlib.Path("~/.config/raven/librarian/documents_hydrogen_photocat").expanduser(),
                           "out_path": HERE / "hydrogen_photocat_questions.json",
                           "sibling_topic": "photocatalytic hydrogen production",
                           "description": "a topically contiguous slice of the Web of Science hydrogen-production "
                                          "corpus — the 2500 records nearest a photocatalysis seed, so the collection "
                                          "is narrow by construction; local to the developer machine (not in this "
                                          "repository)"},
-    "eccomas2024": {"docs_dir": pathlib.Path("~/.config/raven/llmclient/documents_eccomas2024").expanduser(),
+    "eccomas2024": {"docs_dir": pathlib.Path("~/.config/raven/librarian/documents_eccomas2024").expanduser(),
                     "out_path": HERE / "eccomas2024_questions.json",
                     "sibling_topic": "computational methods in applied sciences and engineering",
                     "description": "abstracts from the 9th European Congress on Computational Methods in "

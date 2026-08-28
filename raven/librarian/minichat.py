@@ -124,7 +124,7 @@ def _flag_command_for(user_message_text: str) -> Optional[_FlagCommand]:
 def minimal_chat_client(backend_url) -> None:
     """Minimal LLM chat client, for testing/debugging."""
 
-    history_file = librarian_config.llmclient_userdata_dir / "history"      # user input history (readline)
+    history_file = librarian_config.librarian_userdata_dir / "history"      # user input history (readline)
     datastore_file = librarian_config.llm_datastore_file
     state_file = librarian_config.llm_state_file
 
@@ -248,7 +248,7 @@ def minimal_chat_client(backend_url) -> None:
 
         # Set up autosave at exit.
         def persist() -> None:
-            librarian_config.llmclient_userdata_dir.mkdir(parents=True, exist_ok=True)
+            librarian_config.librarian_userdata_dir.mkdir(parents=True, exist_ok=True)
 
             # Save readline history (if readline is available — Windows
             # without `pyreadline3` has `_has_readline = False` and simply

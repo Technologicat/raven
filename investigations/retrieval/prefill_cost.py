@@ -71,7 +71,7 @@ def main() -> None:  # pragma: no cover
         return default
 
     corpus = opt("--corpus", "hydrogen")
-    db_dir = pathlib.Path(opt("--db-dir", str(pathlib.Path.home() / f".config/raven/llmclient/rag_index_{corpus}"))).expanduser()
+    db_dir = pathlib.Path(opt("--db-dir", str(pathlib.Path.home() / f".config/raven/librarian/rag_index_{corpus}"))).expanduser()
     k_values = tuple(int(x) for x in opt("--k", ",".join(str(k) for k in K_VALUES)).split(","))
     repeats = int(opt("--repeats", "3"))
 

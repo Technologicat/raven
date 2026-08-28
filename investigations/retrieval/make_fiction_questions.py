@@ -36,7 +36,7 @@ Usage:
     python make_fiction_questions.py <base_url> <model> <corpus_dir> [held_out_dir] [n_focused] [n_rambling]
 
     python make_fiction_questions.py http://localhost:1234 qwen3.6-35b-a3b \
-        ~/.config/raven/llmclient/documents ~/Downloads/held-out 78 24
+        ~/.config/raven/librarian/documents ~/Downloads/held-out 78 24
 """
 
 import json

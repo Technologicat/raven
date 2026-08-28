@@ -117,7 +117,7 @@ def main() -> None:  # pragma: no cover
     k = int(opt("--k", "20"))
     db_dir = opt("--db-dir", None)
     db_dir = (pathlib.Path(db_dir).expanduser() if db_dir
-              else pathlib.Path.home() / f".config/raven/llmclient/rag_index_{corpus}")
+              else pathlib.Path.home() / f".config/raven/librarian/rag_index_{corpus}")
 
     from raven.client import api as client_api
     from raven.client import config as client_config
