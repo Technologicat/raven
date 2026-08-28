@@ -364,12 +364,19 @@ class TestMergeCluster:
 class TestMergedAbstracts:
     NOTICE = " © 2024 Elsevier Ltd. All rights reserved."
 
-    def test_the_publishers_notice_is_stripped_from_the_kept_abstract(self):
+    def test_the_publishers_notice_decides_nothing_and_survives_on_the_abstract_it_came_with(self):
+        """Stripping chooses *which* abstract; it does not edit the one that wins.
+
+        Writing the stripped text would leave the output carrying two kinds of abstract — trimmed where a
+        record happened to have a twin, untouched where it did not — and would make the tool a content
+        editor, which is what keeps the audit able to account for the whole input-to-output difference.
+        """
         source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x",
                         abstract="We study things." + self.NOTICE)
                   + entry("b", title="A Study of Learning Analytics", doi="10.1234/x", keywords="k"))
         merged, _row = dd.merge_cluster(dd.cluster_records(records(source))[0])
-        assert dict((f.key, f.value) for f in merged.fields)["abstract"] == "We study things."
+        assert dict((f.key, f.value) for f in merged.fields)["abstract"] \
+            == "We study things." + self.NOTICE
 
     def test_the_longest_abstract_wins_after_stripping_and_not_before(self):
         """Stripping first is what makes "longest" the right rule rather than a coin toss.
@@ -473,8 +480,6 @@ class TestNothingDisappears:
         Every record carries a field the others do not, and two of them disagree about a field they
         share. Nothing may fall between the merged entry and the audit row.
         """
-        from raven.common import text as textutil
-
         source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x", author="Smith, Jane",
                         year="2024", journal="Journal A", abstract="A thorough summary of the work.")
                   + entry("b", title="A study of learning analytics", doi="10.1234/x", year="2024",
@@ -493,10 +498,29 @@ class TestNothingDisappears:
                 value = dd._field_value(record.entry, field.key)
                 if value is None or kept.get(field.key) == value:
                     continue
-                if field.key == "abstract" and kept.get("abstract") == textutil.strip_boilerplate(value):
-                    continue
                 assert f"{field.key}: kept" in recorded, \
                     f"{record.key}'s {field.key} was neither kept nor recorded: {value!r}"
+
+    def test_the_one_exemption_is_an_abstract_differing_only_by_its_rights_notice(self):
+        """Stated as a test because it is the single hole in the promise above, and it is deliberate.
+
+        A database's own notice is usually the only thing separating its copy of an abstract from
+        another's, so reporting each one would bury the differences that are about the paper under
+        hundreds that are about the exporter. Nothing else is compared this way.
+        """
+        source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x",
+                        abstract="We study things. © 2024 Elsevier Ltd. All rights reserved.")
+                  + entry("b", title="A Study of Learning Analytics", doi="10.1234/x",
+                          abstract="We study things. © 2024 Springer Nature."))
+
+        _merged, row = dd.merge_cluster(dd.cluster_records(records(source))[0])
+        assert not any("abstract" in difference for difference in row.differences)
+
+        # The negative control: change what the abstracts actually *say*, and it is reported again.
+        louder = source.replace("We study things. © 2024 Springer Nature.",
+                                "We study something else entirely. © 2024 Springer Nature.")
+        _merged, row = dd.merge_cluster(dd.cluster_records(records(louder))[0])
+        assert any("abstract: kept" in difference for difference in row.differences)
 
 
 class TestReadRecords:
@@ -731,7 +755,7 @@ class TestJudge:
 
 
 class TestWholeRun:
-    def test_a_multi_database_export_deduplicates_end_to_end(self, tmp_path):
+    def test_a_multi_database_export_deduplicates_end_to_end(self):
         """The shape the tool is for: one paper from three databases, plus an unrelated record."""
         source = (entry("scopus", title="Peer-Reviewed AI: A Study", author="Smith, Jane and Jones, Bob",
                         year="2024", doi="10.1234/abc-def", journal="Journal of Things")
@@ -747,17 +771,20 @@ class TestWholeRun:
         parsed, unreadable = dd.read_records(source)
         assert unreadable == []
         clusters = dd.cluster_records(parsed)
-        library, rows = dd.deduplicate(parsed, clusters)
+        library, rows = dd.deduplicate(clusters)
 
         assert [entry_.key for entry_ in library.entries] == ["scopus", "other"]
         assert len(rows) == 1 and rows[0].removed == ("proquest", "arxiv")
 
         merged = {field.key: field.value for field in library.entries[0].fields}
-        assert merged["doi"] == "10.1234/abc-def"          # the en-dash copy matched, and lost
-        assert merged["annote"] == "Copyright note"        # filled in from the ProQuest twin
-        assert merged["abstract"] == "We study things."    # notice stripped
+        assert merged["doi"] == "10.1234/abc-def"      # the en-dash copy matched, and lost
+        assert merged["annote"] == "Copyright note"    # filled in from the ProQuest twin
+        # The ProQuest abstract wins on stripped length and arrives as its source wrote it, notice and
+        # all — the comparison is what stripping is for.
+        assert merged["abstract"].startswith("We study things.")
+        assert merged["abstract"].endswith("All rights reserved.")
 
-    def test_the_output_reads_back_as_the_records_that_were_written(self, tmp_path):
+    def test_the_output_reads_back_as_the_records_that_were_written(self):
         from raven.papers import bibtex
 
         source = (entry("a", title="A Study of {LaTeX} Braces and Ümlauts", author="Smith, Jane",
@@ -766,7 +793,7 @@ class TestWholeRun:
                           keywords="k")
                   + entry("c", title="Something Else Entirely", author="Doe, John", doi="10.5678/y"))
         parsed, _unreadable = dd.read_records(source)
-        library, _rows = dd.deduplicate(parsed, dd.cluster_records(parsed))
+        library, _rows = dd.deduplicate(dd.cluster_records(parsed))
         written = bibtex.write_string(library)
 
         reread, unreadable = dd.read_records(written)
@@ -780,6 +807,6 @@ class TestWholeRun:
         then raises while writing, so the whole bibliography would be lost to it."""
         source = "".join(entry(f"k{i}", title=f"Title number {i}", doi=f"10.1234/{i}") for i in range(20))
         parsed, _unreadable = dd.read_records(source)
-        library, _rows = dd.deduplicate(parsed, dd.cluster_records(parsed))
+        library, _rows = dd.deduplicate(dd.cluster_records(parsed))
         keys = [entry_.key for entry_ in library.entries]
         assert len(keys) == len(set(keys))

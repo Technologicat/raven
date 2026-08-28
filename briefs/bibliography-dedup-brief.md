@@ -164,6 +164,18 @@ twins. Every *differing* value that lost is written to the audit, so nothing dis
 
 ### Abstracts: strip the publisher's notice before comparing, then take the longest
 
+> *Corrected — "before comparing" is the whole of it.* An early cut wrote the *stripped* text into the
+> output, which left the file carrying two kinds of abstract: trimmed where a record happened to have a
+> twin, untouched where it did not. It also made the tool a content editor, which is the thing Juha had
+> just ruled out for `&amp;` — cleaning up what a database wrote is `raven-fixbib`'s job. So stripping
+> decides *which* abstract and never edits the one that wins, and every value the tool writes is one of
+> the copies it read.
+>
+> The audit still compares abstracts stripped, so 162 pairs on the corpus that differ only by whose
+> copyright line is attached are not reported as differences. That is the single exemption in "nothing
+> disappears without a trace", it is stated in `AuditRow`, and a check over the corpus confirms nothing
+> else falls through: 0 values neither kept nor recorded for any other reason.
+
 "Longest wins" on its own is wrong here, and wrong in the common case rather than a corner. Of the 601
 clusters holding two or more different abstracts, **592 differ only by an appended rights notice** —
 `© The Author(s), under exclusive license to Springer Nature Singapore Pte Ltd. 2025.` — so the rule would

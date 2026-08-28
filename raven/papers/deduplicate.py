@@ -19,9 +19,15 @@ usually means something ordinary — a preprint beside its published version, a 
 journal's own, an en-dash where the other has a double hyphen. So a title match is not overridden by a DOI
 mismatch; the disagreement is recorded in the audit instead.
 
-**Normalization is for matching only.** Nothing normalized is ever written out. Output values keep the
-bytes the input had: `Ä` stays `Ä`, LaTeX braces stay where the source put them. A merge only ever *adds*
-a field to the record it kept.
+**Every value written came from the input, unchanged.** Nothing normalized or stripped is ever written
+out — those forms exist to decide *which* value to keep, and the value kept is the one the source wrote.
+`Ä` stays `Ä`, LaTeX braces stay where the source put them, and a publisher's rights notice stays on the
+abstract it came with. So a merge only ever *chooses* among the values in front of it: what comes out is
+one of the copies, never an edit of one.
+
+Cleaning up what a database wrote is a different job with a different tool. `raven-fixbib` repairs the
+file; the Visualizer's importer strips rights notices as it reads. Keeping that out of here is what lets
+the audit account for the whole difference between input and output.
 
 `--judge` adds an opt-in LLM pass over what the deterministic keys could not settle — near-miss titles
 that no exact key joined. It needs a backend, so it is off by default and everything above works without
@@ -835,6 +841,22 @@ def judge_pairs(llm_settings,
     return verdicts
 
 
+def _judge_state_path(opts) -> pathlib.Path | None:
+    """Where to keep the judge's answers, or `None` if there is nowhere sensible.
+
+    `--judge-state` if given; otherwise beside whichever output the run is producing, so that a re-run
+    resumes without the user having had to think about it in advance — which is the only moment at which
+    thinking about it would have helped. A run writing nothing at all keeps nothing.
+    """
+    if opts.judge_state:
+        return pathlib.Path(opts.judge_state).expanduser().resolve()
+    beside = opts.output or opts.audit
+    if not beside:
+        return None
+    path = pathlib.Path(beside).expanduser().resolve()
+    return path.with_name(f"{path.stem}_judge.jsonl")
+
+
 def _apply_judge(records: list[Record], clusters: list[Cluster], opts) -> list[Cluster]:
     """Run the opt-in judge pass and return the re-clustered result. CLI glue for `judge_pairs`."""
     from ..librarian import config as librarian_config, llmclient
@@ -871,7 +893,7 @@ def _apply_judge(records: list[Record], clusters: list[Cluster], opts) -> list[C
         sys.exit(1)
     print(f"judge: {llm_settings.model} at {backend_url}")
 
-    state_path = pathlib.Path(opts.judge_state).expanduser().resolve() if opts.judge_state else None
+    state_path = _judge_state_path(opts)
     verdicts = judge_pairs(llm_settings, pairs, state_path,
                            on_progress=lambda done, total: print(f"  judged {done}/{total}", flush=True))
 
@@ -910,6 +932,13 @@ class AuditRow:
     `differences`: Every field where a merged-away record held a different non-empty value than the one
                    kept, as `field: kept … / dropped …`. Values are truncated; this says what was
                    dropped, and the input file remains the place to read it in full.
+
+                   **Abstracts are compared with their rights notices removed**, so two copies of one
+                   abstract carrying two publishers' copyright lines are not reported as a difference.
+                   They are the overwhelmingly common case — a database's notice is usually the *only*
+                   thing separating its copy from another's — and reporting each one would bury the
+                   differences that are about the paper under hundreds that are about the exporter.
+                   Nothing else is compared that way, and nothing else is exempt.
     """
     kept: str
     removed: tuple[str, ...]
@@ -946,32 +975,38 @@ def _clip(value: str) -> str:
     return value if len(value) <= _AUDIT_VALUE_CHARS else value[:_AUDIT_VALUE_CHARS - 1] + "…"
 
 
-def _best_abstract(cluster: Cluster) -> tuple[str | None, list[tuple[Record, str]]]:
-    """The abstract to keep, and the ones that lost while saying something different.
+def _best_abstract(cluster: Cluster) -> tuple[str | None, list[str]]:
+    """The abstract to keep, as the source wrote it, and the ones that lost while saying something else.
 
-    Every candidate goes through `text.strip_boilerplate` first, and that is what makes "keep the longest"
+    Candidates are *compared* through `text.strip_boilerplate`, and that is what makes "keep the longest"
     the right rule rather than a coin toss. Databases append their own rights notice to the abstracts they
     export, so on raw text the longest copy is usually just the one carrying the most boilerplate, and
-    taking it would graft a publisher's copyright line onto the majority of merged records. Stripped, most
-    of these copies become the same string and there is nothing left to choose.
+    taking it would pick a record for the size of its copyright line. Stripped, most of these copies
+    become the same string and there is nothing left to choose.
 
     What remains after that is either a database's truncation of the same abstract — where the longest is
     plainly right — or a handful of genuinely different texts, where it is the least bad rule and the
     audit records what it passed over.
     """
+    # Stripping decides *which* abstract; it does not edit the one that wins. Writing the stripped text
+    # would leave the output carrying two kinds of abstract — trimmed where a record happened to have a
+    # twin, untouched where it did not — and would be a content edit in a tool whose whole promise is
+    # that the values it writes are the ones it read. Removing a rights notice from a `.bib` is
+    # `raven-fixbib`'s kind of job, and the Visualizer's importer strips at read time regardless.
     candidates = []
     for record in cluster.records:
         raw = record.field("abstract")
         if raw:
             stripped = textutil.strip_boilerplate(raw)
             if stripped:
-                candidates.append((record, stripped))
+                candidates.append((record, raw, stripped))
     if not candidates:
         return None, []
-    best_record, best = max(candidates, key=lambda pair: (len(pair[1]), -pair[0].index))
-    losers = [(record, text) for record, text in candidates
-              if record is not best_record and text != best]
-    return best, losers
+    best_record, best_raw, best_stripped = max(candidates,
+                                               key=lambda triple: (len(triple[2]), -triple[0].index))
+    losers = [raw for record, raw, stripped in candidates
+              if record is not best_record and stripped != best_stripped]
+    return best_raw, losers
 
 
 def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
@@ -1012,7 +1047,7 @@ def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
                    fields=[Field(key, fields[key]) for key in ordered if key in fields])
 
     differences = [f"abstract: kept {_clip(maybe_abstract or '')} / dropped {_clip(text)}"
-                   for _record, text in abstract_losers]
+                   for text in abstract_losers]
     for record in cluster.records[1:]:
         for field in record.entry.fields:
             value = _field_value(record.entry, field.key)
@@ -1031,14 +1066,12 @@ def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
     return merged, row
 
 
-def deduplicate(records: list[Record],
-                clusters: list[Cluster]) -> tuple[Library, list[AuditRow]]:
+def deduplicate(clusters: list[Cluster]) -> tuple[Library, list[AuditRow]]:
     """Merge every cluster, returning the deduplicated library and the audit rows for what merged.
 
-    `records` is taken only for its length, which the caller has already counted — the clusters carry the
-    records themselves. Passing it keeps the signature honest about what this operates on.
+    One entry per cluster, in cluster order, so the output is in the reading order of the input. A cluster
+    of one contributes no audit row: nothing happened to it.
     """
-    del records  # the clusters hold everything; named so the call site reads as the whole corpus
     library = Library()
     rows = []
     for cluster in clusters:
@@ -1109,7 +1142,7 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("--judge", dest="judge", action="store_true", default=False,
                         help="Also ask an LLM about near-miss titles that no exact key joined. Needs a backend; off by default.")
     parser.add_argument("--judge-state", dest="judge_state", default=None, type=str, metavar="PATH",
-                        help="Resumable JSONL of the judge's answers (default: beside the output). A re-run skips what is already there.")
+                        help="Resumable JSONL of the judge's answers. Defaults to sitting beside the output or the audit; a re-run skips what is already there, so a backend that falls over costs the batch in flight rather than the run.")
     parser.add_argument("--backend-url", dest="backend_url", default=None, type=str, metavar="URL",
                         help="LLM backend to judge with, overriding the configured one.")
     parser.add_argument("--log", metavar="PATH", default=None,
@@ -1153,7 +1186,7 @@ def main() -> None:  # pragma: no cover
 
     _report(records, clusters, unreadable)
 
-    library, rows = deduplicate(records, clusters)
+    library, rows = deduplicate(clusters)
 
     if opts.audit:
         audit_path = pathlib.Path(opts.audit).expanduser().resolve()
