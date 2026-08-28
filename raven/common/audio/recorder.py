@@ -255,12 +255,16 @@ class Recorder:
 
     def start(self,
               on_autostop: Optional[Callable] = None,
-              monitor: bool = False) -> None:
-        """Start capturing audio.
+              monitor: bool = False) -> bool:
+        """Start capturing audio. Return whether a capture was started.
 
         This automatically spawns a background task to handle the capture.
 
-        If already capturing, do nothing.
+        **`False` means the device was already open**, and the caller's capture is not happening.
+        Worth checking: a caller that assumes otherwise puts its GUI into a recording state over a
+        recorder that is not recording, and the user finds out by getting a transcript of nothing.
+        A `stop` on this recorder returns before its capture task has exited unless waited on, so
+        the common way to arrive here is a `start` issued too soon after one — see `stop`.
 
         `on_autostop`: 0-argument callable. Return value is ignored.
 
@@ -283,8 +287,8 @@ class Recorder:
         logger.info(f"Recorder.start: Starting audio capture{' (monitoring only)' if monitor else ''}.")
         with self._recording_state_lock:
             if self._is_capturing:
-                logger.info("Recorder.start: This recorder is already capturing. Ignoring.")
-                return
+                logger.warning(f"Recorder.start: This recorder is already capturing (monitoring: {self._is_monitoring}). Refusing to start another capture.")
+                return False
             self._is_capturing = True
             self._is_monitoring = monitor
 
@@ -350,6 +354,7 @@ class Recorder:
                     logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Audio capture task exited.")
             self._task_manager.submit(record_task, env())
             logger.info("Recorder.start: Audio capture task submitted.")
+            return True
 
     def set_device(self, device_name: Optional[str]) -> bool:
         """Switch to another audio capture device. Return whether the switch happened.

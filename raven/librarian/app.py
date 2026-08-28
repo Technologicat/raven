@@ -1219,13 +1219,22 @@ with timer() as tim:
                             # before a message can be recorded. It takes it back in `stop_recording_audio_message`.
                             audio_input_panel.stop_monitoring()
 
+                            # Start capturing before saying so. A refused start — the device still open —
+                            # would otherwise leave the button glowing over a recorder that is not
+                            # recording, and the user finds out when the transcript comes back empty.
+                            if not audio_recorder.require().start(on_autostop=stop_recording_audio_message):
+                                logger.error("start_recording_audio_message: The audio device is busy; not recording.")
+                                gui_animation.flash_button(button="record_audio_message_button",  # tag
+                                                           tooltip=record_audio_message_tooltip,
+                                                           ok=False, message="Microphone busy",
+                                                           duration=gui_config.acknowledgment_duration)
+                                audio_input_panel.start_monitoring()  # give the panel its meter back
+                                return
+
                             # Acknowledge in GUI
                             pulsating_red_text_glow.reset()  # start new pulsation cycle
                             dpg.bind_item_theme(record_audio_message_button, "my_pulsating_red_text_theme")  # tag
                             record_audio_message_tooltip.text = "Stop speaking and send to AI [Ctrl+Shift+Enter]"
-
-                            # Actually start capturing audio
-                            audio_recorder.require().start(on_autostop=stop_recording_audio_message)
                         def stop_recording_audio_message() -> None:
                             # Acknowledge in GUI
                             dpg.bind_item_theme(record_audio_message_button, "disablable_widget_theme")  # tag

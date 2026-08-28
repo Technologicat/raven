@@ -53,6 +53,8 @@ class StubRecorder:
         self.monitoring = False
         self.listeners = []
         self.starts = []
+        self.refused_starts = []  # a `start` that arrived while the device was still open
+        self.stops = []  # the `wait` each `stop` was given
 
     def is_capturing(self):
         return self.recording or self.monitoring
@@ -72,11 +74,21 @@ class StubRecorder:
             self.listeners.remove(cb)
 
     def start(self, on_autostop=None, monitor=False):
+        # The real one refuses while the device is still open, and says so only in the log.
+        if self.is_capturing():
+            self.refused_starts.append(monitor)
+            return
         self.starts.append(monitor)
         self.monitoring = monitor
         self.recording = not monitor
 
     def stop(self, wait=False, timeout=1.0):
+        # Mirrors the real one's asynchrony, which is the whole reason `wait` exists: the capture task
+        # clears the flag from its own `finally`, so without waiting the device is still open when this
+        # returns. A stub that cleared it immediately would make every caller look correct.
+        self.stops.append(wait)
+        if not wait:
+            return False
         self.monitoring = self.recording = False
         return True
 
@@ -88,7 +100,7 @@ class StubRecorder:
         if device_name not in DEVICES:
             raise ValueError(f"No such audio capture device {device_name!r}")
         was_monitoring = self.monitoring
-        self.stop()
+        self.stop(wait=True)  # as the real one does, and for the same reason: it reopens straight after
         self.device_name = device_name
         if was_monitoring:
             self.start(monitor=True)
@@ -542,11 +554,57 @@ class TestMonitoring:
         assert not panel.recorder.is_capturing()
         assert panel._on_vu_update not in panel.recorder.listeners
 
+    def test_the_device_is_free_before_the_caller_records(self, panel):
+        """The app calls this and then immediately starts a recording on the same device.
+
+        `Recorder.stop` returns before its capture task has exited unless waited on, and a `start`
+        issued in that gap is refused — quietly, in the log. Live case 2026-08-28: the mic button had
+        to be pressed twice to start, the first press was spent on nothing, and what reached speech
+        recognition was a second of silence, which Whisper rendered as "Thank you."
+        """
+        panel.open()
+        assert panel.recorder.is_monitoring()
+
+        panel.stop_monitoring()
+        assert panel.recorder.stops == [True], "monitoring was stopped without waiting for the device"
+        assert not panel.recorder.is_capturing(), "the device was still open when stop_monitoring returned"
+
+        panel.recorder.start(monitor=False)  # what `start_recording_audio_message` does next
+        assert panel.recorder.refused_starts == [], "the recording was refused: the device had not been released"
+        assert panel.recorder.is_recording()
+
     def test_it_refuses_to_open_over_a_recording(self, panel):
         panel.recorder.recording = True
         panel.open()
         assert not panel.is_open, "opening the panel took the microphone off a recording"
         assert panel.recorder.starts == []
+
+    def test_the_readout_stays_connected_across_the_handover(self, panel):
+        """The panel is a view onto the recorder, so its meter follows the same stream the toolbar's does.
+
+        The device changes mode when the mic button takes it — but the levels are the same either way,
+        and disconnecting for the duration left the panel's meter dead through every recording while
+        the toolbar's went on moving.
+        """
+        panel.open()
+        assert panel._on_vu_update in panel.recorder.listeners
+
+        panel.stop_monitoring()  # what the app does before recording
+        assert panel._on_vu_update in panel.recorder.listeners, "the panel stopped watching for the recording"
+
+        panel.recorder.start(monitor=False)
+        assert panel._on_vu_update in panel.recorder.listeners
+
+    def test_the_status_says_which_it_is(self, panel):
+        panel.open()
+        assert "Listening" in dpg.get_value("audio_input_status_text")  # tag
+
+        panel.stop_monitoring()
+        panel.recorder.start(monitor=False)
+        panel._on_vu_update(-30.0, -20.0)  # a frame arrives, as one does while recording
+        recording = dpg.get_value("audio_input_status_text")  # tag
+        assert "Listening" not in recording, "the panel still claims nothing is being recorded"
+        assert "Recording" in recording, recording
 
     def test_monitoring_does_not_resume_while_the_panel_is_closed(self, panel):
         # What the app calls after a recording ends: the panel takes the device back only if the user

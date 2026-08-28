@@ -431,7 +431,7 @@ Voice input is still young; voice message editing is missing, for example. We in
 
 How quiet counts as "finished speaking" depends on the room, so it is a control rather than a setting you are expected to get right in advance. Click the **sliders button** (next to the mic) or press **F9** to open the **Audio input** panel.
 
-While the panel is open, *Librarian* listens to the mic without recording anything and without sending anything to the AI, so you can watch the input level with the room as it actually is.
+While the panel is open, *Librarian* listens to the mic without recording anything and without sending anything to the AI, so you can watch the input level with the room as it actually is. The status line above the meter says which it is doing, and both meters stay live through an actual recording too — the panel is a second view of the same input, not a separate one.
 
 - **Microphone** picks which input to record from. The list is re-read each time you open the panel, so something plugged in while *Librarian* was running is there. Switching takes effect immediately, and the meter follows — which is how you compare two microphones, or tell a noisy room from a noisy mic.
   - Monitoring inputs are left out: those record what is being *played*, so one would transcribe the AI's own voice. If you have named one in the configuration, it stays in the list so you can get back to it.

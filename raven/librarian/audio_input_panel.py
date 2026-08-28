@@ -161,6 +161,11 @@ class DPGAudioInputPanel:
         self._sync_widgets_from_recorder()
         self.is_open = True
 
+        # The readout is connected for as long as the panel is on screen, whatever the device is doing —
+        # the panel is a view onto the recorder, so its meter follows the same stream the toolbar's does,
+        # through a recording as well as through monitoring.
+        audio_recorder.require().connect_vu_readout(self._on_vu_update)
+
         if self.centering_reference_window is not None and not self._has_been_positioned:
             dpg.split_frame()  # let anything that is closing finish first, or ours may not appear
             guiutils.recenter_window(self.window_id, reference_window=self.centering_reference_window)  # this shows it
@@ -176,6 +181,7 @@ class DPGAudioInputPanel:
             return
         self.is_open = False
         self.stop_monitoring()
+        audio_recorder.require().disconnect_vu_readout(self._on_vu_update)
         with guiutils.nonexistent_ok():
             dpg.hide_item(self.window_id)  # tag
         if self.save_app_state is not None:
@@ -202,16 +208,23 @@ class DPGAudioInputPanel:
         if rec.is_capturing():
             return
         self._levels.clear()
-        rec.connect_vu_readout(self._on_vu_update)
         rec.start(monitor=True)
         self._set_status_text()
 
     def stop_monitoring(self) -> None:
-        """Stop metering, and let go of the device so a recording can have it."""
+        """Stop *monitoring*, and let go of the device so a recording can have it.
+
+        The readout stays connected: what changes is which mode the device is captured in, and the
+        levels are the same stream either way. So the panel's meter goes on moving through a
+        recording, as the toolbar's always has.
+        """
         rec = audio_recorder.require()
-        rec.disconnect_vu_readout(self._on_vu_update)
         if rec.is_monitoring():
-            rec.stop()
+            # Waited on, because the caller's next move is to start a recording on this device. The
+            # capture task clears the recorder's "capturing" flag from its own `finally`, so a `start`
+            # issued a millisecond after an unwaited `stop` is refused as "already capturing" — and
+            # refused *quietly*, which cost a recording that the user had pressed the button for.
+            rec.stop(wait=True)
         self._set_status_text()
 
     def _on_vu_update(self, instant: float, peak: float) -> None:
@@ -225,6 +238,9 @@ class DPGAudioInputPanel:
             dpg.set_value("audio_input_now_text", format_dBFS(instant))  # tag
             dpg.set_value("audio_input_peak_text", format_dBFS(peak))  # tag
             dpg.set_value("audio_input_floor_text", format_dBFS(self.floor))  # tag
+            # Here rather than only at the mode changes, because the mic button changes the mode without
+            # telling the panel. One more `set_value` on a line that already writes three.
+            self._set_status_text()
 
     def _record_level(self, level: float) -> None:
         """Add one level to the recent history, and drop what has aged out of the window."""
@@ -394,11 +410,17 @@ class DPGAudioInputPanel:
         self._show_threshold(threshold)
 
     def _set_status_text(self) -> None:
+        """Say what the microphone is doing. Read from the recorder rather than set by whoever changed it.
+
+        The mode changes without the panel being involved — the mic button hands the device over and
+        takes it back — so a status the panel had to be *told* about would be wrong for exactly the
+        stretch it matters most.
+        """
         rec = audio_recorder.require()
         if rec.is_monitoring():
             status = "Listening. Nothing is recorded or sent."
         elif rec.is_recording():
-            status = "Recording a message."
+            status = "Recording. This is going to the AI."
         else:
             status = "Not listening."
         with guiutils.nonexistent_ok():
