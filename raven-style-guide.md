@@ -415,6 +415,21 @@ Patterns:
 - A shorthand alias is common: `gui_config = librarian_config.gui_config`.
 - Prompt templates use `textwrap.dedent("""...""").strip()`.
 
+**A config value does what it says on the tin: the number written is the number used.** When a layout change
+means a width has to shrink, change the default — never subtract at the use site, and never wrap the read in
+a helper that adjusts it. Two reasons, and the second is why this is a rule rather than a preference:
+
+- **A hidden adjustment breaks anyone who overrides the value.** They set the number the name promises and
+  get something else, silently, and only for them — which is the hardest kind of report to act on.
+- **The adjustment is invisible where the value is read.** A call site says `gui_config.title_wrap_w` and
+  means it; a reader tracing a layout has no reason to suspect a subtraction sitting somewhere else.
+
+The comment beside the value is where the arithmetic goes, naming what else occupies that space — which is
+what lets the next person change it correctly. `title_wrap_w=486, # Note there will be the keyboard mark's
+dot and two columns of buttons to the left of each item title.` (Juha's correction, 2026-08-28: the first
+version of that change subtracted the dot's width in `info_panel`, behind a helper whose name promised the
+configured width.)
+
 ## Thread safety
 
 ### RLock for shared state
