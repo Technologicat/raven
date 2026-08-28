@@ -308,6 +308,27 @@ class TestUnicodizeBasicMarkup:
     def test_html_entity_auml(self):
         assert utils.unicodize_basic_markup("&auml;") == "ä"
 
+    def test_html_entity_amp(self):
+        assert utils.unicodize_basic_markup("Bell &amp; Howell") == "Bell & Howell"
+
+    def test_html_entity_amp_after_a_bibtex_escape(self):
+        # How this one actually arrives: a database exports HTML into a BibTeX field, something escapes
+        # the ampersand for BibTeX, and `\&amp;` reaches here. The `\&` is unescaped early in the
+        # function, so the entity is what is left to decode.
+        assert utils.unicodize_basic_markup(r"in-context Q\&amp;A") == "in-context Q&A"
+
+    def test_html_entity_nbsp_becomes_an_ordinary_space(self):
+        assert utils.unicodize_basic_markup(r"1)\&nbsp;additional examples") == "1) additional examples"
+
+    def test_an_escaped_entity_decodes_only_once(self):
+        """`&amp;lt;` is how a source writes a literal `&lt;`, and it must stay one.
+
+        The property this pins is the ordering: `&amp;` is decoded after every other entity, so the `&`
+        it produces cannot combine with what follows into a second entity. Decoding it first would turn
+        this into `<` — the text made to say something the author did not write, silently.
+        """
+        assert utils.unicodize_basic_markup("&amp;lt;") == "&lt;"
+
     def test_html_entity_ouml(self):
         assert utils.unicodize_basic_markup("&Ouml;") == "Ö"
 

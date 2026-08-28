@@ -299,6 +299,8 @@
 
 *Constellation-wide*
 
+- **`&amp;` and `&nbsp;` no longer survive into text taken from a bibliography.** A database that exports HTML into a BibTeX field leaves them there, and Raven decoded the neighbouring entities (`&lt;`, `&le;`, `&auml;`) while passing these two through — so a title reading `Q&A` displayed as `Q&amp;A`, in the Visualizer's word cloud and info panel and in Librarian's citations alike. An escaped entity is still decoded only once, so a source that wrote `&amp;lt;` to mean a literal `&lt;` keeps saying that.
+
 - **the file browser now says when it cannot open a folder.** Clicking a system directory, or one the OS will not let you read, did nothing whatsoever: the explanation was routed to a message box, and DPG will not draw one over a modal window — which every file browser in Raven is. So the dialog simply sat there, and the only account of what had happened went to a log nobody was reading. The reason now appears in red on the line above the buttons, and fades after a few seconds. Its other two reports — picking a file where a folder was expected, and a folder that cannot be listed at all — were lost the same way and arrive the same way now.
 
 - **clicking the file browser's type filter no longer costs you the keyboard.** Once you had clicked it — to read what the options were, say — the shortcuts that put the caret back in the name field (Ctrl+F, Tab, Esc) stopped doing anything, silently, for as long as that dialog stayed open. The same was true of OK and Cancel, which normally close the dialog and so never showed it, except when confirming an overwrite.

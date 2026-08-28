@@ -650,6 +650,7 @@ def unicodize_basic_markup(s):
     s = s.replace(r"&ouml;", "ö")
     s = s.replace(r"&Aring;", "Å")
     s = s.replace(r"&aring;", "å")
+    s = s.replace(r"&nbsp;", " ")
 
     # Replace HTML with Unicode in chemical formulas (e.g. "CO₂", "NOₓ") and math (e.g. "x²")
     substitute_sub = functools.partial(_substitute_chars, stringmaps.regular_to_subscript, "sub")
@@ -665,6 +666,16 @@ def unicodize_basic_markup(s):
     # Replace < and > entities last (so that HTML tags process correctly)
     s = s.replace(r"&lt;", "<")
     s = s.replace(r"&gt;", ">")
+
+    # `&amp;` after every other entity, which is what keeps the decoding single-pass: a source that
+    # escaped its own markup writes `&amp;lt;` for a literal "&lt;", and decoding the ampersand first
+    # would turn that into "<" — the text saying something it does not say. Decoded last, it comes out
+    # as the literal "&lt;" the author wrote.
+    #
+    # Reached at all because `\&` is unescaped near the top of this function, so a BibTeX file's
+    # `Q\&amp;A` arrives here as `Q&amp;A`. That is the commonest of these in a database export by a
+    # wide margin, and without this line it survived into abstracts, titles and journal names.
+    s = s.replace(r"&amp;", "&")
 
     # The LaTeX sequence `\"{\i}` (→ "naïve") uses dotless-i purely as a typesetting
     # trick — the intended letter is i, written dotless so the diaeresis dots don't
