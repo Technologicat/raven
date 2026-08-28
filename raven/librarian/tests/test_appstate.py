@@ -153,7 +153,8 @@ class TestLoadEmpty:
         _, state, _, _ = _load(tmp_path, llm_settings)
         # The flags come from `_DEFAULT_FLAGS` rather than a second copy of the list, so that adding,
         # dropping or renaming one cannot leave this test asserting yesterday's set.
-        for key in ("HEAD", "new_chat_HEAD", "system_prompt_node_id") + tuple(appstate._DEFAULT_FLAGS):
+        for key in (("HEAD", "new_chat_HEAD", "system_prompt_node_id")
+                    + tuple(appstate._DEFAULT_FLAGS) + tuple(appstate._DEFAULT_SETTINGS)):
             assert key in state, f"state missing key {key!r}"
 
     @pytest.mark.skipif(not appstate._RETIRED_FLAGS, reason="no flags are currently being retired")
@@ -425,6 +426,62 @@ class TestSave:
         del state[next(iter(appstate._DEFAULT_FLAGS))]
         with pytest.raises(KeyError):
             appstate.save(state_path, state)
+
+    def test_save_missing_required_setting_raises(self, tmp_path, llm_settings):
+        _, state, _, state_path = _load(tmp_path, llm_settings)
+        del state[next(iter(appstate._DEFAULT_SETTINGS))]
+        with pytest.raises(KeyError):
+            appstate.save(state_path, state)
+
+
+# ---------------------------------------------------------------------------
+# Numeric settings (the audio input tuning), as opposed to the boolean flags
+# ---------------------------------------------------------------------------
+
+class TestNumericSettings:
+    def test_defaults_come_from_the_configuration(self, tmp_path, llm_settings):
+        _, state, _, _ = _load(tmp_path, llm_settings)
+        for key, default in appstate._DEFAULT_SETTINGS.items():
+            assert state[key] == default, f"setting {key!r} did not get its default"
+
+    @pytest.mark.parametrize("missing_key", list(appstate._DEFAULT_SETTINGS))
+    def test_a_missing_setting_gets_its_default(self, tmp_path, llm_settings, missing_key):
+        _, state, _, state_path = _load(tmp_path, llm_settings)
+        appstate.save(state_path, state)
+        stored = json.loads(state_path.read_text(encoding="utf-8"))
+        del stored[missing_key]
+        state_path.write_text(json.dumps(stored), encoding="utf-8")
+
+        _, state2, _, _ = _load(tmp_path, llm_settings)
+        assert state2[missing_key] == appstate._DEFAULT_SETTINGS[missing_key]
+
+    @pytest.mark.parametrize("key", list(appstate._DEFAULT_SETTINGS))
+    def test_a_stored_setting_wins_over_the_configured_default(self, tmp_path, llm_settings, key):
+        """The precedence a user tuning the microphone in the room depends on: what they set survives
+        a restart, and editing the configuration afterwards does not silently undo it.
+        """
+        _, state, _, state_path = _load(tmp_path, llm_settings)
+        tuned = -12.5 if key == "stt_silence_threshold" else 4.25
+        assert tuned != appstate._DEFAULT_SETTINGS[key], \
+            "the tuned value equals the default, so this fixture cannot tell a stored value from a filled-in one"
+        state[key] = tuned
+        appstate.save(state_path, state)
+
+        _, state2, _, _ = _load(tmp_path, llm_settings)
+        assert state2[key] == tuned
+
+    @pytest.mark.parametrize("key", ["stt_silence_threshold", "stt_autostop_timeout"])
+    def test_none_survives_a_roundtrip(self, tmp_path, llm_settings, key):
+        # `None` is a value rather than an absence for both of these — measure the room per recording,
+        # and never autostop — so a reload must not read it as a missing key and fill in the default.
+        _, state, _, state_path = _load(tmp_path, llm_settings)
+        assert appstate._DEFAULT_SETTINGS[key] is not None, \
+            f"{key!r} is configured as `None`, so this fixture cannot tell a stored `None` from a default one"
+        state[key] = None
+        appstate.save(state_path, state)
+
+        _, state2, _, _ = _load(tmp_path, llm_settings)
+        assert state2[key] is None
 
 
 # ---------------------------------------------------------------------------

@@ -21,6 +21,8 @@ from typing import Dict, Tuple, Union
 
 from unpythonic.env import env
 
+from ..client import config as client_config
+
 from . import chattree
 from . import chatutil
 from . import imagestore
@@ -42,6 +44,18 @@ _DEFAULT_FLAGS = {# Whether a thinking model may reason before it answers. On by
                   # hidden trace is what people now expect from an LLM frontend, and it is usually a wall of
                   # text between the reader and the answer.
                   "show_thinking": False}
+
+# Per-app settings that are numbers rather than toggles, and whose defaults come from the user's
+# configuration rather than from a literal here. Kept apart from the flags above so that "flags"
+# keeps meaning toggles; `load` and `save` treat the two mappings alike.
+#
+# The precedence is worth stating, since the other reading is defensible: a stored value wins over
+# the configured one. Configuration supplies the value for a fresh state file, and is what the GUI's
+# reset control puts back — so a user who has tuned the microphone in the room keeps that tuning
+# across a restart, and a user who edits the config file has to reset to see it take effect.
+_DEFAULT_SETTINGS = {"stt_silence_threshold": client_config.stt_silence_threshold,  # dBFS, or `None` to measure the room per recording
+                     "stt_autostop_timeout": client_config.stt_autostop_timeout,  # seconds, or `None` to never stop by itself
+                     "stt_vu_peak_hold": client_config.stt_vu_peak_hold}  # seconds
 
 # Flags that used to exist, dropped from a state file on load so they do not sit there forever confusing
 # whoever reads it next. Removable once no state file in the wild still carries them.
@@ -366,8 +380,8 @@ def load(llm_settings: env,
                 state[new_key] = old_value
                 logger.info(f"load: Renaming key '{old_key}' -> '{new_key}' in '{mayberel_state_file}' (resolved to '{state_file}'), keeping value '{old_value}'")
 
-    # Set any missing app state flags to their defaults.
-    for key, default in _DEFAULT_FLAGS.items():
+    # Set any missing app state flags and settings to their defaults.
+    for key, default in {**_DEFAULT_FLAGS, **_DEFAULT_SETTINGS}.items():
         if key not in state:
             state[key] = default
             logger.info(f"load: Missing key '{key}' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{default}'")
@@ -470,7 +484,7 @@ def save(state_file: Union[str, pathlib.Path],
     """
     # validate
     required_keys = ("new_chat_HEAD",  # HEAD node for starting a new chat
-                     "HEAD") + tuple(_DEFAULT_FLAGS.keys())  # current HEAD + per-app GUI flags
+                     "HEAD") + tuple(_DEFAULT_FLAGS.keys()) + tuple(_DEFAULT_SETTINGS.keys())  # current HEAD + per-app GUI flags and settings
     if any(key not in state for key in required_keys):
         raise KeyError(f"At least one required setting is missing from `state`; required keys = {list(sorted(required_keys))}; got existing keys = {list(sorted(state.keys()))}")
 

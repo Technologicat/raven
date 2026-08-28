@@ -54,7 +54,7 @@ with timer() as tim:
     import dearpygui.dearpygui as dpg
 
     from mcpyrate import colorizer
-    from unpythonic import sym
+    from unpythonic import call, sym
     from unpythonic.env import env
 
     # Vendored libraries
@@ -383,6 +383,19 @@ with timer() as tim:
                                          librarian_config.llm_datastore_file,
                                          librarian_config.llm_state_file)
 logger.info(f"Datastore loaded in {tim.dt:0.6g}s.")
+
+@call
+def _apply_stored_audio_capture_settings() -> None:
+    """Hand the recorder the capture settings the user tuned last time.
+
+    `audio.initialize` ran before the state file could be read, so the recorder started on the
+    configured values; these are the remembered ones, which take precedence over them.
+    """
+    rec = audio_recorder.require()
+    rec.silence_threshold = app_state["stt_silence_threshold"]
+    rec.autostop_timeout = app_state["stt_autostop_timeout"]
+    rec.vu_peak_hold = app_state["stt_vu_peak_hold"]
+    logger.info(f"_apply_stored_audio_capture_settings: silence threshold {rec.silence_threshold}dBFS, autostop timeout {rec.autostop_timeout}s, VU peak hold {rec.vu_peak_hold}s.")
 
 logger.info("Loading RAG (retrieval-augmented generation) document store.")
 with timer() as tim:

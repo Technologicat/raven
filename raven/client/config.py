@@ -73,6 +73,38 @@ tts_playback_audio_device = "system-default"  # OS's default, i.e. the same one 
 stt_capture_audio_device = None
 # stt_capture_audio_device = "Built-in Audio Analog Stereo"
 
+# How the recorder decides that you have stopped speaking, and how its VU meter behaves.
+#
+# These are starting values. Raven-librarian offers all three as live controls, and remembers
+# what you set them to — so once you have tuned them there, the app state file is what it starts
+# from, and these apply only to a fresh state file and to the panel's reset button.
+#
+# `stt_silence_threshold`: dBFS below which the input counts as silence. 0 is full scale and
+#                          -90 is the quietest 16-bit audio can be, so a lower number means a
+#                          more sensitive microphone or a noisier room.
+#
+#                          `None` measures the room at the start of each recording instead,
+#                          which cannot work if your input has a noise gate in front of it.
+#
+#                          Worth knowing when choosing one: a single audio frame above the
+#                          threshold restarts the autostop clock, so in a noisy room the value
+#                          has to sit above the occasional bang, not above the average level.
+#
+# `stt_autostop_timeout`: seconds of continuous silence after which the recording stops itself
+#                         and is sent for transcription. `None` disables it, leaving the
+#                         microphone button as the only way to stop — which is what to reach for
+#                         in a room too loud for any threshold to separate speech from noise.
+#
+# `stt_vu_peak_hold`: seconds the VU meter holds a peak before letting it fall. This is also how
+#                     far back the meter's peak line lets you see, which is what makes it useful
+#                     for choosing a threshold.
+#
+stt_silence_threshold = -40.0  # dBFS
+# stt_silence_threshold = None  # measure the room at the start of each recording
+stt_autostop_timeout = 1.5  # seconds
+# stt_autostop_timeout = None  # never stop by itself
+stt_vu_peak_hold = 1.0  # seconds
+
 # --------------------------------------------------------------------------------
 # Device settings for local-mode fallback of `MaybeRemote.*` services.
 #
