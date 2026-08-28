@@ -32,6 +32,7 @@ import dearpygui.dearpygui as dpg
 from ..common import numutils
 from ..common.audio import recorder as audio_recorder
 from ..common.audio import silencegate
+from ..common.gui import keyboardmark
 from ..common.gui import utils as guiutils
 from ..common.gui.vumeter import DPGVUMeter
 
@@ -139,6 +140,7 @@ class DPGAudioInputPanel:
         self.window_id = None
         self.meter = None
         self._has_been_positioned = False
+        self._focus_follower = None  # the animation lighting whichever control holds the keyboard
 
         # Recent signal levels, as `(timestamp_ns, dBFS)`, trimmed to `FLOOR_WINDOW`. Appended by the
         # capture thread, read by whichever thread the user clicks on.
@@ -160,6 +162,15 @@ class DPGAudioInputPanel:
         self._refresh_device_list()  # a microphone may have been plugged in since the last look
         self._sync_widgets_from_recorder()
         self.is_open = True
+
+        # Say where the keyboard is, over the same set the keys are routed by — one animation for the
+        # panel's whole life, since the marks it holds are cheap and it only lights the focused one.
+        if self._focus_follower is None:
+            self._focus_follower = keyboardmark.install_focus_follower(self._FOCUSABLE)
+        # Park the keyboard on the microphone chooser, so the keys work without a click first. A combo
+        # is a safe home: `dpg.focus_item` moves focus to it without activating it, unlike a child
+        # window, and DPG leaves ImGui's keyboard-nav activation off so it cannot open itself.
+        dpg.focus_item("audio_input_device_combo")  # tag
 
         # The readout is connected for as long as the panel is on screen, whatever the device is doing —
         # the panel is a view onto the recorder, so its meter follows the same stream the toolbar's does,
@@ -186,6 +197,87 @@ class DPGAudioInputPanel:
             dpg.hide_item(self.window_id)  # tag
         if self.save_app_state is not None:
             self.save_app_state()
+
+    # ------------------------------------------------------------------------------
+    # Keyboard
+    #
+    # The panel is not modal, so its keys must not reach it while the user is typing in the chat. They
+    # are routed by *what has focus* rather than by the panel being open: `handle_key` answers whether
+    # it took the key, and the app passes on anything it did not. Opening the panel parks focus on the
+    # microphone chooser, so the keys work without a click first — and the blue mark says where they go.
+    #
+    # The sliders are deliberately not reachable this way. Raven has no keyboard story for a slider
+    # anywhere yet, and inventing one here would be inventing it for the constellation; see
+    # `TODO_DEFERRED.md`.
+
+    #: Every widget of ours that can hold the focus, in the order Tab visits them.
+    _FOCUSABLE = ("audio_input_device_combo",  # tag
+                  "audio_input_measure_button",  # tag
+                  "audio_input_autodetect_checkbox",  # tag
+                  "audio_input_autostop_checkbox",  # tag
+                  "audio_input_reset_button")  # tag
+
+    def has_keyboard(self) -> bool:
+        """Whether the keyboard is currently in this panel, and its keys should apply."""
+        if not self.is_open:
+            return False
+        focused = dpg.get_focused_item()
+        return any(focused in guiutils.item_identifiers(widget) for widget in self._FOCUSABLE)
+
+    def handle_key(self, key: int) -> bool:
+        """Act on `key` if it is one of ours. Return whether it was taken.
+
+        Only ever called while `has_keyboard`, so a bare letter here cannot reach the chat composer.
+        """
+        if key == dpg.mvKey_Escape:
+            self.close()
+        elif key == dpg.mvKey_M:
+            self._measure_the_room()
+        elif key == dpg.mvKey_R:
+            self._reset_to_configured_defaults()
+        elif key == dpg.mvKey_A:
+            self._toggle_checkbox("audio_input_autodetect_checkbox", self._on_autodetect_checkbox)  # tag
+        elif key == dpg.mvKey_S:
+            self._toggle_checkbox("audio_input_autostop_checkbox", self._on_autostop_checkbox)  # tag
+        elif key == dpg.mvKey_D:
+            dpg.focus_item("audio_input_device_combo")  # tag
+        elif key in (dpg.mvKey_Up, dpg.mvKey_Down, dpg.mvKey_Home, dpg.mvKey_End):
+            return self._browse_devices(key)
+        else:
+            return False
+        return True
+
+    def _toggle_checkbox(self, tag: Union[int, str], callback: Callable) -> None:
+        """Flip a checkbox and run its callback, which `set_value` does not do by itself."""
+        value = not dpg.get_value(tag)
+        dpg.set_value(tag, value)
+        callback(tag, value)
+
+    def _browse_devices(self, key: int) -> bool:
+        """Step the microphone chooser, as the arrow keys do for a combo elsewhere in the constellation.
+
+        Only when the chooser itself has the focus: the same keys scroll the chat when it does not.
+        """
+        if dpg.get_focused_item() not in guiutils.item_identifiers("audio_input_device_combo"):  # tag
+            return False
+        labels = list(dpg.get_item_configuration("audio_input_device_combo")["items"])  # tag
+        if not labels:
+            return False
+        try:
+            index = labels.index(dpg.get_value("audio_input_device_combo"))  # tag
+        except ValueError:
+            index = 0
+        if key == dpg.mvKey_Up:
+            index = max(index - 1, 0)
+        elif key == dpg.mvKey_Down:
+            index = min(index + 1, len(labels) - 1)
+        elif key == dpg.mvKey_Home:
+            index = 0
+        else:  # dpg.mvKey_End
+            index = len(labels) - 1
+        dpg.set_value("audio_input_device_combo", labels[index])  # tag  # fires no callback of its own
+        self._on_device_combo("audio_input_device_combo", labels[index])  # tag
+        return True
 
     def toggle(self) -> None:
         """Open the panel if closed, close it if open. What the hotkey and the toolbar button call."""

@@ -431,6 +431,8 @@ Voice input is still young; voice message editing is missing, for example. We in
 
 How quiet counts as "finished speaking" depends on the room, so it is a control rather than a setting you are expected to get right in advance. Click the **sliders button** (next to the mic) or press **F9** to open the **Audio input** panel.
 
+Everything in the panel but the sliders can be driven from the keyboard, and the blue mark shows where the keys are going. Opening it puts them on the microphone chooser: **Up**, **Down**, **Home** and **End** step through the microphones, and **D** returns there from anywhere. **M** measures the room, **A** and **S** flip the two checkboxes, **R** resets, and **Esc** closes the panel. The keys apply only while one of the panel's own controls has the focus, so they do not disturb what you are typing in the chat.
+
 While the panel is open, *Librarian* listens to the mic without recording anything and without sending anything to the AI, so you can watch the input level with the room as it actually is. The status line above the meter says which it is doing, and both meters stay live through an actual recording too — the panel is a second view of the same input, not a separate one.
 
 - **Microphone** picks which input to record from. The list is re-read each time you open the panel, so something plugged in while *Librarian* was running is there. Switching takes effect immediately, and the meter follows — which is how you compare two microphones, or tell a noisy room from a noisy mic.

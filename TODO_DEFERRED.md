@@ -13,6 +13,24 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Sliders have no keyboard story anywhere in Raven
+
+*Cluster: keyboard access · Cost: M · Gate: a design decision, not a measurement · Filed: 2026-08-28*
+
+Every slider in the constellation is mouse-only. Librarian's audio input panel made this visible because
+everything *else* in it can now be reached from the keyboard — the microphone chooser, the two checkboxes,
+both buttons — so the three sliders are the hole left in an otherwise complete surface.
+
+DPG offers Ctrl+click to type a value into a slider, which is a keyboard path only for someone who already
+knows it is there and can reach the widget with a mouse first. What is missing is stepping a focused slider
+with the arrow keys, and a convention for a coarse step against a fine one.
+
+It wants deciding once for the constellation rather than per panel: `raven-avatar-settings-editor` has
+seven, the postprocessor editor has one per filter parameter, and the audio input panel has three. A rule
+invented in whichever came first would become the constellation's rule by accident.
+
+Discovered while adding keyboard access to the audio input panel (Juha, 2026-08-28).
+
 ## `fetch_document` inlines up to eleven times what `webfetch` would move out of the log
 
 *Cluster: librarian-context · Cost: M — the design is the work · Gate: none · Filed: 2026-08-25*

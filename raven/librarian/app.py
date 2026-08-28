@@ -1854,6 +1854,12 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="While writing a message"),
                env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak to AI using your mic", notes=f"Device: {audio_recorder.require().device_name}"),
                env(key_indent=1, key="F9", action_indent=0, action="Set up the microphone", notes="Input level, and when quiet means finished"),
+               env(key_indent=2, key="D", action_indent=1, action="Choose the microphone", notes="Then Up, Down, Home, End"),
+               env(key_indent=2, key="M", action_indent=1, action="Measure the room", notes=""),
+               env(key_indent=2, key="A", action_indent=1, action="Measure at each recording", notes=""),
+               env(key_indent=2, key="S", action_indent=1, action="Stop on silence", notes=""),
+               env(key_indent=2, key="R", action_indent=1, action="Reset to configured", notes=""),
+               env(key_indent=2, key="Esc", action_indent=1, action="Close the panel", notes="While the panel has the keyboard"),
                env(key_indent=0, key="Ctrl+Shift+O", action_indent=0, action="Attach file(s) to your message", notes="Documents; and images on a VLM"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+T", action_indent=0, action="Show/hide last thinking trace", notes="For thinking models"),
@@ -2129,6 +2135,12 @@ def librarian_hotkeys_callback(sender, app_data):
 
     elif key == dpg.mvKey_F1:  # de facto standard hotkey for help
         help_window.show()
+
+    # The audio input panel is not modal, so it cannot claim the keyboard the way a dialog does — it
+    # takes the keys only while the focus is on one of its own controls, and passes on anything else.
+    # That is what lets it use bare letters without stealing them from the composer.
+    elif audio_input_panel.has_keyboard() and audio_input_panel.handle_key(key):
+        pass
 
     # Hotkeys for main window, while no modal window is shown
     elif key == dpg.mvKey_F9:  # a bare key, because it is reached with a microphone in one hand
