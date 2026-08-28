@@ -216,7 +216,14 @@ class DPGAudioInputPanel:
         audio_recorder.require().vu_peak_hold = value
         self.app_state["stt_vu_peak_hold"] = value
 
+    # A slider only edits a value that is currently in effect, and it asks the recorder whether that is
+    # so rather than asking its own checkbox. Two assumptions drop out that way: that DPG withholds
+    # input from a disabled widget, and that a checkbox's widget value is in step with the `app_data`
+    # its callback was handed. Neither has been measured here, and what a wrong guess switches back on
+    # is precisely the setting the user turned off.
     def _on_threshold_slider(self, sender, app_data) -> None:
+        if audio_recorder.require().silence_threshold is None:
+            return  # measuring per recording; the slider is only saying what a fixed threshold would be
         self._apply_threshold(float(app_data))
 
     def _on_autodetect_checkbox(self, sender, app_data) -> None:
@@ -230,6 +237,8 @@ class DPGAudioInputPanel:
         self._apply_autostop_timeout(float(dpg.get_value("audio_input_autostop_slider")) if enabled else None)  # tag
 
     def _on_autostop_slider(self, sender, app_data) -> None:
+        if audio_recorder.require().autostop_timeout is None:
+            return  # autostop is off; the slider is only saying how long it would wait
         self._apply_autostop_timeout(float(app_data))
 
     def _on_peak_hold_slider(self, sender, app_data) -> None:

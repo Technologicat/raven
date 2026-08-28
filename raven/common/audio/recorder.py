@@ -20,8 +20,9 @@ from typing import Callable, Optional, List, Tuple
 
 import numpy as np
 
-import pvrecorder
-
+# `pvrecorder` is imported where a device is actually opened, not here. It is the only dependency in this
+# module that a machine may not have, and importing it at module level made everything that *mentions* a
+# recorder — a GUI panel, a test with a stub in place of the device — need it as well.
 from unpythonic import memoize
 from unpythonic.env import env
 
@@ -50,6 +51,7 @@ DEFAULT_VU_PEAK_HOLD = 1.0  # seconds
 @memoize
 def get_available_devices() -> List[str]:
     """Return a list of the names of available audio capture devices."""
+    import pvrecorder  # noqa: PLC0415 -- deferred on purpose; see the note at the imports
     return list(pvrecorder.PvRecorder.get_available_devices())
 
 def validate_capture_device(device_name: Optional[str]) -> str:
@@ -159,6 +161,8 @@ class Recorder:
 
         self.silence_threshold = silence_threshold  # dBFS
         self.autostop_timeout = autostop_timeout  # seconds
+
+        import pvrecorder  # noqa: PLC0415 -- deferred on purpose; see the note at the imports
 
         # `pvrecorder` is always mono ( asked the author here: https://github.com/Picovoice/pvrecorder/issues/146 )
         self.frame_length = frame_length
