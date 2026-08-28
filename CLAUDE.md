@@ -414,6 +414,10 @@ Component order is fixed, so a reader learns where to look: *Raven-librarian*, *
 
 **File a new entry into its group when you write it.** The failure this prevents: 0.2.8 accumulated 58 flat entries — 24 of them opening with `*Raven-librarian*:` — before anyone noticed the prefix was a heading doing prose duty, and regrouping after the fact is a large, error-prone reshuffle that has to be verified entry by entry.
 
+**Measurements from a particular corpus stay out.** "1598 of 6934 records", "1650 occurrences of `©` down to 1" — a number like that is evidence *for* the change, and it is evidence drawn from one dataset that happened to be on a JAMK researcher's disk. A reader of the changelog has a different corpus and wants to know what the feature does for theirs, so the entry says the *kind* of effect and its shape ("this can account for a large share of a file", "publisher names largely gone from the word cloud"), and the figures go where they belong: the commit message, and the brief if there is one.
+
+The pull toward including them is strong and worth naming, because it is not laziness — a measured number is the most honest thing in the room, and it feels like the strongest sentence available. It is, for the audience that shares the corpus. The changelog's audience does not. (Caught twice in one session, 2026-08-28, in entries for `raven-fixbib` and the abstract boilerplate stripper — both written immediately after the measuring, which is exactly when the numbers are most vivid and least transferable.)
+
 This is Raven-local, not fleet-wide: elsewhere in the fleet a project *is* the component, so a header would be noise. Wording rules (density, nesting, users-not-commits, "was it broken in the last tagged release?") are fleet-wide and live in the `changelog` skill.
 
 ### Live GUI testing on a shared desktop
