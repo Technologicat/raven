@@ -409,7 +409,7 @@ class DPGAudioInputPanel:
                               callback=self._on_device_combo,
                               tag="audio_input_device_combo")  # tag
             dpg.add_text("", tag="audio_input_status_text", color=DIM_TEXT)  # tag
-            dpg.add_separator()
+            guiutils.add_section_separator()
 
             with dpg.group(horizontal=True):
                 self.meter = DPGVUMeter(width=28,
@@ -462,7 +462,7 @@ class DPGAudioInputPanel:
                                  callback=self._on_peak_hold_slider,
                                  tag="audio_input_peak_hold_slider")  # tag
 
-            dpg.add_separator()
+            guiutils.add_section_separator()
 
             dpg.add_slider_float(label="Silence level",
                                  min_value=METER_MIN,
@@ -493,7 +493,7 @@ class DPGAudioInputPanel:
                                  callback=self._on_autostop_slider,
                                  tag="audio_input_autostop_slider")  # tag
 
-            dpg.add_separator()
+            guiutils.add_section_separator()
             # No Close button: the window's own title-bar X does it, and `on_close` routes that through
             # the same `close`.
             dpg.add_button(label="Reset to configured defaults",

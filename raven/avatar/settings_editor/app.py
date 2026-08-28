@@ -724,7 +724,7 @@ class PostprocessorSettingsEditorGUI:
 
                     dpg.add_spacer(height=4)
                     dpg.add_input_text(default_value="",
-                                       hint="[Enter text to speak]",
+                                       hint="[Enter text to speak — Ctrl+Space]",
                                        width=self.button_width,
                                        tag="speak_input_text")
                     with dpg.group(horizontal=True):
@@ -1607,6 +1607,8 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
             dpg.focus_item(gui_instance.emotion_choice)
         elif key == dpg.mvKey_V:
             dpg.focus_item(gui_instance.voice_choice)
+        elif key == dpg.mvKey_Spacebar:  # as Raven-librarian focuses its composer
+            dpg.focus_item("speak_input_text")  # tag
         elif key == dpg.mvKey_S:
             if not gui_instance.speaking:
                 gui_instance.on_start_speaking(sender, app_data, "speak")  # emulate clicking the "Speak / Stop speaking" button (as opposed to the record/stop button)
@@ -1677,6 +1679,7 @@ hotkey_info = (
     env(key_indent=0, key="Ctrl+S", action_indent=0, action="Speak / stop speaking", notes=""),
     env(key_indent=0, key="Ctrl+E", action_indent=0, action="Focus emotion chooser", notes=""),
     env(key_indent=0, key="Ctrl+V", action_indent=0, action="Focus voice chooser", notes=""),
+    env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus text to speak", notes=""),
     env(key_indent=1, key="Up / Down", action_indent=0, action="Previous / next choice", notes="While focused"),
     env(key_indent=1, key="Home / End", action_indent=0, action="First / last choice", notes="While focused"),
     helpcard.hotkey_blank_entry,
@@ -1714,6 +1717,13 @@ avatar_instance_id = api.avatar_load(_startup_input_image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings into the GUI, as well as send them to the avatar instance.
 gui_instance.current_input_image_path = _startup_input_image_path  # so that the Refresh button works
+
+# Say where the keyboard is. The set is the controls this app can *send* the keyboard to — the two combos
+# the arrow keys browse (`combobox_choice_map`), and the text field Ctrl+Space focuses — so the marking
+# rule is the routing rule, and DPG draws nothing of its own on any of the three.
+keyboardmark.install_focus_follower([gui_instance.emotion_choice,
+                                     gui_instance.voice_choice,
+                                     "speak_input_text"])  # tag
 api.avatar_start(avatar_instance_id)  # start the avatar rendering on the server...
 gui_instance.dpg_avatar_renderer.start(avatar_instance_id,  # ...and start displaying the live video on the client
                                        on_frame_received=video_recorder._on_frame_received)

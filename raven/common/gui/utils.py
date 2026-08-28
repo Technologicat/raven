@@ -18,7 +18,7 @@ __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually wa
            "park_offscreen", "recenter_window",
            "compute_tooltip_position_scalar",  # re-exported from layout_math
            "snap_slider",
-           "add_toolbar_separator",
+           "add_section_separator", "add_toolbar_separator",
            "get_pixels_per_plotter_data_unit",
            "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y", "DPG_SCROLLBAR_SIZE"]  # default-theme metrics Raven has to know
 
@@ -904,6 +904,29 @@ def snap_slider(sender: Union[str, int],
     value = round(float(value), decimals)
     dpg.set_value(sender, value)
     return value
+
+def add_section_separator(*,
+                          spacing: int = 6,
+                          parent: Optional[Union[int, str]] = None) -> Union[int, str]:
+    """Add a horizontal rule with room around it, between sections of a vertical layout.
+
+    `dpg.add_separator` draws its line flush against whatever sits above and below, so it reads as
+    something attached to one of them rather than as a break between the two.
+
+    `spacing`: pixels of blank space above and below the line.
+    `parent`: explicit DPG parent. `None` uses the implicit container stack, which is what you want
+              inside a `with dpg.window(...)` during a GUI build.
+
+    Returns the DPG item ID of the separator itself.
+
+    See `add_toolbar_separator` for the other axis. That one draws into a drawlist and needs the
+    toolbar's cross-axis size in pixels, which a window that sizes itself to its content cannot say.
+    """
+    kwargs = {} if parent is None else {"parent": parent}
+    dpg.add_spacer(height=spacing, **kwargs)
+    separator = dpg.add_separator(**kwargs)
+    dpg.add_spacer(height=spacing, **kwargs)
+    return separator
 
 def add_toolbar_separator(*,
                           horizontal: bool,

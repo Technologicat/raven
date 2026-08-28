@@ -381,6 +381,41 @@ class TestDescribeItem:
         assert "[deleted]" in described, described
 
 
+class TestAddSectionSeparator:
+    def test_it_puts_space_on_both_sides_of_the_line(self, dpg_context):
+        # A bare `dpg.add_separator` draws flush against its neighbours, which reads as a line attached
+        # to one of them rather than as a break between the two.
+        with dpg.window() as window:
+            dpg.add_text("above")
+            separator = guiutils.add_section_separator(spacing=6)
+            dpg.add_text("below")
+        kinds = [dpg.get_item_type(item) for item in dpg.get_item_children(window, slot=1)]
+        assert kinds == ["mvAppItemType::mvText",
+                         "mvAppItemType::mvSpacer",
+                         "mvAppItemType::mvSeparator",
+                         "mvAppItemType::mvSpacer",
+                         "mvAppItemType::mvText"], kinds
+        assert dpg.get_item_type(separator) == "mvAppItemType::mvSeparator", "the returned item is not the line"
+        dpg.delete_item(window)
+
+    def test_the_spacing_is_what_was_asked_for(self, dpg_context):
+        with dpg.window() as window:
+            guiutils.add_section_separator(spacing=13)
+        spacers = [item for item in dpg.get_item_children(window, slot=1)
+                   if dpg.get_item_type(item) == "mvAppItemType::mvSpacer"]
+        assert [dpg.get_item_configuration(item)["height"] for item in spacers] == [13, 13]
+        dpg.delete_item(window)
+
+    def test_an_explicit_parent_is_honoured(self, dpg_context):
+        # The panel builds inside a `with dpg.window(...)`, but a caller adding to an existing container
+        # after the fact has only the parent to go on.
+        with dpg.window() as window:
+            group = dpg.add_group()
+        guiutils.add_section_separator(parent=group)
+        assert len(dpg.get_item_children(group, slot=1)) == 3
+        dpg.delete_item(window)
+
+
 class TestSnapSlider:
     """`snap_slider` exists because ImGui's float slider has no step: `format` decides how the number
     is drawn and not what it is, so a drag stores more digits than the control ever offered.

@@ -64,6 +64,8 @@
 
 - **an `enabled` switch on postprocessor chain entries**, default on. Set it to `false` to skip a filter while its settings stay in the chain, so a look you spent an evening tuning survives being switched off and back on. It belongs to the chain rather than to any filter, and works anywhere a postprocessor chain does.
 
+- **the settings editor says where the keyboard is, and Ctrl+Space reaches the text-to-speak field.** The emotion chooser, the voice chooser and that field now carry the blue pulse the rest of the constellation uses for the same thing — DPG draws nothing of its own on any of the three, so until now a focused control was indistinguishable from an unfocused one. The field was also the one keyboard-reachable control with no hotkey to reach it; Ctrl+Space is what Raven-librarian uses for its composer.
+
 *Raven-fixbib*
 
 - **records naming the same field twice are now repaired too**, which is how a database export arrives: a ProQuest record carries a separate `annote` for its copyright statement, its last-updated date and its subject terms, and BibTeX has no way to say that, so the parser rejects the entry whole — title, authors and all. The repeats are merged into one field, values kept and joined by newlines, and everything else in the record is left character for character as it was.
