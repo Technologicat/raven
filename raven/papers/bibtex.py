@@ -4,7 +4,8 @@ Writing: `entries_to_bibtex` converts arXiv Atom feed entries, used by `raven.pa
 arXiv API search results.
 
 Reading: `parse_file` and `parse_string` wrap `bibtexparser` with the one middleware chain Raven reads
-BibTeX through, so every consumer gets the same normalization.
+BibTeX through, so every consumer gets the same normalization. A caller that will *write* the library back
+out wants `split_names=False`, and `write_string` either way — see below.
 
 Repairing: `repair_record` and `repair_duplicate_field_keys` each rescue one record `bibtexparser`
 refused, for the two reasons a real-world export gives it — braces that do not balance, and a field name
@@ -14,7 +15,7 @@ write it to a file; `raven.papers.fixbib` does the latter.
 
 from __future__ import annotations
 
-__all__ = ["parse_file", "parse_string",
+__all__ = ["parse_file", "parse_string", "write_string",
            "repair_record", "repair_duplicate_field_keys",
 
            "entries_to_bibtex"]
@@ -32,7 +33,7 @@ from ..common import utils as common_utils
 from . import identifiers
 
 
-def _reader_middleware() -> list:
+def _reader_middleware(split_names: bool) -> list:
     """The middleware chain Raven reads BibTeX through, as a fresh list per call.
 
     Each link earns its place:
@@ -41,34 +42,75 @@ def _reader_middleware() -> list:
         `Title = {...}`, the BibTeX literature writes `title = {...}`.
       - `SeparateCoAuthors` then `SplitNameParts`, in that order, because the second raises without the
         first. Between them they turn one `author` string into name parts that survive "Ludwig van
-        Beethoven", "Brinch Hansen, Per" and "Beeblebrox, IV, Zaphod".
+        Beethoven", "Brinch Hansen, Per" and "Beeblebrox, IV, Zaphod". Omitted when `split_names` is
+        false, leaving `author` and `editor` the strings the file had.
 
     Fresh instances rather than a shared module-level list, because a middleware is free to carry
     per-parse state and sharing one across concurrent parses would be a bug that only shows up under
     load.
     """
-    return [bibtexparser.middlewares.NormalizeFieldKeys(),
-            bibtexparser.middlewares.SeparateCoAuthors(),
-            bibtexparser.middlewares.SplitNameParts()]
+    chain = [bibtexparser.middlewares.NormalizeFieldKeys()]
+    if split_names:
+        chain += [bibtexparser.middlewares.SeparateCoAuthors(),
+                  bibtexparser.middlewares.SplitNameParts()]
+    return chain
 
 
-def parse_file(filename: str | pathlib.Path) -> Library:
+def parse_file(filename: str | pathlib.Path, split_names: bool = True) -> Library:
     """Parse the BibTeX file `filename`, returning a `bibtexparser` `Library`.
+
+    `split_names`: whether to break `author` and `editor` into name parts. See `parse_string`.
 
     Raises whatever `bibtexparser` raises; a caller that wants to treat unparseable input as a normal
     outcome should catch it. Note a `Library` can also come back *partly* parsed - unreadable records
     land in `library.failed_blocks` rather than raising, so a successful return is not a promise that
     every record was understood.
     """
-    return bibtexparser.parse_file(str(filename), append_middleware=_reader_middleware())
+    return bibtexparser.parse_file(str(filename), append_middleware=_reader_middleware(split_names))
 
 
-def parse_string(text: str) -> Library:
+def parse_string(text: str, split_names: bool = True) -> Library:
     """Parse `text` as BibTeX, returning a `bibtexparser` `Library`.
+
+    `split_names`: whether to break `author` and `editor` into name parts. True, the default, is what a
+                   *consumer* wants: one `author` string becomes a list of `NameParts`, so a caller can
+                   ask for the first author's surname without writing a name parser. False leaves both
+                   fields as the strings the file had, which is what a caller that will write the library
+                   back out wants — `raven.papers.deduplicate` is the one in-tree.
 
     `parse_file`, which see, for the error behaviour - it is the same.
     """
-    return bibtexparser.parse_string(text, append_middleware=_reader_middleware())
+    return bibtexparser.parse_string(text, append_middleware=_reader_middleware(split_names))
+
+
+def write_string(library: Library) -> str:
+    """Serialize a `bibtexparser` `Library` back to BibTeX text.
+
+    Use this rather than `bibtexparser.write_string`, whatever the library was read with: it undoes the
+    name splitting when the library carries it and does nothing when it does not, so there is no pairing
+    for a caller to get right.
+
+    Field *values* survive the round trip byte for byte — inner `{LaTeX}` groups, `\\%` escapes, and
+    non-ASCII alike. The *layout* does not, and is not meant to: indentation becomes a tab, a quoted value
+    becomes a braced one, and a bare value gains braces. Callers rewriting a bibliography get a
+    normalized file, which is the point of writing one out at all.
+    """
+    # `bibtexparser.write_string` renders a value it does not recognize with `repr()`, so writing a
+    # split-name library through it silently produces `author = {[NameParts(first=['Jane'], ...)]}` —
+    # a valid-looking BibTeX file with every author field destroyed, and no warning anywhere. Hence a
+    # writer in this module at all, rather than a note telling callers to remember the inverse chain.
+    #
+    # Detected from the data rather than taken as an argument, because the two ways of getting it wrong
+    # are not equally survivable: merging an unsplit library raises `ValueError` and stops, while *not*
+    # merging a split one writes the mangled file and exits 0.
+    needs_merge = any(isinstance(field.value, list)
+                      for entry in library.entries
+                      for field in entry.fields)
+    if not needs_merge:
+        return bibtexparser.write_string(library)
+    return bibtexparser.write_string(library,
+                                     prepend_middleware=[bibtexparser.middlewares.MergeNameParts(),
+                                                         bibtexparser.middlewares.MergeCoAuthors()])
 
 
 def repair_record(raw: str) -> str | None:

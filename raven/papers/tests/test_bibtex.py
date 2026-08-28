@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from raven.papers.bibtex import (_clean_whitespace, _field_spans, _make_key, _undelimit,
                                  entries_to_bibtex, parse_file, parse_string,
-                                 repair_duplicate_field_keys)
+                                 repair_duplicate_field_keys, write_string)
 
 
 def _fake_entry(
@@ -213,6 +213,76 @@ class TestParseFile:
 
         assert len(parse_file(path).entries) == 1
         assert len(parse_file(str(path)).entries) == 1
+
+
+class TestSplitNamesOff:
+    def test_author_stays_the_string_the_file_had(self):
+        library = parse_string("@article{k, author={Beeblebrox, IV, Zaphod and Alice Smith}, year={2024}}",
+                               split_names=False)
+        assert library.entries[0]["author"] == "Beeblebrox, IV, Zaphod and Alice Smith"
+
+    def test_field_keys_are_still_normalized(self):
+        # The one middleware that is not about names stays on: a rewriting caller wants it as much as a
+        # reading one, since it is what makes `entry["title"]` work on a Web of Science export.
+        library = parse_string("@article{k, Title={A Study}, YEAR={2024}}", split_names=False)
+        assert sorted(f.key for f in library.entries[0].fields) == ["title", "year"]
+
+
+class TestWriteString:
+    # `author` here exercises all three shapes the name splitter handles, so a round trip that keeps it
+    # intact has kept the hard cases; the other fields cover the delimiters and escapes.
+    SOURCE = ("@article{k,\n"
+              "  title = {A Study of {LaTeX} Braces and Ümlauts},\n"
+              "  author = {Smith, Jane and van Beethoven, Ludwig and Beeblebrox, IV, Zaphod},\n"
+              "  year = 2024,\n"
+              "  note = \"a quoted value\",\n"
+              "  abstract = {100\\% coverage},\n"
+              "}\n")
+
+    def test_upstream_writes_a_split_library_as_repr(self):
+        """Why this module has a writer at all — pinned, because it is the failure it exists to prevent.
+
+        `bibtexparser.write_string` renders a value it does not recognize with `repr()`, so a library read
+        through the default chain comes back out with every author field replaced by the text of a Python
+        object — a file that still parses as BibTeX, with the authors gone and nothing logged.
+        """
+        import bibtexparser
+        mangled = bibtexparser.write_string(parse_string(self.SOURCE))
+        assert "NameParts(" in mangled
+
+    def test_a_split_library_round_trips(self):
+        assert "NameParts(" not in write_string(parse_string(self.SOURCE))
+        rewritten = parse_string(write_string(parse_string(self.SOURCE)))
+        assert _last_names(rewritten.entries[0]) == ["Smith", "Beethoven", "Beeblebrox"]
+
+    def test_an_unsplit_library_round_trips(self):
+        rewritten = parse_string(write_string(parse_string(self.SOURCE, split_names=False)))
+        assert _last_names(rewritten.entries[0]) == ["Smith", "Beethoven", "Beeblebrox"]
+
+    def test_both_chains_write_the_same_text(self):
+        """The property that lets `write_string` decide from the data instead of taking an argument.
+
+        If the two disagreed, a caller would have to remember which reader produced the library, and the
+        way to get that wrong silently is the one above.
+        """
+        assert write_string(parse_string(self.SOURCE)) == write_string(parse_string(self.SOURCE, split_names=False))
+
+    def test_field_values_survive_byte_for_byte(self):
+        written = write_string(parse_string(self.SOURCE, split_names=False))
+        assert "{A Study of {LaTeX} Braces and Ümlauts}" in written  # inner groups and non-ASCII both
+        assert "{100\\% coverage}" in written                        # and the escape stays an escape
+
+    def test_writing_is_idempotent(self):
+        # A bibliography that has been through the tool once must not keep changing on later passes;
+        # otherwise every re-run of a rewriting tool shows a diff that means nothing.
+        once = write_string(parse_string(self.SOURCE, split_names=False))
+        assert write_string(parse_string(once, split_names=False)) == once
+
+    def test_an_entry_with_no_names_at_all_is_written(self):
+        # The detection asks whether *any* field holds a list. A library with no author anywhere must
+        # take the no-merge path rather than fall off the end of `any()` into an error.
+        written = write_string(parse_string("@book{b, title={No author at all}, year={2024}}"))
+        assert "No author at all" in written
 
 
 class TestFieldSpans:
