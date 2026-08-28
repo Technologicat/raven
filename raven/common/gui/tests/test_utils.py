@@ -379,3 +379,40 @@ class TestDescribeItem:
         described = guiutils.describe_item(widget)
         assert "describe_probe_doomed" in described, described
         assert "[deleted]" in described, described
+
+
+class TestSnapSlider:
+    """`snap_slider` exists because ImGui's float slider has no step: `format` decides how the number
+    is drawn and not what it is, so a drag stores more digits than the control ever offered.
+    """
+
+    @pytest.fixture
+    def slider(self, dpg_context):
+        with dpg.window() as window:
+            yield dpg.add_slider_float(min_value=0.0, max_value=10.0, default_value=1.0, parent=window)
+            dpg.delete_item(window)
+
+    def test_it_rounds_to_the_asked_precision(self, slider):
+        assert guiutils.snap_slider(slider, 2.5327194213867188) == 2.5
+
+    def test_it_snaps_the_handle_too(self, slider):
+        # Without this the widget keeps the unrounded number and the next drag starts from a value
+        # nothing ever stored — invisible, since the display rounds either way.
+        guiutils.snap_slider(slider, 2.5327194213867188)
+        assert dpg.get_value(slider) == pytest.approx(2.5)
+
+    def test_more_decimals_keep_more(self, slider):
+        assert guiutils.snap_slider(slider, 2.5327194213867188, decimals=3) == 2.533
+
+    def test_zero_decimals_give_a_whole_number(self, slider):
+        assert guiutils.snap_slider(slider, 2.5327194213867188, decimals=0) == 3.0
+
+    def test_it_cannot_be_a_dpg_callback_as_it_stands(self):
+        # DPG passes a callback as many positional arguments as `len(signature.parameters)` — which
+        # counts `decimals`, keyword-only and defaulted though it is. So a call site must wrap this in
+        # a two-parameter lambda, and this asserts the reason rather than leaving the wrapper looking
+        # like something a later tidy-up could remove.
+        import inspect
+        parameters = inspect.signature(guiutils.snap_slider).parameters
+        assert len(parameters) == 3, "if this is 2, the wrappers at the call sites are no longer needed"
+        assert parameters["decimals"].kind is inspect.Parameter.KEYWORD_ONLY

@@ -17,6 +17,7 @@ __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually wa
            "wait_for_resize",
            "park_offscreen", "recenter_window",
            "compute_tooltip_position_scalar",  # re-exported from layout_math
+           "snap_slider",
            "add_toolbar_separator",
            "get_pixels_per_plotter_data_unit",
            "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y", "DPG_SCROLLBAR_SIZE"]  # default-theme metrics Raven has to know
@@ -880,6 +881,29 @@ def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, 
 # ---------------------------------------------------------------------------
 # Tooltips, toolbars
 # ---------------------------------------------------------------------------
+
+def snap_slider(sender: Union[str, int],
+                value: float,
+                *,
+                decimals: int = 1) -> float:
+    """Round a float slider's value to `decimals`, snap its handle onto that, and return it.
+
+    Call from the slider's own callback, passing the `sender` and `app_data` DPG handed you.
+
+    `decimals`: how many decimals to keep. Match the slider's `format` — `"%.1f"` wants `1`.
+
+    ImGui's float slider has no step, so `format` decides only how the number is *drawn*: a drag
+    hands over 1.5327194213867188 and shows "1.5". Without this, that is the figure that reaches
+    whatever stores the setting, and the next reader of a config or state file finds seventeen
+    digits under a control that offered one.
+
+    Snapping the handle matters as much as rounding the value: otherwise the widget goes on holding
+    the unrounded number, and the next drag starts from a value nothing ever stored — a drift the
+    display hides, since it rounds either way.
+    """
+    value = round(float(value), decimals)
+    dpg.set_value(sender, value)
+    return value
 
 def add_toolbar_separator(*,
                           horizontal: bool,

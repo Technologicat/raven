@@ -134,6 +134,10 @@
 
 - the importer's two LLM steps — cluster keyword extraction and abstract summarization — no longer run as a conversation with the assistant character. Both outputs are parsed by the importer rather than read by a person, while the character card asks for Markdown, for a reported train of thought, and for conversational prose — all of which had to be undone before the result could be used. Each of the two prompts already states its own task, so what the character contributed was only the part working against it. Expect cleaner keyword lists, and summaries that start with the summary.
 
+*Raven-avatar*
+
+- **the settings editor's fractional sliders now show the value they set**, where four of them showed it multiplied by ten with an `x 0.1` label to undo — upscale factor, animator speed, TTS speed and the lipsync AV offset. The animator's speed slider was the worst of them, since its label said only "Speed", so the 3 on screen was a 0.3 with nothing saying so. They read `1.4`, `0.3`, `1.0` and `-0.8` now.
+
 *Raven-cherrypick*
 
 - **the thumbnail grid scrolls smoothly**, and flashes an arrow at the top or bottom edge as you arrive there, and again if you press or wheel further. It was the last view in the constellation that jumped. A rebuild — changing the filter, or the tile size — still repositions instantly, since gliding there would animate toward a position that is about to be corrected.

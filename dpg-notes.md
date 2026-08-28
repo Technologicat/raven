@@ -103,6 +103,15 @@ for arg in range(len(sig.parameters)):
 job[0](*args)
 ```
 
+**`len(sig.parameters)` counts every parameter, including keyword-only ones and ones with defaults.** So a
+general-purpose helper is usually not directly bindable, however it reads at the call site: a function
+declared `f(sender, value, *, decimals=1)` has three parameters as far as that loop is concerned, and DPG
+calls it as `f(sender, app_data, user_data)` — a `TypeError` for the keyword-only argument, raised on the
+callback thread where it surfaces as something else entirely (see *Threading*). Bind a two-parameter lambda
+instead. `raven.common.gui.utils.snap_slider` is the worked example, and
+`test_utils.py::TestSnapSlider::test_it_cannot_be_a_dpg_callback_as_it_stands` asserts the reason so the
+wrappers do not look like something a later tidy-up could remove. Measured on DPG 2.3.1, 2026-08-28.
+
 So a zero-argument callback is called with nothing, and a one-argument callback receives the **sender** —
 which is what makes the loop-variable idiom unsafe here:
 

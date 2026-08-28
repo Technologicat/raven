@@ -574,14 +574,14 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_text("Set the animator's target FPS\n(will attempt to render and send at this rate)", parent="target_fps_tooltip")  # tag
                     with dpg.group(horizontal=True):
                         def reset_pose_interpolator_step():
-                            dpg.set_value("pose_interpolator_step_slider", 3)
+                            dpg.set_value("pose_interpolator_step_slider", 0.3)
                             self.on_gui_settings_change(None, None)
                         dpg.add_button(label="X", callback=reset_pose_interpolator_step, tag="pose_interpolator_step_reset_button")
                         dpg.add_tooltip("pose_interpolator_step_reset_button", tag="pose_interpolator_step_reset_tooltip")  # tag
                         dpg.add_text("Reset the animator's pose interpolator step to default", parent="pose_interpolator_step_reset_tooltip")  # tag
 
-                        dpg.add_slider_int(label="Speed", default_value=3, min_value=1, max_value=9, clamped=True, width=self.button_width - 80,
-                                           callback=self.on_gui_settings_change, tag="pose_interpolator_step_slider")
+                        dpg.add_slider_float(label="Speed", default_value=0.3, min_value=0.1, max_value=0.9, format="%.1f", clamped=True, width=self.button_width - 80,
+                                             callback=self.on_gui_settings_change, tag="pose_interpolator_step_slider")
                         dpg.add_tooltip("pose_interpolator_step_slider", tag="pose_interpolator_step_tooltip")  # tag
                         dpg.add_text("Set the animator's pose interpolator step (larger = faster)", parent="pose_interpolator_step_tooltip")  # tag
                     dpg.add_button(label="Pause [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
@@ -599,8 +599,8 @@ class PostprocessorSettingsEditorGUI:
 
                     # Upscaler settings
                     dpg.add_text("Upscaler [Ctrl+click to set a numeric value]")
-                    dpg.add_slider_int(label="x 0.1x", default_value=int(10 * self.upscale), min_value=10, max_value=20, clamped=True, width=self.button_width - 64,
-                                       callback=self.on_upscaler_settings_change, tag="upscale_slider")
+                    dpg.add_slider_float(label="x", default_value=self.upscale, min_value=1.0, max_value=2.0, format="%.1f", clamped=True, width=self.button_width - 64,
+                                         callback=self.on_upscaler_settings_change, tag="upscale_slider")
                     dpg.add_tooltip("upscale_slider", tag="upscale_tooltip")  # tag
                     dpg.add_text("Set upscale factor for avatar video stream", parent="upscale_tooltip")  # tag
                     self.upscale_presets = ["A", "B", "C"]
@@ -707,17 +707,18 @@ class PostprocessorSettingsEditorGUI:
                     dpg.add_text("Choose the TTS voice\n(Ctrl+V; then Up, Down, Home, End to jump)", parent="voice_tooltip")  # tag
                     with dpg.group(horizontal=True):
                         dpg.add_text("Speed")
-                        dpg.add_button(label="X", tag="speak_speed_reset_button", callback=lambda: dpg.set_value("speak_speed_slider", 10))
+                        dpg.add_button(label="X", tag="speak_speed_reset_button", callback=lambda: dpg.set_value("speak_speed_slider", 1.0))
                         dpg.add_tooltip("speak_speed_reset_button", tag="speak_speed_reset_tooltip")  # tag
                         dpg.add_text("Reset the TTS audio speed to default", parent="speak_speed_reset_tooltip")  # tag
 
-                        dpg.add_slider_int(label="x 0.1x", default_value=10, min_value=5, max_value=20, clamped=True, width=self.button_width - 122,
-                                           tag="speak_speed_slider")
+                        dpg.add_slider_float(label="x", default_value=1.0, min_value=0.5, max_value=2.0, format="%.1f", clamped=True, width=self.button_width - 122,
+                                             callback=lambda sender, app_data: guiutils.snap_slider(sender, app_data), tag="speak_speed_slider")
                         dpg.add_tooltip("speak_speed_slider", tag="speak_speed_tooltip")  # tag
                         dpg.add_text("Set the TTS audio speed\n(too high may cause skipped words)", parent="speak_speed_tooltip")  # tag
                     dpg.add_text("Lipsynced TTS [adjust video timing below]", tag="speak_lipsync_text")
 
-                    dpg.add_slider_int(label="x 0.1 s", default_value=-8, min_value=-20, max_value=20, clamped=True, width=self.button_width - 64, tag="speak_video_offset")
+                    dpg.add_slider_float(label="s", default_value=-0.8, min_value=-2.0, max_value=2.0, format="%.1f", clamped=True, width=self.button_width - 64,
+                                         callback=lambda sender, app_data: guiutils.snap_slider(sender, app_data), tag="speak_video_offset")
                     dpg.add_tooltip("speak_video_offset", tag="speak_video_tooltip")  # tag
                     dpg.add_text("Adjust AV offset for lipsync playback\n(positive value = shift video later w.r.t the audio)", parent="speak_video_tooltip")  # tag
 
@@ -1188,7 +1189,9 @@ class PostprocessorSettingsEditorGUI:
 
     def on_upscaler_settings_change(self, sender, app_data):
         """Update the upscaler status and send changes to server."""
-        new_upscale = dpg.get_value("upscale_slider") / 10
+        # By tag rather than from `sender`: this callback serves the two combos as well, and the
+        # slider wants normalizing whichever of the three fired.
+        new_upscale = guiutils.snap_slider("upscale_slider", dpg.get_value("upscale_slider"))  # tag
         # No preemptive `configure_live_texture` call — the renderer adapts automatically to the
         # new frame size once the server catches up to the new upscale setting.
         self.upscale = new_upscale
@@ -1237,6 +1240,10 @@ class PostprocessorSettingsEditorGUI:
                 raise RuntimeError("PostprocessorSettingsEditorGUI.on_gui_settings_change: no animator settings loaded, no base for update")
             # self.animator_settings is valid
 
+            # The one float slider among these; the rest are ints, checkboxes and combos, which need no
+            # rounding. By tag rather than from `sender`, since this callback serves all of them.
+            guiutils.snap_slider("pose_interpolator_step_slider", dpg.get_value("pose_interpolator_step_slider"))  # tag
+
             # Update the stuff that can be edited in the GUI:
             #
             # Postprocessor settings
@@ -1250,7 +1257,7 @@ class PostprocessorSettingsEditorGUI:
             custom_animator_settings = {"format": self.comm_format,
                                         "target_fps": dpg.get_value("target_fps_slider"),
                                         "talking_fps": dpg.get_value("talking_fps_slider"),
-                                        "pose_interpolator_step": dpg.get_value("pose_interpolator_step_slider") / 10,
+                                        "pose_interpolator_step": dpg.get_value("pose_interpolator_step_slider"),
                                         "upscale": self.upscale,
                                         "upscale_preset": self.upscale_preset,
                                         "upscale_quality": self.upscale_quality,
@@ -1285,11 +1292,11 @@ class PostprocessorSettingsEditorGUI:
             if "talking_fps" in animator_settings:
                 dpg.set_value("talking_fps_slider", animator_settings["talking_fps"])
             if "pose_interpolator_step" in animator_settings:
-                dpg.set_value("pose_interpolator_step_slider", int(animator_settings["pose_interpolator_step"] * 10))
+                dpg.set_value("pose_interpolator_step_slider", animator_settings["pose_interpolator_step"])
 
             if "upscale" in animator_settings:
                 self.upscale = animator_settings["upscale"]
-                dpg.set_value("upscale_slider", int(self.upscale * 10))
+                dpg.set_value("upscale_slider", self.upscale)
             if "upscale_preset" in animator_settings:
                 self.upscale_preset = animator_settings["upscale_preset"]
                 dpg.set_value("upscale_preset_choice", self.upscale_preset)
@@ -1321,7 +1328,7 @@ class PostprocessorSettingsEditorGUI:
             custom_animator_settings = {"format": self.comm_format,
                                         "target_fps": dpg.get_value("target_fps_slider"),
                                         "talking_fps": dpg.get_value("talking_fps_slider"),
-                                        "pose_interpolator_step": dpg.get_value("pose_interpolator_step_slider") / 10,
+                                        "pose_interpolator_step": dpg.get_value("pose_interpolator_step_slider"),
                                         "upscale": self.upscale,
                                         "upscale_preset": self.upscale_preset,
                                         "upscale_quality": self.upscale_quality,
@@ -1510,10 +1517,10 @@ class PostprocessorSettingsEditorGUI:
 
         # Populate the voice and voice speed fields
         avatar_record.voice = selected_voice
-        avatar_record.voice_speed = dpg.get_value("speak_speed_slider") / 10
+        avatar_record.voice_speed = dpg.get_value("speak_speed_slider")
         avatar_controller.send_text_to_tts(config=avatar_record,
                                            text=text,
-                                           video_offset=dpg.get_value("speak_video_offset") / 10,
+                                           video_offset=dpg.get_value("speak_video_offset"),
                                            on_audio_ready=on_audio_ready,
                                            on_start_speaking=on_start_batch,
                                            on_stop_speaking=on_stop_batch,

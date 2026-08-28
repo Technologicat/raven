@@ -243,16 +243,8 @@ class DPGAudioInputPanel:
     # its callback was handed. Neither has been measured here, and what a wrong guess switches back on
     # is precisely the setting the user turned off.
     def _quantize(self, sender, app_data) -> float:
-        """Round a slider's value to what its `format` displays, and snap the slider onto it.
-
-        ImGui's float slider has no step: `format="%.1f s"` changes what the number *looks* like and not
-        what it is, so a drag hands over 1.5327194213867188 and shows "1.5". Left alone, that is the
-        figure that reaches the app state file, where the next reader finds seventeen digits under a
-        control that offered one.
-        """
-        value = round(float(app_data), _SLIDER_DECIMALS)
-        dpg.set_value(sender, value)  # snap the handle too, so the widget and the setting agree
-        return value
+        """Round a slider's value to the precision its `format` displays, and snap the handle onto it."""
+        return guiutils.snap_slider(sender, app_data, decimals=_SLIDER_DECIMALS)
 
     def _on_threshold_slider(self, sender, app_data) -> None:
         if audio_recorder.require().silence_threshold is None:
