@@ -30,16 +30,25 @@ import html.entities
 import pathlib
 import re
 import unicodedata
+from typing import NamedTuple
 
 import bibtexparser
 from bibtexparser.model import Entry, Field
 from bibtexparser import Library
+
+from unpythonic import box, unbox
 
 from ..common import utils as common_utils
 from ..common.text import boilerplate
 
 from . import identifiers
 from .utils import bibtex_escape
+
+
+# The fields `SeparateCoAuthors` and `SplitNameParts` transform, read off the middleware rather than
+# written out, so that this follows upstream if the set ever changes. Currently
+# `("author", "editor", "translator")`.
+_NAME_FIELDS = bibtexparser.middlewares.SeparateCoAuthors().name_fields
 
 
 def _reader_middleware(split_names: bool) -> list:
@@ -109,13 +118,19 @@ def write_string(library: Library) -> str:
     # split-name library through it silently produces `author = {[NameParts(first=['Jane'], ...)]}` —
     # a valid-looking BibTeX file with every author field destroyed, and no warning anywhere.
     #
-    # Detected from the data, because the two ways of getting it wrong are not equally survivable:
-    # merging an unsplit library raises `ValueError` and stops, while *not* merging a split one
-    # writes the mangled file and exits 0.
-    needs_merge = any(isinstance(field.value, list)
-                      for entry in library.entries
-                      for field in entry.fields)
-    if not needs_merge:
+    # Asked of the library rather than taken as an argument, because the two ways of getting the pairing
+    # wrong are not equally survivable: merging an unsplit library raises `ValueError` and stops, while
+    # *not* merging a split one writes the mangled file and exits 0.
+    #
+    # The question is specifically "is a **name** field holding a list of `NameParts`", which is the one
+    # thing the split does and the only thing there is to undo. `_NAME_FIELDS` comes from the middleware
+    # itself rather than being written out here, so it cannot drift from the fields upstream actually
+    # transforms.
+    names_are_split = any(isinstance(field.value, list)
+                          for entry in library.entries
+                          for field in entry.fields
+                          if field.key in _NAME_FIELDS)
+    if not names_are_split:
         return bibtexparser.write_string(library)
     return bibtexparser.write_string(library,
                                      prepend_middleware=[bibtexparser.middlewares.MergeNameParts(),
@@ -217,13 +232,23 @@ def _scan_value(raw: str, i: int) -> int | None:
         return i
 
 
-def _field_spans(raw: str) -> list[tuple[str, int, int, int, int]] | None:
+class _FieldSpan(NamedTuple):
+    """Where one field of a BibTeX record sits in its text. Offsets are into the record's `raw`.
+
+    None of them includes the comma that separates one field from the next, so a span can be cut out, or
+    its value replaced, without disturbing the punctuation around it.
+    """
+    key: str            # lowercased
+    name_start: int
+    name_end: int
+    value_start: int
+    value_end: int
+
+
+def _field_spans(raw: str) -> list[_FieldSpan] | None:
     """Locate the fields of the single BibTeX record `raw`. `None` if it does not scan.
 
-    Each field is reported as `(lowercased key, name start, name end, value start, value end)`, in the
-    order they appear. Offsets are into `raw`, and none of them includes the comma that separates one
-    field from the next — so a span can be cut out, or its value replaced, without disturbing the
-    punctuation around it.
+    Fields come back in the order they appear, as `_FieldSpan`, which see.
 
     This is a scanner rather than a parse, because every caller here has a record `bibtexparser` has
     already refused; the point is to locate structure in text that is not going to become an `Entry`.
@@ -255,7 +280,7 @@ def _field_spans(raw: str) -> list[tuple[str, int, int, int, int]] | None:
         value_end = _scan_value(raw, value_start)
         if value_end is None:
             return None
-        spans.append((name.group().lower(), name.start(), name.end(), value_start, value_end))
+        spans.append(_FieldSpan(name.group().lower(), name.start(), name.end(), value_start, value_end))
         i = value_end
 
 
@@ -330,7 +355,7 @@ def repair_duplicate_field_keys(raw: str, maybe_duplicate_keys: set[str] | None 
 
     positions = collections.defaultdict(list)
     for index, span in enumerate(spans):
-        positions[span[0]].append(index)
+        positions[span.key].append(index)
     repeated = {key: indices for key, indices in positions.items() if len(indices) > 1}
     if maybe_duplicate_keys is not None:
         wanted = {key.lower() for key in maybe_duplicate_keys}
@@ -340,11 +365,11 @@ def repair_duplicate_field_keys(raw: str, maybe_duplicate_keys: set[str] | None 
 
     edits = []  # (start, end, replacement), disjoint, applied in one pass below
     for indices in repeated.values():
-        values = [_undelimit(raw[spans[i][3]:spans[i][4]]) for i in indices]
+        values = [_undelimit(raw[spans[i].value_start:spans[i].value_end]) for i in indices]
         keep = spans[indices[0]]
-        edits.append((keep[3], keep[4], "{" + "\n".join(values) + "}"))
+        edits.append((keep.value_start, keep.value_end, "{" + "\n".join(values) + "}"))
         for i in indices[1:]:
-            edits.append((*_widen_cut(raw, spans[i][1], spans[i][4]), ""))
+            edits.append((*_widen_cut(raw, spans[i].name_start, spans[i].value_end), ""))
 
     pieces, cursor = [], 0
     for start, end, replacement in sorted(edits):
@@ -368,26 +393,40 @@ def repair_duplicate_field_keys(raw: str, maybe_duplicate_keys: set[str] | None 
 # since the `&` was escaped for BibTeX on the way in, and the replacement has to know whether the `&` it
 # is consuming was already spoken for.
 #
-# The name is bounded and must carry its semicolon: HTML5 also defines a handful of entities without one,
-# and honouring those here would rewrite `AT&T` into `AT&T` via `&T` at the first opportunity.
+# The name is bounded and must carry its semicolon. HTML5 also defines about sixty entities *without* one
+# — `&copy`, `&sect`, `&times`, `&not` — and honouring those would decode any `&` that happens to be
+# followed by one of those words, including where it is the start of a longer word. In this module's own
+# subject matter that reads `see the &copyright notice` as `see the ©right notice`, and `&section 5` as
+# `§ion 5`. With the semicolon required there is nothing to guess about.
 _HTML_ENTITY_PATTERN = re.compile(r"(\\*)&(\#\d{1,7}|\#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});")
 
-# Unicode categories whose characters must not be written into a `.bib` as themselves: format characters
-# and controls (Cf, Cc), and the line and paragraph separators (Zl, Zp). HTML5 names a good number of
-# these — `&zwj;`, `&lrm;`, `&NoBreak;`, `&#10;` — and decoding one to itself would put something in the
-# file that nobody reading the file can see. A Cf is dropped; the rest become an ordinary space.
+# Unicode categories whose characters must not be written into a `.bib` as themselves. HTML5 names a
+# good number of these — `&zwj;`, `&lrm;`, `&NoBreak;`, `&#10;`.
 #
-# A separator has to go for a second reason, which is what makes this a correctness rule rather than a
-# tidiness one: a newline arriving mid-record moves every line after it, and `raven.papers.fixbib`
-# reports faults by line number in the user's own file.
-_INVISIBLE_CATEGORIES = frozenset(["Cf", "Cc", "Zl", "Zp"])
+#   - **Format characters (Cf)** are dropped. A zero-width joiner or a directional mark carries no
+#     information a bibliography record needs, and leaves nothing on screen to explain the file.
+#   - **Controls and the line and paragraph separators (Cc, Zl, Zp)** become an ordinary space, and that
+#     is a correctness rule rather than a tidiness one: a newline arriving mid-record moves every line
+#     after it, and `raven.papers.fixbib` reports faults by line number in the user's own file.
+#
+# **Space separators (Zs) are kept as themselves**, which is the interesting case and the one worth
+# stating. A no-break space looks like a space, and the temptation is to call that a trap and normalize
+# it — but not breaking the line there is the entire point of the character, and the source asked for it.
+# Same for the narrow and figure spaces, which are real typography. Emacs renders these visibly, so they
+# are at least not invisible the way a format character is everywhere.
+#
+# Analysis is a different question with a different answer, and it is already handled elsewhere:
+# `common.utils.unicodize_basic_markup` folds `&nbsp;` to a plain space on the way into the Visualizer,
+# because a tokenizer *should* see a word boundary there. Faithful in the file, normalized for the NLP.
+_DROPPED_CATEGORIES = frozenset(["Cf"])
+_SPACED_CATEGORIES = frozenset(["Cc", "Zl", "Zp"])
 
 
-def _decode_one_entity(match: re.Match, counter: list) -> str:
+def _decode_one_entity(match: re.Match, counter: box) -> str:
     """One `_HTML_ENTITY_PATTERN` match as BibTeX text, or unchanged if it names nothing.
 
-    `counter`: a one-element list the decode count is accumulated into. A closure over an integer would
-               need a `nonlocal`, and `re.sub` gives the replacement no other way to report.
+    `counter`: a `box` the decode count is accumulated into. `re.sub` gives the replacement no way to
+               report other than by mutating something it was handed.
     """
     backslashes, name = match.group(1), match.group(2)
     if name.startswith("#"):
@@ -402,17 +441,15 @@ def _decode_one_entity(match: re.Match, counter: list) -> str:
         return match.group(0)
 
     category = unicodedata.category(character)
-    if category == "Cf":
+    if category in _DROPPED_CATEGORIES:
         character = ""
-    elif category in _INVISIBLE_CATEGORIES or (character.isspace() and character != " "):
-        # A no-break space is the common one, and it is the worst kind of wrong: it looks exactly like a
-        # space, so a title carrying one reads correctly and stops splitting into the words it contains.
+    elif category in _SPACED_CATEGORIES:
         character = " "
 
     # An odd run means the last backslash was escaping the entity's own `&`, which is syntax rather than
     # content and goes with it. An even run is literal escaped backslashes, which stay.
     kept = backslashes[:-1] if len(backslashes) % 2 else backslashes
-    counter[0] += 1
+    counter << unbox(counter) + 1
     return kept + bibtex_escape(character)
 
 
@@ -424,16 +461,16 @@ def decode_html_entities(source: str) -> tuple[str, int]:
     a citation, a word cloud, a typeset bibliography.
 
     The result is BibTeX rather than plain text, so a decoded character that BibTeX reserves is escaped
-    on the way out: `&amp;` becomes `\\&`, and the file stays as readable as it was. `&nbsp;` becomes an
-    ordinary space, since a non-breaking one is invisible and stops being a word boundary.
+    on the way out: `&amp;` becomes `\\&`, and the file stays as readable as it was. `&nbsp;` becomes a
+    real no-break space, since not breaking the line there is what the source asked for.
 
     Everything outside an entity is left byte for byte as it was, this being a substitution over the text
     rather than a parse and rewrite. An entity naming nothing — a stray `&foo;` — is left alone too, and
     does not count: the number returned is how many characters were *decoded*, which is what a caller
     reports to a user, and `re.subn` would have counted it as a substitution.
     """
-    counter = [0]
-    return _HTML_ENTITY_PATTERN.sub(lambda match: _decode_one_entity(match, counter), source), counter[0]
+    counter = box(0)
+    return _HTML_ENTITY_PATTERN.sub(lambda match: _decode_one_entity(match, counter), source), unbox(counter)
 
 
 def _braces_balance(text: str) -> bool:
@@ -458,12 +495,12 @@ def _relocate_in_record(raw: str, field: str) -> str | None:
     spans = _field_spans(raw)
     if not spans:
         return None
-    by_key = {span[0]: span for span in spans}
-    if field in by_key or "abstract" not in by_key:
-        return None  # never clobber a field the record already has
+    by_key = {span.key: span for span in spans}
+    abstract = by_key.get("abstract")
+    if abstract is None:
+        return None
 
-    _key, _name_start, _name_end, value_start, value_end = by_key["abstract"]
-    body, maybe_notice = boilerplate.split_rights_notice(_undelimit(raw[value_start:value_end]))
+    body, maybe_notice = boilerplate.split_rights_notice(_undelimit(raw[abstract.value_start:abstract.value_end]))
     if maybe_notice is None or not body:
         return None
     # A notice sits at the tail, so cutting there normally leaves both halves whole — but a value like
@@ -472,12 +509,31 @@ def _relocate_in_record(raw: str, field: str) -> str | None:
     if not (_braces_balance(body) and _braces_balance(maybe_notice)):
         return None
 
-    # Match the record's own indentation, so the new field looks like the ones around it.
-    line_start = raw.rfind("\n", 0, by_key["abstract"][1]) + 1
-    indent = raw[line_start:by_key["abstract"][1]]
-    candidate = (raw[:value_start] + "{" + body + "}"
-                 + f",\n{indent}{field} = {{{maybe_notice}}}"
-                 + raw[value_end:])
+    # A record can carry a notice in the target field *and* another in its abstract, and both name a
+    # source the record came from. Joined rather than either clobbered or refused, the way
+    # `repair_duplicate_field_keys` joins repeated fields and `raven.papers.deduplicate` unions this
+    # same field across a merge — one rule for combining, wherever the collision turns up.
+    existing = by_key.get(field)
+    if existing is not None:
+        kept = _undelimit(raw[existing.value_start:existing.value_end])
+        if maybe_notice in kept.split("\n"):
+            return None  # already recorded; moving it again would only duplicate it
+        combined = f"{kept}\n{maybe_notice}"
+        if not _braces_balance(combined):
+            return None
+        # Two edits, applied right-to-left so the earlier offsets stay valid.
+        first, second = sorted([(abstract.value_start, abstract.value_end, "{" + body + "}"),
+                                (existing.value_start, existing.value_end, "{" + combined + "}")])
+        candidate = (raw[:first[0]] + first[2] + raw[first[1]:second[0]] + second[2] + raw[second[1]:])
+        expected_notice = combined
+    else:
+        # Match the record's own indentation, so the new field looks like the ones around it.
+        line_start = raw.rfind("\n", 0, abstract.name_start) + 1
+        indent = raw[line_start:abstract.name_start]
+        candidate = (raw[:abstract.value_start] + "{" + body + "}"
+                     + f",\n{indent}{field} = {{{maybe_notice}}}"
+                     + raw[abstract.value_end:])
+        expected_notice = maybe_notice
 
     # The parser is the oracle here as everywhere else in this module, and it is checked against the
     # values rather than merely against "an entry came back": a repair that parses into the wrong text
@@ -490,7 +546,7 @@ def _relocate_in_record(raw: str, field: str) -> str | None:
         return None
     entry = library.entries[0]
     try:
-        if entry["abstract"] != body or entry[field] != maybe_notice:
+        if entry["abstract"] != body or entry[field] != expected_notice:
             return None
     except KeyError:
         return None
@@ -511,8 +567,10 @@ def relocate_rights_notices(source: str, field: str = "copyright") -> tuple[str,
     `field`: where to put it. `copyright` by default: absent from real-world exports, so it collides with
              nothing, and not typeset by standard BibTeX styles, so it cannot appear in a reference list.
 
-    A record already having that field is left alone rather than merged into, and so is one whose braces
-    would not survive the split. Everything outside a moved notice is left byte for byte as it was.
+    A record that already has that field keeps what is there and gains the moved notice on a line below
+    it — both name a source the record came from, and the same joining rule applies wherever these
+    collide. A notice already recorded there is not moved twice. A record whose braces would not survive
+    the split is left alone. Everything outside a moved notice is byte for byte as it was.
     """
     library = parse_string(source, split_names=False)
     pieces, cursor, moved = [], 0, 0

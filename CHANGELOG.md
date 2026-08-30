@@ -78,13 +78,13 @@
 
 - **HTML left in the field values is now decoded**, which is the one fault here that afflicts records a parser is perfectly happy with — so nothing previously reported it at all. A database that exports its web page rather than its record leaves entities behind, and a title meaning `Q&A` reaches your citations, your word cloud and your typeset bibliography as `Q\&amp;A`.
   - The result is BibTeX rather than plain text: a decoded character that BibTeX reserves is escaped on the way out, so `&amp;` becomes `\&` and the file stays as readable as it was.
-  - **An entity naming an invisible character is not decoded to one.** A no-break space is the one that matters — it looks exactly like a space, so a title carrying it reads correctly and quietly stops splitting into the words it contains. Those become ordinary spaces, and zero-width joiners and the like are dropped.
+  - **An entity naming something invisible is not decoded to it.** A zero-width joiner or a directional mark is dropped, and a control character or line separator becomes a space — a `&#10;` landing mid-record would move every line after it. Real spaces are kept as themselves, no-break spaces included: not breaking the line there is what the source asked for.
   - Everything outside an entity is left byte for byte as it was, and an entity naming nothing is left alone. `--keep-entities` switches the whole thing off.
 
 - **a publisher's rights notice is moved out of the `abstract` into a `copyright` field of its own.** It is not what the paper says, and anything reading the abstract as prose has to cope with it — it is why a publisher's name turns up in a word cloud. Humans strip it before analyzing an abstract; this does it once, in the file.
   - **Moved, not deleted.** In a bibliography merged from several database exports the notice is often the only thing saying which export a record came from, and `raven-deduplicate` keeps *all* of them when it merges — so a merged record's `copyright` field names every source it came from.
   - `copyright` because it collides with nothing real exports emit, and standard BibTeX styles do not typeset it, so it cannot turn up in a reference list.
-  - A record that already has that field is left alone rather than merged into, and so is one whose braces would not survive the split. Everything outside a moved notice is byte for byte as it was, so the diff shows exactly which abstracts changed. `--keep-notices` switches it off.
+  - A record that already has a `copyright` field keeps what is there and gains the moved notice below it — both name a source the record came from — and a notice already recorded there is not moved twice. A record whose braces would not survive the split is left alone. Everything outside a moved notice is byte for byte as it was, so the diff shows exactly which abstracts changed. `--keep-notices` switches it off.
 
 *Raven-deduplicate*
 

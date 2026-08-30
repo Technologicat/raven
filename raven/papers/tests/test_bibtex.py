@@ -324,18 +324,32 @@ class TestDecodeHtmlEntities:
         # `&amp;lt;` is how a source writes a literal `&lt;`; the result must still say that.
         assert decode_html_entities("&amp;lt;") == (r"\&lt;", 1)
 
-    def test_an_invisible_character_never_reaches_the_file(self):
-        """A decode that puts something unseeable in a bibliography is worse than the entity was.
+    def test_a_format_character_is_dropped_rather_than_written(self):
+        """A zero-width joiner or a directional mark says nothing a bibliography record needs, and
+        leaves nothing on screen to explain the file it is in."""
+        for source, expected in (("a&zwj;b", "ab"),          # zero-width joiner
+                                 ("&NoBreak;x", "x"),        # word joiner
+                                 ("a&lrm;b", "ab")):         # left-to-right mark
+            assert decode_html_entities(source)[0] == expected
 
-        A no-break space is the dangerous one: it looks exactly like a space, so a title carrying one
-        reads correctly and stops splitting into the words it contains.
+    def test_a_control_or_separator_becomes_a_space(self):
+        """Not tidiness: `fixbib` decodes before repairing and reports faults by line number in the
+        user's own file, so a newline arriving mid-record would move every line after it."""
+        assert decode_html_entities("line&#10;break")[0] == "line break"
+
+    def test_a_no_break_space_stays_a_no_break_space(self):
+        """Not breaking the line there is the whole point of the character, and the source asked for it.
+
+        The analysis path answers this differently and separately: `unicodize_basic_markup` folds it to
+        a plain space on the way into the Visualizer, because a tokenizer *should* see a word boundary.
         """
-        for source, expected in ((r"1)\&nbsp;more", "1) more"),        # no-break space
-                                 ("narrow&#8239;space", "narrow space"),   # narrow no-break space
-                                 ("a&zwj;b", "ab"),                    # zero-width joiner, a format char
-                                 ("&NoBreak;x", "x")):                 # word joiner
-            decoded, _count = decode_html_entities(source)
-            assert decoded == expected
+        decoded, count = decode_html_entities(r"1)\&nbsp;more")
+        assert count == 1
+        assert decoded == "1) more"
+
+    def test_the_other_typographic_spaces_survive_too(self):
+        # A narrow no-break space is French typography, not an accident.
+        assert decode_html_entities("narrow&#8239;space")[0] == "narrow space"
 
     def test_the_line_count_cannot_change(self):
         """`raven-fixbib` reports faults by line number in the user's own file, and decodes before
@@ -389,9 +403,23 @@ class TestRelocateRightsNotices:
         source = "@article{b,\n  title = {B},\n  year = {2024},\n}\n"
         assert relocate_rights_notices(source) == (source, 0)
 
-    def test_an_existing_field_is_never_clobbered(self):
+    def test_an_existing_field_is_appended_to_rather_than_clobbered_or_refused(self):
+        """Both notices name a source the record came from, so they are joined.
+
+        Same rule as `repair_duplicate_field_keys` merging repeated fields and `raven.papers.deduplicate`
+        unioning this field across a merge — one way of combining, wherever the collision turns up.
+        """
         source = ("@article{c,\n  title = {C},\n  abstract = {Body. © 2024 Someone.},\n"
-                  "  copyright = {something the user wrote},\n}\n")
+                  "  copyright = {© 2019 Someone Else.},\n}\n")
+        moved, count = relocate_rights_notices(source)
+        assert count == 1
+        fields = {f.key: f.value for f in parse_string(moved, split_names=False).entries[0].fields}
+        assert fields["abstract"] == "Body."
+        assert fields["copyright"] == "© 2019 Someone Else.\n© 2024 Someone."
+
+    def test_a_notice_already_recorded_there_is_not_moved_twice(self):
+        source = ("@article{c,\n  title = {C},\n  abstract = {Body. © 2024 Someone.},\n"
+                  "  copyright = {© 2024 Someone.},\n}\n")
         assert relocate_rights_notices(source) == (source, 0)
 
     def test_the_records_around_it_are_untouched_byte_for_byte(self):
