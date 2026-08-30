@@ -76,6 +76,7 @@ UNMISTAKABLE = re.compile(r"""(?ix)
 # trusted only when they *open a sentence*, which is what an appended notice does and what a mention
 # inside an argument does not.
 NOTICE_OPENER = re.compile(r"""(?ix)
+      # `\u2013` en dash, `\u2014` em dash: a notice may join on with any of the three dashes
       \bcopyright\s* (?: ©|\(c\)|\d{4}|held\s+by|by\s+the|[-\u2013\u2014]\s )
     | \ball\s+rights\s+reserved\b
     | \bthis\s+ (?:is\s+an?\s+)? (?:\w+\s+){0,3}? (?:work|article|content|review|publication|paper)\s+
@@ -89,6 +90,7 @@ NOTICE_OPENER = re.compile(r"""(?ix)
 # licensing. Measured over a 6934-record export it was the sole evidence for 2 notices out of 1656, both
 # of which the licence-grant clause above now reaches instead.
 
+# The separator after the label: colon, full stop, `\u2013` en dash, `\u2014` em dash, or hyphen.
 LEADING_LABEL = re.compile(r"^\s*(?:abstract|summary)\s*[:.\u2013\u2014-]\s+", re.IGNORECASE)
 
 # What a sentence ends with: the stop, optionally a closing quote or bracket, and optionally a short
@@ -96,6 +98,7 @@ LEADING_LABEL = re.compile(r"^\s*(?:abstract|summary)\s*[:.\u2013\u2014-]\s+", r
 # where it breaks a naive test -- `...within the domain. (CC BY-NC 4.0) This article is licensed to you
 # under a ...` is one sentence ending and another beginning, with a licence tag wedged between them.
 _SENTENCE_END = re.compile(r"""(?x)
+    # `\u2019` right single quote, `\u201d` right double quote — a sentence can end inside a quotation
     [.!?] ['"\u2019\u201d)\]]? \s*
     (?: (?P<aside> [(\[] [^()\[\]]{0,48} [)\]] ) \s* )?
     $""")
@@ -153,6 +156,8 @@ def split_rights_notice(text: str) -> tuple[str, str | None]:
     # A full stop is not one: it ends the abstract's own last sentence and was there before any publisher
     # appended anything, so it stays. Getting this backwards silently shortens every abstract in a corpus
     # by a character, which no aggregate statistic will show.
+    # The separators a notice gets joined on with: whitespace, comma, semicolon, colon, `\u2013`
+    # en dash, `\u2014` em dash, hyphen.
     body = re.sub(r"[\s,;:\u2013\u2014-]+$", "", text[:notice_start].rstrip())
     return body, text[notice_start:].strip() or None
 
