@@ -218,22 +218,24 @@ Patterns:
 
 ## Comments
 
-**Roughly half the file being comments and docstrings is normal here, and intended.** Raven errs toward
-[literate programming](https://en.wikipedia.org/wiki/Literate_programming) (Knuth, 1984): an executable
-essay is more readable than dense code where each line takes a while to puzzle out. Measured 2026-08-29,
-the codebase sits near 40% and that is the healthy state, not drift.
+**The standard is that prose must be as load-bearing for understanding as the code is for behaviour.**
+Not "more comments is better": every line of prose earns its place the way a line of code does, and there
+should be no *extra*. (Juha, 2026-08-29.)
 
-The reason is where the work goes. Dense code is correct and compressed, and it makes every reader
-re-derive the thinking that produced it — the same objection as to theorem-proof-corollary mathematics
-monographs, which are excellent for *reference* and poor for *learning*, because compressing the
-derivation moves the work from one writer to every reader. (Juha, 2026-08-29.)
+Raven errs toward [literate programming](https://en.wikipedia.org/wiki/Literate_programming)
+(Knuth, 1984), because dense code makes every reader re-derive the thinking that produced it — the same
+objection as to theorem-proof-corollary mathematics monographs, which are excellent for *reference* and
+poor for *learning*. Compressing a derivation moves the work from one writer to every reader, and here the
+reader is usually the author six months on, or a session with no memory of the last one.
 
-That trade lands differently in a codebase than in a monograph, because here the reader is usually the
-author six months on, or a session with no memory of the last one. Compression saves the writer once and
-costs everyone afterwards, every time.
+**The ~40% the codebase measures at is an observation, not a target.** It is what load-bearing prose
+happens to cost here. Writing to hit a ratio makes the file worse, and two readings to refuse outright:
 
-Practical consequence: **judge a module by its SLOC, not its total lines** — see *Module size*. A file that
-is half prose will always look twice its weight in `wc -l`.
+- *"Prose is cheap, so more of it is free."* It is cheaper per line than dense code, not free — someone
+  reading the whole file reads all of it.
+- *"Half is prose, so 5k total is really 2.5k."* Size is not bought back that way. Judge a module by its
+  SLOC (see *Module size*), and note that a file needing that much explanation is saying something about
+  its own complexity.
 
 Comments read like prose and explain *why*, not *what*. The style has personality:
 
