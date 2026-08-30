@@ -201,10 +201,12 @@ of looking, and the useful residue is the moment to look rather than a procedure
   Press`. Real corpora produce the *formats*, so those stay real; the names do not have to. This applies
   whether or not the example is unflattering, though a real person illustrating malformed data is the
   worst case.
-  - Two exceptions. A **canonical example from the format's own documentation** — `Ludwig van Beethoven`
-    for BibTeX's von particle — reads as citing a convention rather than naming somebody. And a **name
-    that is the fact**: "Elsevier" lemmatizes to "elsevi", the `_NN-V` DOI suffix is Springer's
-    convention. Fictionalize those and the sentence stops being about anything.
+  - Two exceptions. A **stock example of the shape itself** — ask anyone for a name with a "van" in it
+    and they will say `Ludwig van Beethoven` — where using it names the *shape* rather than a person, and
+    an invented substitute would be less recognizable for no gain. (Two centuries dead helps; a living
+    person is not a stock example of anything.) And a **name that is the fact**: "Elsevier" lemmatizes to
+    "elsevi", the `_NN-V` DOI suffix is Springer's convention. Fictionalize those and the sentence stops
+    being about anything.
 - **Config modules**: Module-level variables, lowercase, with detailed comments.
 - **DPG widget tags**: String literals, `snake_case`, commented with `# tag` on the same line for searchability.
 - **String quotes**: double, `"like this"`. Single quotes are for the case that earns them — a value that
