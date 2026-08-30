@@ -130,11 +130,12 @@ class TestParseString:
         assert name.last == ["Beethoven"]
 
     def test_name_parts_survive_a_compound_last_name(self):
-        # "Brinch Hansen, Per" — the comma is what marks the whole of "Brinch Hansen" as the surname.
-        library = parse_string("@article{k, author={Brinch Hansen, Per}, year={2024}}")
+        # "Holm Dahl, Aksel" — the comma is what marks the whole of "Holm Dahl" as the surname. Without
+        # it, BibTeX reads only the last token as the surname; see `deduplicate._first_surname`.
+        library = parse_string("@article{k, author={Holm Dahl, Aksel}, year={2024}}")
         name = library.entries[0]["author"][0]
-        assert name.last == ["Brinch", "Hansen"]
-        assert name.first == ["Per"]
+        assert name.last == ["Holm", "Dahl"]
+        assert name.first == ["Aksel"]
 
     def test_name_parts_survive_a_suffix(self):
         library = parse_string("@article{k, author={Beeblebrox, IV, Zaphod}, year={2024}}")
@@ -158,17 +159,17 @@ class TestParseString:
 
     def test_a_brace_protected_suffix_is_read_as_a_suffix(self):
         # `{III}` — braces are BibTeX's "do not touch this" marker, and the suffix slot still has to see it.
-        library = parse_string("@article{k, author={Aldrin, {III}, Edwin E.}, year={2024}}")
+        library = parse_string("@article{k, author={Halloway, {III}, Everett M.}, year={2024}}")
         name = library.entries[0]["author"][0]
-        assert name.last == ["Aldrin"]
+        assert name.last == ["Halloway"]
         assert name.jr == ["{III}"]
 
     def test_a_suffix_carrying_a_period_is_read_as_a_suffix(self):
-        library = parse_string("@article{k, author={Fripp, Jr., R. A.}, year={2024}}")
+        library = parse_string("@article{k, author={Fenwick, Jr., A. B.}, year={2024}}")
         name = library.entries[0]["author"][0]
-        assert name.last == ["Fripp"]
+        assert name.last == ["Fenwick"]
         assert name.jr == ["Jr."]
-        assert name.first == ["R.", "A."]
+        assert name.first == ["A.", "B."]
 
     def test_hyphens_survive_in_both_initials_and_given_names(self):
         library = parse_string("@article{k, author={Zhou, X.-Y. and Liisa-Maria Koskinen}, year={2024}}")

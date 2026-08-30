@@ -68,7 +68,7 @@ def _reader_middleware(split_names: bool) -> list:
       - `NormalizeFieldKeys` because the key case is not dependable - a Web of Science export writes
         `Title = {...}`, the BibTeX literature writes `title = {...}`.
       - `SeparateCoAuthors` then `SplitNameParts`, in that order. Between them they turn one `author`
-        string into name parts that survive "Ludwig van Beethoven", "Brinch Hansen, Per" and
+        string into name parts that survive "Ludwig van Beethoven", "Holm Dahl, Aksel" and
         "Beeblebrox, IV, Zaphod". Omitted when `split_names` is false, leaving `author` and `editor`
         the strings the input data had.
 
