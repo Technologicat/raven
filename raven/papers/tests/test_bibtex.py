@@ -345,11 +345,11 @@ class TestDecodeHtmlEntities:
         """
         decoded, count = decode_html_entities(r"1)\&nbsp;more")
         assert count == 1
-        assert decoded == "1) more"
+        assert decoded == "1)\u00a0more"  # no-break space; an escape, since a literal is unreadable here
 
     def test_the_other_typographic_spaces_survive_too(self):
         # A narrow no-break space is French typography, not an accident.
-        assert decode_html_entities("narrow&#8239;space")[0] == "narrow space"
+        assert decode_html_entities("narrow&#8239;space")[0] == "narrow\u202fspace"
 
     def test_the_line_count_cannot_change(self):
         """`raven-fixbib` reports faults by line number in the user's own file, and decodes before
