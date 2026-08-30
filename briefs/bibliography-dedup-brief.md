@@ -14,20 +14,30 @@
 | `51ae63af` | `&amp;` and `&nbsp;` decoded wherever Raven reads bibliography text |
 | `76f46be4` | **`raven-deduplicate` itself**, with its tests |
 | `4801b834` | `raven-fixbib` decodes the HTML a database leaves in the field values |
+| `e8020aa7` | `raven-fixbib` moves a rights notice into a `copyright` field; `deduplicate` unions it |
 
-**The design below stood, and four things in it were corrected by contact with the corpus.** Each is
+Reviewed 2026-08-29, file by file. Two correctness fixes came out of it — `_first_surname` disagreeing
+with itself across the two BibTeX name orders (`b4860466`), and the generic-title guard admitting merges
+that author-and-year agreement cannot settle (`15d56208`) — along with `raven/papers/config.py` and the
+knobs moved into it (`605461f0`, `532ec33a`).
+
+**The design below stood, and five things in it were corrected by contact with the corpus.** Each is
 marked *Corrected* where it appears, and the short version is:
 
 - The degenerate-title guard became a **pairwise** rule rather than a filter on the key, and the length
   threshold it was going to use was measured, found to catch nothing, and dropped.
 - A **second false merge** turned up that the design had not anticipated: a serial's recurring section
   heading, which needed a guard of its own.
+- A **third and fourth**, both found in review rather than by counting: the same person writes several
+  book reviews in a year and every one is titled `Book Review`, and multi-volume conference proceedings
+  share a title across genuinely different books. Author and year agreement settles neither; what does is
+  refusing a pair that contradicts itself on DOI, pages, volume or issue.
 - The fuzzy pass offers **10 pairs, not ~370**. The design's figure was measured before the guards.
 - The judge **must not be asked about Springer chapter versions**, where the design predicted it would
   merely agree with the rule. It does not agree; it is confidently wrong.
 
 What it does on the corpus it was built for, as shipped: **6934 records read** — all of them, see
-*Reading, and the last two records* below — **5166 unique, 1768 merged away from 1300 clusters**, in about
+*Reading, and the last two records* below — **5171 unique, 1763 merged away from 1295 clusters**, in about
 seven seconds. With `--judge`, 5 more merges and 2 refusals.
 
 Sits outside the sprint folders because it is `raven.papers` work, like `ligature-repair-brief.md` is
@@ -86,15 +96,16 @@ Three findings shaped the design:
   Bandyopadhyay 2022 with McNally 2024. Few, but silent.
 
 **These figures predate the guards, and the guards are what the numbers above are missing.** They are kept
-because they size the problem, which is what they were for. As shipped the same corpus gives 5166 unique
-and 1768 removed — a little less merging, because three false merges stopped happening, and a little more
-reading, because two more records now parse.
+because they size the problem, which is what they were for. As shipped the same corpus gives 5171 unique
+and 1763 removed — less merging, because eight false merges stopped happening (three serial section
+headings, five pairs of multi-volume conference proceedings), and more reading, because two more records
+now parse.
 
 ## Design
 
-`raven/papers/dedupbib.py`, console script `raven-dedupbib`. A shipped tool rather than a study-local
-script, because a scoping review's method section can cite a versioned tool and cannot cite somebody's
-`/tmp`.
+`raven/papers/deduplicate.py`, console script `raven-deduplicate`. A shipped tool rather than a
+study-local script, because a scoping review's method section can cite a versioned tool and cannot cite
+somebody's `/tmp`.
 
 ```
 raven-deduplicate input.bib -o deduped.bib --audit audit.tsv [--judge]
@@ -118,9 +129,9 @@ exact normalized title subject to the degenerate-title guard.
 > altogether also refuses the merges that are right — the two Bandyopadhyay copies really are one
 > editorial — so what ships weighs each *pair* of records sharing a title, and a group of three comes
 > apart into the two that are one paper and the one that is not. `_title_edge_holds` is the rule, and it
-> is three cases: a generic title needs the records to positively agree about author and year; two
-> authorless records are refused if their DOIs disagree (below); anything else is refused only if the
-> records contradict each other on both author *and* year.
+> is three cases: a generic title needs the records to positively agree about author and year *and* not to
+> contradict each other on `config.identifying_fields`; two authorless records are refused on that same
+> contradiction (below); anything else is refused only if the records disagree on both author *and* year.
 >
 > **The length threshold in the design was measured and dropped.** Over the corpus it caught nothing the
 > curated genre-label list did not already catch, while rejecting `Reportronic` — a real and thoroughly
@@ -553,7 +564,7 @@ raven-deduplicate tekoalyagentti_tutkimus_fixed.bib \
                   -o deduped.bib -a audit.tsv [--judge]
 ```
 
-6934 read, **5162 unique and 1772 merged away** with the judge, 5166 and 1768 without it. Two records still
+6934 read, **5167 unique and 1767 merged away** with the judge, 5171 and 1763 without it. Two records still
 need a human to fix a name; they are read and deduplicated regardless.
 
 The audit is the artifact the review's method section is built from, and it carries `raven.__version__`.
