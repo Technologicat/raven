@@ -515,7 +515,7 @@ def setup_prompts(llm_settings: env,
             status = status_failed
 
         # No author should be listed more than once.
-        authors_counter = collections.Counter(authors_list)  # TODO: I hope `Counter` preserves insertion order?
+        authors_counter = collections.Counter(authors_list)
         duplicate_names = [author for author, count in authors_counter.items() if count > 1]
         if len(duplicate_names):
             plural_s = "s" if len(duplicate_names) > 1 else ""
@@ -761,8 +761,8 @@ def setup_prompts(llm_settings: env,
             keywords_list = [keyword.strip() for keyword in keywords.split(",")]
 
             # No keyword should be listed more than once.
-            keywords_counter = collections.Counter(keywords_list)  # TODO: I hope `Counter` preserves insertion order?
-            duplicate_keywords = [author for author, count in keywords_counter.items() if count > 1]
+            keywords_counter = collections.Counter(keywords_list)
+            duplicate_keywords = [keyword for keyword, count in keywords_counter.items() if count > 1]
             if len(duplicate_keywords):
                 plural_s = "s" if len(duplicate_keywords) > 1 else ""
                 error_msg = f"Input file '{unique_id}': Extractor returned duplicate keyword{plural_s}; de-duplicated, but manual check recommended: {duplicate_keywords}"
