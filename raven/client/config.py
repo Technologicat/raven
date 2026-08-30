@@ -2,6 +2,8 @@
 
 from typing import NamedTuple
 
+import torch
+
 from ..server import config as server_config  # NOTE: default config location (can be overridden on the command line when starting the server)
 
 # TODO: Assumption: The `userdata_dir` of the client/server pair is local anyway, so we can just as well use the server app's.
@@ -113,12 +115,41 @@ stt_vu_peak_hold = 1.0  # seconds
 # parameterize the in-process fallback's compute device, used when `<svc>_allow_local`
 # is `True` AND the server isn't reachable.
 #
-# Same shape as `raven.server.config.enabled_modules` and as the `devices` dict in
-# `raven.{librarian,visualizer}.config`. Validated by `raven.common.deviceinfo.validate`
-# during `raven.client.api.initialize` (CUDA → CPU fallback, `device_name` injection).
+# Same shape as `raven.server.config.enabled_modules` and as `raven.librarian.config.devices`,
+# which stays separate because Librarian's RAG backend may legitimately want a different model
+# and device from an importer's. Validated by `raven.common.deviceinfo.validate` during
+# `raven.client.api.initialize` (CUDA → CPU fallback, `device_name` injection).
+# See also `run-on-internal-gpu.sh` for another way to select the GPU when starting an app, without
+# modifying any files.
 devices = {
     "tts": {"device_string": "cpu"},  # Local TTS on CPU is workable for chat-paced speech, slower than server-mode GPU.
+    "sanitize": {"device_string": "gpu"},  # dehyphenation; no configurable dtype
+    "embeddings": {"device_string": "gpu",
+                   "dtype": torch.float16},
+    "nlp": {"device_string": "gpu"},  # no configurable dtype
 }
+
+# Which dehyphenation model `MaybeRemote.Dehyphenator` loads in local mode. Character-level contextual
+# embeddings by Flair-NLP, used to repair text broken across lines — as extracted from a PDF, typically.
+#
+# Here rather than in one app's config because three of them want it and only one of those is that app:
+# `visualizer.importer`, `papers.pdf2bib` and `tools.dehyphenate` all reach `MaybeRemote.Dehyphenator`,
+# and `pdf2bib` carried a standing note that a tool should not be loading the Visualizer's config to get
+# at it.
+#
+# NOTE: Raven uses dehyphenation models in two places, and they do not have to be the same.
+#  - Client-side local fallback: this setting.
+#  - Raven-server: served by the `sanitize` module; see `raven.server.config.dehyphenation_model`.
+#
+# This is NOT a HuggingFace model name, but is auto-downloaded (by Flair-NLP) on first use, into
+# `~/.flair/embeddings/`. Loaded by the `dehyphen` package; omit the "-forward" or "-backward" part of the
+# name, which is added automatically. Try "multi" first — it should support 300+ languages; if that does
+# not perform adequately, look at the docs.
+#
+# For available models, see:
+#     https://github.com/flairNLP/flair/blob/master/resources/docs/embeddings/FLAIR_EMBEDDINGS.md
+#     https://github.com/flairNLP/flair/blob/master/flair/embeddings/token.py
+dehyphenation_model = "multi"
 
 # TTS local-mode fallback settings.
 #

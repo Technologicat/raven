@@ -8,8 +8,6 @@ import textwrap
 
 from unpythonic.env import env
 
-import torch
-
 from .. import avatar  # for `avatar.assets_path`
 from .. import config as global_config
 
@@ -452,15 +450,13 @@ llm_database_dir = librarian_userdata_dir / "rag_index"
 # Where to store the search indices for the `HybridIR` API usage example / demo (raven.librarian.tests.test_hybridir)
 hybridir_demo_save_dir = global_config.toplevel_userdata_dir / "hybridir_demo"
 
-# Device settings for running vector embeddings and spaCy NLP locally, in the client process.
+# Compute devices are configured in `raven.client.config.devices`. The RAG backend reaches its
+# embedder and its spaCy tokenizer through `raven.client.mayberemote`, so those records parameterize
+# the client-side local fallback used when Raven-server is not reachable — one map for the whole
+# constellation, rather than one per app that happens to need a GPU.
 #
-# NOTE: These are used only as a local fallback when Raven-server is not running.
-# The RAG backend (`hybridir.HybridIR`) automatically prefers the server when it is available.
-devices = {
-    "embeddings": {"device_string": "gpu",
-                   "dtype": torch.float16},
-    "nlp": {"device_string": "gpu"},  # no configurable dtype
-}
+# The *models* stay per-app, below: which embedding model and which spaCy pipeline this backend wants
+# is a different question from which device the machine has.
 
 # NLP model for spaCy, used for tokenization in keyword search (RAG backend `raven.librarian.hybridir`).
 #

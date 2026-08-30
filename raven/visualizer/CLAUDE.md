@@ -11,7 +11,9 @@ app.py            (~1.9k) — GUI app: window layout, event wiring, search, the 
 info_panel.py     (~1.5k) — the info panel: content build, scrolling, navigation, anchors
 importer.py       (~1.3k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 annotation.py     (~450)  — datapoint annotations and their tooltips
-config.py         (~420)  — Configuration-as-code (devices, import settings, stopwords, GUI settings)
+config.py         (~410)  — Configuration-as-code (import settings, models, stopwords, GUI settings).
+                            Compute devices live in `raven.client.config.devices` — one map for the
+                            constellation, since these stages are `mayberemote` services
 plotter.py        (~280)  — the scatter plot itself
 selection.py      (~260)  — selection state and the lasso/wand tools
 word_cloud.py     (~250)  — word cloud rendering

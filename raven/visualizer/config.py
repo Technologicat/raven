@@ -5,26 +5,17 @@ logger = logging.getLogger(__name__)
 
 import textwrap
 
-import torch
-
 from unpythonic.env import env
 
 import dearpygui.dearpygui as dpg
 
 # --------------------------------------------------------------------------------
-# Torch config
-
-# NOTE: This configures the client-side devices.
-# See also `raven.server.config` for server-side devices.
-
-# Which GPU to use in the BibTeX importer, if available. If not available, CPU fallback is used automatically.
-# See also `run-on-internal-gpu.sh` for another way to select the GPU when starting the app, without modifying any files.
-devices = {
-    "embeddings": {"device_string": "gpu",
-                   "dtype": torch.float16},
-    "nlp": {"device_string": "gpu"},  # no configurable dtype
-    "sanitize": {"device_string": "gpu"},  # used for dehyphenation; no configurable dtype
-}
+# Compute devices
+#
+# Configured in `raven.client.config.devices`. The importer reaches its embedder, its spaCy pipeline
+# and its dehyphenator through `raven.client.mayberemote`, so what those records parameterize is the
+# *client-side local fallback* used when Raven-server is not reachable — a client concern rather than
+# this app's, and one `papers.pdf2bib` and `tools.dehyphenate` share.
 
 # --------------------------------------------------------------------------------
 # BiBTeX import config
@@ -129,26 +120,8 @@ spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but ca
 # (in those abstracts that have multiple paragraphs).
 dehyphenate = True
 
-# Character-level contextual embeddings by Flair-NLP. Used for dehyphenation of broken text (e.g. as extracted from a PDF file).
-#
-# NOTE: Raven uses dehyphenation models in two places, and they don't have to be the same.
-#  - Raven-visualizer: processing of abstracts during BibTeX import (this setting)
-#  - Raven-server: served by the `sanitize` module
-#
-# This is NOT a HuggingFace model name, but is auto-downloaded (by Flair-NLP) on first use.
-#
-# This is installed into `~/.flair/embeddings/`.
-#
-# For available models, see:
-#     https://github.com/flairNLP/flair/blob/master/resources/docs/embeddings/FLAIR_EMBEDDINGS.md
-#     https://github.com/flairNLP/flair/blob/master/flair/embeddings/token.py
-#
-# This model is loaded by the `dehyphen` package; omit the "-forward" or "-backward" part
-# of the model name, those are added automatically.
-#
-# At first, try "multi", it should support 300+ languages. If that doesn't perform adequately, then look at the docs.
-#
-dehyphenation_model = "multi"
+# The model is `raven.client.config.dehyphenation_model` — shared with `papers.pdf2bib` and
+# `tools.dehyphenate`, which want the same one.
 
 # Summarize abstracts using an LLM? Requires an LLM backend to be available.
 # Uses the LLM settings from Librarian's configuration (see `raven.librarian.config`).

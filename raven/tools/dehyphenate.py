@@ -16,7 +16,6 @@ from unpythonic import maybe_open
 from ..client import api
 from ..client import config as client_config
 from ..client import mayberemote
-from ..visualizer import config as visualizer_config
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="""Dehyphenate text bro-ken by hyp-he-na-tion. (You can configure the model in `raven/visualizer/config.py`.)""",
@@ -35,10 +34,9 @@ def main() -> None:
     api.initialize(raven_server_url=(opts.server_url if opts.server_url is not None else client_config.raven_server_url),
                    raven_api_key_file=client_config.raven_api_key_file)
 
-    # TODO: refactor: tools shouldn't load `visualizer_config`
     dehyphenator = mayberemote.Dehyphenator(allow_local=True,
-                                            model_name=visualizer_config.dehyphenation_model,
-                                            device_string=visualizer_config.devices["sanitize"]["device_string"])
+                                            model_name=client_config.dehyphenation_model,
+                                            device_string=client_config.devices["sanitize"]["device_string"])
 
     for input_filename in opts.filenames:
         if input_filename is not None:

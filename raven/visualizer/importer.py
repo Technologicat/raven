@@ -37,6 +37,7 @@ import torch
 
 from sklearn.cluster import HDBSCAN
 
+from ..client import config as client_config
 from ..client import mayberemote
 
 from ..common import bgtask
@@ -80,7 +81,7 @@ if visualizer_config.clusters_keyword_method == "llm" or visualizer_config.summa
 # --------------------------------------------------------------------------------
 # Inits that must run before we proceed any further
 
-deviceinfo.validate(visualizer_config.devices)  # modifies in-place if CPU fallback needed
+deviceinfo.validate(client_config.devices)  # modifies in-place if CPU fallback needed
 
 # The extended stopword set (with custom additional stopwords tuned for English-language scientific text).
 extended_stopwords = copy.copy(nlptools.default_stopwords)
@@ -259,8 +260,8 @@ def _parse_input_files(*filenames):
                     if visualizer_config.dehyphenate:
                         if dehyphenator is None:  # delayed init - load only if needed, on first use
                             dehyphenator = mayberemote.Dehyphenator(allow_local=True,
-                                                                    model_name=visualizer_config.dehyphenation_model,
-                                                                    device_string=visualizer_config.devices["sanitize"]["device_string"])
+                                                                    model_name=client_config.dehyphenation_model,
+                                                                    device_string=client_config.devices["sanitize"]["device_string"])
                         abstract = dehyphenator.dehyphenate(abstract)
                     abstract = common_utils.unicodize_basic_markup(abstract)
                     # Last, so the notice is seen in the same form everything downstream will see. Markup
@@ -343,8 +344,8 @@ def _get_highdim_semantic_vectors(input_data):
             if embedder is None:  # delayed init - load only if needed, on first use
                 embedder = mayberemote.Embedder(allow_local=True,
                                                 model_name=visualizer_config.embedding_model,
-                                                device_string=visualizer_config.devices["embeddings"]["device_string"],
-                                                dtype=visualizer_config.devices["embeddings"]["dtype"])
+                                                device_string=client_config.devices["embeddings"]["device_string"],
+                                                dtype=client_config.devices["embeddings"]["dtype"])
             logger.info("        Encoding...")
             with timer() as tim:
                 def format_entry_for_vectorization(entry: env) -> str:
@@ -364,8 +365,8 @@ def _get_highdim_semantic_vectors(input_data):
                 # This matters to make the "cluster centers" coincide with the original datapoints when clustering is disabled.
                 if embedder.is_local():  # TODO: We can only do this when running locally (otherwise, the device can be different from what we expect). What is the correct solution in the remote case?
                     all_vectors = torch.tensor(all_vectors,
-                                               device=visualizer_config.devices["embeddings"]["device_string"],
-                                               dtype=visualizer_config.devices["embeddings"]["dtype"])
+                                               device=client_config.devices["embeddings"]["device_string"],
+                                               dtype=client_config.devices["embeddings"]["dtype"])
                     all_vectors = all_vectors.detach().cpu().numpy()
             logger.info(f"            Done in {tim.dt:0.6g}s [avg {len(all_inputs) / tim.dt:0.6g} entries/s].")
 
@@ -695,7 +696,7 @@ def _extract_keywords(input_data, max_vis_kw=6):
                 _update_status_and_log("Loading NLP pipeline for keyword analysis...", log_indent=2)
                 nlp = mayberemote.NLP(allow_local=True,
                                       model_name=visualizer_config.spacy_model,
-                                      device_string=visualizer_config.devices["nlp"]["device_string"])
+                                      device_string=client_config.devices["nlp"]["device_string"])
                 _update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
 
             logger.info("        Computing keyword set...")

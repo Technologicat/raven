@@ -56,10 +56,10 @@ from unpythonic.env import env as envcls
 import bm25s  # keyword
 import chromadb  # semantic (vector)
 
+from ..client import config as client_config
 from ..client import mayberemote
 
 from ..common import bgtask
-from ..common import deviceinfo
 from ..common import docextract
 from ..common import nlptools
 from ..common import utils as common_utils
@@ -69,7 +69,8 @@ from . import config as librarian_config
 # --------------------------------------------------------------------------------
 # Module bootup
 
-deviceinfo.validate(librarian_config.devices)  # modifies in-place if CPU fallback needed
+# The device records this module uses live in `raven.client.config` and are validated by
+# `raven.client.api.initialize`, which the docstring below already requires callers to have run.
 
 # `raven.client.api` must be initialized before any `mayberemote` call (the embedder and the tokenizer both
 # go through one), but initializing it *here* was actively harmful: this module is imported by every
@@ -459,11 +460,11 @@ class HybridIR:
         # We compute vector embeddings manually (on Raven's side).
         self.embedder = mayberemote.Embedder(allow_local=local_model_loader_fallback,
                                              model_name=self.embedding_model_name,
-                                             device_string=librarian_config.devices["embeddings"]["device_string"],
-                                             dtype=librarian_config.devices["embeddings"]["dtype"])
+                                             device_string=client_config.devices["embeddings"]["device_string"],
+                                             dtype=client_config.devices["embeddings"]["dtype"])
         self.nlp = mayberemote.NLP(allow_local=local_model_loader_fallback,
                                    model_name=librarian_config.spacy_model,
-                                   device_string=librarian_config.devices["nlp"]["device_string"])
+                                   device_string=client_config.devices["nlp"]["device_string"])
 
         self._stopwords = nlptools.default_stopwords
 

@@ -49,7 +49,6 @@ from ..librarian import agent
 from ..librarian import chatutil
 from ..librarian import config as librarian_config
 from ..librarian import llmclient
-from ..visualizer import config as visualizer_config
 
 from .utils import bibtex_escape
 
@@ -87,10 +86,9 @@ def _get_dehyphenator() -> "mayberemote.Dehyphenator":
     """
     global _dehyphenator
     if _dehyphenator is None:
-        # TODO: refactor: tools shouldn't load `visualizer_config`
         _dehyphenator = mayberemote.Dehyphenator(allow_local=True,
-                                                 model_name=visualizer_config.dehyphenation_model,
-                                                 device_string=visualizer_config.devices["sanitize"]["device_string"])
+                                                 model_name=client_config.dehyphenation_model,
+                                                 device_string=client_config.devices["sanitize"]["device_string"])
     return _dehyphenator
 
 # --------------------------------------------------------------------------------
