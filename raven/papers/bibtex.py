@@ -45,18 +45,19 @@ from .utils import bibtex_escape
 def _reader_middleware(split_names: bool) -> list:
     """The middleware chain Raven reads BibTeX through, as a fresh list per call.
 
-    Each link earns its place:
+    `split_names`: whether to include the `SeparateCoAuthors` + `SplitNameParts` step (see below).
+
+    The chain is:
 
       - `NormalizeFieldKeys` because the key case is not dependable - a Web of Science export writes
         `Title = {...}`, the BibTeX literature writes `title = {...}`.
-      - `SeparateCoAuthors` then `SplitNameParts`, in that order, because the second raises without the
-        first. Between them they turn one `author` string into name parts that survive "Ludwig van
-        Beethoven", "Brinch Hansen, Per" and "Beeblebrox, IV, Zaphod". Omitted when `split_names` is
-        false, leaving `author` and `editor` the strings the file had.
+      - `SeparateCoAuthors` then `SplitNameParts`, in that order. Between them they turn one `author`
+        string into name parts that survive "Ludwig van Beethoven", "Brinch Hansen, Per" and
+        "Beeblebrox, IV, Zaphod". Omitted when `split_names` is false, leaving `author` and `editor`
+        the strings the input data had.
 
     Fresh instances rather than a shared module-level list, because a middleware is free to carry
-    per-parse state and sharing one across concurrent parses would be a bug that only shows up under
-    load.
+    per-parse state.
     """
     chain = [bibtexparser.middlewares.NormalizeFieldKeys()]
     if split_names:
@@ -106,12 +107,11 @@ def write_string(library: Library) -> str:
     """
     # `bibtexparser.write_string` renders a value it does not recognize with `repr()`, so writing a
     # split-name library through it silently produces `author = {[NameParts(first=['Jane'], ...)]}` —
-    # a valid-looking BibTeX file with every author field destroyed, and no warning anywhere. Hence a
-    # writer in this module at all, rather than a note telling callers to remember the inverse chain.
+    # a valid-looking BibTeX file with every author field destroyed, and no warning anywhere.
     #
-    # Detected from the data rather than taken as an argument, because the two ways of getting it wrong
-    # are not equally survivable: merging an unsplit library raises `ValueError` and stops, while *not*
-    # merging a split one writes the mangled file and exits 0.
+    # Detected from the data, because the two ways of getting it wrong are not equally survivable:
+    # merging an unsplit library raises `ValueError` and stops, while *not* merging a split one
+    # writes the mangled file and exits 0.
     needs_merge = any(isinstance(field.value, list)
                       for entry in library.entries
                       for field in entry.fields)
@@ -472,8 +472,7 @@ def _relocate_in_record(raw: str, field: str) -> str | None:
     if not (_braces_balance(body) and _braces_balance(maybe_notice)):
         return None
 
-    # Match the record's own indentation, so the new field looks like the ones around it rather than
-    # announcing which tool wrote it.
+    # Match the record's own indentation, so the new field looks like the ones around it.
     line_start = raw.rfind("\n", 0, by_key["abstract"][1]) + 1
     indent = raw[line_start:by_key["abstract"][1]]
     candidate = (raw[:value_start] + "{" + body + "}"
