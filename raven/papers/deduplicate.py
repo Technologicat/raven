@@ -57,14 +57,12 @@ decoded. The input file is not modified; use `raven-fixbib` to repair the file i
 
 from __future__ import annotations
 
-__all__ = ["PREPRINT_DOI_PREFIXES", "GENERIC_TITLES", "MAX_YEAR_DRIFT", "RIGHTS_FIELD",
-           "normalize_doi", "normalize_title", "is_generic_title",
+__all__ = ["normalize_doi", "normalize_title", "is_generic_title",
 
            "Record", "read_records",
 
            "Cluster", "cluster_records",
 
-           "TITLE_SIMILARITY", "JUDGE_BATCH", "JUDGE_INSTRUCTIONS",
            "fuzzy_candidates", "settled_by_rule", "conflicting_clusters", "judge_batch", "judge_pairs",
 
            "AUDIT_COLUMNS", "AuditRow", "merge_cluster", "deduplicate", "write_audit",
@@ -91,57 +89,18 @@ from .. import __version__
 from ..common import text as textutil
 
 from . import bibtex
+from . import config as papers_config
 from . import fixbib
 
 logger = logging.getLogger(__name__)
 
-# DOI registrants that host copies rather than publish versions of record: the preprint servers, and the
-# general-purpose repositories a paper gets deposited in beside its journal. Used only to decide which
-# copy of a merged pair is the base — a record whose DOI starts with one of these loses to a record whose
-# DOI does not, whatever else is true of them.
+
+# --------------------------------------------------------------------------------
+# Normalizing a record into match keys
 #
-# Deliberately a short list of registrant prefixes rather than a guess from the venue name. Demoting a
-# real journal record by mistake would put the wrong DOI on a merged entry, which is the one outcome
-# nothing downstream can detect.
-PREPRINT_DOI_PREFIXES = ("10.48550/",   # arXiv
-                         "10.5281/",    # Zenodo
-                         "10.2139/",    # SSRN
-                         "10.1101/",    # bioRxiv, medRxiv
-                         "10.21203/",   # Research Square
-                         "10.31234/",   # PsyArXiv (OSF)
-                         "10.31219/",   # OSF Preprints
-                         "10.20944/")   # Preprints.org
-
-# Titles that name a genre rather than a work. Two unrelated papers can carry one and often do —
-# `Editorial` alone put a 2022 paper and a 2024 one in the same cluster — so a title normalizing to one of
-# these carries no evidence of its own, and `_title_edge_holds` requires the corroboration to come from
-# somewhere else.
-#
-# A curated list rather than a length threshold, which was tried first and is the wrong axis: it caught
-# nothing on a 6934-record corpus that this list did not already catch, while rejecting `Reportronic` — a
-# real and thoroughly distinctive title — for being eleven characters long. Distinctiveness is not length.
-# `Generative AI`, which is thirteen, is the better cautionary example: longer than the title the rule
-# rejected, and far likelier to head two different editorials.
-GENERIC_TITLES = frozenset(["editorial", "editorials", "introduction", "preface", "foreword",
-                            "afterword", "correction", "corrections", "corrigendum", "erratum",
-                            "errata", "retraction", "retractionnotice", "comment", "commentary",
-                            "reply", "response", "discussion", "letter", "letters",
-                            "lettertotheeditor", "bookreview", "bookreviews", "review", "reviews",
-                            "bookprofile", "frontmatter", "backmatter", "tableofcontents", "contents",
-                            "index", "abstract", "abstracts", "acknowledgements", "acknowledgments",
-                            "authorindex", "subjectindex", "titlepage", "coverimage", "conclusion",
-                            "conclusions", "summary", "references", "bibliography", "glossary",
-                            "appendix", "notes", "news", "obituary", "announcement", "announcements",
-                            "callforpapers", "aboutthisjournal", "aboutthecontributors",
-                            "issueinformation", "masthead", "untitled", "notitle", "na"])
-
-# How far two records' years may sit apart while still being one paper. One year, because a preprint and
-# its published version routinely straddle a New Year, and two databases can disagree about which year an
-# online-first article belongs to. Two is a different paper.
-MAX_YEAR_DRIFT = 1
-
-# Where `raven-fixbib` puts a rights notice it moves out of an abstract, and so where this looks for one.
-RIGHTS_FIELD = "copyright"
+# Everything below is a key, never a value: nothing normalized here reaches the output. The regexes are
+# implementation and stay in this module; the lists and thresholds a user might reasonably turn are in
+# `raven.papers.config`.
 
 # The seven Unicode dashes, folded to ASCII `-` in a DOI. Publishers' exports disagree about which one a
 # DOI containing a hyphen should use, and two records whose DOIs differ by an en-dash are one paper.
@@ -235,8 +194,11 @@ def is_generic_title(maybe_normalized: str | None) -> bool:
     A record whose title is generic is still deduplicated. What changes is how much its title is allowed
     to prove on its own: see `_title_edge_holds`.
     """
-    return bool(maybe_normalized) and maybe_normalized in GENERIC_TITLES
+    return bool(maybe_normalized) and maybe_normalized in papers_config.generic_titles
 
+
+# --------------------------------------------------------------------------------
+# Reading a bibliography into records
 
 @dataclasses.dataclass(frozen=True)
 class Record:
@@ -364,7 +326,7 @@ def _make_record(index: int, entry: Entry) -> Record:
                   year=_year_of(_field_value(entry, "year")),
                   surname=_first_surname(_field_value(entry, "author")),
                   chapter_version=int(version_match.group(2)) if version_match else None,
-                  is_preprint=doi is not None and doi.startswith(PREPRINT_DOI_PREFIXES))
+                  is_preprint=doi is not None and doi.startswith(papers_config.preprint_doi_prefixes))
 
 
 def read_records(source: str) -> tuple[list[Record], list[fixbib.RepairReport]]:
@@ -398,6 +360,12 @@ def _still_missing(report: fixbib.RepairReport, library: Library) -> bool:
     """
     return not any(entry.key == report.key for entry in library.entries)
 
+
+# --------------------------------------------------------------------------------
+# Deterministic clustering
+#
+# No model involved anywhere below: union-find over exact normalized DOI and exact normalized title, with
+# `_title_edge_holds` deciding when a title match is allowed to carry a merge on its own.
 
 @dataclasses.dataclass(frozen=True)
 class Cluster:
@@ -441,8 +409,8 @@ def _disagree_on_author(a: Record, b: Record) -> bool:
 
 
 def _disagree_on_year(a: Record, b: Record) -> bool:
-    """Whether both records give a year and the two are more than `MAX_YEAR_DRIFT` apart."""
-    return bool(a.year and b.year and abs(a.year - b.year) > MAX_YEAR_DRIFT)
+    """Whether both records give a year and the two are more than `papers_config.max_year_drift` apart."""
+    return bool(a.year and b.year and abs(a.year - b.year) > papers_config.max_year_drift)
 
 
 def _title_edge_holds(a: Record, b: Record) -> bool:
@@ -453,7 +421,7 @@ def _title_edge_holds(a: Record, b: Record) -> bool:
 
       - **A generic title** — `Editorial`, `Book Review` — proves nothing by itself, so it is accepted
         only where the records positively *agree*: the same first author, and years within
-        `MAX_YEAR_DRIFT`. Silence is not agreement here; a record with no author is not merged into
+        `papers_config.max_year_drift`. Silence is not agreement here; a record with no author is not merged into
         another `Editorial` on the strength of the word.
       - **Where neither record names an author**, the title is the only evidence there is, so a
         disagreement about the DOI is enough to overrule it.
@@ -476,7 +444,7 @@ def _title_edge_holds(a: Record, b: Record) -> bool:
     if is_generic_title(a.title):
         return (a.surname is not None and a.surname == b.surname
                 and a.year is not None and b.year is not None
-                and abs(a.year - b.year) <= MAX_YEAR_DRIFT)
+                and abs(a.year - b.year) <= papers_config.max_year_drift)
     if a.surname is None and b.surname is None:
         return not (a.doi and b.doi and a.doi != b.doi)
     return not (_disagree_on_author(a, b) and _disagree_on_year(a, b))
@@ -565,55 +533,12 @@ def _clusters_from(records: list[Record], find, edges: list[tuple[int, int, str]
     return sorted(clusters, key=lambda cluster: cluster.records[0].index)
 
 
-# How alike two normalized titles must be before the judge is asked about them. Chosen to catch the
-# near-misses an exact key cannot — a subtitle one database kept and another dropped, a word order fixed
-# between the preprint and the published version — without asking about every pair of papers on a common
-# subject, which in a topical corpus is most of them.
-TITLE_SIMILARITY = 0.86
-
-# Pairs per model call. Smaller than the 40 filenames `investigations/agent-batch-classification/` used,
-# because each item here carries two full records rather than one filename.
-JUDGE_BATCH = 12
-
-JUDGE_INSTRUCTIONS = """\
-You are deduplicating a bibliography assembled from several literature databases. The same paper is \
-often exported by each database that indexes it, with the fields spelled differently, so two records that \
-look slightly different are frequently one paper.
-
-For each numbered item you are given two bibliography records. Decide whether they describe THE SAME \
-WORK.
-
-Treat as the same work:
-  - the same paper exported by two databases, with different capitalization, punctuation, markup or \
-field coverage
-  - a preprint and the published version of the same paper
-  - two versions of the same book chapter or living reference work entry
-  - the same paper with a subtitle present in one record and absent in the other
-
-Treat as different works:
-  - different papers by the same authors on a related topic
-  - a paper and its own correction, erratum, comment or editorial
-  - different chapters of the same book, or different papers in the same proceedings
-  - a conference paper and a substantially different journal article, where the titles genuinely differ \
-in what they claim
-
-For each item, answer:
-  "i"      the item's number, copied exactly
-  "same"   true if the two records describe the same work, false otherwise
-  "why"    at most fifteen words, the evidence you used
-
-IMPORTANT: judge only from what the records actually say. Do not claim to recognize a DOI, an identifier \
-or a paper from memory; you cannot, and a guess dressed as recognition is worse than saying the records \
-do not settle it. If the two records do not give you enough to tell, answer false — leaving two records \
-that are one paper is recoverable, and merging two different papers is not.
-
-Answer with a JSON array of objects and nothing else. One object per item, in order, no commentary, no \
-markdown fences.
-
-Items:
-{items}
-"""
-
+# --------------------------------------------------------------------------------
+# The LLM judge (opt-in, `--judge`)
+#
+# It sees only what the deterministic pass could not settle, it proposes rather than decides — every "same
+# work" verdict must still clear `_judge_admits` in Python — and it is never asked a question a rule
+# already answers; see `settled_by_rule`.
 
 def _describe_for_judge(record: Record) -> str:
     """One record as the few lines the judge is asked to read.
@@ -632,13 +557,21 @@ def _describe_for_judge(record: Record) -> str:
 
 
 def _title_similarity(a: str, b: str) -> float:
-    """How alike two normalized titles are, on `difflib`'s 0..1 scale.
+    """How alike two normalized titles are, as `difflib.SequenceMatcher.ratio()`.
 
-    Guarded by `difflib`'s own two cheap upper bounds, which is what keeps a quadratic pass over a
-    blocking group affordable: both are O(len) where `ratio` is O(len²).
+    That is `2M/T` — matching characters over the combined length of both strings — so 0 means nothing in
+    common and 1 means identical. **Character overlap, not meaning**: no embeddings and no semantics, so
+    two titles about one subject in different words score low, while two spellings of one title score
+    high. The second is the question being asked here.
+
+    Returns 0.0 rather than the true ratio for a pair that cannot reach `config.title_similarity`, since
+    the caller only ever compares against that threshold. `difflib`'s two cheap upper bounds do that
+    rejection in O(len) where `ratio` is O(len²), which is what keeps a quadratic pass over a blocking
+    group affordable.
     """
+    threshold = papers_config.title_similarity
     matcher = difflib.SequenceMatcher(None, a, b)
-    if matcher.real_quick_ratio() < TITLE_SIMILARITY or matcher.quick_ratio() < TITLE_SIMILARITY:
+    if matcher.real_quick_ratio() < threshold or matcher.quick_ratio() < threshold:
         return 0.0
     return matcher.ratio()
 
@@ -646,8 +579,8 @@ def _title_similarity(a: str, b: str) -> float:
 def fuzzy_candidates(records: list[Record], clusters: list[Cluster]) -> list[tuple[Record, Record]]:
     """Pairs of records that look like one paper but that no exact key joined.
 
-    Blocked by first-author surname and by year within `MAX_YEAR_DRIFT`, then filtered by
-    `TITLE_SIMILARITY`. Blocking is what makes this tractable — comparing all pairs of a 7000-record
+    Blocked by first-author surname and by year within `papers_config.max_year_drift`, then filtered by
+    `papers_config.title_similarity`. Blocking is what makes this tractable — comparing all pairs of a 7000-record
     corpus is 24 million comparisons, and comparing within a surname is a few thousand.
 
     The cost of blocking is what it cannot see: a record with no author or no year is in no block, and
@@ -663,7 +596,7 @@ def fuzzy_candidates(records: list[Record], clusters: list[Cluster]) -> list[tup
     blocks = collections.defaultdict(list)
     for record in records:
         if record.surname and record.year and record.title:
-            for year in range(record.year - MAX_YEAR_DRIFT, record.year + MAX_YEAR_DRIFT + 1):
+            for year in range(record.year - papers_config.max_year_drift, record.year + papers_config.max_year_drift + 1):
                 blocks[(record.surname, year)].append(record)
 
     seen, candidates = set(), []
@@ -676,7 +609,7 @@ def fuzzy_candidates(records: list[Record], clusters: list[Cluster]) -> list[tup
                 if pair in seen:
                     continue  # a pair reachable from two adjacent year blocks is still one pair
                 seen.add(pair)
-                if _title_similarity(a.title, b.title) >= TITLE_SIMILARITY:
+                if _title_similarity(a.title, b.title) >= papers_config.title_similarity:
                     candidates.append((a, b) if a.index < b.index else (b, a))
     return sorted(candidates, key=lambda pair: (pair[0].index, pair[1].index))
 
@@ -757,7 +690,7 @@ def judge_batch(llm_settings, batch: list[tuple[str, str, str]]) -> dict[int, di
     """
     items = "\n\n".join(f"{position}.\n  RECORD A:\n{a}\n  RECORD B:\n{b}"
                         for position, (_pair_id, a, b) in enumerate(batch))
-    answers = _parse_json_payload(_ask_judge(llm_settings, JUDGE_INSTRUCTIONS.format(items=items)))
+    answers = _parse_json_payload(_ask_judge(llm_settings, papers_config.judge_instructions.format(items=items)))
     if not isinstance(answers, list):
         raise ValueError(f"expected a JSON array, got {type(answers).__name__}")
 
@@ -838,8 +771,8 @@ def judge_pairs(llm_settings,
     done = _load_judge_state(maybe_state_path) if maybe_state_path else {}
     todo = [(a, b, why) for a, b, why in pairs if _pair_id(a, b) not in done]
 
-    for start in range(0, len(todo), JUDGE_BATCH):
-        chunk = todo[start:start + JUDGE_BATCH]
+    for start in range(0, len(todo), papers_config.judge_batch):
+        chunk = todo[start:start + papers_config.judge_batch]
         batch = [(_pair_id(a, b), _describe_for_judge(a), _describe_for_judge(b)) for a, b, _why in chunk]
         try:
             answers = judge_batch(llm_settings, batch)
@@ -856,7 +789,7 @@ def judge_pairs(llm_settings,
                 with maybe_state_path.open("a", encoding="utf-8") as stream:
                     stream.write(json.dumps(answer, ensure_ascii=False) + "\n")
         if on_progress is not None:
-            on_progress(min(start + JUDGE_BATCH, len(todo)), len(todo))
+            on_progress(min(start + papers_config.judge_batch, len(todo)), len(todo))
 
     verdicts = {}
     for a, b, _why in pairs:
@@ -937,6 +870,12 @@ def _apply_judge(records: list[Record], clusters: list[Cluster], opts) -> list[C
     return cluster_records(records, verdicts)
 
 
+# --------------------------------------------------------------------------------
+# Merging a cluster, and the audit trail that accounts for it
+
+# The TSV schema. Not a knob despite being public: `AuditRow.to_row` produces these cells in this order,
+# so the two change together or not at all. A caller reading the audit wants the names, which is why it is
+# exported.
 AUDIT_COLUMNS = ("kept", "removed", "matched_by", "size", "title", "dois", "differences")
 
 
@@ -986,11 +925,6 @@ class AuditRow:
                                                   " | ".join(self.differences)))
 
 
-# Long enough to recognize a value and to see how two of them differ; short enough that a row holding
-# two abstracts stays a row. The input file is where anyone reads one in full.
-_AUDIT_VALUE_CHARS = 300
-
-
 def _tsv_cell(value: str) -> str:
     """One TSV cell: no tabs, no newlines, no carriage returns, since those end a cell or a row."""
     return re.sub(r"\s+", " ", str(value)).strip()
@@ -999,7 +933,7 @@ def _tsv_cell(value: str) -> str:
 def _clip(value: str) -> str:
     """`value` shortened to something an audit row can carry."""
     value = _tsv_cell(value)
-    return value if len(value) <= _AUDIT_VALUE_CHARS else value[:_AUDIT_VALUE_CHARS - 1] + "…"
+    return value if len(value) <= papers_config.audit_value_chars else value[:papers_config.audit_value_chars - 1] + "…"
 
 
 def _best_abstract(cluster: Cluster) -> tuple[str | None, list[str]]:
@@ -1075,9 +1009,9 @@ def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
     # `bibtex.repair_duplicate_field_keys` joins repeated fields, for the same reason and so that the two
     # read alike.
     notices = list(dict.fromkeys(value for record in cluster.records
-                                 if (value := record.field(RIGHTS_FIELD)) is not None))
+                                 if (value := record.field(papers_config.rights_field)) is not None))
     if notices:
-        fields[RIGHTS_FIELD] = "\n".join(notices)
+        fields[papers_config.rights_field] = "\n".join(notices)
 
     # Field order follows the base's own, so a merged record still reads like the record it came from,
     # with whatever was filled in from its twins after it.
@@ -1094,7 +1028,7 @@ def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
             value = _field_value(record.entry, field.key)
             kept = fields.get(field.key)
             if (value is not None and kept is not None and value != kept
-                    and field.key not in ("abstract", RIGHTS_FIELD)):
+                    and field.key not in ("abstract", papers_config.rights_field)):
                 differences.append(f"{field.key}: kept {_clip(kept)} / dropped {_clip(value)}")
 
     dois = sorted({record.doi for record in cluster.records if record.doi})
