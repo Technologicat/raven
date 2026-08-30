@@ -7,9 +7,6 @@ fetches results with automatic pagination and rate limiting, and exports as BibT
 from __future__ import annotations
 
 __all__ = [
-    "ARXIV_API_URL",
-    "PAGE_SIZE",
-    "MAX_ARXIV_RESULTS",
     "load_query",
     "determine_output_path",
     "clamp_max_results",
@@ -24,14 +21,12 @@ from pathlib import Path
 import feedparser
 
 from .. import __version__
+from . import config as papers_config
 from . import httpfetch
 from .bibtex import entries_to_bibtex
 from .query import node_to_query, parse_query
 from .ratelimit import RateLimiter
 
-ARXIV_API_URL = "https://export.arxiv.org/api/query"
-PAGE_SIZE = 200
-MAX_ARXIV_RESULTS = 30_000
 
 
 def load_query(query_file: Path | None, query: str | None) -> str:
@@ -68,14 +63,14 @@ def determine_output_path(output: Path | None, query_file: Path | None) -> Path:
 
 
 def clamp_max_results(max_results: int | None) -> int | None:
-    """Clamp *max_results* to arXiv's hard limit (``MAX_ARXIV_RESULTS``).
+    """Clamp *max_results* to arXiv's hard limit (``papers_config.arxiv_max_results``).
 
     ``None`` (fetch all) passes through unchanged.  Values within the limit
     pass through unchanged.  Values above the limit are reduced to it.
     """
     if max_results is None:
         return None
-    return min(max_results, MAX_ARXIV_RESULTS)
+    return min(max_results, papers_config.arxiv_max_results)
 
 
 def search(query: str, max_results: int | None = None) -> list[dict]:
@@ -83,14 +78,14 @@ def search(query: str, max_results: int | None = None) -> list[dict]:
 
     Respects the arXiv rate limit of one request per 3 seconds.
     """
-    rate_limiter = RateLimiter()
+    rate_limiter = RateLimiter(papers_config.arxiv_request_delay)
     results: list[dict] = []
     start = 0
     total: int | None = None
 
     while True:
         # How many to request this page
-        page_size = PAGE_SIZE
+        page_size = papers_config.arxiv_page_size
         if max_results is not None:
             remaining = max_results - len(results)
             if remaining <= 0:
@@ -106,7 +101,7 @@ def search(query: str, max_results: int | None = None) -> list[dict]:
         }
 
         rate_limiter.wait()
-        resp = httpfetch.arxiv_get(ARXIV_API_URL, params=params, timeout=30)
+        resp = httpfetch.arxiv_get(papers_config.arxiv_api_url, params=params, timeout=30)
         resp.raise_for_status()
 
         feed = feedparser.parse(resp.text)
@@ -170,7 +165,7 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover
         "--max-results",
         type=int,
         default=None,
-        help=f"Maximum results to fetch (arXiv hard limit: {MAX_ARXIV_RESULTS})",
+        help=f"Maximum results to fetch (arXiv hard limit: {papers_config.arxiv_max_results})",
     )
     args = ap.parse_args(argv)
 
@@ -189,8 +184,8 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover
     arxiv_query = node_to_query(ast)
     print(f"Query: {arxiv_query}", file=sys.stderr)
 
-    if args.max_results is not None and args.max_results > MAX_ARXIV_RESULTS:
-        print(f"Warning: arXiv caps at {MAX_ARXIV_RESULTS} results, clamping.", file=sys.stderr)
+    if args.max_results is not None and args.max_results > papers_config.arxiv_max_results:
+        print(f"Warning: arXiv caps at {papers_config.arxiv_max_results} results, clamping.", file=sys.stderr)
     max_results = clamp_max_results(args.max_results)
 
     entries = search(arxiv_query, max_results=max_results)

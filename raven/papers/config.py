@@ -1,11 +1,56 @@
 """Configuration for the Raven bibliography tools (`raven.papers`).
 
 The knobs a user might reasonably want to turn. Anything a module reads and nobody outside it should touch
-— a regex, a lookup table, an internal limit — stays in that module, in `SCREAMING_CASE`; see
+— a regex, an XML namespace, a progress glyph — stays in that module, in `SCREAMING_CASE`; see
 `raven-style-guide.md` under *Naming*, where the casing is what says which of the two a constant is.
 
-Currently used by `papers.deduplicate`.
+Used by `papers.deduplicate`, and by the arXiv tools: `papers.search`, `papers.arxiv2bib`,
+`papers.download`, `papers.httpfetch`.
 """
+
+from .. import __version__
+
+# --------------------------------------------------------------------------------
+# Talking to arXiv
+
+# The arXiv API endpoint. One copy: `search`, `arxiv2bib` and `download` each had their own, which is
+# three places to edit if arXiv ever moves it and three chances to miss one.
+arxiv_api_url = "https://export.arxiv.org/api/query"
+
+# Minimum wall time between requests, seconds. **This is arXiv's, not ours** — their terms of use require
+# waiting at least three seconds between requests, so lowering it is a violation rather than a tuning
+# choice. Raise it freely.
+#
+# Here rather than as `RateLimiter`'s default argument, where it was: a number that binds every arXiv
+# caller should be visible in one place a user can find, and `ratelimit` is generic machinery that happens
+# to have been written for this.
+arxiv_request_delay = 3.0
+
+# Search results per request. arXiv's own documentation suggests keeping a single request modest; this is
+# the largest value that has behaved reliably in practice.
+arxiv_page_size = 200
+
+# The most results arXiv will return for one query, however you page through it. Their limit, not ours —
+# a search expecting more than this needs splitting into narrower queries.
+arxiv_max_results = 30_000
+
+# Identifiers per metadata request. The API answers an `id_list` naming many papers in one response, and
+# the rate limit is per *request*, so the metadata for a whole run costs ceil(N / 100) waits instead of N.
+#
+# 100 rather than as many as fit: a URL is not a good place to discover your limits, since an over-long
+# one fails as an opaque HTTP error partway through a batch job. This keeps the query string well inside
+# any sane bound while still amortizing the three-second wait over real work.
+#
+# Note this speeds up metadata only. Fulltext PDFs are one request each and still cost a wait apiece.
+arxiv_id_batch_size = 100
+
+# Sent as `User-Agent` on every arXiv request. arXiv asks for a descriptive agent with a contact address,
+# so that they can get in touch about a misbehaving client rather than simply blocking it.
+#
+# **Worth changing if you are running a modified Raven**, or running it at volume: the address below
+# reaches this project's maintainer, who cannot answer for what your copy did.
+http_user_agent = (f"raven-papers/{__version__} "
+                   f"(+https://github.com/Technologicat/raven; mailto:juha.jeronen@jamk.fi)")
 
 # --------------------------------------------------------------------------------
 # Deciding that two records are the same paper

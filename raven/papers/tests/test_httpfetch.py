@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 import requests
 
+from raven.papers import config as papers_config
 from raven.papers import httpfetch
 
 
@@ -40,8 +41,8 @@ class _ScriptedSession:
 
 def test_useragent_identifies_raven():
     """User-Agent string mentions raven-papers and contains a contact handle."""
-    assert "raven-papers/" in httpfetch.USER_AGENT
-    assert "Technologicat/raven" in httpfetch.USER_AGENT
+    assert "raven-papers/" in papers_config.http_user_agent
+    assert "Technologicat/raven" in papers_config.http_user_agent
 
 
 def test_arxiv_get_passes_useragent_header():
@@ -49,7 +50,7 @@ def test_arxiv_get_passes_useragent_header():
     session = _ScriptedSession([_FakeResponse(200)])
     with patch.object(httpfetch.requests, "get", side_effect=session):
         httpfetch.arxiv_get("https://example.test/api")
-    assert session.calls[0]["headers"]["User-Agent"] == httpfetch.USER_AGENT
+    assert session.calls[0]["headers"]["User-Agent"] == papers_config.http_user_agent
 
 
 def test_arxiv_get_returns_immediately_on_2xx():

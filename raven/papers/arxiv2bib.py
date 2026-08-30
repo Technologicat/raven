@@ -44,8 +44,6 @@ already retries with backoff; a stubborn outage is a reason to wait, not to chan
 from __future__ import annotations
 
 __all__ = [
-    "ARXIV_API_URL",
-    "BATCH_SIZE",
     "read_identifiers",
     "fetch_metadata",
     "main",
@@ -58,17 +56,13 @@ from pathlib import Path
 import feedparser
 
 from .. import __version__
+from . import config as papers_config
 from . import httpfetch
 from .bibtex import entries_to_bibtex
 from .identifiers import strip_version
 from .ratelimit import RateLimiter
 
-ARXIV_API_URL = "https://export.arxiv.org/api/query"
 
-# Identifiers per request. The API accepts a long `id_list`, but a URL is not a good place to discover
-# your limits: an over-long one fails as an opaque HTTP error partway through a batch job. 100 keeps the
-# query string well inside any sane bound while still amortizing the three-second wait over real work.
-BATCH_SIZE = 100
 
 
 def read_identifiers(maybe_paths: list[str], stream=None) -> list[str]:
@@ -108,7 +102,7 @@ def read_identifiers(maybe_paths: list[str], stream=None) -> list[str]:
     return identifiers
 
 
-def fetch_metadata(identifiers: list[str], batch_size: int = BATCH_SIZE) -> list:
+def fetch_metadata(identifiers: list[str], batch_size: int = papers_config.arxiv_id_batch_size) -> list:
     """Fetch arXiv metadata for `identifiers`, in batches, respecting the rate limit.
 
     Returns feedparser entries in arXiv's order, ready for `bibtex.entries_to_bibtex`.
@@ -117,13 +111,13 @@ def fetch_metadata(identifiers: list[str], batch_size: int = BATCH_SIZE) -> list
     mistyped or withdrawn identifier should not discard the several hundred that worked. The caller is
     expected to diff the request against the result and report the gap; `main` does.
     """
-    rate_limiter = RateLimiter()
+    rate_limiter = RateLimiter(papers_config.arxiv_request_delay)
     entries: list = []
 
     for start in range(0, len(identifiers), batch_size):
         batch = identifiers[start:start + batch_size]
         rate_limiter.wait()
-        response = httpfetch.arxiv_get(ARXIV_API_URL,
+        response = httpfetch.arxiv_get(papers_config.arxiv_api_url,
                                        params={"id_list": ",".join(batch), "max_results": len(batch)},
                                        timeout=30)
         response.raise_for_status()

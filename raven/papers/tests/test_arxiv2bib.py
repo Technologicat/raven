@@ -9,8 +9,8 @@ from unittest.mock import patch
 import pytest
 
 from raven.papers import arxiv2bib as arxiv2bib_module
+from raven.papers import config as papers_config
 from raven.papers.arxiv2bib import (
-    BATCH_SIZE,
     _returned_identifiers,
     fetch_metadata,
     read_identifiers,
@@ -121,7 +121,8 @@ class _FakeHttpfetch:
         return self._next_response()
 
 
-def _no_wait_rate_limiter():
+def _no_wait_rate_limiter(delay=None):
+    """A RateLimiter substitute that never sleeps. Takes the delay the real one takes, and ignores it."""
     class _NoWait:
         def wait(self, show_progress=True):
             pass
@@ -180,7 +181,7 @@ class TestFetchMetadata:
             fetch_metadata(["2301.00001"])
         assert len(fake.calls) == 1
         assert fake.calls[0]["max_results"] == 1
-        assert BATCH_SIZE >= 1
+        assert papers_config.arxiv_id_batch_size >= 1
 
 
 # ---- version handling in the emitted BibTeX ---------------------------------

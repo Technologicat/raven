@@ -44,6 +44,7 @@ from mcpyrate import colorizer
 from .. import __version__
 from ..common import stringmaps
 from . import bibtex
+from . import config as papers_config
 from . import httpfetch
 from . import identifiers
 from .ratelimit import RateLimiter
@@ -54,14 +55,9 @@ CHECKMARK = "\u2713"  # ✓
 CROSS = "\u2717"      # ✗
 
 
-ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
 ARXIV_NS = {"arxiv": "http://arxiv.org/schemas/atom"}
 
-# Identifiers per metadata request. arXiv answers an `id_list` naming many papers in one response, and
-# the rate limit is per *request*, so the metadata for a whole run costs ceil(N / 100) waits instead of
-# N. The PDFs still cost one wait each, so this halves a run's wall time rather than eliminating it.
-METADATA_BATCH_SIZE = 100
 
 
 class ArxivMetadataError(ValueError):
@@ -266,7 +262,7 @@ def metadata_to_feed_entry(metadata: Dict[str, str]) -> _FeedLikeEntry:
 def get_paper_metadata(arxiv_id: str,
                        title_length_limit: int = 128) -> Dict[str, str]:
     """Fetch and parse metadata from arXiv API, including PDF link."""
-    api_url = f"{ARXIV_API_URL}?id_list={arxiv_id}"
+    api_url = f"{papers_config.arxiv_api_url}?id_list={arxiv_id}"
     response = httpfetch.arxiv_get(api_url)
     response.raise_for_status()
     return parse_metadata_response(response.content, arxiv_id, title_length_limit)
@@ -323,7 +319,7 @@ def parse_metadata_responses(xml_content: bytes,
 
 
 def get_papers_metadata(arxiv_ids: List[str],
-                        batch_size: int = METADATA_BATCH_SIZE,
+                        batch_size: int = papers_config.arxiv_id_batch_size,
                         title_length_limit: int = 128,
                         rate_limiter: RateLimiter | None = None) -> Dict[str, Dict[str, str]]:
     """Fetch metadata for many papers at once, keyed by requested identifier.
@@ -340,7 +336,7 @@ def get_papers_metadata(arxiv_ids: List[str],
     reports the gap and proceeds with what came back.
     """
     if rate_limiter is None:
-        rate_limiter = RateLimiter()
+        rate_limiter = RateLimiter(papers_config.arxiv_request_delay)
 
     found: Dict[str, Dict[str, str]] = {}
     for start in range(0, len(arxiv_ids), batch_size):
@@ -354,7 +350,7 @@ def get_papers_metadata(arxiv_ids: List[str],
         # had already downloaded hundreds of papers. The batch's identifiers are simply absent from the
         # result, which the caller already reports paper by paper.
         try:
-            response = httpfetch.arxiv_get(ARXIV_API_URL,
+            response = httpfetch.arxiv_get(papers_config.arxiv_api_url,
                                            params={"id_list": ",".join(batch), "max_results": len(batch)})
             response.raise_for_status()
         except Exception as exc:  # noqa: BLE001 -- one bad batch must not abort the run
@@ -395,7 +391,7 @@ def _write_bibtex(metadata_by_id: Dict[str, Dict[str, str]],
 
 def download_papers(arxiv_ids: List[str],
                     output_dir: str = "papers",
-                    batch_size: int = METADATA_BATCH_SIZE,
+                    batch_size: int = papers_config.arxiv_id_batch_size,
                     save_bib: Union[str, pathlib.Path, None] = None) -> None:
     """Download papers from arXiv, naming files from their metadata.
 
@@ -436,7 +432,7 @@ def download_papers(arxiv_ids: List[str],
     )
     output_dir_existing_arxiv_ids = [aid for aid, unused_filename in arxiv_pdf_files_in_output_dir]
 
-    rate_limiter = RateLimiter()
+    rate_limiter = RateLimiter(papers_config.arxiv_request_delay)
 
     # Drop exact repeats before fetching anything, which is what `raven-arxiv2bib` does with its input and
     # what this did not: a repeated identifier was carried all the way to the download step before being

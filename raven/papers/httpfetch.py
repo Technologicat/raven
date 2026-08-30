@@ -12,7 +12,6 @@ identifying `User-Agent` and retries on 429 with backoff, honoring the
 from __future__ import annotations
 
 __all__ = [
-    "USER_AGENT",
     "arxiv_get",
 ]
 
@@ -22,14 +21,10 @@ from typing import Any, Optional
 
 import requests
 
-from .. import __version__
+from . import config as papers_config
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = (
-    f"raven-papers/{__version__} "
-    f"(+https://github.com/Technologicat/raven; mailto:juha.jeronen@jamk.fi)"
-)
 
 
 def arxiv_get(url: str,
@@ -60,7 +55,7 @@ def arxiv_get(url: str,
     out while a `search_query` from the same machine answered in 0.087 s — transient, and exactly the
     shape a retry fixes.
     """
-    headers = {"User-Agent": USER_AGENT}
+    headers = {"User-Agent": papers_config.http_user_agent}
     for attempt in range(max_attempts):
         try:
             response = requests.get(url, params=params, headers=headers, timeout=timeout)

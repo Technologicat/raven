@@ -8,10 +8,9 @@ from unittest.mock import patch
 
 import pytest
 
+from raven.papers import config as papers_config
 from raven.papers import search as search_module
 from raven.papers.search import (
-    MAX_ARXIV_RESULTS,
-    PAGE_SIZE,
     clamp_max_results,
     determine_output_path,
     load_query,
@@ -84,10 +83,10 @@ class TestClampMaxResults:
         assert clamp_max_results(100) == 100
 
     def test_at_limit_unchanged(self):
-        assert clamp_max_results(MAX_ARXIV_RESULTS) == MAX_ARXIV_RESULTS
+        assert clamp_max_results(papers_config.arxiv_max_results) == papers_config.arxiv_max_results
 
     def test_above_limit_clamped(self):
-        assert clamp_max_results(MAX_ARXIV_RESULTS + 5000) == MAX_ARXIV_RESULTS
+        assert clamp_max_results(papers_config.arxiv_max_results + 5000) == papers_config.arxiv_max_results
 
 
 # ---- Synthetic arXiv Atom feed ---------------------------------------------
@@ -141,8 +140,13 @@ class _FakeResponse:
         pass
 
 
-def _no_wait_rate_limiter():
-    """A RateLimiter substitute that never sleeps — keeps tests fast."""
+def _no_wait_rate_limiter(delay=None):
+    """A RateLimiter substitute that never sleeps — keeps tests fast.
+
+    Takes the delay the real constructor takes, and ignores it. The callers pass
+    `config.arxiv_request_delay` explicitly rather than relying on a default, so a stub that accepted no
+    arguments would fail on the call rather than on anything it was written to check.
+    """
     class _NoWait:
         def wait(self, show_progress=True):
             pass
@@ -191,7 +195,7 @@ class TestSearchFunction:
 
     def test_pagination(self, monkeypatch):
         """When total > one page, ``search`` keeps fetching until exhausted."""
-        monkeypatch.setattr(search_module, "PAGE_SIZE", 2)
+        monkeypatch.setattr(papers_config, "arxiv_page_size", 2)
         page1 = _atom_feed(total=3, entries=[("2301.00001", "A"), ("2301.00002", "B")])
         page2 = _atom_feed(total=3, entries=[("2301.00003", "C")])
         with self._patch([_FakeResponse(page1), _FakeResponse(page2)]):
@@ -200,7 +204,7 @@ class TestSearchFunction:
 
     def test_max_results_caps_fetch(self, monkeypatch):
         """``max_results`` stops paging even when more are available."""
-        monkeypatch.setattr(search_module, "PAGE_SIZE", 2)
+        monkeypatch.setattr(papers_config, "arxiv_page_size", 2)
         page1 = _atom_feed(total=10, entries=[("2301.00001", "A"), ("2301.00002", "B")])
         with self._patch([_FakeResponse(page1)]):
             results = search("foo", max_results=2)
@@ -208,7 +212,7 @@ class TestSearchFunction:
 
     def test_max_results_smaller_than_page_size(self, monkeypatch):
         """A small ``max_results`` shrinks the per-page request."""
-        monkeypatch.setattr(search_module, "PAGE_SIZE", 100)
+        monkeypatch.setattr(papers_config, "arxiv_page_size", 100)
         captured = {}
 
         def capture(url, params, timeout):
@@ -239,5 +243,5 @@ class _FakeHttpfetch:
 
 # Assert a sanity check on the module-level constants that the tests reason about.
 def test_constants_sane():
-    assert PAGE_SIZE > 0
-    assert MAX_ARXIV_RESULTS >= PAGE_SIZE
+    assert papers_config.arxiv_page_size > 0
+    assert papers_config.arxiv_max_results >= papers_config.arxiv_page_size
