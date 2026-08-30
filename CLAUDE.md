@@ -637,25 +637,35 @@ This coupling limits TTS engine choices (most don't expose timestamped phoneme d
 ## Current State
 
 ### Well-structured (target style)
-- `raven/librarian/` - Clean module separation (~20k lines across 18 modules, measured 2026-08-24). Note it has outgrown the per-module guideline below in several places — `chat_controller.py` is ~4.0k lines and `llmclient.py` ~2.8k — without losing the layering, which is the property that made it the target style. Size is a smell here, not a verdict. See `raven/librarian/CLAUDE.md` for the layer map.
+- `raven/librarian/` - Clean module separation (~22.8k lines across 20 modules, measured 2026-08-29). Note it has outgrown the per-module guideline below in several places — `chat_controller.py` is ~5.1k lines and `llmclient.py` ~2.4k — without losing the layering, which is the property that made it the target style. Size is a smell here, not a verdict, and the largest of them is tolerated rather than endorsed; see the guideline below. See `raven/librarian/CLAUDE.md` for the layer map.
 
 ### Needs refactoring
 
 Target ~700 lines per module as a guideline, not a hard limit — some modules can be longer when appropriate (e.g. lots of simple related code).
 
-**The number came from the macro projects, and it does not transfer unchanged.** `mcpyrate` and
-`unpythonic` are dense in a way Raven mostly is not: there, 700 lines is plenty because the lines are
-Kolmogorov-hard, and a longer module really is a sign that something wants splitting. Raven's frontends
-and tools are the opposite — long stretches of simple related code, and prose. So a module over the
-guideline is a prompt to look, not a finding: ask whether the *layering* has gone, which is the property
-that made `raven/librarian/` the target style, rather than whether the line count has. `chat_controller.py`
-is ~5k lines and keeps its layers, so it is fine where it is; `raven/papers/deduplicate.py` is ~1.1k of
-which a third is docstrings, and splitting it would move prose around rather than simplify anything.
-(Juha, 2026-08-28, settling exactly this question about the deduplicator.)
+**The number came from the macro projects, and it does not transfer unchanged.** In `mcpyrate` and
+`unpythonic`, 700 lines is plenty because the lines are Kolmogorov-hard, and a longer module really is a
+sign that something wants splitting. So a module over the guideline is a prompt to look, not a finding:
+ask whether the *layering* has gone, which is the property that made `raven/librarian/` the target style,
+rather than whether the line count has.
 
-- `raven/visualizer/app.py` - ~1.9k lines. The split into `info_panel`, `selection`, `plotter`, `annotation`, `word_cloud`, `entry_renderer` and `app_state` has landed; what remains is ordinary size rather than a god object. See `raven/visualizer/CLAUDE.md` for the module map.
-- `raven/visualizer/info_panel.py` - ~1.5k lines, the largest of the extracted modules; a candidate for further splitting, but not urgent.
-- `raven/visualizer/importer.py` - ~1.3k lines, pipeline architecture, lower priority but could benefit from stage separation
+**Two things stop that becoming "big is fine here".** First, watch the units — this codebase is ~40%
+docstrings and comments, so a total line count roughly doubles the SLOC, and the figures we quote are
+usually totals. `chat_controller.py` is 5090 lines and **2046 SLOC**; `raven/papers/deduplicate.py` is 1225
+and 556. Second, density does not predict the right size either: the tempting story is that Raven is the
+prose-heavy opposite of the macro projects, and *most of `chat_controller.py` looks Kolmogorov-hard*
+(Juha, 2026-08-29). Raven has both kinds.
+
+**`chat_controller.py` is tolerated rather than endorsed** — "tolerated for now until we figure out a
+better solution, if ever" (Juha, 2026-08-29). Its layers hold, which is why it has not been split, but that
+is an open acknowledgement that nobody has a decomposition worth the disruption. Do not cite it as licence
+for the next large module. `raven/papers/deduplicate.py`, by contrast, is genuinely settled: 556 SLOC sits
+inside the guideline, and splitting it would move prose around rather than simplify anything (Juha,
+2026-08-28, settling exactly that question about the deduplicator).
+
+- `raven/visualizer/app.py` - ~1.9k lines, 1204 SLOC. The split into `info_panel`, `selection`, `plotter`, `annotation`, `word_cloud`, `entry_renderer` and `app_state` has landed, and it was a real rescue: at 4.4k this was a god object, which nobody is pretending it was fine to be. What remains is *mostly* fine — still half again over the guideline, but ordinary size rather than a god object. See `raven/visualizer/CLAUDE.md` for the module map.
+- `raven/visualizer/info_panel.py` - ~1.5k lines, 828 SLOC, the largest of the extracted modules; marginal against the guideline and the next split candidate, but not urgent.
+- `raven/visualizer/importer.py` - ~1.3k lines, 595 SLOC — inside the guideline. Pipeline architecture; could still benefit from stage separation, but on structure rather than size.
 
 ### Test coverage
 

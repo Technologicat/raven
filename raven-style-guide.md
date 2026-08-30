@@ -78,10 +78,48 @@ This wraps all imports in a `timer` block to measure and log startup time. Impor
 
 ## Module size
 
-- Target ~100–500 SLOC per module (docstrings, comments, and blanks don't count).
-- Rough upper bound ~800 lines total for library modules.
-- App modules (`app.py`) are currently larger — `visualizer/app.py` is 4400+ lines and is the primary refactoring target.
-- The librarian component (~8000 lines across 10 modules) is the target architecture: clean layered design with each module at ~300–800 lines.
+A guideline and not a limit, and the number is worth less than the reason behind it.
+
+**First, watch the units, because we quote both and they differ by about half.** This codebase runs ~40%
+docstrings and comments, so a module's total line count roughly doubles its SLOC. Measured 2026-08-29:
+`chat_controller.py` is 5090 lines and **2046 SLOC**; `papers/deduplicate.py` is 1225 lines and 556 SLOC;
+`papers/bibtex.py` is 831 lines and 341 SLOC. A "5k module" is usually a 2k one wearing its prose.
+
+- Target roughly 300–800 SLOC for a library module. Over that is a prompt to look, not a finding.
+- **What you are looking for is whether the layering has gone**, not whether a counter has passed a
+  threshold. A 900-SLOC module with no discernible internal structure is worse off than a large one whose
+  layers hold, and no line count will tell you which of the two you are holding.
+- **`chat_controller.py` is not an endorsement.** It is four times the target, its layers do hold, and it
+  is *tolerated for now, until we find a better solution — if ever* (Juha, 2026-08-29). That is a standing
+  acknowledgement that nobody has a decomposition worth the disruption, not a demonstration that 5k is
+  acceptable when the layering is good. Take a better decomposition if one turns up; do not cite this
+  module as licence for the next one.
+- **The ~700 figure came from `mcpyrate` and `unpythonic`, and does not transfer unchanged.** There the
+  lines are Kolmogorov-hard, and length really is the signal.
+  - The tempting next step is to say Raven is the prose-heavy opposite, and that is wrong: **most of
+    `chat_controller.py` looks Kolmogorov-hard too** (Juha, 2026-08-29), and it is our largest module.
+    Raven has both kinds, so density does not predict the right size either — which is the actual reason
+    the guideline cannot be a threshold. `papers/deduplicate.py` at 556 SLOC is genuinely prose-heavy and
+    sits inside the target; `chat_controller.py` is dense and sits far outside it; both are where they
+    should be.
+- App modules run larger, and that is not automatically a debt. As of 2026-08-29 the biggest by total lines
+  are `librarian/chat_controller.py` ~5.1k, `librarian/app.py` ~2.6k, `librarian/llmclient.py` ~2.4k, and a
+  cluster of `app.py` files around 1.9k (cherrypick, visualizer, avatar settings editor).
+- **`visualizer/` is what a resolved case looks like**, and worth contrasting with the one above.
+  `app.py` was 4.4k and genuinely a god object — not fine, and nobody pretended otherwise — until it was
+  split into `info_panel`, `selection`, `plotter`, `annotation`, `word_cloud`, `entry_renderer` and
+  `app_state`. The result is *mostly* fine, which is a real verdict rather than a hedge: `importer.py` at
+  595 SLOC is inside the target, `info_panel.py` at 828 is marginal and already flagged as the next split
+  candidate, and `app.py` at 1204 is still half again over. Improved and largely settled, with the
+  remainder named.
+  - **The two large modules got large for different reasons, and that is the useful distinction.**
+    Visualizer was an organically grown experiment nobody had stopped to refactor (Juha, 2026-08-29) — the
+    size was deferral rather than a decision, and refactoring simply collected the debt.
+    `chat_controller.py` was designed with its layers and is large anyway. So one was answerable by
+    looking, and the other has been looked at. Worth asking which kind you have before reaching for a
+    split: the first kind pays back immediately, and the second may have no better arrangement to move to.
+- `raven/librarian/` (~22.8k lines across 20 modules) remains the target architecture — for its layering,
+  which is what made it the model, rather than for its per-module line counts.
 
 ## Where a utility lives, and when that answer expires
 
