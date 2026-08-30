@@ -105,6 +105,22 @@ docstrings and comments, so a module's total line count roughly doubles its SLOC
 - App modules run larger, and that is not automatically a debt. As of 2026-08-29 the biggest by total lines
   are `librarian/chat_controller.py` ~5.1k, `librarian/app.py` ~2.6k, `librarian/llmclient.py` ~2.4k, and a
   cluster of `app.py` files around 1.9k (cherrypick, visualizer, avatar settings editor).
+- **An `app.py` is GUI layout instantiation and wiring, and that much really is irreducible.** Forty
+  distinct widgets with distinct bindings need forty statements; no refactor compresses a description
+  below what it describes, so for the wiring part the line count measures the *GUI*, not the code.
+  - It compresses in exactly two places. Repetition **across** apps belongs in `raven/common/gui/` as a
+    component each app opts into with one call — `filedrop.install(...)` is that chunk of wiring deleted
+    six times over. Repetition **within** one app is a loop or a local helper.
+  - **Check the premise before leaning on it.** The argument licenses a long `app.py` only to the extent
+    the file *is* wiring, and ours may not be: measured 2026-08-29, `visualizer/app.py` has 390 of 1919
+    lines mentioning `dpg.`, `cherrypick/app.py` 194 of 1922, `avatar/settings_editor/app.py` 350 of 1916
+    — and they hold 58, 54 and 86 functions. That grep is a crude lower bound on wiring (a `with
+    dpg.group():` body is wiring too), so it is a hint rather than a verdict. But a file of layout and
+    wiring holding eighty functions is mostly holding callback *bodies*, and a callback body is logic.
+  - Which is already ruled on elsewhere: anything worth calling from elsewhere, or worth testing, belongs
+    in another module (`CLAUDE.md`, "An `app.py` is an OS entry point"). So the order to check an oversized
+    `app.py` is logic that is not wiring, then cross-app repetition, then intra-app repetition — and only
+    then conclude the GUI is simply big.
 - **`visualizer/` is what a resolved case looks like**, and worth contrasting with the one above.
   `app.py` was 4.4k and genuinely a god object — not fine, and nobody pretended otherwise — until it was
   split into `info_panel`, `selection`, `plotter`, `annotation`, `word_cloud`, `entry_renderer` and
