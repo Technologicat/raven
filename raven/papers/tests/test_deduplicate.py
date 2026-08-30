@@ -609,9 +609,36 @@ class TestReadRecords:
         source = entry("k", title="A Study", eprint="2401.00001", archiveprefix="arXiv")
         assert records(source)[0].doi == "10.48550/arxiv.2401.00001"
 
-    def test_the_first_author_surname_is_read_in_both_bibtex_orders(self):
-        assert records(entry("a", title="T", author="van Beethoven, Ludwig"))[0].surname == "vanbeethoven"
-        assert records(entry("b", title="T", author="Ludwig van Beethoven"))[0].surname == "beethoven"
+    def _surname(self, author):
+        return records(entry("k", title="T", author=author))[0].surname
+
+    def test_a_particle_blocks_the_same_in_both_bibtex_orders(self):
+        """One person written two ways must land in one blocking key, or the fuzzy pass cannot see them.
+
+        The particle belongs to the surname, and it is the whole reason this asks `bibtexparser` rather
+        than splitting on the last space.
+        """
+        assert self._surname("van Beethoven, Ludwig") == self._surname("Ludwig van Beethoven") == "vanbeethoven"
+
+    def test_a_comma_less_name_follows_bibtex_and_that_is_sometimes_a_miss(self):
+        """`A B C` with no comma is ambiguous, and BibTeX resolves it by rule: the last token is it.
+
+        Right for the common case — two given names and a surname — and wrong for a compound surname,
+        which is what the comma form exists to say. Pinned because it is a *documented* blocking miss
+        rather than a defect: guessing against the format would be worse, and the cost is one comparison
+        the fuzzy pass does not get to make.
+        """
+        assert self._surname("Petra Johanna Lagerkvist") == self._surname("Lagerkvist, Petra Johanna")
+        assert self._surname("Aksel Holm Dahl") == "dahl"        # BibTeX's reading, and it is the format's
+        assert self._surname("Holm Dahl, Aksel") == "holmdahl"   # ...so the two spellings block apart
+
+    def test_a_suffix_does_not_land_in_the_surname(self):
+        assert self._surname("Fenwick, Jr., A. B.") == "fenwick"
+
+    def test_an_author_bibtex_cannot_express_still_blocks(self):
+        """Three commas where the format allows two. The record is still a paper, and dropping it from
+        the fuzzy pass silently would be worse than reading up to the first comma."""
+        assert self._surname("Bloggs, PhD, MSc, Joan") == "bloggs"
 
     @pytest.mark.parametrize("raw,expected", [("2024", 2024), ("2024-06", 2024), ("c2024", 2024),
                                               ("", None), ("in press", None)])

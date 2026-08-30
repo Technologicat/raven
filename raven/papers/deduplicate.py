@@ -16,8 +16,9 @@ brings all three together:
 
 **DOI equality is evidence; DOI inequality is not.** A paper carrying two different DOIs is common and
 usually means something ordinary — a preprint beside its published version, a Zenodo deposit beside the
-journal's own, an en-dash where the other has a double hyphen. So a title match is not overridden by a DOI
-mismatch; the disagreement is recorded in the audit instead.
+journal's own, an en-dash where the other has a double hyphen. So two records that match on title **are
+merged even when their DOIs differ**, and the audit row lists every DOI in the cluster so the disagreement
+is visible to whoever wants to check it.
 
 **The output is meant to be citable, and the input is not.** A concatenation of database exports is not a
 document anyone would cite from — it is unusable as it stands, which is why this tool exists — so there is
@@ -43,8 +44,9 @@ repository deposit; every field it lacks is filled from a twin that has one. Not
 each merge writes a row to the audit TSV naming what was merged away, which key matched, and every value
 that differed from the one kept.
 
-A scoping review has to report how many duplicates it removed and stand behind the number, so the audit is
-the actual output here and the `.bib` is what you get to use afterwards.
+**The `.bib` is what you came for**, and the audit is what lets you stand behind it — a scoping review has
+to report how many duplicates it removed and answer for the number. Two outputs, and the bibliography is
+the one with lasting value; the audit is a record of due diligence.
 
 ## Reading
 
@@ -81,6 +83,7 @@ import sys
 import unicodedata
 
 from bibtexparser import Library
+from bibtexparser.middlewares import names
 from bibtexparser.model import Entry, Field
 
 from .. import __version__
@@ -289,28 +292,46 @@ def _field_value(entry: Entry, name: str) -> str | None:
 def _first_surname(maybe_author: str | None) -> str | None:
     """The first author's surname, reduced the way `normalize_title` reduces a title.
 
-    Reads the author string directly rather than asking `bibtexparser` to split it, because this module
-    reads without the name-splitting middleware — the split cannot be undone faithfully enough to write
-    the library back out, and the surname is wanted for blocking rather than for display.
+    `bibtexparser`'s own name splitter does the work, called directly as a function — this module reads
+    without the name-splitting middleware, but the middleware is only a wrapper around
+    `parse_single_name_into_parts`, so nothing has to be parsed twice or copied to get at it.
 
-    Handles the two orders BibTeX allows, `Surname, Given` and `Given Surname`, and gives up on anything
-    else by returning `None`. Blocking is all this feeds, so a miss costs a comparison rather than a
-    wrong answer.
+    The particle goes with the surname (`van Beethoven`, not `Beethoven`), which is what makes the two
+    orders agree: `van Beethoven, Ludwig` and `Ludwig van Beethoven` are one person and must land in one
+    blocking key.
+
+    **Two records can still block apart, and where they do the ambiguity is in the file rather than here.**
+    Written without a comma, `A B C` could be two given names and a surname or one given name and a
+    compound surname, and nothing in the string says which. BibTeX resolves it by rule — only the last
+    token is the surname, absent a lowercase particle — so `Petra Johanna Lagerkvist` comes out right and
+    `Aksel Holm Dahl` comes out as `last=[Dahl]`, which is wrong if the surname was meant to be "Holm
+    Dahl". The comma form is how a file says which it meant, and `Holm Dahl, Aksel` blocks differently
+    from the same name written without it.
+
+    Following the rule is right anyway: it is correct for the common case, and the alternative is guessing
+    against the format. The cost is a blocking miss, which the fuzzy pass can afford.
+
+    The suffix has the same shape. `A. B. Fenwick, Jr.` has one comma, so it is `Last, First` and the
+    surname reads as "A. B. Fenwick"; the intended name needs the two-comma form, `Fenwick, Jr., A. B.`.
+
+    Falls back to reading up to the first comma when the splitter refuses the name outright, which it does
+    for `Bloggs, PhD, MSc, Joan` — three commas where BibTeX allows two. That record is still a paper and
+    still worth blocking, and giving up on it here would silently exclude it from the fuzzy pass.
     """
     if not maybe_author:
         return None
-    first = re.split(r"\s+and\s+", maybe_author.strip(), maxsplit=1)[0].strip().strip("{}")
+    try:
+        first = names.split_multiple_persons_names(maybe_author.strip())[0]
+    except Exception:  # noqa: BLE001 -- an author list this cannot split is a blocking miss, not an error
+        first = re.split(r"\s+and\s+", maybe_author.strip(), maxsplit=1)[0]
+    first = first.strip().strip("{}")
     if not first:
         return None
-    if "," in first:
+    try:
+        parts = names.parse_single_name_into_parts(first)
+        surname = " ".join(parts.von + parts.last)
+    except Exception:  # noqa: BLE001 -- see the fallback in the docstring
         surname = first.split(",", 1)[0]
-    else:
-        # "Ludwig van Beethoven" — take the last token, and the particle before it if there is one, so
-        # that this agrees with the comma form for the same person.
-        tokens = first.split()
-        if not tokens:
-            return None
-        surname = tokens[-1]
     return normalize_title(surname)
 
 
