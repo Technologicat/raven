@@ -196,6 +196,15 @@ of looking, and the useful residue is the moment to look rather than a procedure
   status_pending = sym("pending")
   ```
 - **Nonce objects**: `gensym("label")` when you need unique identity with readability.
+- **People and companies in test data and examples: invent them.** Names in a fixture, a docstring
+  example or a comment are made up — `Bloggs, PhD, MSc, Joan`, `Holm Dahl, Aksel`, `Vantage Academic
+  Press`. Real corpora produce the *formats*, so those stay real; the names do not have to. This applies
+  whether or not the example is unflattering, though a real person illustrating malformed data is the
+  worst case.
+  - Two exceptions. A **canonical example from the format's own documentation** — `Ludwig van Beethoven`
+    for BibTeX's von particle — reads as citing a convention rather than naming somebody. And a **name
+    that is the fact**: "Elsevier" lemmatizes to "elsevi", the `_NN-V` DOI suffix is Springer's
+    convention. Fictionalize those and the sentence stops being about anything.
 - **Config modules**: Module-level variables, lowercase, with detailed comments.
 - **DPG widget tags**: String literals, `snake_case`, commented with `# tag` on the same line for searchability.
 - **String quotes**: double, `"like this"`. Single quotes are for the case that earns them — a value that
