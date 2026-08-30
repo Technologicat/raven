@@ -170,7 +170,19 @@ of looking, and the useful residue is the moment to look rather than a procedure
 - **Functions**: `lowercase_with_underscores`.
 - **Classes**: `PascalCase`, including exception classes.
 - **Module-internal symbols**: single underscore prefix (`_update_annotation`, `_macrosteps_count`).
-- **"Constants"**: lowercase, following Lisp/unpythonic tradition. (Python's `SCREAMING_CASE` is not used.)
+- **"Constants": the casing says who the constant is for**, which is the distinction to get right — it is
+  not a matter of taste, and a name in the wrong case is a category error rather than an inconsistency.
+  - **lowercase** — a **user-exposed config knob**, following Lisp/unpythonic tradition. These live in a
+    `config.py`, and all four of Raven's are lowercase throughout.
+  - **`SCREAMING_CASE`** — a **file-local implementation detail**. Padding, a regex, a table the module
+    reads and nobody outside it should. The package holds ~290 of these, correctly.
+
+  So a `SCREAMING_CASE` name in a `config.py` is a category error, and so is a lowercase module-level
+  constant that no user is meant to touch. Deciding the case is deciding whether it is a knob, which is
+  the useful question anyway.
+
+  (This entry previously read "lowercase … `SCREAMING_CASE` is not used", which the codebase contradicted
+  about 290 times over. Corrected 2026-08-29.)
 - **Sentinel values**: `sym("name")` for human-readable sentinels:
   ```python
   action_ack = sym("ack")
