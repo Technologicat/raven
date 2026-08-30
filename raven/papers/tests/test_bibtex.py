@@ -377,7 +377,7 @@ class TestDecodeHtmlEntities:
 class TestRelocateRightsNotices:
     WITH_NOTICE = ("@article{a,\n"
                    "  title = {A Study},\n"
-                   "  abstract = {We study things. © 2024 Elsevier Ltd. All rights reserved.},\n"
+                   "  abstract = {We study things. © 2024 Vantage Academic Press Ltd. All rights reserved.},\n"
                    "  year = {2024},\n"
                    "}\n")
 
@@ -386,12 +386,12 @@ class TestRelocateRightsNotices:
         assert count == 1
         fields = {f.key: f.value for f in parse_string(moved, split_names=False).entries[0].fields}
         assert fields["abstract"] == "We study things."
-        assert fields["copyright"] == "© 2024 Elsevier Ltd. All rights reserved."
+        assert fields["copyright"] == "© 2024 Vantage Academic Press Ltd. All rights reserved."
 
     def test_nothing_is_lost_in_the_move(self):
         """A move rather than a delete: the notice still says which export a record came from."""
         moved, _count = relocate_rights_notices(self.WITH_NOTICE)
-        assert "Elsevier" in moved and "All rights reserved" in moved
+        assert "Vantage Academic Press" in moved and "All rights reserved" in moved
 
     def test_the_new_field_matches_the_records_own_indentation(self):
         moved, _count = relocate_rights_notices(self.WITH_NOTICE)

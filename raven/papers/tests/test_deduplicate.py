@@ -396,7 +396,7 @@ class TestMergeCluster:
 
 
 class TestMergedAbstracts:
-    NOTICE = " © 2024 Elsevier Ltd. All rights reserved."
+    NOTICE = " © 2024 Vantage Academic Press Ltd. All rights reserved."
 
     def test_the_publishers_notice_decides_nothing_and_survives_on_the_abstract_it_came_with(self):
         """Stripping chooses *which* abstract; it does not edit the one that wins.
@@ -471,24 +471,24 @@ class TestMergedRightsNotices:
 
     def test_two_exports_notices_both_survive_the_merge(self):
         source = (entry("scopus", title="A Study of Learning Analytics", doi="10.1234/x",
-                        copyright="© 2024 Elsevier Ltd.")
+                        copyright="© 2024 Vantage Academic Press Ltd.")
                   + entry("springer", title="A study of learning analytics", doi="10.1234/x",
-                          copyright="© The Author(s) 2024, Springer Nature."))
+                          copyright="© The Author(s) 2024, Northwind University Press."))
         fields, _row = self._merged(source)
-        assert fields["copyright"] == "© 2024 Elsevier Ltd.\n© The Author(s) 2024, Springer Nature."
+        assert fields["copyright"] == "© 2024 Vantage Academic Press Ltd.\n© The Author(s) 2024, Northwind University Press."
 
     def test_the_same_notice_twice_is_kept_once(self):
         source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x",
-                        copyright="© 2024 Elsevier Ltd.")
+                        copyright="© 2024 Vantage Academic Press Ltd.")
                   + entry("b", title="A study of learning analytics", doi="10.1234/x",
-                          copyright="© 2024 Elsevier Ltd."))
+                          copyright="© 2024 Vantage Academic Press Ltd."))
         fields, _row = self._merged(source)
-        assert fields["copyright"] == "© 2024 Elsevier Ltd."
+        assert fields["copyright"] == "© 2024 Vantage Academic Press Ltd."
 
     def test_a_union_is_not_reported_as_a_dropped_value(self):
         """Nothing was dropped, so nothing belongs in the audit — the row would be noise."""
         source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x",
-                        copyright="© 2024 Elsevier Ltd.")
+                        copyright="© 2024 Vantage Academic Press Ltd.")
                   + entry("b", title="A study of learning analytics", doi="10.1234/x",
                           copyright="© The Author(s) 2024."))
         _fields, row = self._merged(source)
@@ -496,10 +496,10 @@ class TestMergedRightsNotices:
 
     def test_a_record_without_one_contributes_nothing(self):
         source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x",
-                        copyright="© 2024 Elsevier Ltd.")
+                        copyright="© 2024 Vantage Academic Press Ltd.")
                   + entry("b", title="A study of learning analytics", doi="10.1234/x", keywords="k"))
         fields, _row = self._merged(source)
-        assert fields["copyright"] == "© 2024 Elsevier Ltd."
+        assert fields["copyright"] == "© 2024 Vantage Academic Press Ltd."
 
     def test_a_cluster_with_no_notices_gains_no_field(self):
         source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x")
@@ -570,7 +570,7 @@ class TestNothingDisappears:
                   + entry("b", title="A study of learning analytics", doi="10.1234/x", year="2024",
                           journal="Journal B", keywords="analytics", abstract="Short.")
                   + entry("c", title="A Study of Learning Analytics", doi="10.1234/x", year="2023",
-                          publisher="Elsevier", note="a note"))
+                          publisher="Vantage Academic Press", note="a note"))
 
         cluster = dd.cluster_records(records(source))[0]
         assert len(cluster) == 3, "all three must cluster, or most of this fixture is not exercised"
@@ -594,16 +594,16 @@ class TestNothingDisappears:
         hundreds that are about the exporter. Nothing else is compared this way.
         """
         source = (entry("a", title="A Study of Learning Analytics", doi="10.1234/x",
-                        abstract="We study things. © 2024 Elsevier Ltd. All rights reserved.")
+                        abstract="We study things. © 2024 Vantage Academic Press Ltd. All rights reserved.")
                   + entry("b", title="A Study of Learning Analytics", doi="10.1234/x",
-                          abstract="We study things. © 2024 Springer Nature."))
+                          abstract="We study things. © 2024 Northwind University Press."))
 
         _merged, row = dd.merge_cluster(dd.cluster_records(records(source))[0])
         assert not any("abstract" in difference for difference in row.differences)
 
         # The negative control: change what the abstracts actually *say*, and it is reported again.
-        louder = source.replace("We study things. © 2024 Springer Nature.",
-                                "We study something else entirely. © 2024 Springer Nature.")
+        louder = source.replace("We study things. © 2024 Northwind University Press.",
+                                "We study something else entirely. © 2024 Northwind University Press.")
         _merged, row = dd.merge_cluster(dd.cluster_records(records(louder))[0])
         assert any("abstract: kept" in difference for difference in row.differences)
 
@@ -873,7 +873,7 @@ class TestWholeRun:
                         year="2024", doi="10.1234/abc-def", journal="Journal of Things")
                   + entry("proquest", title="Peer reviewed AI - a study", year="2024",
                           doi="https://doi.org/10.1234/ABC–DEF",
-                          abstract="We study things. © 2024 Elsevier Ltd. All rights reserved.",
+                          abstract="We study things. © 2024 Vantage Academic Press Ltd. All rights reserved.",
                           annote="Copyright note")
                   + entry("arxiv", title="Peer-Reviewed AI: A Study", author="Smith, Jane", year="2023",
                           doi="10.48550/arXiv.2301.00001", abstract="We study things.")

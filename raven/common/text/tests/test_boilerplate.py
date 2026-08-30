@@ -12,7 +12,7 @@ class TestRealNotices:
     """The spellings that actually turn up in database exports."""
 
     def test_the_copyright_sign_opens_a_notice(self):
-        text = f"{BODY} © The Author(s), under exclusive license to Springer Nature Singapore Pte Ltd. 2025."
+        text = f"{BODY} © The Author(s), under exclusive licence to Vantage Academic Press Ltd. 2025."
         assert strip_boilerplate(text) == BODY
 
     def test_all_rights_reserved_opens_a_notice(self):
@@ -23,7 +23,7 @@ class TestRealNotices:
         assert strip_boilerplate(text) == BODY
 
     def test_a_named_licensee_opens_a_notice(self):
-        assert strip_boilerplate(f"{BODY} Licensee MDPI, Basel, Switzerland.") == BODY
+        assert strip_boilerplate(f"{BODY} Licensee Vantage Academic, Helsinki, Finland.") == BODY
 
     def test_copyright_qualified_by_a_year_opens_a_notice(self):
         assert strip_boilerplate(f"{BODY} Copyright 2024 by the authors.") == BODY
@@ -91,9 +91,9 @@ class TestWhatMustSurvive:
 
 class TestFindRightsNotice:
     def test_it_reports_where_the_notice_begins_so_a_caller_can_show_it(self):
-        text = f"{BODY} © 2025 Elsevier Ltd."
+        text = f"{BODY} © 2025 Vantage Academic Press Ltd."
         offset = find_rights_notice(text)
-        assert text[offset:] == "© 2025 Elsevier Ltd."
+        assert text[offset:] == "© 2025 Vantage Academic Press Ltd."
 
     def test_it_reports_nothing_for_text_carrying_no_notice(self):
         assert find_rights_notice(BODY) is None
@@ -102,7 +102,7 @@ class TestFindRightsNotice:
         # The negative control for the window: the same notice text, once inside the budget and once
         # pushed out of it by padding. Without this, a fixture that never exceeds TAIL_BUDGET would
         # pass whether the window were checked or ignored.
-        notice = "© 2025 Elsevier Ltd."
+        notice = "© 2025 Vantage Academic Press Ltd."
         assert find_rights_notice(f"{BODY} {notice}") is not None
         pushed_out = f"{notice} " + "x" * (TAIL_BUDGET + 1)
         assert find_rights_notice(pushed_out) is None
@@ -112,13 +112,13 @@ class TestSplitRightsNotice:
     """Both halves, for a caller writing a bibliography back out rather than analyzing text."""
 
     def test_it_hands_back_the_body_and_the_notice(self):
-        body, notice = split_rights_notice(f"{BODY} © 2025 Elsevier Ltd.")
+        body, notice = split_rights_notice(f"{BODY} © 2025 Vantage Academic Press Ltd.")
         assert body == BODY
-        assert notice == "© 2025 Elsevier Ltd."
+        assert notice == "© 2025 Vantage Academic Press Ltd."
 
     def test_nothing_is_lost_between_the_two_halves(self):
         """The property that makes this safe to use for a move rather than a delete."""
-        text = f"{BODY} © 2025 Elsevier Ltd."
+        text = f"{BODY} © 2025 Vantage Academic Press Ltd."
         body, notice = split_rights_notice(text)
         assert set(text.split()) == set(body.split()) | set(notice.split())
 
@@ -127,11 +127,11 @@ class TestSplitRightsNotice:
 
     def test_a_leading_label_is_dropped_rather_than_returned(self):
         # The one thing here that really is noise: no exporter means `Abstract:` as content.
-        body, notice = split_rights_notice(f"Abstract: {BODY} © 2025 Elsevier Ltd.")
+        body, notice = split_rights_notice(f"Abstract: {BODY} © 2025 Vantage Academic Press Ltd.")
         assert body == BODY and notice is not None
 
     def test_strip_boilerplate_is_the_first_half(self):
-        for text in (f"{BODY} © 2025 Elsevier Ltd.", BODY, f"Abstract: {BODY}", "", "   "):
+        for text in (f"{BODY} © 2025 Vantage Academic Press Ltd.", BODY, f"Abstract: {BODY}", "", "   "):
             assert strip_boilerplate(text) == split_rights_notice(text)[0]
 
 
@@ -144,9 +144,9 @@ class TestShapes:
     def test_an_abstract_that_is_only_a_notice_reduces_to_nothing(self):
         # Degenerate but real: a record whose "abstract" is the copyright line and nothing else. Better
         # an empty string, which a caller can test, than a stray fragment that reads like content.
-        assert strip_boilerplate("© 2025 Elsevier Ltd. All rights reserved.") == ""
+        assert strip_boilerplate("© 2025 Vantage Academic Press Ltd. All rights reserved.") == ""
 
     def test_stripping_is_idempotent(self):
-        text = f"Abstract: {BODY} © 2025 Elsevier Ltd."
+        text = f"Abstract: {BODY} © 2025 Vantage Academic Press Ltd."
         once = strip_boilerplate(text)
         assert strip_boilerplate(once) == once

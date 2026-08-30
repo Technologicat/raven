@@ -4,7 +4,7 @@ Bibliographic databases append their own boilerplate to the abstracts they expor
 what the paper says:
 
     ... contributing to improved educational outcomes and pedagogical strategies. © The Author(s), under
-    exclusive license to Springer Nature Singapore Pte Ltd. 2025.
+    exclusive licence to Vantage Academic Press Ltd. 2025.
 
 The text is legally required where it appears and useless everywhere it then travels. It pollutes anything
 that reads an abstract as prose: it is why "Elsevier" turns up in a word cloud, and — per
@@ -80,7 +80,7 @@ NOTICE_OPENER = re.compile(r"""(?ix)
     | \ball\s+rights\s+reserved\b
     | \bthis\s+ (?:is\s+an?\s+)? (?:\w+\s+){0,3}? (?:work|article|content|review|publication|paper)\s+
       (?:is\s+)? (?:published|licensed|distributed|made\s+available)\s+ (?:to\s+you\s+)? under\b
-    | \blicensee\s+ [A-Z]                             # "Licensee MDPI", "licensee CEDTECH"
+    | \blicensee\s+ [A-Z]                             # "Licensee <publisher>", however they capitalize it
 """)
 
 # Deliberately not a marker: `Creative Commons Attribution` on its own. It is a proper noun that starts
@@ -142,14 +142,14 @@ def split_rights_notice(text: str) -> tuple[str, str | None]:
     a bibliography back out should move it to a field of its own; one about to run text analysis wants
     only the first half, and `strip_boilerplate` is that call.
 
-    A leading `Abstract:` label is removed from the first half. That one really is noise \u2014 no exporter
+    A leading `Abstract:` label is removed from the first half. That one really is noise — no exporter
     means it as content, and nothing is lost by dropping it.
     """
     text = LEADING_LABEL.sub("", text.strip())
     notice_start = find_rights_notice(text)
     if notice_start is None:
         return text.strip(), None
-    # What is left dangling at the cut is a *separator* \u2014 the comma or dash that joined the notice on.
+    # What is left dangling at the cut is a *separator* — the comma or dash that joined the notice on.
     # A full stop is not one: it ends the abstract's own last sentence and was there before any publisher
     # appended anything, so it stays. Getting this backwards silently shortens every abstract in a corpus
     # by a character, which no aggregate statistic will show.
