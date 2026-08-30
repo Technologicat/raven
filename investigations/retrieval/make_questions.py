@@ -291,8 +291,8 @@ def load_entry(path: pathlib.Path, require_abstract: bool = True) -> dict | None
     # Keys are lowercased because BibTeX field names are case-insensitive and the writers disagree: a Web
     # of Science export and `raven-arxiv2bib` write `Title = {...}`, while `raven-pdf2bib` and the BibTeX
     # literature write `title = {...}`. Matching on exact case silently yields *zero* usable records rather
-    # than failing loudly, since a record with no title is a legitimate thing to skip. `bibtex_field_value`
-    # in `raven.common.utils` has always done this; this loader had not, because the first three corpora
+    # than failing loudly, since a record with no title is a legitimate thing to skip. `field_value` in
+    # `raven.papers.bibtex` has always done this; this loader had not, because the first three corpora
     # happened to agree.
     fields = {field.key.lower(): field.value for field in library.entries[0].fields}
     abstract = (fields.get("abstract") or "").strip()

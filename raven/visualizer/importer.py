@@ -202,8 +202,8 @@ def _report_unparseable_records(filename, library):
         # A failed block has no parsed key - that is what failing means - but its raw text still begins with
         # the `@type{key,` header line that would have provided one.
         header_line = failed_block.raw.lstrip().split("\n", 1)[0]
-        key = common_utils.bibtex_header_key(header_line) or "?"
-        unbalanced = common_utils.bibtex_unbalanced_field_names(failed_block.raw)
+        key = bibtex.header_key(header_line) or "?"
+        unbalanced = bibtex.unbalanced_field_names(failed_block.raw)
         suspects = f" Suspect field(s): {', '.join(unbalanced)}." if unbalanced else ""
         logger.warning(f"_parse_input_files: unparseable record '{key}' at line {failed_block.start_line} "
                        f"of {filename}.{suspects}")

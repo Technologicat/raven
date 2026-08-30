@@ -7,6 +7,10 @@ Reading: `parse_file` and `parse_string` wrap `bibtexparser` with the one middle
 BibTeX through, so every consumer gets the same normalization. A caller that will *write* the library back
 out wants `split_names=False`, and `write_string` either way — see below.
 
+Reading what a parser refused: `header_key`, `field_value`, `unbalanced_field_names` and
+`brace_repair_candidates` work on the surface syntax, for saying something useful about a record
+`bibtexparser` has already declined. They are not a second parser and must not become one.
+
 Repairing: `repair_record` and `repair_duplicate_field_keys` each rescue one record `bibtexparser`
 refused, for the two reasons a real-world export gives it — braces that do not balance, and a field name
 that occurs twice. Both take the record's text and hand back text, so a caller may parse the result or
@@ -20,6 +24,9 @@ rights notice appended to an abstract that is metadata in the wrong field.
 from __future__ import annotations
 
 __all__ = ["parse_file", "parse_string", "write_string",
+
+           "header_key", "field_value", "unbalanced_field_names", "brace_repair_candidates",
+
            "repair_record", "repair_duplicate_field_keys", "decode_html_entities",
            "relocate_rights_notices",
 
@@ -27,6 +34,7 @@ __all__ = ["parse_file", "parse_string", "write_string",
 
 import collections
 import html.entities
+import itertools
 import pathlib
 import re
 import unicodedata
@@ -38,7 +46,6 @@ from bibtexparser import Library
 
 from unpythonic import box, unbox
 
-from ..common import utils as common_utils
 from ..common.text import boilerplate
 
 from . import identifiers
@@ -137,6 +144,131 @@ def write_string(library: Library) -> str:
                                                          bibtexparser.middlewares.MergeCoAuthors()])
 
 
+# --------------------------------------------------------------------------------
+# Reading BibTeX by its surface syntax, for when the parser has refused
+#
+# These are not a second BibTeX parser and must not grow into one. They exist for the case where
+# `bibtexparser` has already declined a record - a stray brace in a field value ends the value early and
+# takes the rest of the record with it - and something useful can still be said about the wreckage. Three
+# callers, wanting three different things from the same shape:
+#
+#   - `papers.burstbib`, naming a record from its header line, which it does before parsing anything.
+#   - `librarian.chatutil`, salvaging a title so a document still gets a legible label.
+#   - `visualizer.importer`, naming the fields whose braces look wrong, so the user can go and fix the data.
+
+def header_key(headerline: str) -> str:
+    """Get the record key out of a BibTeX header line: `@article{WOS:000123,` -> `WOS:000123`.
+
+    Returns `""` if `headerline` has no key to give. Verbatim - see `papers.burstbib.get_slug` for the
+    variant sanitized for use as a filename.
+    """
+    start = headerline.find("{")
+    end = headerline.rfind(",")
+    return headerline[start + 1:end] if -1 < start < end else ""
+
+# One `Key = ` at the start of a line, which is the shape every BibTeX writer in practice emits.
+_BIBTEX_FIELD_LINE = re.compile(r"^\s*([A-Za-z][\w-]*)\s*=")
+
+def field_value(text: str, key: str) -> str:
+    """Get the value of the BibTeX field `key` from `text`, by pattern. `""` if there is none to find.
+
+    Case-insensitive, because the key case is not dependable: a Web of Science export writes `Title = {...}`,
+    the BibTeX literature writes `title = {...}`. Reads only a value that opens and closes on its own line,
+    which is what the writers emit and what keeps this from turning into a parser.
+    """
+    pattern = re.compile(r"^\s*" + re.escape(key) + r"\s*=\s*\{(.*)\}\s*,?\s*$",
+                         re.IGNORECASE | re.MULTILINE)
+    match = pattern.search(text)
+    return match.group(1).strip("{} ") if match else ""
+
+def unbalanced_field_names(text: str) -> list[str]:
+    """Names of the fields in `text` whose own line opens more braces than it closes.
+
+    A shortlist of suspects rather than a verdict: a field value that legitimately spans several lines (an
+    `Affiliation` listing one author per line) is unbalanced line by line too. It is still a far shorter
+    list than the record, which is the difference between "this file has a broken record somewhere" and
+    something the user can act on.
+    """
+    names = []
+    for line in text.splitlines():
+        match = _BIBTEX_FIELD_LINE.match(line)
+        if match and line.count("{") != line.count("}"):
+            names.append(match.group(1))
+    return names
+
+def brace_repair_candidates(text: str, max_candidates: int = 200) -> list[str]:
+    """Propose repairs for a BibTeX record `text` whose braces do not balance. Most promising first.
+
+    Each candidate escapes some of the record's braces as `\\{` / `\\}`; the text is otherwise identical,
+    character for character. Returns `[]` when there is nothing sensible to propose.
+
+    **These are guesses, and the caller decides by parsing them.** Deciding *which* brace is the stray one
+    needs to know where each field value begins and ends, which needs a parser — and the record in hand is
+    precisely the one no parser will read, so that route closes. The way out is to stop trying to be right
+    and start being checkable: propose from surface syntax, then let `bibtexparser` adjudicate. The
+    proposals only have to *contain* the truth, not identify it, and a wrong guess costs nothing because it
+    fails to parse and is discarded. Callers should take the first candidate that yields an entry.
+
+    **Escaping, never completion.** An unmatched brace in a field value is nearly always a literal one that
+    belongs to the text: mathematics reaching a BibTeX file through a PDF extractor arrives as things like
+    `{0 <= rho <= 1`, set-builder notation whose closing brace the extractor dropped. `\\{` is what BibTeX
+    means by a literal brace in running text, so escaping states what the data actually is, and no character
+    is added or removed. Supplying a missing partner instead would invent a grouping the author never wrote,
+    and since nothing says *where* that partner belonged, the invention is unconstrained. So a record that
+    lost a field value's *terminator*, rather than gaining a stray literal, is not repairable here — every
+    candidate will fail the caller's check, which is the correct outcome and not a defect.
+
+    Two cheap facts do the pruning, and between them the real cases collapse to a single candidate:
+
+    - **The sign of the imbalance says which brace to look for.** A surplus of `{` means a stray opener, so
+      only openers are eligible; a surplus of `}`, only closers.
+    - **Some braces are structurally certain and never eligible** — the `@type{` on the header line, the one
+      opening each `Key = {` field line, and the record's own closing `}` on its own line. Those are the
+      ones a naive scan would blame first, and escaping any of them destroys the record.
+    """
+    lines = text.splitlines(keepends=True)
+    surplus = text.count("{") - text.count("}")
+    wanted = "{" if surplus > 0 else "}"
+    if surplus == 0:
+        return []
+
+    # Structurally certain braces, which no candidate may touch.
+    reserved = set()
+    for i, line in enumerate(lines):
+        match = _BIBTEX_FIELD_LINE.match(line)
+        if match:
+            col = line.find("{", match.end())
+            if col != -1:
+                reserved.add((i, col))
+        elif line.lstrip().startswith("@"):
+            col = line.find("{")
+            if col != -1:
+                reserved.add((i, col))
+        elif line.strip() == "}":
+            reserved.add((i, line.index("}")))
+
+    eligible = [(i, j) for i, line in enumerate(lines) for j, ch in enumerate(line)
+                if ch == wanted and (i, j) not in reserved and not line[:j].endswith("\\")]
+    if len(eligible) < abs(surplus):
+        return []
+    # A stray literal sits *inside* a value, so it falls after that value's opening brace and before its
+    # terminator. Which way to order the guesses therefore depends on what is being hunted: a surplus
+    # opener is more likely the later of the candidates, a surplus closer the earlier one. Ordering only
+    # decides which guess the oracle sees first, but where more than one would parse, first is what wins.
+    ordered = sorted(eligible, reverse=(wanted == "{"))
+    combinations = list(itertools.islice(itertools.combinations(ordered, abs(surplus)), max_candidates + 1))
+    if len(combinations) > max_candidates:  # too tangled to guess at; let the caller report it instead
+        return []
+
+    candidates = []
+    for chosen in combinations:
+        repaired = list(lines)
+        for i, j in sorted(chosen, reverse=True):  # from the end, so earlier positions stay valid
+            repaired[i] = repaired[i][:j] + "\\" + repaired[i][j:]
+        candidates.append("".join(repaired))
+    return candidates
+
+
 def repair_record(raw: str) -> str | None:
     """Repair one BibTeX record `raw` that failed to parse. Returns the repaired text, or `None`.
 
@@ -144,7 +276,7 @@ def repair_record(raw: str) -> str | None:
     value does — mathematics arriving through a PDF extractor is the usual source. Only the offending
     braces are escaped; the text is otherwise identical, character for character.
 
-    **This is where guessing becomes safe.** `common_utils.bibtex_brace_repair_candidates` proposes repairs
+    **This is where guessing becomes safe.** `brace_repair_candidates` proposes repairs
     from surface syntax, having no way to know which is right — deciding that needs to know where each
     field value begins and ends, which needs a parser, and a record needing repair is precisely the one no
     parser will read. So the proposals are not trusted: each is parsed in turn, and the first that yields
@@ -168,7 +300,7 @@ def repair_record(raw: str) -> str | None:
     # traffic involved: candidates are generated only for a record that has already failed, and the
     # pruning gets that down to one candidate on real data. An application that wants quiet can set the
     # level itself, which is a decision an application gets to make and a library does not.
-    for candidate in common_utils.bibtex_brace_repair_candidates(raw):
+    for candidate in brace_repair_candidates(raw):
         try:
             library = parse_string(candidate, split_names=False)
         except Exception:  # noqa: BLE001 -- a repair that breaks the parser is just a failed repair

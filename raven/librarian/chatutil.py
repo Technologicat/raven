@@ -638,7 +638,7 @@ def document_label(text: str) -> str:
         # Records that are not quite valid BibTeX do occur: an abstract with unbalanced braces aborts the
         # parse of the whole record, title and all. Since the alternative is no label, read the one field
         # we need by pattern - after the real parser has had its say, never instead of it.
-        salvaged = common_utils.bibtex_field_value(text, "title")
+        salvaged = bibtex.field_value(text, "title")
         if salvaged:
             return _shorten(f'"{salvaged}"', _MAXIMUM_LABEL_LENGTH)
 

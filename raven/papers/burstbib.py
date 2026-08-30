@@ -19,6 +19,8 @@ import pathlib
 from ..common import stringmaps
 from ..common import utils as common_utils
 
+from . import bibtex
+
 
 def is_headerline(line: str) -> str | bool:
     """Detect whether *line* is a BibTeX record header. Return stripped *line* or ``False``."""
@@ -33,7 +35,7 @@ def get_slug(headerline: str) -> str:
 
     The slug is sanitized for use as a filename.
     """
-    slug = common_utils.bibtex_header_key(headerline)
+    slug = bibtex.header_key(headerline)
     assert slug  # `is_headerline` gates every call site, so a header with no key cannot get here
     # Make safe for filename, to tolerate broken `.bib` files (users not familiar
     # with BibTeX may have used e.g. a DOI or an URL as the slug)

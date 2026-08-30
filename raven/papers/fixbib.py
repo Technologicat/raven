@@ -60,7 +60,6 @@ import sys
 
 from bibtexparser.model import DuplicateFieldKeyBlock, MiddlewareErrorBlock
 
-from ..common import utils as common_utils
 from . import bibtex
 
 KIND_UNBALANCED_BRACES = "unbalanced braces"
@@ -115,7 +114,7 @@ def _diagnose(failed_block, key: str, line: int) -> RepairReport:
     if isinstance(failed_block, MiddlewareErrorBlock):
         return RepairReport(key, line, KIND_UNREADABLE, str(failed_block.error).replace("\n", " "))
 
-    unbalanced = common_utils.bibtex_unbalanced_field_names(failed_block.raw)
+    unbalanced = bibtex.unbalanced_field_names(failed_block.raw)
     if unbalanced:
         return RepairReport(key, line, KIND_UNBALANCED_BRACES,
                             f"suspect field(s): {', '.join(unbalanced)}")
@@ -181,7 +180,7 @@ def repair_bibtex(source: str) -> tuple[str, list[RepairReport], list[RepairRepo
     cursor = 0
     for start, failed_block in located:
         raw = failed_block.raw
-        key = common_utils.bibtex_header_key(raw.lstrip().split("\n", 1)[0]) or "?"
+        key = bibtex.header_key(raw.lstrip().split("\n", 1)[0]) or "?"
         line = source.count("\n", 0, start) + 1
         maybe_repaired = _repair(failed_block)
 
