@@ -81,9 +81,10 @@ This wraps all imports in a `timer` block to measure and log startup time. Impor
 A guideline and not a limit, and the number is worth less than the reason behind it.
 
 **First, watch the units, because we quote both and they differ by about half.** This codebase runs ~40%
-docstrings and comments, so a module's total line count roughly doubles its SLOC. Measured 2026-08-29:
-`chat_controller.py` is 5090 lines and **2046 SLOC**; `papers/deduplicate.py` is 1225 lines and 556 SLOC;
-`papers/bibtex.py` is 831 lines and 341 SLOC. A "5k module" is usually a 2k one wearing its prose.
+docstrings and comments — deliberately, see *Comments* — so a module's total line count roughly doubles its
+SLOC. Measured 2026-08-29: `chat_controller.py` is 5090 lines and **2046 SLOC**; `papers/deduplicate.py` is
+1225 lines and 556 SLOC; `papers/bibtex.py` is 831 lines and 341 SLOC. A "5k module" is usually a 2k one
+wearing its prose, and shrinking the prose to make a number look better would be the wrong repair.
 
 - Target roughly 300–800 SLOC for a library module. Over that is a prompt to look, not a finding.
 - **What you are looking for is whether the layering has gone**, not whether a counter has passed a
@@ -216,6 +217,23 @@ Patterns:
 - Having no docstring is better than having a placeholder — make the absence explicit.
 
 ## Comments
+
+**Roughly half the file being comments and docstrings is normal here, and intended.** Raven errs toward
+[literate programming](https://en.wikipedia.org/wiki/Literate_programming) (Knuth, 1984): an executable
+essay is more readable than dense code where each line takes a while to puzzle out. Measured 2026-08-29,
+the codebase sits near 40% and that is the healthy state, not drift.
+
+The reason is where the work goes. Dense code is correct and compressed, and it makes every reader
+re-derive the thinking that produced it — the same objection as to theorem-proof-corollary mathematics
+monographs, which are excellent for *reference* and poor for *learning*, because compressing the
+derivation moves the work from one writer to every reader. (Juha, 2026-08-29.)
+
+That trade lands differently in a codebase than in a monograph, because here the reader is usually the
+author six months on, or a session with no memory of the last one. Compression saves the writer once and
+costs everyone afterwards, every time.
+
+Practical consequence: **judge a module by its SLOC, not its total lines** — see *Module size*. A file that
+is half prose will always look twice its weight in `wc -l`.
 
 Comments read like prose and explain *why*, not *what*. The style has personality:
 
