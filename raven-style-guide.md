@@ -196,11 +196,21 @@ of looking, and the useful residue is the moment to look rather than a procedure
   status_pending = sym("pending")
   ```
 - **Nonce objects**: `gensym("label")` when you need unique identity with readability.
-- **People and companies in test data and examples: invent them.** Names in a fixture, a docstring
-  example or a comment are made up — `Bloggs, PhD, MSc, Joan`, `Holm Dahl, Aksel`, `Vantage Academic
-  Press`. Real corpora produce the *formats*, so those stay real; the names do not have to. This applies
-  whether or not the example is unflattering, though a real person illustrating malformed data is the
-  worst case.
+- **Never name a real person or company as the exemplar of a defect.** Not in a commit message, a
+  changelog, a brief, a `TODO`, a test fixture or a comment. The bug is ours; they turn up in it because
+  a database wrote their name somewhere, and a public repo saying "the record that will not parse is
+  *this named researcher*" attributes a fault to somebody who has nothing to do with it. Invent a name
+  that has the same shape and move on.
+  - **This stops at the tool's own output.** `raven-fixbib` quoting a user's unparseable record back at
+    them — `Cannot split the following name ... into parts` — is not naming anybody; it is handing the
+    user their own data so they can find the line. Sanitizing *that* would break the diagnostic. The rule
+    is about text we author, not text we echo.
+  - The failure is that it is invisible after the fact and hard to sweep: the name looks like ordinary
+    prose, so it survives every reading. This one was cleaned from the code and the changelog on
+    2026-08-28 and found still sitting in a brief and a test fixture a day later.
+- **Other people and companies in test data and examples: invent them too.** Names in a fixture, a
+  docstring example or a comment are made up — `Bloggs, PhD, MSc, Joan`, `Holm Dahl, Aksel`, `Vantage
+  Academic Press`. Real corpora produce the *formats*, so those stay real; the names do not have to.
   - Two exceptions. A **stock example of the shape itself** — ask anyone for a name with a "van" in it
     and they will say `Ludwig van Beethoven` — where using it names the *shape* rather than a person, and
     an invented substitute would be less recognizable for no gain. (Two centuries dead helps; a living

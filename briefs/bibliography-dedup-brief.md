@@ -93,7 +93,7 @@ Three findings shaped the design:
   (15–17 fields, long abstracts) but some are author-less; the Scopus and Springer twins have the author
   and no abstract. Only a field-level union keeps both.
 - **Title-only merging needs a guard.** Four clusters key on a degenerate title; `Editorial` merges
-  Bandyopadhyay 2022 with McNally 2024. Few, but silent.
+  Halloway 2022 with Fenwick 2024. Few, but silent.
 
 **These figures predate the guards, and the guards are what the numbers above are missing.** They are kept
 because they size the problem, which is what they were for. As shipped the same corpus gives 5171 unique
@@ -126,7 +126,7 @@ ever *adds* a field from a twin that had one.
 exact normalized title subject to the degenerate-title guard.
 
 > *Corrected.* **The guard is applied per pair, not to the key.** Withholding a degenerate title as a key
-> altogether also refuses the merges that are right — the two Bandyopadhyay copies really are one
+> altogether also refuses the merges that are right — the two Halloway copies really are one
 > editorial — so what ships weighs each *pair* of records sharing a title, and a group of three comes
 > apart into the two that are one paper and the one that is not. `_title_edge_holds` is the rule, and it
 > is three cases: a generic title needs the records to positively agree about author and year *and* not to
@@ -333,14 +333,15 @@ split one writes the mangled file and exits 0.
 **The repair's oracle was asking the wrong question**, and that is why two records looked unrepairable.
 Both repairs judge a candidate by parsing it, which is right; they were parsing it with the full chain,
 which asks "is this record now free of *all* faults" where the question is "did my edit produce an entry".
-The two `gosak_picot_2025` records name `annote` three times *and* carry `Gosak, MSc, RN, Lucija` — three
+The two holdout records name `annote` three times *and* carry an author of the form
+`Surname, PhD, MSc, Given` — three
 commas where BibTeX allows two. The merge was perfect and was thrown away for the name.
 
 Worse, the report named the wrong fault: `duplicate field keys (repeats annote)`, which is a fault the
 tool repairs, so the message read as a contradiction and sent the reader to look at fields that were fine.
 Now the oracle is structural, the merge is kept, and `raven-fixbib` re-checks the repaired record against
-the full chain to report what is actually left: *Cannot split the following name `Gosak, MSc, RN, Lucija`
-into parts: Too many commas.*
+the full chain to report what is actually left: *Cannot split the following name ... into parts: Too
+many commas* — quoting the user's own record back at them, which is how they find it.
 
 A third fault surfaced while fixing that: `_diagnose` consulted a line-by-line brace heuristic before the
 parser's own words, and the merge it had just performed — which joins values with newlines — makes any

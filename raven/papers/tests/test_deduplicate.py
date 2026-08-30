@@ -263,18 +263,18 @@ class TestClusterRecords:
         The 2022 pair must still merge, which is what makes this a test of the guard rather than of
         refusing everything — and it is why the rule is applied per pair rather than per title.
         """
-        source = (entry("bandyopadhyay_2022", title="Editorial", author="Bandyopadhyay, A.",
+        source = (entry("halloway_2022", title="Editorial", author="Halloway, E.",
                         year="2022", doi="10.1177/26314541221107222")
-                  + entry("bandyopadhyay_2022_dup", title="Editorial", author="Bandyopadhyay, A.",
+                  + entry("halloway_2022_dup", title="Editorial", author="Halloway, E.",
                           year="2022", doi="10.1177/26314541221107222")
-                  + entry("mcnally_2024", title="Editorial", author="McNally, S.",
+                  + entry("fenwick_2024", title="Editorial", author="Fenwick, A.",
                           year="2024", doi="10.1177/14697874241293205"))
 
         parsed = records(source)
         assert len({record.title for record in parsed}) == 1, \
             "all three must share a normalized title, or this fixture cannot exercise the guard at all"
 
-        assert clusters_of(source) == [{"bandyopadhyay_2022", "bandyopadhyay_2022_dup"}, {"mcnally_2024"}]
+        assert clusters_of(source) == [{"halloway_2022", "halloway_2022_dup"}, {"fenwick_2024"}]
 
     def test_a_serials_recurring_heading_does_not_merge_its_issues(self):
         """The second false merge: four issues of one journal, joined by the heading they all carry.
