@@ -83,6 +83,33 @@ This wraps all imports in a `timer` block to measure and log startup time. Impor
 - App modules (`app.py`) are currently larger — `visualizer/app.py` is 4400+ lines and is the primary refactoring target.
 - The librarian component (~8000 lines across 10 modules) is the target architecture: clean layered design with each module at ~300–800 lines.
 
+## Where a utility lives, and when that answer expires
+
+`raven.common.utils` is the grab bag: the home for things with no more proper home. Grab bags balloon into
+chaos unless actively mitigated, so it is worth knowing what the mitigation is.
+
+**Ask what the code is *about*, not who calls it.** An operation you cannot describe without naming its
+subject belongs with that subject — the surface-syntax BibTeX readers (`header_key`,
+`brace_repair_candidates` and friends) are BibTeX, whoever happens to call them. The exception is an
+operation that is genuinely general and merely got written the first time somebody needed it here; the tell
+is that you *can* say what it does without naming the domain. Number formatting written while doing BibTeX
+work is still number formatting.
+
+**But the right answer changes over time, and this is the part worth internalizing.** Those four readers
+sat in `common.utils` with a comment explaining that two of their three callers were not paper tooling.
+That was correct: there was no `papers.bibtex` module then, and creating one *solely* to host four
+commonutil-looking functions is structure for its own sake — Bach. Once `papers.bibtex` existed for its own
+reasons, the cost of the proper home dropped to zero and the judgement flipped. Nobody erred; the ground
+moved.
+
+**So the trigger is the arrival of a new module, not a periodic audit.** The day a module about X is
+created is the day `utils` may already be holding something about X — and nothing prompts anyone to look,
+because nothing breaks. That silence is the whole problem: accretion is the passive state, and a grab bag
+gets tidier only when somebody goes and looks.
+
+Note none of this is a rule you can apply mechanically, and it should not be turned into one. It is a way
+of looking, and the useful residue is the moment to look rather than a procedure for looking.
+
 ## Naming
 
 - **Functions**: `lowercase_with_underscores`.
