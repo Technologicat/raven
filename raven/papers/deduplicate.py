@@ -413,6 +413,28 @@ def _disagree_on_year(a: Record, b: Record) -> bool:
     return bool(a.year and b.year and abs(a.year - b.year) > papers_config.max_year_drift)
 
 
+def _disagree_on_identity(a: Record, b: Record) -> bool:
+    """Whether any of `config.identifying_fields` says these are different items.
+
+    Used where the title cannot carry a merge by itself. Only a *positive* disagreement counts: a field
+    one record has and the other lacks says nothing, since two databases export different subsets of one
+    record, and demanding agreement would refuse nearly every genuine pair.
+
+    Values are reduced the way titles are, so `101--103` and `101-103` are one page range rather than two.
+    The DOI is taken from the record's already-normalized form, which additionally sees past a resolver
+    prefix and a stray en-dash.
+    """
+    if a.doi is not None and b.doi is not None and a.doi != b.doi:
+        return True
+    for name in papers_config.identifying_fields:
+        if name == "doi":
+            continue  # handled above, and better, by the normalized form
+        x, y = normalize_title(a.field(name)), normalize_title(b.field(name))
+        if x is not None and y is not None and x != y:
+            return True
+    return False
+
+
 def _title_edge_holds(a: Record, b: Record) -> bool:
     """Whether two records sharing a normalized title may be merged on that evidence.
 
@@ -421,22 +443,36 @@ def _title_edge_holds(a: Record, b: Record) -> bool:
 
       - **A generic title** — `Editorial`, `Book Review` — proves nothing by itself, so it is accepted
         only where the records positively *agree*: the same first author, and years within
-        `papers_config.max_year_drift`. Silence is not agreement here; a record with no author is not merged into
-        another `Editorial` on the strength of the word.
-      - **Where neither record names an author**, the title is the only evidence there is, so a
-        disagreement about the DOI is enough to overrule it.
+        `config.max_year_drift`. Silence is not agreement here; a record with no author is not merged
+        into another `Editorial` on the strength of the word.
+
+        **Agreement on author and year is not sufficient either**, because one person writes several book
+        reviews in a year and every one of them is titled `Book Review`. So the pair must additionally not
+        contradict itself on `config.identifying_fields` — a different DOI, page range or issue means
+        different items. (Raised by Juha, 2026-08-29; the corpus happens to contain no such pair, which is
+        exactly why counting merges could not have found it.)
+      - **Where neither record names an author**, the title is the only evidence there is, so the same
+        identifying-field disagreement is enough to overrule it.
       - **Otherwise** the title is distinctive enough to carry a merge on its own, and is refused only
         where the records positively contradict each other: a different first author *and* a year too far
         apart to be one paper appearing twice. Both are required. Databases disagree about author order
         often enough that a surname mismatch alone is weak evidence, and a preprint and its published
         version straddling a New Year make a year gap alone weaker still. Together they are conclusive.
 
-    The authorless clause is the one that came from a corpus rather than from first principles, and it is
-    worth knowing what it catches: a serial's recurring section headings. `II Political Science: Method
-    and Theory` and `Abstracts Abstracts` head an item in every issue of their journals, carry no author,
-    and are ordinary titles by every other test — so the title alone merged four issues into one record.
-    Of the 36 authorless merges in that corpus, the three where the DOIs disagreed were the three that
-    were wrong, and the 33 where they agreed were all right.
+    The authorless clause came from a corpus rather than from first principles, and it is worth knowing
+    what it catches. A serial's recurring section headings: `II Political Science: Method and Theory` and
+    `Abstracts Abstracts` head an item in every issue of their journals, carry no author, and are ordinary
+    titles by every other test — so the title alone merged four issues into one record.
+
+    And, once the check widened past the DOI, **multi-volume conference proceedings**. `23rd International
+    Conference on Artificial Intelligence in Education, AIED 2022` is the title of both LNCS 13355 and
+    LNCS 13356 — Parts I and II, two different books with one name, no authors and no DOIs between them.
+    Five such pairs were merging in that corpus, each collapsing a whole volume out of the bibliography,
+    and nothing but `volume` distinguishes them.
+
+    That last case is also why the earlier account here was wrong. It read: of 36 authorless merges, the
+    three with disagreeing DOIs were the three that were wrong and the other 33 were all right. Five of
+    the 33 were not, and no DOI could have shown it.
 
     Applied per pair rather than per title, which is what lets four records carrying one heading come
     apart into the two pairs that are each one item.
@@ -444,9 +480,10 @@ def _title_edge_holds(a: Record, b: Record) -> bool:
     if is_generic_title(a.title):
         return (a.surname is not None and a.surname == b.surname
                 and a.year is not None and b.year is not None
-                and abs(a.year - b.year) <= papers_config.max_year_drift)
+                and abs(a.year - b.year) <= papers_config.max_year_drift
+                and not _disagree_on_identity(a, b))
     if a.surname is None and b.surname is None:
-        return not (a.doi and b.doi and a.doi != b.doi)
+        return not _disagree_on_identity(a, b)
     return not (_disagree_on_author(a, b) and _disagree_on_year(a, b))
 
 

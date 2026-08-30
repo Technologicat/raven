@@ -166,6 +166,29 @@ class TestTitleEdge:
                           {"author": "Jones, Bob", "year": "2024"}, title="Editorial")
         assert not dd._title_edge_holds(a, b)
 
+    def test_two_reviews_by_one_person_in_one_year_are_not_one_review(self):
+        """Author and year agreement is not enough for a genre label — the same person writes several.
+
+        Every one of them is titled `Book Review`, so what separates them is which item they are: a DOI,
+        a page range, an issue. The corpus contains no such pair, which is exactly why a merge count
+        could not have found this.
+        """
+        a, b = self._pair({"author": "Smith, Jane", "year": "2024", "pages": "101--103"},
+                          {"author": "Smith, Jane", "year": "2024", "pages": "204--206"},
+                          title="Book Review")
+        assert not dd._title_edge_holds(a, b)
+
+    def test_one_review_exported_twice_still_merges(self):
+        """The negative control for the rule above: without it, refusing everything would also pass.
+
+        Page ranges written with an en-dash and a double hyphen are one range, so the reduction has to see
+        past that or every genuine pair is refused too.
+        """
+        a, b = self._pair({"author": "Smith, Jane", "year": "2024", "doi": "10.1234/x", "pages": "101--103"},
+                          {"author": "Smith, Jane", "year": "2024", "doi": "10.1234/x", "pages": "101-103"},
+                          title="Book Review")
+        assert dd._title_edge_holds(a, b)
+
     def test_a_generic_title_with_no_author_is_refused(self):
         """Silence is not agreement: two authorless `Editorial`s are not one editorial."""
         a, b = self._pair({"year": "2024"}, {"year": "2024"}, title="Editorial")
@@ -178,11 +201,22 @@ class TestTitleEdge:
                           title="II Political Science: Method and Theory")
         assert not dd._title_edge_holds(a, b)
 
-    def test_two_authorless_records_with_no_doi_between_them_are_joined(self):
-        # A proceedings volume exported twice with no DOI either time. Nothing contradicts the title.
+    def test_two_authorless_records_with_nothing_to_contradict_them_are_joined(self):
+        # A proceedings volume exported twice, no DOI either time. Nothing contradicts the title.
         a, b = self._pair({"year": "2024"}, {"year": "2024"},
                           title="25th International Conference on AI in Education, AIED 2024")
         assert dd._title_edge_holds(a, b)
+
+    def test_two_volumes_of_one_proceedings_are_not_one_book(self):
+        """Parts I and II share a title, carry no authors and often carry no DOIs — only `volume` differs.
+
+        Merging them drops a whole volume out of the bibliography, and no DOI check can see it. Five such
+        pairs were merging in the corpus this was built against.
+        """
+        a, b = self._pair({"year": "2022", "volume": "13355 LNCS"},
+                          {"year": "2022", "volume": "13356 LNCS"},
+                          title="23rd International Conference on AI in Education, AIED 2022")
+        assert not dd._title_edge_holds(a, b)
 
     def test_an_authored_record_disagreeing_about_the_doi_is_still_joined(self):
         """The rule is about *authorless* records. A preprint and its published version differ by DOI."""

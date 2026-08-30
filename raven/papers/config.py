@@ -58,6 +58,16 @@ generic_titles = frozenset(["editorial", "editorials", "introduction", "preface"
 # online-first article belongs to. Two is a different paper.
 max_year_drift = 1
 
+# Fields that say *which* item a record is, beyond its title. Consulted where the title cannot carry a
+# merge on its own — a generic title like `Book Review`, or a record naming no author — so that a match on
+# one of those is admitted only when nothing here contradicts it. The same person may well write two book
+# reviews in a year, and those differ by DOI, by page range, or by issue.
+#
+# **Only a positive disagreement counts.** A field absent from either record says nothing, and requiring
+# agreement would refuse nearly every genuine pair, since two databases export different subsets of the
+# same record.
+identifying_fields = ("doi", "pages", "volume", "number")
+
 # Where `raven-fixbib` puts a rights notice it moves out of an abstract, and so where `deduplicate` looks
 # for one. Change both together, or the notice stops being found. See `bibtex.relocate_rights_notices`.
 rights_field = "copyright"
