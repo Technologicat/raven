@@ -13,8 +13,7 @@ from .. import __version__
 # --------------------------------------------------------------------------------
 # Talking to arXiv
 
-# The arXiv API endpoint. One copy: `search`, `arxiv2bib` and `download` each had their own, which is
-# three places to edit if arXiv ever moves it and three chances to miss one.
+# The arXiv API endpoint. Used by `search`, `arxiv2bib` and `download`.
 arxiv_api_url = "https://export.arxiv.org/api/query"
 
 # Minimum wall time between requests, seconds. **This is arXiv's, not ours** — their terms of use require

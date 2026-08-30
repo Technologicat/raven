@@ -1,7 +1,9 @@
 """Rate limiter for API access.
 
-The arXiv API terms of use require waiting a minimum of 3 seconds between
-requests: https://info.arxiv.org/help/api/tou.html
+Generic: the delay is the caller's to state, because it belongs to whichever service is being called
+rather than to this machinery. Raven's arXiv tools take theirs from
+`raven.papers.config.arxiv_request_delay`, which is 3 seconds because the arXiv API terms of use require
+at least that: https://info.arxiv.org/help/api/tou.html
 """
 
 from __future__ import annotations
@@ -25,8 +27,13 @@ class RateLimiter:
     is allowed to start waiting), so that each thread waits for the correct amount of time.
     """
 
-    def __init__(self, delay: float = 3.0) -> None:
-        """`delay`: minimum required delay between actions, seconds."""
+    def __init__(self, delay: float) -> None:
+        """`delay`: minimum required delay between actions, seconds.
+
+        Mandatory, and deliberately so: the right value comes from the service being called, and two
+        callers of this class have no reason to want the same one. A default here would be one service's
+        number quietly applied to every other.
+        """
         self.delay = delay
         self.timestamp = 0  # can use any value that causes the first `wait()` to return immediately
         self.lock = threading.RLock()

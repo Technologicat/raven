@@ -28,11 +28,12 @@ one, since each holds something different and choosing between them is not a rep
 The second fault is worth knowing about for how *much* of a file it can take: 1598 of the 6934 records in
 one real multi-database export, none of them reported as anything more specific than "unparseable".
 
-A third fault needs no rescuing, because the records carrying it parse perfectly well: **HTML left in the
-field values** by a database that exported its web page rather than its record. A title meaning `Q&A`
-arrives as `Q\&amp;A` and stays that way through every tool downstream — a citation, a word cloud, a
-typeset bibliography. The entities are decoded and re-escaped for BibTeX, and everything around them is
-left byte for byte as it was. `--keep-entities` switches it off.
+**HTML left in the field values** is the third fault repaired here, and the odd one out: the records
+carrying it parse perfectly well, so nothing reported it before. A database that exported its web page
+rather than its record leaves entities behind: a title meaning `Q&A` arrives as `Q\&amp;A`, and left alone
+it would read that way in every tool downstream — a citation, a word cloud, a typeset bibliography. The
+entities are decoded and re-escaped for BibTeX, and everything around them is left byte for byte as it
+was. `--keep-entities` switches it off.
 
 Whatever is left is described rather than guessed at, one line per record, naming the fault and the fields
 that carry it. A record whose author is written `Bloggs, PhD, MSc, Joan` cannot be repaired here — BibTeX
@@ -136,8 +137,9 @@ def _residual_fault(repaired: str):
     does the result read under the middleware chain the rest of Raven uses?
 
     Keeping the two apart is what lets a record be repaired *and* reported: one naming `annote` three
-    times and carrying an author BibTeX cannot express keeps the merge, and is reported for the author. Diagnosing the repaired text rather than the original is the point — naming a fault
-    the tool has just fixed would send the reader looking for something that is no longer there.
+    times and carrying an author BibTeX cannot express keeps the merge, and is reported for the author.
+    Diagnosing the repaired text rather than the original is the point — naming a fault the tool has just
+    fixed would send the reader looking for something that is no longer there.
     """
     library = bibtex.parse_string(repaired)
     return library.failed_blocks[0] if library.failed_blocks else None
@@ -223,9 +225,12 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("-l", "--list", dest="list_repairs", action="store_true", default=False,
                         help="Name every record that was repaired, not just how many. A database export can need this a thousand times over, so the list is off by default.")
     parser.add_argument("--keep-entities", dest="keep_entities", action="store_true", default=False,
-                        help="Leave HTML character entities in the field values. They come from a database that exported its web page rather than its record, and are decoded by default.")
+                        help="Leave HTML character entities in the field values. They come from a database "
+                             "that exported its web page rather than its record, and are decoded by default.")
     parser.add_argument("--keep-notices", dest="keep_notices", action="store_true", default=False,
-                        help="Leave a publisher's rights notice inside the `abstract`. By default it is moved to a `copyright` field of its own, where it is still yours to read but is out of the way of anything treating the abstract as prose.")
+                        help="Leave a publisher's rights notice inside the `abstract`. By default it is "
+                             "moved to a `copyright` field of its own, where it is still yours to read "
+                             "but is out of the way of anything treating the abstract as prose.")
     parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="myreferences.bib",
                         help="BibTeX file(s) to repair.")
     opts = parser.parse_args()
