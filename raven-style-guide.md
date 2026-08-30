@@ -177,9 +177,15 @@ of looking, and the useful residue is the moment to look rather than a procedure
   - **`SCREAMING_CASE`** — a **file-local implementation detail**. Padding, a regex, a table the module
     reads and nobody outside it should. The package holds ~290 of these, correctly.
 
-  So a `SCREAMING_CASE` name in a `config.py` is a category error, and so is a lowercase module-level
-  constant that no user is meant to touch. Deciding the case is deciding whether it is a knob, which is
-  the useful question anyway.
+  So a lowercase module-level constant that no user is meant to touch is a category error. Deciding the
+  case is deciding whether it is a knob, which is the useful question anyway.
+
+  **The GUI apps' `config.py` files are `SCREAMING_CASE` throughout, and that is right rather than drift**
+  — `cherrypick`, `conference_timer` and `xdot_viewer`, about a hundred names between them. What they hold
+  is layout geometry and theme, which the app *computes with* (`TOOLBAR_H = FONT_SIZE + 2 *
+  DPG_FRAME_PADDING_Y`) rather than reads as a setting. The lowercase config modules hold settings proper:
+  model names, URLs, thresholds. Living in a file called `config.py` is not by itself what makes something
+  a knob. (Juha, 2026-08-29, declining a rename sweep this entry as first written would have licensed.)
 
   (This entry previously read "lowercase … `SCREAMING_CASE` is not used", which the codebase contradicted
   about 290 times over. Corrected 2026-08-29.)
