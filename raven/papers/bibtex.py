@@ -68,9 +68,10 @@ def _reader_middleware(split_names: bool) -> list:
       - `NormalizeFieldKeys` because the key case is not dependable - a Web of Science export writes
         `Title = {...}`, the BibTeX literature writes `title = {...}`.
       - `SeparateCoAuthors` then `SplitNameParts`, in that order. Between them they turn one `author`
-        string into name parts that survive "Ludwig van Beethoven", "Holm Dahl, Aksel" and
-        "Beeblebrox, IV, Zaphod". Omitted when `split_names` is false, leaving `author` and `editor`
-        the strings the input data had.
+        string into name parts that survive "Ludwig van Beethoven", "Petra Johanna Lagerkvist",
+        "Holm Dahl, Aksel" and "Beeblebrox, IV, Zaphod" — a particle, two given names, a compound
+        surname the comma is needed to mark, and a suffix. Omitted when `split_names` is false, leaving
+        `author` and `editor` the strings the input data had.
 
     Fresh instances rather than a shared module-level list, because a middleware is free to carry
     per-parse state.

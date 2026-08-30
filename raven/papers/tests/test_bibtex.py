@@ -137,6 +137,19 @@ class TestParseString:
         assert name.last == ["Holm", "Dahl"]
         assert name.first == ["Aksel"]
 
+    def test_two_given_names_and_no_comma_leave_only_the_last_token_as_the_surname(self):
+        """The other reading of the same shape, and the control for the test above.
+
+        `A B C` without a comma is ambiguous — two given names and a surname, or one given name and a
+        compound surname — and BibTeX resolves it by rule: the last token is the surname. That is right
+        here and wrong for `Holm Dahl` written the same way, which is what the comma form exists to say.
+        Without this pair, either behaviour would satisfy the compound-surname test on its own.
+        """
+        library = parse_string("@article{k, author={Petra Johanna Lagerkvist}, year={2024}}")
+        name = library.entries[0]["author"][0]
+        assert name.last == ["Lagerkvist"]
+        assert name.first == ["Petra", "Johanna"]
+
     def test_name_parts_survive_a_suffix(self):
         library = parse_string("@article{k, author={Beeblebrox, IV, Zaphod}, year={2024}}")
         name = library.entries[0]["author"][0]
