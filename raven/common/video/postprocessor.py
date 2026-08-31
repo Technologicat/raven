@@ -354,6 +354,17 @@ def _blur_kernel_size(sigma: float) -> int:
 
 # Convenient for GUI auto-population so that we can specify sensible ranges for parameters once, at the implementation site (not separately at each GUI use site).
 def with_metadata(**metadata):
+    """Stash GUI hints for a postprocessor filter's parameters onto the function object.
+
+    Every parameter that has a default value needs an entry here, or `Postprocessor.get_filters`
+    raises `KeyError` when it builds the settings-editor description. The value is `[min, max]`
+    for a numeric parameter, an explicit list of the allowed values for an enum or a bool, and
+    `["!ignore"]` to hide the parameter from the GUI.
+
+    `_priority` is the odd one out: it belongs to the filter rather than to any parameter, and
+    it says where on the imaginary optical path the filter sits. See the band scheme in the
+    comment block above the first filter definition, in `Postprocessor`.
+    """
     def decorator(func):
         @wraps(func)
         def func_with_metadata(*args, **kwargs):
@@ -594,6 +605,47 @@ class Postprocessor:
                     settings = {k: v for k, v in settings.items() if k != "enabled"}
                 apply_filter = getattr(self, filter_name)
                 apply_filter(image, **settings)
+
+    # --------------------------------------------------------------------------------
+    # Filter ordering: what the `_priority` numbers mean
+    #
+    # Each filter's `_priority` places it on an imaginary optical path that runs from the scene,
+    # through the camera, down the signal chain, to the viewer's display. The reference point is
+    # `0.0`, the moment of capture — light entering the taking lens. Anything below that exists
+    # in the world; anything above it is signal.
+    #
+    #   band      range      what it is                                      members
+    #   -------   -------    -------------------------------------------     ------------------------------
+    #   Scene     < 0        what is in front of the lens, and how the        zoom (-1.0)
+    #                        camera is aimed at it
+    #   Capture   [0, 5)     optics, sensor, grading                         bloom (0.0),
+    #                                                                        chromatic_aberration (1.0),
+    #                                                                        noise (1.5), vignetting (2.0),
+    #                                                                        desaturate (3.5)
+    #   Signal    [5, 10]    everything between sensor and display           analog_lowres (5.0) ...
+    #                                                                        digital_glitches (10.0)
+    #   Display   > 10       the viewer's screen                             translucent_display (10.5) ...
+    #                                                                        scanlines (13.0)
+    #
+    # The section headings below follow the same progression, with one crossing worth knowing about:
+    # `bloom` sits under "Physical input signal" although it is the first Capture-band filter. Its
+    # priority of exactly 0.0 is the meaningful part — it is the first thing the taking lens does.
+    #
+    # When adding a filter, the question that picks the band is: is this in the world, or on the display?
+    #
+    # What the number does NOT do is decide the order the engine runs things in. `render_into` applies the
+    # chain positionally, in the order the chain lists its entries; the only reader of `_priority` here is
+    # `get_filters`, which sorts by it. So a hand-written `postprocessor_defaults` or `animator.json` can
+    # put any filter anywhere in the chain — including the same filter twice, which is what the `name`
+    # parameter on every caching filter is for: it keys the instances' caches apart.
+    #
+    # Multiple instances at arbitrary positions have therefore always worked at this level. The settings
+    # editor is where they stop working, and it is worth knowing how far its limitation reaches: its
+    # `strip_postprocessor_chain_for_gui` collapses the chain with `dict(postprocessor_chain)`, keeping one
+    # entry per filter name, and then rebuilds it in the order `get_filters` returned. So a chain that has
+    # been through the editor comes back out in `_priority` order — for that chain the band scheme is the
+    # render order, not merely the panel order. Both halves are the missing add/remove/reorder GUI being
+    # worked around, not properties of the postprocessor.
 
     # --------------------------------------------------------------------------------
     # Physical input signal
