@@ -449,6 +449,9 @@ class Postprocessor:
         self.last_frame_no = -1
 
         # Caches for individual dynamic effects
+        self.crt_warp_grid = defaultdict(lambda: None)  # name -> {"key": tuple, "grid": Tensor}
+        self.crt_weights = defaultdict(lambda: None)  # name -> {"key": tuple, "mask": Tensor or None, "corner": Tensor or None}
+        self.crt_phosphor = defaultdict(lambda: None)  # name -> {"shape": Size, "acc": Tensor}
         self.zoom_data = defaultdict(lambda: None)
         self.ca_grid_cache = defaultdict(lambda: None)  # name -> {"scale": float, "grid_R": Tensor, "grid_B": Tensor}
         self.noise_last_image = defaultdict(lambda: None)
@@ -649,6 +652,313 @@ class Postprocessor:
 
     # --------------------------------------------------------------------------------
     # Physical input signal
+
+    def _crt_warp_grid(self, name: str, h: int, w: int,
+                       warp_x: float, warp_y: float, overscan: float) -> torch.Tensor:
+        """Sampling grid for `crt`'s barrel warp, cached per filter instance.
+
+        Returns a `[1, h, w, 2]` grid in `grid_sample` layout, where the last axis is (x, y).
+        The separable form is Lottes': each axis is pushed outward in proportion to the square
+        of the *other* axis, which is what makes the corners bulge without bending the centerlines.
+        """
+        key = (h, w, warp_x, warp_y, overscan)
+        cached = self.crt_warp_grid[name]
+        if cached is not None and cached["key"] == key:
+            return cached["grid"]
+        sx = self._meshx * (1.0 + warp_x * self._meshy**2)
+        sy = self._meshy * (1.0 + warp_y * self._meshx**2)
+        grid = torch.stack((sx / overscan, sy / overscan), 2).unsqueeze(0)  # [h, w, x/y] -> batch of one
+        self.crt_warp_grid[name] = {"key": key, "grid": grid}
+        return grid
+
+    def _crt_weights(self, name: str, h: int, w: int,
+                     mask_type: str, mask_pitch: int, mask_strength: float,
+                     corner_falloff: float) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
+        """Position-dependent weights for `crt` that do not vary with time, cached per filter instance.
+
+        Returns `(mask, row_mean, corner)`. `mask` and `corner` are `None` when that effect is switched
+        off, so the caller can skip a multiply rather than multiplying by ones. `mask` is `[3, 1, w]` for
+        the screen-aligned stripe masks and `[3, h, w]` for the staggered ones; `corner` is `[1, h, w]`.
+
+        `row_mean` is `[h, 1]`, the mask's mean over channel and column for each row, and it is what lets
+        the caller find the mean of the whole modulation without building a `[3, h, w]` temporary for it:
+        the scanline term varies only with the row, so the mean of the product is the mean over rows of
+        `scanline[row] * row_mean[row]`. For the stripe masks that reduces to a constant, but the
+        staggered masks have vertical structure of their own, and it lines up with the scanlines whenever
+        the two pitches share a factor - which is common, both being small integers.
+        """
+        key = (h, w, mask_type, mask_pitch, mask_strength, corner_falloff)
+        cached = self.crt_weights[name]
+        if cached is not None and cached["key"] == key:
+            return cached["mask"], cached["row_mean"], cached["corner"]
+
+        xx = torch.arange(w, device=self.device, dtype=self.dtype).view(1, w)  # output column index
+        yy = torch.arange(h, device=self.device, dtype=self.dtype).view(h, 1)  # output row index
+        channels = torch.arange(3, device=self.device, dtype=self.dtype)
+        dim = 1.0 - mask_strength
+
+        # The mask lives in OUTPUT pixel space, not in the warped source space the scanlines use.
+        # Physically the emitter structure is on the same surface as the raster and should warp with it,
+        # but its pitch is only a few output pixels, and warping something that fine produces moiré that
+        # swamps the effect it is supposed to add. Screen-aligned is the deliberate choice here; it is a
+        # known deviation from physical correctness rather than an oversight.
+        if mask_type == "none" or mask_strength == 0.0:
+            mask = None
+        else:
+            if mask_type == "aperture_grille":  # vertical RGB stripes: the Trinitron look
+                stripe = ((xx % mask_pitch) / mask_pitch) * 3.0  # [1, w], which third of the pitch
+                emitter = torch.floor(stripe).clamp_(0.0, 2.0)  # [1, w], channel owning this column
+                lit = (emitter.unsqueeze(0) == channels.view(3, 1, 1))  # [3, 1, w]
+            else:  # "slot" and "shadow": the stripe phase jumps half a pitch every `mask_pitch` rows
+                stagger = (torch.floor(yy / mask_pitch) % 2.0) * (mask_pitch / 2.0)  # [h, 1]
+                stripe = (((xx + stagger) % mask_pitch) / mask_pitch) * 3.0  # [h, w]
+                emitter = torch.floor(stripe).clamp_(0.0, 2.0)
+                lit = (emitter.unsqueeze(0) == channels.view(3, 1, 1))  # [3, h, w]
+            mask = dim + (1.0 - dim) * lit.to(self.dtype)
+            if mask_type == "shadow":
+                # A dot mask emits in rows of triads rather than in continuous stripes, so dim between the
+                # rows as well. Raised cosine rather than a hard step: at these pitches a step would alias
+                # against the scanlines, which are also a vertical structure.
+                row_phase = (yy % mask_pitch) / mask_pitch  # [h, 1], 0 at the top of a triad row
+                vertical = 0.5 + 0.5 * torch.cos(2.0 * math.pi * (row_phase - 0.5))  # peaks mid-row
+                mask = mask * (dim + (1.0 - dim) * vertical)
+
+        # Corner falloff is emitter-side: the beam is weaker where it is most deflected. The lens-side
+        # version of this is `vignetting` (2.0), which is a separate filter in a separate band.
+        if corner_falloff == 0.0:
+            corner = None
+        else:
+            r2 = 0.5 * (self._meshx**2 + self._meshy**2)  # [h, w], 0 at the center, 1 at the corners
+            corner = (1.0 - corner_falloff * r2).unsqueeze(0)  # [1, h, w]
+
+        row_mean = None if mask is None else mask.mean(dim=(0, 2)).view(-1, 1)  # [h, 1] or [1, 1]
+
+        self.crt_weights[name] = {"key": key, "mask": mask, "row_mean": row_mean, "corner": corner}
+        return mask, row_mean, corner
+
+    @with_metadata(warp_x=[0.0, 0.10],
+                   warp_y=[0.0, 0.10],
+                   overscan=[1.0, 1.15],
+                   scanline_period=[1, 6],
+                   scanline_weight=[0.0, 8.0],
+                   scanline_strength=[0.0, 1.0],
+                   dynamic_field=[False, True],
+                   field=[0, 1],
+                   mask_type=["aperture_grille", "slot", "shadow", "none"],
+                   mask_pitch=[2, 12],
+                   mask_strength=[0.0, 1.0],
+                   brightness_compensation=[0.0, 1.0],
+                   beam_bleed=[0.0, 1.0],
+                   glow_sigma=[0.3, 5.0],
+                   glow_strength=[0.0, 1.0],
+                   corner_falloff=[0.0, 1.0],
+                   alpha_mode=["both", "luma"],
+                   persistence_tau=[0.0, 0.5],
+                   name=["!ignore"],
+                   _priority=-3.0)
+    def crt(self, image: torch.tensor, *,
+            warp_x: float = 0.0,
+            warp_y: float = 0.0,
+            overscan: float = 1.0,
+            scanline_period: int = 2,
+            scanline_weight: float = 2.0,
+            scanline_strength: float = 0.6,
+            dynamic_field: bool = True,
+            field: int = 0,
+            mask_type: str = "aperture_grille",
+            mask_pitch: int = 3,
+            mask_strength: float = 0.35,
+            brightness_compensation: float = 0.85,
+            beam_bleed: float = 0.25,
+            glow_sigma: float = 1.2,
+            glow_strength: float = 0.0,
+            corner_falloff: float = 0.10,
+            alpha_mode: str = "both",
+            persistence_tau: float = 0.06,
+            name: str = "crt0") -> None:
+        """[dynamic] Raster projection simulation: the character is drawn by a scanning electron beam.
+
+        The avatar is a hologram projected into the scene, so the raster belongs to the *character*,
+        not to the viewer's monitor: it runs early in the chain, where the capture optics downstream
+        film it like anything else in the room. That is what makes the scanlines bloom for free, and
+        it is why the gaps between them are transparent rather than dark - where the beam is not
+        writing, a hologram emits no light, and the room shows through.
+
+        For the other reading, where the whole picture is content on a virtual display device, move
+        this filter to the Display band by hand in `animator.json` and set `alpha_mode="luma"`.
+
+        This is the advanced version of `scanlines`, which stays around as the cheap and simple one.
+        Reach for that when all you need is a hard bright/dark alternation, and for this when you want
+        it to look like a real CRT. They also sit in different bands and model different things - the
+        character's own raster here, the viewer's monitor there - so stacking them is legal, if rarely
+        what anyone wants.
+
+        `warp_x`, `warp_y`: Barrel distortion, pushing the image outward toward the left/right edges
+                            and the top/bottom edges respectively. Nearly vestigial for a hologram,
+                            which has no glass and, on a transparent field, no straight lines to bend.
+                            Both default to 0.0, which also skips the resample entirely.
+        `overscan`: Uniform zoom applied with the warp, as a CRT overscans its picture past the
+                    bezel. 1.0 disables it.
+
+        `scanline_period`: Output lines per raster line. 2 means one bright line for every two pixel
+                           rows. Raise it on a high-resolution output to keep the raster visible.
+        `scanline_weight`: Falloff of the Gaussian across one raster line. Higher is tighter, so the
+                           bright rows read as glowing emitters with darkness between them rather
+                           than as flat stripes.
+        `scanline_strength`: Overall depth of the scanline modulation. 0.0 disables it.
+        `dynamic_field`: If `True`, the raster shifts by half a line each frame, the way an
+                         interlaced display alternates fields.
+        `field`: Which field the alternation starts on, 0 or 1. Only matters as a phase offset.
+
+        `mask_type`: The phosphor structure in front of the beam. One of:
+                       "aperture_grille": vertical RGB stripes (Trinitron). Cheapest and the most
+                                          legible at moderate resolution.
+                       "slot": as above, but the stripes step half a pitch every `mask_pitch` rows,
+                               the consumer-TV look.
+                       "shadow": a triad dot mask. The most structure, and the least legible unless
+                                 the output is large or `mask_pitch` is raised.
+                       "none": no mask.
+        `mask_pitch`: Width of one full RGB group, in *output pixels*. This is deliberately not in
+                      normalized coordinates: a 3-pixel triad is strongly visible at 1024 and
+                      invisible at 4K, and which of those you want depends on the output size.
+        `mask_strength`: How far the two unlit channels are dimmed in each column. 0.0 disables the
+                         mask.
+
+        `brightness_compensation`: Scanlines and mask are both multiplicative and both below 1, so
+                                   they darken the picture; a real tube compensates by driving the
+                                   beam harder. 1.0 restores the original mean brightness exactly,
+                                   0.0 leaves the image dimmed. Full compensation can look too hot
+                                   going into the capture bloom, hence the default below 1.
+        `beam_bleed`: Horizontal smear of the beam, as a 3-tap blur. Applied to alpha as well, so
+                      the spread reads as light rather than being clipped away by the silhouette.
+        `glow_sigma`, `glow_strength`: Light diffusing in the phosphor and the glass. Off by default,
+                                       because the capture `bloom` downstream already does this, and
+                                       does it to the whole scene rather than to the character alone.
+                                       Turn it up only if this filter is used without a bloom.
+        `corner_falloff`: Emitter-side dimming toward the corners, where the beam is most deflected.
+                          The lens-side version of this is the separate `vignetting` filter.
+
+        `alpha_mode`: One of:
+                        "both": modulate luminance and alpha, so the gaps between scanlines are
+                                transparent and the backdrop shows through. The hologram reading.
+                        "luma": modulate luminance only. Use this against a bright backdrop, or for
+                                a display-device reading where the gaps are simply dark.
+                      Alpha follows the *scanline* term only, never the mask. Dimming one channel's
+                      emitters does not make that patch of the picture transparent, and modulating
+                      alpha at the mask pitch punches holes that read as a screen door.
+
+                      Note `translucent_display` also reduces alpha and is in the default chain. With
+                      both at their defaults the character may end up too faint; pull one of them down.
+
+        `persistence_tau`: Phosphor afterglow, as a decay time in seconds. A moving character leaves
+                           a trail of lingering light. 0.0 switches the accumulator off entirely,
+                           which makes this filter stateless.
+
+                           Interacts with `dynamic_field`: the previous field's lines persist into
+                           the current frame and partly fill the gaps, which is what an interlaced
+                           tube does, but it means a long tau washes the scanlines out. Tune the two
+                           together.
+
+        `name`: Cache key. Only needs changing if the same filter appears twice in one chain.
+
+        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        """
+        c, h, w = image.shape
+
+        # The warp is one resample, fused with nothing else, and skipped when it would be the identity.
+        # Everything downstream is evaluated analytically at known coordinates rather than resampled,
+        # which is what keeps the raster crisp: each further resample would soften the high-frequency
+        # structure that *is* the effect.
+        if warp_x != 0.0 or warp_y != 0.0 or overscan != 1.0:
+            grid = self._crt_warp_grid(name, h, w, warp_x, warp_y, overscan)
+            warped = torch.nn.functional.grid_sample(image.unsqueeze(0), grid,
+                                                     mode="bilinear", padding_mode="zeros", align_corners=False)
+            image[:, :, :] = warped.squeeze(0)
+            sy = grid[0, :, :, 1]  # [h, w], the warped y coordinate each output pixel was read from
+        else:
+            sy = self._yy.view(h, 1)  # [h, 1], no warp, so the raster is a function of the row alone
+
+        # The scanlines live in warped (source) space: the beam laid them down before the glass bent
+        # the picture, so under any warp they curve with the image.
+        if dynamic_field:
+            field_phase = 0.5 * ((field + int(self.frame_no)) % 2)
+        else:
+            field_phase = 0.5 * (field % 2)
+        y_px = (sy + 1.0) * (0.5 * (h - 1))  # [-1, 1] -> row index
+        line_phase = y_px / scanline_period + field_phase
+        line_phase = line_phase - torch.floor(line_phase)  # position within one raster line, [0, 1)
+        # Gaussian falloff across the line, rather than the usual bright/dark alternation. This is the
+        # single detail that decides whether the result reads as glowing emitters or as a cheap overlay.
+        w_scan = torch.exp(-scanline_weight * (2.0 * line_phase - 1.0)**2)
+        w_scan = 1.0 - scanline_strength * (1.0 - w_scan)  # exactly 1.0 when the strength is 0
+
+        w_mask, mask_row_mean, w_corner = self._crt_weights(name, h, w, mask_type, mask_pitch,
+                                                            mask_strength, corner_falloff)
+
+        # Brightness compensation, from the mean of the whole modulation. The scanline term varies only
+        # with the row, so `mask_row_mean` collapses the mask to one number per row and the mean of the
+        # product follows without ever building a [3, h, w] temporary for it.
+        #
+        # Under a warp the scanline term varies with the column too, and this becomes an approximation.
+        # That is acceptable in a constant the user tunes by eye, and the warp defaults to off.
+        #
+        # It stays a tensor rather than becoming a Python float: reading it out would sync the GPU, and
+        # nothing here needs to know the number.
+        #
+        # `corner_falloff` is deliberately left out. It is a darkening someone asked for, and
+        # compensating for it would undo it.
+        mean_w = w_scan.mean() if mask_row_mean is None else (w_scan * mask_row_mean).mean()
+        compensation = 1.0 + brightness_compensation * (1.0 / mean_w - 1.0)
+
+        image[:3].mul_(w_scan)
+        if w_mask is not None:
+            image[:3].mul_(w_mask)
+        if w_corner is not None:
+            image[:3].mul_(w_corner)
+        image[:3].mul_(compensation)
+        if alpha_mode == "both":
+            image[3:4].mul_(w_scan)
+
+        if beam_bleed > 0.0:
+            # 1-2-1 at full strength, which is as wide as a 3-tap can go without becoming hollow.
+            tap = 0.25 * beam_bleed
+            neighbours = torch.nn.functional.pad(image.unsqueeze(0), (1, 1, 0, 0), mode="replicate").squeeze(0)
+            image.mul_(1.0 - 2.0 * tap).add_(neighbours[:, :, :-2], alpha=tap).add_(neighbours[:, :, 2:], alpha=tap)
+
+        if persistence_tau > 0.0:
+            # Max-with-decay, not additive: phosphor emission decays, it does not accumulate. This is
+            # also unconditionally stable, where an additive feedback loop compounds any brightness
+            # error frame over frame.
+            #
+            # Applied after the modulation, so what lingers is the raster pattern itself - the beam
+            # writes the pattern into the phosphor, and it is the pattern that decays. Alpha decays
+            # with the rest, because under the hologram reading the trail is light, and light is what
+            # alpha encodes here.
+            record = self.crt_phosphor[name]
+            if record is None or record["shape"] != image.shape:
+                # The crop can change mid-stream, so a stale accumulator is silently wrong. Compare the
+                # stored shape rather than trusting the meshgrid's own size tracking, which several
+                # filters share and any of them may have refreshed already.
+                self.crt_phosphor[name] = {"shape": image.shape, "acc": image.clone()}
+            else:
+                acc = record["acc"]
+                # Decay is per second rather than per frame, so the trail is the same length whatever
+                # the real frame rate is. This is the one place in this filter that needs `last_frame_no`.
+                dt = max(0.0, (self.frame_no - self.last_frame_no) / self.CALIBRATION_FPS)
+                acc.mul_(math.exp(-dt / persistence_tau))
+                torch.maximum(acc, image, out=acc)
+                image.copy_(acc)
+
+        if glow_strength > 0.0:
+            ks = _blur_kernel_size(glow_sigma)
+            glow = torchvision.transforms.GaussianBlur((ks, 1), sigma=glow_sigma)(image)  # blur along x
+            glow = torchvision.transforms.GaussianBlur((1, ks), sigma=glow_sigma)(glow)  # blur along y
+            image[:3].add_(glow[:3], alpha=glow_strength)
+            # Alpha max-combines rather than adding, as in `bloom`: the glow spreads light outward past
+            # the silhouette, but two overlapping glows do not make the picture more than fully opaque.
+            image[3:4].copy_(torch.maximum(image[3:4], glow[3:4].mul_(glow_strength)))
+
+        torch.clamp_(image, min=0.0, max=1.0)
 
     @with_metadata(center_x=[-1.0, 1.0],
                    center_y=[-1.0, 1.0],

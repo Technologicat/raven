@@ -35,6 +35,10 @@ DEFAULT_CHAIN = [
 
 # All public filters with representative default parameters
 ALL_FILTERS = [
+    ("crt", {}),
+    # A filter may appear more than once with different settings, in which case it needs a label to
+    # report under. `crt`'s warp is the one option here that costs a resample, and the default skips it.
+    ("crt", {"warp_x": 0.02, "warp_y": 0.04}, "crt (warped)"),
     ("zoom", {"factor": 2.0, "quality": "low"}),
     ("bloom", {}),
     ("chromatic_aberration", {}),
@@ -174,7 +178,9 @@ def bench_all_filters(pp, image_template):
     print(f"  {'-' * 30} {'-' * 8} {'-' * 8} {'-' * 8}")
 
     results = {}
-    for filter_name, settings in ALL_FILTERS:
+    for entry in ALL_FILTERS:
+        filter_name, settings = entry[0], entry[1]
+        label = entry[2] if len(entry) > 2 else filter_name
         pp.chain = [(filter_name, settings)]
 
         # Warmup
@@ -197,8 +203,8 @@ def bench_all_filters(pp, image_template):
         avg = sum(times) / len(times)
         mn = min(times)
         mx = max(times)
-        results[filter_name] = (avg, mn, mx)
-        print(f"  {filter_name:<30s} {avg * 1000:>7.3f}ms {mn * 1000:>7.3f}ms {mx * 1000:>7.3f}ms")
+        results[label] = (avg, mn, mx)
+        print(f"  {label:<30s} {avg * 1000:>7.3f}ms {mn * 1000:>7.3f}ms {mx * 1000:>7.3f}ms")
 
     # Sort by avg descending
     print("\n  Ranked by cost:")

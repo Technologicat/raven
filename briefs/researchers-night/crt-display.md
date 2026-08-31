@@ -105,6 +105,13 @@ diegetic model was fixed:
    raster. They can coexist. Leave it untouched; do not describe this filter
    as superseding it.
 
+   **Corrected 2026-08-31 (Juha), while the docstring was being written.** The
+   intent is that `crt` is "a more advanced, better-looking alternative for the
+   cheap and simple `scanlines`" — so the docstring leads with that, and the
+   coexistence is the footnote rather than the headline. The technical half
+   above still holds: two bands, two diegetic layers, both usable at once, and
+   `scanlines` is not to be touched. What was wrong was the emphasis.
+
 **Cost, and the fallback.** Placing the filter early means any downstream
 resample softens the raster. In practice only `zoom` resamples, and `zoom` is
 **not in `postprocessor_defaults`** — the default chain is unaffected. If a
@@ -435,6 +442,14 @@ elsewhere in this module these are contract tests, not aesthetic ones.
     shape guard, not just on pixel values.
 
 ### Performance budget
+
+**Measured 2026-08-31: 0.277 ms at 1024², fp16, on the internal dGPU** — against the
+2 ms target below, and against `scanlines`' 0.237 ms for the cheap version of the
+same idea. Turning the warp on costs 0.031 ms more (0.306 ms), so the resample
+this design goes out of its way to skip turns out to be the cheap part; what the
+skip buys is the crispness, not the time. Numbers from
+`raven/common/video/tests/bench_postprocessor.py`, which now carries `crt` in
+both configurations.
 
 Postproc currently runs ~11 ms of the frame budget
 (`briefs/done/avatar-render-pipeline.md`). Target **≤ 2 ms at 1024²**: with warp at

@@ -1084,6 +1084,272 @@ class TestZoomEffect:
 
 
 # ---------------------------------------------------------------------------
+# Tests: crt filter
+# ---------------------------------------------------------------------------
+
+def _crt_off():
+    """Settings that switch every part of `crt` off, as a base for turning exactly one back on."""
+    return dict(warp_x=0.0, warp_y=0.0, overscan=1.0,
+                scanline_strength=0.0, mask_type="none", corner_falloff=0.0,
+                beam_bleed=0.0, glow_strength=0.0, persistence_tau=0.0)
+
+
+class TestCrtContract:
+    def test_preserves_shape_dtype_and_device(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        pp.crt(image)
+        assert image.shape == (4, 64, 128)
+        assert image.dtype == torch.float32
+        assert image.device == torch.device("cpu")
+
+    def test_mutates_in_place(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original = image.clone()
+        pp.crt(image)
+        assert not torch.equal(image, original)
+
+    def test_output_stays_in_unit_range(self):
+        """Brightness compensation drives the beam above 1.0 on purpose, so the clamp is load-bearing."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        pp.crt(image, brightness_compensation=1.0)
+        assert image.min() >= 0.0
+        assert image.max() <= 1.0
+
+    def test_everything_off_is_bitwise_identity(self):
+        """Not `allclose`: this is what exercises the skip of the warp resample, and a tolerance-based
+        comparison would accept a stray bilinear pass that softens the raster this filter exists to draw."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        original = image.clone()
+        pp.crt(image, **_crt_off())
+        assert torch.equal(image, original)
+
+
+class TestCrtBrightnessCompensation:
+    """Scanlines and mask are both multiplicative and both below 1, so they darken the picture. Full
+    compensation is supposed to hand back the original mean brightness."""
+
+    def test_mean_level_is_preserved_across_a_parameter_sweep(self):
+        # Dim enough that the compensated peaks stay under 1.0; the clamp would otherwise eat the
+        # brightness this test is measuring, and the failure would look like a bad constant.
+        for mask_type in ("aperture_grille", "slot", "shadow", "none"):
+            for mask_pitch in (2, 3, 6):
+                for scanline_period, scanline_weight in ((2, 2.0), (3, 4.0), (1, 0.5)):
+                    pp = _make_postprocessor()
+                    image = torch.full((4, 64, 128), 0.1)
+                    pp.crt(image, brightness_compensation=1.0,
+                           mask_type=mask_type, mask_pitch=mask_pitch, mask_strength=0.35,
+                           scanline_period=scanline_period, scanline_weight=scanline_weight,
+                           scanline_strength=0.6, corner_falloff=0.0, beam_bleed=0.0,
+                           glow_strength=0.0, persistence_tau=0.0)
+                    mean = float(image[:3].mean())
+                    # Tight on purpose. The compensation constant is the exact mean of the modulation,
+                    # not an approximation of it, and the cheap approximation that treats the scanline
+                    # and mask terms as independent is off by several percent for the staggered masks -
+                    # their vertical structure lines up with the scanlines whenever the two pitches
+                    # share a factor. A percent-level tolerance here would accept that silently.
+                    assert abs(mean - 0.1) < 1e-5, (f"{mask_type}, pitch {mask_pitch}, period "
+                                                    f"{scanline_period}: mean {mean:.5f}, wanted 0.1")
+
+    def test_without_compensation_the_picture_is_darker(self):
+        """The negative control for the test above: if this filter happened to darken nothing, full
+        compensation would preserve the mean for a reason that has nothing to do with the constant."""
+        pp = _make_postprocessor()
+        image = torch.full((4, 64, 128), 0.1)
+        pp.crt(image, brightness_compensation=0.0, corner_falloff=0.0, beam_bleed=0.0,
+               glow_strength=0.0, persistence_tau=0.0)
+        assert float(image[:3].mean()) < 0.06
+
+
+class TestCrtMask:
+    """The mask is in output pixel space, and carries chroma structure only."""
+
+    @staticmethod
+    def _column_weights(pp, mask_type="aperture_grille", mask_pitch=3, w=128):
+        """Per-column channel weights, read off a flat grey image with everything else switched off."""
+        settings = _crt_off()
+        settings.update(mask_type=mask_type, mask_pitch=mask_pitch, mask_strength=0.35,
+                        brightness_compensation=0.0)
+        image = torch.full((4, 64, w), 0.5)
+        pp.crt(image, **settings)
+        return image[:3] / 0.5  # [3, h, w]
+
+    def test_aperture_grille_is_periodic_in_the_pitch(self):
+        pp = _make_postprocessor()
+        weights = self._column_weights(pp, mask_pitch=3)
+        assert torch.allclose(weights[:, :, :-3], weights[:, :, 3:], atol=1e-6)
+
+    def test_aperture_grille_is_not_periodic_in_less_than_the_pitch(self):
+        """The negative control. A mask that dimmed every column equally would satisfy the test above
+        for every shift, and this fixture could not tell that apart from a working stripe pattern."""
+        pp = _make_postprocessor()
+        weights = self._column_weights(pp, mask_pitch=3)
+        assert not torch.allclose(weights[:, :, :-1], weights[:, :, 1:], atol=1e-6)
+
+    def test_each_column_lights_exactly_one_channel(self):
+        pp = _make_postprocessor()
+        weights = self._column_weights(pp, mask_pitch=3)
+        lit = (weights[:, 0, :] > 0.99).sum(dim=0)  # [w], channels at full strength in each column
+        assert torch.equal(lit, torch.ones(128))
+
+    def test_the_pitch_is_in_output_pixels_not_normalized_coordinates(self):
+        """Rendering the same content wider must not stretch the mask with it. Asserted so that nobody
+        later 'fixes' the pitch into normalized coordinates, which would make it resolution-independent
+        and therefore invisible at 4K - the same problem `scanlines` solved with `double_size`."""
+        narrow = self._column_weights(_make_postprocessor(64, 128), mask_pitch=3, w=128)
+        wide = self._column_weights(_make_postprocessor(64, 256), mask_pitch=3, w=256)
+        assert torch.allclose(narrow[:, 0, :12], wide[:, 0, :12], atol=1e-6)
+
+
+class TestCrtScanlines:
+    @staticmethod
+    def _row_profile(pp, **overrides):
+        """Per-row mean brightness, on a flat grey image with everything but the scanlines switched off."""
+        settings = _crt_off()
+        settings.update(scanline_strength=0.8, scanline_weight=3.0, scanline_period=2,
+                        brightness_compensation=0.0)
+        settings.update(overrides)
+        image = torch.full((4, 64, 128), 0.5)
+        pp.crt(image, **settings)
+        return image[0].mean(dim=1)  # [h]
+
+    def test_alternate_rows_are_dimmed(self):
+        pp = _make_postprocessor()
+        profile = self._row_profile(pp, dynamic_field=False, field=0)
+        assert profile[0::2].mean() < profile[1::2].mean()
+
+    def test_the_field_alternates_between_consecutive_frames(self):
+        """Which set of rows is bright must swap, or `dynamic_field` is doing nothing."""
+        pp = _make_postprocessor()
+        pp.frame_no = 0.0
+        even_first = self._row_profile(pp, dynamic_field=True)
+        pp.frame_no = 1.0
+        even_second = self._row_profile(pp, dynamic_field=True)
+        first_bias = float(even_first[0::2].mean() - even_first[1::2].mean())
+        second_bias = float(even_second[0::2].mean() - even_second[1::2].mean())
+        assert first_bias * second_bias < 0, (f"the two frames have the same field: biases {first_bias:.4f} "
+                                              f"and {second_bias:.4f}")
+
+    def test_output_depends_on_the_value_of_frame_no_not_on_the_call_history(self):
+        """`frame_no` is wall-clock time in disguise, so a filter that counted its own calls instead would
+        drift out of step with everything else in the chain the moment a frame was dropped."""
+        pp = _make_postprocessor()
+        pp.frame_no = 4.0
+        straight_there = self._row_profile(pp, dynamic_field=True)
+        for intermediate in (1.0, 2.0, 3.0):
+            pp.frame_no = intermediate
+            self._row_profile(pp, dynamic_field=True)
+        pp.frame_no = 4.0
+        by_way_of_others = self._row_profile(pp, dynamic_field=True)
+        assert torch.equal(straight_there, by_way_of_others)
+
+
+class TestCrtAlpha:
+    """Where the beam is not writing, a hologram emits no light, so the gaps between scanlines are
+    transparent rather than dark. Alpha follows the scanline term and nothing else."""
+
+    def test_luma_mode_leaves_alpha_untouched(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        alpha_before = image[3].clone()
+        pp.crt(image, alpha_mode="luma", beam_bleed=0.0, glow_strength=0.0, persistence_tau=0.0)
+        assert torch.equal(image[3], alpha_before)
+
+    def test_both_mode_modulates_alpha(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        alpha_before = image[3].clone()
+        pp.crt(image, alpha_mode="both", beam_bleed=0.0, glow_strength=0.0, persistence_tau=0.0)
+        assert not torch.equal(image[3], alpha_before)
+
+    def test_alpha_carries_no_mask_pitch_structure(self):
+        """The screen-door regression. Dimming one channel's emitters does not make that patch of the
+        picture transparent, so alpha must not vary along a row."""
+        pp = _make_postprocessor()
+        image = torch.full((4, 64, 128), 0.5)
+        pp.crt(image, alpha_mode="both", mask_type="aperture_grille", mask_pitch=3, mask_strength=0.9,
+               beam_bleed=0.0, glow_strength=0.0, persistence_tau=0.0, corner_falloff=0.0)
+        row_variation = (image[3].max(dim=1).values - image[3].min(dim=1).values).max()
+        assert float(row_variation) < 1e-6, "alpha varies along a row, so the mask is punching holes in it"
+
+    def test_a_transparent_pixel_never_becomes_opaque(self):
+        """An RGBA frame can always be composited onto a backdrop later; writing an opaque background is
+        irrecoverable, and would destroy both the client-side backdrop and any alpha work done upstream."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        image[3, :, :] = 0.0
+        pp.crt(image, alpha_mode="both", glow_strength=0.5, beam_bleed=1.0)
+        assert float(image[3].max()) == 0.0
+
+
+class TestCrtPhosphorPersistence:
+    """The accumulator is the one piece of state in this filter, and it is the reason the rest of the
+    suite's determinism assumptions need pinning down."""
+
+    def test_off_allocates_nothing(self):
+        pp = _make_postprocessor()
+        pp.crt(_make_image(), persistence_tau=0.0)
+        assert "crt0" not in pp.crt_phosphor
+
+    def test_off_is_repeatable_at_a_fixed_frame(self):
+        pp = _make_postprocessor()
+        source = _make_image()
+        first = source.clone()
+        pp.crt(first, persistence_tau=0.0)
+        second = source.clone()
+        pp.crt(second, persistence_tau=0.0)
+        assert torch.equal(first, second)
+
+    def test_on_is_not_repeatable_at_a_fixed_frame(self):
+        """The negative control for the test above: with the accumulator engaged the second call sees the
+        first one's trail, so a fixture where both runs agreed would prove nothing about statelessness."""
+        pp = _make_postprocessor()
+        source = torch.rand(4, 64, 128)
+        first = source.clone()
+        pp.crt(first, persistence_tau=0.2)
+        pp.last_frame_no, pp.frame_no = 0.0, 1.0
+        second = source.clone()
+        pp.crt(second, persistence_tau=0.2)
+        assert not torch.equal(first, second)
+
+    def test_decay_is_per_second_not_per_frame(self):
+        """Two steps of one frame must leave the same trail as one step of two. A per-frame decay constant
+        would pass every other test here and then shorten the trail whenever the frame rate rose."""
+        def trail(steps):
+            pp = _make_postprocessor()
+            image = torch.full((4, 64, 128), 0.8)
+            pp.crt(image, persistence_tau=0.2)  # seeds the accumulator
+            previous = 0.0
+            for step in steps:
+                pp.last_frame_no, pp.frame_no = previous, step
+                pp.crt(torch.zeros(4, 64, 128), persistence_tau=0.2)
+                previous = step
+            return pp.crt_phosphor["crt0"]["acc"]
+        # Not bitwise: exp(-a) * exp(-a) and exp(-2a) are the same number and different floats.
+        assert torch.allclose(trail([1.0, 2.0]), trail([2.0]), atol=1e-6)
+
+    def test_the_accumulator_is_dropped_when_the_frame_size_changes(self):
+        """The crop can change mid-stream. A stale accumulator would be silently wrong rather than loud."""
+        pp = _make_postprocessor(64, 128)
+        pp.crt(torch.full((4, 64, 128), 0.9), persistence_tau=0.2)
+
+        pp._setup_meshgrid(32, 64)
+        pp.last_frame_no, pp.frame_no = 0.0, 1.0
+        resized = torch.full((4, 32, 64), 0.1)
+        pp.crt(resized, persistence_tau=0.2)
+        assert pp.crt_phosphor["crt0"]["shape"] == torch.Size([4, 32, 64])
+
+        stateless = torch.full((4, 32, 64), 0.1)
+        pp2 = _make_postprocessor(32, 64)
+        pp2.last_frame_no, pp2.frame_no = 0.0, 1.0
+        pp2.crt(stateless, persistence_tau=0.0)
+        assert torch.equal(resized, stateless), "the bright first frame bled into the resized one"
+
+
+# ---------------------------------------------------------------------------
 # Tests: the chain's own `enabled` parameter
 # ---------------------------------------------------------------------------
 
