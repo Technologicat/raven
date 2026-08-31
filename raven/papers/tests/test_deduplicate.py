@@ -6,6 +6,9 @@ found while building this — a serial's recurring section heading merged across
 unrelated editorials merged on the word `Editorial` — were invisible in statistics that looked correct.
 """
 
+import json
+import re
+
 import pytest
 
 from raven.papers import deduplicate as dd
@@ -942,6 +945,145 @@ class TestJudge:
         described = dd._describe_for_judge(parsed[0])
         assert "Journal of Things" in described and "10.1234/x" in described
         assert "not the judge's business" not in described
+
+
+class TestJudgeDoiFit:
+    """Deciding which of a merged work's DOIs belongs to it, with the backend replaced.
+
+    The merge is not in question here — every record below is the same paper. What is in question is that
+    one of them carries an identifier, and a journal reference, belonging to a different paper entirely.
+    """
+
+    # The live case, 2026-08-31. arXiv's metadata for eprint 2405.00291 gives the journal reference and
+    # DOI of an astronomy paper, so one export of this educational data mining paper ships with both.
+    TITLE = "How Can I Improve? Using GPT to Highlight Open-ended Responses"
+    WRONG_DOI = "10.1051/0004-6361/202349120"
+    RIGHT_DOI = "10.5281/zenodo.12729804"
+
+    SOURCE = (entry("ebsco", title=TITLE, author="Lin, Jionghao", year="2024", pages="236--250")
+              + entry("poisoned", title=TITLE, author="Lin, Jionghao", year="2024", doi=WRONG_DOI,
+                      journal="Astronomy and Astrophysics 687, A227")
+              + entry("deposit", title=TITLE, author="Lin, Jionghao", year="2024", doi=RIGHT_DOI,
+                      publisher="International Educational Data Mining Society"))
+
+    def _backend(self, verdicts_by_doi):
+        """A backend answering each item by the DOI printed in it, whatever order they came in."""
+        def fake(_settings, prompt):
+            dois = re.findall(r"\(doi (\S+) —", prompt)
+            assert dois, "the prompt must name the DOI of every item, or this fake answers nothing"
+            return json.dumps([{"i": position, "fits": verdicts_by_doi.get(doi, True), "why": "test"}
+                               for position, doi in enumerate(dois)])
+        return fake
+
+    def _cluster(self, source=None):
+        parsed = records(source if source is not None else self.SOURCE)
+        clusters = dd.cluster_records(parsed)
+        return parsed, clusters
+
+    def test_the_three_records_are_one_work_to_begin_with(self):
+        """The premise of everything below: nothing here is a question about merging."""
+        _parsed, clusters = self._cluster()
+        assert [frozenset(r.key for r in c.records) for c in clusters] == \
+            [{"ebsco", "poisoned", "deposit"}]
+
+    def test_both_dois_are_offered_for_checking(self):
+        _parsed, clusters = self._cluster()
+        assert sorted(doi for _base, _carrier, doi, _venue in dd.doi_candidates(clusters)) == \
+            [self.WRONG_DOI, self.RIGHT_DOI]
+
+    def test_a_work_whose_records_agree_about_the_doi_is_not_asked_about(self):
+        source = (entry("a", title=self.TITLE, author="Lin, J.", year="2024", doi=self.RIGHT_DOI,
+                        journal="Somewhere")
+                  + entry("b", title=self.TITLE, author="Lin, J.", year="2024", doi=self.RIGHT_DOI,
+                          journal="Somewhere Else"))
+        _parsed, clusters = self._cluster(source)
+        assert len(clusters) == 1 and len(clusters[0]) == 2, "the fixture must be one merged cluster"
+        assert dd.doi_candidates(clusters) == []
+
+    def test_a_record_naming_no_venue_is_not_asked_about(self):
+        """The question is whether the venue fits the work. With no venue there is nothing to answer."""
+        source = (entry("a", title=self.TITLE, author="Lin, J.", year="2024", doi=self.WRONG_DOI)
+                  + entry("b", title=self.TITLE, author="Lin, J.", year="2024", doi=self.RIGHT_DOI,
+                          publisher="International Educational Data Mining Society"))
+        _parsed, clusters = self._cluster(source)
+        assert [doi for _base, _carrier, doi, _venue in dd.doi_candidates(clusters)] == [self.RIGHT_DOI]
+
+    def test_a_rejected_doi_is_dropped_along_with_the_venue_it_was_judged_against(self, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", self._backend({self.WRONG_DOI: False}))
+        _parsed, clusters = self._cluster()
+        verdicts = dd.judge_doi_fit(None, dd.doi_candidates(clusters))
+        rejected = dd.rejected_dois(clusters, verdicts)
+        assert rejected == frozenset({self.WRONG_DOI})
+
+        merged, _row = dd.merge_cluster(clusters[0], rejected)
+        fields = {field.key: field.value for field in merged.fields}
+        assert fields["doi"] == self.RIGHT_DOI
+        assert "journal" not in fields, "the venue is half of the claim the judge rejected"
+        assert fields["publisher"] == "International Educational Data Mining Society"
+        assert fields["pages"] == "236--250", "the rest of the cluster is untouched"
+
+    def test_without_the_verdict_the_wrong_doi_would_have_been_kept(self):
+        """The negative control: the fixture has to reproduce the defect, or it proves nothing."""
+        _parsed, clusters = self._cluster()
+        merged, _row = dd.merge_cluster(clusters[0])
+        fields = {field.key: field.value for field in merged.fields}
+        assert fields["doi"] == self.WRONG_DOI
+        assert fields["journal"] == "Astronomy and Astrophysics 687, A227"
+
+    def test_a_work_keeps_a_doi_when_the_judge_rejects_every_one(self, monkeypatch):
+        """A model recognizing nothing is likelier than a work whose every identifier is wrong."""
+        monkeypatch.setattr(dd, "_ask_judge",
+                            self._backend({self.WRONG_DOI: False, self.RIGHT_DOI: False}))
+        _parsed, clusters = self._cluster()
+        verdicts = dd.judge_doi_fit(None, dd.doi_candidates(clusters))
+        assert all(answer["fits"] is False for answer in verdicts.values()), \
+            "the fixture must have both rejected, or the survivor guard has nothing to fire on"
+        assert dd.rejected_dois(clusters, verdicts) == frozenset()
+
+    def test_a_garbled_reply_leaves_every_doi_where_it_was(self, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: "I would rather not say.")
+        _parsed, clusters = self._cluster()
+        verdicts = dd.judge_doi_fit(None, dd.doi_candidates(clusters))
+        assert dd.rejected_dois(clusters, verdicts) == frozenset()
+
+    def test_an_answer_omitting_fits_is_read_as_fits(self, monkeypatch):
+        """Every unclear case falls toward keeping the identifier somebody's bibliography already has."""
+        monkeypatch.setattr(dd, "_ask_judge", lambda _s, _p: '[{"i": 0, "why": "no idea"}]')
+        _parsed, clusters = self._cluster()
+        verdicts = dd.judge_doi_fit(None, dd.doi_candidates(clusters))
+        assert dd.rejected_dois(clusters, verdicts) == frozenset()
+
+    def test_the_audit_row_says_which_doi_was_dropped(self, monkeypatch):
+        monkeypatch.setattr(dd, "_ask_judge", self._backend({self.WRONG_DOI: False}))
+        _parsed, clusters = self._cluster()
+        verdicts = dd.judge_doi_fit(None, dd.doi_candidates(clusters))
+        _merged, row = dd.merge_cluster(clusters[0], dd.rejected_dois(clusters, verdicts))
+        assert any(self.WRONG_DOI in difference and "dropped" in difference
+                   for difference in row.differences)
+
+    def test_a_rerun_asks_nothing_it_has_already_asked(self, tmp_path, monkeypatch):
+        state = tmp_path / "judge.jsonl"
+        monkeypatch.setattr(dd, "_ask_judge", self._backend({self.WRONG_DOI: False}))
+        _parsed, clusters = self._cluster()
+        candidates = dd.doi_candidates(clusters)
+        dd.judge_doi_fit(None, candidates, state)
+        asked = state.read_text(encoding="utf-8").count("\n")
+
+        monkeypatch.setattr(dd, "_ask_judge", _refuse_to_be_called)
+        again = dd.judge_doi_fit(None, candidates, state)
+        assert state.read_text(encoding="utf-8").count("\n") == asked
+        assert again[self.WRONG_DOI]["fits"] is False
+
+    def test_a_state_file_written_before_this_question_existed_still_resumes(self, tmp_path):
+        """Pair answers were keyed by `pair` alone until DOI questions needed an `id` beside it."""
+        state = tmp_path / "judge.jsonl"
+        state.write_text(json.dumps({"pair": "a\tb", "same": True, "why": "old"}) + "\n",
+                         encoding="utf-8")
+        assert dd._load_judge_state(state) == {"a\tb": {"pair": "a\tb", "same": True, "why": "old"}}
+
+
+def _refuse_to_be_called(_settings, _prompt):
+    raise AssertionError("the backend was asked a question the state file had already answered")
 
 
 class TestWholeRun:

@@ -205,6 +205,50 @@ Items:
 {items}
 """
 
+# What the judge is asked about a DOI that may belong to a different paper. Yours to edit — the shape it
+# has to keep is the JSON array of `{i, fits, why}` objects that `deduplicate.judge_doi_batch` reads back.
+#
+# **It asks about the venue and never about the identifier**, which is the whole reason this question can
+# be put to a model at all. A DOI is opaque: nothing about `10.1051/0004-6361/202349120` says astronomy to
+# a reader who does not already know, and a model asked what it resolves to will answer confidently from a
+# claim it cannot support — the failure `judge_instructions` closes with its last paragraph. The venue
+# printed beside it is something the record actually states, and whether an astronomy journal is a
+# plausible home for a paper about tutoring feedback is an ordinary judgement about two pieces of text.
+#
+# The instructions lean hard toward `fits`, deliberately. A wrong `false` deletes a correct identifier
+# from somebody's bibliography, where a wrong `true` merely leaves things as they were; and the venues in
+# a real corpus are mostly obscure, interdisciplinary, or a bare publisher name, none of which is evidence
+# of anything.
+judge_doi_instructions = """\
+You are checking a bibliography for identifiers attached to the wrong paper. This happens: a database \
+mismatches a record, or an author pastes the wrong journal reference into a preprint submission, and a \
+record ends up carrying the identifier and the venue of a completely different paper.
+
+For each numbered item you are given a work — its title, authors and year — and ONE venue that a record \
+claims for it. Decide whether that venue is a plausible place for that work to have been published.
+
+Judge the VENUE against the WORK. The DOI is shown only so that you can name it back. It is not \
+evidence: you cannot know what it resolves to, and a guess dressed as recognition is worse than no \
+answer.
+
+Answer "fits": false ONLY when the venue is clearly about a different subject than the work — an \
+astronomy journal for a paper about classroom assessment, a chemistry journal for a paper about software \
+testing. Anything else fits. A venue that is general, interdisciplinary, unknown to you, or simply a \
+publisher's name FITS: those are ordinary, and a wrong "false" deletes a correct identifier from \
+somebody's bibliography.
+
+For each item, answer:
+  "i"      the item's number, copied exactly
+  "fits"   true if the venue is a plausible home for the work, false if it is clearly about something else
+  "why"    at most fifteen words, the evidence you used
+
+Answer with a JSON array of objects and nothing else. One object per item, in order, no commentary, no \
+markdown fences.
+
+Items:
+{items}
+"""
+
 # --------------------------------------------------------------------------------
 # The audit trail
 

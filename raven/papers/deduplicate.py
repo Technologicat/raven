@@ -74,6 +74,8 @@ __all__ = ["normalize_doi", "normalize_title", "is_generic_title",
 
            "judge_batch", "judge_pairs",
 
+           "doi_candidates", "judge_doi_batch", "judge_doi_fit", "rejected_dois",
+
            "AUDIT_COLUMNS", "AuditRow", "merge_cluster", "deduplicate", "write_audit",
 
            "main"]
@@ -844,8 +846,13 @@ def _load_judge_state(path: pathlib.Path) -> dict[str, dict]:
             answer = json.loads(line)
         except json.JSONDecodeError:
             continue  # a run killed mid-write leaves a partial last line; the pair is simply re-asked
-        if isinstance(answer, dict) and "pair" in answer:
-            state[answer["pair"]] = answer
+        if not isinstance(answer, dict):
+            continue
+        # `pair` is what the pair pass wrote before there was a second kind of question, and files
+        # written then must go on resuming; `id` is what both passes write now.
+        identifier = answer.get("id") or answer.get("pair")
+        if identifier:
+            state[identifier] = answer
     return state
 
 
@@ -891,9 +898,9 @@ def judge_pairs(llm_settings,
         for position, (a, b, why) in enumerate(chunk):
             if position not in answers:
                 continue
-            answer = dict(answers[position], pair=_pair_id(a, b), asked=why,
+            answer = dict(answers[position], id=_pair_id(a, b), pair=_pair_id(a, b), asked=why,
                           keys=[a.key, b.key], titles=[a.display_title, b.display_title])
-            done[answer["pair"]] = answer
+            done[answer["id"]] = answer
             if maybe_state_path is not None:
                 with maybe_state_path.open("a", encoding="utf-8") as stream:
                     stream.write(json.dumps(answer, ensure_ascii=False) + "\n")
@@ -908,6 +915,153 @@ def judge_pairs(llm_settings,
         same = bool(answer.get("same")) and _judge_admits(a, b)
         verdicts[(min(a.index, b.index), max(a.index, b.index))] = same
     return verdicts
+
+
+def _venue_of(record: Record) -> str | None:
+    """What a record says about where it was published, or `None` where it says nothing.
+
+    First of `journal`, `booktitle`, `publisher` that has a value — the order they carry the answer in,
+    most specific first.
+    """
+    for name in ("journal", "booktitle", "publisher"):
+        value = record.field(name)
+        if value:
+            return _tsv_cell(value)[:200]
+    return None
+
+
+def doi_candidates(clusters: list[Cluster]) -> list[tuple[Record, Record, str, str]]:
+    """`(base, carrier, doi, venue)` for each DOI worth checking against the work that carries it.
+
+    Only clusters whose records disagree about the DOI, since a cluster where every record names the same
+    identifier has nothing to choose between. This is a different question from the one
+    `conflicting_clusters` feeds: that one asks whether the records are one work, and this one takes the
+    answer as yes and asks which of the identifiers on it is real.
+
+    **A record naming no venue is not asked about.** The question is whether the venue fits the work, so
+    a record that states no venue offers nothing to answer it with, and asking anyway would invite the
+    model to answer from the identifier — the one thing it cannot read.
+    """
+    candidates = []
+    for cluster in conflicting_clusters(clusters):
+        base = cluster.records[0]
+        seen = set()
+        for record in cluster.records:
+            if record.doi is None or record.doi in seen:
+                continue
+            venue = _venue_of(record)
+            if venue is None:
+                continue
+            seen.add(record.doi)
+            candidates.append((base, record, record.doi, venue))
+    return candidates
+
+
+def _describe_work_for_judge(record: Record) -> str:
+    """The work a DOI is being checked against: what it is, and nothing about where it was published."""
+    parts = [f"title: {record.display_title or '(none)'}"]
+    for label, name in (("authors", "author"), ("year", "year")):
+        value = record.field(name)
+        if value:
+            parts.append(f"{label}: {_tsv_cell(value)[:200]}")
+    return "\n".join(f"      {part}" for part in parts)
+
+
+def _doi_id(record: Record, doi: str) -> str:
+    """A stable name for one `(record, DOI)` question, so a resumed run recognizes what it already asked."""
+    return f"{record.key}\t{doi}"
+
+
+def judge_doi_batch(llm_settings, batch: list[tuple[str, str, str, str]]) -> dict[int, dict]:
+    """Ask about one batch of `(id, work, venue, doi)`. Returns `{position: answer}`.
+
+    An answer that does not parse, or that omits `fits`, is read as **fits** rather than as a rejection.
+    Every unclear case has to fall that way: the action a rejection triggers is dropping an identifier
+    from a merged record, and a garbled reply is not grounds for doing that to somebody's bibliography.
+    """
+    items = "\n\n".join(f"{position}.\n    WORK:\n{work}\n"
+                        f"    claimed venue: {venue}\n"
+                        f"    (doi {doi} — shown only so you can name it back)"
+                        for position, (_id, work, venue, doi) in enumerate(batch))
+    answers = _parse_json_payload(_ask_judge(llm_settings,
+                                             papers_config.judge_doi_instructions.format(items=items)))
+    if not isinstance(answers, list):
+        raise ValueError(f"expected a JSON array, got {type(answers).__name__}")
+
+    resolved = {}
+    for answer in answers:
+        if not isinstance(answer, dict) or "i" not in answer:
+            continue
+        try:
+            position = int(answer["i"])
+        except (TypeError, ValueError):
+            continue
+        if 0 <= position < len(batch):
+            resolved[position] = {"fits": answer.get("fits") is not False,
+                                  "why": str(answer.get("why") or "").strip()}
+    return resolved
+
+
+def judge_doi_fit(llm_settings,
+                  candidates: list[tuple[Record, Record, str, str]],
+                  maybe_state_path: pathlib.Path | None = None,
+                  on_progress=None) -> dict[str, dict]:
+    """Ask whether each candidate DOI's venue fits the work, returning `{doi: answer}`.
+
+    Resumable the same way `judge_pairs` is, into the same JSONL and keyed the same way, so one state
+    file holds both kinds of question and a re-run asks neither of them twice.
+
+    A candidate the model does not answer at all is simply absent from the result, which leaves the DOI
+    where it was — the direction every unanswered question falls in this module.
+    """
+    done = _load_judge_state(maybe_state_path) if maybe_state_path else {}
+    todo = [(base, carrier, doi, venue) for base, carrier, doi, venue in candidates
+            if _doi_id(carrier, doi) not in done]
+
+    for start in range(0, len(todo), papers_config.judge_batch):
+        chunk = todo[start:start + papers_config.judge_batch]
+        batch = [(_doi_id(carrier, doi), _describe_work_for_judge(base), venue, doi)
+                 for base, carrier, doi, venue in chunk]
+        try:
+            answers = judge_doi_batch(llm_settings, batch)
+        except Exception as exc:  # noqa: BLE001 -- a failed batch is a result: re-running is the retry
+            logger.warning(f"judge_doi_fit: batch at {start} failed, {type(exc)}: {exc}")
+            answers = {}
+        for position, (base, carrier, doi, venue) in enumerate(chunk):
+            if position not in answers:
+                continue
+            answer = dict(answers[position], id=_doi_id(carrier, doi), asked="venue",
+                          key=carrier.key, doi=doi, venue=venue, title=base.display_title)
+            done[answer["id"]] = answer
+            if maybe_state_path is not None:
+                with maybe_state_path.open("a", encoding="utf-8") as stream:
+                    stream.write(json.dumps(answer, ensure_ascii=False) + "\n")
+        if on_progress is not None:
+            on_progress(min(start + papers_config.judge_batch, len(todo)), len(todo))
+
+    verdicts = {}
+    for _base, carrier, doi, _venue in candidates:
+        answer = done.get(_doi_id(carrier, doi))
+        if answer is not None and "fits" in answer:
+            verdicts[doi] = answer
+    return verdicts
+
+
+def rejected_dois(clusters: list[Cluster], verdicts: dict[str, dict]) -> frozenset[str]:
+    """The DOIs a merge may drop, given the judge's per-DOI verdicts.
+
+    **A cluster must keep at least one DOI.** Where every identifier on a work is rejected, none of them
+    is dropped: that is a model saying it recognizes nothing rather than a bibliography where every DOI
+    is wrong, and acting on it would strip a merged record of the only identifier it had. Same shape as
+    `_judge_admits` — the model proposes, and what may be done with the proposal is decided here.
+    """
+    rejected = set()
+    for cluster in clusters:
+        dois = {record.doi for record in cluster.records if record.doi}
+        refused = {doi for doi in dois if verdicts.get(doi, {}).get("fits") is False}
+        if refused and dois - refused:
+            rejected |= refused
+    return frozenset(rejected)
 
 
 def _judge_state_path(opts) -> pathlib.Path | None:
@@ -926,8 +1080,18 @@ def _judge_state_path(opts) -> pathlib.Path | None:
     return path.with_name(f"{path.stem}_judge.jsonl")
 
 
-def _apply_judge(records: list[Record], clusters: list[Cluster], opts) -> list[Cluster]:
-    """Run the opt-in judge pass and return the re-clustered result. CLI glue for `judge_pairs`."""
+def _apply_judge(records: list[Record],
+                 clusters: list[Cluster],
+                 opts) -> tuple[list[Cluster], frozenset[str]]:
+    """Run the opt-in judge passes. CLI glue for `judge_pairs` and `judge_doi_fit`.
+
+    Returns `(clusters, rejected)` — the re-clustered result, and the DOIs a merge may drop.
+
+    Two questions, asked in this order because the second depends on the first: which records are one
+    work, and then, of the identifiers on a work, which one actually belongs to it. Re-clustering happens
+    in between, so a cluster the judge has just taken apart is never asked the second question about
+    identifiers it no longer holds together.
+    """
     from ..librarian import config as librarian_config, llmclient
 
     fuzzy = fuzzy_candidates(records, clusters)
@@ -944,8 +1108,8 @@ def _apply_judge(records: list[Record], clusters: list[Cluster], opts) -> list[C
     pairs = [(a, b, "fuzzy") for a, b in fuzzy] + conflicts
     print(f"judge: {len(fuzzy)} near-miss pair(s), {len(conflicts)} DOI-disagreement pair(s)"
           + (f", {settled} settled by rule and not asked about" if settled else ""))
-    if not pairs:
-        return clusters
+    if not pairs and not doi_candidates(clusters):
+        return clusters, frozenset()
 
     backend_url = opts.backend_url or librarian_config.llm_backend_url
     # Stop here rather than at the first batch: this run can take a while, and a precise diagnosis now
@@ -963,20 +1127,38 @@ def _apply_judge(records: list[Record], clusters: list[Cluster], opts) -> list[C
     print(f"judge: {llm_settings.model} at {backend_url}")
 
     state_path = _judge_state_path(opts)
-    verdicts = judge_pairs(llm_settings, pairs, state_path,
-                           on_progress=lambda done, total: print(f"  judged {done}/{total}", flush=True))
+    progress = lambda done, total: print(f"  judged {done}/{total}", flush=True)  # noqa: E731 -- one name, two call sites
 
-    was_together = {}
-    for position, cluster in enumerate(clusters):
-        for record in cluster.records:
-            was_together[record.index] = position
-    merges = sum(1 for (i, j), same in verdicts.items()
-                 if same and was_together[i] != was_together[j])
-    splits = sum(1 for same in verdicts.values() if not same)
-    print(f"judge: {merges} pair(s) newly merged, {splits} pair(s) refused")
+    if pairs:
+        verdicts = judge_pairs(llm_settings, pairs, state_path, on_progress=progress)
+        was_together = {}
+        for position, cluster in enumerate(clusters):
+            for record in cluster.records:
+                was_together[record.index] = position
+        merges = sum(1 for (i, j), same in verdicts.items()
+                     if same and was_together[i] != was_together[j])
+        splits = sum(1 for same in verdicts.values() if not same)
+        print(f"judge: {merges} pair(s) newly merged, {splits} pair(s) refused")
+        clusters = cluster_records(records, verdicts)
+
+    # Recomputed against the clusters as they now stand, which is why this is not hoisted above: a merge
+    # the judge has just refused takes its DOI disagreement with it, and asking about identifiers on a
+    # work that no longer exists would spend a model call to reject a DOI from nothing.
+    candidates = doi_candidates(clusters)
+    rejected = frozenset()
+    if candidates:
+        print(f"judge: {len(candidates)} DOI(s) to check against the venue claimed for them")
+        doi_verdicts = judge_doi_fit(llm_settings, candidates, state_path, on_progress=progress)
+        rejected = rejected_dois(clusters, doi_verdicts)
+        for doi in sorted(rejected):
+            why = doi_verdicts[doi].get("why") or "the venue does not fit the work"
+            print(f"judge: dropping {doi} — {why}")
+        if not rejected:
+            print("judge: every DOI checked fits the work carrying it")
+
     if state_path is not None:
         print(f"judge: answers in {state_path}")
-    return cluster_records(records, verdicts)
+    return clusters, rejected
 
 
 # --------------------------------------------------------------------------------
@@ -1079,11 +1261,24 @@ def _best_abstract(cluster: Cluster) -> tuple[str | None, list[str]]:
     return best_raw, losers
 
 
-def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
+# What a rejected DOI takes down with it. The judge's question is whether *this venue* is a plausible home
+# for *this work*, so a `false` condemns the venue and the identifier together — they are one claim, made
+# by one record, and keeping half of it would leave a merged entry citing an astronomy journal for a paper
+# about tutoring. The rest of that record's fields are untouched: nothing about a mispasted journal
+# reference says its title or its authors are wrong, and in the case this was built for they were right.
+_VENUE_FIELDS = ("journal", "booktitle", "publisher")
+
+
+def merge_cluster(cluster: Cluster, rejected: frozenset[str] = frozenset()) -> tuple[Entry, AuditRow | None]:
     """Merge one cluster into a single entry, and say what that cost.
 
     Returns `(entry, maybe_audit_row)`. A cluster of one is returned unchanged with no audit row, since
     nothing happened to it.
+
+    `rejected`: DOIs the judge found attached to a work they do not belong to (`rejected_dois`), empty
+                unless `--judge` ran. A record whose DOI is in here contributes neither that DOI nor the
+                venue it was judged against, and the audit row says which was dropped and why. Everything
+                else that record holds is used as usual.
 
     The base is `cluster.records[0]`; every field it lacks is filled from the first twin that has one, in
     the same preference order. A field the base already has is never overwritten, with two exceptions:
@@ -1102,10 +1297,14 @@ def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
 
     fields: dict[str, str] = {}
     for record in cluster.records:
+        condemned = record.doi is not None and record.doi in rejected
         for field in record.entry.fields:
             value = _field_value(record.entry, field.key)
-            if value is not None and field.key not in fields:
-                fields[field.key] = value
+            if value is None or field.key in fields:
+                continue
+            if condemned and field.key in ("doi",) + _VENUE_FIELDS:
+                continue
+            fields[field.key] = value
 
     maybe_abstract, abstract_losers = _best_abstract(cluster)
     if maybe_abstract is not None:
@@ -1132,6 +1331,10 @@ def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
 
     differences = [f"abstract: kept {_clip(maybe_abstract or '')} / dropped {_clip(text)}"
                    for text in abstract_losers]
+    for record in cluster.records:
+        if record.doi is not None and record.doi in rejected:
+            differences.append(f"doi: dropped {record.doi} from `{record.key}` — the judge found its "
+                               f"venue does not fit this work")
     for record in cluster.records[1:]:
         for field in record.entry.fields:
             value = _field_value(record.entry, field.key)
@@ -1151,16 +1354,19 @@ def merge_cluster(cluster: Cluster) -> tuple[Entry, AuditRow | None]:
     return merged, row
 
 
-def deduplicate(clusters: list[Cluster]) -> tuple[Library, list[AuditRow]]:
+def deduplicate(clusters: list[Cluster],
+                rejected: frozenset[str] = frozenset()) -> tuple[Library, list[AuditRow]]:
     """Merge every cluster, returning the deduplicated library and the audit rows for what merged.
 
     One entry per cluster, in cluster order, so the output is in the reading order of the input. A cluster
     of one contributes no audit row: nothing happened to it.
+
+    `rejected`: passed through to `merge_cluster`, which see.
     """
     library = Library()
     rows = []
     for cluster in clusters:
-        entry, maybe_row = merge_cluster(cluster)
+        entry, maybe_row = merge_cluster(cluster, rejected)
         library.add(entry)
         if maybe_row is not None:
             rows.append(maybe_row)
@@ -1273,12 +1479,13 @@ def main() -> None:  # pragma: no cover
         sys.exit(1)
 
     clusters = cluster_records(records)
+    rejected = frozenset()
     if opts.judge:
-        clusters = _apply_judge(records, clusters, opts)
+        clusters, rejected = _apply_judge(records, clusters, opts)
 
     _report(records, clusters, unreadable)
 
-    library, rows = deduplicate(clusters)
+    library, rows = deduplicate(clusters, rejected)
 
     if opts.audit:
         audit_path = pathlib.Path(opts.audit).expanduser().resolve()
