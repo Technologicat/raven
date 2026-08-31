@@ -236,6 +236,39 @@ def test_dehyphenate_list_input(dehyphenator):
     out = nlptools.dehyphenate(dehyphenator, ["x", "y"])
     assert out == ["x", "y"]
 
+def test_dehyphenate_survives_whitespace_only_lines(dehyphenator):
+    # A line holding only spaces or tabs is not the empty line `dehyphen` splits paragraphs on, so
+    # it reaches the formatter and splits into no words at all. That crashed the importer on a real
+    # BibTeX abstract. Both positions are checked because they fail differently inside `dehyphen`:
+    # a whitespace line in the middle raised `IndexError`, one at the end raised `AssertionError`,
+    # and a guard could plausibly fix either alone.
+    middle = "The first line of text.\n   \nThe last line of text."
+    trailing = "The first line of text.\nThe last line of text.\n   "
+    for broken in (middle, trailing):
+        out = nlptools.dehyphenate(dehyphenator, broken)
+        assert isinstance(out, str)
+        assert "The first line of text." in out
+        assert "The last line of text." in out
+
+def test_dehyphenate_survives_paragraph_join_emptying_a_line(dehyphenator):
+    # When `dehyphen` judges two paragraphs to be one sentence broken across a hyphen, it moves the
+    # first word of the second onto the end of the first with `pop(0)`. A line that held only that
+    # word is left with no words in it, and `dehyphen`'s own `assert_format` then rejects the result
+    # it just produced -- but only once there is a third paragraph, because nothing re-inspects the
+    # combined paragraph until it is joined again. One real BibTeX abstract in 2518 hit this.
+    #
+    # The two cases below are negative controls, and both are needed: each removes one of the two
+    # conditions, and a fixture missing either would pass against the unfixed code.
+    crashed = "Some introductory text with eval-\n\nuation\nof the method here\n\nA third paragraph follows."
+    only_two_paragraphs = "Some introductory text with eval-\n\nuation\nof the method here"
+    second_paragraph_starts_with_several_words = ("Some introductory text with eval-\n\n"
+                                                  "uation of the method here\nmore text\n\n"
+                                                  "A third paragraph follows.")
+    for text in (crashed, only_two_paragraphs, second_paragraph_starts_with_several_words):
+        out = nlptools.dehyphenate(dehyphenator, text)
+        assert isinstance(out, str)
+        assert "evaluation" in out, f"the hyphen-broken word should still be rejoined: {out!r}"
+
 def test_dehyphenate_fixes_broken_word(dehyphenator):
     # A hyphen-broken paragraph should get reassembled. We don't assert an exact
     # string (the model's perplexity-based joiner has minor leeway), just that

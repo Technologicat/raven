@@ -456,6 +456,17 @@ def _join_paragraphs(scorer: dehyphen.FlairScorer, candidate_paragraphs: List[st
 
             combined = scorer.is_split_paragraph(candidate1, candidate2)
 
+            # Drop lines that `is_split_paragraph` has emptied. When it decides the two paragraphs are
+            # one sentence broken across a hyphen, it moves the first word of `candidate2` onto the end
+            # of `candidate1` with `pop(0)` - and a line that held only that word is left with no words
+            # in it. `dehyphen` removes such lines when its own paragraph pass creates them, but not
+            # here, while its `assert_format` rejects them; so the next round trip through
+            # `is_split_paragraph` fails on input that `is_split_paragraph` itself produced. An empty
+            # line contributes nothing to the rendered text, because each line is emitted as the words
+            # in it joined by spaces - so dropping it changes only whether we crash.
+            if combined is not None:
+                combined = [line for line in combined if len(line) > 0]
+
             # # DEBUG
             # print("-" * 80)
             # print(f"combined: {combined}")  # essentially `candidate1 + candidate2` (if `dehyphen` thinks it wasn't complete) or `None` (if it thinks it was complete)
@@ -505,6 +516,17 @@ def dehyphenate(scorer: dehyphen.FlairScorer, text: Union[str, List[str]]) -> Un
             return text
         if text.count("\n") <= 1:  # Don't send a single line - there's nothing to fix.
             return text
+        # Blank out lines that hold nothing but whitespace, because `dehyphen` cannot survive them.
+        # It ends paragraphs on lines that are exactly empty, so a line of spaces or tabs stays
+        # inside its paragraph, and then splits into no words at all. That empty word list crashes
+        # `dehyphen` two different ways depending on where it sits: `IndexError` from the trailing-
+        # space step in `paragraph_to_format` anywhere but last, and its own `assert_format` when
+        # last. Blanking them makes them the paragraph breaks they already look like.
+        #
+        # We segment with `splitlines`, as `dehyphen` itself does, so the guard cannot disagree with
+        # it about where the lines are; that also normalizes exotic line breaks (`\r\n`, form feed)
+        # to `\n`, which is in keeping with a function whose job is reflowing text anyway.
+        text = "\n".join(line if line.strip() else "" for line in text.splitlines())
         data = dehyphen.text_to_format(text)
         data = scorer.dehyphen(data)
         data = _join_paragraphs(scorer, data)
