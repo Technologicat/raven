@@ -1629,6 +1629,44 @@ class TestAtmosphericDustPathIndependence:
             "from a frozen one")
 
 
+class TestAtmosphericDustDrift:
+    """`drift_jitter_x` and `drift_jitter_y` spread the particle velocities independently.
+
+    The two were one parameter until the field was first tuned by eye, and the collapsed version
+    passes every other test in this file - so this is the only thing standing between the axes and
+    being quietly rejoined by a later edit.
+    """
+
+    def _marginals(self, frame_no, **settings):
+        """Light summed along each axis: how much of it is in each row, and in each column.
+
+        Under motion that is purely horizontal every particle keeps its rows, so the row marginal
+        survives and the column marginal does not - and the other way round for vertical motion.
+        That asymmetry is what makes the two axes separately observable from a rendered frame.
+        """
+        image, _ = _dust_at(frame_no, h=128, w=192, count=400,
+                            drift_x=0.0, drift_y=0.0, sway_amplitude=0.0, **_steady(), **settings)
+        light = (image[:3] * image[3:4]).sum(dim=0)
+        return light.sum(dim=1), light.sum(dim=0)
+
+    @staticmethod
+    def _agreement(a, b):
+        a, b = a - a.mean(), b - b.mean()
+        return float((a * b).sum() / (a.norm() * b.norm()))
+
+    def test_each_axis_scatters_only_along_itself(self):
+        for label, axis in (("drift_jitter_x", dict(drift_jitter_x=0.3, drift_jitter_y=0.0)),
+                            ("drift_jitter_y", dict(drift_jitter_x=0.0, drift_jitter_y=0.3))):
+            rows_before, cols_before = self._marginals(0.0, **axis)
+            rows_after, cols_after = self._marginals(250.0, **axis)  # ten seconds on
+            rows = self._agreement(rows_before, rows_after)
+            cols = self._agreement(cols_before, cols_after)
+            held, moved = (rows, cols) if label == "drift_jitter_x" else (cols, rows)
+            assert held > 0.8, f"{label} moved the particles across its own axis as well ({held:.3f})"
+            assert moved < 0.5, (f"{label} barely moved anything ({moved:.3f}), so this fixture cannot "
+                                 f"tell it from the other axis")
+
+
 class TestAtmosphericDustEnergy:
     """Defocus spreads a mote's light over a larger area; it does not create or destroy any.
 
@@ -1696,7 +1734,8 @@ class TestAtmosphericDustWrapping:
 
     def test_a_wrapping_particle_is_invisible_at_the_moment_it_wraps(self):
         one_particle = dict(count=1, seed=3, depth_near=1.0, depth_far=1.0, size=6.0, aperture=0.0,
-                            drift_x=0.05, drift_y=0.0, drift_jitter=0.0, sway_amplitude=0.0)
+                            drift_x=0.05, drift_y=0.0, drift_jitter_x=0.0, drift_jitter_y=0.0,
+                            sway_amplitude=0.0)
         pp = None
         flux = []
         for step in range(600):

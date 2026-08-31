@@ -757,14 +757,15 @@ class Postprocessor:
     @with_metadata(count=[0, 2000],
                    seed=[0, 2**31 - 1],
                    size=[0.2, 8.0],
-                   depth_near=[0.05, 1.0],
+                   depth_near=[0.05, 4.0],
                    depth_far=[0.05, 4.0],
                    focal_plane=[0.05, 4.0],
                    character_depth=[0.05, 4.0],
                    aperture=[0.0, 30.0],
                    drift_x=[-0.2, 0.2],
                    drift_y=[-0.2, 0.2],
-                   drift_jitter=[0.0, 1.0],
+                   drift_jitter_x=[0.0, 0.5],
+                   drift_jitter_y=[0.0, 0.5],
                    sway_amplitude=[0.0, 0.1],
                    sway_frequency=[0.0, 1.0],
                    tumble_rate=[0.0, 8.0],
@@ -778,17 +779,18 @@ class Postprocessor:
                    name=["!ignore"],
                    _priority=-2.0)
     def atmospheric_dust(self, image: torch.tensor, *,
-                         count: int = 250,
+                         count: int = 50,
                          seed: int = 42,
-                         size: float = 1.5,
-                         depth_near: float = 0.25,
+                         size: float = 3.75,
+                         depth_near: float = 1.0,
                          depth_far: float = 1.75,
                          focal_plane: float = 1.0,
                          character_depth: float = 1.0,
-                         aperture: float = 6.0,
+                         aperture: float = 0.4,
                          drift_x: float = 0.012,
                          drift_y: float = 0.020,
-                         drift_jitter: float = 0.4,
+                         drift_jitter_x: float = 0.10,
+                         drift_jitter_y: float = 0.05,
                          sway_amplitude: float = 0.012,
                          sway_frequency: float = 0.15,
                          tumble_rate: float = 1.2,
@@ -825,7 +827,11 @@ class Postprocessor:
                 catches four times the light. That is the physics, and it is the reason a small change
                 here goes further than expected.
         `depth_near`, `depth_far`: The depth range the particles are spread over. Smaller is nearer.
-                                   A wide range gives strong parallax and a wide spread of sizes.
+                                   A wide range gives strong parallax and a wide spread of sizes, and
+                                   the two are the same lever: screen speed goes as 1/depth, so
+                                   bringing the near end forward is what makes motes hurry across the
+                                   frame. The default range starts at `character_depth`, which puts
+                                   the whole field behind the character and keeps it unhurried.
         `focal_plane`: The depth that is in focus. Particles away from it defocus in both directions.
         `character_depth`: Which side of the character a particle is on. Particles behind it are
                            occluded by it; particles in front of it are drawn over it.
@@ -844,7 +850,9 @@ class Postprocessor:
         `drift_x`, `drift_y`: Mean drift velocity, in normalized units per second. Positive `drift_y`
                               is downward. Screen speed goes as 1/depth, so near particles sweep past
                               while far ones barely move.
-        `drift_jitter`: How much each particle's own direction deviates from the mean.
+        `drift_jitter_x`, `drift_jitter_y`: How far each particle's own velocity deviates from the mean,
+                                            per axis. Split so the spread can be anisotropic, which the
+                                            defaults are: about twice as much sideways as vertically.
         `sway_amplitude`, `sway_frequency`: A horizontal sinusoidal wander on top of the drift, in
                                             normalized units and Hz. This is the entire "physics" -
                                             there is no airflow simulation here and there will not be.
@@ -894,9 +902,9 @@ class Postprocessor:
         # particle buffer. FPS independence, resolution independence and reproducibility all fall out
         # of that, and there is nothing to invalidate when the crop changes mid-stream. Screen velocity
         # goes as 1/z, which is the pinhole projection of a constant world-space velocity.
-        u = (p["x0"] + (drift_x + p["vx"] * drift_jitter) * t / z
+        u = (p["x0"] + (drift_x + p["vx"] * drift_jitter_x) * t / z
              + sway_amplitude * p["sway_a"] * torch.sin(2.0 * math.pi * sway_frequency * p["sway_f"] * t + p["sway_phase"]))
-        v = p["y0"] + (drift_y + p["vy"] * drift_jitter) * t / z
+        v = p["y0"] + (drift_y + p["vy"] * drift_jitter_y) * t / z
 
         # Wrap outside the visible area rather than at its edge, by the largest splat radius. Wrapping
         # at the edge would pop a big bokeh disc into existence in full view; out here a particle is

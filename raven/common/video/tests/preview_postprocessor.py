@@ -44,12 +44,14 @@ VARIANTS = {
     "atmospheric_dust": [
         ("off", dict(count=0)),
         ("defaults", dict()),
-        ("sharp (aperture 0)", dict(aperture=0.0)),
-        ("wide aperture 14", dict(aperture=14.0)),
-        ("dense, count 800", dict(count=800)),
+        ("dense, count 250", dict(count=250)),
         ("soft shimmer, exp 6", dict(glint_exponent=6.0)),
         ("sharp flashes, exp 120", dict(glint_exponent=120.0)),
-        ("focus racked to 0.35", dict(focal_plane=0.35)),
+        # The defaults keep the field behind the character and nearly in focus. These two reach the
+        # other regime: bring the near end forward and the motes are large, fast, and in front.
+        ("field brought forward", dict(depth_near=0.25)),
+        ("...and defocused, aperture 6", dict(depth_near=0.25, aperture=6.0)),
+        ("focus racked to the far end", dict(focal_plane=1.75, aperture=6.0)),
     ],
     "crt": [
         ("off", dict(scanline_strength=0.0, mask_type="none", corner_falloff=0.0,
