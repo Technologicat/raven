@@ -217,6 +217,13 @@ on the Librarian backend).
 | `raven-qoi2png` | image format conversion |
 | `raven-check-cuda`, `raven-check-audio-devices` | environment diagnostics |
 
+**Two instruments are not console scripts and are easy to miss**, because they live inside the package
+tree rather than in `scripts/`: `python -m raven.common.video.tests.bench_postprocessor` costs each
+postprocessor filter on the GPU, and `...preview_postprocessor <filter> --crop` renders a still through
+one at several settings side by side. The second exists because the postprocessor's tests are contract
+tests and cannot see whether a filter *looks* right — which is where its defects have actually lived.
+`raven/common/video/tests/README.md` indexes both.
+
 **To see what an app is doing, use its own flags: `--log-level DEBUG` and `--log PATH`.** Every app with a
 frontend takes both — the GUI apps (pose editor, settings editor, cherrypick, conference timer, librarian,
 visualizer, xdot viewer), `raven-minichat` (a terminal REPL, not a GUI), the visualizer's importer CLI, and
