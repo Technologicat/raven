@@ -13,14 +13,30 @@ afternoon.
 | File | What it answers |
 |---|---|
 | `audit_rules.py` | What each clustering, merging and stripping rule did to a given `.bib`, in six sections meant to be read rather than totalled. `python audit_rules.py search.bib [--limit N]`; writes nothing. |
+| `doi_calibration.py` | Where `config.doi_title_floor` can go, and why the guard it serves needs a second condition beside it. `python doi_calibration.py search.bib`; writes nothing. |
 
 ```bash
 python audit_rules.py path/to/search.bib --limit 20
+python doi_calibration.py path/to/search.bib
 ```
 
-Reads through `raven-fixbib`'s repair exactly as the tool does, so its counts are the tool's counts. Point
-it at any bibliography; nothing here is specific to the corpus this was built against, and that corpus is
-not committed — it is a search export and this repository is public.
+Both read through `raven-fixbib`'s repair exactly as the tool does, so their counts are the tool's counts.
+Point them at any bibliography; nothing here is specific to the corpus this was built against, and that
+corpus is not committed — it is a search export and this repository is public.
+
+## Why the calibration is a script and not a note
+
+`doi_calibration.py` produced a number that is now in `raven.papers.config`, and the temptation was to
+write the number down and throw the script away. What the script holds that a note cannot is the *shape*
+of the evidence: a distribution, a counter-example that no corpus of correct records can supply, and the
+seven hundredths between them that make a title threshold alone impossible to place. Anyone moving
+`doi_title_floor` — for a corpus in another language, or one drawing on venues this one did not — needs
+that shape rather than the number, and needs it for *their* corpus.
+
+It carries its own negative control, built in the file: two papers that really do claim one DOI, one of
+them from arXiv metadata that names an astronomy journal on an education paper. The last thing it prints
+is whether `_doi_edge_holds` still refuses them, so a change that quietly stops the guard firing on the
+case it was written for says so.
 
 ## The six sections, and which bug each would have caught
 
