@@ -822,11 +822,8 @@ class PostprocessorSettingsEditorGUI:
                         with dpg.tooltip(btn_tag):
                             dpg_markdown.add_text(help_markdown)
 
-                    for filter_index, (filter_name, param_info) in enumerate(self.all_postprocessor_filters.items()):
-                        # A rule between filters, but not above the first one — there the panel's own
-                        # heading is already the boundary, and a second line under it reads as a stray.
-                        if filter_index:
-                            guiutils.add_section_separator()
+                    for filter_name, param_info in self.all_postprocessor_filters.items():
+                        guiutils.add_section_separator()
                         with dpg.group(horizontal=True):
                             dpg.add_button(label="Reset", tag=f"{filter_name}_reset_button", callback=make_reset_filter_callback(filter_name))
                             dpg.add_tooltip(f"{filter_name}_reset_button", tag=f"{filter_name}_reset_tooltip")  # tag
@@ -972,10 +969,12 @@ class PostprocessorSettingsEditorGUI:
                                     dpg.add_button(label="X", tag=f"crop_{edge}_reset_button", callback=make_reset_edge_callback(edge, default_value))
                                     dpg.add_slider_float(label=edge.capitalize(), default_value=default_value, min_value=0.0, max_value=1.0, clamped=True, width=self.button_width,
                                                          tag=f"crop_{edge}_slider", callback=on_crop_edge_change, user_data=edge)
-                    dpg.add_spacer(height=4)
 
                 with dpg.child_window(width=self.postprocessor_width, autosize_y=True):
                     build_crop_gui()
+                    # Crop and the postprocessor are two unrelated things stacked in one panel, so the
+                    # boundary between them wants the same rule that divides the filters below.
+                    guiutils.add_section_separator()
                     with dpg.group(horizontal=True):
                         dpg.add_button(label="Clear", callback=self.on_clear_postprocessor, tag="postprocessor_clear_button")
                         dpg.add_tooltip("postprocessor_clear_button", tag="postprocessor_clear_tooltip")  # tag
