@@ -21,6 +21,51 @@ from sklearn.cluster import HDBSCAN, AgglomerativeClustering
 import clusterlab
 
 
+def llm_keywords_for_clusters(texts_by_cluster, *, backend_url=None):
+    """Ask the configured LLM for keywords describing each cluster.
+
+    `texts_by_cluster`: `dict` of `{cluster_id: [entry text, ...]}`, each text as
+                        `raven.visualizer.importer` formats it for this purpose — the title, and the
+                        abstract after it where there is one.
+
+    Returns `{cluster_id: [keyword, ...]}`. A cluster the model declines to characterize gets
+    `["<unknown topic>"]`, which is what the importer records in that case.
+
+    This deliberately reuses the Visualizer's own prompt and the same one-shot `agent.turn` call the
+    importer's `llm` keyword mode makes, rather than asking the question a second way. The point of the
+    exercise is to read what the app would show, so a prompt of our own would answer a question nobody
+    is going to ask again.
+    """
+    from raven.librarian import agent, config as librarian_config, llmclient
+    from raven.visualizer import config as visualizer_config
+
+    url = backend_url or librarian_config.llm_backend_url
+    if not llmclient.test_connection(url):
+        raise SystemExit(f"no LLM backend answering at {url}")
+    llm_settings = llmclient.setup(backend_url=url, quiet=True)
+    print(f"keywording with {llm_settings.model_id} at {url}", file=sys.stderr)
+
+    keywords = {}
+    for cluster_id, texts in sorted(texts_by_cluster.items()):
+        # Same separator the importer uses: a blank line can occur inside an abstract, two cannot.
+        body = "\n\n\n".join(t.strip() for t in texts)
+        prompt = f"{visualizer_config.clusters_llm_keyword_extraction_prompt}\n-----\n\n{body}"
+        record = agent.turn(llm_settings,
+                            prompt,
+                            use_character_card=False,
+                            tools_enabled=False,
+                            internet_enabled=False,
+                            docs_enabled=False,
+                            markup=None)
+        reply = (record.reply or "").strip()
+        if reply.lower() == "keyword extraction failed":
+            keywords[cluster_id] = ["<unknown topic>"]
+        else:
+            keywords[cluster_id] = [k.strip() for k in reply.split(",") if k.strip()]
+        print(f"  cluster {cluster_id}: {', '.join(keywords[cluster_id])}", file=sys.stderr, flush=True)
+    return keywords
+
+
 def drop_undersized_clusters(labels, min_size):
     """Relabel clusters smaller than `min_size` as outliers, and renumber the survivors from 0.
 
@@ -104,10 +149,16 @@ def main():
     parser.add_argument("--assign-outliers", action="store_true", help="give outliers their nearest medoid's label")
     parser.add_argument("--min-similarity", type=float, default=None, help="floor for --assign-outliers")
     parser.add_argument("--titles", type=int, default=8, help="how many titles to print per cluster")
+    parser.add_argument("--llm-keywords", action="store_true",
+                        help="ask the configured LLM for keywords describing each cluster, using the "
+                             "Visualizer's own `clusters_keyword_method='llm'` prompt")
+    parser.add_argument("--backend-url", default=None,
+                        help="LLM backend to use for --llm-keywords, overriding the configured one")
     args = parser.parse_args()
 
     vectors, model_name = clusterlab.load_vectors(args.vectors)
-    titles = clusterlab.load_titles(args.dataset)
+    entries = clusterlab.load_entries(args.dataset)
+    titles = [title for title, _ in entries]
     if len(titles) != len(vectors):
         raise SystemExit(f"dataset has {len(titles)} entries but the embedding cache has {len(vectors)}; "
                          "they must come from the same import")
@@ -171,6 +222,15 @@ def main():
           f"nearest-cluster {clusterlab.mean_nearest_cluster_similarity(original, labels):.3f}\n",
           file=sys.stderr)
 
+    keywords_by_cluster = {}
+    if args.llm_keywords:
+        # Every member goes to the model, not just the ones printed below: the keywords are meant to
+        # describe the cluster, and a sample of eight would describe the sample.
+        texts_by_cluster = {int(cid): [clusterlab.format_for_keyword_extraction(*entries[i])
+                                       for i in np.flatnonzero(labels == cid)]
+                            for cid in np.unique(labels[labels >= 0])}
+        keywords_by_cluster = llm_keywords_for_clusters(texts_by_cluster, backend_url=args.backend_url)
+
     # Print clusters largest first, and within a cluster the titles closest to its centre, so that the
     # first lines a reader sees are the ones that most nearly define what the cluster is about.
     for cid in sorted(np.unique(labels[labels >= 0]), key=lambda c: -np.sum(labels == c)):
@@ -178,6 +238,8 @@ def main():
         center = clusterlab.normalize(original[members].mean(axis=0, keepdims=True))
         order = members[np.argsort(-(original[members] @ center[0]))]
         print(f"--- cluster {cid}  ({len(members)} entries) ---")
+        if int(cid) in keywords_by_cluster:
+            print(f"    KEYWORDS: {', '.join(keywords_by_cluster[int(cid)])}")
         for idx in order[:args.titles]:
             print(f"    {titles[idx]}")
         print()

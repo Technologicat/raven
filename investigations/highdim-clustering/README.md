@@ -393,7 +393,7 @@ support:
 |---|---|
 | `clusterlab.py` | shared loading, normalization, centering, PCA and the scoring metrics. Not a script |
 | `sweep.py` | which HDBSCAN hyperparameters give what, in a chosen space. `--center`, `--pca N`, `--metric` |
-| `show_clusters.py` | one configuration's clusters with their titles, nearest-the-centre first, for judging coherence. `--assign-outliers` tests brief item 3 |
+| `show_clusters.py` | one configuration's clusters with their titles, nearest-the-centre first, for judging coherence. `--algorithm agglomerative` fits the recommended method; `--llm-keywords` labels each cluster with the LLM (see below); `--assign-outliers` tests brief item 3 |
 | `compare_methods.py` | HDBSCAN vs k-means vs agglomerative vs the shipped 2D labelling, on one yardstick. **Unmatched — read with `matched_control.py`, not alone** |
 | `matched_control.py` | the negative control: the same comparison at matched coverage and matched cluster count, against a random floor. This is the one that settled finding 5 |
 
@@ -416,8 +416,56 @@ here is aggregate numbers. Regenerate the missing two with the commands under "R
 | `arxiv_hdbscan_centered_leaf.txt` | arXiv AI, HDBSCAN: 40 clusters, 40% coverage, gap +0.007 |
 | `arxiv_agglomerative_centered_k100.txt` | arXiv AI, agglomerative cut at 100 then filtered: 61 clusters, **90% coverage**, gap −0.067 |
 
-**The last two are the pair to read against each other**, and they are the reason the algorithm choice
-is being left to a reader. They are the two ends of finding 8's trade — HDBSCAN answering for 40% of the
+### Keywords, because 500 titles is not a thing anyone reads
+
+`--llm-keywords` labels each cluster with six keywords from the local model, and that is what makes the
+comparison actually reviewable — a wall of titles is evidence nobody gets through, so the judgement it
+was collected for never happens (Juha, 2026-08-31).
+
+It reuses the Visualizer's own `config.clusters_llm_keyword_extraction_prompt` and the same one-shot
+`agent.turn` call the importer's `clusters_keyword_method = "llm"` mode makes, deliberately rather than
+asking the question a better way: the point is to read what the app would show. Every member of a cluster
+goes into the prompt, not the handful of titles printed under it — keywords describing eight of 52 papers
+would describe the sample. Requires an LLM backend; `--backend-url` points it elsewhere.
+
+**And the keywords answer the coherence question quantitatively, which the titles could not.** The test
+Juha set is whether the clusters are *different enough from each other that having them as separate
+clusters makes sense* — if every cluster came back saying "LLMs", the clustering would be nonsense.
+Measured over the 61 agglomerative clusters of the arXiv AI corpus:
+
+| | |
+|---|---|
+| distinct keywords | **292** of 355 slots |
+| pairwise Jaccard over keyword sets | mean 0.033, **median 0.000** |
+| cluster pairs sharing **no** keyword | **1223 of 1830 (67%)** |
+| pairs sharing more than half their keywords | **0** |
+| most repeated keyword | `large language models`, 34 times; the next is 5 |
+
+So one term is near-ubiquitous, as it must be in a corpus about language models, and **almost nothing
+else repeats at all**. The median pair of clusters has no keyword in common even counting that term.
+
+The inference is stronger than it looks, because **the model labels each cluster in isolation** and is
+never asked to tell them apart: it has no way to make them distinct and no incentive to. Independent
+descriptions coming out this separate is evidence about the inputs rather than about the labeller. Note
+what it does *not* establish — that each cluster is about one thing, which is still a reader's call, and
+what the title samples under each keyword line are for.
+
+**Run against HDBSCAN's clustering of the same corpus, the measure does not overturn the choice, and the
+way it declines to is the whole argument in miniature:**
+
+| | clusters | coverage | Jaccard mean | pairs sharing no keyword | pairs sharing >half |
+|---|---|---|---|---|---|
+| agglomerative, cut at 100 | 61 | **90%** | 0.033 | 67% | 0 |
+| HDBSCAN, `leaf` | 40 | 40% | **0.022** | **78%** | 0 |
+
+HDBSCAN's clusters are *marginally* more distinct — and should be, since it labels only the dense
+two-fifths of the corpus and leaves the hard points out, which is the same thing that flattered it on
+every quality metric in finding 5. Buying that margin costs half the corpus its place on the map. Both
+are comfortably distinct in absolute terms: neither has a single pair of clusters sharing half its
+keywords, and in both the median pair shares none.
+
+**The last two files are the pair to read against each other**, and they are the reason the algorithm
+choice is being left to a reader. They are the two ends of finding 8's trade — HDBSCAN answering for 40% of the
 corpus with a (barely) positive gap, agglomerative answering for 90% of it with a negative one — and the
 metric prefers the first while the second is plainly the better map: 61 balanced clusters (median 12,
 max 52) on LLM alignment surveys, diffusion models, chain-of-thought, RLHF, jailbreaking, RL for

@@ -7,6 +7,11 @@ top and stop anywhere.
 Not sprint work and not deadline-bound; it is the standing gap named in `raven/visualizer/CLAUDE.md` and
 in the root `CLAUDE.md`'s coverage section.
 
+**Intended as one of two parallel sessions** (Juha, 2026-08-31): this alongside a session starting
+`16_chat-graph-view-brief.md`, which the sprint README has as next. The pairing is deliberate rather than
+opportunistic — the two touch different subsystems, so neither is waiting on the other's tree, and they
+are different enough to review side by side, which is the actual constraint.
+
 ## Why now, and why it is easier than it looks
 
 The refactor that motivated wanting tests has landed, so what they would pin is no longer a rewrite in

@@ -28,10 +28,31 @@ def load_titles(pickle_path):
 
     Returns a `list` of `str`.
     """
+    return [title for title, _abstract in load_entries(pickle_path)]
+
+
+def load_entries(pickle_path):
+    """Load `(title, abstract)` for each entry of a Raven-visualizer dataset file, in dataset order.
+
+    `abstract` is the empty string where the record has none. Order is as `load_titles`, which see.
+
+    Returns a `list` of `(str, str)`.
+    """
     import pickle
     with open(pickle_path, "rb") as f:
         dataset = pickle.load(f)
-    return [entry.title for entry in dataset["vis_data"]]
+    return [(entry.title, entry.abstract or "") for entry in dataset["vis_data"]]
+
+
+def format_for_keyword_extraction(title, abstract):
+    """Render one entry the way the keyword-extraction prompt expects it.
+
+    Mirrors `raven.visualizer.importer._format_entry_for_keyword_extraction`, deliberately rather than
+    calling it: importing that module runs its top-level setup, which validates devices and can open an
+    LLM connection, none of which a read-only script should trigger. Three lines of duplication buys
+    that, and this comment is here so the two are kept in step.
+    """
+    return f"{title}.\n\n{abstract}" if abstract else title
 
 
 def normalize(vectors):
