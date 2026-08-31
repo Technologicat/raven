@@ -54,7 +54,7 @@ New assignments under the scheme:
 | filter | priority | band |
 |---|---|---|
 | `backdrop` (future, see §5) | −10.0 | Scene — literally the furthest thing away |
-| `crt` (this brief) | −3.0 | Scene |
+| ~~`crt` (this brief)~~ | ~~−3.0~~ **10.75** | ~~Scene~~ **Display — see the note in §2** |
 | `atmospheric_dust` (companion brief) | −2.0 | Scene |
 
 ## 1. Two diegetic models
@@ -81,6 +81,42 @@ built for:
 the same hologram intuition showing up in the existing chain.
 
 ## 2. Placement: the hologram is *in the world*
+
+> **Overturned 2026-08-31 by measurement. `crt` ships at `_priority = 10.75`,
+> beside `translucent_display`, and this section's reasoning is kept only
+> because it is what the numbers argue against.**
+>
+> The section is right that a hologram is an object in the scene. What it does
+> not account for is that the raster is the finest structure in the picture, so
+> every filter between it and the output is a threat. Scanline contrast on a
+> character still, where 0.48 is the raster the filter draws and 1.0 means none
+> of it is left:
+>
+> | downstream | contrast | what it does |
+> |---|---|---|
+> | `zoom`, `analog_lowres` | 1.00 | resample |
+> | `bloom` | 0.81 | max-combines alpha with a blurred copy, filling the gaps |
+> | `chromatic_aberration` | 0.79 | per-channel resample; also smears the mask |
+> | `vignetting`, `banding`, `translucent_display` | 0.48 | pure multiplies, harmless |
+>
+> Coarsening does not rescue it: at `scanline_period=8` the raster still goes
+> from 0.41 to 0.81 through `bloom` and `chromatic_aberration`.
+>
+> **Consequence 2 below — "emission is free" — was already dead** before the
+> measurement, and by our own hand. Once the scanlines moved to alpha (see §3),
+> `bloom` could not glow them at all: it thresholds on RGB luminance. All it
+> did was blur them away. It damages the mask too, which *is* in RGB — column
+> contrast 0.054 to 0.029. Both halves of the argument fail.
+>
+> **Consequences 1 and 3 survive, and 1 changes sign.** Dust at `-2.0` is now
+> upstream of `crt`, so the dust *does* get rastered — the failure mode the
+> companion brief's ordering exists to prevent. That is a live question for
+> whoever builds it; see the note in `atmospheric-dust.md`.
+>
+> Placement was decided by Juha on the numbers. The general lesson is in the
+> band-scheme comment in `postprocessor.py`: where a filter *depicts* something
+> and where it has to *run* can come apart, and when they do, position is a
+> measurement rather than a taxonomy question.
 
 Routing principle: in the world, or on the display? A hologram is an object in
 the scene. The camera films it, so the raster passes through the capture optics
@@ -471,9 +507,11 @@ elsewhere in this module these are contract tests, not aesthetic ones.
 
 ### Performance budget
 
-**Measured 2026-08-31: 0.277 ms at 1024², fp16, on the internal dGPU** — against the
-2 ms target below, and against `scanlines`' 0.237 ms for the cheap version of the
-same idea. Turning the warp on costs 0.031 ms more (0.306 ms), so the resample
+**Measured 2026-08-31: 0.277 ms at 1024², fp16, on the work machine's internal
+4090** — against the 2 ms target below, and against `scanlines`' 0.237 ms for the
+cheap version of the same idea. **Still to check on the personal machine's
+3070 Ti**, which is the weaker of the two; the margin is wide enough that this is
+expected to be a formality, and the open house itself runs on the work machine. Turning the warp on costs 0.031 ms more (0.306 ms), so the resample
 this design goes out of its way to skip turns out to be the cheap part; what the
 skip buys is the crispness, not the time. Numbers from
 `raven/common/video/tests/bench_postprocessor.py`, which now carries `crt` in

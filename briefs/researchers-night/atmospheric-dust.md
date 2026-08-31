@@ -53,6 +53,34 @@ character → crt (raster) → atmospheric_dust (room air)
 Do not move this filter ahead of `crt`; scanlined dust is the failure
 mode that ordering exists to prevent.
 
+> **This no longer works as written, 2026-08-31: `crt` shipped at `10.75`, not
+> `-3.0`.** It had to move past everything that resamples or blurs, because
+> those erase the raster; the measurements are in `crt-display.md` §2. So dust
+> at `-2.0` is now *upstream* of the raster, and the dust gets scanlined —
+> exactly what this section set out to prevent.
+>
+> **Not yet decided, and it is the first question this filter has to answer.**
+> The two options trade against each other:
+>
+> - **Leave dust at `-2.0`** and accept a rastered dust field. The bloom
+>   coupling — which the next section calls the whole trick — is kept intact.
+>   The diegetic story changes: the raster now covers the whole picture rather
+>   than the character alone, which is the display-device reading.
+> - **Move dust behind `crt`** (`10.8`, say, between `crt` and
+>   `monochrome_display`). The hologram story is preserved exactly. The cost is
+>   that dust no longer rides through `bloom`, so glints do not bloom, and the
+>   next section says that is what turns a white dot into a mote catching the
+>   light rather than a dead pixel.
+>
+> A third option worth pricing before choosing either: give the dust its own
+> internal glint bloom, which would make it independent of chain position. That
+> is more work than either move, and it duplicates `bloom` — but it is the only
+> one that keeps both properties.
+>
+> Note the existing chain already has this shape and nobody has minded:
+> `translucent_display` at `10.5` makes the *whole frame* translucent, dust
+> included, under the same hologram reading.
+
 One caveat to test: `zoom` with `quality="high"`/`"ultra"` crops and re-runs
 Anime4K on the region. Anime4K on 1–2 px bright dots may ring. Test with
 `quality="low"` first; if ringing shows, the fallback is priority −0.5 (after
