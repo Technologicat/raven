@@ -577,14 +577,47 @@ reproducible, and that is where the determinism claim belongs. They are drawn fr
 to the device afterwards for the same reason: the same seed then gives the same field everywhere, which is
 what makes a test able to say anything about it.
 
+### The tuning pass, and what it settled
+
+Run the same day, live in the settings editor. **The shipped defaults are not the brief's**, and the
+distance is worth recording, the brief's numbers having been reasoned from the physics where these came
+from looking at it:
+
+| | brief | shipped |
+|---|---|---|
+| `count` | 250 | **50** |
+| `size` | 1.5 | **3.75** |
+| `depth_near` | 0.25 | **1.0** |
+| `aperture` | 6.0 | **0.4** |
+| `drift_jitter` | 0.4 | **0.10 / 0.05**, split per axis |
+
+Fewer, larger, nearly sharp, and all of them further away than the character. Three things fell out of that:
+
+**`depth_near` is the speed control, and nothing said so.** Screen velocity goes as `1/z`, so a field
+starting at 0.25 has its nearest motes crossing the frame four times faster than one starting at 1.0 — which
+read as the dust drawing attention to itself. The brief presents the near depth as a knob for parallax and
+size spread, which it also is, and says nothing about the thing that made the first look wrong.
+
+**Setting `depth_near` to `character_depth` is how the whole field goes behind the character**, which is
+where it looks best. That also left the parameter pinned at the top of its declared `[0.05, 1.0]`, so the
+range was wrong; it is `[0.05, 4.0]` now, matching its siblings.
+
+**The velocity jitter is anisotropic** — `drift_jitter_x` and `drift_jitter_y`, mirroring the split that
+`drift_x` and `drift_y` already had. The shipped 2:1 ratio is a starting point rather than a tuned figure.
+Note the collapsed version passes every other test in the file, so the axes have a test of their own; it
+watches the light's row and column marginals, since horizontal motion preserves the first and vertical
+motion the second.
+
+**The rastered dust reads correctly** (Juha, 2026-08-31, in motion), which closes the question left open
+under *Ordering against `crt`*. The dust stays at −2.0 and `crt`'s raster covers the room as well as the
+character. The three alternatives recorded there are kept as the analysis, not as pending work.
+
 ### Left undone, deliberately
 
-- **Not in the default chain.** Whether the dust ships on, and at what settings, is a look decision that
-  wants seeing in motion on the exhibit machine, not a default chosen at the console.
-- **Not seen in motion, and not seen on the 3070 Ti.** Everything above is stills and numbers. The drift is
-  verified sub-pixel (0.02 px/frame in even steps, no snapping to the raster) and the wrap is verified to
-  happen with the particle entirely off screen, which are the two things that would look wrong in motion —
-  but that is an argument, not a viewing.
-- **The rastered-dust question stays open**, and the options are in the *Ordering against `crt`* section
-  above. The dust sits at −2.0, so `crt`'s raster covers the room as well as the character. That was decided
-  for v1 before either filter existed; it can now be looked at.
+- **Not in the default chain.** Whether the dust ships on is a decision about everyone's picture rather than
+  about this filter, and the settings editor reaches it meanwhile.
+- **Not seen on the 3070 Ti.** The one-card case is a supported configuration and this is the chain's most
+  expensive filter, so the number that matters is from the machine that has to share a GPU.
+- **`aperture`'s declared range no longer suits its default.** `[0.0, 30.0]` against a default of 0.4 puts
+  the useful setting in the first 1.3% of the slider, which is why it was typed rather than dragged. What
+  range is right depends on the depth range in force, so it wants a decision rather than a guess.
