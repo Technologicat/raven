@@ -108,24 +108,18 @@
             }
         ],
         [
-            "vignetting",
-            {
-                "strength": 0.41999998688697815
-            }
-        ],
-        [
-            "translucent_display",
-            {
-                "alpha": 0.8999999761581421
-            }
-        ],
-        [
             "noise",
             {
                 "channel": "Y",
                 "name": null,
                 "sigma": 1.0,
                 "strength": 0.30000001192092896
+            }
+        ],
+        [
+            "vignetting",
+            {
+                "strength": 0.41999998688697815
             }
         ],
         [
@@ -139,6 +133,12 @@
                 "name": null,
                 "strength": 0.008999999612569809,
                 "unboost": 10.0
+            }
+        ],
+        [
+            "translucent_display",
+            {
+                "alpha": 0.8999999761581421
             }
         ],
         [
