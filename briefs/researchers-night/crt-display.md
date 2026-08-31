@@ -511,9 +511,11 @@ elsewhere in this module these are contract tests, not aesthetic ones.
 4090** — against the 2 ms target below, and against `scanlines`' 0.237 ms for the
 cheap version of the same idea. **Still to check on the personal machine's
 3070 Ti**, which is the weaker of the two; the margin is wide enough that this is
-expected to be a formality, and the open house itself runs on the work machine. Turning the warp on costs 0.031 ms more (0.306 ms), so the resample
-this design goes out of its way to skip turns out to be the cheap part; what the
-skip buys is the crispness, not the time. Numbers from
+expected to be a formality, and the open house itself runs on the work machine.
+
+Turning the warp on costs 0.031 ms more (0.306 ms), so the resample this design
+goes out of its way to skip turns out to be the cheap part; what the skip buys
+is the crispness, not the time. Numbers from
 `raven/common/video/tests/bench_postprocessor.py`, which now carries `crt` in
 both configurations.
 

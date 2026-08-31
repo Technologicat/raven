@@ -107,6 +107,29 @@ A folder here may be a **bundle** rather than a single file, when a document has
 (the notes plus the one-shot rewriter that performed part of it). Same principle as `investigations/` below —
 keep an artifact with what produced it — applied wherever the artifact happens to live.
 
+## A brief is authoritative about *what*, and only suggestive about *why*
+
+Worth knowing before copying a sentence out of one into a docstring or a commit message, because the
+asymmetry follows from how these get written rather than from anyone being careless with them.
+
+The ideas are the maintainer's; the brief is written by the agent, in advance of the code, and reviewed
+more lightly than the code is — review effort goes where the risk is, and the risk is in what ships. So a
+brief's **decisions** carry real authority: they were discussed, and they are what the changeset is for.
+Its **rationale** is a different kind of sentence. Much of it is the agent's reconstruction of why a
+decision was made, written at a point when nothing had been built and nothing could contradict it.
+
+**So verify a brief's *why* against the code before repeating it.** A rationale copied from a brief into
+a docstring is laundered: it arrives looking like something that was checked, and thereafter every reader
+treats it as settled. Where the reasoning turns out to be wrong, correct it *in the brief too* — these are
+single-use documents, but they are read once more by whoever closes them out.
+
+Live case, `researchers-night/crt-display.md`, 2026-08-31. Three of its rationales were wrong, all three
+plausible, and one of them was a rendering bug that every contract test passed: "modulate alpha as well as
+luma" squares the modulation in a straight-alpha frame; `"luma"` was said to be for bright backdrops, which
+does not survive one question; and "emission is free — the capture bloom glows the scanlines" was
+contradicted by measurement, twice over. The brief now carries all three corrections beside the passages
+that were wrong.
+
 ## Related, elsewhere — and deliberately not here
 
 - **`investigations/`** (repo root) holds things we measured, profiled or reproduced — **one directory per
