@@ -646,6 +646,14 @@ Four corrections, marked in place above rather than edited away.
   `shadow` masks, `glow_strength`, and the barrel warp. They are tested for
   contract and correctness, not for looks. `aperture_grille` is what ships and
   what was tuned.
+- **The two saved presets stay on `scanlines`.** `redsepia.json` and
+  `glitchyholo.json` are tuned artistic looks rather than defaults, so moving
+  them to `crt` is a decision about how they should look, not a substitution to
+  make in passing (Juha). `glitchyholo` is the interesting one if anybody
+  revisits it — it is the hologram preset, which is the reading `crt` was built
+  for. Their chains were reordered into `_priority` order the same day, which is
+  a separate matter: both were hand-ordered and the settings editor rewrites any
+  chain it loads.
 - **`brightness_compensation` bleaches highlights at its 0.85 default** — about
   8% of pixels clip on a pale character, against 0.02% at 0.0, and clipping is
   where colour dies. Accepted as the look (Juha, on the live render); the
