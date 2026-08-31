@@ -655,12 +655,28 @@ gives **0.12%**, and its RMS is 1.04 against the normal's 1.0, so the scale is u
 That leaves the two jitters drawn from different distributions, which is deliberate and is documented at
 the draw. It is the one asymmetry in this filter that a reader would otherwise take for an oversight.
 
+### Shipped on, and what the chain costs now
+
+**In the default chain from 2026-08-31** (Juha), at the head of it, in both `raven/server/config.py` and
+`raven/avatar/assets/settings/animator.json`. Both entries are `{}`, so the tuned values are the code
+defaults and there is one place to change them.
+
+Measured on the 4090, the whole default chain: **3.0 ms at 512², 3.2 ms at 768², 3.8 ms at 1024²**, of
+which the dust is about 0.9 ms and roughly flat across the three — its cost is the `[count, K, K]` splat
+batch rather than the frame. Against a postprocessor stage budget of ~11 ms.
+
+Those are the first numbers the bench has reported about the *shipped* chain in a while:
+`bench_postprocessor.py` held a hand-copied `DEFAULT_CHAIN` under a comment saying it came from
+`raven.server.config`, and it had drifted — still listing `scanlines`, knowing nothing of `crt`. It reads
+the config now. Worth noting as a shape rather than an incident: a duplicate that names its own source in
+a comment is the kind that goes stale quietly, because the comment keeps reading as true.
+
+**`aperture`'s range stays at `[0.0, 30.0]`** against its default of 0.4 (Juha, 2026-08-31), so the useful
+setting sits in the first few percent of the slider and gets typed rather than dragged. Raised and
+declined; not a defect to re-notice.
+
 ### Left undone, deliberately
 
-- **Not in the default chain.** Whether the dust ships on is a decision about everyone's picture rather than
-  about this filter, and the settings editor reaches it meanwhile.
 - **Not seen on the 3070 Ti.** The one-card case is a supported configuration and this is the chain's most
-  expensive filter, so the number that matters is from the machine that has to share a GPU.
-- **`aperture`'s declared range no longer suits its default.** `[0.0, 30.0]` against a default of 0.4 puts
-  the useful setting in the first 1.3% of the slider, which is why it was typed rather than dragged. What
-  range is right depends on the depth range in force, so it wants a decision rather than a guess.
+  expensive filter, so the number that matters is from the machine that has to share a GPU. Deferred
+  deliberately rather than forgotten (Juha, 2026-08-31: "let's run that later").

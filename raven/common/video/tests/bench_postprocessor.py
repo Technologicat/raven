@@ -16,6 +16,7 @@ import time
 import torch
 
 from raven.common.video.postprocessor import Postprocessor
+from raven.server import config as server_config
 
 
 DEVICE = torch.device("cuda")
@@ -23,15 +24,12 @@ DTYPE = torch.float16
 N_WARMUP = 10
 N_MEASURE = 200
 
-# Default avatar filter chain from raven.server.config
-DEFAULT_CHAIN = [
-    ("bloom", {}),
-    ("chromatic_aberration", {}),
-    ("vignetting", {}),
-    ("translucent_display", {}),
-    ("banding", {}),
-    ("scanlines", {}),
-]
+# The default avatar filter chain, read from the server config rather than copied from it. The copy
+# that used to live here had drifted: it still listed `scanlines` and knew nothing of `crt` or
+# `atmospheric_dust`, so the one number this module exists to report - what the shipped chain costs -
+# was measuring a chain nobody runs. Importing `raven.server.config` costs only torch, which this
+# module already needs.
+DEFAULT_CHAIN = server_config.postprocessor_defaults
 
 # All public filters with representative default parameters
 ALL_FILTERS = [

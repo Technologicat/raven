@@ -219,6 +219,9 @@ talkinghead_models = "OktayAlpk/talking-head-anime-3"  # ~900 MB
 # For details, see `raven.common.video.postprocessor`.
 #
 postprocessor_defaults = [
+    # in the room, in front of the lens
+    ("atmospheric_dust", {}),
+
     # physical input signal
     ("bloom", {}),
 
