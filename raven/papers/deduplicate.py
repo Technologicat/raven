@@ -40,9 +40,11 @@ source put them, because none of that is broken; `Q\\&amp;A` does not, because i
 abstracts exist to decide *which* value to keep. The value kept is then whichever copy won, as `fixbib`
 would leave it — so a merge chooses among the records in front of it rather than composing a new one.
 
-`--judge` adds an opt-in LLM pass over what the deterministic keys could not settle — near-miss titles
-that no exact key joined. It needs a backend, so it is off by default and everything above works without
-one.
+`--judge` adds an opt-in LLM pass over what the deterministic keys could not settle, and asks two
+questions. First, whether a near-miss the exact keys did not join is one work after all. Then, of the
+identifiers on a work whose records disagree, which one actually belongs to it — asked about the *venue*
+each record names, since a DOI says nothing to a reader who does not already know it. It needs a backend,
+so it is off by default and everything above works without one.
 
 ## What it does with the records it merges
 
