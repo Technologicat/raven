@@ -4,7 +4,7 @@ Usage:
     raven-conference-timer 15:00
     raven-conference-timer 5
     raven-conference-timer 15:00 --size 600
-    python -m raven.conference_timer 15:00
+    python -m raven.conference_timer.app 15:00
 """
 
 import argparse
@@ -28,6 +28,8 @@ parser.add_argument('--log', metavar='PATH', default=None,
 parser.add_argument('--log-level', default='INFO',
                     choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                     help='root logger level (default: INFO)')
+parser.add_argument('--qr', action='store_true',
+                    help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
 args = parser.parse_args()
 
 import logging
@@ -55,6 +57,7 @@ with timer() as tim:
     from ..common import utils as common_utils
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
+    from ..common.gui import qroverlay
     from ..common.gui import utils as guiutils
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
@@ -232,6 +235,9 @@ def main() -> int:
     # --- Start app ---
     dpg.set_primary_window("main_window", True)
     dpg.show_viewport()
+
+    if args.qr:
+        qroverlay.install()
 
     # --- State ---
     start_time = None  # set by _startup; timer doesn't run until then
