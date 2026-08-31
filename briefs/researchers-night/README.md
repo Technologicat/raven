@@ -20,7 +20,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `markdown-block-rendering-brief.md` | Band-2 item 12: block-level Markdown in the chat view | Researchers' Night. Steps 1 and 5 landed 2026-08-25; what remains is behind the single-newline split, which is also what fenced code and multi-line lists are waiting on |
 | `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Step zero is that `XDotWidget.set_graph` has no callers and no tests |
 | `crt-display.md` | Avatar postprocessor: CRT look | Researchers' Night |
-| `atmospheric-dust.md` | Avatar postprocessor: dust | Researchers' Night, and **the schedule's slack** — lands only if time remains. Ranked behind 16 on 2026-08-05. Safe to drop: nothing depends on it, and it borrows its priority-band scheme *from* `crt-display.md` rather than the other way round |
+| `atmospheric-dust.md` | Avatar postprocessor: dust | Researchers' Night. **Moved to the front with `crt` on 2026-08-31**; it was the schedule's slack until then, and it still borrows its priority-band scheme *from* `crt-display.md` rather than the other way round, so that brief's §0 lands first either way |
 | `12_derived-artifact-store-brief.md` | One keying and regeneration mechanism for everything computed *from* a source artifact | v0.2.9. Does not depend on 13 |
 | `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night |
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, PCA preprocessing, cosine-to-medoid outlier assignment, Procrustes alignment | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
@@ -54,6 +54,34 @@ not settled, and the two sensible axes disagree — closure rate (smallest first
 they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
 deadline actually binds; everything else could slip past September without anything breaking.
 
+### Reordered 2026-08-31 — the effects first, then the graph view
+
+Juha's call, 26 days out. **This subsection supersedes the band order below wherever the two disagree**, and
+the thing it disagrees with most is the one constraint the 08-25 pass placed on itself: the graph view no
+longer has to stay ahead of `crt`.
+
+1. **`crt-display` and `atmospheric-dust`**, taken as one piece of work — *"or let's at least try for a day
+   and see how far we get"*. Estimated **1–3 days in total**: self-contained, and straightforward once we
+   iterate a bit. They go first because they are an important part of the wow factor, and because the past
+   week has been unglamorous-but-necessary features. Time to switch gears.
+2. **The graph view** (brief 16). Estimated **one week, perhaps two**. It is the last major piece of
+   *functionality* Juha needs on hand to explain the multiversal nature of LLMs, should the conversation go
+   that way — and it has been promised since the first version of Librarian a year ago. The multiversal
+   storage is what sets Librarian apart, and this is its missing GUI.
+3. **The avatar's expression follows the spoken words** (band-2 item 11). Missing polish, and less
+   noticeable than the effects — nobody cared last year. Straightforward and small, so it can probably be
+   crammed in before the deadline.
+   - **One complication risk, and it cannot be settled before it is tested**: the avatar holding neutral
+     while the final text streams in may look uncanny, and if it does, what to do about it is not obvious.
+4. **Block-level Markdown, the remaining steps** — after the event. Wanted, definitely, but last year did
+   not even have the thinking trace streaming correctly and nobody cared; we are in much better shape now,
+   and nobody is going to mind that it ships without the latest bells and whistles. Estimated **one week,
+   perhaps two**, and it is **the first item to cut** if the time runs out.
+
+That inverts the cut order recorded on 08-26, which named the Markdown remainder and the dust as the two to
+give up. The dust is at the front with `crt` now rather than being the slack, and the Markdown remainder is
+the declared slack in its place.
+
 ### Sized 2026-08-28 — what the last four weeks hold
 
 Juha's sizing of what is left, with 29 days to the deadline. Recorded because it is a scheduling
@@ -75,6 +103,9 @@ long.
 The ordering that follows from this is 11, then 12 and 13 in either order, with 14 and 15 last because
 they are the ones that can be compressed. Note this reverses nothing: it is the band order already
 recorded, now with sizes against it.
+
+**Superseded on 2026-08-31** (see above): 14 and 15 go first and 12 goes last. The sizes themselves stand —
+they are what makes the new order fit.
 
 ### Decided 2026-08-07 — what Monday starts on
 
@@ -154,6 +185,10 @@ question at an exhibit is "what at least landed", not "what was started".
 **One constraint on it, and it is the only one:** the graph view must not fall behind `crt`. It is the
 largest item and the second-most demo-visible, and its own step zero sits in band 1 precisely so the risk is
 known before band 3 begins.
+
+> **Dropped 2026-08-31.** The effects go first after all. Half of what the constraint was for has been
+> discharged in the meantime: step zero ran on 08-25, so the graph view's risk is already known rather than
+> waiting on band 3 to reveal it.
 
 **Band 1 — quick wins.** Hours each, and every one of them removes a line from this list.
 
@@ -348,7 +383,7 @@ is not fully specified until someone has watched it run.
     the white bullets were visible the moment headings started rendering, and step 1 had already built the
     fallback the marker colours needed.
 
-**Band 3 — the large ones.**
+**Band 3 — the large ones.** *Reordered 2026-08-31 to 14, 15, 13; item 12 moves behind all three.*
 
 13. **The graph view** (brief 16).
 14. **`crt-display`.**
@@ -383,6 +418,9 @@ And the two whose detail belongs with the ordering rather than in it:
 - **`atmospheric-dust`** (band 3, last) — still the slack in the schedule, but **wanted rather than merely
   tolerated** (Juha): a significant wow factor, and self-contained enough to be a safe last item. The 08-05
   ordering behind 16 stands.
+  - **Not any more, on either count** (2026-08-31): it goes first, alongside `crt`. The half of this that
+    survives is the appraisal — a significant wow factor, self-contained — which is now the argument for
+    its position rather than for its safety as a last item.
 
 Notes on four of the band-1 entries, each of which is smaller than the thing it is a piece of:
 
@@ -502,6 +540,10 @@ that can only be tuned in the room, then the avatar's face, then the Markdown po
 constraint still holds: the graph view stays ahead of `crt`. If the four weeks tighten, the two to give up
 are the Markdown remainder and the dust — the dust was declared slack from the start, and the Markdown
 remainder is the only band-2 item nobody in the room will notice missing.
+
+**Superseded 2026-08-31**, with 9 and 10 done: the order is now the effects, the graph view, then 11, and 12
+is the only thing left to give up. What still holds is the *reason* item 11 is in at all, which is the
+paragraph above it — the exhibit's hardware does not excuse this one.
 
 1. **An option to hold the avatar's video off until the answer is complete** — GPU anti-congestion.
 
