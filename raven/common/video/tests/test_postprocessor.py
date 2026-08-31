@@ -596,6 +596,53 @@ class TestBloomShape:
         assert image.max() <= 1.0
 
 
+class TestBloomJudgesLightRatherThanColour:
+    """What is bright is the light a pixel emits, `rgb * alpha`, not the colour it carries.
+
+    The distinction is invisible on an opaque character and decisive everywhere else: a nearly
+    transparent pixel's straight colour is what it *would* look like if it were opaque, which can be an
+    arbitrarily large number attached to almost no light. Threshold on that and faint things count as
+    highlights; blur it and the transparent background's arbitrary colour is dragged into the
+    silhouette.
+    """
+
+    PATCH = (slice(None, 3), slice(20, 40), slice(20, 50))  # the opaque neighbour, in colour channels
+
+    def _frame(self, mote_alpha):
+        """An opaque mid-grey patch and, beside it, a vivid mote at the given alpha.
+
+        The mote's colour is 3.0 whatever its alpha, which is the shape a particle of
+        `atmospheric_dust` has: colours up to `max_intensity` carried at an alpha of a few thousandths.
+        Passing `None` leaves the mote out, for the baseline.
+        """
+        image = torch.zeros(4, 64, 96)
+        image[:3, 20:40, 20:50] = 0.35  # below the 0.560 threshold on its own
+        image[3, 20:40, 20:50] = 1.0
+        if mote_alpha is not None:
+            image[:3, 28:33, 54:59] = 3.0
+            image[3, 28:33, 54:59] = mote_alpha
+        return image
+
+    def _neighbour_after_bloom(self, mote_alpha):
+        image = self._frame(mote_alpha)
+        _make_postprocessor().bloom(image)
+        return float(image[self.PATCH].max())
+
+    def test_a_faint_mote_does_not_light_up_its_opaque_neighbour(self):
+        baseline = self._neighbour_after_bloom(None)
+        assert self._neighbour_after_bloom(0.004) == pytest.approx(baseline, abs=0.005), (
+            "a mote carrying almost no light bloomed onto the opaque patch beside it")
+
+    def test_a_mote_that_really_is_bright_still_blooms(self):
+        """The negative control. The bloom coupling is what turns a mote into something catching the
+        light rather than a dead pixel, so a threshold that rejected the faint mote by rejecting
+        everything would satisfy the test above while destroying the effect."""
+        baseline = self._neighbour_after_bloom(None)
+        assert self._neighbour_after_bloom(1.0) > baseline + 0.05, (
+            "the same mote at full alpha did not bloom either, so this filter is not judging light — "
+            "it is rejecting everything, and the test above passes for the wrong reason")
+
+
 class TestBloomEffect:
     def test_modifies_image(self):
         pp = _make_postprocessor()
@@ -1770,9 +1817,12 @@ class TestAtmosphericDustWrapping:
     off screen: at the exact edge it would pop a fully-formed disc into view."""
 
     def test_a_wrapping_particle_is_invisible_at_the_moment_it_wraps(self):
+        # `drift_speed` is set rather than inherited: it is a tuning default, and at the shipped 0.2
+        # this sweep no longer contains a full traverse. The negative control below is what caught
+        # that, which is the whole reason it is there.
         one_particle = dict(count=1, seed=3, depth_near=1.0, depth_far=1.0, size=6.0, aperture=0.0,
-                            drift_x=0.05, drift_y=0.0, drift_jitter_x=0.0, drift_jitter_y=0.0,
-                            sway_amplitude=0.0)
+                            drift_speed=1.0, drift_x=0.05, drift_y=0.0,
+                            drift_jitter_x=0.0, drift_jitter_y=0.0, sway_amplitude=0.0)
         pp = None
         flux = []
         for step in range(600):

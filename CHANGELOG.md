@@ -72,7 +72,7 @@
   - **The motes add light and never hide any**, whatever is behind them, which is what a thing far too small to occlude anything ought to do. There is no opacity setting to get wrong: a mote's alpha is derived as the least that can carry its light. `max_intensity` therefore sets how thin the dust is as well as how bright it may go — with `bloom` switched off, set it to 1.0, since the headroom above 1.0 is only safe while `bloom` is downstream to clamp it back down.
 
 - **`crt`, a raster projection filter** — the avatar drawn by a scanning electron beam, through a phosphor mask, with the bright rows falling off as Gaussians into darkness between them rather than alternating hard between light and dark. It is in the default chain now, in place of `scanlines`, which remains available as the cheap and simple version of the same idea.
-  - **The gaps between the scanlines are transparent, not dark.** The avatar is a hologram: where the beam is not writing it emits no light, so the backdrop shows through the raster rather than the character being striped with black. `alpha_mode` switches to the other reading, a display device whose tube is simply off between the lines.
+  - **`alpha_mode` picks which device is being simulated**, and both readings are in-world. The default is a display whose tube is simply off between the lines, so the gaps are dark. Switch it to put the raster on alpha instead and the gaps become transparent — the avatar as a hologram, with the backdrop showing through between the lines. The see-through-ness of the default chain is `translucent_display`'s job, one filter above, which is a single control rather than two that have to be tuned against each other.
   - Aperture grille, slot and shadow masks; barrel warp and overscan; horizontal beam bleed; corner falloff; and phosphor persistence. The mask pitch and the scanline period are in *output pixels* rather than in fractions of the picture, because a 3-pixel triad is strongly visible at 1024 and invisible at 4K, and which of those you want depends on your output size.
   - **Two of its parameters ship off, both for reasons that may not apply to you.** Phosphor persistence needs more frames per second than the avatar can currently afford — below that a trail reads as smearing — so it is worth revisiting on faster hardware. And the interlaced field alternation flickers, because it is not synchronized to your display's refresh.
   - **`brightness_compensation` is the knob to reach for first.** The scanlines and the mask both darken the picture, and the filter drives the beam harder to compensate, as a real tube does. At the default that pushes the brightest parts of the character into white and takes their colour with them, which on a pale character is quite visible. Turn it down if the result looks bleached rather than rastered.
@@ -141,6 +141,10 @@
   - Works wherever the GUI toolkit's own windowing layer does: X11, macOS and Windows. Wayland is untested — please report if it does not work there.
 
 **Changed**:
+
+*Raven-avatar*
+
+- **the settings editor separates its postprocessor filters with a rule.** The panel lists every filter one after another, and there are enough of them now that where one ends and the next begins had become a thing to work out rather than a thing to see.
 
 *Raven-librarian*
 
@@ -235,6 +239,11 @@
   - In the thumbnail view, the tiles reflow to fill the new width as you drag.
 
 **Fixed**:
+
+*Raven-avatar*
+
+- **`bloom` now decides what is bright by the light a pixel emits rather than by the colour it carries.** In a straight-alpha frame those differ wherever a pixel is not fully opaque: the colour alone is what the pixel *would* look like if it were, which for a nearly transparent one can be a large number attached to almost no light. The old reading called such pixels highlights and then blurred that colour outward, so the avatar's antialiased outline picked up light from the empty space around it. The character itself is unaffected — the two readings agree wherever alpha is 1.
+  - Most visible with `atmospheric_dust` in the chain, where it made the character light up wherever a mote drifted past, which reads as a cutout pasted over the scene rather than as something standing in it.
 
 *Raven-librarian*
 

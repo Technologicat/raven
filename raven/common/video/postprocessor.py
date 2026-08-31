@@ -792,15 +792,15 @@ class Postprocessor:
                    name=["!ignore"],
                    _priority=-2.0)
     def atmospheric_dust(self, image: torch.tensor, *,
-                         count: int = 50,
+                         count: int = 100,
                          seed: int = 42,
-                         size: float = 3.75,
+                         size: float = 3.0,
                          depth_near: float = 1.0,
                          depth_far: float = 1.75,
                          focal_plane: float = 1.0,
                          character_depth: float = 1.0,
                          aperture: float = 0.4,
-                         drift_speed: float = 1.0,
+                         drift_speed: float = 0.2,
                          drift_x: float = 0.012,
                          drift_y: float = 0.020,
                          drift_jitter_x: float = 0.10,
@@ -1172,6 +1172,20 @@ class Postprocessor:
         # There are online tutorials for how to create this effect, see e.g.:
         #   https://learnopengl.com/Advanced-Lighting/Bloom
 
+        # Bloom is about light, so it runs in premultiplied space: in a straight-alpha frame the light a
+        # pixel emits is `rgb * alpha`, and the colour by itself is what the pixel *would* look like if
+        # it were opaque. For a nearly transparent pixel that can be an arbitrarily large number
+        # carrying almost no light, and using it is wrong twice over - it calls faint things bright, and
+        # blurring it drags the transparent background's arbitrary colour into the silhouette's edge.
+        #
+        # On an opaque character the two are the same picture. They part company exactly where alpha is
+        # between 0 and 1: the antialiased outline, and anything the Scene band has put in the air. A
+        # single faint mote of `atmospheric_dust` used to carry a straight-colour luminance near 3.0
+        # against this filter's threshold of 0.56, so every one of them counted as a highlight, and the
+        # blur then spilled that onto whatever opaque thing it drifted past - the character lighting up
+        # where the dust was, which reads as a cutout pasted over the scene.
+        image[:3, :, :].mul_(image[3:4, :, :])
+
         if threshold < 1.0:
             # Find the bright parts.
             # original_yuv = rgb_to_yuv(image[:3, :, :])
@@ -1209,6 +1223,20 @@ class Postprocessor:
         if threshold < 1.0:
             image[3, :, :] = torch.maximum(image[3, :, :], brights[3, :, :])  # alpha: max-combine
 
+        # Back to straight alpha, against whatever alpha the glow ended up with rather than the one we
+        # came in with - and that one has to be brought into range *first*. The glow adds its blurred
+        # alpha to a silhouette that was already opaque, so the divisor is otherwise above 1 and the
+        # round trip comes back dimmer than it went in, over the whole character rather than at its
+        # edge. Where nothing is emitted the colour is arbitrary, so the floor sends it to black rather
+        # than to infinity; alpha is zero there and the pixel contributes nothing either way.
+        image[3:4, :, :].clamp_(0.0, 1.0)
+        image[:3, :, :].div_(image[3:4, :, :].clamp(min=1e-6))
+
+        # Clamping the *straight* colour, and after the division, is what makes this filter the chain's
+        # guard against the byte conversion at the very end: several filters upstream deliberately emit
+        # colours above 1.0 for this one to pick up and glow, and `255 * x` then `.byte()` wraps rather
+        # than saturating. Clamping the premultiplied value instead would let the division put it back
+        # over 1.0 and lose that.
         torch.clamp_(image, min=0.0, max=1.0)
 
     # --------------------------------------------------------------------------------
@@ -2326,7 +2354,7 @@ class Postprocessor:
             glow_sigma: float = 1.2,
             glow_strength: float = 0.0,
             corner_falloff: float = 0.10,
-            alpha_mode: str = "both",
+            alpha_mode: str = "luma",
             persistence_tau: float = 0.0,
             name: str = "crt0") -> None:
         """[dynamic] Raster projection simulation: the character is drawn by a scanning electron beam.
@@ -2425,8 +2453,11 @@ class Postprocessor:
                       not make that patch of the picture transparent, and modulating alpha at the mask
                       pitch punches holes that read as a screen door.
 
-                      Note `translucent_display` also reduces alpha and is in the default chain. With
-                      both at their defaults the character may end up too faint; pull one of them down.
+                      "luma" is the default, and the hologram reading is not lost by it: the chain
+                      already carries `translucent_display` immediately above this filter, and that is
+                      where see-through-ness belongs. Two filters both reducing alpha is one control
+                      too many — either alone leaves the character too faint at the other's default,
+                      and the pair has to be tuned together to land anywhere sensible.
 
         `persistence_tau`: Phosphor afterglow, as a decay time in seconds. A moving character leaves
                            a trail of lingering light.

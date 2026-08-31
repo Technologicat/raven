@@ -822,7 +822,11 @@ class PostprocessorSettingsEditorGUI:
                         with dpg.tooltip(btn_tag):
                             dpg_markdown.add_text(help_markdown)
 
-                    for filter_name, param_info in self.all_postprocessor_filters.items():
+                    for filter_index, (filter_name, param_info) in enumerate(self.all_postprocessor_filters.items()):
+                        # A rule between filters, but not above the first one — there the panel's own
+                        # heading is already the boundary, and a second line under it reads as a stray.
+                        if filter_index:
+                            guiutils.add_section_separator()
                         with dpg.group(horizontal=True):
                             dpg.add_button(label="Reset", tag=f"{filter_name}_reset_button", callback=make_reset_filter_callback(filter_name))
                             dpg.add_tooltip(f"{filter_name}_reset_button", tag=f"{filter_name}_reset_tooltip")  # tag
