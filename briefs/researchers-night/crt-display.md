@@ -187,6 +187,34 @@ compromise. `alpha_mode="both"` is the default; `"luma"` is kept for taste
 testing against a bright backdrop, and is what you would set for a
 Display-band configuration.
 
+**Two corrections from building it, 2026-08-31.**
+
+- **"Alpha *as well as* luma" is wrong, and shipping it that way was visible
+  immediately.** The postprocessor works in straight alpha, so what a viewer
+  sees is `rgb * alpha`; applying the scanline term to both channels squares
+  it, and the brightness compensation corrects for one factor. The result was
+  a washed-out, half-transparent character. `alpha_mode` selects *where the
+  one modulation goes*, not how much of it there is: to alpha for the hologram
+  reading, to the colour for the display reading. The mask stays on the colour
+  either way, which the brief had right for its own reason.
+  - The same argument applies with more force to the three operations that
+    spread or decay light rather than modulating it — beam bleed, persistence
+    and glow. All three now run in premultiplied space, because blurring
+    straight colour channels drags the transparent background's colour into
+    the silhouette's edge, so a glow would darken the edge it is meant to
+    light up.
+  - **The still is what caught it**, not the test suite: every contract test
+    passed against the squared version. `test_the_two_modes_emit_the_same_light`
+    is the assertion that would have.
+- **The backdrop is the wrong reason to reach for `"luma"`** (Juha,
+  2026-08-31). Both modes are diegetic; the question they answer is *which
+  device*, and both answers are in-world. So `"luma"` is the display-device
+  reading and is perfectly good as that — what does not follow is the brief's
+  advice to switch to it against a bright backdrop. Against a bright backdrop
+  the hologram reading is if anything the better one, since the gaps show the
+  backdrop through them; dark bands there would read as scanlines painted onto
+  the character.
+
 Alpha is modulated by the **scanline** term only, never the mask. The mask is a
 chromatic structure — dimming one channel's emitters does not make that patch
 of image transparent. Modulating alpha by the mask punches holes at the mask

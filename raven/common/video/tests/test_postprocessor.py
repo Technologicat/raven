@@ -1094,6 +1094,24 @@ def _crt_off():
                 beam_bleed=0.0, glow_strength=0.0, persistence_tau=0.0)
 
 
+def _light(image):
+    """What a viewer sees: the emitted light, `rgb * alpha`.
+
+    The quantity to assert on for anything about brightness, because `crt` divides its modulation
+    between the colour channels and alpha - which of the two carries the scanlines is what `alpha_mode`
+    selects. A test that read the colour channels alone would report the default configuration as
+    having no scanlines at all.
+    """
+    return image[:3] * image[3:4]
+
+
+def _flat_grey(value=0.1, h=64, w=128):
+    """An opaque flat grey, for measuring what the filter does to a level rather than to a picture."""
+    image = torch.full((4, h, w), value)
+    image[3] = 1.0
+    return image
+
+
 class TestCrtContract:
     def test_preserves_shape_dtype_and_device(self):
         pp = _make_postprocessor()
@@ -1139,13 +1157,13 @@ class TestCrtBrightnessCompensation:
             for mask_pitch in (2, 3, 6):
                 for scanline_period, scanline_weight in ((2, 2.0), (3, 4.0), (1, 0.5)):
                     pp = _make_postprocessor()
-                    image = torch.full((4, 64, 128), 0.1)
+                    image = _flat_grey(0.1)
                     pp.crt(image, brightness_compensation=1.0,
                            mask_type=mask_type, mask_pitch=mask_pitch, mask_strength=0.35,
                            scanline_period=scanline_period, scanline_weight=scanline_weight,
                            scanline_strength=0.6, corner_falloff=0.0, beam_bleed=0.0,
                            glow_strength=0.0, persistence_tau=0.0)
-                    mean = float(image[:3].mean())
+                    mean = float(_light(image).mean())
                     # Tight on purpose. The compensation constant is the exact mean of the modulation,
                     # not an approximation of it, and the cheap approximation that treats the scanline
                     # and mask terms as independent is off by several percent for the staggered masks -
@@ -1158,10 +1176,10 @@ class TestCrtBrightnessCompensation:
         """The negative control for the test above: if this filter happened to darken nothing, full
         compensation would preserve the mean for a reason that has nothing to do with the constant."""
         pp = _make_postprocessor()
-        image = torch.full((4, 64, 128), 0.1)
+        image = _flat_grey(0.1)
         pp.crt(image, brightness_compensation=0.0, corner_falloff=0.0, beam_bleed=0.0,
                glow_strength=0.0, persistence_tau=0.0)
-        assert float(image[:3].mean()) < 0.06
+        assert float(_light(image).mean()) < 0.06
 
 
 class TestCrtMask:
@@ -1207,14 +1225,14 @@ class TestCrtMask:
 class TestCrtScanlines:
     @staticmethod
     def _row_profile(pp, **overrides):
-        """Per-row mean brightness, on a flat grey image with everything but the scanlines switched off."""
+        """Per-row mean emitted light, on a flat grey image with everything but the scanlines off."""
         settings = _crt_off()
         settings.update(scanline_strength=0.8, scanline_weight=3.0, scanline_period=2,
                         brightness_compensation=0.0)
         settings.update(overrides)
-        image = torch.full((4, 64, 128), 0.5)
+        image = _flat_grey(0.5)
         pp.crt(image, **settings)
-        return image[0].mean(dim=1)  # [h]
+        return _light(image)[0].mean(dim=1)  # [h]
 
     def test_alternate_rows_are_dimmed(self):
         pp = _make_postprocessor()
@@ -1264,6 +1282,29 @@ class TestCrtAlpha:
         alpha_before = image[3].clone()
         pp.crt(image, alpha_mode="both", beam_bleed=0.0, glow_strength=0.0, persistence_tau=0.0)
         assert not torch.equal(image[3], alpha_before)
+
+    def test_the_two_modes_emit_the_same_light(self):
+        """`alpha_mode` picks where the scanlines land, not how many times they are applied.
+
+        What a viewer sees is `rgb * alpha`, so a filter that put the scanline term into both channels
+        would square it there - and the brightness compensation, which corrects for one factor of it,
+        would leave the character washed out and half-transparent instead of rastered. That is what this
+        filter did on its first run, and the still it produced is the only reason anyone noticed.
+        """
+        common = dict(mask_type="aperture_grille", mask_pitch=3, mask_strength=0.35,
+                      scanline_strength=0.6, corner_falloff=0.1, brightness_compensation=0.0,
+                      beam_bleed=0.0, glow_strength=0.0, persistence_tau=0.0)
+        source = torch.rand(4, 64, 128) * 0.5  # dim enough that nothing meets the clamp
+
+        luma = source.clone()
+        _make_postprocessor().crt(luma, alpha_mode="luma", **common)
+        both = source.clone()
+        _make_postprocessor().crt(both, alpha_mode="both", **common)
+
+        assert torch.allclose(luma[:3] * luma[3:4], both[:3] * both[3:4], atol=1e-6)
+        # The negative control: the two modes must still be telling the fixture apart somewhere, or the
+        # assertion above holds for the uninteresting reason that nothing happened in either of them.
+        assert not torch.allclose(luma[3], both[3], atol=1e-3), "neither mode touched alpha"
 
     def test_alpha_carries_no_mask_pitch_structure(self):
         """The screen-door regression. Dimming one channel's emitters does not make that patch of the

@@ -332,6 +332,16 @@ docstring is the discoverability surface, and a warning that lives anywhere
 else will not be seen by the person who needs it. Document each parameter
 there too, in the style of the existing `scanlines` and `bloom` docstrings.
 
+## Note from building `crt` first (2026-08-31)
+
+The postprocessor works in **straight** alpha, so what a viewer sees is `rgb * alpha`, and any filter
+that modulates or spreads *light* has to decide which of the two channels carries it. `crt` shipped its
+first version applying the scanline term to both, which squares it; the symptom was a washed-out,
+half-transparent character, and only a rendered still showed it. The compositing this brief specifies
+is already in premultiplied terms (`over`, and `alpha = clamp(I / alpha_reference)` beside `rgb = tint * I`),
+so the same trap is not obviously present here — but the splat is a spreading operation, and the check is
+worth doing deliberately rather than assuming.
+
 ## Testing
 
 Add to `raven/common/video/tests/` alongside the existing postprocessor tests.

@@ -838,14 +838,21 @@ class Postprocessor:
         `corner_falloff`: Emitter-side dimming toward the corners, where the beam is most deflected.
                           The lens-side version of this is the separate `vignetting` filter.
 
-        `alpha_mode`: One of:
-                        "both": modulate luminance and alpha, so the gaps between scanlines are
-                                transparent and the backdrop shows through. The hologram reading.
-                        "luma": modulate luminance only. Use this against a bright backdrop, or for
-                                a display-device reading where the gaps are simply dark.
-                      Alpha follows the *scanline* term only, never the mask. Dimming one channel's
-                      emitters does not make that patch of the picture transparent, and modulating
-                      alpha at the mask pitch punches holes that read as a screen door.
+        `alpha_mode`: Where the scanlines land, which is to say which device is being simulated. Both
+                      answers are in-world; they are different objects, not different amounts of
+                      realism. One of:
+                        "both": on alpha, so the gaps between the lines are transparent and whatever is
+                                behind the avatar shows through them. The hologram reading.
+                        "luma": on the colour, so the gaps are dark. A display device, where the tube
+                                is simply off between the lines. Pair it with a chain position in the
+                                Display band, where the raster belongs to the viewer's screen.
+                      This picks where the modulation goes, not how much of it there is: what a viewer
+                      sees is the colour times the alpha, so applying the scanlines to both channels
+                      would square them and leave the character washed out and half-transparent.
+
+                      The mask stays on the colour in either mode. Dimming one channel's emitters does
+                      not make that patch of the picture transparent, and modulating alpha at the mask
+                      pitch punches holes that read as a screen door.
 
                       Note `translucent_display` also reduces alpha and is in the default chain. With
                       both at their defaults the character may end up too faint; pull one of them down.
@@ -891,6 +898,13 @@ class Postprocessor:
         # single detail that decides whether the result reads as glowing emitters or as a cheap overlay.
         w_scan = torch.exp(-scanline_weight * (2.0 * line_phase - 1.0)**2)
         w_scan = 1.0 - scanline_strength * (1.0 - w_scan)  # exactly 1.0 when the strength is 0
+        # The Gaussian, the separable barrel warp and the emitter mask are all Timothy Lottes' CRT shader
+        # (`CRT_Lottes.fxh`, as shipped with ReShade and vkBasalt), ported in spirit rather than
+        # transliterated. One thing does not need porting: that shader runs on an sRGB backbuffer and so
+        # does explicit linear/sRGB round-trips around the modulation, where this whole module already
+        # works in linear intensity space and gamma correction happens after the chain. The Gaussian and
+        # the multiplicative mask are more correct here than in the original, and adding gamma handling
+        # would break them.
 
         w_mask, mask_row_mean, w_corner = self._crt_weights(name, h, w, mask_type, mask_pitch,
                                                             mask_strength, corner_falloff)
@@ -910,14 +924,35 @@ class Postprocessor:
         mean_w = w_scan.mean() if mask_row_mean is None else (w_scan * mask_row_mean).mean()
         compensation = 1.0 + brightness_compensation * (1.0 / mean_w - 1.0)
 
-        image[:3].mul_(w_scan)
+        # What this filter modulates is *emitted light*, and in a straight-alpha frame the light is
+        # `rgb * alpha`. So `alpha_mode` chooses how the one modulation is divided between the two
+        # channels, not how much of it there is. Putting the scanline term into both would square it,
+        # and the compensation - which corrects for it once - would then leave the character washed out
+        # and half-transparent instead of rastered.
+        if alpha_mode == "both":
+            # The scanline term goes to alpha, so the gaps really are gaps and the room shows through.
+            image[3:4].mul_(w_scan)
+        else:  # "luma": the whole modulation stays on the colour, so the gaps are dark instead
+            image[:3].mul_(w_scan)
+        # The mask stays on the colour whichever mode this is, because it is chromatic structure: dimming
+        # one channel's emitters does not make that patch of the picture transparent, and modulating
+        # alpha at the mask pitch punches holes that read as a screen door.
         if w_mask is not None:
             image[:3].mul_(w_mask)
         if w_corner is not None:
             image[:3].mul_(w_corner)
+        # Compensation can only go on the colour - an alpha above 1 means nothing - but it corrects for
+        # the whole modulation either way, since the two channels multiply at composite time.
         image[:3].mul_(compensation)
-        if alpha_mode == "both":
-            image[3:4].mul_(w_scan)
+
+        # Everything from here on spreads or decays light rather than modulating it, and the same
+        # `rgb * alpha` argument applies with more force: blurring the colour channels on their own drags
+        # the transparent background's colour, which is arbitrary and usually black, into the silhouette's
+        # edge - so a glow would darken the edge it is supposed to light up. Convert to premultiplied
+        # once, do all three there, and convert back.
+        spreads_light = (beam_bleed > 0.0 or persistence_tau > 0.0 or glow_strength > 0.0)
+        if spreads_light:
+            image[:3].mul_(image[3:4])
 
         if beam_bleed > 0.0:
             # 1-2-1 at full strength, which is as wide as a 3-tap can go without becoming hollow.
@@ -931,9 +966,9 @@ class Postprocessor:
             # error frame over frame.
             #
             # Applied after the modulation, so what lingers is the raster pattern itself - the beam
-            # writes the pattern into the phosphor, and it is the pattern that decays. Alpha decays
-            # with the rest, because under the hologram reading the trail is light, and light is what
-            # alpha encodes here.
+            # writes the pattern into the phosphor, and it is the pattern that decays. In premultiplied
+            # space the colour channels and alpha decay together, which is one decay of the light rather
+            # than two; the accumulator therefore holds premultiplied values.
             record = self.crt_phosphor[name]
             if record is None or record["shape"] != image.shape:
                 # The crop can change mid-stream, so a stale accumulator is silently wrong. Compare the
@@ -957,6 +992,12 @@ class Postprocessor:
             # Alpha max-combines rather than adding, as in `bloom`: the glow spreads light outward past
             # the silhouette, but two overlapping glows do not make the picture more than fully opaque.
             image[3:4].copy_(torch.maximum(image[3:4], glow[3:4].mul_(glow_strength)))
+
+        if spreads_light:
+            # Back to straight alpha. Where nothing was emitted the colour is arbitrary and the division
+            # is meaningless, so the floor sends it to black rather than to infinity; alpha is zero there
+            # and the pixel contributes nothing either way.
+            image[:3].div_(image[3:4].clamp(min=1e-6))
 
         torch.clamp_(image, min=0.0, max=1.0)
 
