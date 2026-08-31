@@ -1224,13 +1224,13 @@ class TestCrtMask:
 
 class TestCrtScanlines:
     @staticmethod
-    def _row_profile(pp, **overrides):
+    def _row_profile(pp, h=64, w=128, **overrides):
         """Per-row mean emitted light, on a flat grey image with everything but the scanlines off."""
         settings = _crt_off()
         settings.update(scanline_strength=0.8, scanline_weight=3.0, scanline_period=2,
                         brightness_compensation=0.0)
         settings.update(overrides)
-        image = _flat_grey(0.5)
+        image = _flat_grey(0.5, h, w)
         pp.crt(image, **settings)
         return _light(image)[0].mean(dim=1)  # [h]
 
@@ -1250,6 +1250,25 @@ class TestCrtScanlines:
         second_bias = float(even_second[0::2].mean() - even_second[1::2].mean())
         assert first_bias * second_bias < 0, (f"the two frames have the same field: biases {first_bias:.4f} "
                                               f"and {second_bias:.4f}")
+
+    def test_overscan_moves_the_picture_without_moving_the_raster(self):
+        """`scanline_period` is in output pixels, and `overscan` used to quietly change it.
+
+        Taking the phase from the sampling coordinate meant the raster was magnified with the content:
+        at `overscan=1.15` the lines came out 2.30 output pixels apart instead of 2.00. Beyond breaking
+        what the parameter says it means, a non-integer pitch beats against the pixel grid.
+        """
+        def pitch(overscan):
+            profile = self._row_profile(_make_postprocessor(512, 64), h=512, overscan=overscan)
+            peaks = torch.nonzero((profile[1:-1] > profile[:-2]) & (profile[1:-1] >= profile[2:])).flatten()
+            return float((peaks[1:] - peaks[:-1]).float().mean())
+
+        flat = pitch(1.0)
+        assert abs(flat - 2.0) < 0.01, f"the raster is not on the pitch it was asked for: {flat:.3f}"
+        for overscan in (1.05, 1.10, 1.15):
+            got = pitch(overscan)
+            assert abs(got - flat) < 0.01, (f"overscan {overscan} moved the raster to {got:.3f} output "
+                                            f"pixels from {flat:.3f}")
 
     def test_output_depends_on_the_value_of_frame_no_not_on_the_call_history(self):
         """`frame_no` is wall-clock time in disguise, so a filter that counted its own calls instead would

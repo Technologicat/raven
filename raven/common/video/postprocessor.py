@@ -1807,9 +1807,14 @@ class Postprocessor:
         axis is pushed outward in proportion to the square of the *other* axis, which is what makes the
         corners bulge without bending the centerlines.
 
-        `source_row` is `[h, w]` and always float32: which source row each output pixel reads from,
+        `source_row` is `[h, w]` and always float32: which raster line falls on each output pixel,
         as a row index rather than a coordinate in [-1, 1]. It is what the scanline phase is taken
         from, and the dtype is the point - see the comment at its use site.
+
+        **`overscan` is deliberately absent from `source_row`.** It scales the picture and leaves the
+        raster alone, so the lines stay `scanline_period` output pixels apart however far the picture
+        is blown past the edges. `warp_x` and `warp_y` are present, because those bend the raster
+        along with everything else.
         """
         key = (h, w, warp_x, warp_y, overscan)
         cached = self.crt_warp_grid[name]
@@ -1819,10 +1824,10 @@ class Postprocessor:
         # dtype and are not precise enough for the phase.
         yy = torch.linspace(-1.0, 1.0, h, dtype=torch.float32, device=self.device).view(h, 1)
         xx = torch.linspace(-1.0, 1.0, w, dtype=torch.float32, device=self.device).view(1, w)
-        sx = (xx * (1.0 + warp_x * yy**2)).expand(h, w) / overscan
-        sy = (yy * (1.0 + warp_y * xx**2)).expand(h, w) / overscan
-        grid = torch.stack((sx, sy), 2).unsqueeze(0).to(self.dtype)  # [h, w, x/y] -> batch of one
-        source_row = (sy + 1.0) * (0.5 * (h - 1))
+        warped_x = (xx * (1.0 + warp_x * yy**2)).expand(h, w)
+        warped_y = (yy * (1.0 + warp_y * xx**2)).expand(h, w)
+        grid = torch.stack((warped_x / overscan, warped_y / overscan), 2).unsqueeze(0).to(self.dtype)
+        source_row = (warped_y + 1.0) * (0.5 * (h - 1))  # before the overscan scaling, on purpose
         self.crt_warp_grid[name] = {"key": key, "grid": grid, "source_row": source_row}
         return grid, source_row
 
@@ -1961,7 +1966,8 @@ class Postprocessor:
                             which has no glass and, on a transparent field, no straight lines to bend.
                             Both default to 0.0, which also skips the resample entirely.
         `overscan`: Uniform zoom applied with the warp, as a CRT overscans its picture past the
-                    bezel. 1.0 disables it.
+                    bezel. 1.0 disables it. It moves the picture and not the raster: the scanlines
+                    stay `scanline_period` output pixels apart however far it is pushed.
 
         `scanline_period`: Output lines per raster line. 2 means one bright line for every two pixel
                            rows. Raise it on a high-resolution output to keep the raster visible.
