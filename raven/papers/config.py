@@ -219,6 +219,17 @@ Items:
 # from somebody's bibliography, where a wrong `true` merely leaves things as they were; and the venues in
 # a real corpus are mostly obscure, interdisciplinary, or a bare publisher name, none of which is evidence
 # of anything.
+#
+# **How thin the evidence for this is, stated plainly, because the result looks better than it is.** As of
+# 2026-08-31 this question has been asked of one corpus and has seen exactly *one* true positive — the
+# astronomy DOI it was written for. Eleven true negatives came with it, and those are the useful half:
+# Springer handbooks, an encyclopedia, and one journal appearing in two casings all correctly fitted, which
+# says the false-positive rate is plausibly low for venues of that shape. Nothing has measured how often it
+# *misses* a wrong DOI, and one worked example is not a hit rate. Treat a clean run as saying nothing much
+# happened rather than as saying nothing is wrong, and read the audit anyway. If a corpus ever exercises
+# this properly — several genuinely wrong identifiers, or venues obscure enough to trip it — that is worth
+# writing down here, since this paragraph is the only thing standing between a reader and the assumption
+# that a check this accurate on its first outing is accurate in general.
 judge_doi_instructions = """\
 You are checking a bibliography for identifiers attached to the wrong paper. This happens: a database \
 mismatches a record, or an author pastes the wrong journal reference into a preprint submission, and a \
