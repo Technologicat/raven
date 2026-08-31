@@ -59,8 +59,13 @@ mode that ordering exists to prevent.
 > at `-2.0` is now *upstream* of the raster, and the dust gets scanlined —
 > exactly what this section set out to prevent.
 >
-> **Not yet decided, and it is the first question this filter has to answer.**
-> The two options trade against each other:
+> **Decided 2026-08-31 (Juha): stay at `-2.0` for v1, and tune if it looks
+> weird.** So the dust rides through `bloom` and keeps the glint coupling, and
+> the raster covers the whole picture rather than the character alone. The
+> options below are kept because they are what to reach for if the rastered dust
+> turns out to read badly, and because the third one is not obvious.
+>
+> The two rejected-for-now options trade against each other:
 >
 > - **Leave dust at `-2.0`** and accept a rastered dust field. The bloom
 >   coupling — which the next section calls the whole trick — is kept intact.
@@ -365,10 +370,36 @@ there too, in the style of the existing `scanlines` and `bloom` docstrings.
 The postprocessor works in **straight** alpha, so what a viewer sees is `rgb * alpha`, and any filter
 that modulates or spreads *light* has to decide which of the two channels carries it. `crt` shipped its
 first version applying the scanline term to both, which squares it; the symptom was a washed-out,
-half-transparent character, and only a rendered still showed it. The compositing this brief specifies
-is already in premultiplied terms (`over`, and `alpha = clamp(I / alpha_reference)` beside `rgb = tint * I`),
-so the same trap is not obviously present here — but the splat is a spreading operation, and the check is
-worth doing deliberately rather than assuming.
+half-transparent character, and only a rendered still showed it.
+
+**The check was done, and this brief has the same bug.** Under *Compositing* below:
+
+```
+rgb   = tint * I
+alpha = clamp(I / alpha_reference, 0, 1)
+```
+
+What a viewer sees is `rgb * alpha`, which is `tint * I² / alpha_reference` — the intensity squared.
+A mote at half the reference intensity would come out at a quarter of the light it should have, and
+the effect would read as too dim and too contrasty at once, with the faint motes nearly gone.
+
+**The correct form treats `tint * I` as the *premultiplied* colour and divides it back out**, which is
+the same move `crt` ended up making for its beam bleed, persistence and glow:
+
+```
+alpha = clamp(I / alpha_reference, 0, 1)
+rgb   = tint * I / max(alpha, eps)
+```
+
+so that `rgb * alpha == tint * I` exactly. Note what that means in practice, because it is
+counter-intuitive and worth recognizing in a render: below the reference intensity a mote has a
+**constant colour** (`tint * alpha_reference`) and varying transparency; above it, alpha saturates at 1
+and the colour goes on brightening into the HDR headroom that `max_intensity` caps. Both regimes are
+right; a mote that dims by changing colour is the sign this was implemented the other way.
+
+Assert `rgb * alpha` against the intended flux directly. The energy-conservation test in the testing
+section below is the natural place, and as written it would pass against the squared version, since it
+sums the accumulation buffer rather than the composited light.
 
 ## Testing
 
