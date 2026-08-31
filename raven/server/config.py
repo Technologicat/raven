@@ -238,8 +238,11 @@ postprocessor_defaults = [
     # ("analog_vhstracking", {}),
 
     # CRT TV output (for a touch of retrofuturism)
-    ("banding", {}),
-    ("scanlines", {})
+    #
+    # `crt` supersedes `scanlines` here: same idea, and it draws a Gaussian raster through a phosphor
+    # mask instead of a hard bright/dark alternation. `scanlines` remains available as the cheap one.
+    ("crt", {}),
+    ("banding", {})
 ]
 
 # Default configuration for the animator, loaded when raven-avatar is launched.

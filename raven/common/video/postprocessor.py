@@ -1799,22 +1799,32 @@ class Postprocessor:
         image[3, :, :].mul_(alpha)
 
     def _crt_warp_grid(self, name: str, h: int, w: int,
-                       warp_x: float, warp_y: float, overscan: float) -> torch.Tensor:
+                       warp_x: float, warp_y: float, overscan: float) -> Tuple[torch.Tensor, torch.Tensor]:
         """Sampling grid for `crt`'s barrel warp, cached per filter instance.
 
-        Returns a `[1, h, w, 2]` grid in `grid_sample` layout, where the last axis is (x, y).
-        The separable form is Lottes': each axis is pushed outward in proportion to the square
-        of the *other* axis, which is what makes the corners bulge without bending the centerlines.
+        Returns `(grid, source_row)`. `grid` is `[1, h, w, 2]` in `grid_sample` layout, in the
+        postprocessor's own dtype, where the last axis is (x, y). The separable form is Lottes': each
+        axis is pushed outward in proportion to the square of the *other* axis, which is what makes the
+        corners bulge without bending the centerlines.
+
+        `source_row` is `[h, w]` and always float32: which source row each output pixel reads from,
+        as a row index rather than a coordinate in [-1, 1]. It is what the scanline phase is taken
+        from, and the dtype is the point - see the comment at its use site.
         """
         key = (h, w, warp_x, warp_y, overscan)
         cached = self.crt_warp_grid[name]
         if cached is not None and cached["key"] == key:
-            return cached["grid"]
-        sx = self._meshx * (1.0 + warp_x * self._meshy**2)
-        sy = self._meshy * (1.0 + warp_y * self._meshx**2)
-        grid = torch.stack((sx / overscan, sy / overscan), 2).unsqueeze(0)  # [h, w, x/y] -> batch of one
-        self.crt_warp_grid[name] = {"key": key, "grid": grid}
-        return grid
+            return cached["grid"], cached["source_row"]
+        # Built here rather than from `self._meshx` / `self._meshy`, which carry the postprocessor's
+        # dtype and are not precise enough for the phase.
+        yy = torch.linspace(-1.0, 1.0, h, dtype=torch.float32, device=self.device).view(h, 1)
+        xx = torch.linspace(-1.0, 1.0, w, dtype=torch.float32, device=self.device).view(1, w)
+        sx = (xx * (1.0 + warp_x * yy**2)).expand(h, w) / overscan
+        sy = (yy * (1.0 + warp_y * xx**2)).expand(h, w) / overscan
+        grid = torch.stack((sx, sy), 2).unsqueeze(0).to(self.dtype)  # [h, w, x/y] -> batch of one
+        source_row = (sy + 1.0) * (0.5 * (h - 1))
+        self.crt_warp_grid[name] = {"key": key, "grid": grid, "source_row": source_row}
+        return grid, source_row
 
     def _crt_weights(self, name: str, h: int, w: int,
                      mask_type: str, mask_pitch: int, mask_strength: float,
@@ -1837,9 +1847,13 @@ class Postprocessor:
         if cached is not None and cached["key"] == key:
             return cached["mask"], cached["row_mean"], cached["corner"]
 
-        xx = torch.arange(w, device=self.device, dtype=self.dtype).view(1, w)  # output column index
-        yy = torch.arange(h, device=self.device, dtype=self.dtype).view(h, 1)  # output row index
-        channels = torch.arange(3, device=self.device, dtype=self.dtype)
+        # Index math in int64, not in the postprocessor's dtype. Integers are exact in float16 only up
+        # to 2048, so a 4K output would start picking the wrong emitter partway down the picture -
+        # the same class of failure as the scanline phase, which did ship, and cheaper to avoid here
+        # than to diagnose later. These are cached, so nothing is paid per frame for the wider type.
+        xx = torch.arange(w, device=self.device).view(1, w)  # output column index
+        yy = torch.arange(h, device=self.device).view(h, 1)  # output row index
+        channels = torch.arange(3, device=self.device).view(3, 1, 1)
         dim = 1.0 - mask_strength
 
         # The mask lives in OUTPUT pixel space, not in the warped source space the scanlines use.
@@ -1851,14 +1865,12 @@ class Postprocessor:
             mask = None
         else:
             if mask_type == "aperture_grille":  # vertical RGB stripes: the Trinitron look
-                stripe = ((xx % mask_pitch) / mask_pitch) * 3.0  # [1, w], which third of the pitch
-                emitter = torch.floor(stripe).clamp_(0.0, 2.0)  # [1, w], channel owning this column
-                lit = (emitter.unsqueeze(0) == channels.view(3, 1, 1))  # [3, 1, w]
+                emitter = (xx % mask_pitch) * 3 // mask_pitch  # [1, w], channel owning this column
+                lit = (emitter.unsqueeze(0) == channels)  # [3, 1, w]
             else:  # "slot" and "shadow": the stripe phase jumps half a pitch every `mask_pitch` rows
-                stagger = (torch.floor(yy / mask_pitch) % 2.0) * (mask_pitch / 2.0)  # [h, 1]
-                stripe = (((xx + stagger) % mask_pitch) / mask_pitch) * 3.0  # [h, w]
-                emitter = torch.floor(stripe).clamp_(0.0, 2.0)
-                lit = (emitter.unsqueeze(0) == channels.view(3, 1, 1))  # [3, h, w]
+                stagger = ((yy // mask_pitch) % 2) * (mask_pitch // 2)  # [h, 1]
+                emitter = ((xx + stagger) % mask_pitch) * 3 // mask_pitch  # [h, w]
+                lit = (emitter.unsqueeze(0) == channels)  # [3, h, w]
             mask = dim + (1.0 - dim) * lit.to(self.dtype)
             if mask_type == "shadow":
                 # A dot mask emits in rows of triads rather than in continuous stripes, so dim between the
@@ -1908,7 +1920,7 @@ class Postprocessor:
             scanline_period: int = 2,
             scanline_weight: float = 2.0,
             scanline_strength: float = 0.6,
-            dynamic_field: bool = True,
+            dynamic_field: bool = False,
             field: int = 0,
             mask_type: str = "aperture_grille",
             mask_pitch: int = 3,
@@ -1959,6 +1971,11 @@ class Postprocessor:
         `scanline_strength`: Overall depth of the scanline modulation. 0.0 disables it.
         `dynamic_field`: If `True`, the raster shifts by half a line each frame, the way an
                          interlaced display alternates fields.
+
+                         Off by default, because it flickers: the alternation is not synchronized to
+                         an integer number of vsyncs, so it beats against the display's refresh.
+                         `scanlines` has the same option switched on and is not objectionable there;
+                         it is this filter's raster that makes the flicker too noticeable to keep.
         `field`: Which field the alternation starts on, 0 or 1. Only matters as a phase offset.
 
         `mask_type`: The phosphor structure in front of the beam. One of:
@@ -2034,13 +2051,13 @@ class Postprocessor:
         # which is what keeps the raster crisp: each further resample would soften the high-frequency
         # structure that *is* the effect.
         if warp_x != 0.0 or warp_y != 0.0 or overscan != 1.0:
-            grid = self._crt_warp_grid(name, h, w, warp_x, warp_y, overscan)
+            grid, y_px = self._crt_warp_grid(name, h, w, warp_x, warp_y, overscan)
             warped = torch.nn.functional.grid_sample(image.unsqueeze(0), grid,
                                                      mode="bilinear", padding_mode="zeros", align_corners=False)
             image[:, :, :] = warped.squeeze(0)
-            sy = grid[0, :, :, 1]  # [h, w], the warped y coordinate each output pixel was read from
         else:
-            sy = self._yy.view(h, 1)  # [h, 1], no warp, so the raster is a function of the row alone
+            # No warp, so the raster is a function of the row alone, and the row index is exact.
+            y_px = torch.arange(h, dtype=torch.float32, device=self.device).view(h, 1)
 
         # The scanlines live in warped (source) space: the beam laid them down before the glass bent
         # the picture, so under any warp they curve with the image.
@@ -2048,7 +2065,13 @@ class Postprocessor:
             field_phase = 0.5 * ((field + int(self.frame_no)) % 2)
         else:
             field_phase = 0.5 * (field % 2)
-        y_px = (sy + 1.0) * (0.5 * (h - 1))  # [-1, 1] -> row index
+        # The phase is computed in float32 even when the postprocessor is running in float16, and this
+        # is not a precaution - it is a bug that shipped. Deriving the row index from a half-open
+        # coordinate, `(linspace(-1, 1, h) + 1) * (h - 1) / 2`, cancels catastrophically in fp16: at
+        # h = 1024 the result is off by up to half a row, with row-to-row steps between 0.5 and 1.5
+        # instead of 1.0. The visible effect is bands where consecutive rows land on the same side of
+        # the raster and the alternation stops - horizontal stripes across the picture, uniformly lit,
+        # about 120 rows tall. Row indices are exact in float32 up to 2**24.
         line_phase = y_px / scanline_period + field_phase
         line_phase = line_phase - torch.floor(line_phase)  # position within one raster line, [0, 1)
         # Gaussian falloff across the line, rather than the usual bright/dark alternation. This is the

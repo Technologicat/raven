@@ -1265,6 +1265,71 @@ class TestCrtScanlines:
         assert torch.equal(straight_there, by_way_of_others)
 
 
+class TestCrtPrecision:
+    """The raster is drawn at the pixel pitch, so it is the one thing here that half-precision breaks.
+
+    The postprocessor runs in float16 on the server. Deriving the row index from a coordinate in
+    [-1, 1] — `(linspace(-1, 1, h) + 1) * (h - 1) / 2` — cancels catastrophically there: at h = 1024
+    the answer is off by up to half a row, and across a band of about 120 rows consecutive rows land
+    on the same side of the raster, so the alternation stops and the band renders uniformly lit.
+    It shipped, and it was spotted on screen as horizontal stripes rather than by any test.
+    """
+
+    @staticmethod
+    def _row_light(dtype, h=1024, w=64, **overrides):
+        pp = Postprocessor("cpu", dtype, chain=[])
+        pp._setup_meshgrid(h, w)
+        pp.frame_no = 0.0
+        pp.last_frame_no = -1.0
+        image = torch.full((4, h, w), 0.5, dtype=dtype)
+        image[3] = 1.0
+        settings = dict(scanline_strength=0.8, scanline_weight=3.0, scanline_period=2,
+                        dynamic_field=False, mask_type="none", corner_falloff=0.0,
+                        beam_bleed=0.0, glow_strength=0.0, persistence_tau=0.0,
+                        brightness_compensation=0.0)
+        settings.update(overrides)
+        pp.crt(image, **settings)
+        return _light(image).float()[0].mean(dim=1)  # [h]
+
+    def test_the_raster_alternates_on_every_row_in_half_precision(self):
+        """With period 2 every row must differ from its neighbour. A stalled pair is the artifact."""
+        profile = self._row_light(torch.float16)
+        span = float(profile.max() - profile.min())
+        stalled = torch.nonzero((profile[1:] - profile[:-1]).abs() < 0.2 * span).flatten()
+        assert len(stalled) == 0, (f"the raster stops alternating at {len(stalled)} of {len(profile) - 1} "
+                                   f"row boundaries, first at row {int(stalled[0]) if len(stalled) else -1}")
+
+    def test_half_and_single_precision_draw_the_same_raster(self):
+        """Not merely self-consistent: fp16 must put the light where fp32 puts it, row for row.
+
+        The whole profile is compared rather than which of each pair is brighter. Under the bug the
+        parity comparison still agreed almost everywhere — the stalled band has the rows equal rather
+        than swapped, so a test asking only "is the odd row brighter" passes straight through it.
+        """
+        half = self._row_light(torch.float16)
+        single = self._row_light(torch.float32)
+        worst = float((half - single).abs().max())
+        assert worst < 0.01, f"the two precisions draw different rasters, worst row differs by {worst:.3f}"
+
+    def test_the_mask_picks_the_right_emitter_above_the_half_precision_integer_limit(self):
+        """Integers stop being exact in float16 at 2048, which a 4K frame exceeds. The mask's index
+        math is therefore done in int64: at 2176 rows, a staggered mask built from float16 row numbers
+        starts picking the wrong emitter partway down the picture.
+
+        Compared against the same mask built in float32, because 'exactly one channel is lit per
+        pixel' stays true of the broken version — a wrong stagger still lights exactly one.
+        """
+        def mask_for(dtype):
+            pp = Postprocessor("cpu", dtype, chain=[])
+            pp._setup_meshgrid(2176, 64)
+            mask, _, _ = pp._crt_weights("t", 2176, 64, "slot", 6, 0.35, 0.0)
+            return mask > 0.99
+
+        half, single = mask_for(torch.float16), mask_for(torch.float32)
+        wrong = int((half != single).any(dim=0).sum())
+        assert wrong == 0, f"{wrong} pixels light a different emitter in half precision"
+
+
 class TestCrtAlpha:
     """Where the beam is not writing, a hologram emits no light, so the gaps between scanlines are
     transparent rather than dark. Alpha follows the scanline term and nothing else."""
@@ -1344,17 +1409,26 @@ class TestCrtPhosphorPersistence:
         pp.crt(second, persistence_tau=0.0)
         assert torch.equal(first, second)
 
-    def test_on_is_not_repeatable_at_a_fixed_frame(self):
-        """The negative control for the test above: with the accumulator engaged the second call sees the
-        first one's trail, so a fixture where both runs agreed would prove nothing about statelessness."""
-        pp = _make_postprocessor()
-        source = torch.rand(4, 64, 128)
-        first = source.clone()
-        pp.crt(first, persistence_tau=0.2)
-        pp.last_frame_no, pp.frame_no = 0.0, 1.0
-        second = source.clone()
-        pp.crt(second, persistence_tau=0.2)
-        assert not torch.equal(first, second)
+    def test_on_carries_light_from_the_previous_frame(self):
+        """The negative control for the test above, and the feature itself: a bright frame followed by a
+        dark one must leave a trail.
+
+        Asserted against a *changing* picture on purpose. An earlier version of this test fed the same
+        image twice and asked only that the two outputs differ, which they did - but they differed
+        because `dynamic_field` was alternating the raster, not because anything was accumulating. It
+        went green for a reason that had nothing to do with persistence, and went red the day the field
+        alternation was switched off by default.
+        """
+        def second_frame(persistence_tau):
+            pp = _make_postprocessor()
+            pp.crt(_flat_grey(0.9), persistence_tau=persistence_tau)
+            pp.last_frame_no, pp.frame_no = 0.0, 1.0
+            dark = torch.zeros(4, 64, 128)
+            pp.crt(dark, persistence_tau=persistence_tau)
+            return float(_light(dark).mean())
+
+        assert second_frame(0.2) > 0.05, "nothing lingered from the bright frame"
+        assert second_frame(0.0) == 0.0, "a black frame came back non-black with the accumulator off"
 
     def test_decay_is_per_second_not_per_frame(self):
         """Two steps of one frame must leave the same trail as one step of two. A per-frame decay constant
