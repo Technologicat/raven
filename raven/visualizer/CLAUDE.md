@@ -22,7 +22,24 @@ importer_cli.py    (~80)  — `raven-importer` entry point
 app_state.py       (~58)  — top-level app state containers
 ```
 
-No tests, and still the priority. The original rationale was to catch regressions *during* the refactor; that refactor has since landed without them, so what remains is the other half — pinning down the API boundaries the split created, before feature work starts leaning on them. The extracted modules are the tractable targets, being smaller and having real seams; `app.py` was never the place to start. `importer.py` also serves as a standalone CLI app (`raven-importer`).
+**Almost no tests, and still the priority.** `raven/visualizer/tests/test_importer.py` is the whole of it
+— three tests covering `_parse_input_files`, added 2026-08-31 alongside the per-record error guard they
+pin. Everything else in the package is untested.
+
+The original rationale was to catch regressions *during* the refactor; that refactor has since landed
+without them, so what remains is the other half — pinning down the API boundaries the split created,
+before feature work starts leaning on them. The extracted modules are the tractable targets, being
+smaller and having real seams; `app.py` was never the place to start. `importer.py` also serves as a
+standalone CLI app (`raven-importer`).
+
+**What the first test module establishes, so the next one need not rediscover it:** `importer` imports
+cleanly under pytest — everything expensive is lazy, the LLM connection is set up at import time only
+when the config asks for cluster keywords or summaries — so its functions can be driven against a `.bib`
+written into `tmp_path`. It does reach sklearn, torch and spaCy, which CI does not install, so the module
+is guarded with `pytest.importorskip("raven.visualizer.importer")` and marked `ml`; without the guard a
+module-level import failure is a *collection* error and turns the matrix red rather than skipping.
+`python scripts/check_ci_imports.py` is what reports that, and is worth running before pushing a new test
+module here.
 
 ## How app.py Is Organized
 

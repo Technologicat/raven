@@ -341,6 +341,8 @@
 
 *Raven-visualizer*
 
+- **a bibliography record that cannot be parsed no longer ends the import.** One bad record used to abort the run and discard every record already processed — an hour of work on a large bibliography, with no way to get past it — and whether a record is bad is a question of what some exporter wrote, not of anything visible beforehand. Such a record is now logged and skipped. Dehyphenation does not even cost you that: being cosmetic, a failure there leaves the abstract untidied and keeps the record.
+
 - the info panel's smooth scroll is now really stopped when the panel's content is rebuilt, rather than being told to stop by a call that tidies up after it and leaves it running. A scroll in flight kept moving the panel through the swap, over the position the rebuild had just restored.
 
 *Raven-avatar*

@@ -234,54 +234,73 @@ def _parse_input_files(*filenames):
             _update_status_and_log(f"[{j} out of {len(bibtex_entries_by_filename)}] Extracting data from {filename}...", log_indent=1)
             parsed_data_by_filename[filename] = []
             for entry in entries:
-                fields = entry.fields_dict
-
                 if _is_cancelled():
                     return
 
-                # Validate presence of mandatory fields
-                entry_valid = True
-                for field in ("author", "year", "title"):
-                    if field not in fields or not fields[field].value:
-                        logger.warning(f"Skipping entry '{entry.key}', reason: no {field}")
-                        entry_valid = False
-                        break
-                if not entry_valid:
-                    progress.tick()
-                    continue
+                # A record we cannot process costs us that record and nothing else. Bibliographies come
+                # from exporters nobody here controls, carrying text nobody here has seen, so the useful
+                # guard is not against any particular defect but against the shape they all share: one
+                # bad record used to abort the run, discarding every record already processed - an hour
+                # of work on a large bibliography - and leaving no way to get past it. Skipping is what
+                # a record missing a mandatory field already does; this widens it to anything that
+                # throws. The cancellation check stays outside, since that is not a failure.
+                try:
+                    fields = entry.fields_dict
 
-                authors_str = common_utils.format_bibtex_authors(fields["author"].value)
-                year = fields["year"].value
-                title = common_utils.normalize_whitespace(common_utils.unicodize_basic_markup(fields["title"].value))
+                    # Validate presence of mandatory fields
+                    entry_valid = True
+                    for field in ("author", "year", "title"):
+                        if field not in fields or not fields[field].value:
+                            logger.warning(f"Skipping entry '{entry.key}', reason: no {field}")
+                            entry_valid = False
+                            break
+                    if not entry_valid:
+                        progress.tick()
+                        continue
 
-                # abstract is optional
-                if "abstract" in fields and fields["abstract"].value:
-                    abstract = fields["abstract"].value
-                    if visualizer_config.dehyphenate:
-                        if dehyphenator is None:  # delayed init - load only if needed, on first use
-                            dehyphenator = mayberemote.Dehyphenator(allow_local=True,
-                                                                    model_name=client_config.dehyphenation_model,
-                                                                    device_string=client_config.devices["sanitize"]["device_string"])
-                        abstract = dehyphenator.dehyphenate(abstract)
-                    abstract = common_utils.unicodize_basic_markup(abstract)
-                    # Last, so the notice is seen in the same form everything downstream will see. Markup
-                    # conversion does not produce the copyright sign, but it does strip the grouping braces
-                    # around `{\copyright}`, and the stripper knows that spelling too.
-                    abstract = textutil.strip_boilerplate(abstract)
-                else:
-                    abstract = None
+                    authors_str = common_utils.format_bibtex_authors(fields["author"].value)
+                    year = fields["year"].value
+                    title = common_utils.normalize_whitespace(common_utils.unicodize_basic_markup(fields["title"].value))
 
-                # TODO: "keywords" may be populated (though it always isn't). We don't use them anyway, as we extract our own via NLP.
-                # TODO: WOS exports may also have "keywords-plus"
+                    # abstract is optional
+                    if "abstract" in fields and fields["abstract"].value:
+                        abstract = fields["abstract"].value
+                        if visualizer_config.dehyphenate:
+                            if dehyphenator is None:  # delayed init - load only if needed, on first use
+                                dehyphenator = mayberemote.Dehyphenator(allow_local=True,
+                                                                        model_name=client_config.dehyphenation_model,
+                                                                        device_string=client_config.devices["sanitize"]["device_string"])
+                            # Nested inside the record-level guard on purpose, because the two decisions
+                            # differ: dehyphenation is cosmetic, so a record it chokes on keeps its
+                            # abstract untidied rather than being dropped, where a failure anywhere else
+                            # means we do not have a record worth keeping.
+                            try:
+                                abstract = dehyphenator.dehyphenate(abstract)
+                            except Exception as exc:
+                                logger.warning(f"_parse_input_files: dehyphenation failed for entry '{entry.key}' "
+                                               f"of {filename}, using the abstract as-is. "
+                                               f"{type(exc)}: {exc}")
+                        abstract = common_utils.unicodize_basic_markup(abstract)
+                        # Last, so the notice is seen in the same form everything downstream will see. Markup
+                        # conversion does not produce the copyright sign, but it does strip the grouping braces
+                        # around `{\copyright}`, and the stripper knows that spelling too.
+                        abstract = textutil.strip_boilerplate(abstract)
+                    else:
+                        abstract = None
 
-                # TODO: Preserve what other fields? Or include a full dump of `entry` as-is? Or its `fields_dict`?
+                    # TODO: "keywords" may be populated (though it always isn't). We don't use them anyway, as we extract our own via NLP.
+                    # TODO: WOS exports may also have "keywords-plus"
+                    # TODO: Preserve what other fields? Or include a full dump of `entry` as-is? Or its `fields_dict`?
 
-                # Preserving the full author list in BibTeX format allows us to BibTeX export interesting entries from the GUI.
-                parsed_data_by_filename[filename].append(env(author=authors_str,
-                                                             bibtex_author=fields["author"].value,
-                                                             year=year,
-                                                             title=title,
-                                                             abstract=abstract))
+                    # Preserving the full author list in BibTeX format allows us to BibTeX export interesting entries from the GUI.
+                    parsed_data_by_filename[filename].append(env(author=authors_str,
+                                                                 bibtex_author=fields["author"].value,
+                                                                 year=year,
+                                                                 title=title,
+                                                                 abstract=abstract))
+                except Exception as exc:
+                    logger.warning(f"_parse_input_files: skipping entry '{entry.key}' of {filename}, "
+                                   f"which failed to parse. {type(exc)}: {exc}")
                 progress.tick()
     n_entries_total = sum(len(entries) for entries in bibtex_entries_by_filename.values())
     logger.info(f"    {n_entries_total} total entries processed.")

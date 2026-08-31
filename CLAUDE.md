@@ -697,9 +697,13 @@ large DPG frontends.
 
 What is **not** covered:
 
-- **Visualizer has zero tests.** Still the biggest gap, and the refactor that motivated writing them
-  landed without them — so what they would pin now is the new module boundaries rather than a rewrite
-  in flight.
+- **Visualizer is very nearly untested.** Still the biggest gap, and the refactor that motivated writing
+  tests landed without them — so what they would pin now is the new module boundaries rather than a
+  rewrite in flight. The package broke its duck on 2026-08-31 with
+  `raven/visualizer/tests/test_importer.py`, three tests on `_parse_input_files` written alongside the
+  per-record error guard they pin; nothing else in the package is covered. That module also records what
+  it costs to test this package at all — the `importorskip` guard and `ml` marker `importer` needs to
+  stay out of CI's way — so the next one starts from there rather than from nothing.
 - **The DPG frontends**: librarian `app` and `cleanup_dialog`, and every Visualizer GUI module. **Not
   because DPG resists testing** — it runs without a mapped window, and `common/gui/tests/` already drives a
   real context with an unmapped viewport. See `dpg-notes.md`, "Testing DPG code". The barrier is that nobody
@@ -754,7 +758,7 @@ Size follows VRAM in the usual way — a ~30B MoE wants 24 GB or more, a ~4B fit
 
 ## Known Issues / TODOs
 - Visualizer: the `app.py` split has landed (see `raven/visualizer/CLAUDE.md` for the module map). What remains is ordinary tidying — `info_panel.py` at ~1.5k lines is the next split candidate, and `importer.py` could use stage separation — not a god-object rescue
-- Visualizer has zero tests (the librarian gaps this used to list — `scaffold`, `appstate`, `llmclient` — are all covered now)
+- Visualizer is very nearly untested — only `importer`'s `_parse_input_files` is covered (the librarian gaps this used to list — `scaffold`, `appstate`, `llmclient` — are all covered now)
 - DearPyGui_Markdown decorations land in the wrong place — now tracked in `TODO_DEFERRED.md`, "Markdown
   decorations are placed by measuring the text". All five of them are drawlists positioned from a
   measurement that nothing waits for. The URL *colour* sitting one character off is filed there as probably
