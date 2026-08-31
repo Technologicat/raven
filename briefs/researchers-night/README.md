@@ -18,8 +18,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | Brief | What | Status |
 |---|---|---|
 | `markdown-block-rendering-brief.md` | Band-2 item 12: block-level Markdown in the chat view | Researchers' Night. Steps 1 and 5 landed 2026-08-25; what remains is behind the single-newline split, which is also what fenced code and multi-line lists are waiting on |
-| `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Step zero is that `XDotWidget.set_graph` has no callers and no tests |
-| `atmospheric-dust.md` | Avatar postprocessor: dust | Researchers' Night, and **next**. Moved to the front with `crt` on 2026-08-31; it was the schedule's slack until then. **Corrected the same day and buildable as written** — its placement is decided (−2.0, so the dust carries the raster), and its compositing and testing sections were rewritten after `crt` found the squared-alpha trap they shared |
+| `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night, and **next**. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Step zero is that `XDotWidget.set_graph` has no callers and no tests |
 | `12_derived-artifact-store-brief.md` | One keying and regeneration mechanism for everything computed *from* a source artifact | v0.2.9. Does not depend on 13 |
 | `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night |
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, PCA preprocessing, cosine-to-medoid outlier assignment, Procrustes alignment | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
@@ -35,6 +34,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `done/in-progress-reply-as-a-node.md` | Band-2 item 9: the reply is a node in the datastore while it streams, so an interrupted one survives | 2026-08-28 |
 | `done/stt-audio-input-panel.md` | Band-2 item 10: the microphone set up where it will be used — level, automatic stop, peak hold and the device itself, as a panel rather than as config knobs | 2026-08-28. Written and closed the same day. Its closing section is worth reading for the eight faults live testing found that no desk testing would have, and for what it took to make the test stub worth anything |
 | `done/crt-display.md` | Avatar postprocessor: the character drawn by a scanning electron beam | 2026-08-31, in about ninety minutes. Its §7 is the one to read: the brief was right about *what* to build and wrong about four *whys*, including one that shipped as a rendering bug. It also records the half-precision hazard that any filter drawing structure at the pixel pitch will hit |
+| `done/atmospheric-dust.md` | Avatar postprocessor: light-catching motes drifting in the air | 2026-08-31, the same session as `crt`. Its closing section records a brightness formula the brief got wrong — and, more usefully, a test that passed against the very mistake it was written to reject, found by deliberately breaking the source rather than by reading the test |
 
 The keyboard brief's last item became a constellation-wide component — `raven.common.gui.keyboardmark`, the
 blue pulse that says *the keyboard is here* — so its closing section is worth reading outside the file
@@ -64,11 +64,13 @@ longer has to stay ahead of `crt`.
    and see how far we get"*. Estimated **1–3 days in total**: self-contained, and straightforward once we
    iterate a bit. They go first because they are an important part of the wow factor, and because the past
    week has been unglamorous-but-necessary features. Time to switch gears.
-   - ~~**`crt`**~~ — **done 2026-08-31**, in about ninety minutes of session time, so the estimate was
-     generous rather than wrong. `done/crt-display.md` §7 closes it. **`atmospheric_dust` is next**, and
-     its brief was corrected the same evening on two counts: the placement stays at `-2.0` and accepts a
-     rastered dust field for v1, and its compositing and testing sections carried the same squared-alpha
-     trap `crt` shipped with that morning. Both are fixed in the body, so the brief builds as written.
+   - ~~**Both done 2026-08-31**~~, in one session — well inside the 1–3 days, so the estimate was generous
+     rather than wrong. `done/crt-display.md` §7 and `done/atmospheric-dust.md`'s closing section are what
+     to read. The two share a lesson worth the reading: each brief was right about *what* to build and
+     wrong about a *why*, and in both cases the wrong why was a formula that would have shipped. What
+     remains is a look decision rather than a build: `crt` is in the default chain in place of
+     `scanlines`, the dust is not in it at all, and the rastered dust field its placement implies has
+     still not been seen in motion.
 2. **The graph view** (brief 16). Estimated **one week, perhaps two**. It is the last major piece of
    *functionality* Juha needs on hand to explain the multiversal nature of LLMs, should the conversation go
    that way — and it has been promised since the first version of Librarian a year ago. The multiversal

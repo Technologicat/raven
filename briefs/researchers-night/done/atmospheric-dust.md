@@ -491,3 +491,100 @@ the second is the radius-binning fallback. Measure with the existing
   invariant and not an omission.
 - Lighting from the scene. `φ_light` is a free parameter, not derived from
   anything.
+
+## Closing (2026-08-31)
+
+Built in one session, immediately after `crt`. `raven.common.video.postprocessor.atmospheric_dust` at
+priority −2.0, 19 tests in `raven/common/video/tests/test_postprocessor.py`, preview variants in
+`preview_postprocessor.py` and two bench entries. Not in the default chain: it is switched on in the
+settings editor, which is also how it wants to be evaluated.
+
+### Where the implementation differs from the brief above
+
+Three places, and the first is a defect of the same family as the one this brief was already corrected for.
+
+**The brightness formula was wrong, and the brief's own test 4 is what says so.** It specified
+`I = brightness * (projected_area + glint_gain * glint) / r**2` alongside splat kernels normalized to unit
+*total* energy. Those two cannot both hold: a unit-sum kernel already spreads a fixed flux over the disc, so
+peak intensity falls as `1/r²` on its own, and dividing the flux by `r²` as well makes total flux go as
+`1/r²` — which is to say a defocused mote would lose light rather than spread it, and test 4 ("total added
+flux is invariant to `aperture`") would fail against the brief's own formula.
+
+What shipped is `flux ∝ r_geo**2`, the *geometric* radius with no defocus term in it at all. A particle at
+half the distance subtends twice the angle and collects four times the light, so flux goes as `r_geo²`;
+defocus then spreads that flux without changing it, and peak brightness falls out of the normalization. This
+is also what produces the intended picture rather than merely satisfying a test: at the defaults an in-focus
+mote peaks around ten times brighter than a defocused one of the same particle size, which is why the sharp
+glints read as glints and the bokeh discs read as soft.
+
+**The composite is premultiplied throughout, so the alpha division never happens.** The brief's *Compositing*
+section is right and its formula is what the filter computes; the implementation just never materializes the
+straight-alpha form. `tint * intensity` **is** the premultiplied colour, so dividing it by alpha to hand to
+`over`, which multiplies by alpha again, is a round trip that cancels — along with the epsilon it needs.
+Worth 1.304 ms → 1.005 ms at 1024², because at that size this filter is mostly full-frame traffic. The idea
+the division encodes is unchanged and is now in a comment at the composite, because it is exactly as easy to
+drop from this form as from the other.
+
+Note the consequence for `compositor.over`: it is **not** called. Extracting it was still right — it is a
+duplicate removed from `render_celstack` and a public function `raven.common.video.compositor` should have
+had — but this brief's stated reason for wanting it did not survive contact.
+
+**`tint` is `tint_rgb`, and its metadata is `["!RGB"]`, not `["!ignore"]`.** The settings editor has a
+colour-picker hint (`raven/avatar/settings_editor/app.py`, the `!RGB` branch) that `monochrome_display` has
+used all along, so the parameter gets a picker instead of being hidden. The name follows that sibling.
+
+### Measured
+
+At 1024², fp16, on the 4090:
+
+| | cost |
+|---|---|
+| defaults (`count=250`) | **1.00 ms** — against a 1.5 ms budget, and the most expensive filter in the chain |
+| `aperture=20` | 4.7–6.3 ms |
+| `crt` for comparison | 0.18 ms |
+
+**The cost barely moves with output resolution** (0.998 ms vs 0.970 ms at two sizes) because it is dominated
+by the `[count, K, K]` splat batch rather than by the frame. `aperture` is the only knob that matters:
+`count` is nearly free, and `K` goes as the widest circle of confusion in the field, squared. That is in the
+parameter's docstring, where the person turning it will see it.
+
+Energy conservation holds as the brief predicted, with border clipping as the entire residual: the flux
+retained at `aperture=20` against `aperture=0` runs 85% → 89% → 94.5% → 98.5% at 192×128, 384×256, 768×512
+and 1536×1024.
+
+**Separability was asked about and does not pay.** A radially symmetric kernel is separable only if it is a
+Gaussian, so separating the splat would mean giving up the disc — and the disc is the point, since an
+out-of-focus mote is an image of the aperture. It would also buy nothing: evaluating the kernel is 0.033 ms
+of the 1.30 ms the filter cost before the composite was fixed, the scatter-add is 0.37 ms, and the remaining
+0.9 ms was compositing. Fixing the part that was actually large is where the 23% came from. The brief's
+radius-binning fallback is likewise still unbuilt and still the wrong lever: it trades an `[N, K, K]` splat
+for a full-frame convolution per bin, which at 250 particles is an order of magnitude *more* work.
+
+### Two traps worth carrying forward
+
+**A test that sums the accumulator cannot see the squaring bug**, which is why the corrected brief split it
+into its own item, and the same shape caught a second test here. The first version of the energy test
+asserted that a wide aperture retained most of its light and that the loss shrank with frame size. Both are
+true of the correct implementation — and both are *also* true of unit-peak normalization, which multiplies
+the total by the disc's area while losing light off the edges in exactly the same pattern. The test passed
+against the mistake it existed to reject. Bounding the ratio from above as well as below is what fixed it,
+and mutating the source is what found it: four deliberate breakages, three caught immediately, one not.
+
+**The rendered frame is not bitwise reproducible, and tightening that assertion would be wrong.**
+`index_put_(accumulate=True)` reduces in an unspecified order — on CPU as much as on CUDA — so overlapping
+splats land differently between runs, to about one float32 ULP. The *particle constants* are bitwise
+reproducible, and that is where the determinism claim belongs. They are drawn from a CPU generator and moved
+to the device afterwards for the same reason: the same seed then gives the same field everywhere, which is
+what makes a test able to say anything about it.
+
+### Left undone, deliberately
+
+- **Not in the default chain.** Whether the dust ships on, and at what settings, is a look decision that
+  wants seeing in motion on the exhibit machine, not a default chosen at the console.
+- **Not seen in motion, and not seen on the 3070 Ti.** Everything above is stills and numbers. The drift is
+  verified sub-pixel (0.02 px/frame in even steps, no snapping to the raster) and the wrap is verified to
+  happen with the particle entirely off screen, which are the two things that would look wrong in motion —
+  but that is an argument, not a viewing.
+- **The rastered-dust question stays open**, and the options are in the *Ordering against `crt`* section
+  above. The dust sits at −2.0, so `crt`'s raster covers the room as well as the character. That was decided
+  for v1 before either filter existed; it can now be looked at.

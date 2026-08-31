@@ -88,7 +88,7 @@ individual items carry a "Researchers' Night" note where they feed it. Working b
 1. **Demo correctness** — the defects a live audience would *see*. The temporary-context-inject package (six
    linked items in `TODO_DEFERRED.md`, listed under its cluster index), the Markdown renderer defects, the
    remaining crash/race items. Not polish: this is whether the demo works.
-2. **Demo impressiveness** — `crt` and `atmospheric_dust` (both briefed), ~~the avatar branch-switch
+2. **Demo impressiveness** — ~~`crt` and `atmospheric_dust`~~ (both shipped 2026-08-31), ~~the avatar branch-switch
    glitch~~ (shipped 2026-08-25), ~~RAG reranking for better answers on stage~~ (measured and rejected,
    2026-08-06 — the shipped improvement is `k=50` instead), citation surfacing, colorblind-safe
    signalling, lorebook if it fits.
@@ -151,9 +151,10 @@ already decided.
   seconds, which reads worse. The token/time readout is the optional third — nice for a technical audience
   ("it thought for 8 s and 1400 tokens"), not required.
 
-**Phase 2 — impressiveness.** `crt` and `atmospheric_dust`, both fully briefed and speced. Note `imagefx`
-measures 0.00 GiB today only because its filter chain is empty; these go into exactly that chain, so re-run
-`investigations/vram/avatar_footprint.py` after they land.
+**Phase 2 — impressiveness.** ~~`crt` and `atmospheric_dust`~~ — both landed 2026-08-31; see
+`briefs/researchers-night/done/`. **The VRAM re-measurement they were the trigger for is still owed**:
+`imagefx` measures 0.00 GiB in `investigations/vram/avatar_footprint.py` only because its filter chain is
+empty at construction, and `crt` is now in the default chain. Re-run it.
 
 **Explicitly *not* on the demo path**, each for a recorded reason:
 
