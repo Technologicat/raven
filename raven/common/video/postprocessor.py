@@ -713,13 +713,26 @@ class Postprocessor:
             return torch.rand(count, generator=generator, dtype=torch.float32) * (hi - lo) + lo
         def normal() -> torch.Tensor:
             return torch.randn(count, generator=generator, dtype=torch.float32)
+        def signed_magnitude(lo: float, hi: float) -> torch.Tensor:
+            """A magnitude in [lo, hi] carrying a random sign: spread, with no mass near zero."""
+            magnitude = uniform(lo, hi)
+            return torch.where(torch.rand(count, generator=generator) < 0.5, -magnitude, magnitude)
 
+        # The two velocity jitters are drawn from different distributions, and the asymmetry is the
+        # point rather than an oversight. A particle's drift *direction* is decided by whichever
+        # component is smaller, so a near-zero sideways speed is what makes a mote fall straight down -
+        # while a near-zero vertical one only means it falls at the mean rate, which looks like nothing
+        # at all. A Gaussian piles its mass exactly there, so about one mote in six drifts within 20
+        # degrees of vertical however wide it is set, and a field of those reads as a downdraft rather
+        # than as still air. Bounding the horizontal magnitude away from zero takes that to one in five
+        # hundred. The RMS is 1.04 against the Gaussian's 1.0, so the shape changes and the scale does
+        # not, and `drift_jitter_x` keeps its meaning.
         near, far = min(depth_near, depth_far), max(depth_near, depth_far)
         constants = {"x0": uniform(0.0, 1.0),  # initial normalized position
                      "y0": uniform(0.0, 1.0),
                      "z": uniform(near, far),  # depth; smaller is nearer. Constant for the particle's whole life
-                     "vx": normal(),  # drift direction jitter
-                     "vy": normal(),
+                     "vx": signed_magnitude(0.5, 1.5),  # sideways drift jitter; see above
+                     "vy": normal(),  # ...and vertical, where a Gaussian is fine
                      "s": uniform(0.6, 1.6),  # size jitter
                      "sway_a": uniform(0.5, 1.5),  # sway amplitude / frequency / phase
                      "sway_f": uniform(0.5, 1.5),
@@ -861,6 +874,11 @@ class Postprocessor:
         `drift_jitter_x`, `drift_jitter_y`: How far each particle's own velocity deviates from the mean,
                                             per axis. Split so the spread can be anisotropic, which the
                                             defaults are: about twice as much sideways as vertically.
+
+                                            The sideways spread has no motes near zero, so none of them
+                                            falls straight down; the vertical one is an ordinary normal
+                                            spread about the mean. Both are scaled the same way, so the
+                                            two numbers stay comparable.
         `sway_amplitude`, `sway_frequency`: A horizontal sinusoidal wander on top of the drift, in
                                             normalized units and Hz. This is the entire "physics" -
                                             there is no airflow simulation here and there will not be.

@@ -1650,6 +1650,33 @@ class TestAtmosphericDustDrift:
         a, b = a - a.mean(), b - b.mean()
         return float((a * b).sum() / (a.norm() * b.norm()))
 
+    def test_no_mote_drifts_straight_down(self):
+        """The sideways velocities are drawn as a magnitude with a random sign rather than from a
+        normal distribution, so none of them lands near zero.
+
+        Direction is decided by whichever velocity component is smaller, so a mote with almost no
+        sideways speed falls vertically — and a normal distribution puts its mass exactly there. A
+        field of those reads as a downdraft rather than as still air, and widening the spread does not
+        help, because the fraction near zero is a property of the shape and not of the width.
+        """
+        _, pp = _dust_at(0.0, count=20000)
+        sideways, vertical = pp.dust_particles["dust0"]["vx"], pp.dust_particles["dust0"]["vy"]
+
+        assert float(sideways.abs().min()) >= 0.5, "a mote was drawn with almost no sideways speed"
+        assert float((sideways > 0).float().mean()) == pytest.approx(0.5, abs=0.05), "the field drifts one way"
+        # The vertical jitter is the negative control, and it is free: it is still a normal draw, so if
+        # the assertion above could pass for any distribution this one would pass too.
+        assert float(vertical.abs().min()) < 0.01, ("the vertical jitter is also bounded away from zero, "
+                                                    "so this fixture cannot tell the two shapes apart")
+
+        # The scale is deliberately left alone, so `drift_jitter_x` means what it did before.
+        assert float((sideways**2).mean().sqrt()) == pytest.approx(1.0, rel=0.1)
+
+        angle = torch.rad2deg(torch.atan2((0.012 + sideways * 0.10).abs(),
+                                          (0.020 + vertical * 0.05).abs()))
+        near_vertical = float((angle < 20.0).float().mean())
+        assert near_vertical < 0.01, f"{near_vertical:.1%} of motes drift within 20 degrees of vertical"
+
     def test_drift_speed_rescales_time_and_nothing_else(self):
         """The multiplier exists so the tempo can be set without touching `depth_near`, which also
         decides how large the motes are and which side of the character they pass. So halving the

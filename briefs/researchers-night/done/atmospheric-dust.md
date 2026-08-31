@@ -642,19 +642,25 @@ the shipped filter.
 not specific to dust: any filter that raises alpha can take away more than it adds, and over a dark
 backdrop it looks identical to one that adds.
 
+**The same pass fixed the drift direction, and there the width was the wrong suspect.** Too many motes
+fell almost straight down, which reads as a downdraft rather than as still air. A particle's direction is
+decided by whichever velocity component is *smaller*, so a near-zero sideways speed is what drops a mote
+vertically — while a near-zero vertical one only means it falls at the mean rate and looks like nothing.
+A normal distribution piles its mass exactly at zero, so the fraction is a property of the shape and not
+of the width: measured as the share drifting within 20° of vertical, 12.2% as shipped, and still 6.3% at
+double the sideways jitter. Drawing the sideways magnitude bounded away from zero with a random sign
+gives **0.12%**, and its RMS is 1.04 against the normal's 1.0, so the scale is untouched and
+`drift_jitter_x` keeps its meaning.
+
+That leaves the two jitters drawn from different distributions, which is deliberate and is documented at
+the draw. It is the one asymmetry in this filter that a reader would otherwise take for an oversight.
+
 ### Left undone, deliberately
 
 - **Not in the default chain.** Whether the dust ships on is a decision about everyone's picture rather than
   about this filter, and the settings editor reaches it meanwhile.
 - **Not seen on the 3070 Ti.** The one-card case is a supported configuration and this is the chain's most
   expensive filter, so the number that matters is from the machine that has to share a GPU.
-- **Too many motes fall almost straight down** (Juha, 2026-08-31), and raising `drift_jitter_x` only
-  thins that population rather than removing it. The cause is the distribution rather than its width: a
-  Gaussian piles mass at zero, so about one mote in six draws a near-zero sideways speed whatever the
-  jitter is set to. Measured, as the fraction drifting within 20° of vertical — 12.2% as shipped, 6.3%
-  at double the sideways jitter, 6.8% at less than half the vertical, and **0.2%** if the horizontal
-  magnitude is instead drawn bounded away from zero with a random sign. That last is a small change and
-  a real change in character, so it wants deciding rather than assuming.
 - **`aperture`'s declared range no longer suits its default.** `[0.0, 30.0]` against a default of 0.4 puts
   the useful setting in the first 1.3% of the slider, which is why it was typed rather than dragged. What
   range is right depends on the depth range in force, so it wants a decision rather than a guess.
