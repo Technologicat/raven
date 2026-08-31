@@ -19,6 +19,46 @@ def _solid_rgba(r, g, b, a, h=4, w=4):
 
 
 # ---------------------------------------------------------------------------
+# Tests: the `over` operator
+# ---------------------------------------------------------------------------
+
+class TestOver:
+    """"a over b" on straight-alpha RGBA, which is the format the whole video pipeline uses."""
+
+    def test_an_opaque_top_layer_hides_what_is_under_it(self):
+        top = _solid_rgba(1.0, 0.0, 0.0, 1.0)
+        bottom = _solid_rgba(0.0, 0.0, 1.0, 1.0)
+        assert torch.allclose(compositor.over(top, bottom), top, atol=1e-4)
+
+    def test_a_fully_transparent_top_layer_leaves_the_bottom_alone(self):
+        top = _solid_rgba(1.0, 0.0, 0.0, 0.0)
+        bottom = _solid_rgba(0.0, 0.0, 1.0, 1.0)
+        assert torch.allclose(compositor.over(top, bottom), bottom, atol=1e-4)
+
+    def test_alpha_accumulates_rather_than_replacing(self):
+        """Two half-transparent layers are more opaque together than either is alone."""
+        half = _solid_rgba(1.0, 1.0, 1.0, 0.5)
+        assert torch.allclose(compositor.over(half, half)[3], torch.full((4, 4), 0.75), atol=1e-4)
+
+    def test_neither_input_is_modified(self):
+        """It returns a new tensor. Everything else in this module composites functionally."""
+        top, bottom = _solid_rgba(1.0, 0.0, 0.0, 0.5), _solid_rgba(0.0, 0.0, 1.0, 0.5)
+        top_before, bottom_before = top.clone(), bottom.clone()
+        compositor.over(top, bottom)
+        assert torch.equal(top, top_before) and torch.equal(bottom, bottom_before)
+
+    def test_compositing_over_nothing_recovers_the_colour(self):
+        """Straight alpha, so a layer over a fully transparent one keeps its own colour rather than
+        being scaled toward black — which is what would happen if this treated the input as
+        premultiplied."""
+        layer = _solid_rgba(0.8, 0.4, 0.2, 0.5)
+        empty = _solid_rgba(0.0, 0.0, 0.0, 0.0)
+        result = compositor.over(layer, empty)
+        assert torch.allclose(result[:3], layer[:3], atol=1e-3)
+        assert torch.allclose(result[3], layer[3], atol=1e-4)
+
+
+# ---------------------------------------------------------------------------
 # Tests: render_celstack — alpha blending
 # ---------------------------------------------------------------------------
 

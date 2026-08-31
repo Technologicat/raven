@@ -13,7 +13,8 @@
 - The cel stack (after any parameter processing) can then be rendered by `render_celstack`.
 """
 
-__all__ = ["render_celstack", "get_cel_index_in_stack",
+__all__ = ["over",
+           "render_celstack", "get_cel_index_in_stack",
            "animate_cel_cycle", "animate_cel_sequence", "animate_cel_fadeout",
            "animate_cel_cycle_with_fadeout", "animate_cel_sequence_with_fadeout"]
 
@@ -25,6 +26,22 @@ import time
 from typing import Dict, List, Tuple
 
 import torch
+
+def over(a: torch.tensor, b: torch.tensor) -> torch.tensor:
+    """Alpha-blending operator. "a over b", i.e. "a" sits on top of "b".
+
+    Both are RGBA, shape `[4, h, w]`, with **straight** (non-premultiplied) alpha, which is the
+    format used throughout Raven's video pipeline. Returns a new tensor; neither input is modified.
+
+    https://en.wikipedia.org/wiki/Alpha_compositing
+    """
+    RGBa = a[:3, :, :]
+    RGBb = b[:3, :, :]
+    alpa = a[3, :, :].unsqueeze(0)  # [1, h, w]
+    alpb = b[3, :, :].unsqueeze(0)
+    alpo = (alpa + alpb * (1 - alpa))
+    RGBo = (RGBa * alpa + RGBb * alpb * (1 - alpa)) / (alpo + 1e-5)
+    return torch.cat([RGBo, alpo], dim=0)
 
 def render_celstack(base_image: torch.tensor, celstack: List[Tuple[str, float]], torch_cels: Dict[str, torch.tensor]) -> torch.tensor:
     """Given a base RGBA image and a stack of RGBA cel images, blend the final image.
@@ -52,19 +69,6 @@ def render_celstack(base_image: torch.tensor, celstack: List[Tuple[str, float]],
         return base_image.clone()  # always cloned, because the caller may directly modify the result.
 
     logger.debug(f"compose_cels: Composing {celstack}.")
-
-    def over(a: torch.tensor, b: torch.tensor) -> torch.tensor:
-        """Alpha-blending operator. "a over b", i.e. "a" sits on top of "b".
-
-        https://en.wikipedia.org/wiki/Alpha_compositing
-        """
-        RGBa = a[:3, :, :]
-        RGBb = b[:3, :, :]
-        alpa = a[3, :, :].unsqueeze(0)  # [1, h, w]
-        alpb = b[3, :, :].unsqueeze(0)
-        alpo = (alpa + alpb * (1 - alpa))
-        RGBo = (RGBa * alpa + RGBb * alpb * (1 - alpa)) / (alpo + 1e-5)
-        return torch.cat([RGBo, alpo], dim=0)
 
     out = base_image.clone()
     for celname, strength in celstack:
