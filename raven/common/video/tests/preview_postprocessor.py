@@ -38,6 +38,12 @@ DEFAULT_SOURCE = "raven/avatar/assets/characters/other/aria1.png"
 DEFAULT_CROP = (150, 30, 370, 250)  # the head: skin and saturated hair side by side
 BACKDROP = 0.08  # what the client composites behind the avatar, roughly
 
+# ...and a bright one, because a filter that raises alpha can *darken* what is behind it, and against
+# the default dark backdrop that is invisible. A mote adds light in proportion to its intensity and
+# hides the backdrop in proportion to its alpha, so the two cancel at some backdrop brightness and it
+# subtracts above that. Nothing in a contact sheet over 0.08 would ever show it. `--bright` does.
+BRIGHT_BACKDROP = 0.75
+
 # Per filter, a list of (label, settings) to render. The first entry should switch the filter off, so
 # there is an untouched reference in the sheet to compare against.
 VARIANTS = {
@@ -47,11 +53,14 @@ VARIANTS = {
         ("dense, count 250", dict(count=250)),
         ("soft shimmer, exp 6", dict(glint_exponent=6.0)),
         ("sharp flashes, exp 120", dict(glint_exponent=120.0)),
-        # The defaults keep the field behind the character and nearly in focus. These two reach the
-        # other regime: bring the near end forward and the motes are large, fast, and in front.
+        # The defaults keep the field behind the character and nearly in focus. These reach the other
+        # regime: bring the near end forward and the motes are large, fast, and in front.
         ("field brought forward", dict(depth_near=0.25)),
         ("...and defocused, aperture 6", dict(depth_near=0.25, aperture=6.0)),
-        ("focus racked to the far end", dict(focal_plane=1.75, aperture=6.0)),
+        # Worth running with `--bright`: alpha is derived from `max_intensity`, so lowering that
+        # makes the motes solid enough to darken a bright backdrop — invisible over the usual dark one.
+        ("max_intensity 1 (solid)", dict(max_intensity=1.0, depth_near=0.25, aperture=6.0, seed=5)),
+        ("max_intensity 3 (default)", dict(max_intensity=3.0, depth_near=0.25, aperture=6.0, seed=5)),
     ],
     "crt": [
         ("off", dict(scanline_strength=0.0, mask_type="none", corner_falloff=0.0,
@@ -68,11 +77,11 @@ VARIANTS = {
 }
 
 
-def render(filter_name, label_and_settings, source, crop=None):
+def render(filter_name, label_and_settings, source, crop=None, backdrop=BACKDROP):
     """Run one filter at each of several settings, and return `[(label, HxWx3 uint8), ...]`.
 
-    Each result is gamma-corrected and composited over a dark backdrop, as the client does, so what
-    comes back is what a viewer would see rather than the linear-light RGBA the filter works in.
+    Each result is gamma-corrected and composited over `backdrop`, as the client does, so what comes
+    back is what a viewer would see rather than the linear-light RGBA the filter works in.
     """
     image = Image.open(source).convert("RGBA")
     w, h = image.size
@@ -91,7 +100,7 @@ def render(filter_name, label_and_settings, source, crop=None):
         getattr(pp, filter_name)(frame, **settings)
 
         rgb, alpha = frame[:3], frame[3:4]
-        shown = linear_to_srgb(rgb) * alpha + BACKDROP * (1.0 - alpha)
+        shown = linear_to_srgb(rgb) * alpha + backdrop * (1.0 - alpha)
         tile = (shown.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
         if crop is not None:
             x0, y0, x1, y1 = crop
@@ -126,14 +135,19 @@ def main():
     parser.add_argument("--crop", action="store_true",
                         help="render 1:1 crops instead of whole frames. Use this to judge anything at "
                              "the pixel pitch — a downscaled sheet turns a raster into a flat haze.")
+    parser.add_argument("--bright", action="store_true",
+                        help="composite over a bright backdrop instead of the usual dark one. Use this "
+                             "to judge anything that raises alpha: over a dark backdrop, an effect that "
+                             "hides more light than it adds looks exactly like one that adds light.")
     args = parser.parse_args()
 
     if args.filter not in VARIANTS:
         parser.error(f"no canned variants for '{args.filter}'; add a list to VARIANTS in {pathlib.Path(__file__).name}")
 
-    print(f"{args.filter}, from {args.source}:")
+    backdrop = BRIGHT_BACKDROP if args.bright else BACKDROP
+    print(f"{args.filter}, from {args.source}, over a backdrop of {backdrop}:")
     tiles = render(args.filter, VARIANTS[args.filter], args.source,
-                   crop=DEFAULT_CROP if args.crop else None)
+                   crop=DEFAULT_CROP if args.crop else None, backdrop=backdrop)
     sheet = contact_sheet(tiles)
     sheet.save(args.out)
     print(f"wrote {args.out} {sheet.size}")

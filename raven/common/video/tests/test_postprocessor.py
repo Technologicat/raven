@@ -1505,24 +1505,20 @@ def _dust_at(frame_no, pp=None, h=64, w=128, **settings):
     return image, pp
 
 
-def _unclamped():
-    """Settings that keep the composite out of both clamps, so the light is exactly `tint * intensity`.
-
-    A tiny `alpha_reference` saturates alpha wherever a mote is at all, which collapses the straight
-    colour to the accumulated intensity and makes the emitted light a direct readout of it. Needed by
-    anything measuring flux; not representative of how the filter is used.
-    """
-    return dict(alpha_reference=1e-4, max_intensity=1e6)
-
-
 def _steady():
-    """...and on top of that, a particle field whose per-particle brightness does not vary with time.
+    """A particle field whose per-particle brightness does not vary with time.
 
     The tumble and the glint are what make the dust twinkle, and they also make total flux a moving
-    target. Switching both off leaves motion as the only thing that changes, which is what the
-    wrapping and energy tests want to look at.
+    target. Switching both off leaves motion as the only thing that changes, which is what the wrapping
+    and energy tests want to look at.
+
+    Nothing needs saying about the alpha here: it is derived as `intensity * max(tint) / max_intensity`
+    and the colour clamp is exactly tight against that, so below saturation the emitted light is
+    `tint * intensity` at any `max_intensity` and flux reads straight off the accumulator. Pushing the
+    ceiling far out to "be safe" is in fact the way to break this — alpha then falls under the 1e-6 the
+    unpremultiply floors at, and the light comes back short.
     """
-    return dict(tumble_rate=0.0, glint_gain=0.0, **_unclamped())
+    return dict(tumble_rate=0.0, glint_gain=0.0)
 
 
 class TestAtmosphericDustContract:
@@ -1654,6 +1650,20 @@ class TestAtmosphericDustDrift:
         a, b = a - a.mean(), b - b.mean()
         return float((a * b).sum() / (a.norm() * b.norm()))
 
+    def test_drift_speed_rescales_time_and_nothing_else(self):
+        """The multiplier exists so the tempo can be set without touching `depth_near`, which also
+        decides how large the motes are and which side of the character they pass. So halving the
+        speed must give exactly the field from half as long ago — not a similar-looking one."""
+        slow, _ = _dust_at(200.0, h=128, w=192, drift_speed=0.5, tumble_rate=0.0)
+        fast, _ = _dust_at(100.0, h=128, w=192, drift_speed=1.0, tumble_rate=0.0)
+        assert torch.allclose(slow, fast, atol=1e-5)
+
+        # The negative control: the two frame numbers must actually differ in what they show, or the
+        # field is static and any speed would satisfy the assertion above.
+        moved, _ = _dust_at(200.0, h=128, w=192, drift_speed=1.0, tumble_rate=0.0)
+        assert not torch.allclose(slow, moved, atol=1e-3), (
+            "the field looks the same at both speeds, so this fixture cannot see the multiplier at all")
+
     def test_each_axis_scatters_only_along_itself(self):
         for label, axis in (("drift_jitter_x", dict(drift_jitter_x=0.3, drift_jitter_y=0.0)),
                             ("drift_jitter_y", dict(drift_jitter_x=0.0, drift_jitter_y=0.3))):
@@ -1714,11 +1724,11 @@ class TestAtmosphericDustLight:
         way, because the accumulator holds the intensity whether or not the division was written; what
         the squared version breaks is the step from intensity to what reaches the screen.
 
-        Sampled well below `alpha_reference` on purpose. Above it alpha saturates at 1 and the two
+        Sampled well below the saturation intensity on purpose. Once alpha reaches 1 the two
         formulations agree exactly, which would leave the fixture unable to tell them apart.
         """
         def light(brightness):
-            image, _ = _dust_at(0.0, h=256, w=384, brightness=brightness, alpha_reference=2.0)
+            image, _ = _dust_at(0.0, h=256, w=384, brightness=brightness)
             return float((image[:3] * image[3:4]).sum())
 
         assert light(0.02) > 0.0, "no light at all, so this fixture measures nothing"
@@ -1796,6 +1806,52 @@ class TestAtmosphericDustAlpha:
         assert float((behind[:3] - 0.5).abs().max()) < 1e-5, "dust behind an opaque patch showed through it"
         assert float((infront[:3] - 0.5).abs().max()) > 1e-3, (
             "dust in front of the patch left it untouched, so this fixture cannot tell the two layers apart")
+
+
+class TestAtmosphericDustNeverDarkensTheBackdrop:
+    """Dust adds light. It must never take any away, whatever is behind it.
+
+    A mote adds `light` and hides the backdrop in proportion to its alpha, so a client compositing over
+    a backdrop `B` sees `light - B * alpha`. Alpha is therefore derived rather than chosen: the
+    smallest value that carries the light without the straight colour exceeding `max_intensity`. Any
+    larger and the motes start subtracting light from a bright backdrop, and appear as dark discs.
+
+    The whole suite missed this because every other test renders over a transparent frame, where a mote
+    that hides light and a mote that adds it are indistinguishable. So does looking at it: the avatar's
+    usual backdrop is around 0.08, and the effect only shows once somebody loads a bright image.
+    """
+
+    def _rendered(self, **settings):
+        image, _ = _dust_at(0.0, h=256, w=384, depth_near=0.25, aperture=6.0, seed=5, **settings)
+        return image[:3], image[3:4]
+
+    @staticmethod
+    def _change(rgb, alpha, backdrop):
+        """What a client compositing over `backdrop` would see, per pixel, worst channel."""
+        return ((rgb * alpha + backdrop * (1.0 - alpha)) - backdrop).amin(dim=0)
+
+    def test_no_backdrop_is_darkened(self):
+        rgb, alpha = self._rendered()
+        for backdrop in (0.0, 0.25, 0.5, 0.75, 1.0):
+            worst = float(self._change(rgb, alpha, backdrop).min())
+            assert worst >= -1e-5, (f"over a backdrop of {backdrop} the dust removed up to {-worst:.4f} "
+                                    f"of light; the motes are appearing as dark discs")
+
+    def test_a_field_this_faint_would_still_show_the_fault(self):
+        """The negative control, and it has to be a counterfactual: with alpha derived, no setting can
+        produce the darkening any more, so there is nothing to pass in that makes the test above fail.
+
+        What can still go wrong is the fixture — a frame too empty, or motes too faint, to have
+        darkened anything even under the old rule. So this takes the field as actually rendered,
+        reconstructs the alpha a fixed reference of 0.35 would have given it, and checks that *that*
+        darkens a bright backdrop. If it does not, the fixture is too thin to be evidence.
+        """
+        rgb, alpha = self._rendered()
+        intensity = alpha * (3.0 / 1.0)  # max_intensity / max(tint_rgb), at the defaults
+        as_if_solid = (intensity / 0.35).clamp(0.0, 1.0)
+        worst = float(self._change(rgb * alpha / as_if_solid.clamp(min=1e-6), as_if_solid, 0.75).min())
+        assert worst < -0.01, ("even a fixed reference of 0.35 would not have darkened a 0.75 backdrop "
+                               "on this field, so it is too faint to tell a correct alpha from a wrong one")
 
 
 class TestAtmosphericDustBounds:

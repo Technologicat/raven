@@ -762,6 +762,7 @@ class Postprocessor:
                    focal_plane=[0.05, 4.0],
                    character_depth=[0.05, 4.0],
                    aperture=[0.0, 30.0],
+                   drift_speed=[0.0, 4.0],
                    drift_x=[-0.2, 0.2],
                    drift_y=[-0.2, 0.2],
                    drift_jitter_x=[0.0, 0.5],
@@ -773,7 +774,6 @@ class Postprocessor:
                    glint_gain=[0.0, 20.0],
                    brightness=[0.0, 4.0],
                    tint_rgb=["!RGB"],
-                   alpha_reference=[0.05, 2.0],
                    max_intensity=[1.0, 8.0],
                    softness=[0.3, 3.0],
                    name=["!ignore"],
@@ -787,6 +787,7 @@ class Postprocessor:
                          focal_plane: float = 1.0,
                          character_depth: float = 1.0,
                          aperture: float = 0.4,
+                         drift_speed: float = 1.0,
                          drift_x: float = 0.012,
                          drift_y: float = 0.020,
                          drift_jitter_x: float = 0.10,
@@ -798,7 +799,6 @@ class Postprocessor:
                          glint_gain: float = 6.0,
                          brightness: float = 0.6,
                          tint_rgb: List[float] = [1.0, 0.97, 0.90],
-                         alpha_reference: float = 0.35,
                          max_intensity: float = 3.0,
                          softness: float = 1.0,
                          name: str = "dust0") -> None:
@@ -847,6 +847,14 @@ class Postprocessor:
                     so where the defaults cost about 1 ms at 1024 square, an aperture of 20 costs five
                     or six. Widen it and watch the frame rate; `count` is nearly free by comparison.
 
+        `drift_speed`: Multiplies everything that moves a particle through the air - the drift, the
+                       velocity jitter, and the rate of the sway. The other way to change how fast the
+                       dust crosses the frame is `depth_near`, since screen speed goes as 1/depth, but
+                       that one also changes how large the motes are and which side of the character
+                       they are on. This separates the tempo from the staging.
+
+                       Does not touch `tumble_rate`: the twinkle is a rotation rather than a journey,
+                       and slowing the drift to a crawl does not mean anyone wants the flashes to stop.
         `drift_x`, `drift_y`: Mean drift velocity, in normalized units per second. Positive `drift_y`
                               is downward. Screen speed goes as 1/depth, so near particles sweep past
                               while far ones barely move.
@@ -865,10 +873,14 @@ class Postprocessor:
         `brightness`: Overall gain.
         `tint_rgb`: Colour of the motes, in linear RGB. The default is a slightly warm white.
 
-        `alpha_reference`: The accumulated intensity at which a mote becomes fully opaque. Below it a
-                           mote holds a constant colour and varies in transparency; above it the alpha
-                           has saturated and the colour goes on brightening into the headroom.
         `max_intensity`: Ceiling on the colour, above 1.0 to leave headroom for `bloom` to pick up.
+
+                         It also sets how transparent the motes are, and there is no separate control
+                         for that: a mote's alpha is derived as the smallest value that can carry its
+                         light without the colour exceeding this ceiling. Anything larger would have
+                         the mote hiding more of the backdrop than it adds in light, which is what dust
+                         does not do. So raising this makes the dust thinner and more purely additive
+                         as well as brighter-capable.
 
                          **This is a hazard, not a nicety.** The pipeline ends in `255 * x` and a cast
                          to byte, and a value above 1.0 that reaches that point wraps rather than
@@ -902,9 +914,10 @@ class Postprocessor:
         # particle buffer. FPS independence, resolution independence and reproducibility all fall out
         # of that, and there is nothing to invalidate when the crop changes mid-stream. Screen velocity
         # goes as 1/z, which is the pinhole projection of a constant world-space velocity.
-        u = (p["x0"] + (drift_x + p["vx"] * drift_jitter_x) * t / z
-             + sway_amplitude * p["sway_a"] * torch.sin(2.0 * math.pi * sway_frequency * p["sway_f"] * t + p["sway_phase"]))
-        v = p["y0"] + (drift_y + p["vy"] * drift_jitter_y) * t / z
+        swept = drift_speed * t
+        u = (p["x0"] + (drift_x + p["vx"] * drift_jitter_x) * swept / z
+             + sway_amplitude * p["sway_a"] * torch.sin(2.0 * math.pi * sway_frequency * p["sway_f"] * swept + p["sway_phase"]))
+        v = p["y0"] + (drift_y + p["vy"] * drift_jitter_y) * swept / z
 
         # Wrap outside the visible area rather than at its edge, by the largest splat radius. Wrapping
         # at the edge would pop a big bokeh disc into existence in full view; out here a particle is
@@ -969,14 +982,28 @@ class Postprocessor:
         #
         # What must not be dropped is the *idea* the division encodes. A viewer sees `rgb * alpha`, so
         # putting `tint * intensity` into a straight-alpha colour channel and then letting alpha modulate
-        # it again would square the effect: a mote at half the reference intensity would arrive with a
+        # it again would square the effect: a mote at half the saturation intensity would arrive with a
         # quarter of its light, and the faint ones - which is most of them - would vanish.
         tint = torch.tensor(tint_rgb, dtype=torch.float32, device=self.device).view(3, 1, 1)
+        # Alpha is DERIVED rather than chosen, and it is the smallest value that can carry the light.
+        #
+        # A mote adds `light` and hides the backdrop in proportion to its alpha, so a client compositing
+        # over a backdrop `B` sees `light - B * alpha`. Dust is far too small to occlude anything, so
+        # that must not go negative for any `B` a backdrop can hold - which means alpha has to stay
+        # below `light / B`, and the smaller it is the closer the result comes to the pure addition
+        # that a scatterer actually performs. What stops it going to zero is the other side: the
+        # straight colour is `light / alpha`, and `max_intensity` caps that. The two meet at exactly
+        # one value, so there is nothing here to tune.
+        #
+        # Getting this wrong is invisible where it is normally looked at. The avatar's backdrop is
+        # around 0.08, and against that a mote which removes light and one which adds it are the same
+        # picture; the field only turns into a scatter of dark discs once somebody loads a bright image.
+        alpha_saturation = max_intensity / max(max(tint_rgb), 1e-6)
         def dust_layer(intensity: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
             """One layer's accumulated intensity as `(premultiplied_rgb, alpha)`, in the image's dtype."""
-            alpha = (intensity / alpha_reference).clamp(0.0, 1.0).unsqueeze(0)
-            # `max_intensity` caps the *straight* colour, which in premultiplied form is a cap that
-            # scales with alpha - so it needs no division either.
+            alpha = (intensity / alpha_saturation).clamp(0.0, 1.0).unsqueeze(0)
+            # Binds only once alpha has saturated, the derivation above being what keeps the straight
+            # colour at exactly `max_intensity` below that.
             premultiplied = torch.minimum(tint * intensity, max_intensity * alpha)
             return premultiplied.to(image.dtype), alpha.to(image.dtype)
 
