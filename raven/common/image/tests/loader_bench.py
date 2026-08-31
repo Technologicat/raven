@@ -8,9 +8,9 @@ Does nothing unless ``--dir`` is given.
 
 Usage::
 
-    python -m raven.cherrypick.tests.loader_bench --dir /path/to/images
-    python -m raven.cherrypick.tests.loader_bench --dir /path/to/images --device cuda:1
-    python -m raven.cherrypick.tests.loader_bench --dir /path/to/images --tile-size 256
+    python -m raven.common.image.tests.loader_bench --dir /path/to/images
+    python -m raven.common.image.tests.loader_bench --dir /path/to/images --device cuda:1
+    python -m raven.common.image.tests.loader_bench --dir /path/to/images --tile-size 256
 
 Stages measured:
 

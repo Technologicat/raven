@@ -6,7 +6,7 @@ This is a standalone viewer for xdot format graphs. It can open:
 
 Usage:
     raven-xdot-viewer [file.xdot|file.dot]
-    python -m raven.xdot_viewer [file.xdot|file.dot]
+    python -m raven.xdot_viewer.app [file.xdot|file.dot]
 """
 
 import argparse

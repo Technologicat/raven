@@ -18,6 +18,7 @@ directory is for.
 | `check_dependency_versions.py` | Whether `pyproject.toml`, `pdm.lock` and `requirements-ci.txt` still agree about versions. Reports a locked or CI-pinned version the metadata forbids (exit 1), a package CI pins that `pyproject.toml` never declares, and floors older than what resolves — the last as `old -> new`, so raising them is a read-off. |
 | `check_module_maps.py` | Whether the per-package `CLAUDE.md` module maps still describe their packages. Catches a size that drifted (they are written rounded to two significant figures, so 5% off means the code moved, not the rounding) and — the quieter one — a module absent from the map, where nothing looks wrong and a reader concludes it does not exist. Both had happened: the librarian map read 30–45% low for three weeks, and `indexer.py` was unlisted from the day it was added. |
 | `check_exports.py` | Whether each module's `__all__` still lists what the module has, in the order the module has it. The convention is that it mirrors the file, so a reader can predict where a name sits; drift makes it predict nothing, and a name absent from it silently stops being re-exported. It reports and never rewrites — `__all__` carries comments whose prose is positional, so sorting it automatically would scramble the commentary while making the names right. A public definition *outside* `__all__` fails too: Raven follows the plain convention, so a top-level name without a leading underscore is public and belongs in the list. The one thing it cannot decide is *which* names should be public — an unexported one is either a missing export or a name that wanted an underscore, and both are real answers. |
+| `check_usage_paths.py` | Whether every `python -m raven...` in the repository names a module that exists. Usage lines are documentation the reader is meant to *type*, and nothing imports, lints or tests them — so a renamed or relocated module leaves its old path sitting in a docstring, a README table or a shell script, looking exactly like a working one. Tracked files only; text of any kind, since the README's console-script table is where a wrong one costs most. |
 | `check_todo_structure.py` | Whether `TODO_DEFERRED.md` still parses as a list of items. Catches an item whose `##` heading an edit removed — its body then reads as part of the item above and it vanishes from every future scan of the headings, silently — plus duplicate titles (items are cited by title), missing metadata fields, and headings without a blank line before them. |
 
 **One checker deliberately lives elsewhere**, and is indexed here so that this table stays the place to look:
@@ -55,6 +56,33 @@ python scripts/check_ci_imports.py
 
 The inline-pinned torch trio is read out of the workflow files rather than copied here, because a second
 hand-maintained list is precisely what this script exists to catch.
+
+## Why `check_usage_paths.py` exists
+
+It is a release-time checker rather than a per-edit one, and the reason is who reads the thing it checks.
+A stale import breaks a build; a stale usage line breaks nothing at all, and is discovered by a user
+typing it. Nobody on this side of the repository ever runs `python -m raven.<module>` from the README — the
+console scripts are right there — so a wrong `python -m raven.<module>` lasts for as long as it takes
+somebody to follow the instructions literally. `convert-all-wos2bib.sh` sat in the repository root naming `raven.import_wos`
+from the initial commit of 2024-12-20 until 2026-08-31, and that path was wrong the day it was written:
+the module was `raven/wos2bib.py` at the time. Not rot, then — it had simply never been run.
+
+Run it while preparing a release:
+
+```bash
+python scripts/check_usage_paths.py
+```
+
+Four were wrong on the day it was written, and the spread is the argument for automating it: one module
+had moved packages, one had never been spelled correctly at all, and two named a *package* where only a
+module works. No single habit would have caught all four, and the rot cases are not visible in the diff
+of the change that caused them — the rename happens in one file and the sentence that goes stale is in
+another.
+
+**One class of stale path it cannot see**: a `-m` line inside a code fence in a doc that also gets
+rendered elsewhere is fine, but a usage line written as prose (*"run the wos2bib module"*) names nothing
+mechanically checkable. The check is worth exactly what the convention of writing the full command is
+worth.
 
 ## Why `check_dependency_versions.py` exists
 
