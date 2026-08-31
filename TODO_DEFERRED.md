@@ -2892,9 +2892,10 @@ Discovered during tooltip feature session (2026-04-03).
 
 ## Avatar settings editor: custom postprocessor chain ordering
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-04-09*
+*Cluster: ? · Cost: L · Gate: next · Filed: 2026-04-09*
 
-**This is a GUI limitation only** — `briefs/researchers-night/crt-display.md` §0 establishes that the backend has always
+**This is a GUI limitation only** — the band-scheme comment above the first filter definition in
+`raven/common/video/postprocessor.py` establishes that the backend has always
 supported multiple instances at arbitrary positions: `render_into` applies the chain *positionally*, and
 `_priority` is consumed only by `get_filters` to sort the settings-editor panels. The `name` parameter on every
 caching filter exists precisely so multiple instances key their caches apart. So this item is "build the
@@ -2909,6 +2910,20 @@ this item the prerequisite for the whole idea rather than a nicety alongside it.
 
 Note it is **not** a Researchers' Night blocker: the demo needs `crt` working at its default Scene-band
 position, which the existing autodiscovery gives it. The placement freedom is the follow-up.
+
+**It is a defect and not only a missing feature, which was not known when this was filed** (2026-08-31).
+A chain the editor loads is not merely *displayed* in `_priority` order — it is *rebuilt* in that order
+and saved back that way, so opening a hand-ordered `animator.json` and saving it silently rewrites the
+chain and changes the look, with nothing said. Two of the three shipped presets had already been bitten:
+`redsepia.json` had `desaturate` after `translucent_display`, and `glitchyholo.json` had `noise` and
+`digital_glitches` there too. Both were reordered to match what a round-trip produces, so the files are
+now consistent with the editor — but the trap is still armed for anyone who hand-edits a chain, and it
+disarms itself only when this item lands.
+
+**`crt` shipping at 10.75 rather than the Scene band does not change the argument above, and sharpens
+it.** The filter went to the Display band on measurement — everything upstream that resamples or blurs
+erases the raster — so the Scene-band reading of it is now the one reachable *only* by hand-editing
+`animator.json`, which is the operation this same limitation makes unsafe.
 
 The settings editor currently presents filters in a fixed priority order, with at most one copy of each filter. With the desaturate/monochrome_display and noise/analog_vhs_noise splits, the signal pipeline model is becoming richer — users may want to reorder filters or have multiple instances. The GUI needs drag-and-drop chain building: add/remove filters, reorder freely, support multiple instances of the same filter (with independent `name` keys). Currently, `strip_postprocessor_chain_for_gui` enforces fixed ordering and single instances.
 
