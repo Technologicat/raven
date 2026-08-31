@@ -423,6 +423,14 @@ At 25 FPS the frame period is 40 ms, so `tau = 0.08 s` gives a per-frame decay
 of `exp(-0.5) ≈ 0.61` — visible trailing without smearing. The default below sits
 just under that; it is the first knob to touch.
 
+**Shipped off, 2026-08-31 (Juha, from the live render), and the reason is the
+frame rate rather than the effect.** A convincing afterglow needs more frames per
+second than the avatar can currently afford; below that it reads as smearing
+rather than as lingering light. So this is a "revisit when the pipeline is
+faster" default, not a verdict on the feature — the arithmetic above is sound and
+the code stays. Note `dynamic_field` shipped off for a related reason and the two
+now interact only if someone turns both back on.
+
 **`persistence_tau = 0.0` means off, and must be bit-identical to the stateless
 path** — not "approximately equal", identical. Short-circuit before touching the
 accumulator, and assert it in the tests. This is what keeps the determinism the

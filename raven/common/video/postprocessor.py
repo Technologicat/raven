@@ -2034,9 +2034,14 @@ class Postprocessor:
         `persistence_tau`: Phosphor afterglow, as a decay time in seconds. A moving character leaves
                            a trail of lingering light.
 
-                           Off by default: it looks better without. 0.0 switches the accumulator off
-                           entirely rather than merely making it short, so at the default this filter
-                           holds no state and allocates nothing per instance.
+                           Off by default, and the reason is the frame rate rather than the effect:
+                           a convincing afterglow needs more frames per second than the avatar can
+                           currently afford, and below that it reads as smearing. Worth turning back
+                           on when the pipeline gets faster.
+
+                           0.0 switches the accumulator off entirely rather than merely making it
+                           short, so at the default this filter holds no state and allocates nothing
+                           per instance.
 
                            Interacts with `dynamic_field` if both are turned on: the previous field's
                            lines persist into the current frame and partly fill the gaps, which is
