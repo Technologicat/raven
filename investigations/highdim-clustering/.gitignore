@@ -1,0 +1,8 @@
+# The AOKK title dumps stay local. They are derived from a corpus under `00_stuff/`, which is
+# gitignored research data rather than repo content, and this repository is public — so the same
+# reasoning that keeps the corpus out keeps a listing of its records out. The arXiv dumps are
+# committed instead: those titles are already public on arxiv.org.
+#
+# Regenerate with the `show_clusters.py` commands in README.md.
+clusters_raw_eom_5_1.txt
+clusters_centered_eom_5_1.txt

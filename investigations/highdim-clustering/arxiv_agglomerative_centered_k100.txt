@@ -1,0 +1,489 @@
+958 entries, 1024 dimensions, embedded by Snowflake/snowflake-arctic-embed-l
+
+fitted: 61 clusters, 98 outliers (10.2%)
+  compactness 0.765, nearest-cluster 0.832
+
+--- cluster 1  (52 entries) ---
+    Large Language Model Alignment: A Survey
+    Beyond Accuracy: Evaluating the Reasoning Behavior of Large Language Models -- A Survey
+    A Survey on Large Language Models with some Insights on their Capabilities and Limitations
+    Causal Reasoning and Large Language Models: Opening a New Frontier for Causality
+    Automatically Correcting Large Language Models: Surveying the landscape of diverse self-correction strategies
+    On the Conversational Persuasiveness of Large Language Models: A Randomized Controlled Trial
+
+--- cluster 18  (45 entries) ---
+    Diffusion Models Beat GANs on Image Synthesis
+    High-Resolution Image Synthesis with Latent Diffusion Models
+    SDXL: Improving Latent Diffusion Models for High-Resolution Image Synthesis
+    Elucidating the Design Space of Diffusion-Based Generative Models
+    Denoising Diffusion Probabilistic Models
+    Consistency Models
+
+--- cluster 23  (45 entries) ---
+    Demystifying Long Chain-of-Thought Reasoning in LLMs
+    Chain-of-Thought Prompting Elicits Reasoning in Large Language Models
+    Measuring Faithfulness in Chain-of-Thought Reasoning
+    Deciphering the Factors Influencing the Efficacy of Chain-of-Thought: Probability, Memorization, and Noisy Reasoning
+    Language Models Are Greedy Reasoners: A Systematic Formal Analysis of Chain-of-Thought
+    To CoT or not to CoT? Chain-of-thought helps mainly on math and symbolic reasoning
+
+--- cluster 52  (41 entries) ---
+    The Computational Limits of Deep Learning
+    Consciousness in Artificial Intelligence: Insights from the Science of Consciousness
+    AI and the Everything in the Whole Wide World Benchmark
+    The Next Decade in AI: Four Steps Towards Robust Artificial Intelligence
+    AI Agents That Matter
+    Why AI is Harder Than We Think
+
+--- cluster 28  (35 entries) ---
+    Secrets of RLHF in Large Language Models Part II: Reward Modeling
+    Secrets of RLHF in Large Language Models Part I: PPO
+    Fine-Tuning Language Models from Human Preferences
+    Open Problems and Fundamental Limitations of Reinforcement Learning from Human Feedback
+    RLAIF: Scaling Reinforcement Learning from Human Feedback with AI Feedback
+    Training a Helpful and Harmless Assistant with Reinforcement Learning from Human Feedback
+
+--- cluster 9  (33 entries) ---
+    Compromising Honesty and Harmlessness in Language Models via Deception Attacks
+    Universal and Transferable Adversarial Attacks on Aligned Language Models
+    Coercing LLMs to do and reveal (almost) anything
+    Fundamental Limitations of Alignment in Large Language Models
+    Fundamental Limitations of Alignment in Large Language Models
+    Shadow Alignment: The Ease of Subverting Safely-Aligned Language Models
+
+--- cluster 25  (32 entries) ---
+    Reinforcement Learning for Reasoning in Small LLMs: What Works and What Doesn't
+    Does Reinforcement Learning Really Incentivize Reasoning Capacity in LLMs Beyond the Base Model?
+    Does Reinforcement Learning Really Incentivize Reasoning Capacity in LLMs Beyond the Base Model?
+    Towards Large Reasoning Models: A Survey of Reinforced Reasoning with Large Language Models
+    DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning
+    ReSearch: Learning to Reason with Search for LLMs via Reinforcement Learning
+
+--- cluster 38  (32 entries) ---
+    Grokking: Generalization Beyond Overfitting on Small Algorithmic Datasets
+    Understanding deep learning requires rethinking generalization
+    Learning in High Dimension Always Amounts to Extrapolation
+    Fit without fear: remarkable mathematical phenomena of deep learning through the prism of interpolation
+    A Theory of Neural Tangent Kernel Alignment and Its Influence on Training
+    The Shape of Learning Curves: a Review
+
+--- cluster 30  (29 entries) ---
+    Generating Long Sequences with Sparse Transformers
+    Theoretical Limitations of Self-Attention in Neural Sequence Models
+    Transformer Quality in Linear Time
+    RWKV: Reinventing RNNs for the Transformer Era
+    Practical Computational Power of Linear Transformers and Their Recurrent and Self-Referential Extensions
+    Longformer: The Long-Document Transformer
+
+--- cluster 7  (28 entries) ---
+    Humanly traversable wormholes
+    The Edges of Our Universe
+    On the Impossibility of Supersized Machines
+    A Historical Discussion of Angular Momentum and its Euler Equation
+    A Spiral Structure in the Inner Oort Cloud
+    The First Billion Years, According to JWST
+
+--- cluster 13  (24 entries) ---
+    An Introduction to Transformers
+    Formal Algorithms for Transformers
+    Do Transformer Modifications Transfer Across Implementations and Applications?
+    Tighter Bounds on the Expressivity of Transformer Encoders
+    What learning algorithm is in-context learning? Investigations with linear models
+    Compositional Capabilities of Autoregressive Transformers: A Study on Synthetic, Interpretable Tasks
+
+--- cluster 20  (19 entries) ---
+    A Comprehensive Survey of Continual Learning: Theory, Method and Application
+    A Survey of Meta-Reinforcement Learning
+    Meta-learning of Sequential Strategies
+    RL$^2$: Fast Reinforcement Learning via Slow Reinforcement Learning
+    Model-Agnostic Meta-Learning for Fast Adaptation of Deep Networks
+    Overcoming catastrophic forgetting in neural networks
+
+--- cluster 37  (18 entries) ---
+    Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs
+    Retrieval-Augmented Generation for Large Language Models: A Survey
+    RAG vs Fine-tuning: Pipelines, Tradeoffs, and a Case Study on Agriculture
+    Corrective Retrieval Augmented Generation
+    RAG Foundry: A Framework for Enhancing LLMs for Retrieval Augmented Generation
+    Fine-tuning Large Language Models for Domain-specific Machine Translation
+
+--- cluster 46  (18 entries) ---
+    FP6-LLM: Efficiently Serving Large Language Models Through FP6-Centric Algorithm-System Co-Design
+    An Empirical Study of LLaMA3 Quantization: From LLMs to MLLMs
+    Low-Bit Quantization Favors Undertrained LLMs: Scaling Laws for Quantized LLMs with 100T Training Tokens
+    Quantization Meets dLLMs: A Systematic Study of Post-training Quantization for Diffusion LLMs
+    Pretraining Large Language Models with NVFP4
+    Scalable MatMul-free Language Modeling
+
+--- cluster 43  (17 entries) ---
+    Scaling Laws for Neural Language Models
+    A Dynamical Model of Neural Scaling Laws
+    Scaling Laws for Transfer
+    Scaling Laws for Autoregressive Generative Modeling
+    A Neural Scaling Law from the Dimension of the Data Manifold
+    The Quantization Model of Neural Scaling
+
+--- cluster 3  (15 entries) ---
+    Finetuned Language Models Are Zero-Shot Learners
+    Self-Instruct: Aligning Language Models with Self-Generated Instructions
+    Training language models to follow instructions with human feedback
+    Scaling Instruction-Finetuned Language Models
+    Recall and Learn: Fine-tuning Deep Pretrained Language Models with Less Forgetting
+    LIMA: Less Is More for Alignment
+
+--- cluster 51  (15 entries) ---
+    Ternary Quantization: A Survey
+    Trained Ternary Quantization
+    Learning Sparse Low-Precision Neural Networks With Learnable Regularization
+    Binary and Ternary Natural Language Generation
+    Mixed Precision Training
+    FP8 Quantization: The Power of the Exponent
+
+--- cluster 10  (14 entries) ---
+    AutoAgent: A Fully-Automated and Zero-Code Framework for LLM Agents
+    Gödel Agent: A Self-Referential Agent Framework for Recursive Self-Improvement
+    Gödel Agent: A Self-Referential Agent Framework for Recursive Self-Improvement
+    Automated Design of Agentic Systems
+    Towards AI Search Paradigm
+    Memp: Exploring Agent Procedural Memory
+
+--- cluster 11  (14 entries) ---
+    Are Emergent Abilities in Large Language Models just In-Context Learning?
+    Emergent Abilities of Large Language Models
+    Do Large Language Models Perform the Way People Expect? Measuring the Human Generalization Function
+    Do Models Explain Themselves? Counterfactual Simulatability of Natural Language Explanations
+    Are Emergent Abilities of Large Language Models a Mirage?
+    Reasoning or Reciting? Exploring the Capabilities and Limitations of Language Models Through Counterfactual Tasks
+
+--- cluster 12  (14 entries) ---
+    How Bad is Training on Synthetic Data? A Statistical Analysis of Language Model Collapse
+    Is Model Collapse Inevitable? Breaking the Curse of Recursion by Accumulating Real and Synthetic Data
+    A Tale of Tails: Model Collapse as a Change of Scaling Laws
+    The Curse of Recursion: Training on Generated Data Makes Models Forget
+    Scaling Data-Constrained Language Models
+    Model Collapse Demystified: The Case of Regression
+
+--- cluster 26  (13 entries) ---
+    Prompt Programming for Large Language Models: Beyond the Few-Shot Paradigm
+    What Makes Good In-Context Examples for GPT-$3$?
+    Language Models are Few-Shot Learners
+    Calibrate Before Use: Improving Few-Shot Performance of Language Models
+    Multitask Prompted Training Enables Zero-Shot Task Generalization
+    MetaICL: Learning to Learn In Context
+
+--- cluster 55  (13 entries) ---
+    DeepSeekMoE: Towards Ultimate Expert Specialization in Mixture-of-Experts Language Models
+    DeepSpeed-MoE: Advancing Mixture-of-Experts Inference and Training to Power Next-Generation AI Scale
+    ST-MoE: Designing Stable and Transferable Sparse Expert Models
+    Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity
+    MoE-Pruner: Pruning Mixture-of-Experts Large Language Model using the Hints from Its Router
+    Parameters vs FLOPs: Scaling Laws for Optimal Sparsity for Mixture-of-Experts Language Models
+
+--- cluster 14  (12 entries) ---
+    Alignment faking in large language models
+    Sleeper Agents: Training Deceptive LLMs that Persist Through Safety Training
+    Uncovering Deceptive Tendencies in Language Models: A Simulated Company AI Assistant
+    Simple synthetic data reduces sycophancy in large language models
+    Poser: Unmasking Alignment Faking LLMs by Manipulating Their Internals
+    Towards Understanding Sycophancy in Language Models
+
+--- cluster 16  (12 entries) ---
+    LLMs Know More Than They Show: On the Intrinsic Representation of LLM Hallucinations
+    Chaos with Keywords: Exposing Large Language Models Sycophancy to Misleading Keywords and Evaluating Defense Strategies
+    Training Language Models on the Knowledge Graph: Insights on Hallucinations and Their Detectability
+    Survey on Factuality in Large Language Models: Knowledge, Retrieval and Domain-Specificity
+    Do Language Models Know When They're Hallucinating References?
+    On the Origin of Hallucinations in Conversational Models: Is it the Datasets or the Models?
+
+--- cluster 19  (12 entries) ---
+    A Vision Check-up for Language Models
+    Visual Representation Alignment for Multimodal Large Language Models
+    Does Vision-and-Language Pretraining Improve Lexical Grounding?
+    Learning Transferable Visual Models From Natural Language Supervision
+    Vision language models are blind
+    Language Quantized AutoEncoders: Towards Unsupervised Text-Image Alignment
+
+--- cluster 27  (12 entries) ---
+    BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding
+    Language Models as Knowledge Bases?
+    How Does BERT Answer Questions? A Layer-Wise Analysis of Transformer Representations
+    Implicit Representations of Meaning in Neural Language Models
+    Linearity of Relation Decoding in Transformer Language Models
+    Common Sense or World Knowledge? Investigating Adapter-Based Knowledge Injection into Pretrained Transformers
+
+--- cluster 22  (11 entries) ---
+    Multilingual Machine Translation with Large Language Models: Empirical Results and Analysis
+    EuroLLM: Multilingual Language Models for Europe
+    PolyLM: An Open Source Polyglot Large Language Model
+    An Expanded Massive Multilingual Dataset for High-Performance Language Technologies (HPLT)
+    LLaVaOLMoBitnet1B: Ternary LLM goes Multimodal!
+    No Language Left Behind: Scaling Human-Centered Machine Translation
+
+--- cluster 47  (11 entries) ---
+    An Explanation of In-context Learning as Implicit Bayesian Inference
+    Discovering Latent Knowledge in Language Models Without Supervision
+    Large Language Models Are Latent Variable Models: Explaining and Finding Good Demonstrations for In-Context Learning
+    Connecting the Dots: LLMs can Infer and Verbalize Latent Structure from Disparate Training Data
+    Large Language Models Struggle to Learn Long-Tail Knowledge
+    Language Models (Mostly) Know What They Know
+
+--- cluster 41  (10 entries) ---
+    The Curious Case of Neural Text Degeneration
+    Turning Up the Heat: Min-p Sampling for Creative and Coherent LLM Outputs
+    Turning Up the Heat: Min-p Sampling for Creative and Coherent LLM Outputs
+    A Contrastive Framework for Neural Text Generation
+    Hot or Cold? Adaptive Temperature Sampling for Code Generation with Large Language Models
+    Truncation Sampling as Language Model Desmoothing
+
+--- cluster 45  (10 entries) ---
+    Llama 2: Open Foundation and Fine-Tuned Chat Models
+    Scaling Down to Scale Up: A Guide to Parameter-Efficient Fine-Tuning
+    Gemma 2: Improving Open Language Models at a Practical Size
+    InternLM2 Technical Report
+    OLMo: Accelerating the Science of Language Models
+    h2oGPT: Democratizing Large Language Models
+
+--- cluster 53  (10 entries) ---
+    LoRA: Low-Rank Adaptation of Large Language Models
+    PRILoRA: Pruned and Rank-Increasing Low-Rank Adaptation
+    Compacter: Efficient Low-Rank Hypercomplex Adapter Layers
+    Compressing Large Language Models using Low Rank and Low Precision Decomposition
+    MixLoRA: Enhancing Large Language Models Fine-Tuning with LoRA-based Mixture of Experts
+    Transformer-Squared: Self-adaptive LLMs
+
+--- cluster 5  (9 entries) ---
+    Boosting Theory-of-Mind Performance in Large Language Models via Prompting
+    Improving Factuality and Reasoning in Language Models through Multiagent Debate
+    Mindstorms in Natural Language-Based Societies of Mind
+    Evaluating Large Language Models in Theory of Mind Tasks
+    Unleashing the Emergent Cognitive Synergy in Large Language Models: A Task-Solving Agent through Multi-Persona Self-Collaboration
+    ReAct: Synergizing Reasoning and Acting in Language Models
+
+--- cluster 6  (9 entries) ---
+    MLE-bench: Evaluating Machine Learning Agents on Machine Learning Engineering
+    MLE-bench: Evaluating Machine Learning Agents on Machine Learning Engineering
+    MLAgentBench: Evaluating Language Agents on Machine Learning Experimentation
+    OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments
+    SWE-bench: Can Language Models Resolve Real-World GitHub Issues?
+    Butter-Bench: Evaluating LLM Controlled Robots for Practical Intelligence
+
+--- cluster 21  (9 entries) ---
+    The Consciousness Prior
+    The Platonic Representation Hypothesis
+    Coordination Among Neural Modules Through a Shared Global Workspace
+    The Semantic Hub Hypothesis: Language Models Share Semantic Representations Across Languages and Modalities
+    Relative representations enable zero-shot latent space communication
+    Harnessing the Universal Geometry of Embeddings
+
+--- cluster 29  (9 entries) ---
+    YaRN: Efficient Context Window Extension of Large Language Models
+    Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation
+    Extending Context Window of Large Language Models via Positional Interpolation
+    The Impact of Positional Encoding on Length Generalization in Transformers
+    Dissecting Transformer Length Extrapolation via the Lens of Receptive Field Analysis
+    Exploring Length Generalization in Large Language Models
+
+--- cluster 32  (9 entries) ---
+    Interpreting Attention Layer Outputs with Sparse Autoencoders
+    A is for Absorption: Studying Feature Splitting and Absorption in Sparse Autoencoders
+    Jacobian Sparse Autoencoders: Sparsify Computations, Not Just Activations
+    Identifying Functionally Important Features with End-to-End Sparse Dictionary Learning
+    Transcoders Find Interpretable LLM Feature Circuits
+    Disentangling Disentanglement in Variational Autoencoders
+
+--- cluster 35  (8 entries) ---
+    Early Signs of Steganographic Capabilities in Frontier LLMs
+    Stress-Testing Capability Elicitation With Password-Locked Models
+    Preventing Language Models From Hiding Their Reasoning
+    Demonstrating specification gaming in reasoning models
+    LLM Agents can Autonomously Hack Websites
+    AI Sandbagging: Language Models can Strategically Underperform on Evaluations
+
+--- cluster 49  (8 entries) ---
+    Most Language Models can be Poets too: An AI Writing Assistant and Constrained Text Generation Studio
+    Few-Shot Detection of Machine-Generated Text using Style Representations
+    Multiversal views on language models
+    Bits of Grass: Does GPT already know how to write like Whitman?
+    Are Paraphrases Generated by Large Language Models Invertible?
+    Learning to Generate Text in Arbitrary Writing Styles
+
+--- cluster 59  (8 entries) ---
+    BABILong: Testing the Limits of LLMs with Long Context Reasoning-in-a-Haystack
+    Leave No Context Behind: Efficient Infinite Context Transformers with Infini-attention
+    InfiniteHiP: Extending Language Model Context Up to 3 Million Tokens on a Single GPU
+    Landmark Attention: Random-Access Infinite Context Length for Transformers
+    LLM Maybe LongLM: Self-Extend LLM Context Window Without Tuning
+    LLM-Microscope: Uncovering the Hidden Role of Punctuation in Context Memory of Transformers
+
+--- cluster 2  (7 entries) ---
+    Analysing Mathematical Reasoning Abilities of Neural Models
+    Solving Quantitative Reasoning Problems with Language Models
+    Accelerating mathematical research with language models: A case study of an interaction with GPT-5-Pro on a convex analysis problem
+    Natural Language Embedded Programs for Hybrid Language Symbolic Reasoning
+    Hermes 4 Technical Report
+    Mathematical Reasoning in Latent Space
+
+--- cluster 31  (7 entries) ---
+    To Tune or Not to Tune? Adapting Pretrained Representations to Diverse Tasks
+    Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer
+    Don't Stop Pretraining: Adapt Language Models to Domains and Tasks
+    What Language Model Architecture and Pretraining Objective Work Best for Zero-Shot Generalization?
+    TIES-Merging: Resolving Interference When Merging Models
+    Editing Models with Task Arithmetic
+
+--- cluster 36  (7 entries) ---
+    STaR: Bootstrapping Reasoning With Reasoning
+    Quiet-STaR: Language Models Can Teach Themselves to Think Before Speaking
+    Recursive Introspection: Teaching Language Model Agents How to Self-Improve
+    LADDER: Self-Improving LLMs Through Recursive Problem Decomposition
+    Language Models Can Teach Themselves to Program Better
+    B-STaR: Monitoring and Balancing Exploration and Exploitation in Self-Taught Reasoners
+
+--- cluster 56  (7 entries) ---
+    Scaling Test-time Compute for LLM Agents
+    Can 1B LLM Surpass 405B LLM? Rethinking Compute-Optimal Test-Time Scaling
+    Scaling LLM Test-Time Compute Optimally can be More Effective than Scaling Model Parameters
+    Sleep-time Compute: Beyond Inference Scaling at Test-time
+    s1: Simple test-time scaling
+    ParaThinker: Native Parallel Thinking as a New Paradigm to Scale LLM Test-time Compute
+
+--- cluster 8  (6 entries) ---
+    Decoupled Weight Decay Regularization
+    Symbolic Discovery of Optimization Algorithms
+    The Unreasonable Ineffectiveness of the Deeper Layers
+    Channel Pruning for Accelerating Very Deep Neural Networks
+    Drop Dropout on Single-Epoch Language Model Pretraining
+    ADAHESSIAN: An Adaptive Second Order Optimizer for Machine Learning
+
+--- cluster 15  (6 entries) ---
+    GPT-4 Technical Report
+    G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment
+    Sparks of Artificial General Intelligence: Early experiments with GPT-4
+    TruthfulQA: Measuring How Models Mimic Human Falsehoods
+    Revisiting Text-to-Image Evaluation with Gecko: On Metrics, Prompts, and Human Ratings
+    GPQA: A Graduate-Level Google-Proof Q&A Benchmark
+
+--- cluster 24  (6 entries) ---
+    Generative Agent Simulations of 1,000 People
+    Using Large Language Models to Simulate Multiple Humans and Replicate Human Subject Studies
+    Out of One, Many: Using Language Models to Simulate Human Samples
+    Generative Agents: Interactive Simulacra of Human Behavior
+    Large Language Models Pass the Turing Test
+    Social Simulacra: Creating Populated Prototypes for Social Computing Systems
+
+--- cluster 33  (6 entries) ---
+    Promptomatix: An Automatic Prompt Optimization Framework for Large Language Models
+    Large Language Models as Optimizers
+    The Unreasonable Effectiveness of Eccentric Automatic Prompts
+    Unlocking the Potential of User Feedback: Leveraging Large Language Model as User Simulator to Enhance Dialogue System
+    Inference-Time Intervention: Eliciting Truthful Answers from a Language Model
+    LLaMA-Omni: Seamless Speech Interaction with Large Language Models
+
+--- cluster 39  (6 entries) ---
+    Mamba: Linear-Time Sequence Modeling with Selective State Spaces
+    Falcon-H1: A Family of Hybrid-Head Language Models Redefining Efficiency and Performance
+    Hunyuan-TurboS: Advancing Large Language Models through Mamba-Transformer Synergy and Adaptive Chain-of-Thought
+    MambaByte: Token-free Selective State Space Model
+    FFN Fusion: Rethinking Sequential Computation in Large Language Models
+    MatFormer: Nested Transformer for Elastic Inference
+
+--- cluster 50  (6 entries) ---
+    U-Net: Convolutional Networks for Biomedical Image Segmentation
+    DeepLab: Semantic Image Segmentation with Deep Convolutional Nets, Atrous Convolution, and Fully Connected CRFs
+    Superhuman Accuracy on the SNEMI3D Connectomics Challenge
+    Sapiens: Foundation for Human Vision Models
+    Hopfield Networks is All You Need
+    YOLOv7: Trainable bag-of-freebies sets new state-of-the-art for real-time object detectors
+
+--- cluster 58  (6 entries) ---
+    Censoring Representations with an Adversary
+    Planting Undetectable Backdoors in Machine Learning Models
+    Your Policy Regularizer is Secretly an Adversary
+    Label Leakage and Protection in Two-party Split Learning
+    Adversarial Policies Beat Superhuman Go AIs
+    Model-Free Opponent Shaping
+
+--- cluster 0  (5 entries) ---
+    Patchscopes: A Unifying Framework for Inspecting Hidden Representations of Language Models
+    LVLM-Interpret: An Interpretability Tool for Large Vision-Language Models
+    On Measuring Faithfulness or Self-consistency of Natural Language Explanations
+    Topological Representations of Local Explanations
+    Latent Concept-based Explanation of NLP Models
+
+--- cluster 4  (5 entries) ---
+    Skill-Mix: a Flexible and Expandable Family of Evaluations for AI models
+    FuseChat: Knowledge Fusion of Chat Models
+    Mixture-of-Agents Enhances Large Language Model Capabilities
+    Evolutionary Optimization of Model Merging Recipes
+    Language Models are Super Mario: Absorbing Abilities from Homologous Models as a Free Lunch
+
+--- cluster 17  (5 entries) ---
+    Qwen-Image Technical Report
+    Illustrious: an Open Advanced Illustration Model
+    Qwen3 Technical Report
+    FLUX-Reason-6M & PRISM-Bench: A Million-Scale Text-to-Image Reasoning Dataset and Comprehensive Benchmark
+    Talking Head(?) Anime from a Single Image 4: Improved Model and Its Distillation
+
+--- cluster 34  (5 entries) ---
+    ToolLLM: Facilitating Large Language Models to Master 16000+ Real-world APIs
+    Toolformer: Language Models Can Teach Themselves to Use Tools
+    Efficient Tool Use with Chain-of-Abstraction Reasoning
+    Feedback-Driven Tool-Use Improvements in Large Language Models via Automated Build Environments
+    SMART: Self-Aware Agent for Tool Overuse Mitigation
+
+--- cluster 40  (5 entries) ---
+    Emergent Linear Representations in World Models of Self-Supervised Sequence Models
+    Emergent World Representations: Exploring a Sequence Model Trained on a Synthetic Task
+    World Models
+    Acquisition of Chess Knowledge in AlphaZero
+    Evaluating the World Model Implicit in a Generative Model
+
+--- cluster 42  (5 entries) ---
+    Large Concept Models: Language Modeling in a Sentence Representation Space
+    SONAR-LLM: Autoregressive Transformer that Thinks in Sentence Embeddings and Speaks in Tokens
+    SONAR: Sentence-Level Multimodal and Language-Agnostic Representations
+    From Bytes to Ideas: Language Modeling with Autoregressive U-Nets
+    Local Byte Fusion for Neural Machine Translation
+
+--- cluster 44  (5 entries) ---
+    A Simple Framework for Contrastive Learning of Visual Representations
+    Momentum Contrast for Unsupervised Visual Representation Learning
+    Learning Video Representations using Contrastive Bidirectional Transformer
+    Bootstrap your own latent: A new approach to self-supervised Learning
+    NoProp: Training Neural Networks without Back-propagation or Forward-propagation
+
+--- cluster 48  (5 entries) ---
+    Grokked Transformers are Implicit Reasoners: A Mechanistic Journey to the Edge of Generalization
+    Grokked Transformers are Implicit Reasoners: A Mechanistic Journey to the Edge of Generalization
+    DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models
+    MiMo: Unlocking the Reasoning Potential of Language Model -- From Pretraining to Posttraining
+    LIMO: Less is More for Reasoning
+
+--- cluster 54  (5 entries) ---
+    Pretraining on the Test Set Is All You Need
+    Textbooks Are All You Need
+    BeyondWeb: Lessons from Scaling Synthetic Data for Trillion-scale Pretraining
+    Textbooks Are All You Need II: phi-1.5 technical report
+    The RefinedWeb Dataset for Falcon LLM: Outperforming Curated Corpora with Web Data, and Web Data Only
+
+--- cluster 57  (5 entries) ---
+    High-Dimensional Continuous Control Using Generalized Advantage Estimation
+    Simple random search provides a competitive approach to reinforcement learning
+    Mastering Atari Games with Limited Data
+    Proximal Policy Optimization Algorithms
+    Kullback-Leibler control for discrete-time nonlinear systems on continuous spaces
+
+--- cluster 60  (5 entries) ---
+    Train Large, Then Compress: Rethinking Model Size for Efficient Training and Inference of Transformers
+    Language Modeling Is Compression
+    Training Compute-Optimal Large Language Models
+    Better & Faster Large Language Models via Multi-token Prediction
+    Accuracy is Not All You Need
+
+--- outliers (98 entries) ---
+    Distilling the Knowledge in a Neural Network
+    Deep Unsupervised Learning using Nonequilibrium Thermodynamics
+    The Fallacy of Favoring Gradual Replacement Mind Uploading Over Scan-and-Copy
+    Beyond Hartigan Consistency: Merge Distortion Metric for Hierarchical Clustering
+    Exploring the Limits of Language Modeling
+    Small-Variance Nonparametric Clustering on the Hypersphere
