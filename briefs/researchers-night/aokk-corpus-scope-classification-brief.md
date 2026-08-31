@@ -62,12 +62,21 @@ scope, with a one-line reason each", and the corpus is not modified.
 carrying the least information**. Its escalation was driven by the model's own confidence, so exactly the
 cases that most needed a second look were the ones the rule never re-examined.
 
-That finding transfers directly, because the design above escalates on confidence too. Titles here vary a
-lot in how much they say, and a short generic title is precisely where a title-only verdict is worth
-least and may be delivered most confidently. So pass 2 should take **everything the model is unsure
-about, plus everything whose title is short or generic regardless of confidence** — the second criterion
-measured from the title, not asked of the model. Better still, calibrate first: hand-check a sample of
-pass-1's high-confidence verdicts before trusting the rule at all.
+**But it transfers less severely than it first appears, and the reason is worth knowing before copying
+that script's structure.** The flaw's bite depends on how much the inputs vary in informativeness, and
+*filenames* vary enormously — `2301.12345.pdf` carries nothing at all, so there the badly-served subset
+was large. Titles do not. Measured on this corpus, 2026-08-31: **median 13 words, 5th percentile 7, and
+only 33 records (0.7%) under five words**.
+
+So the mitigation is cheaper here than a heuristic. Those 33 are a hand-checkable list, and they are
+genuinely the uninformative ones — *Editorial*, *Afterword*, *Machine culture*, *Generative AI*. Send
+every record under about five words to pass 2 regardless of what the model says about its own
+confidence, and the known failure mode is closed without tuning anything. Calibrating first is still
+worth it: hand-check a sample of pass-1's high-confidence verdicts before trusting the rule.
+
+(The wider lesson from that run stands even though this corpus dodges it: an escalation rule driven by
+the model's own confidence is blind exactly where the input is thin, so it needs a second criterion
+measured from the input rather than asked of the model.)
 
 ## Open
 

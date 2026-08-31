@@ -13,33 +13,6 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
-## LLM cluster keywords are not comparable across clusters
-
-*Cluster: importer rework · Cost: S–M depending on which remedy · Gate: a design decision, not a measurement · Filed: 2026-08-31 · See also: `investigations/highdim-clustering/`*
-
-`clusters_keyword_method = "llm"` asks the model for keywords one cluster at a time, with nothing tying
-the runs together, so the same concept comes back spelled differently in different clusters — and the
-keywords are then not comparable, which is most of what a reader uses them for. Two clusters sharing a
-concept and two clusters merely spelling it alike are indistinguishable in the output.
-
-**Measured** on 26 clusters of the arXiv AI corpus, 2026-08-31: one concept appeared as **`Large Language
-Models` (14×), `LLM` (4×) and `Large language models` (2×)** — an acronym, an expansion, and a
-capitalization difference, all in one run of one corpus.
-
-The case half is trivial. The acronym-versus-expansion half is the real question, and the candidates pull
-in different directions:
-
-- **A canonicalization pass over the collected vocabulary**, after all clusters are keyworded. Cheap and
-  local, and the only option that needs no change to how keywords are generated.
-- **Constrain generation to a controlled vocabulary** taken from the corpus — which would fold the
-  existing `"frequencies"` method into the `"llm"` one rather than leaving them as alternatives. The most
-  interesting option and the largest.
-- **Ask the prompt for full forms rather than acronyms.** Cheapest, and least reliable: it does not
-  survive a model that decides otherwise, and nothing detects when it has.
-
-Whichever is chosen, note that the word cloud and the cluster labels read the same list, so a remedy
-applied at the extraction step covers both, and one applied at display time does not.
-
 ## VU meters occasionally blank for a frame or two
 
 *Cluster: DPG drawing · Cost: S · Gate: not reproduced on demand — see the check below, which settles it from a recording · Filed: 2026-08-31*

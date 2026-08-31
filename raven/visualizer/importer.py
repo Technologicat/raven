@@ -863,6 +863,80 @@ def _extract_keywords(input_data, max_vis_kw=6):
 
     return all_keywords
 
+def _parse_canonicalization_mapping(text, known_keywords):
+    """Parse the LLM's `original -> replacement` lines into a mapping, discarding what cannot be trusted.
+
+    `text`: the model's reply.
+    `known_keywords`: the set of keywords the first pass actually produced.
+
+    Returns a `dict` `{original: replacement}`, containing only entries where **both sides are keywords
+    that were actually extracted**. That check is the point of asking for a mapping instead of for a
+    rewritten keyword list: a model that invents a term, or rephrases one, cannot get it into the output,
+    because a replacement nobody extracted is dropped rather than trusted. Self-mappings and chains are
+    dropped too, the latter because resolving them needs an ordering the model was never asked for.
+    """
+    mapping = {}
+    for line in text.splitlines():
+        original, separator, replacement = line.partition("->")
+        if not separator:
+            continue
+        original = original.strip()
+        replacement = replacement.strip()
+        if original in known_keywords and replacement in known_keywords and original != replacement:
+            mapping[original] = replacement
+    # A replacement that is itself replaced would need resolving in order, and an ordering the model did
+    # not give us is one we would be inventing. Dropping the far end of each chain leaves a mapping that
+    # is right as far as it goes.
+    return {original: replacement for original, replacement in mapping.items()
+            if replacement not in mapping}
+
+
+def _canonicalize_cluster_keywords(vis_keywords_by_cluster):
+    """Fold spelling variants of one concept together across clusters, using the LLM.
+
+    `vis_keywords_by_cluster`: output of `_collect_cluster_keywords`'s `llm` branch.
+
+    Returns a new list in the same shape, with variants replaced and any duplicates a replacement
+    created removed from each cluster (order preserved, first occurrence kept).
+
+    Returns the input unchanged when there is nothing to do, or when the model declines.
+    """
+    known_keywords = {keyword for keywords in vis_keywords_by_cluster for keyword in keywords}
+    known_keywords.discard("<unknown topic>")  # our own sentinel, not a keyword anyone extracted
+    if len(known_keywords) < 2:
+        return vis_keywords_by_cluster
+
+    _update_status_and_log(f"Canonicalizing {len(known_keywords)} cluster keywords...", log_indent=1)
+    listing = "\n".join(sorted(known_keywords))
+    prompt = f"{visualizer_config.clusters_llm_keyword_canonicalization_prompt}\n-----\n\n{listing}"
+
+    record = agent.turn(llm_settings,
+                        prompt,
+                        use_character_card=False,
+                        tools_enabled=False,
+                        on_progress=llmclient.make_console_progress_handler("."))
+    for reasoning in record.reasoning:
+        logger.info(f"        LLM thoughts for keyword canonicalization:\n{reasoning}")
+    logger.info(f"        LLM output (final answer) for keyword canonicalization:\n{record.reply}")
+
+    mapping = _parse_canonicalization_mapping(record.reply, known_keywords)
+    if not mapping:
+        logger.info("        No keyword replacements to apply.")
+        return vis_keywords_by_cluster
+    logger.info(f"        Applying {len(mapping)} keyword replacement(s): "
+                + ", ".join(f"'{original}' -> '{replacement}'" for original, replacement in sorted(mapping.items())))
+
+    canonicalized = []
+    for keywords in vis_keywords_by_cluster:
+        # A replacement can collide with a keyword the cluster already had, so deduplicate - but keep the
+        # order, which is the order the model gave and reads as most-important-first.
+        seen = {}
+        for keyword in keywords:
+            seen.setdefault(mapping.get(keyword, keyword), None)
+        canonicalized.append(list(seen))
+    return canonicalized
+
+
 def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=6, fraction=0.1):
     """Collect a set of keywords for each visualization cluster (2D), based on the per-entry detected keywords.
 
@@ -944,6 +1018,11 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw
                 cluster_keywords = [keyword.strip() for keyword in scrubbed_output_text.split(",")]
             vis_keywords_by_cluster.append(cluster_keywords)
             eta_estimator.tick()
+
+        # Each cluster above was keyworded on its own, so one concept can have come back under several
+        # spellings. Fold them together now that the whole vocabulary is known - which is the earliest
+        # this can be done, and why it is a second pass rather than part of the loop.
+        vis_keywords_by_cluster = _canonicalize_cluster_keywords(vis_keywords_by_cluster)
     else:
         error_msg = f"Unknown cluster keyword method '{visualizer_config.clusters_keyword_method}'; valid: 'frequencies', 'llm'. Please check your `raven.visualizer.config`."
         logger.error(f"_collect_cluster_keywords: {error_msg}")

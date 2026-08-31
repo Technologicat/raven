@@ -102,6 +102,47 @@ clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
     The set of items to be analyzed is below.
 """).strip()
 
+# Each cluster is keyworded on its own, with nothing tying the runs together, so one concept can come back
+# spelled several ways across clusters -- an acronym here, its expansion there, a capital letter elsewhere.
+# Two clusters that share a concept then look no more alike than two that merely spell one alike, which is
+# most of what a reader uses the keywords for. This second pass folds the variants together.
+#
+# It is asked for a mapping rather than for a rewritten keyword list, because a mapping can be checked: the
+# program keeps only those entries whose replacement is itself one of the keywords the first pass produced,
+# so a model that invents a term cannot introduce it. See `_canonicalize_cluster_keywords`.
+clusters_llm_keyword_canonicalization_prompt = textwrap.dedent("""
+    **Instructions**
+
+    Below is a list of keywords, extracted from the clusters of a document dataset. Each cluster was
+    processed separately, so the same concept may appear several times under different spellings:
+    an acronym and its expansion ("LLM" and "Large Language Models"), a difference in capitalization,
+    or a singular and a plural.
+
+    Please identify the groups of keywords that mean the same thing, and choose one spelling from each
+    group to represent it. Choose the spelling that reads best to a human; prefer the expanded form over
+    an acronym.
+
+    As your response, after you are done thinking, write one line per keyword that should be replaced,
+    in the format:
+
+        original keyword -> replacement keyword
+
+    Write a line only for keywords that need replacing. If a keyword is already the best spelling of its
+    group, or belongs to no group, leave it out entirely.
+
+    IMPORTANT: The result will be read by a computer program, so it needs to be in a standard format.
+
+    Use " -> " (space, hyphen, greater-than, space) as the separator, and write nothing else on the line.
+
+    Both the original and the replacement MUST be copied exactly from the list below. Do not invent
+    new terms, do not rephrase, and do not merge keywords that describe genuinely different things.
+
+    If no keywords need replacing, that is fine. In that case, as your response, after you are done
+    thinking, write ONLY the exact string "no changes needed" (without the quotes).
+
+    The list of keywords is below.
+""").strip()
+
 # NLP model for spaCy, used in keyword extraction.
 #
 # NOTE: Raven uses spaCy models in three places, and they don't have to be the same.

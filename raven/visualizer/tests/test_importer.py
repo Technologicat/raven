@@ -39,6 +39,13 @@ TWO_RECORDS = """
 """
 
 
+class FakeRecord:
+    """Stands in for `agent.turn`'s `TurnRecord`, of which only these two fields are read here."""
+    def __init__(self, reply):
+        self.reply = reply
+        self.reasoning = []
+
+
 class ExplodingDehyphenator:
     """Stands in for `mayberemote.Dehyphenator`, failing the way a real one has been seen to."""
     def __init__(self, *args, **kwargs):
@@ -119,3 +126,67 @@ def test_parse_input_files_skips_a_record_that_fails_anywhere_else(two_record_bi
     assert any("beta2024" not in record.message and "alpha2024" in record.message
                for record in caplog.records), \
         f"the warning should name the skipped entry; got {[r.message for r in caplog.records]}"
+
+
+# ---------------------------------------------------------------------------
+# Cluster keyword canonicalization
+
+
+def test_canonicalization_mapping_keeps_only_verifiable_replacements():
+    # The mapping is parsed rather than trusted, which is the whole reason the prompt asks for a mapping
+    # instead of for a rewritten keyword list. Anything whose replacement was not itself extracted is
+    # dropped, so a model that invents or rephrases a term cannot get it into the dataset.
+    known = {"LLM", "Large Language Models", "Chain-of-Thought", "Reasoning"}
+    reply = ("LLM -> Large Language Models\n"
+             "Chain-of-Thought -> Chain of Thought Prompting\n"   # replacement was never extracted
+             "Reasoning -> Reasoning\n"                           # self-mapping, no-op
+             "Nonexistent -> Reasoning\n"                         # original was never extracted
+             "this line has no arrow at all\n")
+    mapping = importer._parse_canonicalization_mapping(reply, known)
+    assert mapping == {"LLM": "Large Language Models"}
+
+
+def test_canonicalization_mapping_drops_chains():
+    # `a -> b` together with `b -> c` needs resolving in an order the model was never asked to give, so
+    # the far end is dropped rather than guessed at.
+    known = {"a", "b", "c"}
+    mapping = importer._parse_canonicalization_mapping("a -> b\nb -> c\n", known)
+    assert mapping == {"b": "c"}
+
+
+def test_canonicalize_cluster_keywords_merges_variants_without_reordering(monkeypatch):
+    clusters = [["LLM", "Reasoning"],
+                ["Large Language Models", "Benchmarking"],
+                ["Reasoning", "LLM"]]  # a cluster where the replacement collides with a keyword it has
+
+    def fake_turn(settings, prompt, **kwargs):
+        return FakeRecord("LLM -> Large Language Models")
+
+    # `agent` and `llm_settings` are bound at import time only when the config asks for LLM work, so a
+    # test that drives this path has to supply them.
+    monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
+    monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+    monkeypatch.setattr(importer, "llmclient",
+                        type("_FakeLLMClient", (),
+                             {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                        raising=False)
+
+    out = importer._canonicalize_cluster_keywords(clusters)
+
+    assert out[0] == ["Large Language Models", "Reasoning"]
+    assert out[1] == ["Large Language Models", "Benchmarking"], "an untouched keyword keeps its place"
+    # The replacement collides with a keyword the cluster already had; the duplicate goes and the
+    # original order survives, since that order is the model's ranking and reads as most-important-first.
+    assert out[2] == ["Reasoning", "Large Language Models"]
+
+
+def test_canonicalize_cluster_keywords_passes_through_when_nothing_to_do(monkeypatch):
+    # Negative control for the test above: with one keyword there is nothing to canonicalize, so the LLM
+    # is never consulted. Were it consulted, the fake below would raise and this would fail rather than
+    # quietly agreeing with the treatment case.
+    def explode(*args, **kwargs):
+        raise AssertionError("the model should not be asked when there is nothing to canonicalize")
+
+    monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(explode)}), raising=False)
+    clusters = [["Large Language Models"]]
+    assert importer._canonicalize_cluster_keywords(clusters) is clusters
