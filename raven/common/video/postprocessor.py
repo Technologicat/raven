@@ -2079,13 +2079,13 @@ class Postprocessor:
             field_phase = 0.5 * ((field + int(self.frame_no)) % 2)
         else:
             field_phase = 0.5 * (field % 2)
-        # The phase is computed in float32 even when the postprocessor is running in float16, and this
-        # is not a precaution - it is a bug that shipped. Deriving the row index from a half-open
-        # coordinate, `(linspace(-1, 1, h) + 1) * (h - 1) / 2`, cancels catastrophically in fp16: at
-        # h = 1024 the result is off by up to half a row, with row-to-row steps between 0.5 and 1.5
-        # instead of 1.0. The visible effect is bands where consecutive rows land on the same side of
-        # the raster and the alternation stops - horizontal stripes across the picture, uniformly lit,
-        # about 120 rows tall. Row indices are exact in float32 up to 2**24.
+        # The phase is computed in float32 even when the postprocessor is running in float16, and it
+        # has to be. Deriving the row index from a coordinate in [-1, 1] - `(linspace(-1, 1, h) + 1)
+        # * (h - 1) / 2` - cancels catastrophically in fp16: at h = 1024 the result is off by up to
+        # half a row, with row-to-row steps between 0.5 and 1.5 instead of 1.0. What that looks like
+        # is bands where consecutive rows land on the same side of the raster and the alternation
+        # stops - horizontal stripes across the picture, uniformly lit, about 120 rows tall. Row
+        # indices are exact in float32 up to 2**24.
         line_phase = y_px / scanline_period + field_phase
         line_phase = line_phase - torch.floor(line_phase)  # position within one raster line, [0, 1)
         # Gaussian falloff across the line, rather than the usual bright/dark alternation. This is the

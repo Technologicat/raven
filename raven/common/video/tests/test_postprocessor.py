@@ -1252,11 +1252,12 @@ class TestCrtScanlines:
                                               f"and {second_bias:.4f}")
 
     def test_overscan_moves_the_picture_without_moving_the_raster(self):
-        """`scanline_period` is in output pixels, and `overscan` used to quietly change it.
+        """`scanline_period` is in output pixels, and `overscan` must not change it.
 
-        Taking the phase from the sampling coordinate meant the raster was magnified with the content:
-        at `overscan=1.15` the lines came out 2.30 output pixels apart instead of 2.00. Beyond breaking
-        what the parameter says it means, a non-integer pitch beats against the pixel grid.
+        Taking the phase from the sampling coordinate magnifies the raster along with the content it
+        is drawn on: at `overscan=1.15` the lines land 2.30 output pixels apart instead of 2.00. Beyond
+        making the parameter mean something other than what it says, a non-integer pitch beats against
+        the pixel grid.
         """
         def pitch(overscan):
             profile = self._row_profile(_make_postprocessor(512, 64), h=512, overscan=overscan)
