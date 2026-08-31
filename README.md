@@ -276,6 +276,25 @@ Beside the desktop apps, Raven installs a set of headless tools. They exist so t
 - **`raven-arxiv-download`** fetches the fulltext PDFs, for identifiers given on the command line or read out of a `.bib` with `--from-bib`. `--save-bib` writes the BibTeX from metadata it already had to fetch anyway, so you pay arXiv's politeness delays once instead of twice — which is what you want coming from bare identifiers, rather than from a search that handed you the bibliography already.
 - **`raven-burstbib`** splits a multi-entry `.bib` into one file per entry — which is what makes a bibliography usable as a document database, since otherwise the whole thing indexes as a single document.
 - **`raven-wos2bib`**, **`raven-csv2bib`**, **`raven-pdf2bib`** convert Web of Science exports, CSV, and PDF metadata into BibTeX.
+- **`raven-fixbib`** repairs what a database export does to a `.bib`: entries naming the same field two or three times, field values whose braces do not balance, HTML character entities left behind by a database that exported its web page rather than its record, and a publisher's rights notice sitting inside the `abstract`. A parser refuses a broken entry whole — title, authors and all — so a search export can lose a large share of itself to faults nothing reports. `-n` says what it would repair and writes nothing, `-l` names every record rather than counting them, and your file is overwritten only if you ask with `-i`.
+- **`raven-deduplicate`** merges the copies a multi-database search leaves behind: the same paper once per database that indexes it, each in that database's dialect with a different subset of the fields filled in. Two keys decide, and neither is a guess — the DOI, and the title reduced until two databases' spellings of one title agree — unioned transitively, so a record sharing a DOI with one twin and a title with another brings all three together. The surviving copy is the most complete one, with every field it lacks filled in from a twin that has one, and every merge is written to an audit TSV.
+
+**From several databases into one bibliography**
+
+Search Scopus, Web of Science, ProQuest, Springer and arXiv for the same question and you have five exports holding the same papers over and over. One command turns them into something citable:
+
+```bash
+raven-deduplicate scopus.bib wos.bib proquest.bib springer.bib arxiv.bib \
+    -o deduped.bib --audit audit.tsv
+```
+
+Several files are read as one corpus, so there is nothing to concatenate first, and `raven-fixbib`'s repair is applied on the way in — a record the parser would refuse is still counted, so the number you get is honest without your having run the two tools in sequence. Reach for `raven-fixbib` itself when you want the repair in the *files*, which is a different thing from wanting it in the count.
+
+Without `-o` the run reports what it would do and writes nothing; your inputs are never modified either way. `--audit` is the output a scoping review has to stand behind, and the one to keep: a row per merge naming what was kept, what was merged away, which key matched, and every value that differed from the one kept.
+
+The audit is tab-separated, exactly as the `.tsv` says. Worth knowing when you open it in a spreadsheet: LibreOffice defaults to separating on tabs *and* spaces, so every title scatters across a dozen columns and the file looks corrupt. The separators are checkboxes in the import dialog that comes up as the file opens — clear *Space*, keep *Tab* — and they are easy to walk straight past.
+
+Matching errs toward leaving duplicates rather than inventing them, because the two failures cost differently — a missed merge leaves a visible duplicate that a reviewer can act on, while a false merge deletes a paper from the review and nothing downstream can notice. `--judge` additionally asks an LLM about the near-misses no exact key joined; it needs an LLM backend, so it is off by default, and a verdict the records themselves contradict is dropped rather than acted on.
 
 **Datasets and odds and ends**
 
@@ -284,7 +303,7 @@ Beside the desktop apps, Raven installs a set of headless tools. They exist so t
 - **`raven-qoi2png`** converts QOI images to PNG.
 - **`raven-check-cuda`** and **`raven-check-audio-devices`** report what the machine offers, which is usually the fastest way to settle an installation question.
 
-The end-to-end recipes that chain these — [turning a folder of arXiv PDFs into a searchable database](raven/librarian/README.md#turning-a-folder-of-arxiv-pdfs-into-a-searchable-database), and [refreshing that collection when papers get new versions](raven/librarian/README.md#refreshing-a-collection-when-papers-get-new-versions) — are in the Librarian README.
+The other end-to-end recipes that chain these — [turning a folder of arXiv PDFs into a searchable database](raven/librarian/README.md#turning-a-folder-of-arxiv-pdfs-into-a-searchable-database), and [refreshing that collection when papers get new versions](raven/librarian/README.md#refreshing-a-collection-when-papers-get-new-versions) — are in the Librarian README.
 
 
 # Install & run
@@ -439,7 +458,7 @@ python -m pdm install
 
 This works because PDM is just a Python module. This will be allowed to run if `python` is allowed to run.
 
-Similarly, Raven apps are just Python modules, and can be run via Python, as follows. Full list as of Raven v0.2.8:
+Similarly, Raven apps are just Python modules, and can be run via Python, as follows. Full list as of Raven v0.2.9:
 
 ```
 Command                                Replacement
@@ -455,6 +474,8 @@ raven-arxiv2bib                   →    python -m raven.papers.arxiv2bib
 raven-arxiv-download              →    python -m raven.papers.download
 raven-arxiv-search                →    python -m raven.papers.search
 raven-burstbib                    →    python -m raven.papers.burstbib
+raven-fixbib                      →    python -m raven.papers.fixbib
+raven-deduplicate                 →    python -m raven.papers.deduplicate
 raven-dehyphenate                 →    python -m raven.tools.dehyphenate
 raven-qoi2png                     →    python -m raven.tools.qoi2png
 raven-csv2bib                     →    python -m raven.papers.csv2bib
