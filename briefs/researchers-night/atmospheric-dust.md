@@ -239,6 +239,27 @@ the visible area does not. This is the one place where being sloppy shows.
 
 Screen position: `px = u * w`, `py = v * h`.
 
+**`z` is constant per particle, and that is load-bearing rather than incidental**
+(Juha, 2026-08-31). It is drawn once into the constants table and appears only as
+a divisor — parallax in `u` and `v`, projected size in `r_geo`, defocus in
+`r_coc`. Nothing moves a particle in depth, so no particle can cross
+`character_depth`, and the front/behind split each particle is assigned at birth
+holds for its whole life.
+
+**Adding a depth component to the motion would break that, and it is exactly the
+kind of thing someone adds for realism.** A particle drifting through
+`character_depth` at a pixel where the character's alpha is nonzero would be
+passing through a solid person: it would pop between hidden and visible at the
+crossing, and at the crossing itself it is inside the body. Both are wrong, and
+neither is a rendering artifact that tuning fixes.
+
+So if depth motion is ever wanted, it needs the occupancy test that goes with it:
+**the character layer's alpha says where the character is**, so a particle whose
+depth is about to cross `character_depth` at a pixel with nonzero alpha must be
+stopped, reflected, or respawned rather than allowed through. Cheap, and only
+meaningful once there is z motion to guard — which is why it is written here as a
+prerequisite for that feature rather than built now.
+
 ### Optics: one radius, two contributions
 
 ```
@@ -463,6 +484,10 @@ the second is the radius-binning fallback. Measure with the existing
 - Particle shape variants (petals, snowflakes, dandelion seeds). The thin-disc
   model is the deliverable; a `shape` parameter selecting a sprite is the
   obvious v2 and should be designed then, not anticipated now.
-- Interaction with the character's motion (no wake, no displacement).
+- Interaction with the character's motion (no wake, no displacement). Note this
+  is *not* the same as the occupancy test under *Kinematics*: that one guards a
+  feature this brief does not build either, and both stay out for v1.
+- Depth motion. `z` is fixed per particle — see *Kinematics* for why that is an
+  invariant and not an omission.
 - Lighting from the scene. `φ_light` is a free parameter, not derived from
   anything.
