@@ -225,6 +225,84 @@ class TestTitleEdge:
         assert dd._title_edge_holds(a, b)
 
 
+class TestDoiEdge:
+    """Whether a shared DOI may merge two records — the guard against an identifier on the wrong paper.
+
+    The fixtures are two real pairs rather than invented ones, because what has to be told apart here is
+    a matter of degree and a made-up pair cannot show where the degrees actually fall.
+    """
+
+    # arXiv's metadata for eprint 2405.00291 carries the journal reference and DOI of an unrelated
+    # astronomy paper, so an educational data mining record ships with an Astronomy & Astrophysics DOI.
+    # Found 2026-08-31; the two titles score 0.260.
+    EDUCATION = "How Can I Improve? Using GPT to Highlight the Desired and Undesired Parts of Open-ended Responses"
+    ASTRONOMY = "Modifications of astrophysical ices induced by cosmic rays"
+    WRONG_DOI = "10.1051/0004-6361/202349120"
+
+    # One paper, retitled between its preprint and its publication, exported by two databases under the
+    # two titles. The least alike of the 27 such pairs in the corpus this was calibrated against, at
+    # 0.327 — comfortably under `doi_title_floor`, which is why the author clause has to be required too.
+    PREPRINT = "Innovating Computer Programming Pedagogy: The AI-Lab Framework for Generative AI"
+    PUBLISHED = "AI-Lab: A Framework for Introducing Generative Artificial Intelligence Tools in Programming"
+
+    def _pair(self, a_fields, b_fields, doi=WRONG_DOI):
+        source = entry("a", doi=doi, **a_fields) + entry("b", doi=doi, **b_fields)
+        first, second = records(source)
+        return first, second
+
+    def test_two_exports_of_one_paper_are_joined(self):
+        a, b = self._pair({"title": self.EDUCATION, "author": "Lin, Jionghao"},
+                          {"title": self.EDUCATION, "author": "Lin, Jionghao and Chen, Eason"})
+        assert dd._doi_edge_holds(a, b)
+
+    def test_a_different_first_author_alone_does_not_refuse_it(self):
+        """Databases disagree about author order, so a surname mismatch alone is weak evidence."""
+        a, b = self._pair({"title": self.EDUCATION, "author": "Lin, Jionghao and Chen, Eason"},
+                          {"title": self.EDUCATION, "author": "Chen, Eason and Lin, Jionghao"})
+        assert dd._disagree_on_author(a, b), "the fixture must actually disagree, or this proves nothing"
+        assert dd._doi_edge_holds(a, b)
+
+    def test_unlike_titles_alone_do_not_refuse_it(self):
+        """A paper retitled between its preprint and its publication is still one paper."""
+        a, b = self._pair({"title": self.PREPRINT, "author": "Rossi, Marco"},
+                          {"title": self.PUBLISHED, "author": "Rossi, Marco"})
+        ratio = dd._title_similarity(a.title, b.title, 0.0)
+        assert ratio < dd.papers_config.doi_title_floor, (
+            f"the fixture's titles score {ratio:.3f}, above the floor, so this cannot tell a guard that "
+            f"requires an author disagreement from one that does not")
+        assert dd._doi_edge_holds(a, b)
+
+    def test_unlike_titles_and_a_different_first_author_together_refuse_it(self):
+        a, b = self._pair({"title": self.EDUCATION, "author": "Lin, Jionghao"},
+                          {"title": self.ASTRONOMY, "author": "Mejía, C."})
+        assert not dd._doi_edge_holds(a, b)
+
+    def test_a_missing_title_is_not_a_disagreement(self):
+        """Silence is not evidence against a DOI, as it is not against anything else here."""
+        a, b = self._pair({"author": "Lin, Jionghao"},
+                          {"title": self.ASTRONOMY, "author": "Mejía, C."})
+        assert dd._doi_edge_holds(a, b)
+
+    def test_a_refused_edge_does_not_take_the_rest_of_its_group_with_it(self):
+        """Two right records and one wrong one on a single DOI: the two must still merge."""
+        source = (entry("a", title=self.EDUCATION, author="Lin, Jionghao", doi=self.WRONG_DOI)
+                  + entry("b", title=self.EDUCATION, author="Lin, Jionghao and Chen, Eason",
+                          doi=self.WRONG_DOI)
+                  + entry("c", title=self.ASTRONOMY, author="Mejía, C.", doi=self.WRONG_DOI))
+        assert clusters_of(source) == [{"a", "b"}, {"c"}]
+
+    def test_the_refusal_is_reported_rather_than_left_silent(self):
+        source = (entry("a", title=self.EDUCATION, author="Lin, Jionghao", doi=self.WRONG_DOI)
+                  + entry("c", title=self.ASTRONOMY, author="Mejía, C.", doi=self.WRONG_DOI))
+        refused = dd.refused_doi_edges(records(source))
+        assert [(a.key, b.key) for a, b in refused] == [("a", "c")]
+
+    def test_a_corpus_with_nothing_wrong_in_it_reports_nothing(self):
+        source = (entry("a", title=self.PREPRINT, author="Rossi, Marco", doi="10.1234/x")
+                  + entry("b", title=self.PUBLISHED, author="Rossi, Marco", doi="10.1234/x"))
+        assert dd.refused_doi_edges(records(source)) == []
+
+
 class TestClusterRecords:
     def test_an_equal_doi_merges(self):
         assert clusters_of(entry("a", title="One thing", doi="10.1234/x")

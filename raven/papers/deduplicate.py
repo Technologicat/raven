@@ -11,7 +11,7 @@ different subset of the fields filled in. This tool finds those copies and merge
 Two deterministic keys, unioned transitively, so a record matching one twin by DOI and another by title
 brings all three together:
 
-  - **The DOI**, normalized. Equality here is conclusive.
+  - **The DOI**, normalized. The strongest evidence there is, and it needs no corroboration.
   - **The title**, normalized to the point where two databases' spellings of one title agree.
 
 **DOI equality is evidence; DOI inequality is not.** A paper carrying two different DOIs is common and
@@ -19,6 +19,13 @@ usually means something ordinary — a preprint beside its published version, a 
 journal's own, an en-dash where the other has a double hyphen. So two records that match on title **are
 merged even when their DOIs differ**, and the audit row lists every DOI in the cluster so the disagreement
 is visible to whoever wants to check it.
+
+**The one thing that overrules a shared DOI is a DOI that is wrong.** An identifier belonging to a
+different paper reaches a bibliography now and then — a database mismatching one, or an author pasting the
+wrong journal reference into a preprint submission — and it is evidence about a paper that is not the one
+carrying it. So a shared DOI is refused where the two records contradict each other twice over: unalike
+titles *and* different first authors. Both are required, and the run says so out loud when it happens,
+since a refused DOI is a fault in your data rather than a fact about the merge.
 
 **The output is meant to be citable, and the input is not.** A concatenation of database exports is not a
 document anyone would cite from — it is unusable as it stands, which is why this tool exists — so there is
@@ -63,7 +70,9 @@ __all__ = ["normalize_doi", "normalize_title", "is_generic_title",
 
            "Cluster", "cluster_records",
 
-           "fuzzy_candidates", "settled_by_rule", "conflicting_clusters", "judge_batch", "judge_pairs",
+           "fuzzy_candidates", "settled_by_rule", "conflicting_clusters", "refused_doi_edges",
+
+           "judge_batch", "judge_pairs",
 
            "AUDIT_COLUMNS", "AuditRow", "merge_cluster", "deduplicate", "write_audit",
 
@@ -195,6 +204,28 @@ def is_generic_title(maybe_normalized: str | None) -> bool:
     to prove on its own: see `_title_edge_holds`.
     """
     return bool(maybe_normalized) and maybe_normalized in papers_config.generic_titles
+
+
+def _title_similarity(a: str, b: str, threshold: float | None = None) -> float:
+    """How alike two normalized titles are, as `difflib.SequenceMatcher.ratio()`.
+
+    That is `2M/T` — matching characters over the combined length of both strings — so 0 means nothing in
+    common and 1 means identical. **Character overlap, not meaning**: no embeddings and no semantics, so
+    two titles about one subject in different words score low, while two spellings of one title score
+    high. The second is the question being asked here.
+
+    `threshold`: the smallest ratio the caller cares to tell apart, defaulting to
+                 `config.title_similarity`. Anything below it is returned as 0.0 instead of its true
+                 ratio, since a caller only ever compares against its own threshold. `difflib`'s two
+                 cheap upper bounds do that rejection in O(len) where `ratio` is O(len²), which is what
+                 keeps a quadratic pass over a blocking group affordable.
+    """
+    if threshold is None:
+        threshold = papers_config.title_similarity
+    matcher = difflib.SequenceMatcher(None, a, b)
+    if matcher.real_quick_ratio() < threshold or matcher.quick_ratio() < threshold:
+        return 0.0
+    return matcher.ratio()
 
 
 # --------------------------------------------------------------------------------
@@ -435,6 +466,40 @@ def _disagree_on_identity(a: Record, b: Record) -> bool:
     return False
 
 
+def _doi_edge_holds(a: Record, b: Record) -> bool:
+    """Whether two records sharing a normalized DOI may be merged on that evidence.
+
+    Almost always yes, and this exists for the case where it is not. A DOI names one work, so two records
+    carrying the same one are two exports of it — which is why a DOI match needs no corroboration and why
+    it is the strongest key here. The exception is a DOI that is simply *wrong* on one of the records: a
+    database mismatching an identifier, or an author pasting the wrong journal reference into a preprint
+    submission. The identifier is then evidence about a paper that is not the one holding it.
+
+    So a shared DOI is refused only where the two records contradict each other twice over: their titles
+    are less alike than `config.doi_title_floor`, **and** they name different first authors. Both, for
+    `_title_edge_holds`'s reason and measured the same way — databases disagree about author order often
+    enough that a surname mismatch alone is weak evidence, and a paper retitled between its preprint and
+    its published version makes a title difference alone weaker still. Neither is worth acting on; the
+    pair is.
+
+    A record with no title contradicts nothing, and is merged. Silence is not disagreement here, as
+    everywhere else in this module.
+
+    The failure this prevents is the only one in the tool that nothing downstream can notice. A wrong
+    merge on a *title* leaves a cluster whose records disagree about the DOI, which `conflicting_clusters`
+    lists and a reader can check. A wrong merge on a *DOI* produces an audit row indistinguishable from
+    the thousands of correct ones, and one paper quietly leaves the review. (Live case 2026-08-31, and a
+    near miss: an educational data mining paper carrying an Astronomy & Astrophysics DOI, copied
+    faithfully from arXiv's own metadata for the eprint. Only the absence of the astronomy paper from
+    that corpus kept the two apart.)
+    """
+    if a.title is None or b.title is None:
+        return True
+    if not _disagree_on_author(a, b):
+        return True
+    return _title_similarity(a.title, b.title, papers_config.doi_title_floor) >= papers_config.doi_title_floor
+
+
 def _title_edge_holds(a: Record, b: Record) -> bool:
     """Whether two records sharing a normalized title may be merged on that evidence.
 
@@ -494,15 +559,16 @@ def cluster_records(records: list[Record],
     `maybe_judgements`: the judge's verdicts, keyed by a pair of record indices in ascending order, or
                         `None` when the judge did not run. True adds an edge the exact keys missed; False
                         withdraws a *title* edge between that pair, which is how a rejected merge comes
-                        apart. A DOI match is never withdrawn — equality there is conclusive, and the
-                        judge is not asked to overrule it.
+                        apart. The judge is never asked to withdraw a DOI edge: where a shared DOI is
+                        refused at all, `_doi_edge_holds` does it from what the records themselves say.
 
     Every record comes back in exactly one cluster, singletons included, ordered by where the cluster's
     base sat in the input — so the output of a whole run stays in reading order.
 
     Matching is transitive: a record sharing a DOI with one twin and a title with another puts all three
     in one cluster. That is what makes the two keys complementary rather than two passes, since neither
-    key is present on every record. A title match must additionally satisfy `_title_edge_holds`.
+    key is present on every record. Each key carries a guard against the way it can be wrong — a title
+    match must satisfy `_title_edge_holds`, a DOI match `_doi_edge_holds`.
     """
     judgements = maybe_judgements or {}
     parent = list(range(len(records)))
@@ -525,9 +591,13 @@ def cluster_records(records: list[Record],
         if record.doi is not None:
             doi_groups[record.doi].append(index)
     for indices in doi_groups.values():
-        for other in indices[1:]:
-            edges.append((indices[0], other, "doi"))
-            union(indices[0], other)
+        # Every pair rather than a chain from the first, for the same reason the title pass below does
+        # it: an edge that `_doi_edge_holds` refuses must not take the rest of the group down with it.
+        for position, i in enumerate(indices):
+            for j in indices[position + 1:]:
+                if _doi_edge_holds(records[i], records[j]):
+                    edges.append((i, j, "doi"))
+                    union(i, j)
 
     title_groups = collections.defaultdict(list)
     for index, record in enumerate(records):
@@ -591,26 +661,6 @@ def _describe_for_judge(record: Record) -> str:
         if value:
             parts.append(f"{label}: {_tsv_cell(value)[:200]}")
     return "\n".join(f"    {part}" for part in parts)
-
-
-def _title_similarity(a: str, b: str) -> float:
-    """How alike two normalized titles are, as `difflib.SequenceMatcher.ratio()`.
-
-    That is `2M/T` — matching characters over the combined length of both strings — so 0 means nothing in
-    common and 1 means identical. **Character overlap, not meaning**: no embeddings and no semantics, so
-    two titles about one subject in different words score low, while two spellings of one title score
-    high. The second is the question being asked here.
-
-    Returns 0.0 rather than the true ratio for a pair that cannot reach `config.title_similarity`, since
-    the caller only ever compares against that threshold. `difflib`'s two cheap upper bounds do that
-    rejection in O(len) where `ratio` is O(len²), which is what keeps a quadratic pass over a blocking
-    group affordable.
-    """
-    threshold = papers_config.title_similarity
-    matcher = difflib.SequenceMatcher(None, a, b)
-    if matcher.real_quick_ratio() < threshold or matcher.quick_ratio() < threshold:
-        return 0.0
-    return matcher.ratio()
 
 
 def fuzzy_candidates(records: list[Record], clusters: list[Cluster]) -> list[tuple[Record, Record]]:
@@ -680,6 +730,28 @@ def conflicting_clusters(clusters: list[Cluster]) -> list[Cluster]:
     """
     return [cluster for cluster in clusters
             if len(cluster) > 1 and len({record.doi for record in cluster.records if record.doi}) > 1]
+
+
+def refused_doi_edges(records: list[Record]) -> list[tuple[Record, Record]]:
+    """Pairs sharing a DOI that were kept apart anyway, because `_doi_edge_holds` refused them.
+
+    Rare enough to be worth printing whole rather than counting. A shared DOI is the strongest evidence
+    this tool has, so refusing one is the tool saying it believes an identifier in the input is attached
+    to the wrong record — a finding about the data rather than about the merge, and one worth chasing
+    back to whichever database exported it.
+    """
+    groups = collections.defaultdict(list)
+    for record in records:
+        if record.doi is not None:
+            groups[record.doi].append(record)
+
+    refused = []
+    for group in groups.values():
+        for position, a in enumerate(group):
+            for b in group[position + 1:]:
+                if not _doi_edge_holds(a, b):
+                    refused.append((a, b))
+    return sorted(refused, key=lambda pair: (pair[0].index, pair[1].index))
 
 
 def _parse_json_payload(text: str):
@@ -1142,6 +1214,13 @@ def _report(records: list[Record],
                   if len({record.doi for record in cluster.records if record.doi}) > 1]
     if conflicted:
         print(f"    {len(conflicted)} cluster(s) hold more than one DOI (see the audit)")
+
+    # Named in full rather than counted. Each one says a DOI in the input looks attached to the wrong
+    # record, which is a fault worth reading and — unlike a merge — leaves nothing in the audit, since
+    # the whole outcome is that no merge happened.
+    for a, b in refused_doi_edges(records):
+        print(f"    kept apart despite sharing {a.doi}: `{a.key}` and `{b.key}`")
+        print("      different first authors, and the titles do not agree either")
 
 
 def main() -> None:  # pragma: no cover

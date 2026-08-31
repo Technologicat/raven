@@ -112,6 +112,29 @@ max_year_drift = 1
 # same record.
 identifying_fields = ("doi", "pages", "volume", "number")
 
+# How alike two records' titles must be for a DOI they share to be taken at face value. Below this, and
+# only where the two records *also* name different first authors, the shared DOI is read as a data fault
+# rather than as evidence. See `deduplicate._doi_edge_holds`, which is where both conditions are applied.
+#
+# The scale is `difflib.SequenceMatcher.ratio()` over normalized titles, as for `title_similarity`.
+#
+# **Requiring both conditions is what makes this number safe to choose**, and the measurement says so.
+# Over a 6934-record corpus, 27 DOI-joined pairs had titles that were not character-identical; the least
+# alike scored 0.327, a paper retitled between its preprint and its publication. Every one of the 27
+# agreed about the first author, so the author clause by itself refused nothing that corpus contained. A
+# threshold on the title alone would have had to thread 0.327 against the 0.260 scored by two genuinely
+# unrelated papers — seven hundredths of daylight, on one corpus and one counter-example, which is not a
+# line anyone can draw honestly.
+#
+# The failure this prevents is the one nothing downstream can notice. A wrong DOI on a record — a
+# database's mistake, or an author pasting the wrong journal reference into an arXiv submission — merges
+# two unrelated papers on the strongest key the tool has, needs no title agreement to get there, and
+# leaves an audit row that looks exactly like the correct ones beside it. One paper then silently leaves
+# the review. (Live case 2026-08-31: an educational data mining paper carrying an Astronomy &
+# Astrophysics DOI, from arXiv's own metadata for the eprint. The corpus did not also contain the
+# astronomy paper, so nothing merged; had it done so, nothing would have said.)
+doi_title_floor = 0.6
+
 # Where `raven-fixbib` puts a rights notice it moves out of an abstract, and so where `deduplicate` looks
 # for one. Change both together, or the notice stops being found. See `bibtex.relocate_rights_notices`.
 rights_field = "copyright"
