@@ -13,6 +13,62 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## LLM cluster keywords are not comparable across clusters
+
+*Cluster: importer rework · Cost: S–M depending on which remedy · Gate: a design decision, not a measurement · Filed: 2026-08-31 · See also: `investigations/highdim-clustering/`*
+
+`clusters_keyword_method = "llm"` asks the model for keywords one cluster at a time, with nothing tying
+the runs together, so the same concept comes back spelled differently in different clusters — and the
+keywords are then not comparable, which is most of what a reader uses them for. Two clusters sharing a
+concept and two clusters merely spelling it alike are indistinguishable in the output.
+
+**Measured** on 26 clusters of the arXiv AI corpus, 2026-08-31: one concept appeared as **`Large Language
+Models` (14×), `LLM` (4×) and `Large language models` (2×)** — an acronym, an expansion, and a
+capitalization difference, all in one run of one corpus.
+
+The case half is trivial. The acronym-versus-expansion half is the real question, and the candidates pull
+in different directions:
+
+- **A canonicalization pass over the collected vocabulary**, after all clusters are keyworded. Cheap and
+  local, and the only option that needs no change to how keywords are generated.
+- **Constrain generation to a controlled vocabulary** taken from the corpus — which would fold the
+  existing `"frequencies"` method into the `"llm"` one rather than leaving them as alternatives. The most
+  interesting option and the largest.
+- **Ask the prompt for full forms rather than acronyms.** Cheapest, and least reliable: it does not
+  survive a model that decides otherwise, and nothing detects when it has.
+
+Whichever is chosen, note that the word cloud and the cluster labels read the same list, so a remedy
+applied at the extraction step covers both, and one applied at display time does not.
+
+## VU meters occasionally blank for a frame or two
+
+*Cluster: DPG drawing · Cost: S · Gate: not reproduced on demand — see the check below, which settles it from a recording · Filed: 2026-08-31*
+
+Librarian's VU meters have been seen to go blank for a frame or two, showing nothing but flat grey, but
+not reliably enough to reproduce (Juha, 2026-08-31 — "I could swear I've seen them").
+
+**A mechanism that would produce exactly this is visible in the code, and it is not yet confirmed to be
+the one.** `DPGVUMeter.render` (`raven/common/gui/vumeter.py:213`) clears and rebuilds in place:
+
+    dpg.delete_item(self.drawlist, children_only=True)   # clear old content
+    dpg.draw_rectangle(...)                              # background, then the bars
+
+`render` runs on the **capture thread** — `audio_input_panel._on_vu_update` says so in its own docstring
+— while the DPG render loop draws concurrently. The `self._render_lock` around the rebuild serializes
+redraws against *each other*; the render loop does not take it and has no reason to, so a frame landing
+between the delete and the first `draw_rectangle` finds an empty drawlist and draws nothing.
+
+**The check that would confirm it needs no reproduction, only a recording**, and it is worth doing before
+any fix: an empty drawlist shows DPG's own window background, **(45, 45, 48)**, where the meter's
+background is **(64, 64, 64)** — the code says as much in a comment at `vumeter.py:186`. So the blank
+frames are *darker* than the meter's normal background under this hypothesis, and the same shade under
+any hypothesis where the meter draws its own background and stops there. Sample a pixel from a captured
+frame and the question is answered.
+
+If it is this, the fix is the double-buffering Raven already uses elsewhere — build the new content in a
+second drawlist and swap — rather than clearing in place. The toolbar meter is fed separately by the app
+and would be affected identically, so check both.
+
 ## Sliders have no keyboard story anywhere in Raven
 
 *Cluster: keyboard access · Cost: M · Gate: a design decision, not a measurement · Filed: 2026-08-28*
