@@ -299,15 +299,33 @@ pre-emptively, the direct path is exact and fast enough.
 
 ### Compositing
 
-Split by `z` against `character_depth`:
+Build each layer's RGBA from its accumulated intensity `I`:
 
-- **Behind** (`z > character_depth`): build RGBA with
-  `rgb = tint * I`, `alpha = clamp(I / alpha_reference, 0, 1)`, then
-  `image ← over(image, dust_behind)`. Occlusion by the character is **free**:
-  where the character's alpha is 1, the dust underneath is fully hidden.
-  Where the frame is transparent, the dust raises alpha and the client's
-  backdrop shows through around it. This is exactly right.
+```
+alpha = clamp(I / alpha_reference, 0, 1)
+rgb   = tint * I / max(alpha, eps)          # tint * I is the PREMULTIPLIED colour
+```
+
+so that the light a viewer sees, `rgb * alpha`, is `tint * I` exactly. The
+division is the whole point and is easy to leave out — see *Note from building
+`crt` first* above, which is what this formulation is corrected from. Below
+`alpha_reference` a mote then holds a **constant colour** (`tint * alpha_reference`)
+and varies in transparency; above it, alpha saturates at 1 and the colour goes on
+brightening into the headroom `max_intensity` caps. Both regimes are correct, and
+a mote that dims by changing colour is the sign the division was dropped.
+
+Then split by `z` against `character_depth`:
+
+- **Behind** (`z > character_depth`): `image ← over(image, dust_behind)`.
+  Occlusion by the character is **free**: where the character's alpha is 1, the
+  dust underneath is fully hidden. Where the frame is transparent, the dust
+  raises alpha and the client's backdrop shows through around it. This is
+  exactly right.
 - **In front** (`z <= character_depth`): `image ← over(dust_front, image)`.
+
+`over` is `raven.common.video.compositor.over`, public since 2026-08-31 —
+extracted from `render_celstack` for this filter, so there is no second copy of
+alpha blending to drift out of sync with the first.
 
 Note the transparent background works *for* us here: behind-dust in the empty
 region becomes visible motes floating over the client's backdrop image, which is
@@ -372,34 +390,16 @@ that modulates or spreads *light* has to decide which of the two channels carrie
 first version applying the scanline term to both, which squares it; the symptom was a washed-out,
 half-transparent character, and only a rendered still showed it.
 
-**The check was done, and this brief has the same bug.** Under *Compositing* below:
+**The check was done, and this brief had the same bug.** It specified
+`rgb = tint * I` alongside `alpha = clamp(I / alpha_reference, 0, 1)`, which makes the visible light
+`tint * I²` — a mote at half the reference intensity arriving at a quarter of its flux, so the effect
+would read as too dim and too contrasty at once, with the faint motes nearly gone.
 
-```
-rgb   = tint * I
-alpha = clamp(I / alpha_reference, 0, 1)
-```
-
-What a viewer sees is `rgb * alpha`, which is `tint * I² / alpha_reference` — the intensity squared.
-A mote at half the reference intensity would come out at a quarter of the light it should have, and
-the effect would read as too dim and too contrasty at once, with the faint motes nearly gone.
-
-**The correct form treats `tint * I` as the *premultiplied* colour and divides it back out**, which is
-the same move `crt` ended up making for its beam bleed, persistence and glow:
-
-```
-alpha = clamp(I / alpha_reference, 0, 1)
-rgb   = tint * I / max(alpha, eps)
-```
-
-so that `rgb * alpha == tint * I` exactly. Note what that means in practice, because it is
-counter-intuitive and worth recognizing in a render: below the reference intensity a mote has a
-**constant colour** (`tint * alpha_reference`) and varying transparency; above it, alpha saturates at 1
-and the colour goes on brightening into the HDR headroom that `max_intensity` caps. Both regimes are
-right; a mote that dims by changing colour is the sign this was implemented the other way.
-
-Assert `rgb * alpha` against the intended flux directly. The energy-conservation test in the testing
-section below is the natural place, and as written it would pass against the squared version, since it
-sums the accumulation buffer rather than the composited light.
+**Both *Compositing* and *Testing* below are corrected**, and carry the reasoning at the point where it
+is needed: the colour is divided by alpha because `tint * I` is the *premultiplied* value, which is the
+same move `crt` ended up making for its beam bleed, persistence and glow. Build from those sections as
+written; this note is only here to say that they were rewritten and why, since a squared-intensity
+splat is a plausible-looking thing to arrive at independently.
 
 ## Testing
 
@@ -427,12 +427,25 @@ Add to `raven/common/video/tests/` alongside the existing postprocessor tests.
    integrator, or reaches for `self.last_frame_no`. Which is the other half of
    the point: the FPS-correction machinery (`last_frame_no`) exists for
    rate-based effects that *must* accumulate. This filter needs none of it.
-4. **Energy conservation**: total added flux (sum over the accumulation buffer)
-   is invariant to `aperture` for fixed `count`, `brightness`, and tumble
-   phases, to within splat-clipping at the borders.
-5. **Wrapping**: no discontinuity in total flux as particles wrap — sample a
+4. **Energy conservation**: total added flux is invariant to `aperture` for
+   fixed `count`, `brightness`, and tumble phases, to within splat-clipping at
+   the borders. Defocusing spreads a mote's light over a larger area; it does
+   not create or destroy any.
+5. **The composited light is linear in the intensity.** Render a frame over a
+   black backdrop and check that `rgb * alpha` is proportional to `brightness`
+   across a sweep of it, rather than to its square.
+
+   This is the assertion the previous version of item 4 could not make, and the
+   reason it is called out separately: summing the *accumulation buffer* is
+   correct whether or not the alpha division in *Compositing* was written, since
+   the buffer holds `I` either way. What the squared version breaks is the step
+   from `I` to what reaches the screen, so the test has to look at the screen.
+   Sample well below `alpha_reference`, where alpha is still varying — above it
+   alpha saturates at 1 and both formulations agree, which would make the
+   fixture unable to tell them apart.
+6. **Wrapping**: no discontinuity in total flux as particles wrap — sample a
    sweep of `t` and check for spikes.
-6. **Bounds**: with `max_intensity=1.0`, output stays in [0, 1].
+7. **Bounds**: with `max_intensity=1.0`, output stays in [0, 1].
 
 ## Performance budget
 

@@ -898,7 +898,7 @@ every tier, chosen on measurements rather than reputation.
 ## Avatar
 
 - **[High]** `atmospheric_dust` — drifting in-air particles (`briefs/researchers-night/atmospheric-dust.md`). Wanted for the Researchers' Night demo (2026-09-26). Light-catching motes in the avatar's air, priority −2.0, Scene band. Register is anime-atmospheric (dust in a sunbeam), not game-HUD sparkle. Budget: ≤ 1.5 ms at 1024² against the postprocessor's current ~11 ms stage.
-  - **Read the brief's two inserted notes before its body.** The placement is decided — it stays at −2.0 and the dust therefore carries the raster, since `crt` ships in the Display band. And the brief's own compositing section has a squared-alpha bug, the same one `crt` shipped with and had to be fixed live.
+  - **The brief was corrected on 2026-08-31 and builds as written.** Placement is decided: it stays at −2.0, so the dust carries the raster now that `crt` ships in the Display band. And its compositing and testing sections were rewritten — as first drafted they specified `rgb = tint * I` beside `alpha = clamp(I / alpha_reference)`, which squares the intensity in a straight-alpha frame, and an energy test that could not have caught it. `crt` shipped that same bug in the morning and had to be fixed live.
 
 - **[High]** Add help cards for: Avatar settings editor, Avatar pose editor.
 
