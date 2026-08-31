@@ -556,9 +556,43 @@ and 1536×1024.
 Gaussian, so separating the splat would mean giving up the disc — and the disc is the point, since an
 out-of-focus mote is an image of the aperture. It would also buy nothing: evaluating the kernel is 0.033 ms
 of the 1.30 ms the filter cost before the composite was fixed, the scatter-add is 0.37 ms, and the remaining
-0.9 ms was compositing. Fixing the part that was actually large is where the 23% came from. The brief's
-radius-binning fallback is likewise still unbuilt and still the wrong lever: it trades an `[N, K, K]` splat
-for a full-frame convolution per bin, which at 250 particles is an order of magnitude *more* work.
+0.9 ms was compositing. Fixing the part that was actually large is where the 23% came from.
+
+**One splat pass covers every distance from the focal plane, and the batch is where the variation lives.**
+Worth stating because the shape invites the opposite guess: each particle's own radius goes into the
+smoothstep at its own tile, so a single `[count, K, K]` tensor holds `count` differently-sized discs drawn
+in one operation. Nothing runs per depth, per bucket, or per circle of confusion.
+
+What that costs is a `K` chosen once for the whole field, from the largest radius in it — so every mote
+gets the biggest mote's tile and a small one's is mostly zeros:
+
+| | `K` | radius spread | of the batch, doing work |
+|---|---|---|---|
+| shipping defaults | 13 | 1.16–4.40 (3.8×) | 13.4% |
+| field forward, `aperture` 6 | 53 | 1.96–24.1 (12.3×) | 8.4% |
+| `aperture` 20 | 127 | 2.29–61.1 (26.7×) | 9.2% |
+
+**Binning by radius is the obvious repair and it does not pay where we run.** Giving each bucket its own
+tile size costs, as a share of the single-tile arithmetic: at the defaults 74% / 62% / 56% for 2 / 4 / 8
+buckets, at `aperture` 6 53% / 31% / 22%, and at `aperture` 20 51% / 28.5% / 20%. So at the defaults four
+buckets save about 0.3 ms of a 0.9 ms filter in exchange for four kernel launches instead of one and the
+loss of a single coalesced operation — roughly a wash on a GPU, which is fast enough at SIMD that anything
+demanding multiple paths loses unless the data is vast (Juha, 2026-08-31). It is a 3.5× win only at
+`aperture` 20, which is a setting nobody uses.
+
+**And there are two different binning fallbacks, which the sketch above conflates.** Convolving each
+bucket's point buffer with one shared disc — the version this brief originally proposed — is both less
+accurate and enormously slower. Less accurate because it snaps every mote to an integer pixel, losing the
+sub-pixel offset that keeps the drift from reading as a conveyor belt, unless the points are splatted
+bilinearly first. Slower because a full-frame convolution touches every pixel per bucket whether a mote is
+there or not: at 1024² and the shipping `count` of 100, four buckets separably convolved come to 83.9M
+multiply-adds against the single batch's **16.9 thousand**.
+
+That ratio is the thing to carry, because it is the reverse of the intuition that dropped 87% of the
+arithmetic looks wasteful. The `[count, K, K]` batch is dense, coalesced and tiny; a scatter of a hundred
+motes over a million pixels is as sparse as data gets. **Binning only the *tile size*, keeping a kernel per
+particle**, is the variant the numbers above measure, and the only one worth building if this is ever
+needed.
 
 ### Two traps worth carrying forward
 
