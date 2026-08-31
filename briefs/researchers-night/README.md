@@ -55,6 +55,31 @@ not settled, and the two sensible axes disagree — closure rate (smallest first
 they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
 deadline actually binds; everything else could slip past September without anything breaking.
 
+### Starting tomorrow, decided 2026-08-31 — three threads, in parallel
+
+Juha's call at the end of the day. These touch three different subsystems, so none is waiting on
+another's tree, and they are different enough to review side by side — which is the actual constraint,
+review bandwidth rather than machine time. **Only the first is bound by the deadline**; the other two are
+here because they are ready to start, not because they are urgent.
+
+1. **The graph view** — `16_chat-graph-view-brief.md`, which is item 2 of the ordering below and the
+   thread that matters for 26 September. **Step zero is already done** (2026-08-25): a hand-built
+   chat-shaped `Graph` renders through `XDotWidget.set_graph` with no GraphViz and no xdot in the path,
+   and `test_widget.py` covers it. So this starts from the feature work rather than from proving the door
+   opens.
+2. **Visualizer tests** — `briefs/visualizer-test-coverage-brief.md`, **which is in the parent folder,
+   not this one**, being maintenance rather than sprint work. Start at `entry_renderer.py`: 114 SLOC and
+   no `dpg.` calls at all, which the brief's difficulty table settles. The package went from zero tests
+   to three on 2026-08-31, and that module records what it cost — the `importorskip` guard and `ml`
+   marker `importer` needs to stay out of CI's way — so the second module starts from there.
+   - **One thing not to test yet**: `_cluster_*` and `_reduce_dimension` are about to be rewritten
+     (brief 11 item 5, and `investigations/highdim-clustering/`). Tests for those belong to that change;
+     written now they would pin a defect.
+3. **The AOKK on-topic detector** — `aokk-corpus-scope-classification-brief.md`, filed the same day.
+   Buildable in parallel with the other two: it is a batch script over a dataset, touching neither GUI.
+   The brief carries the two confirmed false-positive shapes and a warning about reusing
+   `agent-batch-classification`'s confidence-based escalation.
+
 ### Reordered 2026-08-31 — the effects first, then the graph view
 
 Juha's call, 26 days out. **This subsection supersedes the band order below wherever the two disagree**, and
