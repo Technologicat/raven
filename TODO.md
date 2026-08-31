@@ -897,11 +897,8 @@ every tier, chosen on measurements rather than reputation.
 
 ## Avatar
 
-- **[High]** Prerequisite for both avatar-effect briefs below: **give `_priority` a stated meaning** (`briefs/researchers-night/crt-display.md` §0). The existing numbers already almost form a scheme — Scene (< 0), Capture (0–5), Signal (5–10), Display (≥ 10), with `0.0` as the moment of capture — so codifying it renumbers nothing. Documentation plus a convention, no code motion; the brief asks for it as its own commit, and both new filters need the Scene band to place themselves in.
-
-- **[High]** `crt` — raster projection simulation (`briefs/researchers-night/crt-display.md`). Wanted for the Researchers' Night demo (2026-09-26). **Adds** a filter at priority −3.0, in the Scene band: the hologram's own raster is diegetically *in the world*, so it composites early and rides through the capture-stage optics like the character does. It replaces nothing — `scanlines` (13.0) stays as the *viewer's* monitor, a different diegetic layer, and the brief is explicit that this filter must not be described as superseding it. The capture-band effects (`bloom`, `chromatic_aberration`, `vignetting`) are untouched and in fact load-bearing: downstream `bloom` glows the scanlines for free, which is why `glow_strength` defaults to 0.0. `banding` isn't involved.
-
-- **[High]** `atmospheric_dust` — drifting in-air particles (`briefs/researchers-night/atmospheric-dust.md`). Wanted for the Researchers' Night demo (2026-09-26). Light-catching motes in the avatar's air, priority −2.0, Scene band, for the same diegetic reason. Register is anime-atmospheric (dust in a sunbeam), not game-HUD sparkle. Budget: ≤ 1.5 ms at 1024² against the postprocessor's current ~11 ms stage.
+- **[High]** `atmospheric_dust` — drifting in-air particles (`briefs/researchers-night/atmospheric-dust.md`). Wanted for the Researchers' Night demo (2026-09-26). Light-catching motes in the avatar's air, priority −2.0, Scene band. Register is anime-atmospheric (dust in a sunbeam), not game-HUD sparkle. Budget: ≤ 1.5 ms at 1024² against the postprocessor's current ~11 ms stage.
+  - **Read the brief's two inserted notes before its body.** The placement is decided — it stays at −2.0 and the dust therefore carries the raster, since `crt` ships in the Display band. And the brief's own compositing section has a squared-alpha bug, the same one `crt` shipped with and had to be fixed live.
 
 - **[High]** Add help cards for: Avatar settings editor, Avatar pose editor.
 

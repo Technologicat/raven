@@ -28,7 +28,7 @@ optics (`bloom`, `chromatic_aberration`, `vignetting`) exactly like the
 character does. A late overlay would be the HUD case and would read wrong.
 
 Concretely: priority **−2.0**, in the **Scene** band. See §0 of
-`crt-display.md` (same folder) for the band scheme this assumes — briefly, `0.0` is
+`done/crt-display.md` (same folder) for the band scheme this assumes — briefly, `0.0` is
 the moment of capture, negative priorities are things that exist in front of
 the lens, positive ones are signal. Dust is air in the room, so it is Scene by
 definition. That brief's §0 is a prerequisite for this one; if the two are
@@ -55,7 +55,7 @@ mode that ordering exists to prevent.
 
 > **This no longer works as written, 2026-08-31: `crt` shipped at `10.75`, not
 > `-3.0`.** It had to move past everything that resamples or blurs, because
-> those erase the raster; the measurements are in `crt-display.md` §2. So dust
+> those erase the raster; the measurements are in `done/crt-display.md` §2. So dust
 > at `-2.0` is now *upstream* of the raster, and the dust gets scanlined —
 > exactly what this section set out to prevent.
 >

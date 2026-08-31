@@ -1,6 +1,6 @@
 # Brief: `crt` — raster projection simulation
 
-Target file: `briefs/researchers-night/crt-display.md`
+Target file: `briefs/researchers-night/done/crt-display.md`
 
 ## 0. Prerequisite: give `_priority` a meaning
 
@@ -593,3 +593,72 @@ composes.
   licence to renumber.
 - Any GUI work. This brief adds a filter that the existing autodiscovery picks
   up; it does not touch the settings editor.
+
+## 7. Closed 2026-08-31
+
+Built, tuned live and shipped in about ninety minutes of session time, against a
+sizing that put `crt` and `atmospheric_dust` together at one to three days. The
+brief was accurate about *what to build*; almost everything it got wrong was a
+*why*, which is the finding worth carrying forward.
+
+### Where the brief was wrong
+
+Four corrections, marked in place above rather than edited away.
+
+1. **"Modulate alpha as well as luma" (§3) was a rendering bug.** The
+   postprocessor works in straight alpha, so what a viewer sees is `rgb * alpha`;
+   applying the scanline term to both channels squares it, while the brightness
+   compensation corrects for one factor. The character came out washed out and
+   half-transparent. `alpha_mode` now selects *where* the one modulation goes.
+2. **Placement (§2) was overturned by measurement.** The diegetic argument for
+   the Scene band is sound and the raster does not survive it: `zoom` and
+   `analog_lowres` erase it outright, `bloom` fills the scanline gaps by
+   max-combining alpha with a blurred copy, and `chromatic_aberration` resamples
+   per channel. It ships at **10.75**, beside `translucent_display`.
+3. **"Emission is free" (§2) was never true** in the shipped design. With the
+   scanlines in alpha, `bloom` thresholds on RGB luminance and cannot see them.
+4. **`"luma"` is not for bright backdrops (§3).** Both modes are diegetic; the
+   question they answer is which device.
+
+### What was learned that the brief could not have said
+
+- **Three defects survived a green suite and were caught by three different
+  instruments**: a rendered still (the squared alpha), a person looking at the
+  running app (the fp16 raster banding, and overscan scaling the raster), and
+  arithmetic run afterwards to confirm each. Every contract test passed
+  throughout. All three now have regression tests **verified to fail against the
+  code without their fix** — and two of those tests had to be rewritten once,
+  because the first versions passed against the unfixed code as well.
+- **Half precision is the hazard this filter class has**, and it is not obvious
+  from the source. Deriving a row index from a coordinate in `[-1, 1]` cancels
+  catastrophically in fp16 — half a row of error at h=1024, and a 120-row band
+  where the raster stops alternating. Any future filter drawing structure at the
+  pixel pitch wants its phase in float32 and its index math in integers.
+- **A filter's chain position is decided by what survives downstream**, not by
+  what it depicts. Where the two disagree, the position is a measurement.
+
+### Left undone, deliberately
+
+- **Timing on the personal machine's 3070 Ti.** Measured only on the work
+  machine's 4090: 0.277 ms at 1024² fp16 against a 2 ms budget. The margin makes
+  this a formality, and the open house runs on the work machine.
+- **Three parameters have never been looked at on screen**: the `slot` and
+  `shadow` masks, `glow_strength`, and the barrel warp. They are tested for
+  contract and correctness, not for looks. `aperture_grille` is what ships and
+  what was tuned.
+- **`brightness_compensation` bleaches highlights at its 0.85 default** — about
+  8% of pixels clip on a pale character, against 0.02% at 0.0, and clipping is
+  where colour dies. Accepted as the look (Juha, on the live render); the
+  docstring says which knob to reach for if a later character disagrees.
+
+### Apparatus
+
+`raven/common/video/tests/preview_postprocessor.py` renders a still through any
+filter at a range of settings, as a labelled contact sheet or as 1:1 crops. It is
+what caught the squared alpha, and it is the instrument to reach for before
+believing a look is right — a downscaled contact sheet turns a 1-on-1-off raster
+into a uniform haze, which is a fact about the viewer and not about the filter,
+so judge a raster at 1:1 or not at all.
+
+`raven/common/video/tests/bench_postprocessor.py` carries `crt` in both the
+default and warped configurations.

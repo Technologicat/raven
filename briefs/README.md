@@ -123,7 +123,7 @@ a docstring is laundered: it arrives looking like something that was checked, an
 treats it as settled. Where the reasoning turns out to be wrong, correct it *in the brief too* — these are
 single-use documents, but they are read once more by whoever closes them out.
 
-Live case, `researchers-night/crt-display.md`, 2026-08-31. Three of its rationales were wrong, all three
+Live case, `researchers-night/done/crt-display.md`, 2026-08-31. Three of its rationales were wrong, all three
 plausible, and one of them was a rendering bug that every contract test passed: "modulate alpha as well as
 luma" squares the modulation in a straight-alpha frame; `"luma"` was said to be for bright backdrops, which
 does not survive one question; and "emission is free — the capture bloom glows the scanlines" was
