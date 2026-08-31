@@ -90,5 +90,5 @@
                          ["chromatic_aberration", {}],
                          ["vignetting", {}],
                          ["translucent_display", {}],
-                         ["banding", {}],
-                         ["scanlines", {}]]}
+                         ["crt", {}],
+                         ["banding", {}]]}
