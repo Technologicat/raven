@@ -1,5 +1,5 @@
 #!/bin/bash
-for INFILE in $@ ; do
+for INFILE in "$@" ; do
     DIR=$(dirname "$INFILE")
     BASE=$(basename "$INFILE" .txt)
     OUTFILE="$DIR/$BASE.bib"
