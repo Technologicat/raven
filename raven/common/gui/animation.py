@@ -136,15 +136,32 @@ class Animator:
         with self._lock:
             return sum(1 for animation in self._animations if not animation.ambient)
 
-    def clear(self) -> None:
+    def clear(self, include_ambient: bool = True) -> None:
         """Terminate all registered animations and clear the list of registered animations.
+
+        `include_ambient`: Whether to terminate the ambient animations too. See `Animation.ambient`.
+
+                           `True` (default) leaves the animator empty, which is what app teardown wants.
+
+                           `False` keeps the ambient ones running. This is what an app wants when it is
+                           resetting itself to load new data: an ambient animation belongs to the GUI's
+                           resting state rather than to the data being replaced.
 
         To terminate a specific animation (by object instance), see `cancel`.
         """
+        # An app installs its ambient animations once, before the render loop, and has no other place to
+        # put them back. So a blunt `clear` between datasets removes a QR overlay or a focus follower for
+        # the rest of the session, with nothing to say it happened — the drawlist keeps whatever was last
+        # drawn into it, or stays empty if the first frame had not yet arrived.
         with self._lock:
+            surviving_animations = []
             for animation in self._animations:
-                animation.finish()
+                if animation.ambient and not include_ambient:
+                    surviving_animations.append(animation)
+                else:
+                    animation.finish()
             self._animations.clear()
+            self._animations.extend(surviving_animations)
 animator = Animator()
 
 class Animation:

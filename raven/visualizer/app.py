@@ -227,15 +227,13 @@ def reset_app_state(_update_gui=True):
     # Stop old background tasks (and wait until they actually exit)
     clear_background_tasks(wait=True)
 
-    # Stop GUI animations
-    gui_animation.animator.clear()
+    # Stop GUI animations. Loading new data spares the ambient ones: those belong to the app rather than to
+    # the dataset being replaced, and are installed once, before the render loop, so there is nowhere to put
+    # them back. Exiting takes everything, so that nothing is still calling DPG as the GUI goes away.
+    gui_animation.animator.clear(include_ambient=not _update_gui)
 
     # Only update the GUI elements if not exiting, because when exiting, the GUI is already being deleted.
     if _update_gui:
-        # Re-add the background animations that should always be present in the animator.
-        # These monitor the app state and live-update at every frame.
-        gui_animation.animator.add(PlotterPulsatingGlow(cycle_duration=gui_config.glow_cycle_duration))
-
         # Clear undo history and selection
         selection.reset_undo_history()
         selection.update(common_utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
@@ -591,10 +589,14 @@ def update_search(wait=True):
 app_state.update_search = update_search
 
 
-class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is set up by `reset_app_state`
+class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is installed once, at app startup
     def __init__(self, cycle_duration):
         """Cyclic animation to pulsate the glow highlight for search result datapoints and selected datapoints."""
-        super().__init__()
+        # Ambient: it pulsates for as long as the plotter exists, so an idle-framerate throttle that read it
+        # as activity would never let the app idle. It holds nothing belonging to the dataset either — the
+        # highlight themes and the index boxes it drives are app-lifetime — which is what lets it sit
+        # through a reset for new data instead of being torn down and rebuilt per dataset.
+        super().__init__(ambient=True)
         self.cycle_duration = cycle_duration
 
     @classmethod
@@ -1847,15 +1849,19 @@ dpg.set_primary_window(main_window, True)  # Make this DPG "window" occupy the w
 dpg.set_viewport_vsync(True)
 dpg.show_viewport()
 
+# The glow that pulsates the search-result and selection highlights. It monitors the app state and updates
+# at every frame, for the whole life of the app, so it goes in once here rather than per dataset.
+gui_animation.animator.add(PlotterPulsatingGlow(cycle_duration=gui_config.glow_cycle_duration))
+
+if opts.qr:
+    qroverlay.install()
+
 # Accept datasets and BibTeX files dragged in from the file manager. Installed right after `show_viewport`
 # because that call is what makes DPG's window reachable through GLFW on this thread.
 #
 # The two kinds land in different places by their nature: a dataset is something to *open*, and only one can
 # be open, so several at once is an error rather than a choice. BibTeX is input to the importer, which takes
 # any number, so a dropped set opens the importer window with them already filled in.
-if opts.qr:
-    qroverlay.install()
-
 filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_extension(".pickle"),
                                                          handler=lambda paths: open_file(paths[0]),
                                                          label="a dataset (.pickle)",

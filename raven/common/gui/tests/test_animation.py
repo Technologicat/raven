@@ -953,3 +953,65 @@ class TestAmbientAndTransient:
             assert animation.animator.transient_count - before == 1
         finally:
             animation.animator.cancel(transient)
+
+
+class _Recorder(animation.Animation):
+    """An animation that runs for ever, counting its frames and remembering whether it was finalized."""
+
+    def __init__(self, ambient):
+        super().__init__(ambient=ambient)
+        self.frames = 0
+        self.finished = False
+
+    def render_frame(self, t):
+        self.frames += 1
+        return animation.action_continue
+
+    def finish(self):
+        self.finished = True
+
+
+class TestClearing:
+    """`clear` at app teardown, versus `clear` when an app resets itself to load new data.
+
+    An app installs its ambient animations once, before the render loop — so anything that removes one has
+    removed it for the rest of the session, there being no second install to bring it back. That failure is
+    silent in both directions: a viewport drawlist keeps whatever was last drawn into it, and stays empty if
+    the first frame had not arrived yet.
+    """
+
+    def _add_pair(self):
+        """One ambient animation and one transient one, so the two outcomes can be told apart."""
+        return (animation.animator.add(_Recorder(ambient=True)),
+                animation.animator.add(_Recorder(ambient=False)))
+
+    def test_teardown_takes_everything(self):
+        ambient, transient = self._add_pair()
+        try:
+            animation.animator.clear()
+            assert animation.animator.active_count == 0
+            assert ambient.finished and transient.finished
+        finally:
+            animation.animator.clear()
+
+    def test_a_reset_for_new_data_spares_the_ambient_ones(self):
+        ambient, transient = self._add_pair()
+        try:
+            animation.animator.clear(include_ambient=False)
+            # The transient half is the control: if both halves came out the same way, this fixture cannot
+            # tell a selective clear from a blunt one, and the assertion below would pass for free.
+            assert transient.finished, "nothing was cleared at all"
+            assert not ambient.finished
+            assert animation.animator.active_count == 1
+        finally:
+            animation.animator.clear()
+
+    def test_the_spared_animation_keeps_getting_frames(self):
+        """Surviving the clear is only half of it — the animator must still be ticking it afterwards."""
+        ambient, _ = self._add_pair()
+        try:
+            animation.animator.clear(include_ambient=False)
+            animation.animator.render_frame()
+            assert ambient.frames == 1
+        finally:
+            animation.animator.clear()
