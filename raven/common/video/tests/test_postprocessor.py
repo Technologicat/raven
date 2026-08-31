@@ -1,9 +1,11 @@
 """Tests for raven.common.video.postprocessor — noise primitives, cache mechanics, and filters."""
 
+import pytest
+
 import torch
 
 from raven.common.video.colorspace import rgb_to_yuv
-from raven.common.video.postprocessor import vhs_noise, isotropic_noise, Postprocessor
+from raven.common.video.postprocessor import _MAX_SPLAT_KERNEL, vhs_noise, isotropic_noise, Postprocessor
 
 
 # ---------------------------------------------------------------------------
@@ -1482,6 +1484,300 @@ class TestCrtPhosphorPersistence:
         pp2.last_frame_no, pp2.frame_no = 0.0, 1.0
         pp2.crt(stateless, persistence_tau=0.0)
         assert torch.equal(resized, stateless), "the bright first frame bled into the resized one"
+
+
+# ---------------------------------------------------------------------------
+# Tests: atmospheric_dust filter
+# ---------------------------------------------------------------------------
+
+def _dust_at(frame_no, pp=None, h=64, w=128, **settings):
+    """Render the dust over a transparent frame at a given normalized frame number.
+
+    Returns `(image, pp)`. Passing back the `pp` from a previous call continues the same instance,
+    which is what the path-independence tests need: they care about the sequence of frame numbers a
+    single postprocessor has been driven through.
+    """
+    if pp is None:
+        pp = _make_postprocessor(h, w)
+    pp.last_frame_no, pp.frame_no = pp.frame_no, frame_no
+    image = torch.zeros(4, h, w)
+    pp.atmospheric_dust(image, **settings)
+    return image, pp
+
+
+def _unclamped():
+    """Settings that keep the composite out of both clamps, so the light is exactly `tint * intensity`.
+
+    A tiny `alpha_reference` saturates alpha wherever a mote is at all, which collapses the straight
+    colour to the accumulated intensity and makes the emitted light a direct readout of it. Needed by
+    anything measuring flux; not representative of how the filter is used.
+    """
+    return dict(alpha_reference=1e-4, max_intensity=1e6)
+
+
+def _steady():
+    """...and on top of that, a particle field whose per-particle brightness does not vary with time.
+
+    The tumble and the glint are what make the dust twinkle, and they also make total flux a moving
+    target. Switching both off leaves motion as the only thing that changes, which is what the
+    wrapping and energy tests want to look at.
+    """
+    return dict(tumble_rate=0.0, glint_gain=0.0, **_unclamped())
+
+
+class TestAtmosphericDustContract:
+    def test_preserves_shape_dtype_and_device(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        pp.atmospheric_dust(image)
+        assert image.shape == (4, 64, 128)
+        assert image.dtype == torch.float32
+        assert image.device == torch.device("cpu")
+
+    def test_mutates_in_place(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original = image.clone()
+        pp.atmospheric_dust(image)
+        assert not torch.equal(image, original)
+
+    def test_zero_count_is_bitwise_identity(self):
+        """The documented way to switch the filter off, so it must cost nothing and change nothing."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        original = image.clone()
+        pp.atmospheric_dust(image, count=0)
+        assert torch.equal(image, original)
+
+    def test_every_parameter_has_gui_metadata(self):
+        """`get_filters` raises `KeyError` on a defaulted parameter with no `with_metadata` entry, and
+        the settings editor is the only thing that calls it - so without this the omission ships."""
+        filters = dict(Postprocessor.get_filters())
+        assert "atmospheric_dust" in filters
+        assert set(filters["atmospheric_dust"]["ranges"]) == set(filters["atmospheric_dust"]["defaults"])
+
+    def test_sits_in_the_scene_band(self):
+        """Dust is in the room, so it has to be composited before the camera looks at the scene: ahead
+        of `zoom`'s framing and of every capture-stage filter."""
+        order = [name for name, _ in Postprocessor.get_filters()]
+        assert order.index("atmospheric_dust") < order.index("zoom") < order.index("bloom")
+
+
+class TestAtmosphericDustDeterminism:
+    """The particle field is a closed-form function of `seed` and time, with no integrator and no
+    buffer, which is what makes any of it testable at all."""
+
+    def test_the_particle_constants_are_bitwise_reproducible(self):
+        """Drawn from a CPU generator and moved to the device afterwards, so the same seed gives the
+        same field everywhere. This is the part that is exactly reproducible."""
+        _, first = _dust_at(0.0)
+        _, second = _dust_at(0.0)
+        a, b = first.dust_particles["dust0"], second.dust_particles["dust0"]
+        for key in ("x0", "y0", "z", "vx", "vy", "s", "tumble_phase", "glint_phase", "r", "flux_scale"):
+            assert torch.equal(a[key], b[key]), f"particle constant '{key}' is not reproducible"
+
+    def test_the_rendered_frame_reproduces_to_within_the_scatter_add(self):
+        """The image is *not* bitwise reproducible, and the reason is worth knowing rather than
+        tightening: `index_put_(accumulate=True)` reduces in an unspecified order, on CPU as well as
+        on CUDA, so overlapping splats land in a different order from run to run. The spread is one
+        float32 ULP, and asserting equality here would produce a test that fails at random."""
+        first, _ = _dust_at(0.0)
+        second, _ = _dust_at(0.0)
+        assert torch.allclose(first, second, atol=1e-6)
+
+    def test_a_different_seed_gives_a_different_field(self):
+        a, _ = _dust_at(0.0, seed=1)
+        b, _ = _dust_at(0.0, seed=2)
+        assert not torch.allclose(a, b, atol=1e-3)
+
+    def test_calling_twice_at_one_frame_number_gives_one_answer(self):
+        """The filter holds no per-frame state, so a repeated call is not a second step of anything."""
+        pp = _make_postprocessor()
+        first, _ = _dust_at(7.0, pp)
+        second, _ = _dust_at(7.0, pp)
+        assert torch.allclose(first, second, atol=1e-6)
+
+
+class TestAtmosphericDustPathIndependence:
+    """Output depends on the *value* of `frame_no`, never on the sequence of calls that reached it.
+
+    Note this is not a frame-rate test, and one would be vacuous: `frame_no` is
+    `CALIBRATION_FPS * seconds_since_stream_start`, so the same wall-clock instant gives the same
+    frame number whatever the real rate is. What this pins is that nobody has replaced the closed
+    form with an integrator, or reached for `last_frame_no`.
+    """
+
+    def test_a_uniform_sweep_and_an_irregular_one_agree_where_they_meet(self):
+        uniform_pp = None
+        uniform = {}
+        for step in range(11):
+            uniform[float(step)], uniform_pp = _dust_at(float(step), uniform_pp)
+
+        irregular_pp = None
+        irregular = {}
+        for frame_no in (0.0, 0.3, 2.7, 5.1, 10.0):
+            irregular[frame_no], irregular_pp = _dust_at(frame_no, irregular_pp)
+
+        for frame_no in (0.0, 10.0):
+            assert torch.allclose(uniform[frame_no], irregular[frame_no], atol=1e-6), (
+                f"frame {frame_no} came out differently depending on how it was reached")
+
+        # The negative control. If the field were static, every frame would agree with every other and
+        # the assertions above would hold for a reason that has nothing to do with path independence.
+        assert not torch.allclose(uniform[0.0], uniform[10.0], atol=1e-3), (
+            "nothing moved over ten frames, so this fixture cannot tell a path-independent filter "
+            "from a frozen one")
+
+
+class TestAtmosphericDustEnergy:
+    """Defocus spreads a mote's light over a larger area; it does not create or destroy any.
+
+    This is what makes an out-of-focus mote read as a soft bokeh disc rather than as a big bright
+    blob, and it is why each splat is normalized to unit *total* rather than to unit peak.
+    """
+
+    def _flux(self, h, w, **settings):
+        image, _ = _dust_at(0.0, h=h, w=w, **_steady(), **settings)
+        return float((image[:3] * image[3:4]).sum())
+
+    def test_defocus_moves_light_around_without_creating_any(self):
+        """Not exactly conserved on any one frame: a wider circle of confusion pushes more of each
+        splat off the edges. So there are two assertions, and the first is the one that matters -
+        the totals must *agree*, with the residual explained by border clipping, which shrinks as the
+        border becomes a smaller share of the picture.
+
+        Bounding the ratio from above is what separates this from a test of the clipping alone.
+        Normalizing each splat to unit peak instead of unit total also loses light off the edges in
+        exactly this pattern, while multiplying the total by the area - so an assertion that only
+        says "most of it survived" passes against the very mistake this is here to reject.
+        """
+        retained = [self._flux(h, w, aperture=20.0) / self._flux(h, w, aperture=0.0)
+                    for h, w in ((128, 192), (256, 384), (512, 768))]
+        assert retained[-1] == pytest.approx(1.0, abs=0.1), (
+            f"a wide aperture changed the total light by a factor of {retained[-1]:.2f} at 768x512; "
+            f"defocus must spread light, not make or destroy it")
+        assert retained[0] < retained[1] < retained[2], f"clipping is not shrinking with frame size: {retained}"
+
+    def test_brightness_goes_as_the_projected_area(self):
+        """A particle twice as large intercepts four times the light. `size` therefore drives total
+        flux quadratically, which is the physics and is also why a small change to it goes further
+        than the parameter's name suggests."""
+        small = self._flux(256, 384, size=1.0, aperture=0.0)
+        large = self._flux(256, 384, size=2.0, aperture=0.0)
+        assert large / small == pytest.approx(4.0, rel=0.05)
+
+
+class TestAtmosphericDustLight:
+    """What a viewer sees is `rgb * alpha`, and the accumulated intensity is the *premultiplied*
+    colour - so the composite has to divide by alpha somewhere, or the effect comes out squared."""
+
+    def test_the_emitted_light_is_linear_in_the_intensity(self):
+        """The assertion the energy tests above cannot make. Summing the accumulator would pass either
+        way, because the accumulator holds the intensity whether or not the division was written; what
+        the squared version breaks is the step from intensity to what reaches the screen.
+
+        Sampled well below `alpha_reference` on purpose. Above it alpha saturates at 1 and the two
+        formulations agree exactly, which would leave the fixture unable to tell them apart.
+        """
+        def light(brightness):
+            image, _ = _dust_at(0.0, h=256, w=384, brightness=brightness, alpha_reference=2.0)
+            return float((image[:3] * image[3:4]).sum())
+
+        assert light(0.02) > 0.0, "no light at all, so this fixture measures nothing"
+        ratio = light(0.04) / light(0.02)
+        assert ratio == pytest.approx(2.0, rel=0.02), (
+            f"doubling the brightness multiplied the emitted light by {ratio:.3f}; 4.0 means the alpha "
+            f"division was dropped and the effect is being squared")
+
+
+class TestAtmosphericDustWrapping:
+    """A particle leaving one edge reappears at the other. The wrap has to happen while it is entirely
+    off screen: at the exact edge it would pop a fully-formed disc into view."""
+
+    def test_a_wrapping_particle_is_invisible_at_the_moment_it_wraps(self):
+        one_particle = dict(count=1, seed=3, depth_near=1.0, depth_far=1.0, size=6.0, aperture=0.0,
+                            drift_x=0.05, drift_y=0.0, drift_jitter=0.0, sway_amplitude=0.0)
+        pp = None
+        flux = []
+        for step in range(600):
+            image, pp = _dust_at(float(step), pp, h=64, w=96, **_steady(), **one_particle)
+            flux.append(float((image[:3] * image[3:4]).sum()))
+
+        peak = max(flux)
+        # The negative control, in two halves: the sweep has to contain a full traverse, or there is
+        # no wrap in it and everything below holds vacuously.
+        assert peak > 0.0, "the particle was never visible"
+        assert min(flux) == 0.0, ("the particle was never entirely off screen, so this sweep does not "
+                                  "contain a wrap and cannot say anything about one")
+        assert flux[-1] > 0.5 * peak, ("the particle left and did not come back, so the sweep is too "
+                                       "short to have wrapped")
+
+        # A wrap with no margin would step from nearly full flux on one edge to nearly full flux on the
+        # other. With one, the particle fades out at an edge, is gone, and fades back in at the other.
+        for before, after in zip(flux, flux[1:]):
+            if abs(after - before) > 0.25 * peak:
+                assert False, (f"flux jumped from {before:.2f} to {after:.2f} against a peak of "
+                               f"{peak:.2f}: a particle appeared or vanished rather than crossing an edge")
+
+
+class TestAtmosphericDustAlpha:
+    """This filter raises alpha where a mote is and nowhere else.
+
+    An RGBA frame can always be composited onto a backdrop later; an opaque one cannot be undone, and
+    would destroy both the client-side backdrop and any alpha work earlier filters have done.
+    """
+
+    def test_a_transparent_frame_stays_mostly_transparent(self):
+        image, _ = _dust_at(0.0, h=256, w=384)
+        assert float(image[3].min()) == 0.0, "every pixel picked up some alpha; the frame was filled in"
+        assert float((image[3] == 0.0).float().mean()) > 0.5, (
+            "less than half the frame is still fully transparent, which is a veil rather than motes")
+
+    def test_alpha_never_decreases(self):
+        pp = _make_postprocessor(128, 192)
+        image = torch.zeros(4, 128, 192)
+        image[3, 40:80, 40:80] = 0.5
+        before = image[3].clone()
+        pp.atmospheric_dust(image, count=800, brightness=2.0)
+        assert bool((image[3] >= before - 1e-6).all()), "the dust made part of the frame more transparent"
+
+    def test_the_character_occludes_the_dust_behind_it(self):
+        """`character_depth` splits the particles into a layer drawn under the frame and one drawn over
+        it. Occlusion is then free: where the frame is opaque, the dust beneath it is simply hidden."""
+        def render(character_depth):
+            pp = _make_postprocessor(128, 192)
+            image = torch.zeros(4, 128, 192)
+            image[:3, 30:100, 50:150] = 0.5  # an opaque patch standing in for the character
+            image[3, 30:100, 50:150] = 1.0
+            pp.atmospheric_dust(image, count=800, brightness=2.0, character_depth=character_depth)
+            return image[:, 30:100, 50:150]
+
+        behind = render(0.01)  # every particle is further away than the character
+        infront = render(9.0)  # ...and now every particle is nearer
+        assert float((behind[:3] - 0.5).abs().max()) < 1e-5, "dust behind an opaque patch showed through it"
+        assert float((infront[:3] - 0.5).abs().max()) > 1e-3, (
+            "dust in front of the patch left it untouched, so this fixture cannot tell the two layers apart")
+
+
+class TestAtmosphericDustBounds:
+    def test_max_intensity_one_keeps_the_output_in_range(self):
+        """The pipeline ends in `255 * x` and a cast to byte, which wraps rather than saturating - so a
+        value above 1.0 that survives to the end comes out black. `bloom` clamps, which is what makes
+        the headroom safe while it is downstream; with `bloom` off this ceiling is the only guard."""
+        pp = _make_postprocessor(128, 192)
+        image = torch.zeros(4, 128, 192)
+        pp.atmospheric_dust(image, count=2000, brightness=4.0, max_intensity=1.0)
+        assert float(image.min()) >= 0.0
+        assert float(image.max()) <= 1.0
+
+    def test_an_extreme_aperture_clamps_the_kernel_rather_than_allocating_for_it(self):
+        """The splat batch is [count, K, K] and the circle of confusion grows quadratically as a
+        particle approaches the lens, so without a ceiling a wide aperture is an out-of-memory rather
+        than an ugly picture."""
+        pp = _make_postprocessor(128, 192)
+        image = torch.zeros(4, 128, 192)
+        pp.atmospheric_dust(image, aperture=30.0, depth_near=0.05, depth_far=0.05, focal_plane=4.0)
+        assert pp.dust_particles["dust0"]["K"] <= _MAX_SPLAT_KERNEL
 
 
 # ---------------------------------------------------------------------------

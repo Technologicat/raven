@@ -340,6 +340,21 @@ class HistogramEqualizer:
 
 # --------------------------------------------------------------------------------
 
+# The two convolution kernels in this module have ceilings, and they are six times apart because they
+# are truncating different things.
+#
+# A Gaussian has infinite support, so `_MAX_BLUR_KERNEL` is a point at which we stop caring: past it
+# the tails contribute nothing visible, and a blur that genuinely wants to be wider is better done by
+# downsampling than by a bigger kernel.
+#
+# A splat disc has *finite* support and the kernel has to span all of it, so `_MAX_SPLAT_KERNEL` is a
+# resource limit rather than an approximation - going over it means clamping the effect, not merely
+# dropping a tail. It is where it is because the batch is [count, K, K]: at the parameter maxima that
+# is 2000 x 129 x 129, or 133 MB in float32, which is already more than anyone wants transiently on a
+# GPU that is also holding the avatar's models.
+_MAX_BLUR_KERNEL = 21
+_MAX_SPLAT_KERNEL = 129
+
 def _blur_kernel_size(sigma: float) -> int:
     """Gaussian blur kernel size for a given sigma.
 
@@ -350,7 +365,7 @@ def _blur_kernel_size(sigma: float) -> int:
     Result is always odd (required by torchvision GaussianBlur).
     Minimum kernel size is 3 (torchvision requirement).
     """
-    return min(21, max(3, 2 * math.ceil(2 * sigma) + 1))
+    return min(_MAX_BLUR_KERNEL, max(3, 2 * math.ceil(2 * sigma) + 1))
 
 # Convenient for GUI auto-population so that we can specify sensible ranges for parameters once, at the implementation site (not separately at each GUI use site).
 def with_metadata(**metadata):
@@ -449,6 +464,7 @@ class Postprocessor:
         self.last_frame_no = -1
 
         # Caches for individual dynamic effects
+        self.dust_particles = defaultdict(lambda: None)  # name -> {"key": tuple, "K": int, per-particle constants}
         self.crt_warp_grid = defaultdict(lambda: None)  # name -> {"key": tuple, "grid": Tensor}
         self.crt_weights = defaultdict(lambda: None)  # name -> {"key": tuple, "mask": Tensor or None, "corner": Tensor or None}
         self.crt_phosphor = defaultdict(lambda: None)  # name -> {"shape": Size, "acc": Tensor}
@@ -619,8 +635,8 @@ class Postprocessor:
     #
     #   band      range      what it is                                      members
     #   -------   -------    -------------------------------------------     ------------------------------
-    #   Scene     < 0        what is in front of the lens, and how the        zoom (-1.0)
-    #                        camera is aimed at it
+    #   Scene     < 0        what is in front of the lens, and how the        atmospheric_dust (-2.0),
+    #                        camera is aimed at it                            zoom (-1.0)
     #   Capture   [0, 5)     optics, sensor, grading                         bloom (0.0),
     #                                                                        chromatic_aberration (1.0),
     #                                                                        noise (1.5), vignetting (2.0),
@@ -659,6 +675,328 @@ class Postprocessor:
 
     # --------------------------------------------------------------------------------
     # Physical input signal
+
+    def _dust_particles(self, name: str,
+                        count: int, seed: int,
+                        size: float, depth_near: float, depth_far: float,
+                        aperture: float, focal_plane: float, softness: float) -> dict:
+        """Per-particle constants for `atmospheric_dust`, cached per filter instance.
+
+        Returns a dict of `[count]` tensors on the postprocessor's device, all float32, plus the
+        splat kernel size `K` and the largest splat radius `r_max` as Python numbers. Everything in
+        here is constant for as long as the parameters are, so the caller pays for it only when one
+        of them moves.
+
+        The two derived quantities are the reason this is not just a table of random draws:
+
+        `r` combines the projected size of the particle with its circle of confusion, in quadrature.
+        Quadrature because the splat is the convolution of the two discs and variances add, so `r` is
+        the second moment of the result rather than either radius alone.
+
+        `flux_scale` is the *geometric* radius squared, and carries no defocus term at all. A particle
+        twice as near subtends twice the angle and collects four times the light, so total flux goes
+        as `r_geo**2`; defocusing spreads that flux over more pixels without creating or destroying
+        any of it. Peak brightness then falls out of normalizing each splat to unit sum, which is what
+        makes a defocused mote read as a soft bokeh disc rather than a big bright blob.
+
+        Everything is drawn on the CPU from a CPU generator and moved to the device afterwards, so the
+        same seed gives the same particle field on CUDA as on CPU. That costs one host-to-device copy
+        per parameter change, and it buys the tests a reference they can compute anywhere.
+        """
+        key = (count, seed, size, depth_near, depth_far, aperture, focal_plane, softness)
+        cached = self.dust_particles[name]
+        if cached is not None and cached["key"] == key:
+            return cached
+
+        generator = torch.Generator(device="cpu").manual_seed(int(seed) & 0x7FFFFFFF)
+        def uniform(lo: float, hi: float) -> torch.Tensor:
+            return torch.rand(count, generator=generator, dtype=torch.float32) * (hi - lo) + lo
+        def normal() -> torch.Tensor:
+            return torch.randn(count, generator=generator, dtype=torch.float32)
+
+        near, far = min(depth_near, depth_far), max(depth_near, depth_far)
+        constants = {"x0": uniform(0.0, 1.0),  # initial normalized position
+                     "y0": uniform(0.0, 1.0),
+                     "z": uniform(near, far),  # depth; smaller is nearer. Constant for the particle's whole life
+                     "vx": normal(),  # drift direction jitter
+                     "vy": normal(),
+                     "s": uniform(0.6, 1.6),  # size jitter
+                     "sway_a": uniform(0.5, 1.5),  # sway amplitude / frequency / phase
+                     "sway_f": uniform(0.5, 1.5),
+                     "sway_phase": uniform(0.0, 2.0 * math.pi),
+                     "tumble_w": uniform(0.5, 1.5),  # tumble rate multiplier and phase
+                     "tumble_phase": uniform(0.0, 2.0 * math.pi),
+                     "glint_phase": uniform(0.0, 2.0 * math.pi)}  # where in the tumble this particle flashes
+
+        z = constants["z"]
+        r_geo = size * constants["s"] / z
+        r_coc = aperture * (z - focal_plane).abs() / z  # circle of confusion, thin lens
+        r = torch.sqrt(r_geo**2 + r_coc**2)
+
+        r_ceiling = 0.5 * (_MAX_SPLAT_KERNEL - 1) - softness
+        n_clamped = int((r > r_ceiling).sum())
+        if n_clamped:
+            logger.warning(f"_dust_particles: instance '{name}': {n_clamped} of {count} particles want a splat "
+                           f"radius above the {r_ceiling:.1f} px ceiling and are clamped to it. Lower `aperture`, "
+                           f"or raise `depth_near` to keep particles away from the lens.")
+            r = r.clamp(max=r_ceiling)
+        r_max = float(r.max())
+        # The kernel has to span the disc plus its soft edge, and an odd side so it can be centered.
+        kernel_size = max(3, min(_MAX_SPLAT_KERNEL, 2 * math.ceil(r_max + softness) + 1))
+
+        constants["r"] = r
+        constants["flux_scale"] = r_geo**2
+        record = {k: v.to(self.device) for k, v in constants.items()}
+        record["key"] = key
+        record["K"] = kernel_size
+        record["r_max"] = r_max
+        record["z_cpu"] = z  # kept host-side so the front/behind split can be counted without a GPU sync
+        self.dust_particles[name] = record
+        return record
+
+    @with_metadata(count=[0, 2000],
+                   seed=[0, 2**31 - 1],
+                   size=[0.2, 8.0],
+                   depth_near=[0.05, 1.0],
+                   depth_far=[0.05, 4.0],
+                   focal_plane=[0.05, 4.0],
+                   character_depth=[0.05, 4.0],
+                   aperture=[0.0, 30.0],
+                   drift_x=[-0.2, 0.2],
+                   drift_y=[-0.2, 0.2],
+                   drift_jitter=[0.0, 1.0],
+                   sway_amplitude=[0.0, 0.1],
+                   sway_frequency=[0.0, 1.0],
+                   tumble_rate=[0.0, 8.0],
+                   glint_exponent=[1.0, 200.0],
+                   glint_gain=[0.0, 20.0],
+                   brightness=[0.0, 4.0],
+                   tint_rgb=["!RGB"],
+                   alpha_reference=[0.05, 2.0],
+                   max_intensity=[1.0, 8.0],
+                   softness=[0.3, 3.0],
+                   name=["!ignore"],
+                   _priority=-2.0)
+    def atmospheric_dust(self, image: torch.tensor, *,
+                         count: int = 250,
+                         seed: int = 42,
+                         size: float = 1.5,
+                         depth_near: float = 0.25,
+                         depth_far: float = 1.75,
+                         focal_plane: float = 1.0,
+                         character_depth: float = 1.0,
+                         aperture: float = 6.0,
+                         drift_x: float = 0.012,
+                         drift_y: float = 0.020,
+                         drift_jitter: float = 0.4,
+                         sway_amplitude: float = 0.012,
+                         sway_frequency: float = 0.15,
+                         tumble_rate: float = 1.2,
+                         glint_exponent: float = 40.0,
+                         glint_gain: float = 6.0,
+                         brightness: float = 0.6,
+                         tint_rgb: List[float] = [1.0, 0.97, 0.90],
+                         alpha_reference: float = 0.35,
+                         max_intensity: float = 3.0,
+                         softness: float = 1.0,
+                         name: str = "dust0") -> None:
+        """[dynamic] Light-catching motes drifting in the air around the character.
+
+        Dust in a sunbeam, or with different tuning something closer to pollen, snow or petals. The
+        effect is diegetic: the particles are a property of the air the character is standing in, not
+        a sparkle laid over the picture, which is why this runs in the Scene band ahead of `zoom` and
+        the capture optics. The dust is framed by the camera and lit by the same lens as the character.
+
+        Each particle is modelled as a thin disc tumbling in place, which is where the twinkle comes
+        from - the disc is invisible edge-on and flashes as it turns through alignment with the light.
+        Nothing animates the brightness directly.
+
+        The particles carry a depth, and are the only thing in this pipeline that does: the character
+        is a flat billboard and the backdrop is a flat plane. So focus lives here rather than in a
+        filter of its own. Sharp glints and soft bokeh discs are one population at different distances
+        from the focal plane, not two effects.
+
+        `count`: How many particles. 0 disables the filter cheaply.
+        `seed`: Which particle field. Any change reshuffles every particle.
+
+        `size`: Particle radius in pixels at depth 1.0, before the per-particle size jitter.
+
+                Note this drives brightness as well as size, quadratically: a particle twice as large
+                catches four times the light. That is the physics, and it is the reason a small change
+                here goes further than expected.
+        `depth_near`, `depth_far`: The depth range the particles are spread over. Smaller is nearer.
+                                   A wide range gives strong parallax and a wide spread of sizes.
+        `focal_plane`: The depth that is in focus. Particles away from it defocus in both directions.
+        `character_depth`: Which side of the character a particle is on. Particles behind it are
+                           occluded by it; particles in front of it are drawn over it.
+
+                           Defaults to the same depth as `focal_plane`, which puts the character in
+                           focus with dust racking out of focus both nearer and further. Decoupling
+                           the two lets you rack focus onto the dust instead.
+        `aperture`: Circle of confusion in pixels per unit of defocus. 0.0 makes everything sharp,
+                    which reads as grit on a lens rather than as dust in a room.
+
+                    This is also the only expensive knob here. The splat kernel has to span the widest
+                    circle of confusion in the whole field, and its cost goes as the square of that -
+                    so where the defaults cost about 1 ms at 1024 square, an aperture of 20 costs five
+                    or six. Widen it and watch the frame rate; `count` is nearly free by comparison.
+
+        `drift_x`, `drift_y`: Mean drift velocity, in normalized units per second. Positive `drift_y`
+                              is downward. Screen speed goes as 1/depth, so near particles sweep past
+                              while far ones barely move.
+        `drift_jitter`: How much each particle's own direction deviates from the mean.
+        `sway_amplitude`, `sway_frequency`: A horizontal sinusoidal wander on top of the drift, in
+                                            normalized units and Hz. This is the entire "physics" -
+                                            there is no airflow simulation here and there will not be.
+
+        `tumble_rate`: How fast the discs rotate, in radians per second.
+        `glint_exponent`: Width of the specular lobe. This is the main expressive knob: low values
+                          give a soft continuous shimmer, high ones sharp sparse flashes. It is what
+                          decides whether the result reads as atmosphere or as game-HUD sparkle.
+        `glint_gain`: How much brighter a glint is than the particle's own scattered light.
+        `brightness`: Overall gain.
+        `tint_rgb`: Colour of the motes, in linear RGB. The default is a slightly warm white.
+
+        `alpha_reference`: The accumulated intensity at which a mote becomes fully opaque. Below it a
+                           mote holds a constant colour and varies in transparency; above it the alpha
+                           has saturated and the colour goes on brightening into the headroom.
+        `max_intensity`: Ceiling on the colour, above 1.0 to leave headroom for `bloom` to pick up.
+
+                         **This is a hazard, not a nicety.** The pipeline ends in `255 * x` and a cast
+                         to byte, and a value above 1.0 that reaches that point wraps rather than
+                         saturating - a blown highlight comes out black. `bloom` clamps to [0, 1] at
+                         its end, so headroom here is safe only while `bloom` is downstream and
+                         enabled. **With `bloom` off, set this to 1.0.**
+        `softness`: Width of the splat's soft edge, in pixels.
+
+        `name`: Cache key. Only needs changing if the same filter appears twice in one chain.
+
+        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        """
+        c, h, w = image.shape
+        if count <= 0:
+            return
+
+        p = self._dust_particles(name, count, seed, size, depth_near, depth_far,
+                                 aperture, focal_plane, softness)
+        kernel_size = p["K"]
+        half = kernel_size // 2
+        t = self.frame_no / self.CALIBRATION_FPS  # seconds since stream start
+
+        # Everything below is float32 regardless of the postprocessor's own dtype. The positions are
+        # unbounded in time and the accumulation buffer sums many small contributions, and float16 is
+        # bad at both: `t / z` reaches four digits within the hour, where fp16 has none left for the
+        # sub-pixel offset that keeps the drift from looking like a conveyor belt. The tensors here are
+        # [count]-sized or one screen, so the wider type costs nothing worth measuring.
+        z = p["z"]
+
+        # Closed-form trajectories: position is a function of `t` alone, with no integrator and no
+        # particle buffer. FPS independence, resolution independence and reproducibility all fall out
+        # of that, and there is nothing to invalidate when the crop changes mid-stream. Screen velocity
+        # goes as 1/z, which is the pinhole projection of a constant world-space velocity.
+        u = (p["x0"] + (drift_x + p["vx"] * drift_jitter) * t / z
+             + sway_amplitude * p["sway_a"] * torch.sin(2.0 * math.pi * sway_frequency * p["sway_f"] * t + p["sway_phase"]))
+        v = p["y0"] + (drift_y + p["vy"] * drift_jitter) * t / z
+
+        # Wrap outside the visible area rather than at its edge, by the largest splat radius. Wrapping
+        # at the edge would pop a big bokeh disc into existence in full view; out here a particle is
+        # already entirely off screen when it jumps. This is the one place where being sloppy shows.
+        margin_x = (p["r_max"] + softness) / w
+        margin_y = (p["r_max"] + softness) / h
+        u = torch.remainder(u + margin_x, 1.0 + 2.0 * margin_x) - margin_x
+        v = torch.remainder(v + margin_y, 1.0 + 2.0 * margin_y) - margin_y
+
+        # A thin disc, tumbling. `projected_area` goes to zero edge-on; `glint` is a narrow specular
+        # lobe that the disc sweeps through twice per rotation. The twinkle is free - a narrow lobe
+        # means each disc flashes only briefly, which is exactly why real tumbling flakes twinkle.
+        phase = p["tumble_phase"] + p["tumble_w"] * tumble_rate * t
+        projected_area = torch.cos(phase).abs()
+        glint = torch.cos(phase - p["glint_phase"]).abs() ** glint_exponent
+        flux = brightness * p["flux_scale"] * (projected_area + glint_gain * glint)
+
+        # Splat each particle as a soft-edged disc evaluated at its own sub-pixel offset. Snapping to
+        # integer pixels instead is what makes a slow drift look like it is on a conveyor belt.
+        px = u * w
+        py = v * h
+        center_x = torch.round(px)
+        center_y = torch.round(py)
+        offsets = torch.arange(kernel_size, device=self.device, dtype=torch.float32) - half
+        dx = offsets.view(1, kernel_size) - (px - center_x).view(count, 1)  # [count, K]
+        dy = offsets.view(1, kernel_size) - (py - center_y).view(count, 1)
+        distance = torch.sqrt(dy.view(count, kernel_size, 1)**2 + dx.view(count, 1, kernel_size)**2)
+        edge = ((p["r"].view(count, 1, 1) + softness) - distance) / (2.0 * softness)
+        edge = edge.clamp(0.0, 1.0)
+        kernel = edge * edge * (3.0 - 2.0 * edge)  # smoothstep
+        # Unit total energy, then scale by flux - not unit peak. Normalizing the peak would make a
+        # defocused mote a big bright blob instead of a soft disc, and would break the invariant that
+        # defocus moves light around without creating any.
+        kernel = kernel * (flux / kernel.sum(dim=(1, 2)).clamp(min=1e-12)).view(count, 1, 1)
+
+        # Scatter-add into one buffer holding both layers, indexed as `layer * h * w + row * w + col`.
+        # Index math in int64: these are pixel addresses, and at 4K the count exceeds what float16
+        # represents exactly by three orders of magnitude.
+        indices = torch.arange(kernel_size, device=self.device, dtype=torch.int64) - half
+        rows = center_y.to(torch.int64).view(count, 1) + indices.view(1, kernel_size)  # [count, K]
+        cols = center_x.to(torch.int64).view(count, 1) + indices.view(1, kernel_size)
+        inbounds = (((rows >= 0) & (rows < h)).view(count, kernel_size, 1)
+                    & ((cols >= 0) & (cols < w)).view(count, 1, kernel_size))
+        # Zeroing the out-of-bounds cells *after* the normalization is the point: a particle straddling
+        # the edge loses exactly the fraction of its light that fell off the picture, where renormalizing
+        # what is left would make it brighten as it exits. The indices are clamped rather than selected
+        # because a boolean mask needs its result size on the host, which costs a sync every frame.
+        kernel = kernel * inbounds.to(torch.float32)
+        layer = (z <= character_depth).to(torch.int64)  # 1 = in front of the character
+        flat = (layer.view(count, 1, 1) * (h * w)
+                + rows.clamp(0, h - 1).view(count, kernel_size, 1) * w
+                + cols.clamp(0, w - 1).view(count, 1, kernel_size))
+        accumulator = torch.zeros(2 * h * w, dtype=torch.float32, device=self.device)
+        accumulator.index_put_((flat.reshape(-1),), kernel.reshape(-1), accumulate=True)
+        accumulator = accumulator.view(2, h, w)
+
+        # Composite in PREMULTIPLIED space, where `tint * intensity` is already the dust layer's colour.
+        # The straight-alpha form of this - divide the colour by alpha, hand the result to `over`, which
+        # multiplies by alpha again - cancels exactly, and with it goes the epsilon that division needs.
+        # It also saves a read and a write of every pixel per layer, which is most of what this filter
+        # costs: at 1024 square the splat itself is 0.4 ms of it and full-frame traffic is the rest.
+        #
+        # What must not be dropped is the *idea* the division encodes. A viewer sees `rgb * alpha`, so
+        # putting `tint * intensity` into a straight-alpha colour channel and then letting alpha modulate
+        # it again would square the effect: a mote at half the reference intensity would arrive with a
+        # quarter of its light, and the faint ones - which is most of them - would vanish.
+        tint = torch.tensor(tint_rgb, dtype=torch.float32, device=self.device).view(3, 1, 1)
+        def dust_layer(intensity: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+            """One layer's accumulated intensity as `(premultiplied_rgb, alpha)`, in the image's dtype."""
+            alpha = (intensity / alpha_reference).clamp(0.0, 1.0).unsqueeze(0)
+            # `max_intensity` caps the *straight* colour, which in premultiplied form is a cap that
+            # scales with alpha - so it needs no division either.
+            premultiplied = torch.minimum(tint * intensity, max_intensity * alpha)
+            return premultiplied.to(image.dtype), alpha.to(image.dtype)
+
+        # This filter raises alpha where a mote is and nowhere else; it never writes an opaque
+        # background. An RGBA frame can always be composited onto a backdrop later, but an opaque one
+        # cannot be undone, and it would destroy both the client-side backdrop and any alpha work the
+        # rest of the chain has done. Only a filter whose whole job is a backdrop may do that.
+        n_front = int((p["z_cpu"] <= character_depth).sum())
+        light = image[:3] * image[3:4]  # the frame, premultiplied; unpremultiplied again at the end
+        if n_front < count:
+            # Occlusion by the character is free: where the character is opaque the dust behind it is
+            # hidden, and where the frame is transparent the dust shows through onto whatever backdrop
+            # the client composites in. No depth buffer needed.
+            #
+            # `over(image, dust)`, so the coverage that matters is the *image's* - captured before the
+            # alpha update, since both lines need the old value.
+            dust_light, dust_alpha = dust_layer(accumulator[0])
+            uncovered = 1.0 - image[3:4]
+            light.add_(dust_light * uncovered)
+            image[3:4].add_(dust_alpha * uncovered)
+        if n_front:
+            # `over(dust, image)`: here it is the dust that covers, and its alpha is not read back from
+            # the frame, so the two updates are independent.
+            dust_light, dust_alpha = dust_layer(accumulator[1])
+            uncovered = 1.0 - dust_alpha
+            light.mul_(uncovered).add_(dust_light)
+            image[3:4].mul_(uncovered).add_(dust_alpha)
+        image[:3] = light.div_(image[3:4].clamp(min=1e-6))
 
     @with_metadata(center_x=[-1.0, 1.0],
                    center_y=[-1.0, 1.0],

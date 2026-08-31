@@ -41,6 +41,16 @@ BACKDROP = 0.08  # what the client composites behind the avatar, roughly
 # Per filter, a list of (label, settings) to render. The first entry should switch the filter off, so
 # there is an untouched reference in the sheet to compare against.
 VARIANTS = {
+    "atmospheric_dust": [
+        ("off", dict(count=0)),
+        ("defaults", dict()),
+        ("sharp (aperture 0)", dict(aperture=0.0)),
+        ("wide aperture 14", dict(aperture=14.0)),
+        ("dense, count 800", dict(count=800)),
+        ("soft shimmer, exp 6", dict(glint_exponent=6.0)),
+        ("sharp flashes, exp 120", dict(glint_exponent=120.0)),
+        ("focus racked to 0.35", dict(focal_plane=0.35)),
+    ],
     "crt": [
         ("off", dict(scanline_strength=0.0, mask_type="none", corner_falloff=0.0,
                      beam_bleed=0.0, glow_strength=0.0, persistence_tau=0.0,

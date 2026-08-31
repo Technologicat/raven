@@ -35,6 +35,10 @@ DEFAULT_CHAIN = [
 
 # All public filters with representative default parameters
 ALL_FILTERS = [
+    ("atmospheric_dust", {}),
+    # The splat batch is [count, K, K], and K is driven by the widest circle of confusion in the
+    # field - so aperture, not count, is what moves this one.
+    ("atmospheric_dust", {"aperture": 20.0}, "atmospheric_dust (wide aperture)"),
     ("crt", {}),
     # A filter may appear more than once with different settings, in which case it needs a label to
     # report under. `crt`'s warp is the one option here that costs a resample, and the default skips it.
