@@ -243,7 +243,6 @@
 *Raven-avatar*
 
 - **`bloom` now decides what is bright by the light a pixel emits rather than by the colour it carries.** In a straight-alpha frame those differ wherever a pixel is not fully opaque: the colour alone is what the pixel *would* look like if it were, which for a nearly transparent one can be a large number attached to almost no light. The old reading called such pixels highlights and then blurred that colour outward, so the avatar's antialiased outline picked up light from the empty space around it. The character itself is unaffected — the two readings agree wherever alpha is 1.
-  - Most visible with `atmospheric_dust` in the chain, where it made the character light up wherever a mote drifted past, which reads as a cutout pasted over the scene rather than as something standing in it.
 
 *Raven-librarian*
 
