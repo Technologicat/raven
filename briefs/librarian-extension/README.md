@@ -383,9 +383,10 @@ amendment above. Listed so the folder's contents are legible from its README rat
 - **16 — chat graph view** (`16_chat-graph-view-brief.md`). **Researchers' Night**, and ahead of
   `atmospheric-dust.md`. Framed explanatory before navigational: the exhibit's job is making "an LLM is a
   multiverse generator" visible, so rerolling from the graph and exploring existing branches are the two
-  carrying interactions. Built via `XDotWidget.set_graph` in memory rather than by emitting xdot — which
-  means step zero is that `set_graph` currently has **no callers and no tests**, a widget defect owed
-  regardless of this brief. Fragment search is v2, scoped with 14.
+  carrying interactions. Built via `XDotWidget.set_graph` in memory rather than by emitting xdot. Its step
+  zero — that entry point having had no callers and no tests, a widget defect owed regardless of this
+  brief — **was done 2026-08-25**: a hand-built chat-shaped graph renders through it, and
+  `tests/test_widget.py` covers it. Fragment search is v2, scoped with 14.
 - **`atmospheric-dust.md`** and **`crt-display.md`**. Avatar postprocessor work, queued for Researchers'
   Night. Moved in 2026-08-03; neither is done. **Dust is now behind brief 16** (2026-08-05) and lands only
   if time remains — it is the schedule's slack, and safely so: `atmospheric-dust.md` takes its priority-band
