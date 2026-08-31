@@ -98,6 +98,9 @@ class XDotWidget(gui_animation.Animation):
         `dark_bg_color`: Background color in dark mode (DPG format, [0,255]).
         `light_bg_color`: Background color in light mode (DPG format, [0,255]).
         """
+        # The widget is its own animation — it registers itself with the animator below, and the animator
+        # reads base-class state on every animation it holds, so this has to run whatever else we do here.
+        super().__init__()
         self.gui_uuid = str(uuid.uuid4())  # used in GUI widget tags
         self._width = width
         self._height = height
@@ -998,6 +1001,11 @@ class XDotWidget(gui_animation.Animation):
 
     def destroy(self) -> None:
         """Clean up resources."""
+        # Reverse of the order they were acquired in, so the animator stops calling `render_frame` before
+        # the items that frame draws into go away. Left registered, a destroyed widget keeps being ticked
+        # for the life of the process, drawing into deleted items.
+        gui_animation.animator.cancel(self)
+
         with guiutils.nonexistent_ok():
             dpg.delete_item(self._handler_registry)
 

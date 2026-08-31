@@ -16,6 +16,7 @@ import pytest
 
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
+from raven.common.gui import animation  # noqa: E402 -- after importorskip by design
 from raven.common.gui.xdotwidget.graph import (Graph, Node, Edge, Pen,  # noqa: E402 -- after importorskip by design
                                                TextShape, EllipseShape, LineShape)
 from raven.common.gui.xdotwidget.widget import XDotWidget  # noqa: E402 -- after importorskip by design
@@ -77,6 +78,7 @@ def widget(dpg_context):
         instance = XDotWidget(parent=window, width=600, height=400)
     instance.set_graph(chat_shaped_graph())
     yield instance
+    instance.destroy()  # deregisters it from the process-wide animator, which outlives this context
     dpg.delete_item(window)
 
 
@@ -144,3 +146,28 @@ def test_highlighting_a_node_still_renders(widget):
 def test_search_indexes_a_hand_built_graph(widget):
     """`Graph` builds its search index in `__init__`, so this works without the parser having run."""
     assert len(widget._search.search("reply") or []) == 2
+
+
+class TestTheWidgetIsAnAnimation:
+    """It registers itself with the process-wide animator, so it has to be a complete `Animation`.
+
+    Not a formality: the animator reads base-class state off every animation it holds, from the render loop
+    and from the paths that stop everything at shutdown. A widget that skipped the base constructor took the
+    whole app's shutdown down with it, and — the animator being a singleton — one such widget left registered
+    in a test process broke every later test that cleared it, in unrelated modules.
+    """
+
+    def test_the_base_class_state_is_there(self, widget):
+        assert widget.ambient is False
+        assert widget.t0 > 0
+
+    def test_the_animator_can_stop_it(self, widget):
+        assert widget in animation.animator._animations, "it never registered, so clearing proves nothing"
+        animation.animator.clear()
+        assert widget not in animation.animator._animations
+
+    def test_destroying_it_deregisters_it(self, widget):
+        """Otherwise a destroyed widget keeps drawing into deleted items for the life of the process."""
+        assert widget in animation.animator._animations
+        widget.destroy()
+        assert widget not in animation.animator._animations
