@@ -3,7 +3,7 @@
 Whether the Visualizer's clusters should be found in the embedding space rather than in the 2D
 projection, what that costs, and which algorithm to use once the fit moves there.
 
-Measured 2026-08-31, against four corpora — of which **three count**; see the next section. No Visualizer
+Measured 2026-08-31, against five corpora — of which **four count**; see the next section. No Visualizer
 code was changed; this is the measurement that says what to change.
 
 The question comes from `briefs/researchers-night/11_visualizer-importer-rework-brief.md` item 5, which
@@ -14,21 +14,44 @@ scheduling either.
 
 ## The corpora, and which of them count
 
-Four corpora, but they do not carry equal weight. **AOKK, hydrogen and arXiv AI are representative of
-what gets fed into Raven; banichuk is not** (Juha, 2026-08-31) — it is an old hand-built bibliography,
-titles only, and pathological rather than merely small.
+Five corpora, but they do not carry equal weight. **AOKK, hydrogen, arXiv AI and ECCOMAS are
+representative of what gets fed into Raven; banichuk is not** (Juha, 2026-08-31) — it is an old
+hand-built bibliography, titles only, and pathological rather than merely small.
 
 That is measured, not just asserted. Abstract coverage counted from the `.bib` files, and the geometry
 from the embedding caches (1500-point sample for the pairwise figures):
 
-| corpus | n | with abstract | ‖mean vector‖ | pairwise cosine mean | p1 – p99 |
-|---|---|---|---|---|---|
-| AOKK multisource | 5007 | 83% | 0.701 | 0.488 | 0.304 – 0.868 |
-| hydrogen production | 21378 | 100% | 0.668 | 0.449 | 0.277 – 0.643 |
-| arXiv AI | 958 | 100% | 0.657 | 0.431 | 0.234 – 0.620 |
-| banichuk | 531 | **0.4%** (2 of 541) | **0.900** | **0.810** | 0.626 – 0.927 |
+| corpus | n | with abstract | ‖mean vector‖ | pairwise cosine mean | p1 – p99 | median distance |
+|---|---|---|---|---|---|---|
+| AOKK multisource | 5007 | 83% | 0.701 | 0.488 | 0.304 – 0.868 | **0.516** |
+| hydrogen production | 21378 | 100% | 0.668 | 0.449 | 0.277 – 0.643 | 0.558 |
+| arXiv AI | 958 | 100% | 0.657 | 0.431 | 0.234 – 0.620 | 0.568 |
+| ECCOMAS 2024 | 2519 | 100% | 0.634 | 0.401 | 0.254 – 0.576 | **0.602** |
+| banichuk | 531 | **0.4%** (2 of 541) | **0.900** | **0.810** | 0.626 – 0.927 | **0.184** |
 
-The three representative corpora agree closely on geometry. Banichuk is the outlier on every column:
+**The last column connects this to `investigations/retrieval/`,** which found that *topical crowding*
+costs retrieval independently of corpus size, and reported hydrogen's corpus median vector distance as
+**0.574**. Measured here on the Visualizer's own embeddings it is 0.558 — near enough to be the same
+quantity, though that study measured over RAG chunks and this one over `title + abstract`, so read the
+two as consistent rather than as one number checked twice.
+
+What the column adds is the ordering, and it is not the one the anisotropy column suggests: **AOKK is
+more crowded than hydrogen**, not less (0.516 against 0.558). Both are searches aimed at one topic, which
+is the shape that produces crowding, and AOKK is the tighter aim of the two (Juha's expectation,
+2026-08-31, confirmed here). Two consequences worth carrying into the rework:
+
+- The ~19%-of-corpus mega-cluster that every method finds on AOKK and on hydrogen is what a crowded
+  corpus looks like from the clustering side, the same property that study saw from the retrieval side.
+  **ECCOMAS is the control that makes this more than a story**: it is the least crowded corpus here
+  (median distance 0.602) and its largest cluster is **6%** of the corpus against their 19%, with the
+  most even size distribution of the five. A conference covering many subfields against two searches
+  aimed at one topic — the mega-cluster tracks the crowding, and it was not put there by the algorithm.
+- **The map and the retrieval index have a shared failure mode**, so a corpus that reads as crowded here
+  is one to expect retrieval trouble on too — and AOKK is the first corpus to look crowded by this
+  measure without having been examined for it. Its known search false positives are a separate matter
+  and would sit at the *edges* of that mass rather than in it.
+
+The four representative corpora agree closely on geometry. Banichuk is the outlier on every column:
 almost no abstracts, and a mean vector of norm 0.900 — nearly all of every embedding pointing one way,
 with all pairwise similarities crushed into a narrow high cone. So its margins between methods are tiny
 by construction, and finding 5 shows them landing inside the arithmetic noise. **Read it as a
@@ -42,9 +65,11 @@ both and label which is which" — and this section is that labelling.
 ### A precision trap in the caches, found here
 
 **The importer caches embeddings in whatever dtype the embedding device was configured with**, so dtype
-varies per cache with no flag saying so: AOKK's is `float64`, and banichuk's, arXiv AI's and hydrogen's
-are all `float16`. Sixteen-bit floats carry about three decimal digits, which is exactly the precision
-these similarities are quoted to.
+varies per cache with no flag saying so: AOKK's and ECCOMAS's are `float64`, and banichuk's, arXiv AI's
+and hydrogen's are all `float16`. Sixteen-bit floats carry about three decimal digits, which is exactly
+the precision these similarities are quoted to. (ECCOMAS was imported on 2026-08-31 through the same
+pipeline that had produced some of the `float16` caches, so the dtype is not even stable over time on
+one machine — it follows whatever the embedding device was configured with that day.)
 
 It mattered. Normalizing at the cache's own dtype moved banichuk's k-means gap from +0.011 to **+0.019**,
 which flips its ordering against HDBSCAN (+0.017) — a conclusion reversed by rounding. `clusterlab.normalize`
@@ -89,6 +114,11 @@ random labelling matched to its own coverage and cluster count, since floors dif
 | HDBSCAN in 2D — *what ships today* | 183 | 74% | −0.143 | −0.248 | +0.105 |
 | HDBSCAN in high-D, `mcs=5 ms=1 eom` | 37 | 26% | +0.069 | −0.173 | +0.242 |
 | agglomerative, matched coverage and k | 37 | 26% | +0.102 | −0.173 | +0.275 |
+
+**It replicates on a second corpus in an unrelated domain.** ECCOMAS 2024 (computational mechanics,
+2519 records) was imported through the shipped pipeline for exactly this check: its 2D labelling scores
+**−0.155 against a floor of −0.282**, the same shape as AOKK's −0.143 against −0.248. Two corpora with
+nothing in common but the pipeline, both landing a little above their floor with a negative gap.
 
 The shipped map is not noise — it sits meaningfully above its floor. But its gap is **negative**: its
 183 clusters are closer to each other, in the embedding space, than their own members are to their
@@ -147,6 +177,9 @@ partly an artifact and survives on only one corpus.** At matched coverage and ma
 | arXiv AI | 958 | 20 | 19% | gap | +0.031 | +0.019 | **+0.067** | −0.199 |
 | | | | | size-weighted | +0.018 | +0.005 | **+0.023** | −0.203 |
 | | | | | drop clusters <5 | **+0.031** | +0.020 | +0.022 | −0.199 |
+| ECCOMAS 2024 | 2519 | 59 | 22% | gap | +0.015 | +0.017 | **+0.049** | −0.204 |
+| | | | | size-weighted | +0.003 | +0.002 | **+0.019** | −0.214 |
+| | | | | drop clusters <5 | +0.015 | +0.008 | **+0.019** | −0.214 |
 | *banichuk — not representative* | 531 | 24 | 51% | gap | *+0.017* | *+0.019* | *+0.025* | *−0.065* |
 
 **The plain gap has a weighting hole, and agglomerative is the method that exploits it.** Compactness
@@ -161,20 +194,29 @@ HDBSCAN produced **none on any corpus**:
 | AOKK | 37 | 7 (3 singletons) | 27 |
 | hydrogen | 536 | **140** | 330 |
 | arXiv AI | 20 | 3 | 14 |
+| ECCOMAS | 59 | 7 | 41 |
 
 Two checks close the hole — weighting separation by cluster size, and discarding clusters under 5
 members before scoring. Under them:
 
 - **AOKK**: agglomerative's lead holds under both (+0.120 vs +0.113; +0.101 vs +0.069). Real.
 - **hydrogen**: holds, but narrowly (+0.036 vs +0.027; +0.042 vs +0.033) and at the cost of 140 slivers.
+- **ECCOMAS**: holds under both, and by the widest relative margin of the five — +0.019 against +0.003
+  size-weighted, where HDBSCAN is all but indistinguishable from having found nothing.
 - **arXiv AI**: collapses. +0.067 becomes +0.023 size-weighted — a 0.005 lead — and **+0.022 against
   HDBSCAN's +0.031** once slivers go, so HDBSCAN wins. The apparent factor-of-two was the slivers.
 
-So the honest reading: **k-means is last under every check on every corpus**, which is robust and is the
-part that speaks to Clust-Splitter. **Agglomerative leads on two of three representative corpora under
-the robust checks and loses the third**, by margins a quarter the size of the headline number. It is the
-better bet, not a settled answer — and its chaining is a defect in its own right, since a quarter of its
-hydrogen output was clusters of one or two papers.
+So the honest reading: **k-means is last under both robust checks on every representative corpus**, which
+is the sturdiest result here and the part that speaks to Clust-Splitter. **Agglomerative leads on three
+of four representative corpora under those checks and loses the fourth**, by margins a quarter the size
+of the headline number.
+
+**That comparison did not decide the method, and on reflection could not have.** The gap is computed over
+clustered points only, so it says nothing about the 74–81% of papers HDBSCAN declines to place — and
+declining to place them is what earns it a good score. Coverage decides it instead; see "What this
+suggests for the rework". Worth noting as a pattern rather than a one-off: on this question the metric
+was close, unstable under three different controls, and pointed the wrong way, while the quantity that
+settled it was sitting in the coverage column the whole time.
 
 An earlier version of this write-up claimed "three for three, ahead by roughly a factor of two". That
 was the unweighted number believed too readily, and it is precisely the artifact the `≤2` column exists
@@ -191,12 +233,16 @@ earlier version of this write-up carried the `eom` numbers for hydrogen (HDBSCAN
 
 **k-means standing in for MSSC is the relevant reading for Clust-Splitter** (brief 13). A real MSSC
 solver would find a better optimum of the k-means objective, so the k-means row is a floor on the
-centroid model rather than its ceiling — but it is last on all three representative corpora and under
-every one of the three checks, which is the most robust result in this table. It is also the only method
-that goes *below the random floor's neighbourhood* on any check: −0.038 size-weighted on AOKK, where the
-random labelling scores −0.173 and both rivals are positive. That is evidence against the centroid model
-fitting literature embeddings, and it is worth having before anyone f2py-wraps 9k lines of Fortran. On
-banichuk it edges ahead of HDBSCAN by 0.002, which is the noise rather than a result.
+centroid model rather than its ceiling — but it is last on all four representative corpora under both
+robust checks, which is the sturdiest result in this table. It is also the only method that goes *below
+the random floor's neighbourhood* on any check: −0.038 size-weighted on AOKK, where the random labelling
+scores −0.173 and both rivals are positive. That is evidence against the centroid model fitting
+literature embeddings, and it is worth having before anyone f2py-wraps 9k lines of Fortran.
+
+Stated exactly, because "last everywhere" would be an overstatement by two hundredths: on the *plain*
+gap it edges HDBSCAN on ECCOMAS (+0.017 against +0.015) and on banichuk (+0.019 against +0.017). Both
+margins are 0.002, which is the noise, and both vanish under either robust check — but they are why the
+claim above is about the robust checks rather than about all three.
 
 The caveat that keeps this from being decisive: Lloyd's algorithm is a weak solver, and "the objective is
 wrong for this data" and "this solver finds bad optima of it" predict the same table. Distinguishing them
@@ -210,18 +256,22 @@ collapsing.** The same `mcs=5, ms=1, eom` gives:
 | AOKK multisource | 5007 | 37 | 26% |
 | arXiv AI | 958 | **2** | 87% |
 | hydrogen production | 21378 | **2** | 100% |
+| ECCOMAS 2024 | 2519 | **2** | 79% |
 | *banichuk — not representative* | 531 | *24* | *51%* |
 
-**On two of the three representative corpora, `eom` collapses**, and hydrogen's two clusters hold 21367
+**On three of the four representative corpora, `eom` collapses**, and hydrogen's two clusters hold 21367
 records and 6. That is not a map. For a tool that imports whatever bibliography a user hands it, this is
 a serious drawback independent of partition quality: there is no setting that is right for the next
 corpus, and the failure is silent — the importer would log "2 clusters detected" and carry on to build a
 word cloud out of it.
 
-Note which way discounting banichuk cuts here. Banichuk is one of only two corpora where `eom` behaves,
-so leaning on it would have made HDBSCAN look considerably more dependable than it is. Agglomerative cut
-at a target count or a distance threshold is predictable in a way this is not. `sweep_hydrogen.tsv` has
-the `eom`/`leaf` comparison at that size.
+ECCOMAS made this worse rather than better, which is the useful direction for a fifth corpus to move a
+finding. Before it, AOKK and banichuk were two corpora out of four where `eom` behaved, and it was
+possible to read the collapses as the odd cases; at three out of four, behaving is the odd case. Note
+also which way discounting banichuk cuts — it is now one of only *two* corpora where `eom` works at all,
+and the other is not representative either way, so leaning on it would have made HDBSCAN look far more
+dependable than it is. Agglomerative cut at a target count or a distance threshold is predictable in a
+way this is not. `sweep_hydrogen.tsv` has the `eom`/`leaf` comparison at that size.
 
 **7. The embeddings are strongly anisotropic, and centering helps.** The corpus mean vector has norm
 **0.70** — most of every embedding points in one shared direction — which compresses pairwise cosines
@@ -247,15 +297,55 @@ support:
 - **Move the authoritative fit to high-D and make the 2D map presentation only.** Finding 1. The high-D
   fit is already being computed and thrown away.
 - **Fit on centered vectors.** Finding 7. Cheap, and it buys granularity.
-- **Try agglomerative average-linkage as the fitting method**, with undersized clusters kept as
-  outliers — but as a candidate to evaluate, not as a settled answer. Findings 5 and 6. It leads on two
-  of three representative corpora under the robust checks and loses the third, and its chaining produces
-  a tail of one- and two-paper clusters that the min-size filter exists to absorb. The strongest part of
-  the case against HDBSCAN is not the gap at all, it is finding 6: a method that silently returns two
-  clusters for 21378 papers cannot be pointed at an arbitrary user bibliography.
-  - **The decision this actually needs is a reader's verdict, not another metric.** The gap has now been
-    wrong three times in this investigation, each time in a way that looked like a result. arXiv AI is
-    the corpus to settle it on, being both representative and one Juha can judge.
+- **Use agglomerative average-linkage, with undersized clusters kept as outliers.** *Decided
+  2026-08-31 (Juha): the outlier count settles it on its own, in agglomerative's favour.* The gap
+  comparison in finding 5 is genuinely close and was never going to decide this. Coverage is not close:
+
+  | corpus | agglomerative, cut at 100, min size 5 | HDBSCAN, best non-degenerate |
+  |---|---|---|
+  | AOKK | 83 clusters, **99%** coverage | 37 clusters, 26% |
+  | hydrogen | 88 clusters, **100%** coverage | 536 clusters, 21% |
+  | ECCOMAS | 84 clusters, **98%** coverage | 59 clusters, 22% |
+  | arXiv AI | 61 clusters, **90%** coverage | 20 clusters, 19% |
+  | banichuk | 28 clusters, 73% coverage | 24 clusters, 51% |
+
+  On these corpora HDBSCAN has only two settings available: label a fifth of the corpus, or collapse to
+  two clusters (finding 6). Neither is a map. The shipped 2D map places 74% of papers, so adopting
+  HDBSCAN in high-D would take coverage from 74% to ~20% — a regression a reader would notice
+  immediately and a metric would not, since the gap *rewards* declining to answer.
+
+  The outlier concept survives, which is what makes this different from brief item 3's unconditional
+  assignment: the min-size filter still reports 1–10% of papers as outliers, and those are the ones in
+  genuinely thin regions, rather than every paper HDBSCAN's density estimate could not place.
+  - **A single cut level, k=100, works on every corpus we have** — 73% to 100% coverage, against the
+    shipped map's 74% — so it is the default to ship (Juha, 2026-08-31: "if it works for all the corpora
+    we have, let's ship it"). Note what that number is and is not: the tree is cut at 100, and how many
+    clusters *survive* the min-size filter is the corpus's answer, not ours — 28 on banichuk, 88 on a
+    corpus forty times its size. **The cut is a resolution, not a cluster count.**
+  - **Which matters, because "how many clusters does this corpus have" has no answer.** On hydrogen, the
+    same 21378 records yield:
+
+    | method | clusters |
+    |---|---|
+    | HDBSCAN `eom` | 2 |
+    | classical k-means, k chosen the usual way | ~4 — *Juha's recollection, not re-measured here* |
+    | **agglomerative, cut at 100, min size 5** | **88** |
+    | HDBSCAN `leaf` | 536 |
+
+    Two orders of magnitude across methods on one corpus. Nothing in the data picks a number, so a tool
+    that tries to discover one is really exposing its own criterion — and the two extremes are both
+    useless, a 2-cluster map saying nothing and a 536-cluster one being no easier to read than the
+    bibliography. Fixing the resolution and letting the corpus decide how many clusters clear it is the
+    move that avoids the question.
+  - **It also cuts cluster counts against what ships today, which was the hope going in.** AOKK: 183
+    clusters in the shipped 2D map, 83 here, with coverage up from 74% to 99%.
+  - **Cost at 21378 records: 1 min 44 s and 3.9 GB peak**, so `maia`'s 32 GB is not troubled at this
+    size. The n² distance matrix still governs, and ~50k would need about 20 GB, so the existing
+    `max_n` sampling does not go away — it moves further out.
+  - Average linkage chains, so AOKK's largest cluster holds 944 of 5007 papers and hydrogen's 4016 of
+    21378 — **19% of the corpus in both cases**. That is not the method: HDBSCAN found the same AOKK mass
+    at 818, and the crowding measurement above says both corpora genuinely have one. Worth watching, not
+    a reason to reconsider.
 - **Do not adopt brief item 3 unconditionally**, and treat brief item 2 as a speed measure rather than
   a quality one. Findings 3 and 4.
 - **Expect fewer clusters and more outliers than the current map shows**, and decide deliberately how to
@@ -354,6 +444,12 @@ python investigations/highdim-clustering/show_clusters.py --vectors $V --dataset
 ```
 
 The other corpora are `00_stuff/rawdata/banichuk_references_embeddings_cache.npz`,
-`00_stuff/rawdata/ai_papers_202510_embeddings_cache.npz`, and the hydrogen set, whose five per-file
-caches under `00_stuff/rawdata/100000_most_relevant_refs_of_hydrogen_productionzip/` concatenate to
-21378 records.
+`00_stuff/rawdata/ai_papers_202510_embeddings_cache.npz`, the hydrogen set, whose five per-file caches
+under `00_stuff/rawdata/100000_most_relevant_refs_of_hydrogen_productionzip/` concatenate to 21378
+records, and ECCOMAS 2024 under `00_stuff/datasets/ECCOMAS2024/`.
+
+**ECCOMAS had no cache and had to be imported to get one**, which is worth knowing before repeating it:
+`raven-importer` writes the embedding cache beside its input `.bib` as a side effect, and also produces
+the shipped-2D labelling that finding 1 needs, so one run yields both. That import is also what exposed
+the dehyphenation crash fixed in `1d43323f` — the corpus could not be imported at all until then, which
+is the sense in which adding a fifth corpus paid for itself twice.
