@@ -1978,14 +1978,20 @@ class Postprocessor:
         `brightness_compensation`: Scanlines and mask are both multiplicative and both below 1, so
                                    they darken the picture; a real tube compensates by driving the
                                    beam harder. 1.0 restores the original mean brightness exactly,
-                                   0.0 leaves the image dimmed. Full compensation can look too hot
-                                   going into the capture bloom, hence the default below 1.
+                                   0.0 leaves the image dimmed.
+
+                                   What it costs is highlights. The mean is restored by pushing the
+                                   lit rows and stripes up, and whatever was already near white
+                                   clips there and loses its colour with it. On a bright character
+                                   the default sends about 8% of pixels into the clamp, against
+                                   0.02% at 0.0 - so this is the first knob to reach for if colours
+                                   look bleached rather than rastered.
         `beam_bleed`: Horizontal smear of the beam, as a 3-tap blur. Applied to alpha as well, so
                       the spread reads as light rather than being clipped away by the silhouette.
-        `glow_sigma`, `glow_strength`: Light diffusing in the phosphor and the glass. Off by default,
-                                       because the capture `bloom` downstream already does this, and
-                                       does it to the whole scene rather than to the character alone.
-                                       Turn it up only if this filter is used without a bloom.
+        `glow_sigma`, `glow_strength`: Light diffusing in the phosphor and the glass. Off by default.
+                                       This is the only thing in the chain that can make the scanlines
+                                       themselves glow: `bloom` runs before this filter, so it lights
+                                       up the character but never sees the raster.
         `corner_falloff`: Emitter-side dimming toward the corners, where the beam is most deflected.
                           The lens-side version of this is the separate `vignetting` filter.
 
@@ -2024,7 +2030,7 @@ class Postprocessor:
         c, h, w = image.shape
 
         # The warp is one resample, fused with nothing else, and skipped when it would be the identity.
-        # Everything downstream is evaluated analytically at known coordinates rather than resampled,
+        # Everything after it in this filter is evaluated analytically at known coordinates rather than
         # which is what keeps the raster crisp: each further resample would soften the high-frequency
         # structure that *is* the effect.
         if warp_x != 0.0 or warp_y != 0.0 or overscan != 1.0:
