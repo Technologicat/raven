@@ -126,7 +126,7 @@
 
 *Constellation-wide*
 
-- **`--qr`**, which puts a scannable "Get Raven" code in the corner of any of the six GUI apps. For running Raven where people are watching: a visitor sees a demo for a minute and walks off, and nobody writes down a URL. Off unless asked for.
+- **`--qr`**, which puts a scannable "Get Raven" code in the corner of any of the seven GUI apps. For running Raven where people are watching: a visitor sees a demo for a minute and walks off, and nobody writes down a URL. Off unless asked for.
   - The URL comes from the installed package's own metadata, so it cannot drift from where Raven actually lives. Running from a source checkout, where there is no metadata to read, the overlay declines instead of showing a wrong address.
   - The corner it sits in stays clickable, and it costs no framerate in an app that is otherwise idle.
 
