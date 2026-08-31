@@ -612,12 +612,49 @@ motion the second.
 under *Ordering against `crt`*. The dust stays at −2.0 and `crt`'s raster covers the room as well as the
 character. The three alternatives recorded there are kept as the analysis, not as pending work.
 
+### The second tuning pass, and the defect it turned up
+
+A mote's alpha decided how much of the backdrop it hid, while its intensity decided how much light it
+added — and the two were set independently, `alpha_reference` against `tint`. Wherever the backdrop was
+brighter than `tint * alpha_reference`, that arithmetic came out negative: the mote **removed** light and
+appeared as a dark disc. At the shipped 0.35, most of the field most of the time. Real dust is far too
+small to occlude anything, so this was wrong rather than merely mistuned.
+
+**Nothing in the suite or in the looking could have found it**, and the reason is worth carrying: every
+test rendered over a transparent frame, and every contact sheet composited over the avatar's usual
+backdrop of 0.08. Against a backdrop that dark a mote that hides light and a mote that adds it are the
+same picture. It surfaced because Juha loaded a background image.
+
+**`alpha_reference` is gone rather than corrected.** Its only correct value is
+`max_intensity / max(tint_rgb)` — where the light-adding condition and the colour ceiling meet — so it
+was a slider on which every position but one was wrong, and the GUI offers no way to know which
+(Juha, 2026-08-31). The alpha is now derived at that value, which makes darkening structurally
+impossible for any settings rather than merely fixed at the default. `max_intensity` is left as the one
+control, and it now sets how thin the dust is as well as how bright it may go.
+
+**The first fix was wrong, and measuring is what said so.** An `alpha_exponent` was built and tested
+before the derivation was worked out: it halved the total light removed, left the worst case untouched
+at −0.43 — the offenders being motes already at alpha 1, where an exponent does nothing — and at the
+correct reference it destroys 87% of the light rather than making anything translucent. It is not in
+the shipped filter.
+
+`preview_postprocessor.py` grew a `--bright` flag out of this, because the class of defect it hides is
+not specific to dust: any filter that raises alpha can take away more than it adds, and over a dark
+backdrop it looks identical to one that adds.
+
 ### Left undone, deliberately
 
 - **Not in the default chain.** Whether the dust ships on is a decision about everyone's picture rather than
   about this filter, and the settings editor reaches it meanwhile.
 - **Not seen on the 3070 Ti.** The one-card case is a supported configuration and this is the chain's most
   expensive filter, so the number that matters is from the machine that has to share a GPU.
+- **Too many motes fall almost straight down** (Juha, 2026-08-31), and raising `drift_jitter_x` only
+  thins that population rather than removing it. The cause is the distribution rather than its width: a
+  Gaussian piles mass at zero, so about one mote in six draws a near-zero sideways speed whatever the
+  jitter is set to. Measured, as the fraction drifting within 20° of vertical — 12.2% as shipped, 6.3%
+  at double the sideways jitter, 6.8% at less than half the vertical, and **0.2%** if the horizontal
+  magnitude is instead drawn bounded away from zero with a random sign. That last is a small change and
+  a real change in character, so it wants deciding rather than assuming.
 - **`aperture`'s declared range no longer suits its default.** `[0.0, 30.0]` against a default of 0.4 puts
   the useful setting in the first 1.3% of the slider, which is why it was typed rather than dragged. What
   range is right depends on the depth range in force, so it wants a decision rather than a guess.
