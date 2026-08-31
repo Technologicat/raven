@@ -1931,7 +1931,7 @@ class Postprocessor:
             glow_strength: float = 0.0,
             corner_falloff: float = 0.10,
             alpha_mode: str = "both",
-            persistence_tau: float = 0.06,
+            persistence_tau: float = 0.0,
             name: str = "crt0") -> None:
         """[dynamic] Raster projection simulation: the character is drawn by a scanning electron beam.
 
@@ -2032,13 +2032,16 @@ class Postprocessor:
                       both at their defaults the character may end up too faint; pull one of them down.
 
         `persistence_tau`: Phosphor afterglow, as a decay time in seconds. A moving character leaves
-                           a trail of lingering light. 0.0 switches the accumulator off entirely,
-                           which makes this filter stateless.
+                           a trail of lingering light.
 
-                           Interacts with `dynamic_field`: the previous field's lines persist into
-                           the current frame and partly fill the gaps, which is what an interlaced
-                           tube does, but it means a long tau washes the scanlines out. Tune the two
-                           together.
+                           Off by default: it looks better without. 0.0 switches the accumulator off
+                           entirely rather than merely making it short, so at the default this filter
+                           holds no state and allocates nothing per instance.
+
+                           Interacts with `dynamic_field` if both are turned on: the previous field's
+                           lines persist into the current frame and partly fill the gaps, which is
+                           what an interlaced tube does, but it means a long tau washes the scanlines
+                           out. Tune the two together.
 
         `name`: Cache key. Only needs changing if the same filter appears twice in one chain.
 
