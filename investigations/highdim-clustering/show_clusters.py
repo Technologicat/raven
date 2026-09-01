@@ -230,17 +230,22 @@ def main():
         # Every member goes to the model where the cluster is small enough, because the keywords are meant
         # to describe the cluster and a sample of the three titles printed below would describe the sample.
         # A big cluster cannot: on a crowded corpus the largest runs to hundreds of entries, and with
-        # abstracts attached that is a prompt of a quarter of a million tokens. So the biggest clusters are
-        # capped, keeping the entries nearest the centre - the ones that most define what the cluster is
-        # about, which is the question being asked. Clusters at or below the cap are unaffected, and on the
-        # corpora here that is most of them.
+        # abstracts attached that is a prompt of a quarter of a million tokens.
+        #
+        # An oversized cluster is sampled evenly along its centrality ordering, which is what
+        # `importer._collect_cluster_keywords` does - the two must agree, or this stops predicting what
+        # the app would show, which is the only reason to run it. Taking the most central entries instead
+        # would describe the cluster's densest part, and a big cluster on a crowded corpus is exactly the
+        # one likely to span several subtopics.
         texts_by_cluster = {}
         capped = []
         for cid in np.unique(labels[labels >= 0]):
             members = np.flatnonzero(labels == cid)
             if len(members) > args.max_prompt_entries:
                 center = clusterlab.normalize(original[members].mean(axis=0, keepdims=True))
-                members = members[np.argsort(-(original[members] @ center[0]))][:args.max_prompt_entries]
+                by_centrality = members[np.argsort(-(original[members] @ center[0]))]
+                picks = np.linspace(0, len(by_centrality) - 1, args.max_prompt_entries).round().astype(int)
+                members = by_centrality[picks]
                 capped.append(int(cid))
             texts_by_cluster[int(cid)] = [clusterlab.format_for_keyword_extraction(*entries[i])
                                           for i in members]
