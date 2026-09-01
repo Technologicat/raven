@@ -332,8 +332,14 @@ fired with "the fade is heading for the default text colour, not for black" abou
 perfectly. Half an investigation goes into the mechanism the message points at before anyone checks the
 clock.
 
-So treat a macOS-only failure as a report about the *test*, not about macOS. It is the runner that keeps the
-suite honest about its timing assumptions, which is worth having.
+So a macOS-only failure in a test that *waits* for something is a report about the test rather than about
+macOS. It is the runner that keeps the suite honest about its timing assumptions, which is worth having.
+
+**That is this failure mode, not a rule about macOS.** A dependency can simply be broken there, and reading
+every platform-specific red as "our test is optimistic" walks past a real bug. The two are usually cheap to
+tell apart: a lost timing bet is intermittent and fails in the assertion that samples, while a broken
+dependency fails deterministically and somewhere structural — an import, a backend selection, a numerical
+result that differs rather than arrives late. Ask which shape it has before assuming either.
 
 ### Naming and placing a test module
 
