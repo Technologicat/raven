@@ -61,14 +61,53 @@ The ordering is what changes: distinctive first.
 | the new dataset dialog | the common pool, framed as *what this dataset is about* | said once, at corpus level, instead of 34 times |
 | the same dialog | the full `all_keywords` table with counts, copyable | this is the *inspection* view, where "everything, with numbers" belongs |
 
-### Raise the extraction count, then split
+**The dialog is an instrument, not a readout** (Juha, 2026-09-01). Each keyword row is clickable and
+**selects**, honouring the modifier that picks the selection mode — so the existing replace / add /
+subtract / intersect algebra in `selection.py` composes into boolean queries over keywords, and no query
+language has to be invented. Select the clusters carrying `AI`, add `chatbot`, add `generative`, then
+invert, and what remains is the candidate out-of-scope material. That is how the four AI-less clusters
+recorded in `briefs/researchers-night/aokk-corpus-scope-classification-brief.md` were found, and it
+wants to be a feature rather than a script somebody ran once.
 
-Six keywords is a label budget, not an inspection budget, and once the common ones are filtered out a
-cluster can be left with very few. So extract **10–12** and let the split decide what is shown.
+### Raise the extraction count to 12, then split
 
-**This needs measuring before it is built** — see the open question below. Human keyword sets run to
-5–6, so a request for twelve may be out of distribution for the model and may be answered with padding
-rather than with six more real keywords.
+**Measured 2026-09-01, and the number follows from what the split costs rather than from taste.** The
+requirement is *six discriminating keywords to show*, so keywords burnt on corpus-common terms do not
+count toward it. Counting the burn per cluster on the labelled corpora:
+
+| corpus | threshold | burnt per cluster (median / p90 / max) | must extract for six distinctive |
+|---|---|---|---|
+| arXiv AI | 10% | 1 / 1 / 1 | 7 / 7 / 7 |
+| AOKK | 10% | 2 / 4 / 5 | 8 / **10** / **11** |
+| AOKK | 15% | 2 / 3 / 4 | 8 / 9 / 10 |
+| AOKK | 25% | 1 / 1 / 2 | 7 / 7 / 8 |
+
+So **10–12 covers the p90 and worst cases on a crowded corpus**, and the threshold and the count are
+coupled: a tighter threshold burns less budget but leaves more shared terms in the per-cluster display,
+which is the thing the split exists to remove.
+
+**The model can supply twelve, and does not pad to reach it.** `keyword_count_probe.py` ran twelve
+clusters at both settings:
+
+- asked for six → **5.8** returned on average; asked for twelve → **11.2**. It returns fewer when it has
+  fewer (one cluster gave 10), rather than filling a quota.
+- distinctiveness within the twelve-run barely falls from the head to the tail: **0.44** for positions
+  1–6 against **0.40** for 7–12. Padding would collapse.
+- the tails read as real topics, several *more* specific than typical head keywords: *Cognitive Load,
+  Human-AI Teams, AI Transparency, Delegation, Metacognition, Human-AI Symbiosis*; *Anthropomorphism,
+  Trust in AI*; *Emotion Recognition, Pedagogical Agents*; *Self-efficacy, Goal setting*.
+
+Two cautions about those numbers, because both invite over-reading. The fall from the six-run's head
+(0.53) to the twelve-run's head (0.44) is **confounded** — more keywords per cluster means more chances
+of collision, so part of that is arithmetic rather than quality, and only the within-run comparison is
+clean. And *grounding* (whether a keyword's words appear in the cluster's own titles) came back at 1.00
+and 0.97, which is **near-saturated and therefore weak**: a 944-title haystack contains almost any word,
+so it would only have been informative had it come back low.
+
+**Expect less than six extra discriminators, though.** The tails carry corpus-common terms too —
+`Educational Technology`, `Personalized Learning`, `AI Literacy` recur across them — so some of the
+extra budget lands in the common pool rather than in the cluster's own label. That is the split working
+as intended, not a fault, but it means the yield from 6→12 is smaller than the raw count suggests.
 
 ### The dialog
 
@@ -91,19 +130,29 @@ the only place it has ever been seen. So this section is pure GUI work over an e
 selected* points (`word_cloud.py:143`), so it is selection-scoped, visual and approximate. This is
 corpus-scoped, numeric and exact. Different questions.
 
+## Settled
+
+- ~~**Does the model produce twelve meaningful keywords?**~~ **Yes** — measured 2026-09-01, see above.
+- ~~**Should topic keywords be filtered to nouns and proper nouns?**~~ **Done**, shipped 2026-09-01:
+  `nlptools.count_frequencies` now defaults to `accepted_pos=("NOUN", "PROPN")`. The verbs of academic
+  prose crowded the head of the frequency list and discriminate nothing.
+  - The adjective question is **sequenced rather than closed**. They are genuinely mixed — `generative`,
+    `collaborative`, `conversational` are topical, `effective`, `significant`, `specific` are filler —
+    but the measurement found a discriminator worth keeping: **the topical ones are also tagged NOUN a
+    fair share of the time**, because they get used substantively, while the filler ones essentially
+    never are (`generative` 155 ADJ / 110 NOUN, against `effective` 101 ADJ / 0 NOUN). So the noun
+    filter already recovers much of the topical signal and excludes the filler outright.
+  - Revisit including ADJ **after this brief's split exists**, since that mechanism is what would demote
+    the filler automatically. The word cloud is what argues against it today, having nothing that filters.
+
 ## Open
 
-- **Does the model produce twelve meaningful keywords, or six and six of padding?** Cheap to measure:
-  run one corpus at 6 and at 12 and compare the tails. Do this before raising the number.
 - **What threshold?** The arXiv distribution (34, then 5) is bimodal enough that anything from ~10% to
-  ~50% of clusters separates it cleanly, so the value is not critical *there*. A topically narrow corpus
-  like AOKK will put much more into the common pool, which is correct behaviour and worth looking at
-  before fixing a default.
+  ~50% separates it cleanly, so the value is not critical *there*. AOKK's is a smooth gradient with no
+  gap (31, 21, 20, 17, 17, 16, 13, 12, 11, 11 …), so it is AOKK that chooses the number. Measured
+  2026-09-01: at 10% the common pool is 11 keywords and a cluster keeps a median of 4 distinctive; at
+  25% the pool is 2 and the median is 5. **No cluster is left with none at any threshold on either
+  corpus**, which was the risk worth checking. Somewhere near 10–15% looks right; it is coupled to the
+  extraction count above, so decide the two together.
 - **Does the split apply to `"frequencies"` mode too?** That method already discriminates, so the
   per-cluster half is largely redundant for it. The dialog applies either way.
-- **Should topic keywords be filtered to nouns and proper nouns?** `learning` (NOUN, lemma `learning`)
-  and `learn` (VERB, lemma `learn`) are counted separately, which is spaCy behaving correctly — a
-  deverbal noun is its own lexeme, and merging them would lose the distinction between "machine
-  learning" and "students learn". Verified 2026-09-01 on en_core_web_sm 3.8.0. The verb sense is close
-  to a stopword here, so a POS filter would sharpen the list; it would also drop useful adjectives, so
-  it wants trying rather than assuming.

@@ -1,0 +1,83 @@
+cluster 15 (944 entries)
+    six   [ 6]: Artificial Intelligence in Education, Higher Education, Generative AI, Large Language Models, Student Learning, Intelligent Tutoring Systems
+    twelve[12]: Artificial Intelligence in Higher Education, Generative AI in Education, AI-Augmented Instruction, Large Language Models in Education, AI-Facilitated Feedback, Intelligent Tutoring Systems, Educational Chatbots, Student Learning Outcomes, AI Literacy, Human-AI Collaboration, Self-Regulated Learning, Academic Integrity
+            first six: Artificial Intelligence in Higher Education, Generative AI in Education, AI-Augmented Instruction, Large Language Models in Education, AI-Facilitated Feedback, Intelligent Tutoring Systems
+            the tail : Educational Chatbots, Student Learning Outcomes, AI Literacy, Human-AI Collaboration, Self-Regulated Learning, Academic Integrity
+
+cluster 3 (572 entries)
+    six   [ 6]: Large Language Models, Artificial Intelligence, Natural Language Processing, Human-AI Interaction, Educational Technology, Generative AI
+    twelve[10]: Large Language Models, Generative AI, AI-Assisted Learning, Intelligent Tutoring Systems, Automated Assessment, Human-AI Collaboration, Pedagogical Scaffolding, AI Teaching Assistants, Educational Technology, AI in Education
+            first six: Large Language Models, Generative AI, AI-Assisted Learning, Intelligent Tutoring Systems, Automated Assessment, Human-AI Collaboration
+            the tail : Pedagogical Scaffolding, AI Teaching Assistants, Educational Technology, AI in Education
+
+cluster 5 (400 entries)
+    six   [ 6]: AI chatbots in education, Generative AI, ChatGPT, Higher education, Student learning outcomes, Pedagogical integration
+    twelve[10]: AI chatbots, Generative AI, ChatGPT, Higher education, Instructional design, Student attitudes, Personalized learning, Academic integrity, Adaptive learning, Critical thinking
+            first six: AI chatbots, Generative AI, ChatGPT, Higher education, Instructional design, Student attitudes
+            the tail : Personalized learning, Academic integrity, Adaptive learning, Critical thinking
+
+cluster 40 (319 entries)
+    six   [ 6]: Generative AI in Education, Academic Integrity, Critical Thinking, Student Perceptions, Pedagogical Frameworks, AI-Generated Feedback
+    twelve[12]: Generative AI in Education, Higher Education, Academic Integrity, Teaching and Learning, Student Perceptions, Educational Technology, Pedagogical Frameworks, Self-Regulated Learning, Critical Thinking, AI-Generated Feedback, Human-AI Collaboration, AI Literacy
+            first six: Generative AI in Education, Higher Education, Academic Integrity, Teaching and Learning, Student Perceptions, Educational Technology
+            the tail : Pedagogical Frameworks, Self-Regulated Learning, Critical Thinking, AI-Generated Feedback, Human-AI Collaboration, AI Literacy
+
+cluster 20 (272 entries)
+    six   [ 6]: Artificial Intelligence in Education, Personalized Learning, Adaptive Learning, Generative AI, Educational Assessment, AI Ethics
+    twelve[10]: Artificial Intelligence in Education, Educational Technology, Personalized Learning, Adaptive Learning, Generative AI, AI Ethics, AI Assessment, Higher Education, AI Literacy, Intelligent Tutoring Systems
+            first six: Artificial Intelligence in Education, Educational Technology, Personalized Learning, Adaptive Learning, Generative AI, AI Ethics
+            the tail : AI Assessment, Higher Education, AI Literacy, Intelligent Tutoring Systems
+
+cluster 17 (195 entries)
+    six   [ 6]: Self-Regulated Learning, Generative AI, AI Chatbots, Metacognition, Intelligent Tutoring Systems, Educational Technology
+    twelve[12]: Self-regulated learning, Generative AI, Chatbots, Large language models, Intelligent tutoring systems, Metacognition, Educational technology, Personalized learning, Learning analytics, Pedagogical scaffolding, Self-efficacy, Goal setting
+            first six: Self-regulated learning, Generative AI, Chatbots, Large language models, Intelligent tutoring systems, Metacognition
+            the tail : Educational technology, Personalized learning, Learning analytics, Pedagogical scaffolding, Self-efficacy, Goal setting
+
+cluster 73 (135 entries)
+    six   [ 6]: Intelligent Tutoring Systems, Adaptive Learning, Personalized Learning, Affective Computing, Collaborative Learning, Learning Analytics
+    twelve[12]: Intelligent Tutoring Systems, Adaptive Learning, Personalized Learning, Affective Computing, Cognitive Load, Artificial Intelligence in Education, Learning Analytics, Collaborative Learning, E-Learning, Pedagogical Agents, Emotion Recognition, Self-Regulated Learning
+            first six: Intelligent Tutoring Systems, Adaptive Learning, Personalized Learning, Affective Computing, Cognitive Load, Artificial Intelligence in Education
+            the tail : Learning Analytics, Collaborative Learning, E-Learning, Pedagogical Agents, Emotion Recognition, Self-Regulated Learning
+
+cluster 71 (127 entries)
+    six   [ 5]: Human-AI Collaboration, Appropriate Trust, Explainable AI, Decision-Making, Human-AI Reliance
+    twelve[12]: Human-AI Interaction, Human-AI Collaboration, Appropriate Trust, AI Reliance, Explainable AI, Human-AI Decision-Making, Cognitive Load, Human-AI Teams, AI Transparency, Delegation, Metacognition, Human-AI Symbiosis
+            first six: Human-AI Interaction, Human-AI Collaboration, Appropriate Trust, AI Reliance, Explainable AI, Human-AI Decision-Making
+            the tail : Cognitive Load, Human-AI Teams, AI Transparency, Delegation, Metacognition, Human-AI Symbiosis
+
+cluster 27 (119 entries)
+    six   [ 6]: Pedagogical agents, Conversational agents, AI in education, Virtual learning companions, Educational technology, Human-AI interaction
+    twelve[12]: Pedagogical Agents, Conversational Agents, Virtual Learning Companions, AI in Education, Intelligent Tutoring Systems, Emotional Support, Collaborative Learning, Metacognitive Scaffolding, Human-AI Interaction, Learning Outcomes, Educational Technology, Social Presence
+            first six: Pedagogical Agents, Conversational Agents, Virtual Learning Companions, AI in Education, Intelligent Tutoring Systems, Emotional Support
+            the tail : Collaborative Learning, Metacognitive Scaffolding, Human-AI Interaction, Learning Outcomes, Educational Technology, Social Presence
+
+cluster 1 (109 entries)
+    six   [ 6]: Conversational Agents, Human-AI Interaction, Large Language Models, Human-Computer Interaction, AI Design, Multi-Agent Collaboration
+    twelve[10]: Conversational Agents, Human-AI Interaction, Large Language Models, Multi-Agent Systems, User Experience Design, Multimodal Interaction, AI Assistants, Trust in AI, Anthropomorphism, Human-AI Collaboration
+            first six: Conversational Agents, Human-AI Interaction, Large Language Models, Multi-Agent Systems, User Experience Design, Multimodal Interaction
+            the tail : AI Assistants, Trust in AI, Anthropomorphism, Human-AI Collaboration
+
+cluster 60 (107 entries)
+    six   [ 6]: Active learning, Higher education, Educational technology, Student engagement, Personalized learning, Assessment
+    twelve[10]: Active Learning, Formative Feedback, Artificial Intelligence in Education, Student Engagement, Hybrid Learning, Personalized Learning, Learning Analytics, Instructional Design, Student Motivation, Digital Pedagogy
+            first six: Active Learning, Formative Feedback, Artificial Intelligence in Education, Student Engagement, Hybrid Learning, Personalized Learning
+            the tail : Learning Analytics, Instructional Design, Student Motivation, Digital Pedagogy
+
+cluster 14 (100 entries)
+    six   [ 5]: Artificial Intelligence, Language Learning, Generative AI, Foreign Language Teaching, AI-Assisted Learning
+    twelve[12]: Artificial Intelligence in Language Learning, Generative AI, English as a Foreign Language, Second Language Acquisition, AI-Assisted Language Teaching, Intelligent Virtual Agents, Personalized Learning, Computer-Assisted Language Learning, Automated Feedback, Educational Technology, Large Language Models, Teacher AI Literacy
+            first six: Artificial Intelligence in Language Learning, Generative AI, English as a Foreign Language, Second Language Acquisition, AI-Assisted Language Teaching, Intelligent Virtual Agents
+            the tail : Personalized Learning, Computer-Assisted Language Learning, Automated Feedback, Educational Technology, Large Language Models, Teacher AI Literacy
+
+==============================================================================
+asked for six:    mean returned 5.8
+asked for twelve: mean returned 11.2
+
+distinctiveness, six-run positions 1-6 : 0.53
+distinctiveness, twelve-run positions 1-6 : 0.44
+distinctiveness, twelve-run positions 7-12: 0.40
+   (a fall from 1-6 to 7-12 is what padding would look like)
+
+grounding in the cluster's own titles, positions 1-6 : 1.00
+grounding in the cluster's own titles, positions 7-12: 0.97

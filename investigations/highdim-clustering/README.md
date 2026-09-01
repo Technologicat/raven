@@ -298,7 +298,9 @@ support:
   fit is already being computed and thrown away.
 - **Fit on centered vectors.** Finding 7. Cheap, and it buys granularity.
 - **Use agglomerative average-linkage, with undersized clusters kept as outliers.** *Decided
-  2026-08-31 (Juha): the outlier count settles it on its own, in agglomerative's favour.* The gap
+  2026-08-31 (Juha): the outlier count settles it on its own, in agglomerative's favour. Not
+  disqualified on 2026-09-01 by reading the keyword-labelled clusters, which was the remaining way it
+  could have lost.* The gap
   comparison in finding 5 is genuinely close and was never going to decide this. Coverage is not close:
 
   | corpus | agglomerative, cut at 100, min size 5 | HDBSCAN, best non-degenerate |
@@ -366,14 +368,13 @@ support:
     and the equivalence argument does not extend to `eom`**, whose stability sums are not invariant under
     a monotone change of metric. Note also that a `ball_tree` in 1024 dimensions degenerates toward brute
     force, so the saving would be in memory rather than in time.
-- **A domain reader's verdict — the one thing that would actually settle the algorithm choice.** Brief 11
-  designates banichuk for this job because Juha can judge that literature, but banichuk is the corpus
-  this write-up otherwise discounts, so the two roles pull apart. **arXiv AI resolves it** (Juha,
-  2026-08-31: "somewhat familiar with it"): it is representative *and* readable, which banichuk is not
-  and AOKK is not. `arxiv_hdbscan_centered_leaf.txt` and `arxiv_agglomerative_centered_k100.txt` are
-  written for exactly this, and the question to put to them is not "are these clusters tight" — the
-  numbers already answer that, and disagree with each other — but **"which of these two would I rather
-  navigate?"**
+- ~~**A domain reader's verdict — the one thing that would actually settle the algorithm choice.**~~
+  **Answered 2026-09-01, and the shape of the answer is worth stating exactly.** Coverage had already
+  decided this: agglomerative places the hard datapoints that HDBSCAN declines, and that is not a close
+  call. So the reading of the keyword-labelled clusters was **a disqualification test, not a second
+  vote** — the one thing that could still have ruled agglomerative out was its cluster quality, and it
+  did not (Juha's framing, and the correct one). Two lines of evidence *agreeing* would overstate it;
+  one decided, and the other declined to veto.
 - **Fulltext.** The arXiv corpus is the only one with fulltext PDFs on disk
   (`~/.config/raven/librarian/documents_arxiv_fulltext`, noted by Juha 2026-08-31). Everything here
   embeds `title + abstract`, which is what the importer does. Whether clustering on fulltext-derived

@@ -37,10 +37,29 @@ The second shape is the one that argues for doing this with a model rather than 
 no exclusion list distinguishes the two senses of "learning assistant", but a reader distinguishes them
 instantly from the title alone.
 
-**They also cluster.** The high-D clustering run on 2026-08-31 put twelve of the human-Learning-Assistant
-papers in a cluster of their own, so a per-cluster pass is a plausible cheaper first cut — worth trying
-before the per-record pass, and worth *not* relying on, since it only finds the false positives that
-happen to be numerous enough to form a cluster. The singleton helpline paper would not be found this way.
+**They also cluster, and a cheap screen finds them.** Measured 2026-09-01 on the agglomerative
+clustering (cut at 100, min size 5) with LLM keywords, `investigations/highdim-clustering/`:
+
+- **The human-Learning-Assistant group is a cluster of its own, 58 records**, keyworded *Learning
+  Assistants, Peer Learning, Collaborative Learning, Active Learning, Higher Education, Pedagogical
+  Training* — **with no AI term in it at all**, in a corpus about AI agents in higher education. The
+  earlier HDBSCAN run found twelve of these and left the other 46 unclustered, which is one more
+  instance of the coverage argument that decided the algorithm.
+- **The AI/human sense split is handled correctly**: *"Generative-AI, a Learning Assistant?"* sits in an
+  AI cluster, and a separate cluster covers AI teaching assistants. The clustering separates the two
+  senses of the phrase that the boolean query cannot.
+- **Screening on "no AI term among the keywords" puts 4 clusters of 83 in front of a reader**, covering
+  107 records (2.1%): the 58 above, 23 on participatory design and HCI, 17 on computer-supported
+  collaborative learning, and 9 on digital literacy and social equity. Judging four clusters is a
+  different proposition from judging 5007 records.
+
+So run the screen first. **It is a first cut and not a substitute**: it can only find false positives
+numerous enough to form their own cluster, and the singleton helpline paper sits inside a large AI
+cluster where nothing about its keywords gives it away.
+
+Note the screen is currently a script over the investigation's output. The keyword dialog proposed in
+`briefs/visualizer-keyword-pools-brief.md` would make it an ordinary GUI operation — select the clusters
+carrying each AI term, invert, look at what is left — which is a better home for it than a script.
 
 ## Approach
 
