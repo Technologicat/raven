@@ -58,12 +58,41 @@ Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
    claimed minimal degradation, i.e. 3× less embedding storage. It does **not** subsume item 2's PCA step,
    though: Matryoshka truncation is fixed at training time, while PCA is *corpus-adaptive* and item 2's stated
    purpose is measuring this corpus's effective dimensionality. They may still compose.
-2. **PCA preprocessing**: Reduce embedding dimensionality (e.g. 768 → 50) before UMAP/t-SNE. Measure effective dimensionality of the corpus — if first 50 components capture >95% variance, downstream quality should be nearly identical but faster.
-3. **Cosine-to-medoid outlier assignment**: HDBSCAN noise points assigned to the cluster whose medoid has highest cosine similarity, instead of leaving them unassigned.
+2. ~~**PCA preprocessing**~~ — **premise measured false, 2026-09-01. Do not implement as written.**
+   The item assumed "if first 50 components capture >95% variance, downstream quality should be nearly
+   identical but faster". Fifty components capture **53%** on the corpora we have, 100 capture 67%, and
+   300 reach only 90%. Worse, PCA *lowers* cluster separation — it reduces the noise fraction only by
+   splitting, and the resulting clusters sit closer together in the real space. Still possibly worth
+   having as a **speed** measure for the t-SNE/UMAP step, which was never tested. See
+   `investigations/highdim-clustering/README.md`, finding 3.
+3. ~~**Cosine-to-medoid outlier assignment**~~ — **measured harmful, 2026-09-01. Do not implement as
+   written.** Assigning every noise point to its nearest medoid takes coverage to 100% and the
+   compactness-minus-separation gap from +0.069 to −0.147, i.e. back to the quality of the 2D clustering
+   this rework exists to replace. The median outlier sits at 0.64 similarity to its winning medoid
+   against ~0.90 within clusters: those points genuinely belong nowhere. If outlier assignment is wanted
+   it needs a similarity floor, and the floor does all the work. Finding 4.
+   - **What the outliers actually are** was measured separately and is more useful: they sit between two
+     clusters rather than apart from all of them, and almost none are alone. The remedy that survived is
+     to keep a small cluster when its *cohesion* clears the corpus's own, which needs no threshold at
+     all. Findings 9 and 10.
 4. **Procrustes alignment**: When adding new papers to an existing dataset, re-embed the full combined corpus, then use SVD on correspondence points (papers present in both old and new embeddings) to find the optimal rotation matrix R. Apply R to align the new embedding with the old one. Preserves spatial memory while allowing new clusters to appear. Side benefit: novelty detection (new papers far from existing clusters may indicate field-expanding work).
 
 5. **Cluster once, in high-D — the clusters the user sees are currently computed in 2D, and that is a defect.**
-   Added 2026-08-05. The pipeline runs HDBSCAN twice, and the run that produces the visible answer is the
+   Added 2026-08-05.
+
+   > **Settled and measured, 2026-09-01. Read
+   > [`investigations/highdim-clustering/README.md`](../../investigations/highdim-clustering/README.md)
+   > before implementing this — it is the specification, and this item is the reasoning that led to it.**
+   > The defect is confirmed (the shipped 2D labelling scores −0.143 against a random floor of −0.248,
+   > and its clusters are closer to each other than their own members are to their centres). What
+   > changed since this item was written: **the algorithm is agglomerative average-linkage, not
+   > HDBSCAN** — HDBSCAN either labels a fifth of a corpus or silently collapses to two clusters on
+   > three representative corpora of four. Cut the tree at 100, keep a small cluster when its cohesion
+   > clears the corpus's own, and expose no size knob. Both questions this item said needed settling are
+   > settled: the memory limit does not bind at 21k records (3.9 GB, 1 min 44 s), and the parameters are
+   > not transferred from the old fit. The 2D map becomes presentation only.
+
+   The pipeline runs HDBSCAN twice, and the run that produces the visible answer is the
    wrong one:
 
    - `cluster_highdim_semantic_vectors` (importer.py) fits HDBSCAN with `metric="cosine"` on the
