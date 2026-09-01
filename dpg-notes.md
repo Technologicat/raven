@@ -391,6 +391,30 @@ no deferred upload step to race against. If confirmed, switching from
 `dynamic_texture` to `raw_texture` could eliminate the need for double
 `split_frame` in cherrypick's mip pipeline. Needs investigation.
 
+## A dashed line's marks look uneven when they are shorter than the stroke is thick
+
+Antialiasing is not the cause and turning it on is not the fix — `dpg.get_app_configuration()` reports
+`anti_aliased_lines = True` by default, and Raven never changes it.
+
+The unevenness is in the *geometry's sub-pixel phase*, which is a kind of aliasing that antialiasing does
+not remove. A dashed outline is drawn as one short polyline per mark, each starting wherever the pattern
+puts it, so a mark whose ends fall near pixel boundaries spreads its coverage across more pixels and reads
+lighter and wider, while one that happens to land near-aligned reads crisper and narrower. The eye
+compares neighbouring marks and calls the difference *thickness*.
+
+**How much it shows depends on the ratio of mark length to stroke width**, because the positional error is
+roughly constant while the mark is not. A mark shorter than the stroke is thick is essentially a blob, and
+the wobble is most of it; **at twice the width the same wobble only moves the ends**, which nobody notices.
+
+So: **keep the "on" length at least about twice the line thickness.** Live case 2026-09-01, Raven's chat
+graph — a selection ring specified as 2.0-on against a 2.5-wide stroke came out visibly ragged along the
+straight runs, while the gap boxes beside it (6.0-on at 1.5 wide, four times) had always looked even. The
+ring at 4.0-on against 2.0 wide looks consistent.
+
+If a genuinely fine dotted pattern is wanted, the remedy is snapping the dash phase to whole pixels in
+screen space rather than shortening the marks further. Not needed so far, and it would distort diagonals
+and curves, so it is a last resort rather than the default.
+
 ## Diagnosing background-task races
 
 Raven's DPG apps push decode/mip/texture work onto background threads, guarded by a monotonic generation counter (bumped on each image switch) and cooperative cancellation (`bgtask.TaskManager` sequential mode cancels the prior task when a new one is submitted). Two failure modes recur, and both are **silent** by default:
