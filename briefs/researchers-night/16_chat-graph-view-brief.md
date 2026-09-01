@@ -864,10 +864,22 @@ remaining work is the two features below plus the polish the four rules describe
      or **the idle detector has switched it off**. Both of those are causes independent of what the panel
      is currently showing. What must stay out of the condition is the pause that being *covered* causes,
      which is downstream of the switch and would close the loop.
-   - Open, and needing a look rather than a decision: which signal means "producing frames".
-     `avatar_renderer.animator_running` goes True when the animator is *started*, which is before the
-     first frame arrives, so it is probably not the one. `fps_statistics` is fed per received frame and
-     may be the honest test.
+   - **The signal should be the renderer's own, not something Librarian infers** (Juha, 2026-09-01): the
+     stream receiver sets a flag, and Librarian reads it. `animator_running` will not do — it goes True
+     when the animator is *started*, before any frame has arrived — and having Librarian watch
+     `fps_statistics` would put the knowledge in the wrong place.
+   - **But which flag, exactly, decides whether the loop comes back.** Two different things are being
+     asked for here and only one of them is safe as an auto-switch input:
+     - **Latched: "a frame has arrived since the last start."** False from `start()` until the first
+       frame, then True until the next start. This is the boot-gap answer and it cannot close the loop,
+       because covering the avatar does not un-arrive its first frame.
+     - **Live: "frames are arriving right now."** Useful, and for something else — a stalled stream or a
+       server that went away, which today shows a frozen last frame and says nothing. As an auto-switch
+       input it re-closes the loop exactly: covering the avatar pauses it, which stops the frames, which
+       reads as unavailable, which keeps the graph up, and the avatar never returns.
+     So the auto-switch keys on *causes* — not yet booted, idle detector fired — and a live receiving flag
+     stays out of that condition however tempting it looks, being the one signal that the switch's own
+     effect can flip.
 6. **The graph toggle is not persisted.** Every other checkbox in that row round-trips through
    `app_state`; this one reads `dpg.get_value` and writes nothing, so it is off again on restart. A key
    beside the others in `appstate.py`'s defaults (line ~44), read at build time for the checkbox's
