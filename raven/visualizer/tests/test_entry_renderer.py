@@ -273,6 +273,61 @@ def test_a_digit_in_a_fragment_also_matches_its_sub_and_superscript_forms():
     assert highlight(case_insensitive, "CO2 capture") == "<CO2> capture"
 
 
+# --------------------------------------------------------------------------------
+# Applying the highlighters
+#
+# The markup the tooltip and the info panel both wrap a matched fragment in. It was written twice,
+# identically, before it lived here -- so these are the first assertions about it.
+
+WHITE = (255, 255, 255, 255)
+
+
+def highlighted(text, search_string, surrounding_color=WHITE):
+    case_sensitive, case_insensitive = entry_renderer.compile_search_highlight_regexes(search_string)
+    return entry_renderer.apply_search_highlight(text, case_sensitive, case_insensitive,
+                                                 surrounding_color=surrounding_color)
+
+
+def test_a_title_with_no_search_running_is_left_exactly_as_it_was():
+    # Which is what lets a caller skip the Markdown renderer: an unchanged title renders as plain text,
+    # and that is the overwhelmingly common case.
+    assert highlighted("Laser ablation of steel", "") == "Laser ablation of steel"
+
+
+def test_a_title_that_matches_nothing_is_left_exactly_as_it_was():
+    # Negative control for the test above: a search *is* running, and the title still comes back
+    # untouched, so the caller's "did anything change?" test means "did anything match".
+    assert highlighted("Laser ablation of steel", "photocatalysis") == "Laser ablation of steel"
+
+
+def test_a_matched_fragment_is_wrapped_in_its_own_colour():
+    marked = highlighted("Laser ablation", "ablation")
+    assert "<font color='#ff0000'>ablation</font>" in marked
+
+
+def test_the_surrounding_colour_is_closed_and_reopened_around_a_highlight():
+    # The renderer's font tags do not stack, so the highlight cannot nest inside the tag that colours
+    # the title -- it has to close that one and open it again afterwards. Getting this wrong leaves the
+    # rest of the title drawn in the highlight colour.
+    marked = highlighted("Laser ablation", "ablation", surrounding_color=WHITE)
+    assert marked.startswith("Laser </font>"), "the surrounding colour is closed where the highlight starts"
+    assert marked.endswith(f"<font color='{WHITE}'>"), "...and reopened where it ends"
+
+
+def test_a_short_lowercase_fragment_does_not_match_the_markup_a_highlight_inserted():
+    # "col" is a prefix of the `<font color=...>` that highlighting inserts, so the order of the two
+    # passes is load-bearing: the all-lowercase fragments go first, and the only pass that then sees
+    # inserted markup is the case-sensitive one, whose fragments all carry an uppercase letter.
+    marked = highlighted("Colorimetric Laser assay", "col Laser")
+    assert marked.count("#ff0000") == 2, "one highlight for 'Col', one for 'Laser', and none inside the markup"
+
+
+def test_both_kinds_of_fragment_are_highlighted():
+    marked = highlighted("Laser ablation", "Laser ablation")
+    assert "<font color='#ff0000'>Laser</font>" in marked
+    assert "<font color='#ff0000'>ablation</font>" in marked
+
+
 def test_the_compiled_highlighters_are_regexes_ready_for_re_sub():
     # The contract the docstring states, and what the callers' truthiness test relies on.
     case_sensitive, case_insensitive = entry_renderer.compile_search_highlight_regexes("Laser ablation")

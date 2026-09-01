@@ -34,7 +34,6 @@ __all__ = ["content_lock",
 
 import gc
 import logging
-import re
 import threading
 logger = logging.getLogger(__name__)
 
@@ -273,18 +272,13 @@ def _render_worker(*, task_env, env=None):
                         else:  # no search active
                             item_search_status = item_searchoff
 
-                        # Per-fragment search highlighting in the title (when matched).
-                        # Mirrors the info panel's MD highlighting; see `info_panel._update_info_panel`
-                        # for the rationale (font tags don't stack — close + reopen the surrounding
-                        # color tag at every highlight; case-insensitive first so "col" can't match
-                        # the "<font color=...>" inserted by an earlier substitution).
-                        entry_title_text = entry.title
-                        if search_string:
-                            if maybe_regex_case_insensitive:
-                                entry_title_text = re.sub(maybe_regex_case_insensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
-                            if maybe_regex_case_sensitive:
-                                entry_title_text = re.sub(maybe_regex_case_sensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
-                        if search_string and entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
+                        # Per-fragment search highlighting in the title (when matched). Shared with the
+                        # info panel, which renders the same markup for the same titles.
+                        entry_title_text = entry_renderer.apply_search_highlight(entry.title,
+                                                                                 maybe_regex_case_sensitive,
+                                                                                 maybe_regex_case_insensitive,
+                                                                                 surrounding_color=title_color)
+                        if entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
                             header = f"<font color='{title_color}'>{entry_title_text}</font>"
                             dpg_markdown.add_text(header, wrap=gui_config.annotation_tooltip_w, parent=item_group, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}")  # MD renderer renders into its own group
                         else:  # plain text (much faster) when no highlighting needed

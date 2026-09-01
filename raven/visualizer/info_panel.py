@@ -96,7 +96,6 @@ __all__ = ["content_lock",
 import functools
 import gc
 import logging
-import re
 import threading
 import time
 from io import StringIO
@@ -1360,15 +1359,11 @@ def _update_info_panel(*, task_env=None, env=None):
                 dpg.set_item_callback(b, make_select_cluster(cluster_id))
 
                 # Item authors, year, title (with search result highlight, if any)
-                entry_title_text = entry.title
-                if search_string:
-                    if maybe_regex_case_insensitive:  # case-insensitive first so a fragment like "col" won't match the "<font color=...>"
-                        # The font tags don't stack in the MD renderer, so close the surrounding
-                        # tag (for title color) when the highlight starts, and re-open it after.
-                        entry_title_text = re.sub(maybe_regex_case_insensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
-                    if maybe_regex_case_sensitive:  # case-sensitive fragments contain at least one uppercase letter -> safe (won't match anything the case-insensitive pass added)
-                        entry_title_text = re.sub(maybe_regex_case_sensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
-                if search_string and entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
+                entry_title_text = entry_renderer.apply_search_highlight(entry.title,
+                                                                         maybe_regex_case_sensitive,
+                                                                         maybe_regex_case_insensitive,
+                                                                         surrounding_color=title_color)
+                if entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
                     header = f"<font color='{title_color}'>{entry.author} ({entry.year}): {entry_title_text}</font>"
                     entry_title_group = dpg_markdown.add_text(header, wrap=gui_config.title_wrap_w, parent=entry_title_container_group, tag=f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}")  # MD renderer renders into its own group
                     if is_search_match:
