@@ -3021,6 +3021,33 @@ class DPGLinearizedChatView:
                                              flasher=(self._scroll_end_flasher if user_initiated else None),
                                              commanded_y_scroll=self._commanded_y_scroll)
 
+    def find_message(self, node_id: str) -> "DPGChatMessage | None":
+        """Return the message widget showing chat node `node_id`, or `None` if it is not in this view.
+
+        `None` is the ordinary answer, not an error: the view holds one branch, and a node on any other one
+        has no widget here by construction.
+        """
+        with self.chat_controller.current_chat_history_lock:  # `build` refills this from another thread
+            for dpg_chat_message in self.chat_controller.current_chat_history:
+                if dpg_chat_message.node_id == node_id:
+                    return dpg_chat_message
+        return None
+
+    def jump_to_node(self, node_id: str) -> bool:
+        """Scroll to the message showing chat node `node_id` and flash it. Returns whether it was found.
+
+        The pair `_make_jump_to_tool_call` uses, for a whole message rather than a sub-element: scrolling
+        alone lands the reader somewhere without saying which of the messages now on screen was the answer.
+        """
+        message = self.find_message(node_id)
+        if message is None:
+            logger.info(f"DPGLinearizedChatView.jump_to_node: chat node '{node_id}' is not in this view")
+            return False
+        self.scroll_view(scroll_target_node_id=node_id, user_initiated=True)
+        gui_animation.highlight_widget(widget=f"chat_message_timestamp_{message.gui_uuid}",  # tag
+                                       duration=gui_config.acknowledgment_duration)
+        return True
+
     def scroll_view(self,
                     max_wait_frames: int = 10,
                     scroll_target_node_id: str | None = None,

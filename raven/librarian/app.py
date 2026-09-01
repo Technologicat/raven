@@ -86,6 +86,7 @@ with timer() as tim:
 
     from . import appstate
     from . import audio_input_panel as audio_input  # module: the panel class, and the meter scale the toolbar's VU meter shares
+    from . import chatgraph_panel
     from .chat_controller import DPGChatController
     from .cleanup_dialog import DPGCleanupDialog
     from . import config as librarian_config
@@ -1405,7 +1406,7 @@ with timer() as tim:
                                                 "having stopped speaking. Worth doing in the room the\n"
                                                 "system will be used in — that is what decides the number.")
 
-            with dpg.group():  # right column: AI avatar
+            with dpg.group(tag="avatar_column"):  # tag  # right column: the avatar, or the chat graph in its place
                 avatar_panel_w, avatar_panel_h = _get_avatar_panel_base_size()
                 with dpg.child_window(tag="avatar_panel",
                                       width=avatar_panel_w,
@@ -1479,6 +1480,44 @@ with timer() as tim:
                                  tag="avatar_subtitle_text")
                     dpg.bind_item_font("avatar_subtitle_text", subtitle_font)  # tag
 
+                # The chat graph shares the avatar's rect exactly, as a second child window shown in its
+                # place rather than as an overlay with its own z-order. One rect with alternative
+                # occupants: the same mechanism a no-avatar mode will use, where this one simply never
+                # hides.
+                #
+                # `input_blocked` goes in as a lambda because `is_any_modal_window_visible` is defined
+                # further down this module and the GUI is built at module scope, so the name does not exist
+                # yet. The lambda defers the lookup to the first mouse event, by which time it does. Same
+                # for `chat_controller`, which is built after the GUI it drives.
+                def switch_to_chat_node(node_id: str) -> None:
+                    """Move HEAD to `node_id` — the graph view's commit gesture."""
+                    if datastore.get_parent(node_id) is None:
+                        # A root is a character card, not a message, and HEAD resting on one is the single
+                        # state the chat view can show nothing from: it builds upward from HEAD, so the
+                        # chat under a card falls out of sight. The per-message branch button refuses this
+                        # for the same reason.
+                        logger.info(f"switch_to_chat_node: '{node_id}' is a system prompt node; not moving HEAD there")
+                        return
+                    if app_state["HEAD"] == node_id:
+                        return
+                    app_state["HEAD"] = node_id
+                    # The same discontinuity a sibling switch is, and usually a larger one: a jump taken
+                    # from the graph can cross to a conversation the avatar was never in.
+                    chat_controller.mark_discontinuity()
+                    chat_controller.view.build()
+
+                chat_graph_panel = chatgraph_panel.DPGChatGraphPanel(
+                    gui_parent="avatar_column",  # tag
+                    datastore=datastore,
+                    app_state=app_state,
+                    themes_and_fonts=themes_and_fonts,
+                    width=avatar_panel_w,
+                    height=avatar_panel_h,
+                    on_preview=lambda node_id: chat_controller.view.jump_to_node(node_id),
+                    on_commit=lambda node_id: switch_to_chat_node(node_id),
+                    input_blocked=lambda: is_any_modal_window_visible(),
+                    show=False)
+
                 with dpg.child_window(tag="mode_toggle_controls",
                                       width=-1,
                                       height=gui_config.chat_controls_h,
@@ -1494,6 +1533,16 @@ with timer() as tim:
                         def toggle_subtitles_enabled():
                             app_state["avatar_subtitles_enabled"] = not app_state["avatar_subtitles_enabled"]
                             avatar_controller.subtitles_enabled = app_state["avatar_subtitles_enabled"]
+                        def toggle_chat_graph():
+                            # One rect, two occupants. Hide the outgoing one before showing the incoming
+                            # one: they are siblings in the same group, so two shown at once would stack
+                            # rather than overlap.
+                            if dpg.get_value("chat_graph_checkbox"):  # tag
+                                dpg.hide_item("avatar_panel")  # tag
+                                chat_graph_panel.show()
+                            else:
+                                chat_graph_panel.hide()
+                                dpg.show_item("avatar_panel")  # tag
                         def toggle_show_thinking():
                             app_state["show_thinking"] = not app_state["show_thinking"]
                         def toggle_thinking_enabled():
@@ -1543,6 +1592,19 @@ with timer() as tim:
                         else:
                             subtitle_explanation_str = "Closed-caption (CC) the avatar's speech."
                         dpg.add_text(f"{subtitle_explanation_str}\nUsed when TTS is ON.\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
+
+                        # This group governs the right-hand panel rather than the avatar specifically, which
+                        # is the same widening a no-avatar mode makes: the panel is what a mode varies, and
+                        # the avatar is one thing that can fill it.
+                        dpg.add_checkbox(label="Chat graph", default_value=False,
+                                         callback=toggle_chat_graph, tag="chat_graph_checkbox")  # tag
+                        dpg.add_tooltip("chat_graph_checkbox", tag="chat_graph_tooltip")  # tag
+                        dpg.add_text("Show the chat tree in place of the avatar.\n\n"
+                                     "Every chat ever started is in there, branching. Clicking a message\n"
+                                     "shows it; clicking it again switches the conversation to it, so you\n"
+                                     "can look around without changing anything.\n\n"
+                                     "The avatar's video pauses while it is covered.",
+                                     parent="chat_graph_tooltip")  # tag
 
                     # Utility actions — one-shot actions, kept a visually distinct group from the
                     # persistent-state toggles above (their own rows, under a separator). The panel below the
@@ -1620,7 +1682,6 @@ with timer() as tim:
                         util_cleanup_tooltip = gui_tooltip.Tooltip("util_cleanup_button",  # tag
                                                                     "Clean up and save the chat data\n(shows what would be deleted first)")
 
-        # NOTE: If you add or remove buttons here, update also `number_of_below_chat_buttons` and/or `number_of_separators` (search for them in this module).
         # The bottom row is split into two child windows that mirror the panels above them: the chat-side
         # buttons sit under the chat panel, the AI-disclosure label under the avatar panel. Splitting is what
         # makes the label centerable at all - in one full-width row its position depended on the total width
@@ -1696,16 +1757,6 @@ with timer() as tim:
                     dpg.bind_item_font("chat_new_button", themes_and_fonts.icon_font_solid)  # tag
                     dpg.bind_item_theme("chat_new_button", "disablable_widget_theme")  # tag
                     new_chat_tooltip = gui_tooltip.Tooltip("chat_new_button", "Start new chat [Ctrl+N]")  # tag
-
-                    dpg.add_button(label=fa.ICON_DIAGRAM_PROJECT,
-                                   callback=lambda: None,  # TODO
-                                   enabled=False,
-                                   width=gui_config.toolbutton_w,
-                                   tag="chat_open_graph_button")
-                    dpg.bind_item_font("chat_open_graph_button", themes_and_fonts.icon_font_solid)  # tag
-                    dpg.bind_item_theme("chat_open_graph_button", "disablable_widget_theme")  # tag
-                    open_graph_tooltip = dpg.add_tooltip("chat_open_graph_button")  # tag
-                    dpg.add_text("Open graph view", parent=open_graph_tooltip)
 
                     add_separator(line=False)
 
@@ -1903,7 +1954,10 @@ def render_help_extras(self: helpcard.HelpWindow,
                           parent=g1, wrap=self.content_width)
     dpg_markdown.add_text(f"{self.c_txt}Rerolling creates a new sibling and sets the HEAD pointer to that. Previous siblings remain stored in the tree. Starting a new chat, or branching the chat, only resets the HEAD pointer.{self.c_end}",
                           parent=g1, wrap=self.content_width)
-    dpg_markdown.add_text(f"{self.c_txt}Nothing is ever discarded. Where a message has siblings, its arrow buttons step between them, so a rerolled reply can be compared against the one it replaced. Reaching a *different* old chat still needs a graph view of the tree, which is not built yet.{self.c_end}",
+    # Kept to one clause because the card has no room to spare. When it does, what belongs after the colon
+    # is how the view is actually used: the whole tree is drawn there, and clicking a message twice moves
+    # the conversation to it.
+    dpg_markdown.add_text(f"{self.c_txt}Nothing is ever discarded. Where a message has siblings, its arrow buttons step between them, so a rerolled reply can be compared against the one it replaced. To reach a *different* old chat, switch on **Chat graph** below the avatar.{self.c_end}",
                           parent=g1, wrap=self.content_width)
     dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
 
@@ -2010,6 +2064,7 @@ def _resize_panels() -> None:
     avatar_controller.reposition_subtitle()  # apply new position to current subtitle, if any
     dpg.set_item_width("avatar_panel", avatar_panel_w)  # tag
     dpg.set_item_height("avatar_panel", avatar_panel_h)  # tag
+    chat_graph_panel.set_size(avatar_panel_w, avatar_panel_h)  # shares that rect exactly
     dpg_avatar_renderer.reposition(new_x_center=(avatar_panel_w // 2),
                                    new_y_bottom=(avatar_panel_h - 8))
     if _animator_settings is not None:  # may not be initialized yet at app startup on a 1920x1080 screen (triggers immediate resize)

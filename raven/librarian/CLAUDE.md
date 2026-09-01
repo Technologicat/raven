@@ -35,7 +35,7 @@ number claims a precision that the next commit removes. The previous exact figur
 time anyone noticed. Re-measure before quoting one.
 
 ```
-Layer 5 - Applications:     app.py (~2.5k), minichat.py (~730, minimal reference client),
+Layer 5 - Applications:     app.py (~2.7k), minichat.py (~730, minimal reference client),
                             indexer.py (~170, the `raven-indexer` CLI; also where the frontends get their
                             shared `open_document_store`)
 Layer 4 - Controller/GUI:   chat_controller.py (~5.0k), cleanup_dialog.py (~410), audio_input_panel.py (~700),

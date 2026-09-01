@@ -49,6 +49,11 @@ _DEPTH_EXPANSION_FACTOR = 2
 
 _TOOLBAR_H = 34  # pixels, the row of view controls above the graph
 
+# Font atlas sizes for graph labels. The renderer picks whichever is closest to the size it is drawing at,
+# so this is a ladder rather than a choice: a label is legible at one zoom and unreadable at the next, and
+# scaling one atlas across that range is what makes it look smeared. Same ladder `raven-xdot-viewer` uses.
+_GRAPH_TEXT_FONT_SIZES = (4, 8, 16, 32, 64)
+
 
 class DPGChatGraphPanel(gui_animation.Animation):
     """The chat graph view, as a self-contained panel.
@@ -95,7 +100,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
                          handlers are global, so without this the click that dismisses a dialog also lands
                          on the graph behind it.
         `graph_text_fonts`: `(size, font_id)` pairs for graph labels; the renderer picks the closest to the
-                            size it is drawing at.
+                            size it is drawing at. `None` (the default) loads a ladder of sizes into
+                            `themes_and_fonts` and uses that, since every caller wants the same one.
         `dark_mode`: Whether to invert the graph's lightness for a dark background. Raven's interface is
                      dark, so this defaults on.
         `show`: Whether the panel starts visible.
@@ -128,6 +134,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
                                                show=self._is_shown,
                                                tag=f"chat_graph_panel_{self.gui_uuid}")  # tag
         self._build_toolbar()
+        if graph_text_fonts is None:
+            graph_text_fonts = [(size, guiutils.load_extra_font(themes_and_fonts, size,
+                                                                "OpenSans", "Regular")[1])
+                                for size in _GRAPH_TEXT_FONT_SIZES]
         self._widget = XDotWidget(parent=self._container,
                                   width=self._graph_w(width),
                                   height=self._graph_h(height),
