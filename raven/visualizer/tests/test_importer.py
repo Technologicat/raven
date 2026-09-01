@@ -7,7 +7,9 @@ can be exercised against a `.bib` written into `tmp_path`, with the one remote s
 (dehyphenation) replaced.
 """
 
+import concurrent.futures
 import itertools
+import threading
 
 import pytest
 
@@ -19,7 +21,9 @@ importer = pytest.importorskip("raven.visualizer.importer")
 
 pytestmark = pytest.mark.ml
 
-from raven.visualizer import config as visualizer_config  # noqa: E402 -- must follow the guard above
+from unpythonic import unbox  # noqa: E402 -- must follow the guard above
+
+from raven.visualizer import config as visualizer_config  # noqa: E402 -- ditto
 
 
 TWO_RECORDS = """
@@ -268,3 +272,352 @@ def test_small_cluster_is_sent_whole(monkeypatch):
     body = prompts[0].split("-----", 1)[1]
     for i in range(4):
         assert f"paper {i}" in body
+
+
+# ---------------------------------------------------------------------------
+# Records `bibtexparser` refused
+
+
+STRAY_BRACE = """@article{stray2024,
+  author = {Alpha, Anna},
+  year = {2024},
+  title = {A paper with a stray brace},
+  abstract = {We consider the set {a, b and nothing closes it.}
+}
+"""
+
+# Not a brace fault at all: the field has no `=`, so there is nothing for the brace repair to propose.
+BEYOND_REPAIR = """@article{hopeless2024,
+  author {Beta, Bob},
+  year = {2024},
+  title = {A paper that cannot be saved}
+}
+"""
+
+GOOD_RECORD = """@article{fine2024,
+  author = {Gamma, Gil},
+  year = {2024},
+  title = {A paper that parses},
+  abstract = {Nothing wrong here.}
+}
+"""
+
+
+def parse_bib(text):
+    from raven.papers import bibtex
+    return bibtex.parse_string(text)
+
+
+def test_a_record_with_a_stray_brace_is_recovered_into_the_library():
+    # A stray `{` in an abstract -- mathematics arriving through a PDF extractor is the usual source --
+    # aborts the parse of the whole record, title and all. Escaping it recovers the record whole, and the
+    # entry is added as though it had parsed.
+    library = parse_bib(STRAY_BRACE + "\n" + GOOD_RECORD)
+    assert [entry.key for entry in library.entries] == ["fine2024"], \
+        "the stray-brace record parsed on its own, so this fixture cannot tell a recovery from a no-op"
+
+    importer._report_unparseable_records("test.bib", library)
+    assert sorted(entry.key for entry in library.entries) == ["fine2024", "stray2024"]
+
+
+def test_a_recovered_record_keeps_the_fields_that_were_lost_with_it():
+    # The point of recovering is the whole record, not just its key: everything downstream needs the
+    # title, and the reason the record failed was a field the user cannot see is missing.
+    library = parse_bib(STRAY_BRACE)
+    importer._report_unparseable_records("test.bib", library)
+    recovered = next(entry for entry in library.entries if entry.key == "stray2024")
+    assert recovered["title"] == "A paper with a stray brace"
+    assert set(recovered.fields_dict) >= {"author", "year", "title", "abstract"}
+    assert "a, b" in recovered["abstract"], "the field the record died on should be there, brace and all"
+
+
+def test_a_recovery_is_reported_naming_the_record_and_the_file(caplog):
+    # Raven repairs its own reading of the file and never the file, so the user has to be told that a
+    # record in their bibliography needs fixing and where -- `raven-fixbib` is what writes it back.
+    library = parse_bib(STRAY_BRACE)
+    with caplog.at_level("WARNING"):
+        importer._report_unparseable_records("mybib.bib", library)
+    messages = [record.message for record in caplog.records]
+    assert any("stray2024" in message and "mybib.bib" in message for message in messages), messages
+    assert any("raven-fixbib" in message for message in messages), messages
+
+
+def test_a_record_that_cannot_be_recovered_is_reported_rather_than_vanishing(caplog):
+    # The asymmetry this removes: a record that parses but lacks `author`, `year` or `title` is skipped
+    # further down with a warning naming it, while a record that never became an entry at all would
+    # otherwise disappear silently -- and that is the case the user has no other way to notice.
+    library = parse_bib(BEYOND_REPAIR + "\n" + GOOD_RECORD)
+    with caplog.at_level("WARNING"):
+        importer._report_unparseable_records("mybib.bib", library)
+
+    assert [entry.key for entry in library.entries] == ["fine2024"], "nothing should have been recovered here"
+    messages = [record.message for record in caplog.records]
+    assert any("hopeless2024" in message for message in messages), \
+        f"the unparseable record should be named; got {messages}"
+
+
+def test_the_report_counts_the_lost_records(caplog):
+    library = parse_bib(BEYOND_REPAIR + "\n" + BEYOND_REPAIR.replace("hopeless2024", "hopeless2025"))
+    with caplog.at_level("WARNING"):
+        importer._report_unparseable_records("mybib.bib", library)
+    assert any("2 records" in record.message for record in caplog.records), \
+        [record.message for record in caplog.records]
+
+
+def test_a_clean_file_is_reported_on_at_all(caplog):
+    # Negative control for the four above: with nothing to report the pass returns immediately, so a
+    # warning here would mean the check fires on healthy files too.
+    library = parse_bib(GOOD_RECORD)
+    with caplog.at_level("WARNING"):
+        importer._report_unparseable_records("mybib.bib", library)
+    assert not [record for record in caplog.records if record.levelname == "WARNING"]
+
+
+# ---------------------------------------------------------------------------
+# Progress reporting
+
+
+@pytest.fixture
+def progress(monkeypatch):
+    """A fresh progress counter that believes a task is running, since that is what it reports for."""
+    monkeypatch.setattr(importer, "has_task", lambda: True)
+    counter = importer._Progress()
+    return counter
+
+
+def test_progress_is_none_when_no_task_is_running(monkeypatch):
+    # The branch `importer_gui.update_status` handles by showing 0%: the counter has no meaning between
+    # runs, and reporting a stale fraction would be worse than reporting nothing.
+    monkeypatch.setattr(importer, "has_task", lambda: False)
+    assert importer._Progress().value is None
+
+
+def test_progress_starts_at_zero_and_each_macrostep_is_an_equal_share(progress):
+    assert progress.value == pytest.approx(0.0)
+    progress.tock()
+    assert progress.value == pytest.approx(1 / 8), "eight macrosteps, so each is an eighth"
+    progress.tock()
+    assert progress.value == pytest.approx(2 / 8)
+
+
+def test_microsteps_interpolate_within_the_current_macrostep(progress):
+    progress.tock()
+    progress.set_micro_count(4)
+    progress.tick()
+    progress.tick()
+    # Half way through the second macrostep: one whole macrostep, plus half of the next one's share.
+    assert progress.value == pytest.approx((1 + 0.5) / 8)
+
+
+def test_a_macrostep_does_not_inherit_the_previous_one_s_microstep_count(progress):
+    # Without the reset, a macrostep that never calls `set_micro_count` would divide its single tick by
+    # whatever the previous step happened to use, and the bar would crawl instead of stepping.
+    progress.set_micro_count(100)
+    progress.tock()
+    progress.tick()
+    assert progress.value == pytest.approx((1 + 1) / 8)
+
+
+def test_resetting_takes_the_counter_back_to_the_start(progress):
+    progress.set_micro_count(4)
+    progress.tick()
+    progress.tock()
+    assert progress.value > 0.0, "nothing advanced, so this fixture cannot tell a reset from a fresh counter"
+    progress.reset()
+    assert progress.value == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Formatting an entry for keyword extraction
+
+
+def test_an_entry_with_an_abstract_is_its_title_then_the_abstract():
+    from unpythonic.env import env
+    entry = env(title="A title", abstract="An abstract.", author="Alpha, Anna", year="2024")
+    assert importer._format_entry_for_keyword_extraction(entry) == "A title.\n\nAn abstract."
+
+
+def test_an_entry_without_an_abstract_is_its_bare_title():
+    # No full stop is added here, unlike the case above, where the stop separates title from abstract.
+    from unpythonic.env import env
+    entry = env(title="A title", abstract="", author="Alpha, Anna", year="2024")
+    assert importer._format_entry_for_keyword_extraction(entry) == "A title"
+
+
+def test_authors_and_year_are_left_out():
+    # They are not relevant to what a paper is about, and an author name repeated across a cluster's
+    # entries would read to a frequency count as a keyword.
+    from unpythonic.env import env
+    entry = env(title="A title", abstract="An abstract.", author="Zzyzx, Quentin", year="1999")
+    formatted = importer._format_entry_for_keyword_extraction(entry)
+    assert "Zzyzx" not in formatted
+    assert "1999" not in formatted
+
+
+# ---------------------------------------------------------------------------
+# Status updates
+
+
+def test_a_status_update_goes_nowhere_when_nobody_is_listening():
+    # The dynvar's default is a no-op, which is what lets the pipeline call this unconditionally --
+    # `raven-importer` on the command line has no GUI to update.
+    importer._update_status_and_log("Parsing input files...")
+
+
+def test_a_status_update_reaches_the_listener_verbatim():
+    from unpythonic import dyn
+    seen = []
+    with dyn.let(maybe_update_status=seen.append):
+        importer._update_status_and_log("Parsing input files...")
+    assert seen == ["Parsing input files..."]
+
+
+def test_the_log_indent_does_not_reach_the_listener(caplog):
+    # The indent is for reading the log as a tree of steps; the GUI's status line is one line wide and
+    # would show it as leading blanks.
+    from unpythonic import dyn
+    seen = []
+    with caplog.at_level("INFO"):
+        with dyn.let(maybe_update_status=seen.append):
+            importer._update_status_and_log("Clustering...", log_indent=2)
+    assert seen == ["Clustering..."]
+    assert any(record.message == "        Clustering..." for record in caplog.records), \
+        f"the log line should carry four spaces per indent level; got {[r.message for r in caplog.records]}"
+
+
+# ---------------------------------------------------------------------------
+# The background task
+
+
+@pytest.fixture
+def uninitialized(monkeypatch):
+    """`importer` as it is on a fresh import: no executor, no task manager."""
+    monkeypatch.setattr(importer, "bg", None)
+    monkeypatch.setattr(importer, "task_manager", None)
+
+
+@pytest.fixture
+def initialized(uninitialized, monkeypatch):
+    """`importer` with a real executor behind it, torn down afterwards.
+
+    The executor is real because the point of these tests is the task wrapper -- callbacks, result codes,
+    the status the GUI reads -- and a fake one would be asserting against the fake. What is replaced is
+    `import_bibtex`, the hour-long part.
+
+    `init` registers an `atexit` cleanup that reads the module-level `task_manager` when the interpreter
+    exits -- long after this fixture has put it back to `None`. Left alone, every test using this fixture
+    contributes an `AttributeError` to the end of the run. Collecting the registrations instead of making
+    them keeps the teardown honest, and `test_initialization_registers_a_cleanup` is what covers the real
+    one.
+    """
+    registered = []
+    monkeypatch.setattr(importer.atexit, "register", registered.append)
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    importer.init(executor)
+    yield registered
+    if importer.task_manager is not None:
+        importer.task_manager.clear(wait=True)
+    executor.shutdown(wait=True)
+
+
+def run_one_task(fake_import_bibtex, monkeypatch, timeout=10.0):
+    """Start an import whose pipeline is `fake_import_bibtex`, wait for it, and return its `task_env`."""
+    monkeypatch.setattr(importer, "import_bibtex", fake_import_bibtex)
+    finished = threading.Event()
+    seen = []
+
+    def done_callback(task_env):
+        seen.append(task_env)
+        finished.set()
+
+    assert importer.start_task(None, done_callback, "/out/dataset.pickle", "/in/one.bib") is True
+    assert finished.wait(timeout), "the importer task never finished"
+    return seen[0]
+
+
+def test_no_task_exists_before_the_module_is_initialized(uninitialized):
+    assert importer.has_task() is False
+
+
+def test_cancelling_before_initialization_is_a_no_op(uninitialized):
+    # Teardown paths call this whatever killed the app, including a failure during bootup.
+    importer.cancel_task()
+
+
+def test_an_import_cannot_start_before_the_module_is_initialized(uninitialized):
+    # The GUI's start button is live from the first frame, and `init` happens later in the app's bootup.
+    assert importer.start_task(None, None, "/out/dataset.pickle", "/in/one.bib") is False
+
+
+def test_initialization_registers_a_cleanup(initialized):
+    # An import holds a worker thread, so a process exiting mid-import would otherwise hang waiting for it.
+    assert len(initialized) == 1
+
+
+def test_initialization_is_idempotent(initialized):
+    # `init` is called from the app's bootup and from `raven-importer`; a second call must not swap the
+    # executor out from under a task that is already using it.
+    first = importer.task_manager
+    importer.init(concurrent.futures.ThreadPoolExecutor(max_workers=1))
+    assert importer.task_manager is first
+
+
+def test_a_task_runs_the_pipeline_with_the_filenames_it_was_given(initialized, monkeypatch):
+    called = []
+    task_env = run_one_task(lambda status_cb, out, *ins: called.append((out, ins)), monkeypatch)
+    assert called == [("/out/dataset.pickle", ("/in/one.bib",))]
+    assert task_env.result_code is importer.result_successful
+
+
+def test_only_one_import_runs_at_a_time(initialized, monkeypatch):
+    # An import takes a lot of GPU and CPU, so a second one alongside the first would make both slower
+    # and could exhaust VRAM.
+    release = threading.Event()
+    monkeypatch.setattr(importer, "import_bibtex", lambda status_cb, out, *ins: release.wait(10.0))
+    assert importer.start_task(None, None, "/out/dataset.pickle", "/in/one.bib") is True
+    try:
+        assert importer.has_task(), "nothing was running, so this fixture cannot tell a refusal from a start"
+        assert importer.start_task(None, None, "/out/other.pickle", "/in/two.bib") is False
+    finally:
+        release.set()
+
+
+def test_the_started_callback_fires_before_the_pipeline_does(initialized, monkeypatch):
+    # The GUI re-enables its stop button from this callback, so it must arrive while there is still
+    # something to stop.
+    order = []
+    monkeypatch.setattr(importer, "import_bibtex", lambda status_cb, out, *ins: order.append("pipeline"))
+    finished = threading.Event()
+    importer.start_task(lambda task_env: order.append("started"), lambda task_env: finished.set(),
+                        "/out/dataset.pickle", "/in/one.bib")
+    assert finished.wait(10.0)
+    assert order == ["started", "pipeline"]
+
+
+def test_a_failing_import_is_reported_in_the_status_the_gui_reads(initialized, monkeypatch):
+    # The task dies on a background thread, so the exception itself never reaches the user. The status
+    # line is the only place they learn the import did not happen.
+    def explode(status_cb, out, *ins):
+        raise RuntimeError("the embedder went away")
+
+    task_env = run_one_task(explode, monkeypatch)
+    assert task_env.result_code is importer.result_errored
+    assert isinstance(task_env.exc, RuntimeError)
+    assert "the embedder went away" in unbox(importer.status_box)
+
+
+def test_a_finished_import_says_so_and_says_how_to_start_another(initialized, monkeypatch):
+    run_one_task(lambda status_cb, out, *ins: None, monkeypatch)
+    assert "complete" in unbox(importer.status_box)
+
+
+def test_a_finished_task_leaves_the_progress_counter_at_the_start(initialized, monkeypatch):
+    def advance(status_cb, out, *ins):
+        importer.progress.tock()
+        importer.progress.tock()
+
+    monkeypatch.setattr(importer, "has_task", importer.has_task)  # keep the real one; the fixture has a task
+    run_one_task(advance, monkeypatch)
+    # With no task running the counter reports `None` rather than a number, so the reset is checked on
+    # the underlying macrostep count -- which is what the *next* run would otherwise inherit.
+    assert importer.progress._macrosteps_done == 0

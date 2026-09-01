@@ -62,10 +62,16 @@ python-pptx==1.0.2
 PyYAML==6.0.3
 qoi==0.7.2
 requests==2.34.2
+# `visualizer.plotter` imports it at module level for its KDTree, so without it `test_plotter.py`
+# `importorskip`s away — 38 tests reporting a skip that reads as a pass.
+scipy==1.17.1
 sseclient-py==1.9.0  # llmclient's SSE transport; needed since test_llmclient/test_scaffold started running here
 tqdm==4.70.0
 trafilatura==2.2.0
 unpythonic==2.4.0
+# Same story as `scipy` above, for `test_word_cloud.py`'s 28 tests. It brings matplotlib with it, which is
+# why that is not listed here: only direct dependencies are pinned (see the scope note above).
+wordcloud==1.9.6
 wosfile==0.7.0
 
 # numpy 2.5.0 raised its floor to Python 3.12 (2.4.6 is >=3.11), so the matrix legitimately

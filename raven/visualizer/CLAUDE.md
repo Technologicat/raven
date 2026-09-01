@@ -1,13 +1,13 @@
 # Visualizer — CLAUDE.md
 
-~7.1k lines across 12 modules. The `app.py` split has landed.
+~7.1k lines across 13 modules. The `app.py` split has landed.
 
 Sizes are rounded to two significant figures, measured **2026-09-01** — they are here for the shape of the
 package, not as a figure to quote. Re-measure before quoting one. `python scripts/check_module_maps.py`
 checks this table against the package, including whether every module is in it.
 
 ```
-app.py            (~1.8k) — GUI app: window layout, event wiring, the main render loop
+app.py            (~1.4k) — GUI app: window layout, event wiring, the main render loop
 info_panel.py     (~1.6k) — the info panel: content build, scrolling, navigation, anchors
 importer.py       (~1.5k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 annotation.py     (~500)  — datapoint annotations and their tooltips
@@ -15,6 +15,7 @@ config.py         (~440)  — Configuration-as-code (import settings, models, st
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services
 plotter.py        (~420)  — the scatter plot: dataset loading, plotter-space queries, the select brush
+importer_gui.py   (~430)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~270)  — selection state and the lasso/wand tools
 word_cloud.py     (~250)  — word cloud rendering
 entry_renderer.py (~190)  — per-entry rendering shared by panel and tooltip
@@ -23,19 +24,38 @@ importer_cli.py    (~82)  — `raven-importer` entry point
 app_state.py       (~58)  — top-level app state containers
 ```
 
-**Under test as of 2026-09-01** — 218 tests over eight modules, which is every module the coverage plan
+**Under test as of 2026-09-01** — 289 tests over nine modules, which is every module the coverage plan
 covers:
 
 ```
 tests/test_selection.py       (39) — the four combine modes, undo/redo, scroll anchors, modifier keys
+tests/test_plotter.py         (38) — the cluster sort, and the plotter-space queries
+tests/test_importer.py        (37) — parsing and record recovery, cluster keywords, progress, the task
 tests/test_info_panel.py      (34) — hotkey decisions, the clipboard, cluster navigation, widget kinds
 tests/test_entry_renderer.py  (33) — grouping, the `max_n` budget, search highlighter compile and apply
+tests/test_importer_gui.py    (31) — the filename tables, the start/stop decision table, the dialogs
 tests/test_annotation.py      (30) — the item decoration table, and the guards on showing a tooltip
 tests/test_word_cloud.py      (28) — the two render guards, keyword summing, cancellation, saving
-tests/test_plotter.py         (26) — the cluster sort, and the plotter-space queries
 tests/test_search.py          (19) — what counts as a match, and the three GUI elements reporting it
-tests/test_importer.py         (9) — `_parse_input_files`, and cluster-keyword canonicalization
 ```
+
+**Seven of the nine run in CI.** What keeps a module out is a module-level import of something
+`.github/workflows/requirements-ci.txt` does not install, and the consequence is a skip that reads as a
+pass rather than a failure. SciPy and `wordcloud` were added on 2026-09-01 for exactly this reason, which
+brought `test_plotter.py` and `test_word_cloud.py` in. What is left out:
+
+- **`test_info_panel.py`** — `info_panel` imports spaCy.
+- **`test_importer.py`** — deliberately: it carries the `ml` marker, and CI runs `-m "not ml"`. The
+  importer *is* the ML pipeline, so this one is not a gap. (It would also need scikit-learn and
+  `mcpyrate`.)
+
+Note torch *is* in CI — installed from PyTorch's own CPU wheel index by a separate line in the workflows.
+That is why it is absent from the requirements file: `--index-url` inside a requirements file is a
+file-level option in pip, so it would repoint every package in the list.
+
+`importer_gui` is only clean because it reaches the pipeline through `_importer()` instead of importing it
+at the top; `test_importer_gui.py` asserts that structurally, since the consequence of regressing it is a
+skip rather than a failure.
 
 **What is deliberately *not* covered, and why**, since a coverage figure hides it: the two big content
 builds (`info_panel._update_info_panel`, `annotation._render_worker`) and everything that reads widget
@@ -61,6 +81,18 @@ so what these pin is the module boundaries the split created, before feature wor
   worth running before pushing a new test module here.
 - **`entry_renderer` needs no guard at all**, reaching nothing beyond numpy and `unpythonic`, so its
   tests run on every push.
+- **A whole window can be built and read back headless.** `test_importer_gui.py` calls
+  `importer_gui.build_window()` into a context with an unmapped viewport and then asserts against the real
+  widgets — `get_item_label`, `get_item_configuration(...)["enabled"]`, `get_value`, and the table's rows via
+  `get_item_children(table, slot=1)`. So a layout module wants a context rather than a stand-in, and only two
+  things have to be faked: `app_state.themes_and_fonts` (a bare `env(icon_font_solid=0)` is enough for
+  `bind_item_font`) and the `disablable_widget_theme` tag.
+  - **What a context cannot answer is anything the last frame decided.** `is_item_visible` stays False until
+    something renders — read `get_item_configuration(...)["show"]` instead, and patch `dpg.is_item_visible`
+    where a test needs the window to *be* open. **Drawn geometry does not exist at all**: a widget's position
+    and size come out of layout, and layout only happens against a mapped viewport. So configuration and item
+    state are fair game; anything measured is not. `dpg-notes.md`, "Testing DPG code" has the full ceiling,
+    including the one coordinate that survives headless and why it is not the one you want.
 - **A module whose DPG use is a handful of calls does not need a context.** `selection` makes four kinds
   of DPG call, and `test_selection.py` monkeypatches a recording stand-in over the module's `dpg` binding
   that delegates everything else to the real toolkit — so assertions are about what the module asked the
