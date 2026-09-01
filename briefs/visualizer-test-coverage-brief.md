@@ -46,15 +46,24 @@ better proxy for how much a test has to stand up before it can assert anything.
 
 | module | SLOC | `dpg.` calls | note |
 |---|---|---|---|
-| `entry_renderer.py` | 114 | **0** | **start here** — per-entry rendering shared by panel and tooltip |
-| `app_state.py` | 46 | 1 | state containers; small enough to be a warm-up |
+| `entry_renderer.py` | 114 | **0** | **done 2026-09-01**, 27 tests — per-entry rendering shared by panel and tooltip |
+| ~~`app_state.py`~~ | ~~46~~ | ~~1~~ | **nothing to test.** Three lines of code (`app_state = env()`) under 46 of docstring; the SLOC figure counted the prose |
 | `importer.py` | 874 | 0 | partly covered; the rest of the pipeline is plain functions |
-| `word_cloud.py` | 185 | 11 | |
-| `selection.py` | 179 | 18 | selection algebra (replace/add/subtract/intersect) is testable apart from the widgets |
+| `word_cloud.py` | 185 | 11 | **next** |
+| `selection.py` | 179 | 18 | **done 2026-09-01**, 36 tests — the selection algebra and the undo history |
 | `plotter.py` | 183 | 22 | |
 | `annotation.py` | 298 | 79 | |
 | `info_panel.py` | 1078 | 172 | |
 | `app.py` | 1350 | 448 | last, and possibly never — an entry point is wiring |
+
+**The `dpg.` count is the right proxy, but it overstates the cost where the calls are few and simple.**
+`selection`'s eighteen are four distinct calls — `enable_item`, `disable_item`, `set_value`,
+`is_key_down` — so `test_selection.py` monkeypatches a recording stand-in over the module's `dpg`
+binding, delegating everything else to the real toolkit so the key constants stay DPG's own. Assertions
+are then about what the module asked the GUI to do. That works because those calls are *commands*, not
+queries: nothing in `selection` reads geometry back. A module that measures a widget wants a real
+context instead, which per-module is fine (`dpg-notes.md`, "Testing DPG code") — so read the count as
+"how many distinct things does this ask DPG for", not as a line total.
 
 `config.py` needs no tests (configuration-as-code, and it carries local overrides). `importer_cli.py`
 looks easy on this table but **check whether it calls `parse_args` at module scope before trying** —
@@ -74,6 +83,11 @@ Prefer assertions about **what Raven decides**, not what a library does — the 
 - `importer`: the remaining pipeline stages. `_cluster_*` and `_reduce_dimension` are about to be
   rewritten (brief 11 item 5), so **write those tests as part of that change, not before it** — a test
   of the current two-stage clustering pins a defect.
+  - **`_collect_cluster_keywords`'s `llm` branch is under repair as of 2026-09-01** and joins that list
+    for the same reason. It joins every entry of a cluster into one prompt with no cap, which on a
+    crowded corpus is a prompt the backend either refuses or silently truncates — so the largest
+    cluster, the one most worth labelling, gets keywords that are wrong or absent. The fix caps the
+    prompt. Anything asserted about the current shape would pin the unbounded one.
 
 ## The rule that matters most here
 
