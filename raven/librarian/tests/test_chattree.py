@@ -1021,3 +1021,117 @@ class TestInMemorySidecarStorage:
             assert forest.prune_unreferenced_sidecars() == []
         assert forest.list_sidecar_files() == [name]
         assert "sidecar_extractor" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# The change counter
+# ---------------------------------------------------------------------------
+
+class TestGeneration:
+    """`generation` is what lets a view poll the forest instead of every writer knowing about the view.
+
+    So what these pin is the *contract a poller relies on*: it moves for anything that would change what a
+    view of the forest shows, and it holds still for everything else. The second half is the one that can
+    rot quietly -- a counter that advances on reads still passes every "did it notice?" test, while costing
+    its poller a full rebuild per frame forever.
+    """
+
+    def test_a_fresh_forest_starts_somewhere(self, forest):
+        assert isinstance(forest.generation, int)
+
+    @pytest.mark.parametrize("name,mutate", [
+        ("create_node", lambda f, n: f.create_node("another", parent_id=n)),
+        ("add_revision", lambda f, n: f.add_revision(n, "edited")),
+        ("overwrite_active_revision", lambda f, n: f.overwrite_active_revision(n, "overwritten")),
+        ("set_revision_name", lambda f, n: f.set_revision_name(n, f.get_revision(n), "the good one")),
+        ("copy_node", lambda f, n: f.copy_node(n, new_parent_id=None)),
+        ("copy_subtree", lambda f, n: f.copy_subtree(n, new_parent_id=None)),
+        ("delete_node", lambda f, n: f.delete_node(n)),
+        ("delete_subtree", lambda f, n: f.delete_subtree(n)),
+        ("detach_subtree", lambda f, n: f.detach_subtree(n)),
+        ("detach_children", lambda f, n: f.detach_children(n)),
+        ("reparent_subtree", lambda f, n: f.reparent_subtree(n, new_parent_id=None)),
+        ("reparent_children", lambda f, n: f.reparent_children(n, new_parent_id=None)),
+        ("purge", lambda f, n: f.purge()),
+        ("touch", lambda f, n: f.touch()),
+    ])
+    def test_every_mutator_advances_it(self, name, mutate):
+        # Built per case rather than taken from a fixture: several of these delete the node they are given,
+        # and one empties the forest.
+        forest = Forest()
+        parent = forest.create_node("parent", parent_id=None)
+        node = forest.create_node("node", parent_id=parent)
+        forest.create_node("child", parent_id=node)
+
+        before = forest.generation
+        mutate(forest, node)
+        assert forest.generation != before, f"`{name}` changed the forest without announcing it"
+
+    def test_deleting_a_revision_advances_it(self, forest):
+        # Its own case: the node needs two revisions before one can go, and that setup is a mutation itself.
+        node = forest.create_node("first", parent_id=None)
+        second = forest.add_revision(node, "second")
+        before = forest.generation
+        forest.delete_revision(node, second)
+        assert forest.generation != before
+
+    def test_switching_the_active_revision_advances_it(self, forest):
+        node = forest.create_node("first", parent_id=None)
+        forest.add_revision(node, "second")
+        before = forest.generation
+        forest.set_revision(node, 1)
+        assert forest.generation != before
+
+    @pytest.mark.parametrize("name,read", [
+        ("get_payload", lambda f, n: f.get_payload(n)),
+        ("get_parent", lambda f, n: f.get_parent(n)),
+        ("get_children", lambda f, n: f.get_children(n)),
+        ("get_siblings", lambda f, n: f.get_siblings(n)),
+        ("get_revisions", lambda f, n: f.get_revisions(n)),
+        ("get_revision", lambda f, n: f.get_revision(n)),
+        ("get_revision_name", lambda f, n: f.get_revision_name(n, 1)),
+        ("linearize_up", lambda f, n: f.linearize_up(n)),
+        ("walk_up", lambda f, n: f.walk_up(n)),
+        ("get_all_root_nodes", lambda f, n: f.get_all_root_nodes()),
+        ("generation", lambda f, n: f.generation),
+        ("str", lambda f, n: str(f)),
+    ])
+    def test_reads_leave_it_alone(self, chain, name, read):
+        forest, a, b, c = chain
+        before = forest.generation
+        read(forest, b)
+        assert forest.generation == before, f"`{name}` is a read, but it advanced the change counter"
+
+    def test_a_prune_with_nothing_to_prune_leaves_it_alone(self, chain):
+        # The negative control for the two prunes below: without it, a `touch` placed unconditionally at the
+        # top of either one would still satisfy every "it advanced" assertion in this class.
+        forest, a, b, c = chain
+        before = forest.generation
+        forest.prune_dead_links(a)
+        forest.prune_unreachable_nodes(a)
+        assert forest.generation == before
+
+    def test_pruning_a_dead_link_advances_it(self, chain):
+        forest, a, b, c = chain
+        forest.nodes[b]["children"].append("no-such-node")
+        before = forest.generation
+        forest.prune_dead_links(a)
+        assert forest.generation != before
+
+    def test_pruning_an_unreachable_node_advances_it(self, chain):
+        forest, a, b, c = chain
+        forest.create_node("orphan", parent_id=None)
+        before = forest.generation
+        forest.prune_unreachable_nodes(a)
+        assert forest.generation != before
+
+    def test_loading_a_datastore_advances_it(self, tmp_path):
+        datastore_file = tmp_path / "chat.json"
+        written = PersistentForest(datastore_file, autosave=False)
+        written.create_node("hello", parent_id=None)
+        written.save()
+
+        read_back = PersistentForest(datastore_file, autosave=False)
+        # `_load` runs during construction, so what is checked is that the load left a mark at all -- a
+        # counter still at its initial value would mean a reload cannot be distinguished from no forest.
+        assert read_back.generation != Forest().generation

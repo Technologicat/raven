@@ -151,9 +151,38 @@ class Forest:
         """
         self.nodes = {}
         self.lock = threading.RLock()
+        self._generation = 0
         self._sidecar_extractor = sidecar_extractor
         self._sidecar_bytes: dict[str, bytes] = {}
         self._sidecar_descriptions: dict[str, dict[str, Any]] = {}
+
+    # ------------------------------------------------------------------
+    # Change counter
+
+    def _get_generation(self) -> int:
+        """Return the current value of the change counter. See the `generation` property."""
+        with self.lock:
+            return self._generation
+
+    generation = property(fget=_get_generation,
+                          doc="""A counter that increases whenever anything in the forest changes.
+
+    Compare two readings for equality to answer "has anything changed since I last looked?" — the values
+    themselves carry no meaning, and one change may advance the counter by more than one step. Reading is
+    cheap enough to do once per rendered frame, which is what it is for: a view of the forest can keep
+    itself up to date without every writer having to know that view exists.
+
+    A mutation made by writing to `nodes` directly does not show up here. Call `touch` after doing that.
+    """)
+
+    def touch(self) -> None:
+        """Advance the change counter, announcing a mutation made by writing to `nodes` directly.
+
+        Every method of this class that changes anything does this for itself, so the only reason to call
+        this is the raw access the class docstring permits.
+        """
+        with self.lock:
+            self._generation += 1
 
     def create_node(self, payload: Any, parent_id: Optional[str]) -> str:
         """Create a node containing `payload`, and store it in the forest.
@@ -209,6 +238,7 @@ class Forest:
             if parent_id is not None:  # link parent to this node (do this first before saving the new node, in case `parent_id` is not found)
                 self.nodes[parent_id]["children"].append(node_id)
             self.nodes[node_id] = node
+            self.touch()
         return node_id
 
     def add_revision(self, node_id: str, payload: Any, revision_name: Optional[str] = None) -> int:
@@ -253,6 +283,7 @@ class Forest:
                 node["revision_names"][str(revision_id)] = revision_name
             node["active_revision"] = revision_id
             node["next_free_revision"] += 1
+            self.touch()
         return revision_id
 
     def overwrite_active_revision(self, node_id: str, payload: Any) -> int:
@@ -288,6 +319,7 @@ class Forest:
             node = self.nodes[node_id]
             revision_id = node["active_revision"]
             node["data"][str(revision_id)] = payload
+            self.touch()
         return revision_id
 
     def delete_revision(self, node_id: str, revision_id: int) -> None:
@@ -321,6 +353,8 @@ class Forest:
             # Set new active revision if needed.
             if deleting_active_revision:
                 node["active_revision"] = revision_id_to_activate
+
+            self.touch()
 
     def get_revisions(self, node_id: str) -> List[int]:
         """Return a list of all revision IDs of the payload revisions of node `node_id`, in numerical order."""
@@ -366,7 +400,8 @@ class Forest:
             node = self.nodes[node_id]
             if str(revision_id) not in node["data"]:
                 raise KeyError(f"Forest.set_revision: node '{node_id}' has no revision '{revision_id}'")
-        node["active_revision"] = revision_id
+            node["active_revision"] = revision_id
+            self.touch()
 
     def set_revision_name(self, node_id: str, revision_id: int, revision_name: str) -> str:
         """Set the human-readable name of payload revision `revision_id` of node `node_id`.
@@ -385,6 +420,7 @@ class Forest:
                 raise KeyError(f"Forest.set_revision_name: node '{node_id}' has no revision '{revision_id}'")
             assert str(revision_id) in node["data"]
             node["revision_names"][str(revision_id)] = revision_name
+            self.touch()
             return revision_name
 
     def get_payload(self, node_id: str, revision_id: Optional[int] = None) -> Any:
@@ -508,6 +544,7 @@ class Forest:
             new_node["active_revision"] = original_node["active_revision"]
             new_node["next_free_revision"] = original_node["next_free_revision"]
             new_node["revision_names"] = copy.deepcopy(original_node["revision_names"])
+            self.touch()  # `create_node` already announced the node; this announces the content that replaced its dummy payload
             return new_node_id
 
     def copy_subtree(self, node_id: str, new_parent_id: Optional[str]) -> str:
@@ -543,6 +580,7 @@ class Forest:
             self.detach_subtree(node_id)  # this will also raise KeyError if the node is not found
             self.detach_children(node_id)
             self.nodes.pop(node_id)  # the datastore has the only reference to the actual node data, so the node becomes eligible for GC
+            self.touch()
 
     def delete_subtree(self, node_id: str) -> None:
         """Delete the subtree starting from `node_id`. All child nodes are deleted, recursively."""
@@ -559,6 +597,7 @@ class Forest:
                         logger.warning(f"Forest.delete_subtree: while deleting children of '{node_id}': one of its child nodes '{child_node_id}' does not exist. Ignoring error.")
                 self.nodes.pop(node_id)
             recursive_delete(node_id)
+            self.touch()
 
     def detach_subtree(self, node_id: str) -> str:
         """Detach the subtree starting from `node_id`, so that `node_id` becomes a new root node.
@@ -584,6 +623,7 @@ class Forest:
                 except ValueError:
                     logger.warning(f"Forest.detach_subtree: while detaching node '{node_id}' from its parent: this node was not listed in the children of its parent node '{parent_node_id}'. Ignoring error.")
         node["parent"] = None
+        self.touch()
         return node_id
 
     # TODO: do we need `reparent_children`, for symmetry with `reparent_subtree`?
@@ -608,6 +648,7 @@ class Forest:
                 else:
                     child_node["parent"] = None
             node["children"].clear()
+            self.touch()
         return node_id
 
     def reparent_subtree(self, node_id: str, new_parent_id: Optional[str]) -> str:  # Not sure if this operation is needed, ever.
@@ -629,6 +670,7 @@ class Forest:
             if new_parent_id is not None:
                 node["parent"] = new_parent_id
                 new_parent_node["children"].append(node_id)
+                self.touch()  # `detach_subtree` announced the detach; this announces the reattach
         return node_id
 
     def reparent_children(self, node_id: str, new_parent_id: Optional[str]) -> str:
@@ -659,6 +701,7 @@ class Forest:
                     else:
                         child_node["parent"] = new_parent_id
                         new_parent_node["children"].append(child_node_id)
+                self.touch()  # `detach_children` announced the detach; this announces the reattach
         return node_id
 
     def walk_up(self, node_id: str, callback: Optional[Callable] = None) -> str:
@@ -774,6 +817,7 @@ class Forest:
                 if parent_node_id is not None and parent_node_id not in self.nodes:  # dead link?
                     logger.warning(f"Forest.prune_dead_links: Node '{node_id}' links to nonexistent parent '{parent_node_id}'; removing the link.")
                     node["parent"] = None
+                    self.touch()
 
                 nonexistent_children, valid_children = partition(pred=lambda node_id: node_id in self.nodes,
                                                                  iterable=node["children"])
@@ -784,6 +828,7 @@ class Forest:
                     logger.warning(f"Forest.prune_dead_links: Node '{node_id}' links to one or more nonexistent children, {nonexistent_children}; removing the links.")
                     node["children"].clear()
                     node["children"].extend(valid_children)
+                    self.touch()
 
                 for child_node_id in node["children"]:  # walk the remaining (valid) ones
                     walk(child_node_id)
@@ -809,6 +854,7 @@ class Forest:
         """
         with self.lock:
             self.nodes.clear()
+            self.touch()
 
     # ------------------------------------------------------------------
     # Attachment sidecars
@@ -1251,6 +1297,7 @@ class PersistentForest(Forest):
                 self._upgrade(data)
                 self.nodes.clear()
                 self.nodes.update(data)
+                self.touch()
                 plural_s = "s" if len(data) != 1 else ""
                 logger.info(f"PersistentForest._load: PersistentForest loaded successfully ({len(data)} node{plural_s}).")
 
