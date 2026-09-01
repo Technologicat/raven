@@ -18,7 +18,7 @@ dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed
 
 from raven.common.gui import animation  # noqa: E402 -- after importorskip by design
 from raven.common.gui.xdotwidget.graph import (Graph, Node, Edge, Pen,  # noqa: E402 -- after importorskip by design
-                                               TextShape, EllipseShape, LineShape)
+                                               TextShape, EllipseShape, LineShape, PolygonShape)
 from raven.common.gui.xdotwidget.widget import XDotWidget  # noqa: E402 -- after importorskip by design
 
 # Drawlist children live in slot 2. Slot 1 holds none and reads as "the renderer drew nothing", which is a
@@ -253,3 +253,39 @@ def test_describe_element_is_public_because_a_status_bar_wants_it(widget):
     target = widget.get_graph().get_node_by_name("a")
     assert "user: hello" in XDotWidget.describe_element(target)
     assert XDotWidget.describe_element(None) is None
+
+def test_a_dashed_polygon_outline_is_actually_dashed(widget):
+    """Polygons ignored `pen.dash` for as long as this renderer existed.
+
+    Lines and beziers honoured it; polygons drew one solid closed polyline whatever the pen said. So a
+    caller asking for a dashed box got a solid one, silently — and GraphViz's own `style=dashed` on a node
+    came out solid too. Nothing failed; the picture was just wrong, which is the kind of defect only a
+    drawn-item count catches.
+    """
+    pen = Pen()
+    box = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)]
+    solid = PolygonShape(pen, box, filled=False)
+
+    dashed_pen = Pen()
+    dashed_pen.dash = (6.0, 4.0)
+    dashed = PolygonShape(dashed_pen, box, filled=False)
+
+    graph = Graph(width=100.0, height=50.0,
+                  nodes=[Node(x=50.0, y=25.0, w=100.0, h=50.0, shapes=[solid], internal_name="solid")])
+    widget.set_graph(graph)
+    widget.zoom_to_fit(animate=False)
+    widget._render()
+    solid_items = drawn(widget)
+
+    graph = Graph(width=100.0, height=50.0,
+                  nodes=[Node(x=50.0, y=25.0, w=100.0, h=50.0, shapes=[dashed], internal_name="dashed")])
+    widget.set_graph(graph)
+    widget.zoom_to_fit(animate=False)
+    widget._render()
+    dashed_items = drawn(widget)
+
+    # One polyline for the solid box; one per visible dash for the broken one. The comparison is against
+    # the solid case rather than against a number, so it says nothing about how many dashes the pattern
+    # happens to produce at this zoom -- only that the pen was read at all.
+    assert dashed_items > solid_items, \
+        f"a dashed outline drew {dashed_items} items and a solid one {solid_items}; the dash was ignored"

@@ -297,8 +297,16 @@ def _render_polygon_shape(drawlist: Union[int, str],
         # DPG's draw_polygon doesn't close automatically for stroke,
         # so we need to use draw_polyline with the first point appended
         closed_points = points + [points[0]]
-        dpg.draw_polyline(closed_points, color=stroke_color,
-                          thickness=thickness, parent=drawlist)
+        if pen.dash:
+            # Same treatment a `LineShape` gets. Polygons went without it for as long as this renderer has
+            # existed, so a dashed outline asked for by a caller -- or by GraphViz's `style=dashed` -- came
+            # out solid, silently and with nothing to notice but the picture.
+            scaled_dash = tuple(d * zoom for d in pen.dash)
+            for seg in _dashify_polyline(closed_points, scaled_dash):
+                dpg.draw_polyline(seg, color=stroke_color, thickness=thickness, parent=drawlist)
+        else:
+            dpg.draw_polyline(closed_points, color=stroke_color,
+                              thickness=thickness, parent=drawlist)
 
 
 def _render_line_shape(drawlist: Union[int, str],
