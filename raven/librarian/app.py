@@ -1537,7 +1537,8 @@ with timer() as tim:
                             # One rect, two occupants. Hide the outgoing one before showing the incoming
                             # one: they are siblings in the same group, so two shown at once would stack
                             # rather than overlap.
-                            if dpg.get_value("chat_graph_checkbox"):  # tag
+                            app_state["chat_graph_shown"] = dpg.get_value("chat_graph_checkbox")  # tag
+                            if app_state["chat_graph_shown"]:
                                 dpg.hide_item("avatar_panel")  # tag
                                 chat_graph_panel.show()
                             else:
@@ -1596,7 +1597,8 @@ with timer() as tim:
                         # This group governs the right-hand panel rather than the avatar specifically, which
                         # is the same widening a no-avatar mode makes: the panel is what a mode varies, and
                         # the avatar is one thing that can fill it.
-                        dpg.add_checkbox(label="Chat graph", default_value=False,
+                        dpg.add_checkbox(label="Chat graph",
+                                         default_value=app_state["chat_graph_shown"],
                                          callback=toggle_chat_graph, tag="chat_graph_checkbox")  # tag
                         dpg.add_tooltip("chat_graph_checkbox", tag="chat_graph_tooltip")  # tag
                         dpg.add_text("Show the chat tree in place of the avatar.\n\n"
@@ -2639,6 +2641,23 @@ def _build_initial_chat_view(sender, app_data) -> None:
         _refresh_backend_status_pill(startup_backend_status)
         _start_backend_status_poll(delay_first_probe=True)
 dpg.set_frame_callback(3, _build_initial_chat_view)
+
+def _apply_saved_panel_choice(sender, app_data) -> None:
+    """Put the chat graph back in the right-hand panel if that is where the user left it.
+
+    Frame 4, which is after the avatar has started (frame 2) and the chat view has been built (frame 3).
+    Later rather than at GUI build time for two reasons: the avatar renderer initializes into that panel
+    and should not have to do it while the panel is hidden, and the graph's first build wants a datastore
+    and a chat view that already exist.
+
+    Goes through the checkbox's own callback rather than repeating what it does. The pair of show/hide
+    calls has to stay in one place — two occupants of one rect, and getting the order wrong stacks them.
+    """
+    if _shutting_down:
+        return
+    if app_state["chat_graph_shown"]:
+        toggle_chat_graph()
+dpg.set_frame_callback(4, _apply_saved_panel_choice)
 
 logger.info("App render loop starting.")
 

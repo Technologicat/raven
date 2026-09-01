@@ -410,14 +410,22 @@ class TestGreetingRefresh:
 
 class TestSave:
     def test_save_then_load_roundtrips(self, tmp_path, llm_settings):
+        """Every flag, not a hand-written pair of them.
+
+        Naming two meant a flag added later was not covered here and looked as though it were — which is
+        how `chat_graph_shown` arrived with the defaults tested and the round trip not.
+        """
         _, state, _, state_path = _load(tmp_path, llm_settings)
-        state["internet_enabled"] = False
-        state["docs_enabled"] = False
+        flipped = {key: not default for key, default in appstate._DEFAULT_FLAGS.items()
+                   if isinstance(default, bool)}
+        assert len(flipped) == len(appstate._DEFAULT_FLAGS), \
+            "a flag is not a bool, so flipping it is not how to test it; extend this test rather than skip it"
+        state.update(flipped)
         appstate.save(state_path, state)
 
         stored = json.loads(state_path.read_text(encoding="utf-8"))
-        assert stored["internet_enabled"] is False
-        assert stored["docs_enabled"] is False
+        for key, value in flipped.items():
+            assert stored[key] is value, f"flag {key!r} did not survive the round trip"
         assert stored["HEAD"] == state["HEAD"]
 
     def test_save_missing_required_key_raises(self, tmp_path, llm_settings):
