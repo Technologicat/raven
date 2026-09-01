@@ -24,13 +24,14 @@ importer_cli.py    (~82)  — `raven-importer` entry point
 app_state.py       (~58)  — top-level app state containers
 ```
 
-**Under test as of 2026-09-01** — 289 tests over nine modules, which is every module the coverage plan
+**Under test as of 2026-09-01** — 307 tests over nine modules, which is every module the coverage plan
 covers:
 
 ```
+tests/test_importer.py        (55) — parsing and record recovery, cluster keywords, clustering,
+                                     progress, the background task, embeddings and summarization
 tests/test_selection.py       (39) — the four combine modes, undo/redo, scroll anchors, modifier keys
 tests/test_plotter.py         (38) — the cluster sort, and the plotter-space queries
-tests/test_importer.py        (37) — parsing and record recovery, cluster keywords, progress, the task
 tests/test_info_panel.py      (34) — hotkey decisions, the clipboard, cluster navigation, widget kinds
 tests/test_entry_renderer.py  (33) — grouping, the `max_n` budget, search highlighter compile and apply
 tests/test_importer_gui.py    (31) — the filename tables, the start/stop decision table, the dialogs
@@ -47,7 +48,10 @@ brought `test_plotter.py` and `test_word_cloud.py` in. What is left out:
 - **`test_info_panel.py`** — `info_panel` imports spaCy.
 - **`test_importer.py`** — deliberately: it carries the `ml` marker, and CI runs `-m "not ml"`. The
   importer *is* the ML pipeline, so this one is not a gap. (It would also need scikit-learn and
-  `mcpyrate`.)
+  `mcpyrate`.) One test in it additionally carries `llm` and needs `--run-llm` or `--backend-url`;
+  it builds the LLM connection itself rather than waiting for the module's import-time one, which is
+  only set up when the config asks for keywords or summaries — otherwise it would be a test that never
+  runs on a machine configured without them.
 
 Note torch *is* in CI — installed from PyTorch's own CPU wheel index by a separate line in the workflows.
 That is why it is absent from the requirements file: `--index-url` inside a requirements file is a

@@ -706,3 +706,293 @@ def run_keyword_extraction(monkeypatch, fake_turn, caplog):
 
     with caplog.at_level("WARNING"):
         return importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors)
+
+
+# ---------------------------------------------------------------------------
+# Clustering
+#
+# These need scikit-learn but no model and no server, so they are the cheap half of the `ml` group. The
+# vectors are synthetic and well separated on purpose: what is asserted is the shape of the answer and the
+# alignment between the answer and the data, not HDBSCAN's judgement, which is the library's business.
+
+
+def two_directions(n_per_cluster=40, dim=8, spread=0.05, seed=42):
+    """Two tight groups of unit vectors pointing along different axes, as one `[2 * n, dim]` array.
+
+    The high-dimensional pass compares by cosine, so what has to differ between the groups is *direction*.
+    An isotropic blob around the origin has none — it comes back as no clusters at all, and the step
+    raises rather than returning an empty answer. This is also the shape the step really sees: the
+    embedder's output lives on the unit hypersphere.
+    """
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    groups = []
+    for axis in np.eye(dim)[:2]:
+        vectors = axis + rng.normal(0.0, spread, size=(n_per_cluster, dim))
+        groups.append(vectors / np.linalg.norm(vectors, axis=1, keepdims=True))
+    return np.concatenate(groups, axis=0)
+
+
+def two_blobs(n_per_blob=40, dim=2, separation=10.0, seed=42):
+    """Two well-separated Gaussian blobs, as one `[2 * n_per_blob, dim]` array.
+
+    For the 2D pass, which compares by euclidean distance — unlike `two_directions` above.
+    """
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    first = rng.normal(0.0, 1.0, size=(n_per_blob, dim))
+    second = rng.normal(0.0, 1.0, size=(n_per_blob, dim)) + separation
+    return np.concatenate([first, second], axis=0)
+
+
+def test_the_highdim_pass_finds_the_clusters_that_are_there():
+    _, n_clusters = importer._cluster_highdim_semantic_vectors(two_directions())
+    assert n_clusters >= 2, "two groups pointing different ways should not come back as one cluster"
+
+
+def test_the_highdim_pass_returns_a_bounded_sample_per_cluster():
+    # What comes back is training data for the dimension reduction, so it is stratified rather than
+    # complete: up to `_MAX_REPRESENTATIVES_PER_CLUSTER` from each detected cluster. `max_n` does not
+    # bound it — that bounds how many vectors are *fitted*.
+    cap = importer._MAX_REPRESENTATIVES_PER_CLUSTER
+    n_per_cluster = 40  # a literal, deliberately: sizing the fixture from `cap` would grow it with the
+    assert cap < n_per_cluster, ("the cap now exceeds what this fixture supplies per cluster, so it "
+                                 "cannot bite and this test asserts nothing -- raise `n_per_cluster`")
+    all_vectors = two_directions(n_per_cluster=n_per_cluster)
+    unique_vs, n_clusters = importer._cluster_highdim_semantic_vectors(all_vectors, max_n=10000)
+
+    assert unique_vs.shape[1] == all_vectors.shape[1], "the vectors keep their dimensionality"
+    assert len(unique_vs) <= cap * n_clusters
+    # Every cluster holds more than the cap, so a run that returned everything is the thing to rule out.
+    assert len(unique_vs) < len(all_vectors)
+
+
+def test_the_highdim_pass_fits_on_a_sample_when_the_dataset_is_large(caplog):
+    # HDBSCAN runs out of memory somewhere around 50k vectors, so above `max_n` it sees a random subset.
+    # The representative points still come from that subset, so `max_n` bounds them too.
+    all_vectors = two_directions(n_per_cluster=100)
+    with caplog.at_level("INFO"):
+        unique_vs, _ = importer._cluster_highdim_semantic_vectors(all_vectors, max_n=120)
+    assert any("Dataset is large" in record.message for record in caplog.records), \
+        "the sampling branch was not taken, so this fixture says nothing about the cap"
+    assert len(unique_vs) <= 120
+
+
+def test_the_sample_a_large_dataset_is_fitted_on_holds_distinct_entries():
+    # The subset is drawn without replacement, so no entry is fitted twice. Drawing independently instead
+    # spends part of the sample on duplicates -- roughly a tenth of a 10k-of-50k draw -- and the duplicates
+    # reach the representative points, where they weight the dimension reduction's training set toward
+    # whichever entries happened to be drawn more than once.
+    #
+    # Observable from outside because the fixture has no repeated rows of its own: a duplicate row in the
+    # output can only have come from a repeated index.
+    import numpy as np
+    all_vectors = two_directions(n_per_cluster=100)
+    unique_vs, _ = importer._cluster_highdim_semantic_vectors(all_vectors, max_n=150)
+    assert len(np.unique(unique_vs, axis=0)) == len(unique_vs), "the same entry was picked more than once"
+
+
+def test_the_highdim_pass_refuses_a_dataset_it_cannot_cluster():
+    # Documented behaviour: with no clusters there is nothing to train the dimension reduction on, so the
+    # step stops rather than proceeding on an empty training set. A bibliography of a handful of entries
+    # is the realistic way to get here -- the clusterer's `min_cluster_size` is 5, so four entries cannot
+    # form one however they are arranged. (Scattering points at random does *not* get here: with
+    # `min_samples=1` and leaf selection, HDBSCAN finds structure in noise.)
+    with pytest.raises(RuntimeError):
+        importer._cluster_highdim_semantic_vectors(two_directions(n_per_cluster=2))
+
+
+def test_the_2d_pass_tags_each_entry_with_its_own_cluster():
+    # The tagging walks `vis_data` and `labels` by the same index, so an off-by-one here would mislabel
+    # every point in the dataset while looking perfectly healthy -- every entry still gets *a* cluster.
+    from unpythonic.env import env
+
+    lowdim = two_blobs(n_per_blob=40, dim=2)
+    entries = [env(title=f"paper {i}", abstract="") for i in range(len(lowdim))]
+    input_data = env(parsed_data_by_filename={"a.bib": entries})
+
+    vis_data, labels, n_vis_clusters, n_vis_outliers = importer._cluster_lowdim_data(input_data, lowdim)
+
+    assert vis_data == entries, "the concatenation should preserve order; the labels are indexed by it"
+    assert len(labels) == len(lowdim)
+    for entry, label in zip(vis_data, labels):
+        assert entry.cluster_id == label
+        assert 0.0 <= entry.cluster_probability <= 1.0
+    # The two blobs are far apart, so the tags must actually separate them -- otherwise every assertion
+    # above is satisfied by a run that put everything in one cluster.
+    assert len({int(label) for label in labels} - {-1}) >= 2
+    assert n_vis_clusters >= 2
+
+
+def test_the_2d_pass_counts_outliers_as_the_points_it_left_unclustered():
+    import numpy as np
+
+    lowdim = two_blobs(n_per_blob=40, dim=2)
+    entries_env = _entries_env(len(lowdim))
+    _, labels, _, n_vis_outliers = importer._cluster_lowdim_data(entries_env, lowdim)
+    assert n_vis_outliers == int(np.sum(labels == -1))
+
+
+def test_the_2d_pass_concatenates_across_input_files_in_order():
+    # A multi-file import is the normal case, and the 2D coordinates arrive as one array for the whole
+    # dataset -- so the concatenation order here is what aligns entries to their points.
+    from unpythonic.env import env
+
+    lowdim = two_blobs(n_per_blob=40, dim=2)
+    first = [env(title=f"first {i}", abstract="") for i in range(len(lowdim) // 2)]
+    second = [env(title=f"second {i}", abstract="") for i in range(len(lowdim) // 2)]
+    input_data = env(parsed_data_by_filename={"a.bib": first, "b.bib": second})
+
+    vis_data, _, _, _ = importer._cluster_lowdim_data(input_data, lowdim)
+    assert vis_data == first + second
+
+
+def _entries_env(n):
+    """An `input_data`-shaped namespace holding `n` blank entries in one file."""
+    from unpythonic.env import env
+    return env(parsed_data_by_filename={"a.bib": [env(title=f"paper {i}", abstract="") for i in range(n)]})
+
+
+# ---------------------------------------------------------------------------
+# The steps that need a model
+#
+# `mayberemote` with `allow_local=True` means these run whether or not raven-server is up: with a server
+# they go over HTTP, without one they load the model in-process. Either way they need `raven.client.api`
+# initialized first, and either way they are slow -- which is what the `ml` marker on this file is for.
+
+
+@pytest.fixture(scope="module")
+def initialized_api():
+    """Initialize the client API, as every app does during its bootup, before any `mayberemote` call."""
+    from raven.client import api
+    from raven.client import config as client_config
+    api.initialize(raven_server_url=client_config.raven_server_url,
+                   raven_api_key_file=client_config.raven_api_key_file)
+
+
+@pytest.fixture
+def two_entry_input_data(tmp_path):
+    """`_parse_input_files` output for two real entries, with its caches under `tmp_path`.
+
+    The caches matter: both steps below write one beside each input file, keyed on the file's mtime. A
+    fixture pointing at a repo path would leave those lying around and, worse, would let one test's cache
+    answer another test's question.
+    """
+    from unpythonic.env import env
+    path = tmp_path / "two_records.bib"
+    path.write_text(TWO_RECORDS, encoding="utf-8")
+    entries = [env(author="Alpha, Anna", bibtex_author="Alpha, Anna", year="2024",
+                   title="Laser ablation of titanium alloys",
+                   abstract="We study laser ablation thresholds for titanium alloys in Helsinki."),
+               env(author="Beta, Bob", bibtex_author="Beta, Bob", year="2024",
+                   title="A paper with no abstract at all",
+                   abstract=None)]
+    return env(parsed_data_by_filename={str(path): entries},
+               n_entries_total=len(entries),
+               resolved_filenames=[str(path)])
+
+
+def test_embedding_vectors_land_on_the_unit_hypersphere(initialized_api, two_entry_input_data):
+    # The module documents this as a property callers may rely on -- it is what makes cosine similarity
+    # the right comparison downstream, and what the high-dimensional clustering assumes.
+    import numpy as np
+    all_vectors = importer._get_highdim_semantic_vectors(two_entry_input_data)
+    assert all_vectors.shape[0] == 2
+    norms = np.linalg.norm(all_vectors, axis=1)
+    # The tolerance is fp16-sized on purpose: the configured embedding device may use half precision, and
+    # measured norms then sit a few times 1e-4 off unity. Tightening this to 1e-4 fails on a correct run.
+    assert np.allclose(norms, 1.0, atol=1e-3), f"vectors are not unit-length: {norms}"
+
+
+def test_a_second_embedding_pass_reads_the_cache_rather_than_the_model(initialized_api, two_entry_input_data, caplog):
+    # Caches are per input file so that adding a file to a dataset does not re-embed the ones already
+    # done. On a real corpus this is the difference between seconds and an hour.
+    first = importer._get_highdim_semantic_vectors(two_entry_input_data)
+    with caplog.at_level("INFO"):
+        second = importer._get_highdim_semantic_vectors(two_entry_input_data)
+
+    import numpy as np
+    assert np.allclose(first, second)
+    assert not any("Computing embeddings" in record.message for record in caplog.records), \
+        "the second pass recomputed the embeddings instead of reading its cache"
+
+
+def test_keyword_extraction_fills_in_the_three_fields_the_dataset_needs(initialized_api, two_entry_input_data):
+    all_keywords = importer._extract_keywords(two_entry_input_data)
+    entries = two_entry_input_data.parsed_data_by_filename[two_entry_input_data.resolved_filenames[0]]
+
+    assert isinstance(all_keywords, dict) and all_keywords, "the dataset-wide keyword counts should be populated"
+    for entry in entries:
+        assert isinstance(entry.keywords, dict)
+        assert isinstance(entry.entities, set)
+        assert isinstance(entry.vis_keywords, list)
+
+    # The entry with an abstract has more to say than the one without; without this the assertions above
+    # are satisfied by an extractor that returned empty containers for both.
+    with_abstract, without_abstract = entries
+    assert with_abstract.keywords, f"nothing was extracted from an abstract-bearing entry: {with_abstract.title}"
+    assert len(with_abstract.keywords) > len(without_abstract.keywords)
+
+
+def test_the_dataset_wide_keyword_counts_are_sorted_by_frequency(initialized_api, two_entry_input_data):
+    all_keywords = importer._extract_keywords(two_entry_input_data)
+    counts = list(all_keywords.values())
+    assert counts == sorted(counts, reverse=True)
+
+
+def test_the_visualized_keywords_per_entry_are_capped(initialized_api, two_entry_input_data):
+    # `vis_keywords` is what reaches the GUI, so its length is a display decision rather than an analysis
+    # one. Named entities are added on top of the cap, so the bound is on the frequency-ranked part.
+    max_vis_kw = 2
+    importer._extract_keywords(two_entry_input_data, max_vis_kw=max_vis_kw)
+    entries = two_entry_input_data.parsed_data_by_filename[two_entry_input_data.resolved_filenames[0]]
+    for entry in entries:
+        frequency_ranked = [kw for kw in entry.vis_keywords if kw not in entry.entities]
+        assert len(frequency_ranked) <= max_vis_kw, f"{entry.title}: {entry.vis_keywords}"
+
+
+# ---------------------------------------------------------------------------
+# Summarization, against a live LLM backend
+#
+# What a mock cannot say: whether a real model, given Raven's own prompt, produces something the importer
+# stores as a summary rather than tripping its failure sentinel. Shape only -- the model differs between
+# machines and over time, so asserting on wording would be a test of the model.
+
+
+@pytest.fixture
+def live_llm(request, monkeypatch):
+    """Give `importer` a real LLM connection, whatever its config said when it was imported.
+
+    `importer` sets `llm_settings` at *import* time, and only when the config asks for cluster keywords or
+    summaries -- so a test that waited for that would skip on any machine configured without them, which is
+    the common case and would make it a test that never runs. It is built here instead, exactly as the
+    module builds its own, and injected the way the fake-LLM tests inject theirs.
+    """
+    from raven.librarian import agent
+    from raven.librarian import config as librarian_config
+    from raven.librarian import llmclient
+
+    backend_url = request.config.getoption("--backend-url") or librarian_config.llm_backend_url
+    if not llmclient.test_connection(backend_url):
+        pytest.skip(f"no LLM backend answering at {backend_url}; pass --backend-url URL to name another")
+    settings = llmclient.setup(backend_url=backend_url)
+    if llmclient.backend_status(settings) is llmclient.backend_has_no_model:
+        pytest.skip(f"the LLM backend at {backend_url} has no model loaded")
+
+    monkeypatch.setattr(importer, "agent", agent, raising=False)
+    monkeypatch.setattr(importer, "llmclient", llmclient, raising=False)
+    monkeypatch.setattr(importer, "llm_settings", settings, raising=False)
+    return settings
+
+
+@pytest.mark.llm
+def test_an_abstract_is_summarized_and_a_missing_one_is_not(live_llm, two_entry_input_data, monkeypatch):
+    monkeypatch.setattr(visualizer_config, "summarize", True)
+    importer._summarize(two_entry_input_data)
+
+    with_abstract, without_abstract = two_entry_input_data.parsed_data_by_filename[two_entry_input_data.resolved_filenames[0]]
+    assert without_abstract.summary is None, "an entry with no abstract has nothing to summarize"
+    # `None` here too would mean the model answered with the failure sentinel, which is the outcome worth
+    # knowing about: the prompt no longer works on whatever model is loaded.
+    assert isinstance(with_abstract.summary, str) and with_abstract.summary.strip(), \
+        "the model returned no usable summary for an abstract; the prompt may no longer suit it"

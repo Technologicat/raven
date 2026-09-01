@@ -400,6 +400,8 @@ def _get_highdim_semantic_vectors(input_data):
     return all_vectors
 
 
+_MAX_REPRESENTATIVES_PER_CLUSTER = 20  # how many points per seed cluster train the dimension reduction
+
 def _cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
     """Cluster the semantic vectors in the high-dimensional space.
 
@@ -415,7 +417,10 @@ def _cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
     Return a tuple `(unique_vs, n_clusters)`, where:
 
         `unique_vs`: Rank-2 `np.array` of shape `[N, highdim]`, a sample of representative vectors,
-                     stratified across detected clusters. Here `N = min(len(all_vectors), max_n)`.
+                     stratified across detected clusters: up to `_MAX_REPRESENTATIVES_PER_CLUSTER`
+                     from each, so `N` is at most that times `n_clusters`. `max_n` does not bound it
+                     directly — it bounds how many vectors are *fitted*, and so how many clusters
+                     there can be to draw from.
 
         `n_clusters`: `int`, the number of detected clusters.
 
@@ -439,9 +444,13 @@ def _cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
             fit_idxs = np.arange(len(all_vectors), dtype=np.int64)
             fit_vectors = all_vectors
         else:  # Too many (HDBSCAN runs out of memory on 32GB for ~50k).
-            # Take a random set of 10k entries, and hope we hit all the important clusters.
+            # Take a random set of `max_n` entries, and hope we hit all the important clusters.
+            #
+            # Without replacement, so that the sample really is `max_n` distinct entries. Drawing
+            # independently instead would spend roughly a tenth of a 10k-of-50k sample on duplicates,
+            # which costs the clusterer that much of the coverage this branch exists to buy.
             logger.info(f"        Dataset is large ({len(all_vectors)} > {max_n}), picking {max_n} random entries for cluster detection.")
-            fit_idxs = np.random.randint(len(all_vectors), size=max_n)
+            fit_idxs = np.random.choice(len(all_vectors), size=max_n, replace=False)
             fit_vectors = all_vectors[fit_idxs]
 
         dyn.maybe_update_status(f"Detecting semantic clusters using {len(fit_vectors)} samples...")
@@ -457,7 +466,7 @@ def _cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
             # Instead of using the medoids, pick a few random representative points from each cluster. We just take the first up-to-k points for now.
             # TODO: This discards the medoids (`clusterer.medoids_`). Include them, too?
             points_by_cluster = [all_vectors[fit_idxs[clusterer.labels_ == label]] for label in range(n_clusters)]  # gather sublists by cluster, discard outliers (label -1)
-            samples_by_cluster = [points[:20, :] for points in points_by_cluster]
+            samples_by_cluster = [points[:_MAX_REPRESENTATIVES_PER_CLUSTER, :] for points in points_by_cluster]
             unique_vs = np.concatenate(samples_by_cluster)
             logger.info(f"        Picked a total of {len(unique_vs)} representative points from the detected seed clusters.")
         else:
