@@ -52,8 +52,8 @@ better proxy for how much a test has to stand up before it can assert anything.
 | `word_cloud.py` | 185 | 11 | **done 2026-09-01**, 28 tests — the two render guards, and the save dialog |
 | `selection.py` | 179 | 18 | **done 2026-09-01**, 36 tests — the selection algebra and the undo history |
 | `plotter.py` | 183 | 22 | **done 2026-09-01**, 26 tests — the cluster sort, and the plotter-space queries |
-| `annotation.py` | 298 | 79 | **next** |
-| `info_panel.py` | 1078 | 172 | after that, and the last one |
+| `annotation.py` | 298 | 79 | **done 2026-09-01**, 17 tests — the guards; the content build is not covered |
+| `info_panel.py` | 1078 | 172 | **done 2026-09-01**, 31 tests — the decisions; the geometry is not covered |
 | ~~`app.py`~~ | ~~1350~~ | ~~448~~ | **out of scope** (Juha, 2026-09-01) — see below |
 
 **`app.py` is not on the list, and that is settled rather than deferred.** It lays out the GUI, wires the

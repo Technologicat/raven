@@ -22,21 +22,31 @@ importer_cli.py    (~80)  — `raven-importer` entry point
 app_state.py       (~58)  — top-level app state containers
 ```
 
-**Thinly tested, and still the priority.** 70 tests over three of the eleven modules, as of 2026-09-01:
+**Under test as of 2026-09-01** — 177 tests over seven modules, which is every module the coverage plan
+covers:
 
 ```
-tests/test_selection.py       (36) — the four combine modes, undo/redo, scroll anchors, modifier keys
+tests/test_selection.py       (39) — the four combine modes, undo/redo, scroll anchors, modifier keys
+tests/test_info_panel.py      (31) — hotkey decisions, the clipboard, cluster navigation, widget kinds
+tests/test_word_cloud.py      (28) — the two render guards, keyword summing, cancellation, saving
 tests/test_entry_renderer.py  (27) — grouping, alphabetization, the `max_n` budget, search highlighters
-tests/test_importer.py         (7) — `_parse_input_files`, and cluster-keyword canonicalization
+tests/test_plotter.py         (26) — the cluster sort, and the plotter-space queries
+tests/test_annotation.py      (17) — the guards that decide whether a tooltip is shown at all
+tests/test_importer.py         (9) — `_parse_input_files`, and cluster-keyword canonicalization
 ```
 
-The plan for the rest, ordered by measured difficulty, is `briefs/visualizer-test-coverage-brief.md`.
+**What is deliberately *not* covered, and why**, since a coverage figure hides it: the two big content
+builds (`info_panel._update_info_panel`, `annotation._render_worker`) and everything that reads widget
+geometry back — scroll positions, "which item is at the top of the panel", the anchoring that survives a
+rebuild. Those need rendered frames, so they need a running app rather than a DPG context.
+`config.py` needs no tests (configuration-as-code, carrying local overrides), and `app.py` is out of
+scope: it lays out the GUI, wires events and animations, and boots up, so anything in there worth
+testing is a sign it belongs in another module. `briefs/visualizer-test-coverage-brief.md` is the plan
+and records both decisions.
 
-The original rationale was to catch regressions *during* the refactor; that refactor has since landed
-without them, so what remains is the other half — pinning down the API boundaries the split created,
-before feature work starts leaning on them. The extracted modules are the tractable targets, being
-smaller and having real seams; `app.py` was never the place to start. `importer.py` also serves as a
-standalone CLI app (`raven-importer`).
+The original rationale was to catch regressions *during* the refactor; that refactor landed without them,
+so what these pin is the module boundaries the split created, before feature work leans on them.
+`importer.py` also serves as a standalone CLI app (`raven-importer`).
 
 **What the existing test modules establish, so the next one need not rediscover it:**
 
