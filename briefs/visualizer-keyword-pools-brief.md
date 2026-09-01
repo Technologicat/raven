@@ -116,6 +116,39 @@ What the classical case does not transfer is the prior: there the terms are raw 
 usually a typo, where here they are model-written topic labels over clusters, so a singleton is usually
 a real specific topic — measured at 80–94%. Not immune; differently distributed.
 
+### Measured and rejected: cross-checking keywords against the frequency data
+
+An appealing idea, and worth recording precisely because it is appealing enough to be re-derived. The
+frequency method already runs, is per-*record* rather than per-cluster, is lemmatized, and already drops
+words occurring fewer than twice — so an LLM keyword whose content lemmas are absent from `all_keywords`
+would contain words never attested twice anywhere in the corpus. That is a record-level floor reached
+through the words, and it costs nothing, both passes already running.
+
+**It finds nothing, and is wrong when it fires.** Measured 2026-09-01: 2 of 272 distinct keywords on
+AOKK (0.7%) and 2 of 385 on ECCOMAS (0.5%), and all four are legitimate — `Academic Advising`,
+`Neurodivergence`, `Limit analysis`, `Magnetohydrodynamics`. They fail only because the corpus says
+*advisor*, *neurodivergent*, *MHD*: morphological and abbreviation variation, not invention.
+
+Three reasons it cannot work, of which the last is decisive:
+
+- **Almost everything is already grounded.** A corpus vocabulary runs to ~8900 lemmas, and a keyword
+  built from standard terminology lands in it.
+- **What it flags is morphology**, and precisely the cases where the model used the field's canonical
+  term rather than the corpus's inflection — the good behaviour, not the bad.
+- **It is blindest to the failure it was meant to catch.** ECCOMAS's prose fragments are built from
+  *abstract*, *summary*, *research*, *modeling*, all common in that corpus, so they pass as grounded.
+
+The consolation is the 99.5% figure itself: it is direct evidence the model is not inventing
+terminology, which is the risk grounding was proposed to detect. And the general lesson is that an LLM
+keyword is an *abstraction* over a cluster, so cheap lexical checkability is the thing traded away for
+labels worth reading (Juha, 2026-09-01).
+
+**Same shape as brief 09's retrieval work**, and worth noticing as a pattern rather than an anecdote:
+a run of obviously-good improvements, none of which survived measurement, with the one thing that
+helped being an unglamorous constant — there, `k=50`, worth +10.1 points of recall at a quarter the
+marginal cost of anything beyond it (`investigations/retrieval/README.md`). Here the same: the guards
+that survived are deterministic and dull, and the clever cross-check did not.
+
 ### Unify case deterministically before asking the model anything
 
 Most of what the canonicalization pass actually does is fix case — `AI safety` → `AI Safety`,
