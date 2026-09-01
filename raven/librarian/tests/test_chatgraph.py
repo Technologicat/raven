@@ -147,6 +147,78 @@ class TestSpine:
 
 
 # ---------------------------------------------------------------------------
+# Previewing another branch
+# ---------------------------------------------------------------------------
+
+class TestPreview:
+    """Browsing the multiverse must change nothing; only a deliberate second act does.
+
+    So the picture is drawn around a previewed node while HEAD stays put, and the two questions -- what is
+    on screen, and where you actually are -- are answered separately.
+    """
+
+    def _fork(self):
+        """A shared prefix, then two ways on.
+
+            system -> user -> taken -> taken_tip
+                           -> not_taken -> not_taken_tip
+        """
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        user = forest.create_node(payload("user", "which way"), parent_id=system)
+        taken = forest.create_node(payload("assistant", "this way"), parent_id=user)
+        taken_tip = forest.create_node(payload("user", "onwards"), parent_id=taken)
+        not_taken = forest.create_node(payload("assistant", "or that way"), parent_id=user)
+        not_taken_tip = forest.create_node(payload("user", "elsewhere"), parent_id=not_taken)
+        return forest, system, user, taken, taken_tip, not_taken, not_taken_tip
+
+    def test_the_previewed_branch_is_the_one_drawn(self):
+        forest, system, user, taken, taken_tip, not_taken, not_taken_tip = self._fork()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken_tip,
+                                                            focus_node_id=not_taken_tip))
+        assert not_taken_tip in built.refs, "the previewed branch was not drawn"
+        assert built.spine == tuple(forest.linearize_up(not_taken_tip))
+
+    def test_the_colour_still_says_where_head_is(self):
+        # The half that makes a preview readable: the shared prefix is coloured and the divergence is not,
+        # so the picture shows where you would be going against where you are.
+        forest, system, user, taken, taken_tip, not_taken, not_taken_tip = self._fork()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken_tip,
+                                                            focus_node_id=not_taken_tip))
+        assert built.refs[system].on_current_branch and built.refs[user].on_current_branch
+        assert not built.refs[not_taken].on_current_branch
+        assert not built.refs[not_taken_tip].on_current_branch
+
+    def test_previewing_leaves_the_head_pill_where_head_is(self):
+        forest, system, user, taken, taken_tip, not_taken, not_taken_tip = self._fork()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken_tip,
+                                                            focus_node_id=not_taken_tip))
+        assert "HEAD" not in built.refs[not_taken_tip].pills, \
+            "the previewed node is wearing the pointer it has not been given"
+        assert taken in built.refs, "the fixture cannot say where HEAD's pill went if that row is off-screen"
+        assert built.refs[taken].pills == ()
+
+    def test_no_focus_means_the_picture_is_heads(self):
+        # The control: without it, a build that ignored `focus_node_id` entirely would satisfy nothing
+        # above, but a build that ignored `head_node_id` would satisfy all of it.
+        forest, system, user, taken, taken_tip, not_taken, not_taken_tip = self._fork()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken_tip))
+        assert built.spine == tuple(forest.linearize_up(taken_tip))
+        assert built.refs[taken_tip].pills == ("HEAD",)
+        assert built.refs[taken].on_current_branch
+
+    def test_a_deleted_head_does_not_take_the_picture_with_it(self):
+        # HEAD can vanish under a running view -- a cleanup, a deleted subtree. The colour is then unknown,
+        # which is worth strictly less than the picture.
+        forest, system, user, taken, taken_tip, not_taken, not_taken_tip = self._fork()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id="no-such-node",
+                                                            focus_node_id=not_taken_tip))
+        assert not_taken_tip in built.refs
+        assert not any(ref.on_current_branch for ref in built.refs.values()
+                       if isinstance(ref, chatgraph.ChatNodeRef))
+
+
+# ---------------------------------------------------------------------------
 # Pointer pills
 # ---------------------------------------------------------------------------
 

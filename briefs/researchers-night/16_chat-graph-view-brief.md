@@ -537,6 +537,27 @@ That follows from where the contention actually is: *the two compete for screen 
 available.* With no avatar there is nothing to trade against, so there is nothing to toggle, and the
 question of what the panel shows by default answers itself.
 
+**So the panel has a preference and a current occupant, and they are not the same thing** (Juha,
+2026-09-01). Three rules, in order:
+
+- **The toolbar button toggles, and is a toggle.** It is labelled and tooltipped as *toggle*, not *open* —
+  the placeholder said "Open graph view" — and it is **enabled only when an avatar is available**, since
+  with nothing to trade screen space against there is nothing to toggle.
+- **When the avatar's video auto-offs, the graph takes the panel** rather than the panel showing
+  *"[Video is off]"*. A dead placeholder is the one thing that rect is certainly not worth.
+- **When the video comes back, so does the avatar — if that is what the user asked for.** Hence the
+  preference: the automatic switch is a loan of the rect, not a change of mind, and the button is what
+  states the mind.
+
+**The loop to avoid, which this arrangement invites.** Showing the graph covers the avatar; covering the
+avatar pauses it; a paused avatar is "video off"; and "video off" is the condition that shows the graph. Read
+naively, the avatar never comes back.
+
+The cut is that **the auto-switch keys on the idle detector, not on whether the video is running.** Going
+idle shows the graph; `avatar_controller.ping` — activity — hands the rect back. The visibility-driven pause
+is downstream of the switch and must never be an input to it. Two signals that look like one, and the whole
+mechanism turns on keeping them apart.
+
 Two consequences for the panel commit, both cheap now and awkward later:
 
 - **The pause gate is conditional on there being something to pause.** `avatar_renderer` may be absent, so

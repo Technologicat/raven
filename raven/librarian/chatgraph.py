@@ -80,7 +80,10 @@ class ChatNodeRef(Ref):
     `node_id`: Its ID in the datastore. This is also the graph node's name, so `XDotWidget.pan_to_node`
                takes a chat node ID directly.
     `role`: "system", "user", "assistant" or "tool".
-    `on_spine`: Whether it lies on the branch leading to HEAD — which is what the fill colour encodes.
+    `on_current_branch`: Whether it lies on the branch HEAD is on — which is what the fill colour encodes.
+                         Not the same as being on the drawn spine: previewing another branch draws that
+                         one, and the shared prefix stays coloured while the divergence does not, which is
+                         the picture of *where you would be going against where you are*.
     `tool_call_count`: How many tool calls this message made, for the badge. Zero for everything that made
                        none, which is nearly every node.
     `pills`: The pointer labels resting on it, e.g. `("SYS", "NEW")`. A tuple rather than one value because
@@ -88,12 +91,12 @@ class ChatNodeRef(Ref):
              starts at the system prompt node, so SYS and NEW coincide there.
     """
 
-    def __init__(self, name: str, node_id: str, role: str, on_spine: bool,
+    def __init__(self, name: str, node_id: str, role: str, on_current_branch: bool,
                  tool_call_count: int, pills: Tuple[str, ...]):
         super().__init__(name)
         self.node_id = node_id
         self.role = role
-        self.on_spine = on_spine
+        self.on_current_branch = on_current_branch
         self.tool_call_count = tool_call_count
         self.pills = pills
 
@@ -182,8 +185,12 @@ class RootGapRef(Ref):
 class ViewState:
     """What the user is currently looking at. Owned by the panel; read here.
 
-    `head_node_id`: The tip of the current branch — `app_state["HEAD"]`. The spine runs from its root down
-                    to here.
+    `head_node_id`: The tip of the current branch — `app_state["HEAD"]`. Where the user actually is, which
+                    is what the fill colour and the HEAD pill report.
+    `focus_node_id`: The node the picture is drawn around, defaulting to `head_node_id`. These come apart
+                     while previewing: clicking a node on another branch re-lays the graph out around it
+                     and refreshes the siblings near it, without moving HEAD. Browsing the multiverse
+                     changes nothing; only a deliberate second act does.
     `new_chat_node_id`: Where a new chat starts — `app_state["new_chat_HEAD"]`. Taken as a parameter rather
                         than derived, because *what* it points at is changing: it is the AI's greeting
                         today, and the root itself for a chat started with the greeting turned off. One
@@ -196,6 +203,7 @@ class ViewState:
     """
 
     head_node_id: str
+    focus_node_id: Optional[str] = None
     new_chat_node_id: Optional[str] = None
     expanded_tool_turns: Set[str] = dataclasses.field(default_factory=set)
     sibling_focus: Dict[str, str] = dataclasses.field(default_factory=dict)
@@ -555,7 +563,7 @@ def _edge_between(src: xdotgraph.Node, dst: xdotgraph.Node, config: LayoutConfig
 def build(datastore: chattree.Forest,
           state: ViewState,
           config: Optional[LayoutConfig] = None) -> ChatGraph:
-    """Build the picture of the chat forest around `state.head_node_id`.
+    """Build the picture of the chat forest around `state.focus_node_id`, or HEAD if none is given.
 
     `datastore`: The chat forest. Read under its own lock, and not modified.
     `state`: What the user is looking at. See `ViewState`.
@@ -564,20 +572,30 @@ def build(datastore: chattree.Forest,
     Returns a `ChatGraph`: the `Graph` to hand to `XDotWidget.set_graph`, plus the table saying what each
     of its nodes stands for.
 
-    Raises `KeyError` if `state.head_node_id` is not in the datastore.
+    Raises `KeyError` if the node the picture is drawn around is not in the datastore.
     """
     config = config or LayoutConfig()
 
     with datastore.lock:
-        full_spine = datastore.linearize_up(state.head_node_id)
+        focus_node_id = state.focus_node_id or state.head_node_id
+        full_spine = datastore.linearize_up(focus_node_id)
         visible_spine = _collapse_tool_rounds(datastore, full_spine, state.expanded_tool_turns)
+
+        # Two different questions, and conflating them is what would make a preview look like a move.
+        # `drawn_spine` is the branch on screen and decides the layout; `current_branch` is where HEAD
+        # actually is and decides the colour. They agree until somebody previews another branch, and then
+        # the shared prefix stays green while the divergence does not.
+        try:
+            current_branch = set(datastore.linearize_up(state.head_node_id))
+        except KeyError:  # HEAD is gone, mid-cleanup or mid-delete; the picture is still worth drawing
+            current_branch = set()
 
         visible_spine, elided_ancestors, depth_gap_row = _depth_window(
             visible_spine, state.new_chat_node_id, config.max_visible_depth)
 
-        on_spine = set(visible_spine)
-        rows = _rows_for(datastore, state, config, visible_spine)
-        subtree_counts = _subtree_counts_for(datastore, rows, on_spine)
+        drawn_spine = set(visible_spine)
+        rows = _rows_for(datastore, state, config, visible_spine, focus_node_id)
+        subtree_counts = _subtree_counts_for(datastore, rows, drawn_spine)
 
         # ------------------------------------------------------------------
         # Vertical placement. A row that has subtree gaps hanging off it, and the root row when ancestors
@@ -639,12 +657,12 @@ def build(datastore: chattree.Forest,
                     name = slot.node_id
                     ref = ChatNodeRef(name, node_id=slot.node_id,
                                       role=_role_of(datastore, slot.node_id),
-                                      on_spine=(slot.node_id in on_spine),
+                                      on_current_branch=(slot.node_id in current_branch),
                                       tool_call_count=_tool_call_count(datastore, slot.node_id),
                                       pills=_pills_for(slot.node_id, state, is_root=(row_index == 0)))
                     shapes = _box_shapes(x, y, width, config,
                                          _label_of(datastore, slot.node_id, config.label_chars),
-                                         fill=(SPINE_FILL_COLOR if slot.node_id in on_spine
+                                         fill=(SPINE_FILL_COLOR if slot.node_id in current_branch
                                                else OFF_SPINE_FILL_COLOR),
                                          dashed=False, pills=ref.pills)
 
@@ -744,7 +762,8 @@ def _content_bbox(nodes: Sequence[xdotgraph.Node]) -> Tuple[float, float, float,
 def _rows_for(datastore: chattree.Forest,
               state: ViewState,
               config: LayoutConfig,
-              visible_spine: Sequence[str]) -> List[_Row]:
+              visible_spine: Sequence[str],
+              focus_node_id: str) -> List[_Row]:
     """Choose what each level of the picture holds: one row per spine node, plus HEAD's children.
 
     The caller holds the datastore lock.
@@ -777,15 +796,16 @@ def _rows_for(datastore: chattree.Forest,
                         each_side=config.siblings_each_side)
         rows.append(_Row(slots, _index_of_slot(slots, node_id), parent_node_id=parent_id))
 
-    # HEAD's own children, so that the branch does not appear to end at HEAD when it does not.
-    head_children = datastore.get_children(state.head_node_id)
-    if head_children:
-        focus_id = state.sibling_focus.get(state.head_node_id, head_children[0])
-        focus_index = head_children.index(focus_id) if focus_id in head_children else 0
-        slots = _window(head_children, focus_index, must_include=set(),
+    # The children of the node at the bottom of the spine, so that the branch does not appear to end
+    # there when it does not.
+    children = datastore.get_children(focus_node_id)
+    if children:
+        chosen = state.sibling_focus.get(focus_node_id, children[0])
+        chosen_index = children.index(chosen) if chosen in children else 0
+        slots = _window(children, chosen_index, must_include=set(),
                         each_side=config.siblings_each_side)
-        rows.append(_Row(slots, _index_of_slot(slots, head_children[focus_index]),
-                         parent_node_id=state.head_node_id))
+        rows.append(_Row(slots, _index_of_slot(slots, children[chosen_index]),
+                         parent_node_id=focus_node_id))
     return rows
 
 
@@ -844,8 +864,11 @@ def _index_of_slot(slots: Sequence[_Slot], node_id: str) -> int:
 
 def _subtree_counts_for(datastore: chattree.Forest,
                         rows: Sequence[_Row],
-                        on_spine: Set[str]) -> List[Dict[str, int]]:
+                        drawn_spine: Set[str]) -> List[Dict[str, int]]:
     """Return, per row, how many children each of its off-spine nodes has — omitting the childless ones.
+
+    Off the *drawn* spine, not off HEAD's branch: a node whose children are already the row below needs no
+    gap announcing that it has some.
 
     The caller holds the datastore lock.
     """
@@ -853,7 +876,7 @@ def _subtree_counts_for(datastore: chattree.Forest,
     for row in rows:
         row_counts: Dict[str, int] = {}
         for slot in row.slots:
-            if slot.is_gap or slot.node_id in on_spine:
+            if slot.is_gap or slot.node_id in drawn_spine:
                 continue
             child_count = len(datastore.get_children(slot.node_id))
             if child_count:
