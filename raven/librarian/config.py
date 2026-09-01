@@ -569,6 +569,21 @@ gui_config = env(  # ----------------------------------------
                  chat_color_tool_front=colorspace.hex_to_rgb("#d59231ff"),
                  chat_color_tool_back=(45, 45, 48),
                  # ----------------------------------------
+                 # Chat graph view
+                 #
+                 # How much of the tree the graph view draws around the current branch. Everything it leaves
+                 # out is still shown, as a clickable "...N more" gap, so raising these trades screen space
+                 # for fewer clicks rather than trading honesty for detail.
+                 #
+                 # Neither is speed-bound in any range worth using: a rebuild costs about a millisecond at
+                 # the defaults and a fifth of a 60 fps frame at four times them, on a twenty-thousand-node
+                 # forest, because the cost follows the number of boxes drawn rather than the size of the
+                 # tree. What limits them is how much a reader can take in at once. The picture is allowed
+                 # to overflow the panel — the view pans, and a graph running off the edge reads more like
+                 # the shape the tree has than one trimmed to a rectangle.
+                 chat_graph_siblings_each_side=5,  # siblings shown either side of the focused one, at each level
+                 chat_graph_max_visible_depth=12,  # boxes down the current branch, the root included
+                 # ----------------------------------------
                  # Avatar TTS speech subtitling / closed-captioning
                  #
                  # These settings are used when the "Subtitles" GUI toggle is enabled.

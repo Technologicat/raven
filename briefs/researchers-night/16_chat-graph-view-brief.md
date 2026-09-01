@@ -485,18 +485,52 @@ they are re-examined rather than inherited.
   the expectation is a step, and this jumps to the middle. It is worth trying anyway because it reaches
   anywhere in a fan in O(log n) clicks where a step takes O(n) (Juha, 2026-09-01: "not what people expect,
   but might be what they actually *want*").
-- **How much to show, and therefore whether the layout wants a real tidy-tree algorithm.** Two separate
-  limits, and only one of them is what the sibling window was sized against:
+- **Whether the layout wants a real tidy-tree algorithm.** Neither of the two limits that were expected to
+  decide this actually does, so it comes down to how the picture reads:
   - *Screen space is not the binding one.* **The picture may spill past the panel's edges** rather than
     being sized to fit inside it — the view pans, and a graph running off the edge reads more like the
-    shape the tree actually has than a graph trimmed to a rectangle does (Juha, 2026-09-01). So
-    `siblings_each_side` and `max_visible_depth` can be generous.
-  - *Graph-building speed is the one that decides it*, and it has not been measured. The whole `Graph` is
-    rebuilt on every change, so the visible set is bounded by what that costs per rebuild, not by what
-    fits. Measure before widening the defaults.
+    shape the tree actually has than a graph trimmed to a rectangle does (Juha, 2026-09-01).
+  - *Neither is rebuild speed*, which was the other candidate and has now been measured —
+    `investigations/chatgraph-rebuild-cost/`. Cost tracks the number of boxes drawn, not the size of the
+    forest: about 1 ms at `siblings_each_side = 5`, and a fifth of a frame at 20, on a twenty-thousand-node
+    forest. `siblings_each_side` was raised from 2 to 5 on the strength of that. The measurement also
+    settles decision 7's loose end — `get_all_root_nodes` is 0.37 ms at that size, once per rebuild, so it
+    needs no index for this view's sake.
+  - So the ceiling is **legibility**, which only looking can set.
 - **Pointer pills are outlined rather than filled**, reasoned from the renderer's dark-mode contrast rule
   picking a text colour from the element's fill. That reasoning is from reading the renderer, not from
   seeing it drawn.
+
+### Found by measuring: the depth window can hide the level the sibling window is for
+
+Turned up on 2026-09-01 while timing rebuilds, and not asked by anything above. **With HEAD deep in a long
+chat, the depth window elides the session level entirely.** A chat twenty messages deep gives a spine of
+twenty-three; keeping the root and the last eleven drops everything between, and the wide level — the
+children of `new_chat_HEAD` — is in that gap.
+
+So the level this brief says doubles as the recent-chats list disappears exactly when the conversation is
+long enough for the user to want out of it. The root is pinned against the depth window already, for
+reasons that apply here just as well: it is what says where you are rather than what was said.
+
+**Open**: whether the session level is pinned too. It is a small change to the depth window — keep the root,
+keep the session level, spend the rest of the budget near HEAD — and it changes what the picture shows, so
+it is not one to make in passing.
+
+### Road mode makes the avatar optional, so the panel cannot assume one
+
+Noted 2026-09-01 (Juha). The on-the-road mode is coming, and in it the avatar is **not constructed at all** —
+that is where its VRAM and battery saving come from, and `TODO_DEFERRED.md`'s item is explicit that a mode
+which merely hides the avatar panel saves nothing that matters.
+
+Two consequences for the panel commit, both cheap now and awkward later:
+
+- **The pause gate is conditional on there being something to pause.** `avatar_renderer` may be absent, so
+  the visibility term is "pause it if it exists", not "pause it".
+- **The rect is not the avatar's to own.** Placement is decided as two child windows sharing one rect
+  (`TODO.md:661`), and in road mode one of the two occupants never exists — so whatever computes that
+  rect has to run without an avatar panel. Today `_get_avatar_panel_size` is what computes it, which is
+  the name to watch: the geometry is the *right-hand panel's*, and the avatar is one thing that can fill
+  it.
 
 ### Sequencing
 

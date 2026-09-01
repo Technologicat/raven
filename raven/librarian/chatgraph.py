@@ -43,6 +43,7 @@ from ..common.gui.xdotwidget import graph as xdotgraph
 
 from . import chattree
 from . import chatutil
+from . import config as librarian_config
 
 # Authored for a light background and inverted by the renderer, which is the path a parsed graph takes too
 # -- so the two cannot drift apart, and there is one place to look when a colour is wrong.
@@ -228,8 +229,11 @@ class LayoutConfig:
     arrowhead_halfwidth: float = 4.5
     margin: float = 20.0
     label_chars: int = 40
-    siblings_each_side: int = 2
-    max_visible_depth: int = 12
+    # These two are the ones a user has a reason to change, so they live in `config` and are picked up from
+    # there; the rest of this class is drawing detail. Neither is speed-bound in any range worth using --
+    # see `investigations/chatgraph-rebuild-cost/`, and the comment beside them in the config.
+    siblings_each_side: int = librarian_config.gui_config.chat_graph_siblings_each_side
+    max_visible_depth: int = librarian_config.gui_config.chat_graph_max_visible_depth
 
 
 # --------------------------------------------------------------------------------

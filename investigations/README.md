@@ -41,6 +41,8 @@ that stops the link decaying again, and it is worth keeping up even when the con
 | `bibliography-dedup/` | What each of `raven-deduplicate`'s rules actually did to a given `.bib`, listed and grouped rather than totalled. The instrument that found both of its false merges, neither of which a cluster count could show — so it is re-run whenever a rule changes, not once. Also where `config.doi_title_floor` comes from, and why the guard it serves takes two conditions and not one |
 | `highdim-clustering/` | Whether the Visualizer's clusters should be found in the embedding space rather than in the 2D map — yes, measurably, and that part is settled on two corpora in unrelated domains. Which algorithm, was decided by coverage rather than by any quality metric: HDBSCAN either labels a fifth of a corpus or silently collapses to two clusters (three representative corpora of four), so agglomerative average-linkage cut at a fixed resolution ships. Mostly a lesson about the yardstick — every interesting difference here was an artifact of coverage, cluster count, sliver clusters, or `float16` caches until a control removed it. Also kills two items of brief 11 on the data: PCA preprocessing hurts separation, and unconditional outlier assignment undoes the whole gain |
 
+| `chatgraph-rebuild-cost/` | What one rebuild of the chat graph view costs, and what it scales with — the number of boxes drawn rather than the size of the forest, so the sibling window is bounded by legibility rather than by time. Also the reason the depth window can hide the very level the sibling window exists for |
+
 ## Shared instruments are pointed at, not copied
 
 Some probes serve several investigations, or belong to a brief rather than to a study. Those stay where they
