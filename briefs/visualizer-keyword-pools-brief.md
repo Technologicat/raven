@@ -80,10 +80,53 @@ The importer's ordering already satisfies this, canonicalization being the last 
 does and the ranking happening at load; it is recorded because nothing in the code says why the order
 matters.
 
-*The measurements in this brief were taken before canonicalization existed, so every distinctiveness
-figure here is an upper bound.* What the classical case does not transfer is the prior: there the terms
-are raw tokens and a hapax is usually a typo, where here they are model-written topic labels over
-clusters, so a singleton is more often a real specific topic. Not immune — differently distributed.
+**Both halves of that were then measured, 2026-09-01, and the tail holds up.**
+
+*How much of it is spelling variants:* almost none. Running the shipped canonicalization over the five
+labelled corpora merges 6–45 keywords, of which only **0–12 were singletons** — arXiv 2, AOKK 0,
+hydrogen 3, banichuk 1, ECCOMAS 12. The singleton fraction barely moves. The reason is structural:
+variants are overwhelmingly of *common* terms, because a keyword must be used across many clusters
+before anyone spells it two ways. So the ordering constraint above is correct and was never silently
+corrupting the ranking, and the distinctiveness figures were inflated by at most ~6%, and by 0–1% on
+three corpora of five.
+
+*How much of it is noise:* 6–20%, the rest being real topics. Asking the model to classify each
+singleton against the full vocabulary (`judge_singletons.py`):
+
+| corpus | topic | generic | duplicate | artifact |
+|---|---|---|---|---|
+| AOKK | **94%** | 4% | 2% | 0% |
+| ECCOMAS | 89% | 4% | 6% | 2% |
+| banichuk | 87% | 12% | 2% | 0% |
+| hydrogen | 83% | 14% | 2% | 1% |
+| arXiv | 80% | 13% | 7% | 0% |
+
+**That judge has a ground-truth check, which is what makes it worth reading at all.** ECCOMAS's five
+artifacts are exactly the fragments of the one malformed prose reply found independently earlier the
+same day — *"Based on the five abstracts provided"*, *"and ocular biomechanics."* — and the judge
+returned zero artifacts on the three corpora separately verified to have none. It also produced visible
+false positives: hydrogen's *Surface production* and *Volume production* are plasma-physics terms for
+how negative ions are made, not noise. So: useful for a rough split, not a number to build on.
+
+**The residual risk is `generic`, not `artifact`.** A vague term occurring in exactly one cluster scores
+maximum rarity and leads the display — which is the failure the ranking exists to prevent, arriving by
+the back door. At 4–14% it is small, and it is the part worth watching if the tail ever looks wrong.
+
+What the classical case does not transfer is the prior: there the terms are raw tokens and a hapax is
+usually a typo, where here they are model-written topic labels over clusters, so a singleton is usually
+a real specific topic — measured at 80–94%. Not immune; differently distributed.
+
+### Unify case deterministically before asking the model anything
+
+Most of what the canonicalization pass actually does is fix case — `AI safety` → `AI Safety`,
+`Chain-of-thought` → `Chain-of-Thought`. A rule does that more reliably than a model and costs nothing,
+which leaves the model only the acronym and synonym decisions that need judgement (Juha, 2026-09-01).
+`judge_singletons.unify_case` is the shape: group by casefold, keep the most frequent surface form, ties
+to the one that sorts first so the result does not depend on iteration order. Worth moving into
+`importer._canonicalize_cluster_keywords` as a pre-step.
+
+Apply the same normalization to whatever the model returns, so a verdict on `Water Splitting` is not
+dropped because the vocabulary spells it `Water splitting`.
 
 **Ties matter and break sensibly.** Most keywords appear in exactly one cluster and so share the top IDF;
 breaking those ties by the model's own order means its relevance judgement decides among equally

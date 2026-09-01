@@ -1,0 +1,59 @@
+/home/jje/Documents/koodit/raven/.venv/lib/python3.12/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.12.3)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+=== arxiv_agglomerative_centered_k100.txt (61 clusters) ===
+  20 replacements applied, of which 2 merged a keyword that had occurred in exactly one cluster
+                           before    after
+  distinct keywords           271      269
+  singletons                  237      235
+  common pool                   1        1
+  burn median                   1        1
+  burn p90                      1        1
+  singleton fraction         87%      87%
+  sample merges: 'AI alignment' -> 'AI Alignment'; 'AI safety' -> 'AI Safety'; 'Catastrophic forgetting' -> 'Catastrophic Forgetting'; 'Chain-of-thought' -> 'Chain-of-Thought'; 'Few-shot learning' -> 'Few-Shot Learning'; 'Fine-Tuning' -> 'Fine-tuning'
+
+=== aokk_agglomerative_centered_k100.txt (83 clusters) ===
+  18 replacements applied, of which 0 merged a keyword that had occurred in exactly one cluster
+                           before    after
+  distinct keywords           254      253
+  singletons                  208      208
+  common pool                  11       10
+  burn median                   2        2
+  burn p90                      4        4
+  singleton fraction         82%      82%
+  sample merges: 'AI in Education' -> 'Artificial Intelligence in Education'; 'AI in education' -> 'Artificial Intelligence in Education'; 'AI-assisted Learning' -> 'AI-Assisted Learning'; 'AI-assisted learning' -> 'AI-Assisted Learning'; 'Active learning' -> 'Active Learning'; 'Artificial intelligence' -> 'Artificial Intelligence'
+
+=== kw_eccomas_k100.txt (84 clusters) ===
+  45 replacements applied, of which 12 merged a keyword that had occurred in exactly one cluster
+                           before    after
+  distinct keywords           347      331
+  singletons                  284      268
+  common pool                   3        4
+  burn median                   1        1
+  burn p90                      1        2
+  singleton fraction         82%      81%
+  sample merges: 'Bayesian Inference' -> 'Bayesian inference'; 'Computational Efficiency' -> 'Computational efficiency'; 'Computational Fluid Dynamics' -> 'Computational fluid dynamics'; 'Computational Mechanics' -> 'Computational mechanics'; 'Constitutive Modeling' -> 'Constitutive modeling'; 'Discontinuous Galerkin Methods' -> 'Discontinuous Galerkin methods'
+
+=== kw_hydrogen13_k100.txt (82 clusters) ===
+  20 replacements applied, of which 3 merged a keyword that had occurred in exactly one cluster
+                           before    after
+  distinct keywords           312      309
+  singletons                  257      252
+  common pool                   2        2
+  burn median                   1        1
+  burn p90                      1        1
+  singleton fraction         82%      82%
+  sample merges: 'CO2 capture' -> 'Carbon dioxide capture'; 'Carbon Dioxide Capture' -> 'Carbon dioxide capture'; 'Cu-Cl cycle' -> 'Copper-chlorine cycle'; 'Hydrogen Evolution Reaction' -> 'Hydrogen evolution reaction'; 'Hydrogen Production' -> 'Hydrogen production'; 'Hydrogen Purification' -> 'Hydrogen purification'
+
+=== kw_banichuk_k100.txt (28 clusters) ===
+  6 replacements applied, of which 1 merged a keyword that had occurred in exactly one cluster
+                           before    after
+  distinct keywords           142      141
+  singletons                  128      126
+  common pool                   4        4
+  burn median                   0        0
+  burn p90                      1        1
+  singleton fraction         90%      89%
+  sample merges: 'Finite element methods' -> 'Finite Element Method'; 'Numerical methods' -> 'Numerical Methods'; 'axially moving webs' -> 'Axially moving webs'; 'dynamic stability' -> 'Dynamic stability'; 'sampling methods' -> 'Sampling Methods'; 'vibrations' -> 'Vibrations'
+

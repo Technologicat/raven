@@ -1,0 +1,47 @@
+=== arxiv_agglomerative_centered_k100.txt (61 clusters) ===
+  vocabulary 271 after case unification; 237 occur in one cluster; 237 judged
+    topic       190    80%   a specific research topic, worth showing as a label
+    generic      30    13%   too vague to tell one cluster from another
+    duplicate    17     7%   means the same as another keyword in the list
+    artifact      0     0%   not a topic at all - a fragment, an instruction, or noise
+  sample duplicate: ['Chain-of-thought reasoning', 'Human Alignment', 'LLM Alignment', 'Misalignment', 'Model Alignment']
+  sample generic: ['Agent', 'Alignment', 'Behavioral Control', 'Benchmarking', 'Computational Efficiency']
+
+=== aokk_agglomerative_centered_k100.txt (83 clusters) ===
+  vocabulary 254 after case unification; 208 occur in one cluster; 208 judged
+    topic       195    94%   a specific research topic, worth showing as a label
+    generic       9     4%   too vague to tell one cluster from another
+    duplicate     4     2%   means the same as another keyword in the list
+    artifact      0     0%   not a topic at all - a fragment, an instruction, or noise
+  sample duplicate: ['AI assistants', 'AI-generated feedback', 'Education Technology', 'Trust and Reliance']
+  sample generic: ['Decision-Making', 'Educational Interventions', 'Educational Platforms', 'Educational Transformation', 'Ethical Considerations']
+
+=== kw_eccomas_k100.txt (84 clusters) ===
+  vocabulary 347 after case unification; 284 occur in one cluster; 284 judged
+    topic       253    89%   a specific research topic, worth showing as a label
+    generic      10     4%   too vague to tell one cluster from another
+    duplicate    16     6%   means the same as another keyword in the list
+    artifact      5     2%   not a topic at all - a fragment, an instruction, or noise
+  sample artifact: ['Based on the five abstracts provided', 'and ocular biomechanics.', 'and simulation techniques to address complex clinical problems', 'here is a structured summary of the research. These studies collectively highlight the application of computational modeling', 'ranging from perioperative prediction to radiotherapy planning']
+  sample duplicate: ['Finite Element Modeling', 'Immersed boundary methods', 'Inverse analysis', 'Level set method', 'Level-Set Functions']
+  sample generic: ['Algorithm Development', 'Classification', 'Computational methods', 'Industrial Applications', 'Mechanical properties']
+
+=== kw_hydrogen13_k100.txt (82 clusters) ===
+  vocabulary 312 after case unification; 257 occur in one cluster; 257 judged
+    topic       214    83%   a specific research topic, worth showing as a label
+    generic      36    14%   too vague to tell one cluster from another
+    duplicate     4     2%   means the same as another keyword in the list
+    artifact      3     1%   not a topic at all - a fragment, an instruction, or noise
+  sample artifact: ['South Africa', 'Surface production', 'Volume production']
+  sample duplicate: ['CO2 capture', 'Cu-Cl cycle', 'Hydrogen refueling stations', 'Thermochemical water-splitting']
+  sample generic: ['Alternative water sources', 'Aquatic plants', 'Artificial neural networks', 'Bioalcohols', 'Biomass']
+
+=== kw_banichuk_k100.txt (28 clusters) ===
+  vocabulary 142 after case unification; 128 occur in one cluster; 128 judged
+    topic       111    87%   a specific research topic, worth showing as a label
+    generic      15    12%   too vague to tell one cluster from another
+    duplicate     2     2%   means the same as another keyword in the list
+    artifact      0     0%   not a topic at all - a fragment, an instruction, or noise
+  sample duplicate: ['Finite element methods', 'Gridless methods']
+  sample generic: ['Buckling analysis', 'Computer simulation', 'Decision making', 'Deformation', 'Dynamic properties']
+
