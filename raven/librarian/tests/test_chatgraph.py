@@ -308,6 +308,68 @@ class TestTruncation:
         assert any(edge.src is gap_node for edge in built.graph.edges)
         assert not any(edge.src is root_node and edge.dst is not gap_node for edge in built.graph.edges)
 
+    def _long_chat(self, n_chats=8, depth=25):
+        """A card, a greeting, a fan of chats under it, and one of them carried on well past the budget."""
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+        sessions = [forest.create_node(payload("user", f"chat {k} opens"), parent_id=greeting)
+                    for k in range(n_chats)]
+        node = sessions[3]
+        for d in range(depth):
+            node = forest.create_node(payload("assistant" if d % 2 == 0 else "user", f"message {d}"),
+                                      parent_id=node)
+        return forest, root, greeting, sessions, node
+
+    def test_the_way_out_of_a_long_chat_stays_on_screen(self):
+        # The session level -- the children of `new_chat_HEAD` -- doubles as the list of recent chats, so
+        # eliding it strands the reader in the conversation they are trying to leave. It is pinned against
+        # the depth window the way the root is.
+        forest, root, greeting, sessions, head = self._long_chat()
+        config = chatgraph.LayoutConfig(max_visible_depth=8)
+        built = chatgraph.build(forest,
+                                chatgraph.ViewState(head_node_id=head, new_chat_node_id=greeting), config)
+
+        assert refs_of_type(built, chatgraph.DepthGapRef), \
+            "this branch is not long enough to be truncated, so the pinning is not being tested"
+        assert root in built.refs and greeting in built.refs
+        assert sessions[3] in built.refs, "the chat this branch belongs to was elided"
+        assert any(other in built.refs for other in sessions if other != sessions[3]), \
+            "the session level is there but its siblings are not, so there is still no way to another chat"
+
+    def test_without_the_pointer_the_session_level_goes(self):
+        # The control for the case above, and it is the behaviour that prompted the change: knowing where
+        # the session level *is* takes `new_chat_HEAD`, and without it the window can only keep the root.
+        forest, root, greeting, sessions, head = self._long_chat()
+        config = chatgraph.LayoutConfig(max_visible_depth=8)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head), config)
+        assert root in built.refs
+        assert sessions[3] not in built.refs
+
+    def test_the_gap_sits_below_the_pinned_prefix(self):
+        forest, root, greeting, sessions, head = self._long_chat()
+        config = chatgraph.LayoutConfig(max_visible_depth=8)
+        built = chatgraph.build(forest,
+                                chatgraph.ViewState(head_node_id=head, new_chat_node_id=greeting), config)
+
+        gap_node = built.graph.get_node_by_name("gap:depth")
+        session_node = built.graph.get_node_by_name(sessions[3])
+        assert any(edge.src is session_node and edge.dst is gap_node for edge in built.graph.edges), \
+            "the elision is between the session level and HEAD, so that is where the gap belongs"
+        assert gap_node.y > built.graph.get_node_by_name(root).y
+
+    def test_a_prefix_that_would_crowd_out_head_is_not_pinned(self):
+        # `new_chat_HEAD` is normally one node under the root, but nothing guarantees it. A prefix reaching
+        # halfway down the budget would answer "where am I" by dropping "what is happening".
+        forest = Forest()
+        ids = chain(forest, length=40)
+        config = chatgraph.LayoutConfig(max_visible_depth=8)
+        built = chatgraph.build(forest,
+                                chatgraph.ViewState(head_node_id=ids[-1], new_chat_node_id=ids[20]),
+                                config)
+        assert ids[20] not in built.refs
+        assert ids[0] in built.refs and ids[-1] in built.refs
+
     def test_an_off_spine_sibling_with_children_says_so(self):
         forest = Forest()
         system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
@@ -361,10 +423,14 @@ class TestGeometry:
         forest = Forest()
         system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
         greeting = forest.create_node(payload("assistant", "hello!"), parent_id=system)
-        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(12)]
+        # Thirty, so that the fan is wider than any plausible `siblings_each_side` and the row still
+        # has gaps in it. Sized to the shipped default once, it went vacuous the day that default was
+        # raised -- the window swallowed the whole fan, the gap assertions iterated over nothing, and the
+        # tests went on passing while they stopped testing.
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
         for chat in chats:  # every off-spine sibling has a continuation, so every one wants a subtree gap
             forest.create_node(payload("assistant", "and so on"), parent_id=chat)
-        head = chats[6]
+        head = chats[15]
         for k in range(4):
             forest.create_node(payload("assistant", f"reroll {k}"), parent_id=head)
         return forest, head
@@ -419,7 +485,9 @@ class TestGeometry:
         forest, head = self._crowded()
         config = chatgraph.LayoutConfig()
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head), config)
-        for ref in refs_of_type(built, chatgraph.SiblingGapRef):
+        gap_refs = refs_of_type(built, chatgraph.SiblingGapRef)
+        assert gap_refs, "no sibling gaps in this fixture, so the loop below asserts nothing"
+        for ref in gap_refs:
             box = built.graph.get_node_by_name(ref.name).get_bounding_box()
             assert box[2] - box[0] == pytest.approx(config.gap_node_w)
 

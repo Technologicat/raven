@@ -512,9 +512,15 @@ So the level this brief says doubles as the recent-chats list disappears exactly
 long enough for the user to want out of it. The root is pinned against the depth window already, for
 reasons that apply here just as well: it is what says where you are rather than what was said.
 
-**Open**: whether the session level is pinned too. It is a small change to the depth window — keep the root,
-keep the session level, spend the rest of the budget near HEAD — and it changes what the picture shows, so
-it is not one to make in passing.
+**Decided 2026-09-01: pin it.** The depth window keeps a prefix at the top of the tree and a run at the
+bottom, with one gap between them. The prefix runs down to and including the session node — the child of
+`new_chat_HEAD` this branch began at — rather than being the root alone.
+
+Kept *whole* rather than as its two ends: `new_chat_HEAD` normally sits directly under the root, so the
+prefix is three nodes, and pinning only the ends would split the elision into two runs and spend a gap box
+on hiding a single node. Falls back to the root alone when `new_chat_HEAD` is not on this branch (a chat
+under an older card), or when the prefix would take more than half the budget — a prefix that crowds out
+the nodes near HEAD has answered *where am I* at the cost of *what is happening*.
 
 ### Road mode makes the avatar optional, so the panel cannot assume one
 
@@ -522,15 +528,24 @@ Noted 2026-09-01 (Juha). The on-the-road mode is coming, and in it the avatar is
 that is where its VRAM and battery saving come from, and `TODO_DEFERRED.md`'s item is explicit that a mode
 which merely hides the avatar panel saves nothing that matters.
 
+**The shape that makes this cheap** (Juha, 2026-09-01): road mode still constructs the avatar's child
+window, blank and never shown, and **leaves the graph open permanently**. So the two occupants exist in
+both modes and the rect arithmetic does not change; what road mode varies is that one of them is empty and
+the other never hides.
+
+That follows from where the contention actually is: *the two compete for screen space only when both are
+available.* With no avatar there is nothing to trade against, so there is nothing to toggle, and the
+question of what the panel shows by default answers itself.
+
 Two consequences for the panel commit, both cheap now and awkward later:
 
 - **The pause gate is conditional on there being something to pause.** `avatar_renderer` may be absent, so
-  the visibility term is "pause it if it exists", not "pause it".
-- **The rect is not the avatar's to own.** Placement is decided as two child windows sharing one rect
-  (`TODO.md:661`), and in road mode one of the two occupants never exists — so whatever computes that
-  rect has to run without an avatar panel. Today `_get_avatar_panel_size` is what computes it, which is
-  the name to watch: the geometry is the *right-hand panel's*, and the avatar is one thing that can fill
-  it.
+  the visibility term is "pause it if it exists", not "pause it". In road mode nothing ever pauses,
+  because nothing was ever started.
+- **The rect is not the avatar's to own.** Placement is two child windows sharing one rect
+  (`TODO.md:661`), and in road mode one of them is blank — so whatever computes that rect has to run
+  without an avatar in it. Today `_get_avatar_panel_size` is what computes it, which is the name to watch:
+  the geometry is the *right-hand panel's*, and the avatar is one thing that can fill it.
 
 ### Sequencing
 

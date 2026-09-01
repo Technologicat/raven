@@ -572,14 +572,8 @@ def build(datastore: chattree.Forest,
         full_spine = datastore.linearize_up(state.head_node_id)
         visible_spine = _collapse_tool_rounds(datastore, full_spine, state.expanded_tool_turns)
 
-        # Depth window. The root stays: it carries SYS, and it is the only thing naming which version of
-        # the character card this conversation was written under. The rest of the budget goes to the nodes
-        # nearest HEAD, which is where the reader is.
-        elided_ancestors: Tuple[str, ...] = ()
-        if len(visible_spine) > config.max_visible_depth:
-            tail_length = config.max_visible_depth - 1
-            elided_ancestors = tuple(visible_spine[1:-tail_length])
-            visible_spine = [visible_spine[0]] + visible_spine[-tail_length:]
+        visible_spine, elided_ancestors, depth_gap_row = _depth_window(
+            visible_spine, state.new_chat_node_id, config.max_visible_depth)
 
         on_spine = set(visible_spine)
         rows = _rows_for(datastore, state, config, visible_spine)
@@ -590,7 +584,7 @@ def build(datastore: chattree.Forest,
         # were elided, get a whole empty row's worth of space below them to hold those gaps -- otherwise a
         # gap drawn one row down lands on top of the row that is already there.
 
-        needs_band = [bool(subtree_counts[index]) or (index == 0 and bool(elided_ancestors))
+        needs_band = [bool(subtree_counts[index]) or index == depth_gap_row
                       for index in range(len(rows))]
         row_step = config.node_h + config.vertical_spacing
         row_y: List[float] = []
@@ -682,7 +676,8 @@ def build(datastore: chattree.Forest,
         if elided_ancestors:
             depth_gap_node = add_box("gap:depth",
                                      DepthGapRef("gap:depth", hidden_node_ids=elided_ancestors),
-                                     x=0.0, y=band_y[0], label=f"…{len(elided_ancestors)} more")
+                                     x=0.0, y=band_y[depth_gap_row],
+                                     label=f"…{len(elided_ancestors)} more")
 
         for row_index, drawn_row in enumerate(drawn):
             for slot, graph_node in drawn_row:
@@ -714,7 +709,8 @@ def build(datastore: chattree.Forest,
                 graph_edges.append(_edge_between(parent_node, graph_node, config))
 
         if depth_gap_node is not None:
-            graph_edges.append(_edge_between(nodes_by_name[visible_spine[0]], depth_gap_node, config))
+            graph_edges.append(_edge_between(nodes_by_name[visible_spine[depth_gap_row]],
+                                             depth_gap_node, config))
 
     # ------------------------------------------------------------------
     # Normalize into the widget's coordinate box, which `zoom_to_fit` reads as (0, 0)-(width, height).
@@ -791,6 +787,51 @@ def _rows_for(datastore: chattree.Forest,
         rows.append(_Row(slots, _index_of_slot(slots, head_children[focus_index]),
                          parent_node_id=state.head_node_id))
     return rows
+
+
+def _depth_window(visible_spine: Sequence[str],
+                  new_chat_node_id: Optional[str],
+                  max_visible_depth: int) -> Tuple[List[str], Tuple[str, ...], int]:
+    """Choose which of the branch's nodes to draw. Returns (kept, elided, row the gap sits below).
+
+    The budget goes to a prefix at the top of the tree and a run at the bottom, with one gap between them.
+    The bottom is where the reader is. The top is what says *where* they are, and it is two things rather
+    than one:
+
+    - **The root**, which carries SYS and names the version of the character card this was written under.
+    - **The session level** — the child of `new_chat_node_id` this branch began at, and its siblings, which
+      are every other chat started under the same card. That level doubles as the list of recent chats, so
+      losing it costs the only way out of the current conversation.
+
+    The second is the reason this is not simply "keep the root". A chat twenty messages deep has a spine
+    longer than the budget, and the elided middle swallows the session level — which is to say the way out
+    disappears exactly when the conversation is long enough to want one.
+
+    The prefix is kept whole rather than as the two pinned nodes alone. `new_chat_node_id` normally sits
+    directly under the root, so the whole prefix is three nodes; pinning only the ends of it would split
+    the elision into two runs and spend a gap box on hiding a single node.
+
+    Falls back to the root alone when the prefix would leave no room for the tail, or when
+    `new_chat_node_id` is not on this branch — which is what a chat under an older card looks like.
+
+    `row the gap sits below`: index into `kept`. Meaningless when nothing was elided.
+    """
+    if len(visible_spine) <= max_visible_depth:
+        return list(visible_spine), (), 0
+
+    prefix_length = 1  # the root
+    if new_chat_node_id is not None and new_chat_node_id in visible_spine:
+        prefix_length = visible_spine.index(new_chat_node_id) + 2  # the anchor, plus the session node
+    # Leave at least half the budget for the nodes nearest HEAD; a prefix that crowds those out has
+    # answered "where am I" at the cost of "what is happening".
+    if prefix_length > max_visible_depth // 2:
+        prefix_length = 1
+    prefix_length = min(prefix_length, len(visible_spine))
+
+    tail_length = max_visible_depth - prefix_length
+    elided = tuple(visible_spine[prefix_length:len(visible_spine) - tail_length])
+    kept = list(visible_spine[:prefix_length]) + list(visible_spine[-tail_length:])
+    return kept, elided, prefix_length - 1
 
 
 def _index_of_slot(slots: Sequence[_Slot], node_id: str) -> int:
