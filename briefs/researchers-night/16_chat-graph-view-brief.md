@@ -877,10 +877,8 @@ remaining work is the two features below plus the polish the four rules describe
      up, and the avatar never returns. A live flag is worth having for something else entirely, a stalled
      stream or a server that went away, which today shows a frozen last frame and says nothing. The switch
      keys on causes; the one signal its own effect can flip is the one it must not read.
-6. **The graph toggle is not persisted.** Every other checkbox in that row round-trips through
-   `app_state`; this one reads `dpg.get_value` and writes nothing, so it is off again on restart. A key
-   beside the others in `appstate.py`'s defaults (line ~44), read at build time for the checkbox's
-   `default_value`, and written in `toggle_chat_graph`.
+~~6. **The graph toggle is not persisted.**~~ Done 2026-09-01: `chat_graph_shown` in the flag defaults,
+   applied on frame 4 so the avatar renderer never initializes into a hidden panel.
 7. **Fragment search across the tree**, which was always v2 and is brief 14's companion.
 
 **Open, needing a decision rather than work:** whether `raven-xdot-viewer` gets the actual-size button
