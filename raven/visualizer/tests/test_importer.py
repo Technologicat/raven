@@ -967,17 +967,26 @@ def live_llm(request, monkeypatch):
     summaries -- so a test that waited for that would skip on any machine configured without them, which is
     the common case and would make it a test that never runs. It is built here instead, exactly as the
     module builds its own, and injected the way the fake-LLM tests inject theirs.
+
+    Only the *connection* is built here. The LLM call itself belongs to `_summarize`, which makes it
+    through `agent.turn` -- so this fixture must not make one of its own, or the test would be asserting
+    against its own request rather than against the one the importer sends. Same gate as
+    `raven/librarian/tests/test_live_backend.py`, and for the same reason: a skip has to name what was
+    wrong, since a skip and a pass look alike.
     """
     from raven.librarian import agent
     from raven.librarian import config as librarian_config
     from raven.librarian import llmclient
 
     backend_url = request.config.getoption("--backend-url") or librarian_config.llm_backend_url
-    if not llmclient.test_connection(backend_url):
-        pytest.skip(f"no LLM backend answering at {backend_url}; pass --backend-url URL to name another")
-    settings = llmclient.setup(backend_url=backend_url)
-    if llmclient.backend_status(settings) is llmclient.backend_has_no_model:
-        pytest.skip(f"the LLM backend at {backend_url} has no model loaded")
+    if not llmclient.test_connection(backend_url, quiet=True):
+        pytest.skip(f"no LLM backend answering at {backend_url} -- start one, or point this somewhere "
+                    f"else with: pytest --backend-url http://host:port")
+    settings = llmclient.setup(backend_url, quiet=True)
+    status = llmclient.backend_status(settings)
+    if status is not llmclient.backend_ready:
+        pytest.skip(f"backend at {backend_url} is not ready: "
+                    f"{llmclient.describe_backend_status(status, backend_url)}")
 
     monkeypatch.setattr(importer, "agent", agent, raising=False)
     monkeypatch.setattr(importer, "llmclient", llmclient, raising=False)
