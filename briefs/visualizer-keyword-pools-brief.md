@@ -36,10 +36,40 @@ at import time, and the second half of this brief needs no importer change at al
 The quantity that separates the two pools is a keyword's **cluster document frequency** (CDF): in how
 many clusters does it appear? It is a count over `vis_keywords_by_cluster`, which is saved.
 
+**Rank by it; do not threshold on it** (settled 2026-09-01 — the first draft of this brief proposed a
+threshold, and Juha asked whether this could be made adaptive the way the cohesion criterion had been.
+It can, and the adaptive form has no parameter at all.)
+
 ```
-common pool      = {k : CDF(k) >= threshold_fraction * n_clusters}
-distinctive(c)   = [k for k in vis_keywords_by_cluster[c] if k not in common pool]
+idf(k)           = log(n_clusters / CDF(k))          # high = distinctive to few clusters
+displayed(c)     = sort(vis_keywords_by_cluster[c], by -idf, ties keep the model's own order)[:6]
+common pool      = the low-idf end of the same ranking, shown once at corpus level
 ```
+
+**The display budget does the cutting, and a budget is a layout constraint rather than a tuning knob.**
+Extract 12, rank, show 6. There is no number for anyone to choose, and the rule adapts by itself: on
+arXiv, where a single term is corpus-wide, the ranking barely moves most clusters; on AOKK, where a
+dozen are, it reorders aggressively.
+
+**The model's own ordering is not the one wanted, and measurably so.** Asked to describe a cluster, it
+leads with the general topic — which is correct for *identity* and exactly wrong for *discrimination*.
+Measured on AOKK's 83 clusters: **80 of them would change displayed order** under IDF ranking.
+
+| cluster | as the model gave it | ranked by IDF |
+|---|---|---|
+| 0 | **Generative AI**, Higher Education, Teaching and Learning, … | Educational Transformation, Teaching and Learning, …, **Generative AI** |
+| 5 | Self-Regulated Learning, **Generative AI**, Educational Chatbots, … | Metacognitive Support, Educational Chatbots, …, **Generative AI** |
+| 15 | Knowledge Tracing, **Intelligent Tutoring Systems**, … | Knowledge Tracing, Knowledge Graphs, …, **Intelligent Tutoring Systems** |
+
+`Generative AI` scores IDF 0.98, appearing in 31 of 83 clusters, and sinks to last wherever it appears.
+IDF ran 0.98 to 4.42 across that corpus, so the spread is ample.
+
+**Ties matter and break sensibly.** Most keywords appear in exactly one cluster and so share the top IDF;
+breaking those ties by the model's own order means its relevance judgement decides among equally
+distinctive terms. Two rankings, each used for what it is good at.
+
+*Same idiom as `nlptools.suggest_keywords`, which already scores the `"frequencies"` method's keywords
+against a corpus background — so this is the house move rather than a new one.*
 
 Three consequences worth having:
 
@@ -75,16 +105,20 @@ wants to be a feature rather than a script somebody ran once.
 requirement is *six discriminating keywords to show*, so keywords burnt on corpus-common terms do not
 count toward it. Counting the burn per cluster on the labelled corpora:
 
-| corpus | threshold | burnt per cluster (median / p90 / max) | must extract for six distinctive |
+| corpus | "common" at | corpus-common keywords per cluster (median / p90 / max) | must extract for six distinctive |
 |---|---|---|---|
-| arXiv AI | 10% | 1 / 1 / 1 | 7 / 7 / 7 |
-| AOKK | 10% | 2 / 4 / 5 | 8 / **10** / **11** |
-| AOKK | 15% | 2 / 3 / 4 | 8 / 9 / 10 |
-| AOKK | 25% | 1 / 1 / 2 | 7 / 7 / 8 |
+| arXiv AI | CDF ≥ 10% | 1 / 1 / 1 | 7 / 7 / 7 |
+| AOKK | CDF ≥ 10% | 2 / 4 / 5 | 8 / **10** / **11** |
+| AOKK | CDF ≥ 15% | 2 / 3 / 4 | 8 / 9 / 10 |
+| AOKK | CDF ≥ 25% | 1 / 1 / 2 | 7 / 7 / 8 |
 
-So **10–12 covers the p90 and worst cases on a crowded corpus**, and the threshold and the count are
-coupled: a tighter threshold burns less budget but leaves more shared terms in the per-cluster display,
-which is the thing the split exists to remove.
+So **10–12 covers the p90 and worst cases on a crowded corpus.**
+
+*The percentages here are not the threshold the mechanism uses — there isn't one. They are three
+readings of "how generic counts as generic", used to bracket how many of a cluster's keywords are
+corpus-common and therefore sink under the ranking. The count needs bracketing rather than solving,
+which is why a spread of strictness levels is the right way to read it, and why the extraction count
+survived the threshold's removal unchanged.*
 
 **The model can supply twelve, and does not pad to reach it.** `keyword_count_probe.py` ran twelve
 clusters at both settings:
@@ -147,12 +181,15 @@ corpus-scoped, numeric and exact. Different questions.
 
 ## Open
 
-- **What threshold?** The arXiv distribution (34, then 5) is bimodal enough that anything from ~10% to
-  ~50% separates it cleanly, so the value is not critical *there*. AOKK's is a smooth gradient with no
-  gap (31, 21, 20, 17, 17, 16, 13, 12, 11, 11 …), so it is AOKK that chooses the number. Measured
-  2026-09-01: at 10% the common pool is 11 keywords and a cluster keeps a median of 4 distinctive; at
-  25% the pool is 2 and the median is 5. **No cluster is left with none at any threshold on either
-  corpus**, which was the risk worth checking. Somewhere near 10–15% looks right; it is coupled to the
-  extraction count above, so decide the two together.
+- ~~**What threshold?**~~ **Dissolved 2026-09-01 — there is no threshold.** Ranking by IDF and cutting
+  at the display budget does the job without one, and adapts per corpus by itself. The measurements that
+  led here are kept because they say what the ranking is up against: arXiv's cluster-document-frequency
+  distribution is bimodal (34, then 5), where AOKK's is a smooth gradient (31, 21, 20, 17, 17, 16, 13,
+  12, 11, 11 …) with no gap for any threshold to find. A rule that needed a cutoff would have had to be
+  tuned per corpus; this one does not.
 - **Does the split apply to `"frequencies"` mode too?** That method already discriminates, so the
   per-cluster half is largely redundant for it. The dialog applies either way.
+- **Does the corpus-level display want the low-IDF terms, or the raw frequency head, or both?** They are
+  different lists — the first is "what every cluster mentions", the second is "what the corpus is made
+  of" — and both have a claim on the phrase *what this dataset is about*. Cheap to show both; worth
+  looking at once before deciding.
