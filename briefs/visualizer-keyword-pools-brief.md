@@ -64,6 +64,27 @@ Measured on AOKK's 83 clusters: **80 of them would change displayed order** unde
 `Generative AI` scores IDF 0.98, appearing in 31 of 83 clusters, and sinks to last wherever it appears.
 IDF ran 0.98 to 4.42 across that corpus, so the spread is ample.
 
+**The tail is where this can fail, and canonicalization is what stands in the way.** Ranking by rarity
+inherits the classical frequency-analysis failure: a term occurring once scores highest, and "occurs
+once" is what a genuinely specific topic looks like *and* what noise looks like (Juha, 2026-09-01). The
+distinctiveness figures in this brief cannot tell those apart, and neither can a string test — measured
+on three corpora, 82–87% of distinct keywords occur in exactly one cluster, and a subset/superset check
+flags 14–25% of those as possible variants while catching `logical reasoning` against `reasoning` and
+`photobiological hydrogen production` against `hydrogen production`, which are *specializations* and
+precisely what should rank first.
+
+So the only step that can separate a variant from a specialization is the canonicalization pass, which
+judges semantic equivalence rather than string overlap. **It must therefore run before IDF is computed**
+— a spelling variant that ought to have merged otherwise scores maximum rarity and leads the display.
+The importer's ordering already satisfies this, canonicalization being the last thing the `llm` branch
+does and the ranking happening at load; it is recorded because nothing in the code says why the order
+matters.
+
+*The measurements in this brief were taken before canonicalization existed, so every distinctiveness
+figure here is an upper bound.* What the classical case does not transfer is the prior: there the terms
+are raw tokens and a hapax is usually a typo, where here they are model-written topic labels over
+clusters, so a singleton is more often a real specific topic. Not immune — differently distributed.
+
 **Ties matter and break sensibly.** Most keywords appear in exactly one cluster and so share the top IDF;
 breaking those ties by the model's own order means its relevance judgement decides among equally
 distinctive terms. Two rankings, each used for what it is good at.
