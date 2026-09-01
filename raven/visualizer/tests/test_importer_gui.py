@@ -360,6 +360,84 @@ def test_destroying_the_dialogs_joins_both_tick_threads(gui, monkeypatch):
     assert destroyed == ["open", "save"]
 
 
+class RecordingDialog:
+    """Stands in for a `FileDialog`, recording whether it was asked to open."""
+    def __init__(self, visible=False):
+        self.shown = 0
+        self.visible = visible
+
+    def show_file_dialog(self):
+        self.shown += 1
+
+    def is_visible(self):
+        return self.visible
+
+
+@pytest.fixture
+def modal_mode(monkeypatch):
+    """Record the modal-mode transitions, which are what stop hotkeys firing behind an open dialog."""
+    entered, exited = [], []
+    monkeypatch.setattr(app_state, "enter_modal_mode", lambda: entered.append(True), raising=False)
+    monkeypatch.setattr(app_state, "exit_modal_mode", lambda: exited.append(True), raising=False)
+    return entered, exited
+
+
+@pytest.mark.parametrize("show, dialog_attribute",
+                         [(lambda: importer_gui.show_open_dialog(), "_filedialog_open"),
+                          (lambda: importer_gui.show_save_dialog(), "_filedialog_save")],
+                         ids=["open", "save"])
+def test_opening_a_dialog_also_enters_modal_mode(gui, monkeypatch, modal_mode, show, dialog_attribute):
+    """The two halves are separable and only one of them is visible on screen.
+
+    Showing the dialog without entering modal mode leaves every hotkey live behind it, which is the failure
+    `is_any_modal_window_visible` exists to prevent and the one Librarian actually hit. Nothing about the
+    dialog's appearance says whether the second half happened, so it is asserted here.
+    """
+    entered, _ = modal_mode
+    dialog = RecordingDialog()
+    monkeypatch.setattr(importer_gui, dialog_attribute, dialog)
+
+    show()
+    assert dialog.shown == 1
+    assert entered == [True], "the dialog was shown without entering modal mode"
+
+
+@pytest.mark.parametrize("show", [importer_gui.show_open_dialog, importer_gui.show_save_dialog],
+                         ids=["open", "save"])
+def test_opening_a_dialog_that_does_not_exist_yet_is_ignored(gui, modal_mode, show, caplog):
+    """The dialogs are created later in the app's bootup than the window whose buttons open them.
+
+    The fixture leaves both at `None`, which is the state between those two points.
+    """
+    entered, _ = modal_mode
+    with caplog.at_level("WARNING"):
+        show()
+    assert entered == [], "modal mode was entered with no dialog to be modal about"
+    assert any("does not exist yet" in record.message for record in caplog.records), \
+        f"the refusal should say why; got {[r.message for r in caplog.records]}"
+
+
+def test_the_dialogs_are_built_to_match_what_each_one_is_picking(gui, tmp_path):
+    """Filters and modes, which fail quietly: a wrong filter shows the user an empty folder.
+
+    Input is any number of `.bib` files to read; output is one dataset file to write, so the save dialog
+    additionally wants the overwrite confirmation that `save_mode` brings.
+    """
+    importer_gui.initialize_filedialogs(str(tmp_path))
+
+    assert importer_gui._filedialog_open is not None
+    assert importer_gui._filedialog_save is not None
+    assert importer_gui.is_any_dialog_visible() is False, "creating a dialog must not show it"
+
+    assert ".bib" in importer_gui._filedialog_open.filter_list
+    assert importer_gui._filedialog_open.multi_selection is True
+    assert importer_gui._filedialog_open.save_mode is False
+
+    assert ".pickle" in importer_gui._filedialog_save.filter_list
+    assert importer_gui._filedialog_save.multi_selection is False
+    assert importer_gui._filedialog_save.save_mode is True
+
+
 def test_a_closing_open_dialog_fills_in_the_files_it_returned(gui, monkeypatch):
     monkeypatch.setattr(app_state, "exit_modal_mode", lambda: None, raising=False)
     importer_gui._open_dialog_callback(["/in/one.bib", "/in/two.bib"])

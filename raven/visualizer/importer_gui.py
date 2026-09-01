@@ -174,8 +174,16 @@ def is_any_dialog_visible():
             (_filedialog_save is not None and _filedialog_save.is_visible()))
 
 def show_open_dialog():
-    """Button callback. Show the open import file dialog, for the user to pick which BibTeX files to import."""
+    """Button callback. Show the open import file dialog, for the user to pick which BibTeX files to import.
+
+    Does nothing if the dialog does not exist yet.
+    """
     logger.debug("show_open_dialog: Showing open import dialog.")
+    # The dialogs are created later in the app's bootup than the window that opens them, so the same
+    # "might not exist yet" that `is_any_dialog_visible` guards against applies here.
+    if _filedialog_open is None:
+        logger.warning("show_open_dialog: the open import dialog does not exist yet, ignoring.")
+        return
     _filedialog_open.show_file_dialog()
     app_state.enter_modal_mode()
     logger.debug("show_open_dialog: Done.")
@@ -192,8 +200,14 @@ def _open_dialog_callback(selected_files):
         logger.debug("_open_dialog_callback: Cancelled.")
 
 def show_save_dialog():
-    """Button callback. Show the save import file dialog, to ask the user for a filename to save the imported dataset as."""
+    """Button callback. Show the save import file dialog, to ask the user for a filename to save the imported dataset as.
+
+    Does nothing if the dialog does not exist yet.
+    """
     logger.debug("show_save_dialog: Showing save import dialog.")
+    if _filedialog_save is None:  # see `show_open_dialog`
+        logger.warning("show_save_dialog: the save import dialog does not exist yet, ignoring.")
+        return
     _filedialog_save.show_file_dialog()
     app_state.enter_modal_mode()
     logger.debug("show_save_dialog: Done.")
