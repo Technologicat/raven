@@ -78,6 +78,11 @@ the extraction brief, are bound by nothing, and wait on the Librarian tree besid
    Run the cluster screen the brief describes before the LLM pass; it puts 4 clusters covering 107
    records in front of a reader instead of 5007, and it is already measured.
 
+   **Then begin with the brief's step 0**, the calibration pilot — pass 1 over a sample, hand-checked —
+   which is the one measurement the two-pass design rests on and the only part of the brief that is still
+   argument rather than evidence. Measuring before building is the habit; this closes the last place
+   where the brief reasons about the model's behaviour instead of having looked at it.
+
 2. **Move the Markdown font warm-up into `raven.common.gui`.** `setup_markdown`'s own docstring already
    says an app "may still" want a dummy element that forces `DearPyGui_Markdown` to load its fonts at
    startup, tells the reader not to add more than one during startup, and points at

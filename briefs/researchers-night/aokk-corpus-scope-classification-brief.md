@@ -66,6 +66,34 @@ carrying each AI term, invert, look at what is left — which is a better home f
 Modelled on `investigations/agent-batch-classification/classify_papers.py`, which did the same shape of
 job over ~1600 arXiv papers, and lands as its own investigation bundle beside it.
 
+**Start with step 0.** It is the measurement this design rests on and has not been taken, and the project's
+habit is to measure before building rather than after (decided 2026-09-01).
+
+0. **Calibrate on a sample, before committing to the design.** Note this cannot happen *before* pass 1 —
+   what is being calibrated is pass 1's own confidence — so it is a pilot: run pass 1 over a random
+   sample, hand-check its verdicts, and only then commit to the escalation rule and the full run.
+
+   **What it has to answer**, in order of how much rides on it:
+
+   - **Are the high-confidence verdicts actually right?** This is the assumption the two-pass split is
+     built on: everything pass 1 is sure about is never looked at again. If they are unreliable the
+     design is wrong, not just its threshold.
+   - **Is "under five words" the right second criterion**, or does the model turn out to be confidently
+     wrong on some other recognizable shape of input? The whole point of a second criterion is that it
+     is measured from the input rather than asked of the model, so it has to be found by looking.
+   - **Which way do the errors fall?** A false *drop* loses a real study silently; a false *keep* costs
+     a reader one line of review. They are not equally bad, and the threshold should not treat them as
+     if they were.
+
+   Check the whole sample by hand, not only the confident half — the disagreements between the model and
+   a reader are the finding, and they cannot be counted without the other half to compare against.
+
+   **Sample size wants deciding at the time and is not settled here.** A hundred is the obvious starting
+   point because it is still cheap to read; be aware it only resolves the coarse question. If the true
+   error rate among confident verdicts is a couple of percent, a hundred records shows one or two — enough
+   to rule out "this is badly broken", not enough to put a number on it. Take that as the reason to look
+   at the errors rather than to count them.
+
 1. **Pass 1, titles only, in batches.** Cheap, and enough for the clear cases in both shapes above.
    Ask for a verdict plus a confidence, in JSON, as that script does.
 2. **Pass 2, one record at a time, title *and* abstract.** For everything pass 1 was not sure about.
@@ -95,8 +123,12 @@ only 33 records (0.7%) under five words**.
 So the mitigation is cheaper here than a heuristic. Those 33 are a hand-checkable list, and they are
 genuinely the uninformative ones — *Editorial*, *Afterword*, *Machine culture*, *Generative AI*. Send
 every record under about five words to pass 2 regardless of what the model says about its own
-confidence, and the known failure mode is closed without tuning anything. Calibrating first is still
-worth it: hand-check a sample of pass-1's high-confidence verdicts before trusting the rule.
+confidence, and the known failure mode is closed without tuning anything.
+
+**That is an argument, not a measurement**, which is why step 0 above exists and why it comes first. The
+five-word rule closes the failure mode *this corpus is known to have*; whether the model is confidently
+wrong on some other recognizable shape of title is exactly what a hand-checked sample is for, and nothing
+here has looked.
 
 (The wider lesson from that run stands even though this corpus dodges it: an escalation rule driven by
 the model's own confidence is blind exactly where the input is thin, so it needs a second criterion
