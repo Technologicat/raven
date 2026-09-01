@@ -194,7 +194,7 @@ class TextShape(Shape):
     Attributes:
         pen: Drawing pen.
         x, y: Position (baseline).
-        j: Justification (-1=left, 0=center, 1=right). Parsed, but not supported; we always left-justify.
+        j: Justification (-1=left, 0=center, 1=right), applied against `w`.
         w: Expected width (for scaling to fit).
         t: The text content.
     """
