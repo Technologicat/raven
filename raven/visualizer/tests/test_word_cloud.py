@@ -340,8 +340,9 @@ def test_toggling_a_hidden_window_renders_the_current_selection(gui, submissions
 # Saving
 
 def test_showing_the_save_dialog_puts_the_app_into_modal_mode(gui, monkeypatch):
-    # The plot's own mouse and key handlers have to stand down while a modal is up, so the two go
-    # together: a dialog shown without entering modal mode is one the user can drag the plot behind.
+    # Entering modal mode is what takes the plotter's annotation tooltip off the screen and lifts the
+    # info panel's keyboard mark, so the two go together: a dialog shown without it leaves a tooltip
+    # floating over the dialog.
     shown = []
     monkeypatch.setattr(app_state, "filedialog_save",
                         env(show_file_dialog=lambda: shown.append("dialog")), raising=False)
