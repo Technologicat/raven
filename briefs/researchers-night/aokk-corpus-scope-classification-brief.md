@@ -72,8 +72,13 @@ job over ~1600 arXiv papers, and lands as its own investigation bundle beside it
    83% of this corpus has an abstract, so the second pass has real extra evidence to work with — which
    is not true of every corpus and is worth stating as a precondition.
 
-Output is a review list, not a deletion: the deliverable is "here are the N records I think are out of
-scope, with a one-line reason each", and the corpus is not modified.
+**Two outputs, and the source corpus is modified by neither** (decided 2026-09-01):
+
+- **A filtered `.bib`** holding the records judged in scope, so it imports straight into Visualizer and
+  the corpus can be looked at without the false positives in it.
+- **A list of what was dropped, and why** — one line of reason per record. This is the reviewable half:
+  a filtered file alone gives no way to tell a good cut from a bad one, and the reasons are what make
+  the run auditable after the fact rather than only during it.
 
 ### The escalation rule has a known failure mode — do not reuse it unexamined
 
@@ -97,11 +102,12 @@ worth it: hand-check a sample of pass-1's high-confidence verdicts before trusti
 the model's own confidence is blind exactly where the input is thin, so it needs a second criterion
 measured from the input rather than asked of the model.)
 
-## Open
+## Settled 2026-09-01
 
-- **Whether to judge against the broad question or the research questions.** This brief says the broad
-  one. The narrower reading would flag many more records, and "not about data-informed decision-making"
-  is a different claim from "not in scope" — worth deciding before the run, since it changes what the
-  output means.
-- **What to do with the answer.** A filtered `.bib`, a flag on the dataset records, or just a list. The
-  cheapest useful thing is the list.
+- **Judge against the broad question**, as this brief proposed: *studies on different aspects of the use
+  of AI agents in higher education*. Juha's call, and the reason matters for what comes after — **the
+  research questions get their own, more detailed passes later**, and those want the corpus ingested into
+  Librarian first. So this run is the coarse cut that makes the corpus worth ingesting, and "not about
+  data-informed decision-making" stays a separate question asked separately, rather than being folded in
+  here where it would look like the same verdict.
+- **Both outputs**: the filtered `.bib` and the dropped-with-reasons list. See *Approach* above.

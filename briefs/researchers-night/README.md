@@ -22,7 +22,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `12_derived-artifact-store-brief.md` | One keying and regeneration mechanism for everything computed *from* a source artifact | v0.2.9. Does not depend on 13 |
 | `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night |
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, ~~PCA preprocessing~~, ~~cosine-to-medoid outlier assignment~~, Procrustes alignment, and **clustering in high-D**. **Items 2, 3 and 5 were measured on 2026-09-01 and the brief now points at `investigations/highdim-clustering/README.md`, which is the specification** — 2 and 3 are measured harmful and must not be built as written, 5 is settled and ready to implement (agglomerative, not HDBSCAN) | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
-| `aokk-corpus-scope-classification-brief.md` | An LLM batch pass over the AOKK corpus, flagging records the boolean search pulled in that are not about AI agents in higher education | Filed 2026-08-31, unscheduled. The problem is confirmed rather than suspected: `"conversational agent"` caught a child-helpline paper, and `"learning assistant"` matches 40 records across *two senses* — the AI tool, and the STEM term of art for a human undergraduate Learning Assistant. Carries a warning about reusing `agent-batch-classification`'s confidence-based escalation, whose known failure mode applies directly |
+| `aokk-corpus-scope-classification-brief.md` | An LLM batch pass over the AOKK corpus, flagging records the boolean search pulled in that are not about AI agents in higher education | Filed 2026-08-31. **Next up, and the only near-term item with a date**: needed within two weeks of 2026-09-01, and its two open questions were settled that day, so it starts from a decided spec. The problem is confirmed rather than suspected: `"conversational agent"` caught a child-helpline paper, and `"learning assistant"` matches 40 records across *two senses* — the AI tool, and the STEM term of art for a human undergraduate Learning Assistant. Carries a warning about reusing `agent-batch-classification`'s confidence-based escalation, whose known failure mode applies directly |
 | `14_chat-search-brief.md` | Search within the chat log | v0.2.9. The match unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer implementation rebuilds the whole panel and so does not transfer to an incrementally-built chat log |
 
 ## Closed
@@ -55,14 +55,30 @@ not settled, and the two sensible axes disagree — closure rate (smallest first
 they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
 deadline actually binds; everything else could slip past September without anything breaking.
 
-### Starting tomorrow, filed 2026-09-01 — two shared-GUI items, both waiting on Librarian
+### Starting tomorrow, filed 2026-09-01 — the AOKK judge pass, then two shared-GUI items
 
 The Visualizer thread of the three below has closed: `done/visualizer-app-py-extraction.md` landed both
 its extractions, `app.py` went 1763 → 1344 lines, and the package went from 4 of its 9 test modules
-running in CI to 8 of 9. What follows are the two items that came out of doing it. **Neither is bound by
-26 September**, and both touch modules the Librarian session is currently in, so they wait for that tree.
+running in CI to 8 of 9.
 
-1. **Move the Markdown font warm-up into `raven.common.gui`.** `setup_markdown`'s own docstring already
+**Take the AOKK judge pass first.** It is the only one of these three with a date on it — Juha needs the
+result **within two weeks of 2026-09-01**, against a fortnight that already has other work in it — and it
+is the one that unblocks other things rather than tidying something. The other two came out of closing
+the extraction brief, are bound by nothing, and wait on the Librarian tree besides.
+
+1. **The AOKK on-topic judge pass** — `aokk-corpus-scope-classification-brief.md`, in this folder.
+   **Do it in a fresh session**: the brief is self-contained and carries its own measurements, and the
+   work is a batch script over a dataset rather than a continuation of anything.
+
+   Both of its open questions were settled on 2026-09-01, so it starts from a decided spec: judge
+   against the **broad** question (the research questions get their own more detailed passes later, after
+   the corpus is in Librarian), and emit **both** a filtered `.bib` — importable into Visualizer — and a
+   list of what was dropped with a one-line reason each. The source corpus is not modified.
+
+   Run the cluster screen the brief describes before the LLM pass; it puts 4 clusters covering 107
+   records in front of a reader instead of 5007, and it is already measured.
+
+2. **Move the Markdown font warm-up into `raven.common.gui`.** `setup_markdown`'s own docstring already
    says an app "may still" want a dummy element that forces `DearPyGui_Markdown` to load its fonts at
    startup, tells the reader not to add more than one during startup, and points at
    `raven.visualizer.app` as the example. That is the shared layer describing a job and handing it to
@@ -78,7 +94,7 @@ running in CI to 8 of 9. What follows are the two items that came out of doing i
    actually fires cannot be confirmed headless, since it needs rendered frames, so this one ends with a
    live check.
 
-2. **Test what each app's `FileDialog`s are configured for.** `importer_gui`'s two got this on
+3. **Test what each app's `FileDialog`s are configured for.** `importer_gui`'s two got this on
    2026-09-01 — filters, `multi_selection`, `save_mode` — because a wrong filter fails quietly, showing
    the user an empty folder rather than an error. Juha's call the same day: if we test those, the rest
    should be tested too, and there are a lot of them across the apps. `vendor/file_dialog` is already
@@ -134,6 +150,7 @@ here because they are ready to start, not because they are urgent.
    Buildable in parallel with the other two: it is a batch script over a dataset, touching neither GUI.
    The brief carries the two confirmed false-positive shapes and a warning about reusing
    `agent-batch-classification`'s confidence-based escalation.
+   - *Not started that day, and now item 1 of the subsection above — it acquired a date.*
 
 ### Reordered 2026-08-31 — the effects first, then the graph view
 
