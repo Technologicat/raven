@@ -868,18 +868,15 @@ remaining work is the two features below plus the polish the four rules describe
      stream receiver sets a flag, and Librarian reads it. `animator_running` will not do — it goes True
      when the animator is *started*, before any frame has arrived — and having Librarian watch
      `fps_statistics` would put the knowledge in the wrong place.
-   - **But which flag, exactly, decides whether the loop comes back.** Two different things are being
-     asked for here and only one of them is safe as an auto-switch input:
-     - **Latched: "a frame has arrived since the last start."** False from `start()` until the first
-       frame, then True until the next start. This is the boot-gap answer and it cannot close the loop,
-       because covering the avatar does not un-arrive its first frame.
-     - **Live: "frames are arriving right now."** Useful, and for something else — a stalled stream or a
-       server that went away, which today shows a frozen last frame and says nothing. As an auto-switch
-       input it re-closes the loop exactly: covering the avatar pauses it, which stops the frames, which
-       reads as unavailable, which keeps the graph up, and the avatar never returns.
-     So the auto-switch keys on *causes* — not yet booted, idle detector fired — and a live receiving flag
-     stays out of that condition however tempting it looks, being the one signal that the switch's own
-     effect can flip.
+   - **The flag is for measuring when bootup is done**, which makes it the latched kind: false from
+     `start()` until the first frame arrives, true thereafter until the next start. That cannot close the
+     loop, because covering the avatar does not un-arrive its first frame.
+   - *A caution for whoever implements it, not a reading of the above:* the obvious generalization —
+     a **live** "frames are arriving right now" — must stay out of the auto-switch's condition. Covering
+     the avatar pauses it, which stops the frames, which would read as unavailable, which keeps the graph
+     up, and the avatar never returns. A live flag is worth having for something else entirely, a stalled
+     stream or a server that went away, which today shows a frozen last frame and says nothing. The switch
+     keys on causes; the one signal its own effect can flip is the one it must not read.
 6. **The graph toggle is not persisted.** Every other checkbox in that row round-trips through
    `app_state`; this one reads `dpg.get_value` and writes nothing, so it is off again on restart. A key
    beside the others in `appstate.py`'s defaults (line ~44), read at build time for the checkbox's
