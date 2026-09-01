@@ -800,8 +800,17 @@ Three directions, none chosen:
 - **Let the two occupants of the rect be different sizes.** They are alternatives, never both on screen, so
   nothing forces the graph to inherit the avatar's dimensions. The split could move when the graph is
   shown.
-- **Cap what the avatar *renders* and letterbox it.** Then the panel is free to grow while the character
-  costs what it costs today. Cheapest of the three in compute and the most work in plumbing.
+- **Cap what the avatar *renders* and letterbox it — which is already how it works.** Checked 2026-09-01:
+  `DPGAvatarRenderer` is handed a rect and positions the character bottom-centred in it, and the
+  character's pixel size follows `avatar_config`'s `upscale`, not the rect. So panel size and avatar cost
+  are already decoupled, and this direction costs nothing to adopt.
+  - **The backdrop is handled too**, which was the part expected to need care.
+    `configure_backdrop`'s contract: if the loaded image does not match the requested size, it is
+    "rescaled with Lanczos on CPU, and then cropped to fit the aspect ratio" — so widening the panel
+    re-crops the background rather than stretching it, which is what
+    `raven-avatar-settings-editor` needs and gets from the same method.
+  - Note its threading constraint if this is wired to a resize: `configure_backdrop` waits for a frame, so
+    it cannot be called from the render thread. `app.py` already calls it from the debounced resize task.
 
 The first two are compatible and could both apply. The third is the one that makes the *avatar* panel
 growable, which the other two deliberately avoid needing.
