@@ -67,6 +67,9 @@ _PILL_ADVANCE_PER_CHAR = 0.62
 # zoom 1, so this is far below anything a display can tell apart and far above float rounding.
 _COINCIDENT_POINT_TOLERANCE = 1e-9
 
+# Horizontal breathing room between a box's edge and its text, in graph units.
+_LABEL_INSET = 8.0
+
 
 # --------------------------------------------------------------------------------
 # What a graph node means
@@ -227,24 +230,35 @@ class LayoutConfig:
                           `2 * siblings_each_side + 3` items counting the two gaps.
     `max_visible_depth`: How many spine nodes to draw, the root included. Anything between the root and the
                          last `max_visible_depth - 1` of them becomes one depth gap.
-    `label_chars`: Coarse cut for a node's label. The widget compacts further when the text will not fit at
-                   the current zoom; this is what keeps a whole chat message from becoming the graph's
-                   width at zoom 1.
+    `label_chars`: Coarse cut for a node's label, or `None` to derive it from the node width and the font
+                   size — the default, and what keeps the three in step when any one of them moves. The
+                   widget compacts further when the text will not fit at the current zoom; this is the cut
+                   that stops a whole chat message from becoming the graph's width at zoom 1.
     """
 
-    node_w: float = 180.0
-    node_h: float = 52.0
-    gap_node_w: float = 84.0
+    node_w: float = 300.0
+    node_h: float = 64.0
+    gap_node_w: float = 120.0
     horizontal_spacing: float = 24.0
     vertical_spacing: float = 44.0
     corner_radius: float = 10.0
-    font_size: float = 13.0
+    # The same size the rest of Raven's interface uses, so a node reads like the app it belongs to once the
+    # reader has zoomed to 1:1. Sourced rather than repeated: two numbers both meaning "the UI font" drift.
+    font_size: float = librarian_config.gui_config.font_size
+    role_font_size: float = 0.7 * librarian_config.gui_config.font_size
     pill_font_size: float = 10.0
     pill_h: float = 16.0  # a pill's width follows its own label; see `_box_shapes`
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
     margin: float = 20.0
-    label_chars: int = 40
+    label_chars: Optional[int] = None
+
+    def _get_effective_label_chars(self) -> int:
+        """Return `label_chars`, or how many characters fit across a node when it was left unset."""
+        if self.label_chars is not None:
+            return self.label_chars
+        return max(1, int((self.node_w - 2 * _LABEL_INSET) / (self.font_size * _PILL_ADVANCE_PER_CHAR)))
+
     # These two are the ones a user has a reason to change, so they live in `config` and are picked up from
     # there; the rest of this class is drawing detail. Neither is speed-bound in any range worth using --
     # see `investigations/chatgraph-rebuild-cost/`, and the comment beside them in the config.
@@ -369,13 +383,24 @@ def _tool_call_count(datastore: chattree.Forest, node_id: str) -> int:
     return len(message.get("tool_calls") or ())
 
 
-def _label_of(datastore: chattree.Forest, node_id: str, limit: int) -> str:
-    """Return the one-line label for `node_id`."""
+# What a node's role line says, when the message carries no persona name of its own. "system" and "tool"
+# never have one; "user" and "assistant" normally do, and theirs is the character's name, which says more
+# than the role does.
+_ROLE_CAPTIONS = {"system": "SYSTEM", "tool": "TOOL", "user": "USER", "assistant": "AI"}
+
+
+def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, limit: int) -> Tuple[str, str]:
+    """Return `(who said it, what they said)` for `node_id`, both ready to draw.
+
+    The speaker is the message's stored persona where it has one, and the role otherwise — the same
+    preference the chat log shows, so the two views name the same participants the same way.
+    """
     try:
         role, persona, text = chatutil.get_node_message_text_without_persona(datastore, node_id)
     except (KeyError, TypeError):
-        return "(missing)"
-    return _truncate(text, limit) or f"({role or 'empty'})"
+        return "?", "(missing)"
+    speaker = persona or _ROLE_CAPTIONS.get(role, (role or "?").upper())
+    return speaker, (_truncate(text, limit) or "(empty)")
 
 
 def _collapse_tool_rounds(datastore: chattree.Forest,
@@ -496,13 +521,15 @@ class _Row:
 
 def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                 label: str, fill: Optional[xdotconstants.Color],
-                dashed: bool, pills: Tuple[str, ...]) -> List[xdotgraph.Shape]:
-    """Return the shapes for one box: its outline, its label, and any pointer pills above it.
+                dashed: bool, pills: Tuple[str, ...],
+                speaker: Optional[str] = None) -> List[xdotgraph.Shape]:
+    """Return the shapes for one box: its outline, its text, and any pointer pills above it.
 
     `width`: The box's width. A gap is narrower than a node, and the row layout allocates it that much
              room, so drawing it at any other width would put it under its neighbour.
     `fill`: `None` for an unfilled box, which is what a gap is.
     `dashed`: Draw the outline broken.
+    `speaker`: Who said it, drawn small above the label. `None` for a gap, which nobody said.
     """
     x1, y1 = x - 0.5 * width, y - 0.5 * config.node_h
     x2, y2 = x + 0.5 * width, y + 0.5 * config.node_h
@@ -525,10 +552,24 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     text_pen = xdotgraph.Pen()
     text_pen.color = LINE_COLOR
     text_pen.fontsize = config.font_size
-    # A text shape's y is its baseline, so nudge down by roughly a third of the cap height to sit the label
-    # on the box's centre line rather than above it.
-    shapes.append(xdotgraph.TextShape(text_pen, x, y + 0.35 * config.font_size,
-                                      xdotgraph.TextShape.CENTER, width - 12.0, label))
+
+    # A text shape's y is its baseline, so a line sits on the y given plus about a third of its cap height.
+    # With a speaker the two lines straddle the centre; without one the label takes the centre itself.
+    if speaker is not None:
+        speaker_pen = xdotgraph.Pen()
+        speaker_pen.color = LINE_COLOR
+        speaker_pen.fontsize = config.role_font_size
+        # Left-aligned, unlike the label. The speaker is the same handful of short words on every node, so
+        # a common left edge lets the eye read the column of them without tracking a centre that moves.
+        shapes.append(xdotgraph.TextShape(speaker_pen, x1 + _LABEL_INSET,
+                                          y - 0.15 * config.node_h + 0.35 * config.role_font_size,
+                                          xdotgraph.TextShape.LEFT,
+                                          width - 2 * _LABEL_INSET, speaker))
+        label_y = y + 0.22 * config.node_h + 0.35 * config.font_size
+    else:
+        label_y = y + 0.35 * config.font_size
+    shapes.append(xdotgraph.TextShape(text_pen, x, label_y,
+                                      xdotgraph.TextShape.CENTER, width - 2 * _LABEL_INSET, label))
 
     # Pills are a separate visual class from nodes -- outlined rather than filled -- so that SYS, NEW and
     # HEAD read as labels attached to a node rather than as part of what the node says. Two reasons for
@@ -698,11 +739,12 @@ def build(datastore: chattree.Forest,
                                       on_current_branch=(slot.node_id in current_branch),
                                       tool_call_count=_tool_call_count(datastore, slot.node_id),
                                       pills=_pills_for(slot.node_id, state, is_root=(row_index == 0)))
-                    shapes = _box_shapes(x, y, width, config,
-                                         _label_of(datastore, slot.node_id, config.label_chars),
+                    speaker, label = _speaker_and_label_of(datastore, slot.node_id,
+                                                          config._get_effective_label_chars())
+                    shapes = _box_shapes(x, y, width, config, label,
                                          fill=(SPINE_FILL_COLOR if slot.node_id in current_branch
                                                else OFF_SPINE_FILL_COLOR),
-                                         dashed=False, pills=ref.pills)
+                                         dashed=False, pills=ref.pills, speaker=speaker)
 
                 graph_node = xdotgraph.Node(x=x, y=y, w=width, h=config.node_h,
                                             shapes=shapes, internal_name=name)

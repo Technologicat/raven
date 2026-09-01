@@ -227,6 +227,68 @@ class TestPreview:
 
 
 # ---------------------------------------------------------------------------
+# Who said it
+# ---------------------------------------------------------------------------
+
+class TestSpeaker:
+    """Role was the one thing a node carried no channel for: colour is branch membership, and the label is
+    the message. The plan was glyphs, which wait on an `ImageShape` the widget does not have; text does not.
+    """
+
+    def _texts(self, built, node_id):
+        node = built.graph.get_node_by_name(node_id)
+        return [s.t for s in node.shapes if isinstance(s, xdotgraph.TextShape)]
+
+    def test_a_node_says_who_spoke(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert "SYSTEM" in self._texts(built, system)
+        assert "USER" in self._texts(built, user)
+        assert "AI" in self._texts(built, reply)
+
+    def test_a_persona_is_preferred_to_the_role(self):
+        # The chat log shows the character's name, so the graph shows the same one; "AI" is the fallback
+        # for a message stored without a persona, not the normal case.
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        spoken = forest.create_node(payload("assistant", "hello!"), parent_id=system)
+        forest.get_payload(spoken)["general_metadata"]["persona"] = "Aria"
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=spoken))
+        texts = self._texts(built, spoken)
+        assert "Aria" in texts
+        assert "AI" not in texts, "the persona is there but the role caption is too, so both are drawn"
+
+    def test_a_gap_says_nobody(self):
+        # The control for the above: a speaker line on every box would satisfy them and be wrong here --
+        # a gap is not a message and has no speaker.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=chats[0]))
+
+        gaps = refs_of_type(built, chatgraph.SiblingGapRef)
+        assert gaps, "no gap in this fixture, so nothing is being checked"
+        for gap in gaps:
+            texts = self._texts(built, gap.name)
+            assert len(texts) == 1, f"a gap box drew {len(texts)} texts; it should draw only its count"
+
+    def test_the_label_cut_follows_the_node_width_and_the_font(self):
+        # Three numbers that have to agree. Derived rather than written down, so that changing any one of
+        # them cannot leave a label that overflows its box or stops short of it.
+        narrow = chatgraph.LayoutConfig(node_w=120.0)
+        wide = chatgraph.LayoutConfig(node_w=600.0)
+        assert wide._get_effective_label_chars() > narrow._get_effective_label_chars()
+
+        big_font = chatgraph.LayoutConfig(font_size=40.0)
+        assert big_font._get_effective_label_chars() < chatgraph.LayoutConfig()._get_effective_label_chars()
+
+        assert chatgraph.LayoutConfig(label_chars=7)._get_effective_label_chars() == 7, \
+            "an explicit setting must still win"
+
+
+# ---------------------------------------------------------------------------
 # Pointer pills
 # ---------------------------------------------------------------------------
 
