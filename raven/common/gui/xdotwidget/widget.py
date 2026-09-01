@@ -24,7 +24,7 @@ from .. import animation as gui_animation
 from .. import utils as guiutils
 
 from .constants import DPGColor, Point
-from .graph import Graph, Node, Edge, PolygonShape, get_highlight_colors
+from .graph import Graph, Node, Edge, Element, PolygonShape, get_highlight_colors
 from .highlight import HighlightState
 from .hitdetect import hit_test_screen
 from .parser import parse_xdot
@@ -57,8 +57,8 @@ class XDotWidget(gui_animation.Animation):
                  width: int,
                  height: int,
                  tag: Optional[str] = None,
-                 on_hover: Optional[Callable[[Optional[str]], None]] = None,
-                 on_click: Optional[Callable[[str, int], None]] = None,
+                 on_hover: Optional[Callable[[Optional[Element]], None]] = None,
+                 on_click: Optional[Callable[[Element, int], None]] = None,
                  on_open_url: Optional[Callable[[str], None]] = None,
                  input_blocked: Optional[Callable[[], bool]] = None,
                  text_compaction_callback: Optional[Callable[[str, float], str]] = None,
@@ -73,8 +73,15 @@ class XDotWidget(gui_animation.Animation):
         `parent`: DPG parent (child window, group, etc.)
         `width`, `height`: Widget dimensions in pixels.
         `tag`: Optional DPG tag for the widget group.
-        `on_hover`: Callback when hovering changes. Receives node ID or None.
-        `on_click`: Callback when a node is clicked. Receives (node_id, button).
+        `on_hover`: Callback when the hovered element changes. Receives the `Node` or `Edge` under the
+                    cursor, or `None` when the cursor leaves everything.
+        `on_click`: Callback when an element is clicked. Receives `(element, button)`, where `element` is
+                    the `Node` or `Edge` that was hit.
+
+                    The element itself rather than a description of it, because a caller that has to *act*
+                    on the click needs to know which element it was, and a label cannot be turned back
+                    into one -- two nodes may carry the same text, and an `Edge` has no name at all. For a
+                    caption, pass it to `describe_element`.
         `input_blocked`: Predicate answering "is something on top of me, so I should ignore input?".
                           Consulted on every mouse event, so keep it cheap.
 
@@ -131,7 +138,9 @@ class XDotWidget(gui_animation.Animation):
         # Mouse state
         self._dragging = False
         self._last_mouse_pos = (0.0, 0.0)
-        self._last_hover_desc: Optional[str] = None
+        # The hovered element itself, for change detection. Comparing captions would miss a move between
+        # two elements that happen to be labelled the same.
+        self._last_hover_element = None
 
         # Modifier key state for link highlights (tracked to detect changes per-frame)
         self._last_shift = False
@@ -352,7 +361,7 @@ class XDotWidget(gui_animation.Animation):
             my = (element.src.y + element.dst.y) / 2
             self._viewport.pan_to_point(mx, my, animate=True)
             self._needs_render = True
-        return self._describe_element(element)
+        return self.describe_element(element)
 
     def _navigate_to_element(self, element) -> Optional[str]:
         """Navigate the view to center on `element` (Node or Edge).
@@ -396,7 +405,7 @@ class XDotWidget(gui_animation.Animation):
                 self._focus_node_name = element.dst.internal_name
                 self._viewport.pan_to_point(element.dst.x, element.dst.y, animate=True)
             self._needs_render = True
-        return self._describe_element(element)
+        return self.describe_element(element)
 
     def clear_search(self) -> None:
         """Clear the current search."""
@@ -599,10 +608,12 @@ class XDotWidget(gui_animation.Animation):
     # Element descriptions (for status bar, callbacks)
 
     @staticmethod
-    def _describe_element(element) -> Optional[str]:
-        """Return a human-readable description of a graph element, or None.
+    def describe_element(element) -> Optional[str]:
+        """Return a human-readable description of a graph element, or `None` if there is none.
 
-        Uses the display label text (from TextShapes), not the internal graph ID.
+        Uses the display label text (from TextShapes), not the internal graph ID. This is what a status
+        bar wants; `on_click` and `on_hover` hand over the element itself, and this turns one into a
+        caption.
         """
         if element is None:
             return None
@@ -759,8 +770,8 @@ class XDotWidget(gui_animation.Animation):
             if self._highlight.has_link_highlights():
                 self._highlight.clear_link_highlights()  # instant clear, no fade — render once to make it take effect
                 visual_changed = True
-            if self._last_hover_desc is not None:
-                self._last_hover_desc = None
+            if self._last_hover_element is not None:
+                self._last_hover_element = None
                 if self._on_hover:
                     self._on_hover(None)
             if visual_changed:
@@ -791,15 +802,12 @@ class XDotWidget(gui_animation.Animation):
         if self._follow_indicator_pos != old_indicator:
             self._needs_render = True
 
-        # Notify callback if hover changed.
-        # Build a human-readable description (using labels, not internal names).
-        new_hover_desc = self._describe_element(element)
-
-        if new_hover_desc != self._last_hover_desc:
-            self._last_hover_desc = new_hover_desc
+        # Notify the callback if the hovered element changed.
+        if element is not self._last_hover_element:
+            self._last_hover_element = element
             self._needs_render = True
             if self._on_hover:
-                self._on_hover(new_hover_desc)
+                self._on_hover(element)
 
     def _on_mouse_move(self, sender, app_data) -> None:
         """Handle mouse movement, updating highlights, and triggering the custom callback if set."""
@@ -840,8 +848,7 @@ class XDotWidget(gui_animation.Animation):
         if follow_target is not None:
             self._navigate_to_element(follow_target)
             if self._on_click:
-                desc = self._describe_element(follow_target)
-                self._on_click(desc, button)
+                self._on_click(follow_target, button)
             return
 
         # Normal hit test
@@ -849,8 +856,7 @@ class XDotWidget(gui_animation.Animation):
         if element is not None:
             self._navigate_to_element(element)
             if self._on_click:
-                desc = self._describe_element(element)
-                self._on_click(desc, button)
+                self._on_click(element, button)
 
     def _nearest_edge_endpoint(self, sx: float, sy: float) -> Optional[Tuple[Edge, str]]:
         """Find the nearest edge endpoint within follow radius.

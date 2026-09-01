@@ -32,6 +32,7 @@ from unpythonic import env, sym
 
 from ..common.gui import animation as gui_animation
 from ..common.gui import utils as guiutils
+from ..common.gui.xdotwidget import graph as xdotgraph
 from ..common.gui.xdotwidget.widget import XDotWidget
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
@@ -315,17 +316,24 @@ class DPGChatGraphPanel(gui_animation.Animation):
     # ------------------------------------------------------------------
     # Clicks
 
-    def _on_click(self, node_id: str, button: int) -> None:
-        """Handle a click on a box. `node_id` is the graph node's name, not necessarily a chat node ID."""
+    def _on_click(self, element, button: int) -> None:
+        """Handle a click on the graph.
+
+        `element`: The `Node` or `Edge` the widget hit. Edges are ignored: every edge here is a parent
+                   link, so clicking one asks nothing the two boxes at its ends do not already answer.
+        """
         if button != dpg.mvMouseButton_Left:
+            return
+        if not isinstance(element, xdotgraph.Node):
             return
         with self._lock:
             chat_graph = self._chat_graph
         if chat_graph is None:
             return
-        ref = chat_graph.ref_for(node_id)
+        ref = chat_graph.ref_for(element.internal_name)
         if ref is None:
-            logger.warning(f"DPGChatGraphPanel._on_click: no ref for graph node '{node_id}'; ignoring")
+            logger.warning("DPGChatGraphPanel._on_click: no ref for graph node "
+                           f"'{element.internal_name}'; ignoring")
             return
 
         if isinstance(ref, chatgraph.ChatNodeRef):

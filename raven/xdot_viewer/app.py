@@ -244,24 +244,25 @@ def _set_status(text: str) -> None:
         dpg.set_value(_app_state["status_text"], text)
 
 
-def _on_hover(description: Optional[str]) -> None:
+def _on_hover(element) -> None:
     """Handle hover callback.
 
-    `description`: Human-readable element description from the widget, or None.
+    `element`: The `Node` or `Edge` under the cursor, or `None` when the cursor is over neither.
+
+    The widget hands over the element and leaves the wording to us, since a caller that acts on a click
+    cannot work back from a caption. This one only displays, so it asks for the caption.
     """
-    if description:
-        _set_status(description)
-    else:
-        _set_status("")
+    _set_status(XDotWidget.describe_element(element) or "")
 
 
-def _on_click(description: str, button: int) -> None:
+def _on_click(element, button: int) -> None:
     """Handle click callback.
 
-    The widget handles zoom-to-element internally; the app just
-    updates the status bar.
+    `element`: The `Node` or `Edge` that was clicked.
+
+    The widget handles zoom-to-element internally; the app just updates the status bar.
     """
-    _set_status(f"Clicked: {description}")
+    _set_status(f"Clicked: {XDotWidget.describe_element(element)}")
 
 
 def _on_open_url(url: str) -> None:

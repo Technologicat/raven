@@ -171,3 +171,54 @@ class TestTheWidgetIsAnAnimation:
         assert widget in animation.animator._animations
         widget.destroy()
         assert widget not in animation.animator._animations
+
+
+def test_a_click_hands_over_the_element_rather_than_a_caption(widget, monkeypatch):
+    """The contract a caller that must *act* on a click depends on.
+
+    `on_click` used to pass `describe_element`'s output — a label — and its docstring said it passed a node
+    id. Nothing noticed for as long as the only consumer was a status bar, and the first consumer that
+    needed to know *which* node had been clicked got a sentence it could not look anything up with. A
+    caption is derivable from an element; an element is not derivable from a caption, two nodes being
+    free to carry the same text.
+    """
+    received = []
+    widget._on_click = lambda element, button: received.append((element, button))
+    widget.zoom_to_fit(animate=False)
+
+    # Aimed off-centre on purpose. `_on_mouse_click` tries edge-follow before the node hit test, and this
+    # fixture's edges run centre to centre, so a click at a node's centre is also a click on its incoming
+    # edge's endpoint -- which navigates to the *parent* and reports that instead. A real graph's edges
+    # stop at the node boundary, so this is the fixture's shape rather than the widget's behaviour.
+    target = widget.get_graph().get_node_by_name("b1")
+    monkeypatch.setattr(widget, "_input_allowed", lambda: True)
+    monkeypatch.setattr(widget, "_is_mouse_inside", lambda: True)
+    monkeypatch.setattr(widget, "_get_local_mouse_pos",
+                        lambda: widget._viewport.graph_to_screen(target.x1 + 8.0, target.y1 + 8.0))
+
+    widget._on_mouse_click(None, 0)
+    assert received == [(target, 0)], "the click did not arrive as the node that was hit"
+
+
+def test_a_hover_hands_over_the_element_too(widget, monkeypatch):
+    """Same contract, same reason. Also: hover change is now detected by identity rather than by caption,
+    so two adjacent nodes labelled the same are distinguishable — which by caption they were not."""
+    received = []
+    widget._on_hover = received.append
+    widget.zoom_to_fit(animate=False)
+
+    target = widget.get_graph().get_node_by_name("a")
+    monkeypatch.setattr(widget, "_input_allowed", lambda: True)
+    monkeypatch.setattr(widget, "_is_mouse_inside", lambda: True)
+    monkeypatch.setattr(widget, "_get_local_mouse_pos",
+                        lambda: widget._viewport.graph_to_screen(target.x, target.y))
+
+    widget._refresh_hover()
+    assert received == [target]
+
+
+def test_describe_element_is_public_because_a_status_bar_wants_it(widget):
+    """`raven-xdot-viewer` displays what it is handed, so the wording has to stay reachable."""
+    target = widget.get_graph().get_node_by_name("a")
+    assert "user: hello" in XDotWidget.describe_element(target)
+    assert XDotWidget.describe_element(None) is None

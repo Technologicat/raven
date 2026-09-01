@@ -88,8 +88,14 @@ def panel(dpg_context):
 
 
 def click(panel_obj, node_name: str) -> None:
-    """Deliver a left click on the named graph box, the way the widget would."""
-    panel_obj._on_click(node_name, dpg.mvMouseButton_Left)
+    """Deliver a left click on the named graph box, the way the widget would.
+
+    The widget hands over the `Node` it hit, not its name, so the lookup here is part of what is being
+    tested: a panel reading the wrong field off it finds no ref and does nothing.
+    """
+    node = panel_obj._chat_graph.graph.get_node_by_name(node_name)
+    assert node is not None, f"no box named '{node_name}' in the current picture"
+    panel_obj._on_click(node, dpg.mvMouseButton_Left)
 
 
 # ---------------------------------------------------------------------------
