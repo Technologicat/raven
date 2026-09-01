@@ -854,8 +854,13 @@ growable, which the other two deliberately avoid needing.
 
 ## Where this stands, end of 2026-09-01
 
-The view is built, wired into Librarian, and has been driven live several times. It is *usable* — the
-remaining work is the two features below plus the polish the four rules describe.
+The view is built, wired into Librarian, and was driven live a dozen times over the day, each round
+turning up something the tests could not see. It is *usable*: switch it on and you can reach any chat you
+have ever started. Everything below is committed, pushed, and green on all four CI jobs.
+
+**Start tomorrow by relaunching**, before reading further or changing anything. Several fixes landed after
+the last look and the running instance is always behind; more importantly, everything on the remaining
+list is a judgement about how the picture reads, and those are decided in front of it.
 
 **Built and landed:**
 
@@ -869,8 +874,23 @@ remaining work is the two features below plus the polish the four rules describe
   the four gap kinds, HEAD emphasis and the preview ring.
 - In the shared widget, so `raven-xdot-viewer` has them too: `on_click`/`on_hover` hand over the element
   rather than a caption, a drag no longer navigates, `flash_nodes`, a 1 s fade-out, a 1.25 wheel notch.
+- The toggle is remembered across restarts (`app_state["chat_graph_shown"]`, applied on frame 4).
 - Docs updated — a **Chat graph** section in `raven/librarian/README.md`, a line in the main README, and
-  the roadmap item shrunk to what is genuinely left.
+  the roadmap item shrunk to what is genuinely left. `dpg-notes.md` gained the ragged-dashes entry.
+
+**Bugs found by looking, all fixed, and worth knowing because each was invisible to every test:**
+
+- `XDotWidget.on_click` passed a caption where its docstring promised an identity — and this brief had
+  quoted that docstring as proof the hook existed.
+- Polygons ignored `pen.dash` entirely, so no dashed outline in either app had ever been dashed.
+- A press that became a drag navigated first and panned after, which on an edge meant zooming to a
+  two-point bounding box.
+- The branch frame clipped the SYS pill, node boxes and drawn extents being two different rectangles.
+- Glyph-advance estimates cut labels a quarter early and pushed pill text out of centre; the panel
+  measures through DPG now.
+- Three test fixtures had gone vacuous — asserting over empty lists, or unable to tell the two behaviours
+  apart. All three were caught by running the suite against deliberately broken code, none by reading it.
+  **That habit is the single most valuable thing to carry into tomorrow.**
 
 **Not built, in the order worth doing:**
 
