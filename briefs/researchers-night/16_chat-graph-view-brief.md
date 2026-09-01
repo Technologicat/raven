@@ -1,9 +1,10 @@
 # Brief 16: chat graph view
 
-> **Line numbers are as of 2026-08-04 and want verifying.** They were read from a shallow clone that was
-> already a couple of hours behind a moving tree, and the files most often cited here (`app.py`,
-> `chat_controller.py`) were among those being committed to that day. Treat every `file.py:NNN` below as a
-> pointer to a thing that exists, not as a coordinate.
+> **Line numbers verified and corrected 2026-09-01.** Every pointer in the 2026-08-04 draft had drifted —
+> they were read from a shallow clone already a couple of hours behind a moving tree — but each named a
+> thing that exists. The numbers below are the current ones. Two pointers resolved to nothing and are
+> annotated where they appear: `README.md:590`'s "port xdottir" sentence has been removed (the port
+> landed), and `README.md:588`'s recent-chats wish is now `README.md:776–777`.
 
 **Researchers' Night work (2026-09-26), and it takes precedence over `atmospheric-dust.md`** (decided
 2026-08-05: the graph adds more value; dust lands only if time remains after this). Written 2026-08-04. The
@@ -13,10 +14,12 @@ part is built, and that the demo gives it a purpose beyond navigation.
 The ordering is safe in the direction it needs to be: `atmospheric-dust.md:30–35` takes its priority-band
 scheme *from* `crt-display.md` §0, so the dependency runs dust → crt. Nothing points back at dust, and
 dropping it leaves both `crt` and this brief intact — which is what makes it a sound last item rather than an
-overcommitted one.
+overcommitted one. (Both have since landed and live in `done/`, so the ordering argument is history.)
 
-**Closes on landing**: `TODO.md`, *"Nonlinear chat view / chat graph editor"*, the placeholder button at
-`app.py:1083`, and `raven/librarian/README.md:377` / `:588` / `:590`.
+**Closes on landing**: `TODO.md`, *"Nonlinear chat view / chat graph editor"* (`TODO.md:658`), the
+placeholder button at `app.py:1700–1708`, the recent-chats wish at `raven/librarian/README.md:776–777`, the
+right-panel occupant note at `README.md:415`, and the help card's "not built yet" sentence at
+`app.py:1906`.
 
 (An earlier draft also listed one of the help card's two "This is a tech demo" disclaimers, on the grounds
 that `TODO_DEFERRED.md:1183` called it still true in substance — old chats stored but unreachable. Both
@@ -31,8 +34,9 @@ Two entries are stale in the same direction:
   Graph)` takes a `Graph` directly, and `Node(x, y, w, h, ...)` / `Edge(src, dst, points, shapes)` take
   explicit geometry. The graph is built in memory. No text format, no re-parse, and no DOT escaping applied
   to chat content.
-- **`raven/librarian/README.md:590` says a suitable DPG widget is missing and xdottir should be ported.**
+- **`raven/librarian/README.md` said a suitable DPG widget was missing and xdottir should be ported.**
   That port happened; `raven/common/gui/xdotwidget/` is the result, and `raven-xdot-viewer` is built on it.
+  The sentence has since been removed from the README, which is why it has no line number here.
 
 The widget already exposes every hook this needs: `on_click(node_id, button)`, `on_hover`, `pan_to_node`,
 `set_highlighted_nodes`, `search`, and `text_compaction_callback` for the label-does-not-fit case.
@@ -144,7 +148,7 @@ fails in practice. This also puts the round-versus-call distinction on screen in
 is fixing it in — a round is what gets a node, the calls within it are the badge's count.
 
 **Use `ICON_GEARS` for the badge.** The chat log already marks tool-role messages with it (the three-cogs
-glyph), and `chat_controller.py:599` records the reservation deliberately: `ICON_GEAR`, the universal
+glyph), and `chat_controller.py:1101–1103` records the reservation deliberately: `ICON_GEAR`, the universal
 settings glyph, is held for the future settings dialog and must not be used here. Reusing the same symbol
 means a visitor who expands a badge sees the marker they were just shown.
 
@@ -166,7 +170,7 @@ Navigation between windows: clicking a sibling re-centres, with the rebuild happ
 finishes. Whether custom controls are needed to jump by several siblings at once, or whether click-to-recentre
 covers it, is open.
 
-**That wide level is also the recent-chats list.** `raven/librarian/README.md:588` wants one, and notes that
+**That wide level is also the recent-chats list.** `raven/librarian/README.md:776–777` wants one, and notes that
 "recent chat" is ill-defined in a nonlinear format, guessing that the user's first message is a good enough
 splitting point. The fan-out shape says the guess is right, and this view already renders that level. So the
 level deserves special treatment — recency ordering, possibly timestamps — and this brief closes that item
@@ -251,7 +255,7 @@ room.
 first thing to go when zoomed out and compacted (`text_compaction_callback` exists for exactly that case).
 
 **Decided 2026-08-05: role glyphs**, reusing the ones the chat log already carries rather than picking
-afresh. The tool role's is `ICON_GEARS`, and `chat_controller.py:599–601` documents why it is not `ICON_GEAR`
+afresh. The tool role's is `ICON_GEARS`, and `chat_controller.py:1101–1103` documents why it is not `ICON_GEAR`
 — that one is reserved for the settings dialog. Whatever the other roles use in the chat log, carry the same
 symbols across, so that the two views name the same things the same way.
 
@@ -264,9 +268,9 @@ The marks the chat log uses for turns are `raven/icons/system.png`, `user.png`, 
 image assets, not font glyphs. (`ICON_GEARS` is a different thing: it marks a tool call *inside* a message,
 and the collapsed tool-count badge should reuse it, per above.)
 
-**`XDotWidget` cannot render images — but not for the reason recorded.** `parser.py:623–625` parses xdot
+**`XDotWidget` cannot render images — but not for the reason recorded.** `parser.py:633–635` parses xdot
 image shapes and skips them with a warning, on the stated grounds that DPG drawlists lack image support.
-**That premise is disproven by code in this repo**: `chat_controller.py:375` calls `dpg.draw_image` into a
+**That premise is disproven by code in this repo**: `chat_controller.py:615–616` calls `dpg.draw_image` into a
 drawlist to paint these very icons. Correct the comment while implementing; it will otherwise keep costing
 someone the same investigation.
 
@@ -281,25 +285,36 @@ character image and shadows the generic AI texture when found — which is how A
 pointing at `raven/icons/ai.png` would silently lose it, and the loss would show up only when a character is
 loaded.
 
-### Resampling: draw at native size and there is nothing to do
+### Resampling: scale with the node, clamped at native size
 
 DPG samples nearest-neighbour, which is why the tree carries a custom GPU Lanczos scaler. But the shipped
 role icons are **64×64 already, high-quality downscales meant for 1:1 use** (`aria1_icon.png` is 64×66;
 originals live in `raven/icons/00_workfiles/cropped/`, e.g. 719×722 for the generic AI icon).
 
-**So constant screen size at 64 px is the zero-work path**: draw the existing textures 1:1 and there is no
-resampling, no mip chain, and no coupling to `Viewport`'s zoom at all. Combined with the legibility argument
-— a fixed-size icon stays readable when zoomed out to take in a wide sibling fan — this is the recommended
-answer, and the remaining alternatives cost real work:
+**Decided 2026-09-01: the icon is a fixed fraction of node height, clamped to 64 px on screen.** So it
+never upsamples past the asset, and it shrinks with everything else when zooming out.
+
+An earlier draft of this section recommended a *constant* 64 px screen size, on the grounds that a
+fixed-size icon stays readable when zoomed out to take in a wide sibling fan. That argument inverts at the
+zoom it was written for: a wide fan is exactly the view where nodes are a few dozen pixels across, and a
+64 px icon is then wider than the node carrying it, so the row becomes overlapping icons with no nodes
+visible behind them. Constant screen size fails first in the case it was chosen to serve.
+
+Downsampling a 64 px texture through DPG's nearest-neighbour path is what the chat log already does today
+(64 px assets into a 32 px rect), so this needs no new machinery and introduces no inconsistency. The
+alternatives both cost real work and neither is needed:
 
 - **A different fixed size** wants a new *asset*, generated offline from the originals, rather than a runtime
   Lanczos pass. That is how the 64 px files were produced in the first place, and an asset is cheaper and
   more inspectable than a startup GPU step.
-- **Scaling with the node** needs the full apparatus: `mipchain`
+- **Lanczos at render time** needs the full apparatus: `mipchain`
   (`raven/common/image/lanczos.py`) plus the selection rule in `mip_scale_for_zoom`
-  (`raven/cherrypick/preload.py`). Note the trap if this is chosen — `mipchain`'s `min_size` defaults to 64,
-  tuned for Cherrypick's photographs, so a 64 px icon produces a chain of length one and the aliasing
-  survives the machinery.
+  (`raven/cherrypick/preload.py`). Note the trap if quality turns out to want it — `mipchain`'s `min_size`
+  defaults to 64, tuned for Cherrypick's photographs, so a 64 px icon produces a chain of length one and the
+  aliasing survives the machinery.
+
+Make the size rule a parameter on the shape rather than a constant in the layout, so the two can be
+compared by looking at them.
 
 *One asset note found while checking this, not belonging to this brief*: the chat log draws these 64 px icons
 into a `gui_config.chat_icon_size = 32` rect, so it takes DPG's nearest-neighbour path today. The fix is a
@@ -339,7 +354,7 @@ already-previewed node, a GUI button, or a modifier-click. Prototype before choo
 
 **Corrected 2026-08-05.** An earlier draft suggested a separate OS window or a second display. Neither is
 available: DPG gives one real OS window, which becomes the viewport. That is why the original plan in
-`TODO_DEFERRED.md:3060`ff assumed a panel.
+`TODO_DEFERRED.md:4397`ff assumed a panel.
 
 What *is* available is DPG windows — Visualizer's word cloud feature is the precedent. Whether that suits a
 graph view is open.
@@ -363,24 +378,105 @@ tree sizes with windowed siblings. Revisit only if measurement says otherwise.
 - **Editing the tree from the graph.** `chattree` has `delete_subtree`, `reparent_subtree` and friends, so it
   is tempting. Destructive operations driven from a graph a stranger is clicking is a bad first version.
 - **Revisions**, per above — they belong with message editing.
-- **A forest view across all roots.** The windowed wide level covers what the demo needs. **Reopened as
-  settle-item 7** — this was decided when roots were effectively singular, which stopped being true on
-  2026-08-12.
+- **A forest view across all roots.** The windowed wide level covers what the demo needs. Reopened when
+  roots became first-class on 2026-08-12, and closed again on 2026-09-01 — see decision 7 below.
 
-## What this brief must settle before implementation
+## Settled 2026-09-01
 
-1. **Panel placement** — DPG window, or a panel in the main layout — against the road-mode item's
-   swappable-panel framing.
-2. **The commit gesture**, right-click being unavailable. Prototype rather than argue.
-3. **Whether tool-node expansion is per-node or a global toggle.** The collapse itself is decided; only the
-   control is open.
-4. **Sibling-window controls**: whether click-to-recentre suffices or jump-by-several controls are needed,
-   and how many siblings the window holds either side.
-5. **Ordering at the wide level**, given that it doubles as the recent-chats list.
-6. **Whether an icon scales with its node or holds a constant screen size.** See the resampling note above:
-   the two answers differ by an order of magnitude in cost, and constant size is also likely what reads
-   better when zoomed out to take in a wide sibling fan.
-7. **Whether the graph view shows the root level at all**, and if so how — given that roots are card
-   versions rather than characters, that clicking one creates an avatar/voice mismatch against `config.py`,
-   and that it is the only route to chats written under older cards. This decision also fixes whether
-   `get_all_root_nodes` needs an index.
+The seven open items are decided, and four more surfaced while deciding them. What follows is the
+implementation contract; where a decision reverses something above, the section above says so too.
+
+1. **Panel placement: two child windows sharing the avatar panel's rect, shown and hidden.** Not a DPG
+   window and not a true overlay with its own z-order. This was already decided in `TODO.md:661` and is
+   recorded here only because this brief re-opened it. The view is built as a component class taking a
+   `gui_parent`, so the rect is one line in `app.py` if this is ever revisited.
+   - **The avatar pauses while covered**, per `TODO.md:662–663`, and the gate needs its own path rather
+     than a term in the idle branch. Two reasons, both checked: the existing pause is guarded by
+     `config.idle_timeout is not None` (`avatar_controller.py:358`), so a visibility term added inside it
+     would be dead for anyone who turned idle-off off; and `ping` resumes unconditionally
+     (`avatar_controller.py:388–390`), so without a visibility term there, any chat rebuild un-pauses a
+     covered avatar — and `view.build()` calls `ping`.
+2. **Commit gesture: a second left-click on the already-previewed node, plus a button in the graph's own
+   toolbar** enabled while a node is previewed. Both call the same function; the click is the fluent
+   gesture and the button is the discoverable one. **The button's tooltip names the click**, which is what
+   makes the fluent gesture findable at all. Preview state must be visibly highlighted, so that what a
+   second click will do is on screen before it happens.
+   - Note what the two-tier shape is *for*. Moving HEAD is itself non-destructive here — nothing is lost
+     and the graph can always get you back — so this is about legibility rather than safety, and should
+     not be hardened as if it were about safety.
+3. **Tool-node expansion is per-node**, keyed by a set of expanded assistant-node IDs. Same cost as a
+   global flag, since the whole `Graph` is rebuilt either way, and "what is inside this one" is the
+   question a visitor actually has.
+4. **Sibling window: the focused sibling ±2, plus the first and last as anchors, with a "…N more" gap
+   between.** Clicking a gap re-centres the window on the middle sibling of that gap — so the gap
+   primitive *is* the jump-by-several control and no extra widgets are needed. Up to nine items at a
+   level.
+   - **No ±10 buttons here**, unlike the chat log's sibling row. A gap click bisects the remaining run,
+     which beats a fixed stride on a fan of unknown width. Whether that in turn makes the chat log's ±10
+     buttons redundant is a real question and an open one — it wants empirics from this view first, and
+     nothing here should change them pre-emptively.
+5. **One ordering rule everywhere: left to right is creation order.** "Recent" is expressed by where the
+   *window* sits — the newest end, by default, at the session level — rather than by reversing that one
+   level, which would otherwise read backwards from every other level in the same picture.
+   - **Timestamps go in the node tooltip to start with.** Whether the session level also wants one drawn
+     into the node is deliberately left to look at in the running GUI; build the label so a second line
+     can be added cheaply.
+6. **An icon is a fixed fraction of node height, clamped to 64 px on screen.** This reverses the earlier
+   recommendation of constant screen size; the reasoning is in the resampling section above.
+7. **v1 renders HEAD's root only**, with a visible but inert "…N more cards" marker above it so the
+   truncation stays honest. Cross-root navigation stays out: clicking through to another card's chats
+   would leave the configured avatar and voice rendering against a different system prompt, and that
+   mismatch wants a decision of its own. Consequence: `get_all_root_nodes` needs no index for v1, so the
+   deferred item on that O(n) scan does not need acting on yet.
+   - The cheap follow-on, if the archaeology is wanted before the mismatch is solved: let the marker
+     re-scope the graph to another root as *preview only*, with commit disabled there. No HEAD move, so no
+     mismatch, and old-card chats become visible even though they are not yet reachable.
+
+### The greeting is becoming optional, so the wide level is defined structurally
+
+**The wide level is the children of `app_state["new_chat_HEAD"]`** — not "depth 2", which is how the
+sections above reason about it. The greeting node is on its way to being optional (Juha, 2026-09-01), and
+*optional* means per-chat rather than a global switch: one datastore will hold chats in both shapes. When
+there is no greeting, `new_chat_HEAD` is the root itself and the wide level moves up one.
+
+**Consequence: pointer pills are a list per node, not one pill.** With no greeting, SYS and NEW land on the
+same node. Cheap if built that way from the start.
+
+### Four more, settled at the same time
+
+**A. Module split.** `chatgraph.py` — the pure builder: datastore plus view state in, a `Graph` out, no DPG
+beyond the shape classes, which are plain data. `chatgraph_panel.py` — the DPG panel: the `XDotWidget`, the
+toolbar, the click wiring, the avatar pause. The split is what makes the layout unit-testable, which is the
+whole difficulty of this feature; nothing about the layout is checkable through a widget. Standard agile
+caveat applies — if the split fights the code, stop and reconsider rather than forcing it.
+
+**B. Layout: layered, with HEAD's lineage as a centred spine.** One row per depth; siblings windowed around
+the spine node at each level. Reingold–Tilford is the textbook fit for a tree in general and is overkill
+once windowing bounds the visible set — and a fixed spine gives the position stability of `TODO.md:664`
+nearly for free. The vertical window mirrors the horizontal one: root, gap, the last ~12 ancestors, HEAD,
+HEAD's children. An off-spine sibling that has children gets a downward gap marker, so its truncation shows
+the same way every other truncation does.
+
+**Position stability is a UX requirement, not a nicety** (Juha, 2026-09-01), and where the graph must move
+to accommodate new content, it moves *smoothly*. The widget already does this: `set_graph` replaces the
+graph without touching pan or zoom (it only updates the bounds), `pan_to_point(animate=True)` runs through
+`SmoothValue`, and the widget tracks a focus node of its own (`_focus_node_name` / `get_focus_node`). So the
+recipe is a deterministic layout followed by `pan_to_node(focus, animate=True)` after each rebuild: the
+anchor node stays put and the view slides, rather than the content jumping under a fixed viewport.
+
+**C. Live update is driven by a monotone `generation` counter on `chattree.Forest`**, bumped on every
+mutation; the panel reads it on the animator tick and rebuilds when it moves. About five lines in the
+datastore, against edits at the dozen-odd mutation sites in `chat_controller` — and it is the honest
+version of the alternative, which was to poll `(HEAD, len(datastore.nodes))` and would miss a delete and a
+create landing in the same frame. `chattree` is foundation code, so this was asked rather than assumed.
+
+**D. Dark mode by default, with a toggle.** Author the graph colours light and let the renderer's
+`dark_mode=True` lightness inversion do the work — the same path a parsed graph takes, so the two cannot
+diverge, and no API change. Raven's interface is dark everywhere; `raven-xdot-viewer` is the exception and
+exposes a toggle, so this view carries the same toggle. Note `set_dark_mode` is module-global state in the
+renderer, which is harmless with one widget in the process and worth remembering if that stops being true.
+
+### Sequencing
+
+Four reviewable commits: the builder and its tests; the panel and its placement, including the avatar pause
+gate; the interactions; the tool badges and role icons.
