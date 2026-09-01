@@ -847,10 +847,20 @@ remaining work is the two features below plus the polish the four rules describe
    thread where `split_frame` deadlocks.
 4. **Attachment thumbnails**, to the design above: straddling the right edge, stacked and capped, bordered
    in the graph's line pen, prepared on a background task with a placeholder meanwhile.
-5. **The avatar pause gate.** Never built. `TODO.md:662–663` and the road-mode notes above have the
-   traps: the visibility term needs its own path rather than a term in the idle branch, and the switch
-   keys on the idle detector rather than on whether the video happens to be running.
-6. **Fragment search across the tree**, which was always v2 and is brief 14's companion.
+5. **The avatar pause gate, and the auto-switch that goes with it.** Never built — so the two symptoms
+   reported on 2026-09-01 are the feature's absence rather than defects in it: the avatar's video keeps
+   rendering behind the graph, and switching itself off leaves *"[Video is off]"* on screen instead of
+   handing the panel to the graph.
+   - The spec is above, under road mode: the checkbox sets a *preference*, the graph takes the panel
+     whenever the video is off, and the avatar gets it back when the video returns if that is what the
+     preference says. `TODO.md:662–663` and the road-mode notes have the two traps — the visibility term
+     needs its own path rather than a term in the idle branch, and the switch keys on the idle detector,
+     never on whether the video happens to be running, or it deadlocks against its own pause.
+6. **The graph toggle is not persisted.** Every other checkbox in that row round-trips through
+   `app_state`; this one reads `dpg.get_value` and writes nothing, so it is off again on restart. A key
+   beside the others in `appstate.py`'s defaults (line ~44), read at build time for the checkbox's
+   `default_value`, and written in `toggle_chat_graph`.
+7. **Fragment search across the tree**, which was always v2 and is brief 14's companion.
 
 **Open, needing a decision rather than work:** whether `raven-xdot-viewer` gets the actual-size button
 too, for the consistency that now runs the other way.
