@@ -31,6 +31,9 @@ from raven.visualizer.app_state import app_state  # noqa: E402 -- ditto
 SEARCH_FIELD = "search_field"  # tag
 
 
+STOPWORDS = {"the", "of", "a", "and"}  # stands in for spaCy's list; see the `gui` fixture
+
+
 def test_spacy_is_not_imported_at_module_level():
     """Asserted against the source, because another test may have imported spaCy by the time this runs.
 
@@ -48,6 +51,12 @@ def test_spacy_is_not_imported_at_module_level():
 
 
 def test_the_stopword_set_is_the_english_one_and_is_cached():
+    """The one test here that wants the real list, so the only one that needs spaCy.
+
+    Deliberately separate from the tests of what the panel *does* with stopwords: those stand a fixed set
+    in, so they run wherever the suite runs and cannot be broken by upstream editing its word list.
+    """
+    pytest.importorskip("spacy", reason="spaCy not installed (the stopword list's only source)")
     first = info_panel._get_stopwords()
     assert "the" in first and "of" in first, "this does not look like an English stopword set"
     assert "titanium" not in first, "an ordinary content word must not be filtered out of a search"
@@ -106,6 +115,11 @@ def gui(monkeypatch):
     # would leave the test asserting against its own stub.
     monkeypatch.setattr(info_panel.selection, "dpg", fake_dpg)
     monkeypatch.setattr(info_panel.gui_animation, "flash_button", lambda **kwargs: None)
+    # A fixed stopword set rather than spaCy's. What this module decides is to drop whatever the loader
+    # hands it; *which* words those are is spaCy's business, and is asserted in the one test that says so.
+    # Standing in here keeps these tests off a multi-second import CI does not have, and off a word list
+    # that upstream is free to change under them.
+    monkeypatch.setattr(info_panel, "_get_stopwords", lambda: STOPWORDS)
 
     entries = [make_entry("The synthesis of a novel catalyst", cluster_id=0, data_idx=0),
                make_entry("A study of methanol", cluster_id=0, data_idx=1),
@@ -253,13 +267,13 @@ def test_the_default_action_searches_the_plotter_for_the_current_entry(gui, monk
 
 
 def test_the_search_drops_stopwords_from_the_title(gui, monkeypatch):
-    # Two reasons, both visible in the result: the Markdown highlighter has fewer short fragments to mark
-    # up, and "Methanol" stops matching on the "an" inside it, short case-insensitive fragments being
-    # tried first.
+    # A title makes a poor query unstripped: the search matches by substring, so its short common words
+    # match almost everywhere. Asserted against the stubbed set, since what belongs to this module is
+    # dropping them -- `test_search.test_a_lowercase_stopword_matches_inside_longer_words` is why.
     be_current(monkeypatch, 0)
     info_panel.search_or_select_current_entry()
     assert gui.dpg.values[SEARCH_FIELD] == "synthesis novel catalyst", \
-        "'the', 'of' and 'a' are stopwords; the rest of the title is the query"
+        "'The', 'of' and 'a' are in the stubbed stopword set; the rest of the title is the query"
 
 
 def test_asking_again_for_the_entry_already_searched_clears_the_search(gui, monkeypatch):
