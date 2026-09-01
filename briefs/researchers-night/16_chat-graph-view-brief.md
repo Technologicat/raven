@@ -476,6 +476,28 @@ diverge, and no API change. Raven's interface is dark everywhere; `raven-xdot-vi
 exposes a toggle, so this view carries the same toggle. Note `set_dark_mode` is module-global state in the
 renderer, which is harmless with one widget in the process and worth remembering if that stops being true.
 
+### Left open on purpose, to be settled by looking
+
+Three things the builder has taken a position on that only the running GUI can confirm. Written down so
+they are re-examined rather than inherited.
+
+- **A gap click bisects the run it hides**, which is not what a reader expects from a "…12 more" control —
+  the expectation is a step, and this jumps to the middle. It is worth trying anyway because it reaches
+  anywhere in a fan in O(log n) clicks where a step takes O(n) (Juha, 2026-09-01: "not what people expect,
+  but might be what they actually *want*").
+- **How much to show, and therefore whether the layout wants a real tidy-tree algorithm.** Two separate
+  limits, and only one of them is what the sibling window was sized against:
+  - *Screen space is not the binding one.* **The picture may spill past the panel's edges** rather than
+    being sized to fit inside it — the view pans, and a graph running off the edge reads more like the
+    shape the tree actually has than a graph trimmed to a rectangle does (Juha, 2026-09-01). So
+    `siblings_each_side` and `max_visible_depth` can be generous.
+  - *Graph-building speed is the one that decides it*, and it has not been measured. The whole `Graph` is
+    rebuilt on every change, so the visible set is bounded by what that costs per rebuild, not by what
+    fits. Measure before widening the defaults.
+- **Pointer pills are outlined rather than filled**, reasoned from the renderer's dark-mode contrast rule
+  picking a text colour from the element's fill. That reasoning is from reading the renderer, not from
+  seeing it drawn.
+
 ### Sequencing
 
 Four reviewable commits: the builder and its tests; the panel and its placement, including the avatar pause
