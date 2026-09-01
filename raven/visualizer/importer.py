@@ -937,7 +937,7 @@ def _canonicalize_cluster_keywords(vis_keywords_by_cluster):
     return canonicalized
 
 
-def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=6, fraction=0.1):
+def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vectors=None, max_vis_kw=6, fraction=0.1, max_prompt_entries=60):
     """Collect a set of keywords for each visualization cluster (2D), based on the per-entry detected keywords.
 
     `vis_data`: output of `_cluster_lowdim_data`, which see.
@@ -947,11 +947,23 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw
 
                     Output of `_extract_keywords`, which see.
 
+    `all_vectors`: Used when `config.clusters_keyword_method == "llm"`, and required in that case.
+
+                   Output of `_get_highdim_semantic_vectors`, which see. Must be in the same order as
+                   `vis_data`. Used to choose which entries of an oversized cluster to describe it by.
+
     `max_vis_kw`: how many keywords to keep for each cluster.
 
     `fraction`: Used when `config.clusters_keyword_method == "frequencies"`.
 
                 IMPORTANT. The source of the keyword suggestion magic. See `nlptools.suggest_keywords`.
+
+    `max_prompt_entries`: Used when `config.clusters_keyword_method == "llm"`.
+
+                          At most this many of a cluster's entries are sent to the LLM to be described.
+                          A cluster with more is sampled evenly, ordered from its center outwards; a
+                          cluster with fewer is sent whole. Exists because a large cluster with abstracts
+                          otherwise builds a prompt no backend will accept.
 
     Returns `vis_keywords_by_cluster`, a list, where the `k`th item is a list of keywords (`str`) for cluster ID `k`.
     For each cluster, the keywords are sorted by number of occurrences (descending) across the whole dataset.
@@ -977,16 +989,50 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw
                                                                 max_keywords=max_vis_kw)
         logger.info(f"        Done in {tim.dt:0.6g}s.")
     elif visualizer_config.clusters_keyword_method == "llm":
-        # First, group entries by cluster
-        entries_by_cluster = collections.defaultdict(list)  # {cluster_id0: [entry0, ...], ...}
-        for entry in vis_data:
+        # First, group entries by cluster. The index of each entry is kept alongside it, because
+        # `all_vectors` is in the same order as `vis_data` - both are the per-input-file lists
+        # concatenated the same way - and the capping below needs the vector for each entry.
+        entries_by_cluster = collections.defaultdict(list)  # {cluster_id0: [(idx0, entry0), ...], ...}
+        for idx, entry in enumerate(vis_data):
             if entry.cluster_id >= 0:  # not an outlier
-                entries_by_cluster[entry.cluster_id].append(entry)
+                entries_by_cluster[entry.cluster_id].append((idx, entry))
 
         eta_estimator = ETAEstimator(total=len(entries_by_cluster), keep_last=50)
         vis_keywords_by_cluster = []
-        for cluster_id, entries in sorted(entries_by_cluster.items()):  # default sort is fine, since the key is the cluster ID
+        for cluster_id, indexed_entries in sorted(entries_by_cluster.items()):  # default sort is fine, since the key is the cluster ID
             logger.info(f"        Extracting keywords for cluster #{cluster_id} (number of clusters: {len(entries_by_cluster.items())}); {eta_estimator.formatted_eta}")
+
+            # A big cluster does not fit in a prompt. Every entry used to go in, which holds while the
+            # clusters are small and does not in general: on a corpus whose search aimed at one topic, the
+            # largest cluster can hold hundreds of entries, and with abstracts attached that is a prompt of
+            # a few hundred thousand tokens. What the backend then does - refuse the request, or silently
+            # drop the far end of it - is its own business, and neither of those is a keyword list. The
+            # cluster it happens to is the largest one, whose label matters most.
+            #
+            # Which entries to keep is decided from the vectors rather than from anything the clusterer
+            # reports about its own members, so that this survives a change of clustering algorithm:
+            # ordering by similarity to the cluster's own mean direction is a property of the labels and
+            # the embedding, and reads the same whether the labels came from HDBSCAN, an agglomerative
+            # method, or k-means.
+            #
+            # The sample is then spread evenly along that ordering rather than taken from the top of it.
+            # Taking the most central entries would describe the cluster's densest part, and a big cluster
+            # on a crowded corpus is exactly the one likely to span several subtopics - so that reads as a
+            # confident answer about a third of the cluster. Even spacing keeps the core, which comes
+            # first, while giving the edges a proportional say. It also needs no random seed to be
+            # reproducible, which sampling uniformly at random would.
+            if len(indexed_entries) > max_prompt_entries:
+                member_vectors = all_vectors[[idx for idx, _entry in indexed_entries]]
+                center = member_vectors.mean(axis=0)
+                center = center / max(np.linalg.norm(center), 1e-12)
+                by_centrality = np.argsort(-(member_vectors @ center))
+                picks = np.linspace(0, len(by_centrality) - 1, max_prompt_entries).round().astype(int)
+                entries = [indexed_entries[by_centrality[k]][1] for k in picks]
+                logger.info(f"            Cluster #{cluster_id} has {len(indexed_entries)} entries; keywording from "
+                            f"{max_prompt_entries} of them, spread from its center outwards.")
+            else:
+                entries = [entry for _idx, entry in indexed_entries]
+
             # Use two blank lines as an entry separator (works also when the abstract has paragraph breaks; also clearly associates which title goes with which abstract).
             cluster_texts = "\n\n\n".join(_format_entry_for_keyword_extraction(entry).strip() for entry in entries)
             prompt = f"{visualizer_config.clusters_llm_keyword_extraction_prompt}\n-----\n\n{cluster_texts}"
@@ -1379,7 +1425,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
         # Find a set of keywords for each cluster
 
         if visualizer_config.extract_keywords:
-            vis_keywords_by_cluster = _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords)
+            vis_keywords_by_cluster = _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vectors)
         else:
             vis_keywords_by_cluster = []
         progress.tock()

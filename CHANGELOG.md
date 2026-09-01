@@ -345,6 +345,9 @@
 
 *Raven-visualizer*
 
+- **the LLM cluster-keyword step no longer builds a prompt too large to send.** Every entry of a cluster went into one prompt, which holds while the clusters are small and does not in general — on a corpus whose search aimed at one topic, the largest cluster can carry hundreds of entries, and with abstracts attached that is a prompt of a few hundred thousand tokens. The backend then either refuses it or silently drops the far end, and neither is a keyword list; the cluster it happened to was the largest one, whose label matters most.
+  - An oversized cluster is now described from an even sample of it, spread from its centre outwards, so the label reflects the whole cluster rather than only its densest part. Which entries those are is worked out from the embeddings rather than from anything the clustering algorithm reports about its own members, so it reads the same whichever algorithm produced the clusters.
+
 - **a bibliography record that cannot be parsed no longer ends the import.** One bad record used to abort the run and discard every record already processed — an hour of work on a large bibliography, with no way to get past it — and whether a record is bad is a question of what some exporter wrote, not of anything visible beforehand. Such a record is now logged and skipped. Dehyphenation does not even cost you that: being cosmetic, a failure there leaves the abstract untidied and keeps the record.
 
 - the info panel's smooth scroll is now really stopped when the panel's content is rebuilt, rather than being told to stop by a call that tidies up after it and leaves it running. A scroll in flight kept moving the panel through the swap, over the position the rebuild had just restored.

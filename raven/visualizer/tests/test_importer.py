@@ -190,3 +190,81 @@ def test_canonicalize_cluster_keywords_passes_through_when_nothing_to_do(monkeyp
     monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(explode)}), raising=False)
     clusters = [["Large Language Models"]]
     assert importer._canonicalize_cluster_keywords(clusters) is clusters
+
+
+# ---------------------------------------------------------------------------
+# Oversized clusters
+
+
+def test_oversized_cluster_is_sampled_from_its_center_outwards(monkeypatch):
+    # A cluster with hundreds of entries builds a prompt no backend will take, so it is capped. The
+    # sample is spread along the centrality ordering rather than taken from the top of it, because the
+    # top of it describes the cluster's densest part and a big cluster is the one most likely to span
+    # several subtopics.
+    #
+    # The fixture is built so the two behaviours disagree: nine entries share one direction and the
+    # tenth is orthogonal to them, so it sorts last by centrality. Taking the five *most central* would
+    # leave it out; spreading five picks across the ordering includes it. Asserting that it is present
+    # is therefore an assertion about the spreading, not merely about the capping.
+    import numpy as np
+    from unpythonic.env import env
+
+    vis_data = [env(title=f"central {i}", abstract="", cluster_id=0, cluster_probability=1.0)
+                for i in range(9)]
+    vis_data.append(env(title="the outlier", abstract="", cluster_id=0, cluster_probability=1.0))
+    all_vectors = np.array([[1.0, 0.0]] * 9 + [[0.0, 1.0]])
+
+    prompts = []
+
+    def fake_turn(settings, prompt, **kwargs):
+        prompts.append(prompt)
+        return FakeRecord("Keyword A, Keyword B")
+
+    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+    monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
+    monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+    monkeypatch.setattr(importer, "llmclient",
+                        type("_FakeLLMClient", (),
+                             {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                        raising=False)
+    monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
+
+    importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors, max_prompt_entries=5)
+
+    assert len(prompts) == 1
+    body = prompts[0].split("-----", 1)[1]
+    assert body.count("\n\n\n") + 1 == 5, "the prompt should carry exactly the capped number of entries"
+    assert "the outlier" in body, \
+        "the least central entry should still be sampled; taking the most central ones would drop it"
+
+
+def test_small_cluster_is_sent_whole(monkeypatch):
+    # Negative control for the test above: below the cap nothing is sampled, so every entry is present.
+    # Without this, a bug that sent one entry per cluster would still satisfy the assertions above.
+    import numpy as np
+    from unpythonic.env import env
+
+    vis_data = [env(title=f"paper {i}", abstract="", cluster_id=0, cluster_probability=1.0)
+                for i in range(4)]
+    all_vectors = np.array([[1.0, 0.0]] * 4)
+
+    prompts = []
+
+    def fake_turn(settings, prompt, **kwargs):
+        prompts.append(prompt)
+        return FakeRecord("Keyword A")
+
+    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+    monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
+    monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+    monkeypatch.setattr(importer, "llmclient",
+                        type("_FakeLLMClient", (),
+                             {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                        raising=False)
+    monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
+
+    importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors, max_prompt_entries=60)
+
+    body = prompts[0].split("-----", 1)[1]
+    for i in range(4):
+        assert f"paper {i}" in body
