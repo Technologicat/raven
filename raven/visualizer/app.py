@@ -35,9 +35,18 @@ opts = parser.parse_args()
 
 import logging
 from ..common import logsetup
+# TODO: apply this list's *shape* to the other Raven apps. It is hand-curated — everything the Visualizer
+# emits, plus the shared-layer modules whose output is worth reading here, and nothing third-party — and it
+# is the standard the constellation is aiming at rather than a local quirk. Every other app currently
+# passes no `allow` at all, so each one emits its dependencies' logging too; normalizing them means either
+# curating a list per app or settling for a blanket `"raven"`, which is a decision nobody has made yet.
+#
+# Recorded because the asymmetry looks like a defect from either end: the next reader may well "fix" this
+# one to match the others, which would be the wrong direction.
 logsetup.configure(level=getattr(logging, opts.log_level),
                    logfile=opts.log,
-                   allow=[__name__,
+                   allow=[__name__,  # this module, whatever it is called (`__main__` under `python -m`)...
+                          __package__,  # ...and every other Visualizer module, including ones not written yet
                           "raven.client.mayberemote",
                           "raven.client.api",
                           "raven.client.util",
@@ -50,7 +59,6 @@ logsetup.configure(level=getattr(logging, opts.log_level),
                           "raven.common.gui.widgetfinder",
                           "raven.common.utils",
                           "raven.librarian.llmclient",
-                          "raven.visualizer.importer",
                           "raven.vendor.file_dialog.fdialog"])
 logger = logging.getLogger(__name__)
 
@@ -70,7 +78,7 @@ with timer() as tim:
 
     from unpythonic.env import env
     envcls = env  # for functions that need an `env` parameter due to `@dlet`, so that they can also instantiate env objects (oops)
-    from unpythonic import call, box, unbox, sym
+    from unpythonic import call, unbox
 
     import dearpygui.dearpygui as dpg
 
@@ -97,6 +105,7 @@ with timer() as tim:
     from . import annotation
     from . import config as visualizer_config
     from . import importer  # BibTeX importer
+    from . import importer_gui  # ...and its GUI
     from . import info_panel
     from . import plotter
     from . import search
@@ -143,7 +152,8 @@ app_state.exit_modal_mode = exit_modal_mode
 def is_any_modal_window_visible():
     """Return whether *some* modal window is open.
 
-    Currently these are the help card, the "open file" dialog, and the "save word cloud" dialog.
+    Currently these are the help card, the "open file" dialog, the "save word cloud" dialog, and the
+    BibTeX importer's own two file dialogs.
 
     The messagebox term is here ahead of any caller: this app shows no messagebox today, and the `messagebox`
     import exists for this check alone. It is deliberate rather than speculative — the failure it forecloses
@@ -153,7 +163,7 @@ def is_any_modal_window_visible():
     and doing something else) does not look like a missing line in this function.
     """
     return (is_open_file_dialog_visible() or word_cloud.is_save_dialog_visible() or
-            is_open_import_dialog_visible() or is_save_import_dialog_visible() or
+            importer_gui.is_any_dialog_visible() or
             help_window.is_visible() or
             messagebox.is_visible())
 
@@ -265,14 +275,10 @@ def open_file(filename):
 
 filedialog_open = None
 app_state.filedialog_save = None
-filedialog_open_import = None
-filedialog_save_import = None
 
 def initialize_filedialogs(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
     """Create the file dialogs."""
     global filedialog_open
-    global filedialog_open_import
-    global filedialog_save_import
     filedialog_open = FileDialog(title="Open dataset",
                                  tag="open_file_dialog",
                                  callback=_open_file_callback,
@@ -284,18 +290,7 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                            filter_list=[".png"],
                                            save_mode=True,
                                            default_path=default_path)
-    filedialog_open_import = FileDialog(title="Choose BibTeX file(s) to import [Ctrl+click to multi-select]",
-                                        tag="open_import_dialog",
-                                        callback=_open_import_callback,
-                                        filter_list=[".bib"],
-                                        multi_selection=True,
-                                        default_path=default_path)
-    filedialog_save_import = FileDialog(title="Save imported dataset as",
-                                        tag="save_import_dialog",
-                                        callback=_save_import_callback,
-                                        filter_list=[".pickle"],
-                                        save_mode=True,
-                                        default_path=default_path)
+    importer_gui.initialize_filedialogs(default_path)
 
 # --------------------------------------------------------------------------------
 # "Open file" dialog
@@ -332,197 +327,6 @@ def is_open_file_dialog_visible():
     if filedialog_open is None:
         return False
     return filedialog_open.is_visible()
-
-# --------------------------------------------------------------------------------
-# BibTeX importer integration
-
-importer_input_files_box = box([])
-importer_output_file_box = box("")
-
-importer_action_start = sym("start")
-importer_action_stop = sym("stop")
-
-def show_importer_window():
-    """Show the BibTeX importer window, centered on the main window.
-
-    Already open: leave it alone, in the position the user gave it. Centering is for the way in, when the
-    window has no position anyone chose.
-    """
-    if dpg.is_item_visible("importer_window"):  # tag
-        return
-    dpg.show_item("importer_window")  # tag
-    guiutils.recenter_window("importer_window", reference_window=main_window)  # tag
-
-def toggle_importer_window():
-    """Show/hide the BibTeX importer window."""
-    if dpg.is_item_visible("importer_window"):  # tag
-        dpg.hide_item("importer_window")  # tag
-    else:
-        show_importer_window()
-
-def show_open_import_dialog():
-    """Button callback. Show the open import file dialog, for the user to pick which BibTeX files to import."""
-    logger.debug("show_open_import_dialog: Showing open import dialog.")
-    filedialog_open_import.show_file_dialog()
-    app_state.enter_modal_mode()
-    logger.debug("show_open_import_dialog: Done.")
-
-def _open_import_callback(selected_files):
-    """Callback that fires when the open import file dialog closes."""
-    logger.debug("_open_import_callback: Open import dialog callback triggered.")
-    app_state.exit_modal_mode()
-    if selected_files:
-        logger.debug(f"_open_import_callback: User selected the file(s) {selected_files}.")
-        importer_input_files_box << selected_files  # the dialog hands over a list of its own, so this one is ours to keep
-        update_open_import_gui_table()
-    else:  # empty selection -> cancelled
-        logger.debug("_open_import_callback: Cancelled.")
-
-def is_open_import_dialog_visible():
-    """Return whether the open import file dialog is open.
-
-    We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
-    """
-    if filedialog_open_import is None:
-        return False
-    return filedialog_open_import.is_visible()
-
-def import_bibtex_files(filenames: list[str]) -> None:
-    """Open the BibTeX importer window, with `filenames` already filled in as the input files.
-
-    This is where a drag-and-drop of BibTeX files lands. It stops short of starting the import: the importer
-    also needs an output dataset to save as, and picking that is the user's next step, so the window opens
-    ready rather than running.
-    """
-    logger.debug(f"import_bibtex_files: {len(filenames)} file(s).")
-    importer_input_files_box << list(filenames)  # our own copy — the box outlives this call
-    update_open_import_gui_table()
-    show_importer_window()
-
-def show_save_import_dialog():
-    """Button callback. Show the save import file dialog, to ask the user for a filename to save the imported dataset as."""
-    logger.debug("show_save_import_dialog: Showing save import dialog.")
-    filedialog_save_import.show_file_dialog()
-    app_state.enter_modal_mode()
-    logger.debug("show_save_import_dialog: Done.")
-
-def _save_import_callback(selected_files):
-    """Callback that fires when the save import file dialog closes."""
-    logger.debug("_save_import_callback: Save import dialog callback triggered.")
-    app_state.exit_modal_mode()
-    if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
-        raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
-    if selected_files:
-        selected_file = selected_files[0]
-        logger.debug(f"_save_import_callback: User selected the file '{selected_file}'.")
-        importer_output_file_box << selected_file
-        update_save_import_gui_table()
-    else:  # empty selection -> cancelled
-        logger.debug("_save_import_callback: Cancelled.")
-
-def is_save_import_dialog_visible():
-    """Return whether the save import file dialog is open.
-
-    We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
-    """
-    if filedialog_save_import is None:
-        return False
-    return filedialog_save_import.is_visible()
-
-def update_importer_status():
-    """Update the BibTeX importer status in the GUI.
-
-    This is called automatically every frame while the importer task is running.
-
-    This is also called one more time when the importer task exits, via the `done_callback` mechanism.
-    """
-    # The importer generates the GUI messages. We only need to get them from there.
-    dpg.set_value("importer_status_text", unbox(importer.status_box))
-
-    # Update the importer progress bar.
-    if importer.progress is not None:
-        progress_value = importer.progress.value
-    else:
-        progress_value = 0.0
-    percentage = int(100 * progress_value)
-    dpg.set_value("importer_progress_bar", progress_value)
-    dpg.configure_item("importer_progress_bar", overlay=f"{percentage}%")
-    # dpg.set_item_label("importer_window", f"BibTeX import [running, {percentage}%]")  # TODO: would be nice to see status while minimized, but prevents dragging the window for some reason.
-
-def importer_started_callback(task_env):
-    """Callback that fires when the BibTeX importer task actually starts.
-
-    We use this to update the GUI state.
-    """
-    dpg.set_item_label("importer_startstop_button", fa.ICON_STOP)
-    dpg.set_value("importer_startstop_tooltip_text", "Cancel BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
-    dpg.enable_item("importer_startstop_button")
-
-    dpg.set_item_label("importer_startstop_heading_text_button", "Running; click to cancel")  # TODO: DRY duplicate definitions for labels
-    dpg.set_value("importer_startstop_heading_text_tooltip_text", "Cancel BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
-    dpg.enable_item("importer_startstop_heading_text_button")
-
-def importer_done_callback(task_env):
-    """Callback that fires when the BibTeX importer task actually exits, via the `done_callback` mechanism.
-
-    The callback fires regardless of whether the task completed successfully, errored out, or was cancelled.
-    See `start_task` for details how to use the `task_env.cancelled`, `task_env.result_code` and `task_env.exc` attributes.
-
-    We use this to update the GUI state.
-    """
-    update_importer_status()
-    dpg.configure_item("importer_progress_bar", overlay="")
-    dpg.hide_item("importer_progress_bar")
-
-    dpg.set_item_label("importer_startstop_button", fa.ICON_PLAY)
-    dpg.set_value("importer_startstop_tooltip_text", "Start BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
-    dpg.enable_item("importer_startstop_button")
-
-    dpg.set_item_label("importer_startstop_heading_text_button", "Start")  # TODO: DRY duplicate definitions for labels
-    dpg.set_value("importer_startstop_heading_text_tooltip_text", "Start BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
-    dpg.enable_item("importer_startstop_heading_text_button")
-
-    # dpg.set_item_label("importer_window", "BibTeX import")  # TODO: DRY duplicate definitions for labels
-
-def start_importer(output_file, *input_files):
-    """Start the BibTeX importer to import `input_files` (.bib) into `output_file` (Raven-visualizer dataset format, currently .pickle)."""
-    if importer.has_task():
-        return
-    dpg.show_item("importer_progress_bar")
-    dpg.disable_item("importer_startstop_button")  # Prevent multiple clicks: wait until the task actually starts before allowing the user to tell it to stop. The button will be re-enabled by the `started_callback`.
-    dpg.disable_item("importer_startstop_heading_text_button")
-    importer.start_task(importer_started_callback, importer_done_callback, output_file, *input_files)
-
-def stop_importer():
-    """Stop (cancel) the BibTeX importer task, if any is running."""
-    if not importer.has_task():
-        return
-    dpg.disable_item("importer_startstop_button")  # We must wait until the previous task actually exits before we can start a new one. The button will be re-enabled by the `done_callback`.
-    dpg.disable_item("importer_startstop_heading_text_button")
-    dpg.set_item_label("importer_startstop_heading_text_button", "Canceling...")  # TODO: DRY duplicate definitions for labels
-    importer.cancel_task()
-
-def start_or_stop_importer():
-    """The actual GUI button callback. Start or stop the BibTeX importer task, using the input/output filenames currently selected in the GUI."""
-    logger.info("start_or_stop_importer: called.")
-    if importer.has_task():
-        logger.info("start_or_stop_importer: importer task is running, so we will stop it.")
-        action = importer_action_stop
-    else:
-        logger.info("start_or_stop_importer: no importer task running, so we will start one.")
-        action = importer_action_start
-
-    if action is importer_action_start:
-        output_file = unbox(importer_output_file_box)
-        input_files = unbox(importer_input_files_box)
-        logger.info(f"start_or_stop_importer: output file is '{output_file}', input files are '{input_files}'.")
-        if output_file and input_files:  # filenames specified?
-            logger.info("start_or_stop_importer: filenames have been specified. Invoking importer.")
-            start_importer(output_file, *input_files)
-        else:
-            logger.info("start_or_stop_importer: input, output or both filenames missing. Cannot start importer.")
-    else:
-        stop_importer()
 
 # --------------------------------------------------------------------------------
 # Animations, live updates
@@ -608,7 +412,7 @@ def update_animations():
     info_panel.update_navigation_controls()  # Info panel top/bottom/pageup/pagedown buttons
 
     if importer.has_task():
-        update_importer_status()
+        importer_gui.update_status()
 
     # ----------------------------------------
     # Render all currently running animations
@@ -826,7 +630,7 @@ with timer() as tim:
 
                 dpg.add_button(label=fa.ICON_DOWNLOAD,
                                tag="open_importer_window_button",
-                               callback=toggle_importer_window,
+                               callback=importer_gui.toggle_window,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
                 dpg.bind_item_font("open_importer_window_button", app_state.themes_and_fonts.icon_font_solid)  # tag
@@ -1057,128 +861,7 @@ with timer() as tim:
                                                                      "Save word cloud as PNG [Ctrl+S]")
 
     # BibTeX importer integration. This allows invoking the BibTeX importer from the Raven-visualizer GUI.
-    with dpg.window(show=False, modal=False, no_title_bar=False, tag="importer_window",
-                    label="BibTeX import",
-                    no_scrollbar=True, autosize=True) as importer_window:
-        with dpg.group(horizontal=False):
-            def importer_separator():
-                """Add a horizontal line with a good-looking amount of vertical space around it. Used in the BibTeX importer window."""
-                dpg.add_spacer(width=gui_config.importer_w, height=2)  # leave some vertical space
-                with dpg.drawlist(width=gui_config.importer_w, height=1):
-                    dpg.draw_line((0, 0), (gui_config.importer_w - 1, 0), color=(140, 140, 140, 255), thickness=1)
-                dpg.add_spacer(width=gui_config.importer_w, height=1)  # leave some vertical space
-
-            # dpg.add_text("[To start, select files, and then click the play button.]", color=(140, 140, 140, 255))
-            dpg.add_spacer(width=gui_config.importer_w)  # ensure window width
-
-            def update_save_import_gui_table():
-                """In the BibTeX importer window, update the output filename in the GUI.
-
-                Called by `_save_import_callback` when the save import file dialog closes.
-                """
-                for child in dpg.get_item_children("save_import_table", slot=1):  # This won't affect table columns, because they live in a different slot.
-                    dpg.delete_item(child)
-
-                importer_output_file = unbox(importer_output_file_box)
-                with dpg.table_row(parent="save_import_table"):
-                    if importer_output_file:
-                        dpg.add_text(os.path.basename(importer_output_file), color=(140, 140, 140, 255))
-                    else:
-                        dpg.add_text("[not selected]", color=(140, 140, 140, 255))
-
-            def update_open_import_gui_table():
-                """In the BibTeX importer window, update the input filenames in the GUI.
-
-                Called by `_open_import_callback` when the open import file dialog closes.
-                """
-                for child in dpg.get_item_children("open_import_table", slot=1):  # This won't affect table columns, because they live in a different slot.
-                    dpg.delete_item(child)
-
-                importer_input_files = unbox(importer_input_files_box)
-                if importer_input_files:
-                    for importer_input_file in importer_input_files:
-                        with dpg.table_row(parent="open_import_table"):
-                            dpg.add_text(os.path.basename(importer_input_file), color=(140, 140, 140, 255))
-                else:
-                    with dpg.table_row(parent="open_import_table"):
-                        dpg.add_text("[not selected]", color=(140, 140, 140, 255))
-
-            with dpg.group(horizontal=True):
-                dpg.add_button(label=fa.ICON_HARD_DRIVE,
-                               tag="importer_save_button",
-                               width=gui_config.toolbutton_w,
-                               callback=show_save_import_dialog)
-                dpg.bind_item_font("importer_save_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                with dpg.tooltip("importer_save_button", tag="importer_save_tooltip"):  # tag
-                    dpg.add_text("Select output dataset file to save as [Ctrl+S]", tag="importer_save_tooltip_text")  # TODO: DRY duplicate definitions for labels
-
-                # We use a separate button widget instead of a header row.
-                #
-                # The header row would look clickable, but it isn't. It only supports a sort callback when `sortable=True`,
-                # and abusing that as a button click callback is nontrivial. It gets called also when the table is rendered
-                # (i.e. when the import window is opened), which also leads to an incorrect window size for the file-open dialog.
-                with dpg.group():
-                    dpg.add_button(label="Output dataset file",
-                                   tag="importer_save_heading_text_button",
-                                   width=gui_config.importer_w - gui_config.toolbutton_w - 11,
-                                   callback=show_save_import_dialog)
-                    with dpg.tooltip("importer_save_heading_text_button", tag="importer_save_heading_text_tooltip"):  # tag
-                        dpg.add_text("Select output dataset file to save as [Ctrl+S]", tag="importer_save_heading_text_tooltip_text")  # TODO: DRY duplicate definitions for labels
-                    with dpg.table(header_row=False,
-                                   sortable=False,
-                                   width=gui_config.importer_w - gui_config.toolbutton_w - 11,
-                                   tag="save_import_table"):
-                        dpg.add_table_column(label="Output dataset file")
-                    update_save_import_gui_table()
-
-            with dpg.group(horizontal=True):
-                dpg.add_button(label=fa.ICON_FOLDER,
-                               tag="importer_select_input_files_button",
-                               width=gui_config.toolbutton_w,
-                               callback=show_open_import_dialog)
-                dpg.bind_item_font("importer_select_input_files_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                with dpg.tooltip("importer_select_input_files_button", tag="importer_select_input_files_tooltip"):  # tag
-                    dpg.add_text("Select input BibTeX files [Ctrl+O]", tag="importer_select_input_files_tooltip_text")  # TODO: DRY duplicate definitions for labels
-
-                with dpg.group():
-                    dpg.add_button(label="Input BibTeX files",
-                                   tag="importer_select_input_files_heading_text_button",
-                                   width=gui_config.importer_w - gui_config.toolbutton_w - 11,
-                                   callback=show_open_import_dialog)
-                    with dpg.tooltip("importer_select_input_files_heading_text_button", tag="importer_select_input_files_heading_text_tooltip"):  # tag
-                        dpg.add_text("Select input BibTeX files [Ctrl+O]", tag="importer_select_input_files_heading_text_tooltip_text")  # TODO: DRY duplicate definitions for labels
-                    with dpg.table(header_row=False,
-                                   sortable=False,
-                                   width=gui_config.importer_w - gui_config.toolbutton_w - 11,
-                                   tag="open_import_table"):
-                        dpg.add_table_column(label="Input BibTeX files")
-                    update_open_import_gui_table()
-
-            dpg.add_spacer(width=gui_config.importer_w, height=2)  # leave some vertical space
-
-            with dpg.group(horizontal=True):
-                dpg.add_button(label=fa.ICON_PLAY,
-                               tag="importer_startstop_button",
-                               width=gui_config.toolbutton_w,
-                               callback=start_or_stop_importer,
-                               enabled=True)
-                dpg.bind_item_font("importer_startstop_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("importer_startstop_button", "disablable_widget_theme")  # tag
-                with dpg.tooltip("importer_startstop_button", tag="importer_startstop_tooltip"):  # tag
-                    dpg.add_text("Start BibTeX import [Ctrl+Enter]", tag="importer_startstop_tooltip_text")  # TODO: DRY duplicate definitions for labels
-
-                dpg.add_button(label="Start",
-                               tag="importer_startstop_heading_text_button",
-                               width=gui_config.importer_w - gui_config.toolbutton_w - 11,
-                               callback=start_or_stop_importer)
-                dpg.bind_item_theme("importer_startstop_heading_text_button", "disablable_widget_theme")  # tag
-                with dpg.tooltip("importer_startstop_heading_text_button", tag="importer_startstop_heading_text_tooltip"):
-                    dpg.add_text("Start BibTeX import [Ctrl+Enter]", tag="importer_startstop_heading_text_tooltip_text")
-
-            importer_separator()
-
-            dpg.add_progress_bar(default_value=0, width=-1, show=False, tag="importer_progress_bar")
-            dpg.add_text("[To start, select files, and then click the play button.]", wrap=gui_config.importer_w, color=(140, 140, 140, 255), tag="importer_status_text")
+    importer_gui.build_window()
 
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
@@ -1490,7 +1173,7 @@ def hotkeys_callback(sender, app_data):
 
     # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
     elif (is_open_file_dialog_visible() or word_cloud.is_save_dialog_visible() or
-          is_open_import_dialog_visible() or is_save_import_dialog_visible()):
+          importer_gui.is_any_dialog_visible()):
         return
 
     # Hotkeys while the word cloud viewer is shown
@@ -1503,13 +1186,13 @@ def hotkeys_callback(sender, app_data):
     elif dpg.is_item_visible("importer_window"):  # tag
         if ctrl_pressed:
             if key == dpg.mvKey_O:
-                show_open_import_dialog()
+                importer_gui.show_open_dialog()
                 return
             elif key == dpg.mvKey_S:
-                show_save_import_dialog()
+                importer_gui.show_save_dialog()
                 return
             elif key == dpg.mvKey_Return:
-                start_or_stop_importer()
+                importer_gui.start_or_stop()
                 return
 
     # Hotkeys for main window, while no modal window is shown
@@ -1587,7 +1270,7 @@ def hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_O:
             show_open_file_dialog()
         elif key == dpg.mvKey_I:
-            toggle_importer_window()
+            importer_gui.toggle_window()
         elif key == dpg.mvKey_Home:
             plotter.reset_zoom()
         elif key == dpg.mvKey_N:
@@ -1705,7 +1388,7 @@ filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_ext
                                                          label="a dataset (.pickle)",
                                                          multiple=False),
                                        filedrop.DropRule(matches=filedrop.by_extension(".bib"),
-                                                         handler=import_bibtex_files,
+                                                         handler=importer_gui.import_bibtex_files,
                                                          label="BibTeX files to import (.bib)")],
                                       reference_window=main_window,
                                       what="Raven-visualizer",
@@ -1748,10 +1431,10 @@ finally:
     # segfault rather than an exception. Here rather than in the exit callback, because joining is waiting
     # and the exit callback runs inside `render_dearpygui_frame`, where waiting deadlocks anything parked
     # in `split_frame`.
-    for filedialog in (filedialog_open, filedialog_open_import, filedialog_save_import,
-                       app_state.filedialog_save):
+    for filedialog in (filedialog_open, app_state.filedialog_save):
         if filedialog is not None:
             filedialog.destroy()
+    importer_gui.destroy_filedialogs()
 
     try:
         dpg.destroy_context()
