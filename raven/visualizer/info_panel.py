@@ -62,6 +62,8 @@ __all__ = ["content_lock",
            "cluster_id_to_display_idx",
            "report_plaintext",
            "report_markdown",
+           "build_header",
+           "build_navigation_controls",
            "clear_tasks",
            "build_window",
            "note_wheel_scroll",
@@ -112,6 +114,7 @@ from ..common import numutils
 
 from ..common.gui import animation as gui_animation
 from ..common.gui import keyboardmark
+from ..common.gui import tooltip as gui_tooltip
 from ..common.gui import utils as guiutils
 from ..common.gui import widgetfinder
 
@@ -185,6 +188,114 @@ _current_item_mark = None  # keyboardmark.Mark, created lazily by `_get_current_
 _scroll_animation = None  # reference to the current info panel scroll animation (if any), so we can stop only this animation.
 _scroll_animation_lock = threading.RLock()
 
+_copy_report_tooltip = None  # gui_tooltip.Tooltip on the copy-report button, created in `build_header`.
+                             # A `Tooltip` rather than a plain `dpg.tooltip`, because the copy
+                             # acknowledgment rewrites the caption and a `dpg.tooltip` would draw one
+                             # frame at its old size.
+
+
+def build_header():
+    """Create the info panel's header child window: the copy button, the title, and the status readouts.
+
+    Call this from the app's GUI build, at the point in the layout where the header belongs. It creates
+    the child window itself, so its position in the app's tree is where this call sits.
+
+    The app is expected to add its Markdown font-loading warm-up into `item_information_header`
+    afterwards; that is a DPG startup concern rather than part of the header.
+    """
+    global _copy_report_tooltip
+    with dpg.child_window(tag="item_information_header",  # tag
+                          width=gui_config.info_panel_w,
+                          height=gui_config.info_panel_header_h,
+                          no_scrollbar=True,  # we want to hide the "hello"
+                          no_scroll_with_mouse=True):
+        with dpg.group(horizontal=True, tag="item_information_header_group"):
+            dpg.add_button(tag="copy_report_to_clipboard_button",
+                           label=fa.ICON_COPY,
+                           callback=copy_report_to_clipboard,
+                           enabled=False)
+            dpg.bind_item_font("copy_report_to_clipboard_button", app_state.themes_and_fonts.icon_font_solid)  # tag
+            dpg.bind_item_theme("copy_report_to_clipboard_button", "disablable_widget_theme")  # tag
+            # Self-sizing: the copy acknowledgment replaces this three-line caption with one line.
+            _copy_report_tooltip = gui_tooltip.Tooltip("copy_report_to_clipboard_button",  # tag
+                                                       "Copy report to clipboard [F8]\n    no modifier: as plain text\n    with Shift: as Markdown")  # TODO: DRY duplicate definitions for labels
+
+            # Static header text
+            dpg.add_text("Item information", color=(255, 255, 255, 255), tag="item_information_title")
+
+            # Dynamic header text, this will be replaced by the item count statistics when something is shown in the info panel.
+            dpg.add_text("[nothing selected]", color=(140, 140, 140, 255), tag="item_information_selection_item_count")  # TODO: DRY duplicate definitions for labels
+            dpg.add_text("[x items shown]", color=(140, 140, 140, 255), tag="item_information_total_count", show=False)
+
+            # Spinners to indicate that the item info panel is refreshing. The color shows the state (update pending, or updating).
+            # At most one spinner is shown at a time.
+            dpg.add_loading_indicator(style=0,
+                                      radius=1.0,
+                                      color=(255, 96, 96, 255),  # orange
+                                      secondary_color=(128, 32, 32, 255),
+                                      show=False,
+                                      tag="info_panel_pending_spinner")
+            dpg.add_loading_indicator(style=0,
+                                      radius=1.0,
+                                      color=(96, 96, 255, 255),  # blue
+                                      secondary_color=(32, 32, 128, 255),
+                                      show=False,
+                                      tag="info_panel_rendering_spinner")
+
+
+def build_navigation_controls():
+    """Create the info panel's navigation bar: scroll to top/bottom, page up/down, and search-match jumps.
+
+    Call this from the app's GUI build, at the point in the layout where the bar belongs.
+
+    Every button starts disabled: there is nothing to navigate until a dataset is loaded and something is
+    in the panel. `update_navigation_controls`, called per frame, is what enables them.
+    """
+    with dpg.child_window(tag="item_information_navigation_controls",  # tag
+                          width=gui_config.info_panel_w,
+                          height=gui_config.info_panel_header_h,
+                          no_scrollbar=True,
+                          no_scroll_with_mouse=True):
+        with dpg.group(horizontal=True, tag="item_information_navigation_controls_group"):
+            for tag, icon, callback, caption in (("go_to_top_button", fa.ICON_ANGLES_UP, go_to_top,
+                                                  "To top [Home, when search field not focused]"),
+                                                 ("page_up_button", fa.ICON_ANGLE_UP, page_up,
+                                                  "Page up [Page Up, when search field not focused]"),
+                                                 ("page_down_button", fa.ICON_ANGLE_DOWN, page_down,
+                                                  "Page down [Page Down, when search field not focused]"),
+                                                 ("go_to_bottom_button", fa.ICON_ANGLES_DOWN, go_to_bottom,
+                                                  "To bottom [End, when search field not focused]")):
+                dpg.add_button(tag=tag,
+                               label=icon,
+                               width=gui_config.info_panel_button_w,
+                               callback=callback,
+                               enabled=False)
+                dpg.bind_item_font(tag, app_state.themes_and_fonts.icon_font_solid)
+                dpg.bind_item_theme(tag, "disablable_widget_theme")  # tag
+                with dpg.tooltip(tag):
+                    dpg.add_text(caption)
+
+            dpg.add_spacer(width=6)
+
+            # Scroll between search matches. Circles rather than DPG's standard arrows: the info panel
+            # content is full of arrow buttons meaning something else, and these sit right above them.
+            for tag, icon, callback, caption in (("prev_search_match_button", fa.ICON_CIRCLE_UP,
+                                                  scroll_to_prev_search_match, "Previous search match [Shift+F3]"),
+                                                 ("next_search_match_button", fa.ICON_CIRCLE_DOWN,
+                                                  scroll_to_next_search_match, "Next search match [F3]")):
+                dpg.add_button(tag=tag,
+                               label=icon,
+                               width=gui_config.info_panel_button_w,
+                               callback=callback,
+                               enabled=False)
+                dpg.bind_item_font(tag, app_state.themes_and_fonts.icon_font_solid)
+                dpg.bind_item_theme(tag, "disablable_widget_theme")  # tag
+                with dpg.tooltip(tag):
+                    dpg.add_text(caption)
+
+            dpg.add_text("[no search active]", color=(140, 140, 140, 255), tag="item_information_search_controls_item_count")  # TODO: DRY duplicate definitions for labels
+            dpg.add_text("[x/x]", color=(140, 140, 140, 255), tag="item_information_search_controls_current_item", show=False)
+
 
 def _get_task_manager():
     """Lazy-create the info panel render task manager. Requires `app_state.bg` to be set."""
@@ -206,10 +317,14 @@ def clear_tasks(wait=False):
 # Window / callback wiring (called once after app.py's GUI layout exists)
 
 def build_window():
-    """Create the initial content group, wire button callbacks, create the scroll-end flasher.
+    """Create the initial content group and the scroll-end flasher.
 
-    Must be called after `app.py`'s GUI layout has created `item_information_panel` (with the
-    `info_panel_content_end_spacer` as its only child) and the navigation/copy/search buttons.
+    Must be called after the app's GUI layout has created `item_information_panel`, with the
+    `info_panel_content_end_spacer` as its only child.
+
+    The header and the navigation bar are `build_header` and `build_navigation_controls`, which the app
+    calls at their own places in its layout. Their buttons carry their callbacks from birth, so there is
+    nothing to bind here.
     """
     global _content_group
     global _scroll_end_flasher
@@ -220,14 +335,6 @@ def build_window():
     _content_group = dpg.add_group(horizontal=False, parent="item_information_panel", before="info_panel_content_end_spacer")  # tag
     dpg.add_text("[Select item(s) to view information]", color=(140, 140, 140, 255), parent=_content_group)  # TODO: DRY duplicate definitions for labels
     dpg.set_item_alias(_content_group, "info_panel_content_group")  # tag  # debug-registry name; int ID is the hot path
-
-    dpg.set_item_callback("go_to_top_button", go_to_top)  # tag
-    dpg.set_item_callback("go_to_bottom_button", go_to_bottom)  # tag
-    dpg.set_item_callback("page_up_button", page_up)  # tag
-    dpg.set_item_callback("page_down_button", page_down)  # tag
-    dpg.set_item_callback("copy_report_to_clipboard_button", copy_report_to_clipboard)  # tag
-    dpg.set_item_callback("next_search_match_button", scroll_to_next_search_match)  # tag
-    dpg.set_item_callback("prev_search_match_button", scroll_to_prev_search_match)  # tag
 
     _scroll_end_flasher = gui_animation.ScrollEndFlasher(target="item_information_panel",
                                                          tag="scroll_end_flasher",
@@ -489,7 +596,7 @@ def _copy_report_to_clipboard(*, report_format):
     gui_animation.flash_button(button="copy_report_to_clipboard_button",  # tag
                                message=f"Copied to clipboard! ({'plain text' if report_format == 'txt' else 'Markdown'})",
                                duration=gui_config.acknowledgment_duration,
-                               tooltip=app_state.copy_report_tooltip)
+                               tooltip=_copy_report_tooltip)
 
 
 def copy_current_entry_to_clipboard():

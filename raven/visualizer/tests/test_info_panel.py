@@ -23,7 +23,9 @@ import pytest
 
 info_panel = pytest.importorskip("raven.visualizer.info_panel")
 
-from unpythonic import box  # noqa: E402 -- after importorskip by design
+import dearpygui.dearpygui as dpg  # noqa: E402 -- after importorskip by design
+
+from unpythonic import box  # noqa: E402 -- ditto
 from unpythonic.env import env  # noqa: E402 -- ditto
 
 from raven.visualizer.app_state import app_state  # noqa: E402 -- ditto
@@ -62,6 +64,94 @@ def test_the_stopword_set_is_the_english_one_and_is_cached():
     assert "titanium" not in first, "an ordinary content word must not be filtered out of a search"
     assert info_panel._get_stopwords() is first, "the set is rebuilt on every call, which is the cost the "\
                                                  "lazy load exists to pay only once"
+
+
+# --------------------------------------------------------------------------------
+# The header and the navigation bar
+#
+# These moved out of `app.py`, where they could not be built in a test at all: `app.py` created the
+# widgets and `info_panel` reached back for them by tag, with `build_window`'s docstring carrying the
+# ordering requirement as prose that nothing enforced. Built here into a real context, so the wiring is
+# checked rather than described.
+
+
+@pytest.fixture
+def dpg_context():
+    """A DPG context with an unmapped viewport, plus the two things the builders bind to."""
+    dpg.create_context()
+    dpg.create_viewport(width=100, height=100)  # never shown: tests must not steal focus
+    dpg.setup_dearpygui()
+    with dpg.theme(tag="disablable_widget_theme"):  # tag
+        pass
+    yield
+    dpg.destroy_context()
+
+
+@pytest.fixture
+def built_chrome(dpg_context, monkeypatch):
+    """The header and the navigation bar, built as the app builds them.
+
+    Inside a window, because both create *child* windows and DPG has nowhere to put one otherwise -- the
+    app calls them from inside its own layout tree, which is the whole point of their shape.
+    """
+    monkeypatch.setattr(app_state, "themes_and_fonts", env(icon_font_solid=0), raising=False)
+    monkeypatch.setattr(info_panel, "_copy_report_tooltip", None)
+    with dpg.window():
+        info_panel.build_header()
+        info_panel.build_navigation_controls()
+
+
+NAVIGATION_BUTTONS = {"go_to_top_button": "go_to_top",
+                      "page_up_button": "page_up",
+                      "page_down_button": "page_down",
+                      "go_to_bottom_button": "go_to_bottom",
+                      "prev_search_match_button": "scroll_to_prev_search_match",
+                      "next_search_match_button": "scroll_to_next_search_match"}
+
+
+def test_the_header_carries_the_widgets_the_module_writes_to(built_chrome):
+    for tag in ("item_information_header", "item_information_title",
+                "item_information_selection_item_count", "item_information_total_count",
+                "info_panel_pending_spinner", "info_panel_rendering_spinner",
+                "copy_report_to_clipboard_button"):
+        assert dpg.does_item_exist(tag), f"{tag} is missing from the built header"
+    assert info_panel._copy_report_tooltip is not None, "the copy button's self-sizing caption was not made"
+
+
+def test_the_status_readouts_start_hidden_and_the_spinners_with_them(built_chrome):
+    # Nothing is loaded yet, so there are no counts to show and no refresh in flight. `update` and the
+    # per-frame poller are what reveal these.
+    for tag in ("item_information_total_count", "info_panel_pending_spinner", "info_panel_rendering_spinner"):
+        assert dpg.get_item_configuration(tag)["show"] is False, f"{tag} should start hidden"
+    assert dpg.get_value("item_information_selection_item_count") == "[nothing selected]"
+
+
+@pytest.mark.parametrize("tag, function_name", sorted(NAVIGATION_BUTTONS.items()))
+def test_every_navigation_button_is_wired_to_its_own_function(built_chrome, tag, function_name):
+    """The part that used to be seven `set_item_callback` calls against widgets another module had made.
+
+    A wrong or missing binding is silent: the button draws, enables itself with the others, and does
+    nothing when clicked.
+    """
+    assert dpg.does_item_exist(tag)
+    assert dpg.get_item_callback(tag) is getattr(info_panel, function_name)
+
+
+def test_the_copy_button_is_wired_too(built_chrome):
+    assert dpg.get_item_callback("copy_report_to_clipboard_button") is info_panel.copy_report_to_clipboard
+
+
+def test_every_navigation_button_starts_disabled(built_chrome):
+    # There is nothing to navigate until a dataset is loaded and something is in the panel;
+    # `update_navigation_controls` is what enables them.
+    for tag in NAVIGATION_BUTTONS:
+        assert dpg.get_item_configuration(tag)["enabled"] is False, f"{tag} should start disabled"
+    assert dpg.get_item_configuration("copy_report_to_clipboard_button")["enabled"] is False
+
+
+def test_the_search_match_readouts_start_at_no_search(built_chrome):
+    assert dpg.get_value("item_information_search_controls_item_count") == "[no search active]"
+    assert dpg.get_item_configuration("item_information_search_controls_current_item")["show"] is False
 
 
 class RecordingDPG:
@@ -128,7 +218,8 @@ def gui(monkeypatch):
     monkeypatch.setattr(app_state, "dataset", dataset, raising=False)
 
     # Read as an argument to the acknowledgment flash, so it has to exist even though the flash is stubbed.
-    monkeypatch.setattr(app_state, "copy_report_tooltip", env(text=""), raising=False)
+    # Normally created by `build_header`, which these tests do not run.
+    monkeypatch.setattr(info_panel, "_copy_report_tooltip", env(text=""))
 
     searched = []
     monkeypatch.setattr(app_state, "update_search", lambda **kwargs: searched.append(kwargs), raising=False)

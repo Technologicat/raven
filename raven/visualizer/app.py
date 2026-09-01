@@ -432,129 +432,27 @@ with timer() as tim:
             # Info panel
             with dpg.group(tag="info_and_help"):
                 # Title
-                with dpg.child_window(tag="item_information_header",
-                                      width=gui_config.info_panel_w,
-                                      height=gui_config.info_panel_header_h,
-                                      no_scrollbar=True,  # we want to hide the "hello"
-                                      no_scroll_with_mouse=True):
-                    with dpg.group(horizontal=True, tag="item_information_header_group"):
-                        # Copy report to clipboard button
-                        # The callback function is bound in `info_panel.build_window()`.
-                        dpg.add_button(tag="copy_report_to_clipboard_button",
-                                       label=fa.ICON_COPY,
-                                       enabled=False)
-                        dpg.bind_item_font("copy_report_to_clipboard_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("copy_report_to_clipboard_button", "disablable_widget_theme")  # tag
-                        # Self-sizing: the copy acknowledgment replaces this three-line caption with one line.
-                        app_state.copy_report_tooltip = gui_tooltip.Tooltip("copy_report_to_clipboard_button",  # tag
-                                                                            "Copy report to clipboard [F8]\n    no modifier: as plain text\n    with Shift: as Markdown")  # TODO: DRY duplicate definitions for labels
+                info_panel.build_header()
 
-                        # Static header text
-                        dpg.add_text("Item information", color=(255, 255, 255, 255), tag="item_information_title")
+                # FIX: Trigger Markdown renderer to load all font families at startup, so it won't bite us with a race condition later when we populate the info panel.
+                #
+                # The render seems to be asynchronous, so if you populate other stuff into the same child window while `dpg_markdown` is loading its fonts,
+                # some place in the rendering engine may forget where it was going. Some of your content will be omitted, and the rest abruptly injected
+                # into the middle of the Markdown render that was in progress. Triggering the font loading now (while we're NOT populating the info panel
+                # in a tight loop) seems to avoid this issue.
+                #
+                # This could also have something to do with the DPG container stack, which seems to be global. Just to be safe, we have already changed
+                # both background renderers (the info panel and the annotation) not to use the container stack, but to parent each GUI widget explicitly.
+                #
+                # Note also that if we call `dpg_markdown.add_text` twice or more before the first frame renders, it segfaults DPG (at least 1.11).
+                # So this is the only Markdown render in the initial main window setup. Any other Markdown text is rendered later.
+                #
+                # It goes inside the info panel header, which has no scrollbar, so the "hello" it renders is clipped away rather than shown. That is the
+                # header's only involvement: this is a DPG startup concern, not part of what the header displays.
+                with dpg.group(tag="markdown_font_loader_trigger_dummy", parent="item_information_header"):  # tag
+                    dpg_markdown.add_text("hello, *hello*, **hello**, ***hello***")  # regular, bold, italic, bold italic
 
-                        # Dynamic header text, this will be replaced by the item count statistics when something is shown in the info panel.
-                        item_information_text = dpg.add_text("[nothing selected]", color=(140, 140, 140, 255), tag="item_information_selection_item_count")  # TODO: DRY duplicate definitions for labels
-                        total_count_text = dpg.add_text("[x items shown]", color=(140, 140, 140, 255), tag="item_information_total_count", show=False)
-
-                        # Spinners to indicate that the item info panel is refreshing. The color shows the state (update pending, or updating).
-                        # At most one spinner is shown at a time.
-                        dpg.add_loading_indicator(style=0,
-                                                  radius=1.0,
-                                                  color=(255, 96, 96, 255),  # orange
-                                                  secondary_color=(128, 32, 32, 255),
-                                                  show=False,
-                                                  tag="info_panel_pending_spinner")
-                        dpg.add_loading_indicator(style=0,
-                                                  radius=1.0,
-                                                  color=(96, 96, 255, 255),  # blue
-                                                  secondary_color=(32, 32, 128, 255),
-                                                  show=False,
-                                                  tag="info_panel_rendering_spinner")
-
-                    # FIX: Trigger Markdown renderer to load all font families at startup, so it won't bite us with a race condition later when we populate the info panel.
-                    #
-                    # The render seems to be asynchronous, so if you populate other stuff into the same child window while `dpg_markdown` is loading its fonts,
-                    # some place in the rendering engine may forget where it was going. Some of your content will be omitted, and the rest abruptly injected
-                    # into the middle of the Markdown render that was in progress. Triggering the font loading now (while we're NOT populating the info panel
-                    # in a tight loop) seems to avoid this issue.
-                    #
-                    # This could also have something to do with the DPG container stack, which seems to be global. Just to be safe, we have already changed
-                    # both background renderers (the info panel and the annotation) not to use the container stack, but to parent each GUI widget explicitly.
-                    #
-                    # Note also that if we call `dpg_markdown.add_text` twice or more before the first frame renders, it segfaults DPG (at least 1.11).
-                    # So this is the only Markdown render in the initial main window setup. Any other Markdown text is rendered later.
-                    with dpg.group(tag="markdown_font_loader_trigger_dummy"):
-                        dpg_markdown.add_text("hello, *hello*, **hello**, ***hello***")  # regular, bold, italic, bold italic
-
-                with dpg.child_window(tag="item_information_navigation_controls",
-                                      width=gui_config.info_panel_w,
-                                      height=gui_config.info_panel_header_h,
-                                      no_scrollbar=True,
-                                      no_scroll_with_mouse=True):
-                    with dpg.group(horizontal=True, tag="item_information_navigation_controls_group"):
-                        # The callback functions for all buttons in this group are defined (and bound) later when we define the info panel.
-                        go_to_top_button = dpg.add_button(tag="go_to_top_button",
-                                                          label=fa.ICON_ANGLES_UP,
-                                                          width=gui_config.info_panel_button_w,
-                                                          enabled=False)
-                        dpg.bind_item_font("go_to_top_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("go_to_top_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("go_to_top_button"):  # tag
-                            dpg.add_text("To top [Home, when search field not focused]")
-
-                        page_up_button = dpg.add_button(tag="page_up_button",
-                                                        label=fa.ICON_ANGLE_UP,
-                                                        width=gui_config.info_panel_button_w,
-                                                        enabled=False)
-                        dpg.bind_item_font("page_up_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("page_up_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("page_up_button"):  # tag
-                            dpg.add_text("Page up [Page Up, when search field not focused]")
-
-                        page_down_button = dpg.add_button(tag="page_down_button",
-                                                          label=fa.ICON_ANGLE_DOWN,
-                                                          width=gui_config.info_panel_button_w,
-                                                          enabled=False)
-                        dpg.bind_item_font("page_down_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("page_down_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("page_down_button"):  # tag
-                            dpg.add_text("Page down [Page Down, when search field not focused]")
-
-                        go_to_bottom_button = dpg.add_button(tag="go_to_bottom_button",
-                                                             label=fa.ICON_ANGLES_DOWN,
-                                                             width=gui_config.info_panel_button_w,
-                                                             enabled=False)
-                        dpg.bind_item_font("go_to_bottom_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("go_to_bottom_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("go_to_bottom_button"):  # tag
-                            dpg.add_text("To bottom [End, when search field not focused]")
-
-                        dpg.add_spacer(width=6)
-
-                        # Scroll between search matches buttons.
-                        prev_search_match_button = dpg.add_button(tag="prev_search_match_button",
-                                                                  # arrow=True,
-                                                                  # direction=dpg.mvDir_Up,  # The standard arrow looks too confusing, being close to other arrow buttons (in info panel content) but with different meaning.
-                                                                  label=fa.ICON_CIRCLE_UP,
-                                                                  width=gui_config.info_panel_button_w,
-                                                                  enabled=False)
-                        dpg.bind_item_font("prev_search_match_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("prev_search_match_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("prev_search_match_button"):  # tag
-                            dpg.add_text("Previous search match [Shift+F3]")
-                        next_search_match_button = dpg.add_button(tag="next_search_match_button",
-                                                                  # arrow=True,
-                                                                  # direction=dpg.mvDir_Down,
-                                                                  label=fa.ICON_CIRCLE_DOWN,
-                                                                  width=gui_config.info_panel_button_w,
-                                                                  enabled=False)
-                        dpg.bind_item_font("next_search_match_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("next_search_match_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("next_search_match_button"):  # tag
-                            dpg.add_text("Next search match [F3]")
-
-                        dpg.add_text("[no search active]", color=(140, 140, 140, 255), tag="item_information_search_controls_item_count")  # TODO: DRY duplicate definitions for labels
-                        dpg.add_text("[x/x]", color=(140, 140, 140, 255), tag="item_information_search_controls_current_item", show=False)
+                info_panel.build_navigation_controls()
 
                 # Item information content.
                 # The content group itself (alias "info_panel_content_group") is created by `info_panel.build_window()`;

@@ -8,7 +8,8 @@ checks this table against the package, including whether every module is in it.
 
 ```
 app.py            (~1.4k) — GUI app: window layout, event wiring, the main render loop
-info_panel.py     (~1.6k) — the info panel: content build, scrolling, navigation, anchors
+info_panel.py     (~1.7k) — the info panel: its header and navigation bar, content build, scrolling,
+                            navigation, anchors
 importer.py       (~1.5k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 annotation.py     (~500)  — datapoint annotations and their tooltips
 config.py         (~440)  — Configuration-as-code (import settings, models, stopwords, GUI settings).
@@ -21,23 +22,24 @@ word_cloud.py     (~250)  — word cloud rendering
 entry_renderer.py (~190)  — per-entry rendering shared by panel and tooltip
 search.py         (~150)  — the title scan, and the three GUI elements reporting its result
 importer_cli.py    (~82)  — `raven-importer` entry point
-app_state.py       (~58)  — top-level app state containers
+app_state.py       (~62)  — top-level app state containers
 ```
 
-**Under test as of 2026-09-01** — 307 tests over nine modules, which is every module the coverage plan
+**Under test as of 2026-09-01** — 326 tests over nine modules, which is every module the coverage plan
 covers:
 
 ```
 tests/test_importer.py        (55) — parsing and record recovery, cluster keywords, clustering,
                                      progress, the background task, embeddings and summarization
+tests/test_info_panel.py      (47) — hotkey decisions, the clipboard, cluster navigation, widget kinds,
+                                     and the header and navigation bar it now builds itself
 tests/test_selection.py       (39) — the four combine modes, undo/redo, scroll anchors, modifier keys
 tests/test_plotter.py         (38) — the cluster sort, and the plotter-space queries
-tests/test_info_panel.py      (34) — hotkey decisions, the clipboard, cluster navigation, widget kinds
+tests/test_importer_gui.py    (36) — the filename tables, the start/stop decision table, the dialogs
 tests/test_entry_renderer.py  (33) — grouping, the `max_n` budget, search highlighter compile and apply
-tests/test_importer_gui.py    (31) — the filename tables, the start/stop decision table, the dialogs
 tests/test_annotation.py      (30) — the item decoration table, and the guards on showing a tooltip
 tests/test_word_cloud.py      (28) — the two render guards, keyword summing, cancellation, saving
-tests/test_search.py          (19) — what counts as a match, and the three GUI elements reporting it
+tests/test_search.py          (20) — what counts as a match, and the three GUI elements reporting it
 ```
 
 **Seven of the nine run in CI.** What keeps a module out is a module-level import of something
