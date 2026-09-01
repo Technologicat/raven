@@ -77,6 +77,10 @@ def titles_matching(dataset, query):
 
 # --------------------------------------------------------------------------------
 # What counts as a match
+#
+# The help card's "How search works" section (`app.render_help_extras`) states these same rules to users,
+# in prose, with worked examples. If a test here has to change, that text is now wrong and nothing will
+# say so -- these tests are what makes a rule change visible, so this is where the reminder belongs.
 
 def test_a_fragment_matches_anywhere_in_the_title(dataset):
     # Incremental fragment search: "cat" finds "photocatalytic", which is the point of not tokenizing.

@@ -69,6 +69,11 @@ def find_matches(dataset, search_string):
     The titles are matched in their normalized form (`entry.normalized_title`), which is what the query
     is normalized to as well — otherwise a search for "O2" would fail on a title spelling it "O₂".
     """
+    # These rules are also stated to users, in prose, by the help card's "How search works" section
+    # (`app.render_help_extras`) — including two worked examples, that "hydrogen" matches "Hydrogen" and
+    # that "TiO" matches titanium oxide but not "bastion". Changing what counts as a match means editing
+    # that text too. The tests below will notice a changed rule; nothing notices stale prose, which is
+    # why the pointer is here rather than only in the help card.
     if not search_string:
         return common_utils.make_blank_index_array()
 
