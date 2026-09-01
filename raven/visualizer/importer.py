@@ -863,6 +863,42 @@ def _extract_keywords(input_data, max_vis_kw=6):
 
     return all_keywords
 
+# A keyword is a noun phrase. These bounds are what separates one from the failure mode actually seen -
+# the model answering with a bulleted prose summary instead of a list, despite the prompt saying that a
+# program would read the result. Generous on purpose: the longest real keyword observed across five
+# corpora is 43 characters ("Artificial Intelligence in Higher Education"), and no cluster produced more
+# than a dozen.
+_MAX_KEYWORD_LENGTH = 80
+_MAX_KEYWORDS_PER_CLUSTER = 25
+
+
+def _parse_keyword_list(reply):
+    """Parse an LLM keyword reply.
+
+    `reply`: the model's answer to `config.clusters_llm_keyword_extraction_prompt`.
+
+    Returns:
+        - a `list` of `str`, the keywords, when the reply is a keyword list;
+        - `[]` when the model declined, having answered with its failure sentinel. That is a valid
+          answer to the question and there is nothing to retry;
+        - `None` when the reply is not a keyword list at all, which is worth another attempt.
+
+    The distinction between the last two is the point. Measured across 338 clusters of five corpora, one
+    reply came back as bulleted prose - rare, and left unchecked it becomes twenty-odd sentence fragments
+    recorded as a cluster's keywords. Ranking by rarity would then put them first, since a fragment
+    occurs in exactly one cluster, so the failure is promoted rather than buried.
+    """
+    reply = reply.strip()
+    if reply.lower() == "keyword extraction failed":
+        return []
+    keywords = [keyword.strip() for keyword in reply.split(",") if keyword.strip()]
+    if not keywords or len(keywords) > _MAX_KEYWORDS_PER_CLUSTER:
+        return None
+    if any(len(keyword) > _MAX_KEYWORD_LENGTH or "\n" in keyword for keyword in keywords):
+        return None
+    return keywords
+
+
 def _parse_canonicalization_mapping(text, known_keywords):
     """Parse the LLM's `original -> replacement` lines into a mapping, discarding what cannot be trusted.
 
@@ -937,7 +973,8 @@ def _canonicalize_cluster_keywords(vis_keywords_by_cluster):
     return canonicalized
 
 
-def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vectors=None, max_vis_kw=6, fraction=0.1, max_prompt_entries=60):
+def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vectors=None, max_vis_kw=6, fraction=0.1,
+                              max_prompt_entries=60, max_keyword_attempts=3):
     """Collect a set of keywords for each visualization cluster (2D), based on the per-entry detected keywords.
 
     `vis_data`: output of `_cluster_lowdim_data`, which see.
@@ -964,6 +1001,13 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vector
                           A cluster with more is sampled evenly, ordered from its center outwards; a
                           cluster with fewer is sent whole. Exists because a large cluster with abstracts
                           otherwise builds a prompt no backend will accept.
+
+    `max_keyword_attempts`: Used when `config.clusters_keyword_method == "llm"`.
+
+                            How many times to ask before giving a cluster up as unlabelled. A reply that
+                            is not a keyword list at all is retried; the model *declining* is not, that
+                            being a valid answer. Running out logs an error and leaves the cluster with
+                            `"<unknown topic>"`.
 
     Returns `vis_keywords_by_cluster`, a list, where the `k`th item is a list of keywords (`str`) for cluster ID `k`.
     For each cluster, the keywords are sorted by number of occurrences (descending) across the whole dataset.
@@ -1045,23 +1089,41 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vector
             # and the character card asks for Markdown, a reported train of thought, and conversational
             # prose - all of which have to be undone before the result can be parsed. The prompt above
             # says who is doing what.
-            record = agent.turn(llm_settings,
-                                prompt,
-                                use_character_card=False,
-                                tools_enabled=False,
-                                on_progress=llmclient.make_console_progress_handler("."))
-            scrubbed_output_text = record.reply
+            # A reply that is not a keyword list is worth asking again for, since the failure is
+            # occasional rather than systematic - one cluster in 338, across five corpora - and the
+            # second attempt costs one request against a run that is minutes long either way. Declining
+            # is not a failure and is not retried: "keyword extraction failed" is a valid answer to the
+            # question asked, and asking again would only pester the model into inventing a theme.
+            cluster_keywords = None
+            for attempt in range(1, max_keyword_attempts + 1):
+                record = agent.turn(llm_settings,
+                                    prompt,
+                                    use_character_card=False,
+                                    tools_enabled=False,
+                                    on_progress=llmclient.make_console_progress_handler("."))
+                scrubbed_output_text = record.reply
 
-            for reasoning in record.reasoning:
-                logger.info(f"        LLM thoughts for cluster #{cluster_id}:\n{reasoning}")
-            logger.info(f"        LLM output (final answer) for cluster #{cluster_id}:\n{scrubbed_output_text}")
+                for reasoning in record.reasoning:
+                    logger.info(f"        LLM thoughts for cluster #{cluster_id}:\n{reasoning}")
+                logger.info(f"        LLM output (final answer) for cluster #{cluster_id}:\n{scrubbed_output_text}")
 
-            # TODO: wrap this in a retry mechanism (up to 3 times?)
-            if scrubbed_output_text.strip().lower() == "keyword extraction failed":
-                logger.warning(f"        The LLM could not identify a common theme for cluster #{cluster_id}.")
+                parsed = _parse_keyword_list(scrubbed_output_text)
+                if parsed == []:
+                    logger.warning(f"        The LLM could not identify a common theme for cluster #{cluster_id}.")
+                    cluster_keywords = ["<unknown topic>"]
+                    break
+                if parsed is not None:
+                    cluster_keywords = parsed
+                    break
+                logger.warning(f"        The LLM's reply for cluster #{cluster_id} is not a keyword list "
+                               f"(attempt {attempt} of {max_keyword_attempts}).")
+
+            if cluster_keywords is None:
+                # Out of attempts. An error rather than a warning: every other cluster got a real label,
+                # so this one is a hole in the map that somebody should see in the log.
+                logger.error(f"        Giving up on keywords for cluster #{cluster_id} after "
+                             f"{max_keyword_attempts} attempts; the LLM never answered with a keyword list.")
                 cluster_keywords = ["<unknown topic>"]
-            else:
-                cluster_keywords = [keyword.strip() for keyword in scrubbed_output_text.split(",")]
             vis_keywords_by_cluster.append(cluster_keywords)
             eta_estimator.tick()
 

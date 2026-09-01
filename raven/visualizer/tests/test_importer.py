@@ -621,3 +621,88 @@ def test_a_finished_task_leaves_the_progress_counter_at_the_start(initialized, m
     # With no task running the counter reports `None` rather than a number, so the reset is checked on
     # the underlying macrostep count -- which is what the *next* run would otherwise inherit.
     assert importer.progress._macrosteps_done == 0
+
+
+# ---------------------------------------------------------------------------
+# Keyword replies that are not keyword lists
+
+
+PROSE_REPLY = (
+    "Based on the five abstracts provided, here is a structured summary of the research.\n"
+    "*   Investigated physiological signal-based prediction.\n"
+    "*   Applied standard machine learning algorithms and integrated explainability techniques.\n")
+
+
+def test_parse_keyword_list_separates_declining_from_malformed():
+    # Three outcomes, and the middle one is the reason this function exists. A model that declines has
+    # answered the question; a model that returns prose has not, and only the second is worth retrying.
+    assert importer._parse_keyword_list("Alpha, Beta Gamma, Delta") == ["Alpha", "Beta Gamma", "Delta"]
+    assert importer._parse_keyword_list("  Keyword Extraction Failed  ") == []
+    assert importer._parse_keyword_list(PROSE_REPLY) is None, \
+        "a bulleted prose summary is not a keyword list"
+    assert importer._parse_keyword_list(", ".join(f"kw{i}" for i in range(40))) is None, \
+        "forty keywords is not an answer to a request for six"
+    assert importer._parse_keyword_list("") is None
+
+
+def test_keyword_extraction_retries_a_malformed_reply(monkeypatch, caplog):
+    # The failure is occasional rather than systematic -- one cluster in 338 across five corpora -- so a
+    # second ask is worth one request against a run that takes minutes either way.
+    replies = iter([PROSE_REPLY, "Knowledge Distillation, Model Compression"])
+
+    def fake_turn(settings, prompt, **kwargs):
+        return FakeRecord(next(replies))
+
+    keywords = run_keyword_extraction(monkeypatch, fake_turn, caplog)
+    assert keywords == [["Knowledge Distillation", "Model Compression"]], \
+        "the retry's answer should be used, not the prose"
+    assert any("not a keyword list" in r.message for r in caplog.records)
+
+
+def test_keyword_extraction_gives_up_and_logs_an_error(monkeypatch, caplog):
+    # Out of attempts, the cluster is a hole in the map and somebody should see it in the log -- an
+    # error, where every other cluster in the run got a real label.
+    def always_prose(settings, prompt, **kwargs):
+        return FakeRecord(PROSE_REPLY)
+
+    keywords = run_keyword_extraction(monkeypatch, always_prose, caplog)
+    assert keywords == [["<unknown topic>"]]
+    assert any(r.levelname == "ERROR" and "Giving up" in r.message for r in caplog.records)
+
+
+def test_keyword_extraction_does_not_retry_a_decline(monkeypatch, caplog):
+    # Negative control for the two above: declining is a valid answer, so it must be taken at face value
+    # rather than retried. Were it retried, the counter below would exceed one and this would fail --
+    # which is what separates "handles malformed replies" from "asks repeatedly whenever it dislikes an
+    # answer", and the second would pester the model into inventing a theme it had just said was absent.
+    calls = []
+
+    def declines(settings, prompt, **kwargs):
+        calls.append(prompt)
+        return FakeRecord("keyword extraction failed")
+
+    keywords = run_keyword_extraction(monkeypatch, declines, caplog)
+    assert keywords == [["<unknown topic>"]]
+    assert len(calls) == 1, f"a decline should be accepted, not retried; got {len(calls)} calls"
+
+
+def run_keyword_extraction(monkeypatch, fake_turn, caplog):
+    """Drive `_collect_cluster_keywords`'s LLM branch over one two-record cluster."""
+    import numpy as np
+    from unpythonic.env import env
+
+    vis_data = [env(title=f"paper {i}", abstract="", cluster_id=0, cluster_probability=1.0)
+                for i in range(2)]
+    all_vectors = np.array([[1.0, 0.0]] * 2)
+
+    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+    monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
+    monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+    monkeypatch.setattr(importer, "llmclient",
+                        type("_FakeLLMClient", (),
+                             {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                        raising=False)
+    monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
+
+    with caplog.at_level("WARNING"):
+        return importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors)
