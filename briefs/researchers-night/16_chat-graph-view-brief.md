@@ -17,9 +17,9 @@ dropping it leaves both `crt` and this brief intact — which is what makes it a
 overcommitted one. (Both have since landed and live in `done/`, so the ordering argument is history.)
 
 **Closes on landing**: `TODO.md`, *"Nonlinear chat view / chat graph editor"* (`TODO.md:658`), the
-placeholder button at `app.py:1700–1708`, the recent-chats wish at `raven/librarian/README.md:776–777`, the
-right-panel occupant note at `README.md:415`, and the help card's "not built yet" sentence at
-`app.py:1906`.
+placeholder button at `app.py:1700–1708` — *deleted*, the control being a mode-toggle checkbox instead
+(see below) — the recent-chats wish at `raven/librarian/README.md:776–777`, the right-panel occupant note
+at `README.md:415`, and the help card's "not built yet" sentence at `app.py:1906`.
 
 (An earlier draft also listed one of the help card's two "This is a tech demo" disclaimers, on the grounds
 that `TODO_DEFERRED.md:1183` called it still true in substance — old chats stored but unreachable. Both
@@ -540,9 +540,21 @@ question of what the panel shows by default answers itself.
 **So the panel has a preference and a current occupant, and they are not the same thing** (Juha,
 2026-09-01). Three rules, in order:
 
-- **The toolbar button toggles, and is a toggle.** It is labelled and tooltipped as *toggle*, not *open* —
-  the placeholder said "Open graph view" — and it is **enabled only when an avatar is available**, since
-  with nothing to trade screen space against there is nothing to toggle.
+- **The control is a checkbox in the mode-toggle row, not the toolbar button** (Juha, 2026-09-01). It sits
+  beside *Speech* and *Subtitles* — the group that already governs the right-hand panel — and it is
+  offered **only when an avatar exists**, since with nothing to trade screen space against there is
+  nothing to toggle.
+  - Two reasons it belongs there rather than in the bottom toolbar. It is *persistent state*, and that row
+    is where Librarian keeps persistent state, the toolbar being for one-shot actions. And it stays put
+    while the graph is up: the row sits below the shared rect, so the switch that put the graph there does
+    not disappear under it.
+  - **So `chat_open_graph_button` is deleted rather than wired.** It has been a disabled placeholder since
+    it was added; the brief's "closes on landing" list means it stops existing, not that it starts
+    working. Note the label it never got to wear would have been wrong anyway — "Open graph view", for a
+    control that has to close it again.
+  - This widens the fourth toggle group's meaning from *what the avatar does* to *what the right-hand
+    panel shows*, which is the same reframing road mode makes and worth making in the README's wording
+    when this lands.
 - **When the avatar's video auto-offs, the graph takes the panel** rather than the panel showing
   *"[Video is off]"*. A dead placeholder is the one thing that rect is certainly not worth.
 - **When the video comes back, so does the avatar — if that is what the user asked for.** Hence the
