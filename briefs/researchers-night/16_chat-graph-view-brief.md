@@ -136,6 +136,19 @@ must not diverge on what a user would notice: case sensitivity, regex, whether t
 traces are searchable. Brief 14 lands first and decides those; this inherits them and adds the
 window-moving `next_match`.
 
+**Revisited 2026-09-01, and the ordering argument gained teeth.** The pairing above reads as a
+coordination note; it is stronger than that. **Shipping tree-wide search without in-branch search is a
+worse state to be in than having neither**, because it hands the user a way to search the entire multiverse
+and no way to search the conversation actually in front of them — an asymmetry they would notice
+immediately and could not explain. So brief 14 is not merely first in a queue: it is what makes this one
+shippable, and the two want treating as one piece of work with two halves.
+
+**The graph half copies `raven-xdot-viewer`'s search UX** rather than inventing one, for the reason the
+toolbar already follows it: the two show the same widget, and the machinery
+(`search` / `highlight_search_results` / `next_match` / `prev_match`) is the widget's own.
+
+**Both are wanted before Researchers' Night and the time looks sufficient** (Juha, 2026-09-01).
+
 ## Tool nodes will swamp the view unless collapsed
 
 The tree does not alternate user / AI. `ai_turn` creates a node per LLM response **and** a node per tool
@@ -755,6 +768,30 @@ thing turns on, because the failure was exactly a collision between two of them:
 Four reviewable commits: the builder and its tests; the panel and its placement, including the avatar pause
 gate; the interactions; the tool badges and role icons.
 
+### Bookmarks, as a second use for the pills
+
+Raised 2026-09-01 (Juha), needing design rather than a decision. The pointer pills — SYS, NEW, HEAD — are
+a mechanism as well as three labels: a small named tag attached to a node and drawn beside it. **A
+user-defined bookmark is the same shape**, in a colour of its own.
+
+What that buys, beyond a place to put them: the picture already knows how to lay pills out (a list per
+node, stacked above the box, right-aligned), and it already handles more than one landing on the same node
+— so a bookmark on HEAD is not a special case.
+
+What is undesigned, and is the whole of the work:
+
+- **How one is made and removed.** There is no verb for it yet, which puts this in the same bucket as the
+  "buttons near a node" question under *Getting back* — and probably means the two should be answered
+  together rather than each growing its own affordance.
+- **Whether a bookmark is named**, and if so, where the name is typed and how much of it a pill can show.
+  An unnamed bookmark is a colour and a position, which may be enough for a handful and useless for
+  twenty.
+- **Where they live.** A pointer pill is derived from `app_state`; a bookmark is user data about a node,
+  which is a different lifetime and probably belongs in the datastore beside the node rather than in the
+  app state beside the pointers.
+- **How you get to one you cannot see.** A bookmark whose node is outside the current windows is
+  invisible, which is the same problem the sibling window has, and would want the same kind of answer.
+
 ### Getting back: the view has no history
 
 Raised 2026-09-01, from a live run. Switch to *"How can I help you today?"* — two clicks — and the position
@@ -879,7 +916,13 @@ remaining work is the two features below plus the polish the four rules describe
      keys on causes; the one signal its own effect can flip is the one it must not read.
 ~~6. **The graph toggle is not persisted.**~~ Done 2026-09-01: `chat_graph_shown` in the flag defaults,
    applied on frame 4 so the avatar renderer never initializes into a hidden panel.
-7. **Fragment search across the tree**, which was always v2 and is brief 14's companion.
+7. **Search, both halves.** Tree-wide search here, copying `raven-xdot-viewer`'s UX, *and* brief 14's
+   in-branch search in the chat log — one piece of work with two halves rather than two items, since
+   shipping the first without the second is a worse state than having neither. See the search section
+   above.
+8. **Bookmarks**, reusing the pill mechanism in a colour of their own. Design first; see the section
+   above, and note it wants answering together with the "buttons near a node" question, both being about
+   giving this view verbs.
 
 **Open, needing a decision rather than work:** whether `raven-xdot-viewer` gets the actual-size button
 too, for the consistency that now runs the other way.
