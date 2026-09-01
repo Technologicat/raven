@@ -10,6 +10,8 @@ The module needs no DearPyGui: the xdot package imports its widget lazily, and e
 
 import pytest
 
+from raven.common.gui.xdotwidget import graph as xdotgraph
+
 from raven.librarian import chatgraph
 from raven.librarian.chattree import Forest
 
@@ -71,6 +73,12 @@ def overlapping_pairs(chat_graph: chatgraph.ChatGraph) -> list:
 def refs_of_type(chat_graph: chatgraph.ChatGraph, ref_type) -> list:
     """Return every ref of the given kind, in no particular order."""
     return [ref for ref in chat_graph.refs.values() if isinstance(ref, ref_type)]
+
+
+def _width_of(shape) -> float:
+    """Return the width of a shape's bounding box."""
+    box = shape.get_bounding_box()
+    return box[2] - box[0]
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +238,63 @@ class TestPills:
         assert built.refs[system].pills == ("SYS",)
         assert built.refs[greeting].pills == ("NEW",)
         assert built.refs[reply].pills == ("HEAD",)
+
+    def test_a_pill_outline_has_no_repeated_vertex(self):
+        """A repeated vertex is a zero-length segment, which a stroked polyline renders as a spur.
+
+        Pills are where this bites: their radius clamps to half their height, so the box is a stadium, the
+        two arcs on each side share a centre, and each arc ends exactly where the next begins. Visible as a
+        horizontal flick at the pill's left and right extremes -- which is where those joins are.
+        """
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        user = forest.create_node(payload("user", "hello"), parent_id=system)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=user))
+
+        config = chatgraph.LayoutConfig()
+        stadium = chatgraph._rounded_rect_points(0.0, 0.0, 40.0, config.pill_h, 0.5 * config.pill_h)
+        assert len(stadium) < 4 * (chatgraph._ROUNDED_CORNER_SEGMENTS + 1), \
+            ("this box is not degenerate enough to have coincident arc centres, so it cannot show the "
+             "duplicate-vertex problem at all")
+        repeats = [k for k in range(1, len(stadium)) if stadium[k] == stadium[k - 1]]
+        assert repeats == [], f"repeated vertices at {repeats}"
+
+        # And the same for what actually gets drawn, since the pill above is only the helper's output.
+        for shape in built.graph.get_node_by_name(system).shapes:
+            if isinstance(shape, xdotgraph.PolygonShape):
+                doubled = [k for k in range(1, len(shape.points)) if shape.points[k] == shape.points[k - 1]]
+                assert doubled == [], f"repeated vertices at {doubled} in a drawn outline"
+
+    def test_a_pill_label_is_measured_rather_than_given_the_box_width(self):
+        """The renderer centres text by starting it at `centre - w/2` and drawing left-aligned.
+
+        So `w` has to be what the text measures. Passing the box width instead begins a short label half
+        the difference too far left, which is what put "SYS" inside its own rounded cap.
+        """
+        # HEAD is put below the root so the root wears exactly one pill; with two, "the pill box" below is
+        # ambiguous and the test would be asserting about whichever came first.
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        user = forest.create_node(payload("user", "hello"), parent_id=system)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=user))
+        assert built.refs[system].pills == ("SYS",)
+
+        node = built.graph.get_node_by_name(system)
+        pill_texts = [s for s in node.shapes
+                      if isinstance(s, xdotgraph.TextShape) and s.t == "SYS"]
+        assert len(pill_texts) == 1
+        pill_boxes = [s for s in node.shapes
+                      if isinstance(s, xdotgraph.PolygonShape) and _width_of(s) < chatgraph.LayoutConfig().node_w]
+        assert len(pill_boxes) == 1, "expected exactly one box smaller than the node: the pill"
+
+        text_w = pill_texts[0].w
+        box_w = _width_of(pill_boxes[0])
+        assert text_w < box_w, "the label claims the whole box, so it will be drawn off to the left"
+        # The text, centred, must clear both rounded caps. Equality is the intent -- the box is built as
+        # the text plus one cap's width at each end -- so this compares with a tolerance rather than
+        # failing on the last bit of a float.
+        assert 0.5 * (box_w - text_w) == pytest.approx(0.5 * chatgraph.LayoutConfig().pill_h), \
+            "the label does not clear the rounded caps by exactly one radius each side"
 
     def test_sys_and_new_coincide_when_there_is_no_greeting(self):
         # The AI greeting is becoming optional, and optional per chat rather than globally -- so one

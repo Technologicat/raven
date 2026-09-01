@@ -58,6 +58,15 @@ _GAP_DASH: Tuple[float, float] = (6.0, 4.0)
 
 _ROUNDED_CORNER_SEGMENTS = 4  # per corner; four is already indistinguishable from a curve at these radii
 
+# Average glyph advance as a fraction of font size, for estimating how wide a short uppercase label comes
+# out. Only the pointer pills need this, and only to size a box around three known words; anything wanting
+# a real measurement has to ask DPG, which this module deliberately cannot do.
+_PILL_ADVANCE_PER_CHAR = 0.62
+
+# Two outline vertices closer together than this are the same point. In graph units, which are pixels at
+# zoom 1, so this is far below anything a display can tell apart and far above float rounding.
+_COINCIDENT_POINT_TOLERANCE = 1e-9
+
 
 # --------------------------------------------------------------------------------
 # What a graph node means
@@ -231,8 +240,7 @@ class LayoutConfig:
     corner_radius: float = 10.0
     font_size: float = 13.0
     pill_font_size: float = 10.0
-    pill_w: float = 38.0
-    pill_h: float = 16.0
+    pill_h: float = 16.0  # a pill's width follows its own label; see `_box_shapes`
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
     margin: float = 20.0
@@ -291,7 +299,19 @@ def _rounded_rect_points(x1: float, y1: float, x2: float, y2: float,
     for (cx, cy), start_angle in corners:
         for k in range(_ROUNDED_CORNER_SEGMENTS + 1):
             angle = start_angle + 0.5 * math.pi * (k / _ROUNDED_CORNER_SEGMENTS)
-            points.append((cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
+            point = (cx + radius * math.cos(angle), cy + radius * math.sin(angle))
+            # Drop a vertex that repeats the one before it. Ordinarily there is none -- one corner's arc
+            # ends where a straight edge begins -- but when the radius is clamped to half the shorter side
+            # the box is a stadium, the two arcs on that side share a centre, and each meets the next at
+            # the same point. A repeated vertex is a zero-length segment, which a stroked polyline renders
+            # as a spur at the join: visible as a horizontal flick at the left and right extremes of a
+            # pill, which is exactly where those joins are.
+            #
+            # Compared with a tolerance, not for equality. The two spellings of that shared point are
+            # `cos(2*pi)` and `cos(0)`, which agree to about one part in 10^16 and not to the bit -- so an
+            # exact test drops nothing and the spur survives, looking for all the world like the fix is in.
+            if not points or math.dist(point, points[-1]) > _COINCIDENT_POINT_TOLERANCE:
+                points.append(point)
     return points
 
 
@@ -527,17 +547,35 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     pill_text_pen = xdotgraph.Pen()
     pill_text_pen.color = LINE_COLOR
     pill_text_pen.fontsize = config.pill_font_size
-    pill_span = len(pills) * config.pill_w + max(0, len(pills) - 1) * 3.0
-    for k, pill in enumerate(pills):
-        px1 = x2 - pill_span + k * (config.pill_w + 3.0)
+
+    # A pill is sized to its own label rather than to a fixed width, and its `TextShape` is given the width
+    # of the *text* rather than of the box.
+    #
+    # Both halves matter, and the second is the subtle one. The renderer centres a text shape by starting
+    # it at `centre - w/2` and drawing left-aligned from there, so `w` has to be what the text actually
+    # measures: pass the box width instead and a label narrower than the box begins half the difference too
+    # far left, which puts "SYS" inside its own rounded cap.
+    #
+    # The width is estimated rather than measured -- this module holds no DPG and cannot ask a font
+    # anything. The pills carry three short uppercase words, so an average advance is close enough; a
+    # label whose glyphs are unusually wide would sit a little right of centre, never outside the box,
+    # because the padding is a full cap at each end.
+    text_widths = [config.pill_font_size * _PILL_ADVANCE_PER_CHAR * len(pill) for pill in pills]
+    box_widths = [text_w + config.pill_h for text_w in text_widths]  # a cap's worth of room at each end
+    pill_span = sum(box_widths) + max(0, len(pills) - 1) * 3.0
+
+    cursor = x2 - pill_span
+    for pill, text_w, box_w in zip(pills, text_widths, box_widths):
+        px1, px2 = cursor, cursor + box_w
         py2 = y1 - 4.0
-        px2, py1 = px1 + config.pill_w, py2 - config.pill_h
+        py1 = py2 - config.pill_h
         shapes.append(xdotgraph.PolygonShape(pill_pen,
                                              _rounded_rect_points(px1, py1, px2, py2, 0.5 * config.pill_h),
                                              filled=False))
         shapes.append(xdotgraph.TextShape(pill_text_pen,
                                           0.5 * (px1 + px2), py2 - 0.3 * config.pill_h,
-                                          xdotgraph.TextShape.CENTER, config.pill_w, pill))
+                                          xdotgraph.TextShape.CENTER, text_w, pill))
+        cursor = px2 + 3.0
     return shapes
 
 
