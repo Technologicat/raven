@@ -94,10 +94,10 @@ def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None, data
 
         # The entries themselves. Leave only the first few if there are too many to display.
         entries = entries_by_cluster[cluster_id]
+        more = ""  # nothing was cut, until something is; also the answer when there is no limit at all
         if max_n is not None:
             # TODO: How to compact this in the worst case? Many clusters, with 3 data points in each -> will render 3 * n_clusters entries.
             n_extra_entries = len(entries) - max_entries_per_cluster
-            more = ""
             if n_extra_entries > 0:
                 if n_extra_entries < 3:  # less pedantic to avoid cutting if there are just 1 or 2 more entries than the limit would allow
                     pass
