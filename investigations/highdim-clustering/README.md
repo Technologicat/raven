@@ -483,6 +483,10 @@ support:
 | `show_clusters.py` | one configuration's clusters with their titles, nearest-the-centre first, for judging coherence. `--algorithm agglomerative` fits the recommended method; `--llm-keywords` labels each cluster with the LLM (see below); `--assign-outliers` tests brief item 3 |
 | `compare_methods.py` | HDBSCAN vs k-means vs agglomerative vs the shipped 2D labelling, on one yardstick. **Unmatched — read with `matched_control.py`, not alone** |
 | `matched_control.py` | the negative control: the same comparison at matched coverage and matched cluster count, against a random floor. This is the one that settled finding 5 |
+| `outlier_anatomy.py` | whether the unplaced records are apart from every cluster or merely between two, and whether a small cluster is a topic or a residue. Finding 9 and finding 10 |
+| `keyword_count_probe.py` | how many keywords the model gives when asked for N, and whether what it adds last is real. `--counts twelve fifteen` compares any pair. Settled the extraction count |
+| `canonicalize_and_remeasure.py` | how much of the high-IDF tail is spelling variants, by running the *shipped* canonicalization over keyword files already produced and re-measuring. Reuses `importer._parse_canonicalization_mapping`, so it measures what the importer does rather than a second implementation |
+| `judge_singletons.py` | of the keywords occurring in exactly one cluster, how many are real topics. Also holds `unify_case`, the deterministic case-folding that belongs in the importer's canonicalization as a pre-step. The weakest instrument here — one model grading another's output — but it caught the malformed reply without being told it existed |
 
 ## Data
 
@@ -577,6 +581,15 @@ python investigations/highdim-clustering/sweep.py --vectors $V
 python investigations/highdim-clustering/matched_control.py --vectors $V --dataset $D
 python investigations/highdim-clustering/show_clusters.py --vectors $V --dataset $D --center
 ```
+
+**Two datasets were imported on 2026-09-01 so that their embedding caches had matching titles**, and
+both are on disk rather than needing to be made again: `00_stuff/datasets/banichuk.pickle` (531 — that
+corpus had never been imported as a Visualizer dataset, despite brief 11 naming it the evaluation
+instrument for the map) and `00_stuff/datasets/eccomas2024.pickle` (2519, replacing a 2518-record one
+built on the other machine from a differently-named file). Both match their caches exactly. For hydrogen
+use `00_stuff/datasets/savedrecs1-3.pickle`, which aligns with the concatenated `savedrecs`,
+`savedrecs-2` and `savedrecs-3` caches at 11973 records — no import needed, and the 1–5 set has no
+matching dataset.
 
 The other corpora are `00_stuff/rawdata/banichuk_references_embeddings_cache.npz`,
 `00_stuff/rawdata/ai_papers_202510_embeddings_cache.npz`, the hydrogen set, whose five per-file caches

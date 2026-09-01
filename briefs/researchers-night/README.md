@@ -55,6 +55,24 @@ not settled, and the two sensible axes disagree — closure rate (smallest first
 they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
 deadline actually binds; everything else could slip past September without anything breaking.
 
+### Learned 2026-09-01 — dividing threads by module does not divide their test files
+
+The three threads below ran in parallel and collided anyway, in the one place the division did not
+cover. One session was asked to stay clear of `importer.py` and did; both then wrote into
+`test_importer.py`, because a thread that changes a module needs that module's tests, and "stay out of
+X" does not imply "stay out of X's tests". The result was a working tree where three tests were red and
+a lint error sat in a file two sessions were both editing — so neither could commit without pushing the
+other's half-finished work.
+
+**So divide by test file as explicitly as by module**, and when it is already tangled, the cheap way out
+is to extract the staged blob and run it alone:
+
+    git show :path/to/test_file.py > /tmp/check.py   # run pytest on this, then delete it
+
+That proves what the *commit* contains passes, independently of what the working tree holds, and it took
+one command. Juha staged the trailing hunk in Emacs and the commit went in green while the other
+session's work sat untouched beside it.
+
 ### Starting tomorrow, decided 2026-08-31 — three threads, in parallel
 
 Juha's call at the end of the day. These touch three different subsystems, so none is waiting on
