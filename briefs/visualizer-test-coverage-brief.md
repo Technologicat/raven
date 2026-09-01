@@ -49,12 +49,18 @@ better proxy for how much a test has to stand up before it can assert anything.
 | `entry_renderer.py` | 114 | **0** | **done 2026-09-01**, 27 tests — per-entry rendering shared by panel and tooltip |
 | ~~`app_state.py`~~ | ~~46~~ | ~~1~~ | **nothing to test.** Three lines of code (`app_state = env()`) under 46 of docstring; the SLOC figure counted the prose |
 | `importer.py` | 874 | 0 | partly covered; the rest of the pipeline is plain functions |
-| `word_cloud.py` | 185 | 11 | **next** |
+| `word_cloud.py` | 185 | 11 | **done 2026-09-01**, 28 tests — the two render guards, and the save dialog |
 | `selection.py` | 179 | 18 | **done 2026-09-01**, 36 tests — the selection algebra and the undo history |
-| `plotter.py` | 183 | 22 | |
-| `annotation.py` | 298 | 79 | |
-| `info_panel.py` | 1078 | 172 | |
-| `app.py` | 1350 | 448 | last, and possibly never — an entry point is wiring |
+| `plotter.py` | 183 | 22 | **done 2026-09-01**, 26 tests — the cluster sort, and the plotter-space queries |
+| `annotation.py` | 298 | 79 | **next** |
+| `info_panel.py` | 1078 | 172 | after that, and the last one |
+| ~~`app.py`~~ | ~~1350~~ | ~~448~~ | **out of scope** (Juha, 2026-09-01) — see below |
+
+**`app.py` is not on the list, and that is settled rather than deferred.** It lays out the GUI, wires the
+animations and the event handlers, and boots the app up; the general Raven rule is that an `app.py`
+should not be doing anything else, so anything found in there worth testing is a sign that it belongs in
+another module, not that the entry point needs a test. Testing it would also mean testing the wiring
+against itself. So `info_panel.py` is the last module in this plan, not the second to last.
 
 **The `dpg.` count is the right proxy, but it overstates the cost where the calls are few and simple.**
 `selection`'s eighteen are four distinct calls — `enable_item`, `disable_item`, `set_value`,
