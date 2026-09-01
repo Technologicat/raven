@@ -570,6 +570,12 @@ idle shows the graph; `avatar_controller.ping` — activity — hands the rect b
 is downstream of the switch and must never be an input to it. Two signals that look like one, and the whole
 mechanism turns on keeping them apart.
 
+**A third consequence, in the help card** (Juha, 2026-09-01). The card tells the reader to switch on
+*Chat graph* to reach an old chat, and in road mode there is no switch — the graph is already up — nor an
+avatar to describe its position relative to. So that sentence has to vary by mode. For now it carries no
+locator at all, a label being findable on its own; saying where the toggle is would be right in one mode
+and wrong in the other, which is worse than saying nothing.
+
 Two consequences for the panel commit, both cheap now and awkward later:
 
 - **The pause gate is conditional on there being something to pause.** `avatar_renderer` may be absent, so

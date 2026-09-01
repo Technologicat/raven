@@ -1954,10 +1954,15 @@ def render_help_extras(self: helpcard.HelpWindow,
                           parent=g1, wrap=self.content_width)
     dpg_markdown.add_text(f"{self.c_txt}Rerolling creates a new sibling and sets the HEAD pointer to that. Previous siblings remain stored in the tree. Starting a new chat, or branching the chat, only resets the HEAD pointer.{self.c_end}",
                           parent=g1, wrap=self.content_width)
-    # Kept to one clause because the card has no room to spare. When it does, what belongs after the colon
-    # is how the view is actually used: the whole tree is drawn there, and clicking a message twice moves
-    # the conversation to it.
-    dpg_markdown.add_text(f"{self.c_txt}Nothing is ever discarded. Where a message has siblings, its arrow buttons step between them, so a rerolled reply can be compared against the one it replaced. To reach a *different* old chat, switch on **Chat graph** below the avatar.{self.c_end}",
+    # Kept to one clause because the card has no room to spare. When it does, what belongs after it is how
+    # the view is actually used: the whole tree is drawn there, and clicking a message twice moves the
+    # conversation to it.
+    #
+    # No locator for the switch, deliberately. "Below the avatar" is where it is today and nowhere in a
+    # no-avatar mode, which has no avatar to be below and no toggle either, the graph being permanently
+    # up. A label is findable; a direction that is wrong in one mode is worse than none. That mode will
+    # want this sentence to say something else entirely, which is its own work.
+    dpg_markdown.add_text(f"{self.c_txt}Nothing is ever discarded. Where a message has siblings, its arrow buttons step between them, so a rerolled reply can be compared against the one it replaced. To reach a *different* old chat, switch on **Chat graph**.{self.c_end}",
                           parent=g1, wrap=self.content_width)
     dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
 
