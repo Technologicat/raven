@@ -1,0 +1,322 @@
+Connected to LLM backend at http://maia.local:1234
+--- cluster 31  (140 entries) ---
+    KEYWORDS: Physics-Informed Neural Networks, Partial Differential Equations, Machine Learning, Neural Operators, Reduced-Order Models, Computational Fluid Dynamics
+
+--- cluster 13  (125 entries) ---
+    KEYWORDS: Phase-field modeling, Fracture mechanics, Fatigue fracture, Damage modeling, Concrete, Computational mechanics
+
+--- cluster 0  (121 entries) ---
+    KEYWORDS: Computational Fluid Dynamics, Aerodynamic Optimization, Wind Turbines, Aircraft Design, Turbulence Modeling, Flow Control
+
+--- cluster 26  (118 entries) ---
+    KEYWORDS: Hemodynamics, Computational Fluid Dynamics, Fluid-structure interaction, Cardiovascular modeling, Patient-specific simulation, Medical device simulation
+
+--- cluster 27  (112 entries) ---
+    KEYWORDS: Large Eddy Simulation, Turbulence Modeling, High-Order Numerical Methods, Data-Driven Closures, Turbulent Combustion, Scale-Resolving Simulations
+
+--- cluster 45  (93 entries) ---
+    KEYWORDS: Topology Optimization, Additive Manufacturing, Stress Constraints, Level-Set Methods, Density-Based Methods, Lattice Structures
+
+--- cluster 24  (77 entries) ---
+    KEYWORDS: Additive Manufacturing, Numerical Simulation, Microstructure Evolution, Phase-Field Modeling, Thermo-Mechanical Analysis, High-Performance Computing
+
+--- cluster 5  (73 entries) ---
+    KEYWORDS: Reduced Order Models, Computational Fluid Dynamics, Parametric Partial Differential Equations, Machine Learning, Fluid-Structure Interaction, Proper Orthogonal Decomposition
+
+--- cluster 25  (67 entries) ---
+    KEYWORDS: Multiphase flows, Fluid-structure interaction, Phase-field methods, Level set method, Volume of fluid, Diffuse interface models
+
+--- cluster 36  (67 entries) ---
+    KEYWORDS: Mechanical Metamaterials, Lattice Structures, Multiscale Homogenization, Topology Optimization, Wave Propagation Control, Programmable Materials
+
+--- cluster 14  (62 entries) ---
+    KEYWORDS: Finite element analysis, Composite materials, Damage mechanics, Fracture modeling, Multiscale modeling, Uncertainty quantification
+
+--- cluster 81  (58 entries) ---
+    KEYWORDS: Machine Learning, Constitutive Modeling, Surrogate Modeling, Multiscale Homogenization, Topology Optimization, Physics-Informed Neural Networks
+
+--- cluster 8  (54 entries) ---
+    KEYWORDS: Isogeometric Analysis, B-splines, NURBS, Multi-patch Methods, CAD Integration, Finite Element Method
+
+--- cluster 17  (53 entries) ---
+    KEYWORDS: Computational Fluid Dynamics, Discontinuous Galerkin Methods, Finite Volume Methods, High-Order Schemes, Well-Balanced Schemes, Entropy Stability
+
+--- cluster 46  (47 entries) ---
+    KEYWORDS: Masonry structures, Seismic assessment, Numerical modeling, Finite element method, Structural retrofitting, Limit analysis
+
+--- cluster 10  (43 entries) ---
+    KEYWORDS: Poromechanics, Thermo-Hydro-Mechanical Coupling, Porous Media, Multiphysics Simulation, Underground Energy Storage, Induced Seismicity
+
+--- cluster 15  (43 entries) ---
+    KEYWORDS: Mathematical modeling, computational biology, cancer modeling, agent-based modeling, biomechanics, multi-scale modeling
+
+--- cluster 23  (42 entries) ---
+    KEYWORDS: High-performance computing, Computational fluid dynamics, Iterative linear solvers, Preconditioners, Multigrid methods, Finite element methods
+
+--- cluster 53  (42 entries) ---
+    KEYWORDS: Adjoint-based optimization, Shape optimization, Multidisciplinary design optimization, Gradient-based optimization, Computational fluid dynamics, PDE-constrained optimization
+
+--- cluster 9  (37 entries) ---
+    KEYWORDS: Optimization under uncertainty, Reliability-based design optimization, Robust design optimization, Surrogate modeling, Bayesian optimization, Structural reliability analysis
+
+--- cluster 3  (36 entries) ---
+    KEYWORDS: Computational Cardiology, Cardiac Electrophysiology, Multiphysics Modeling, Multiscale Simulation, Numerical Methods, High-Performance Computing
+
+--- cluster 6  (36 entries) ---
+    KEYWORDS: Constitutive modeling, Soft tissue mechanics, Fiber orientation, Finite element analysis, Micromechanics, Anisotropy
+
+--- cluster 71  (36 entries) ---
+    KEYWORDS: Digital Twins, Model Order Reduction, Surrogate Models, Bayesian Model Updating, Structural Health Monitoring, Uncertainty Quantification
+
+--- cluster 19  (34 entries) ---
+    KEYWORDS: Domain Decomposition Methods, Parallel Computing, Finite Element Method, Preconditioners, Neural Networks, Electromagnetics
+
+--- cluster 40  (34 entries) ---
+    KEYWORDS: Advanced composite materials, Variable-angle tow composites, Functionally graded materials, Laminated shell structures, Finite element analysis, Post-buckling analysis
+
+--- cluster 7  (33 entries) ---
+    KEYWORDS: Wave propagation, Time integration schemes, Finite element methods, Discontinuous Galerkin methods, Numerical stability
+
+--- cluster 29  (33 entries) ---
+    KEYWORDS: Structural Health Monitoring, Damage Identification, Machine Learning, Bayesian Inference, Model Updating, Finite Element Method
+
+--- cluster 30  (33 entries) ---
+    KEYWORDS: Scientific machine learning, System identification, Reduced-order modeling, Physics-informed machine learning, Gaussian processes, Data assimilation
+
+--- cluster 59  (31 entries) ---
+    KEYWORDS: Lattice Boltzmann Method, Computational Fluid Dynamics, GPU Acceleration, Turbulence Modeling, Porous Media, Numerical Simulations
+
+--- cluster 37  (30 entries) ---
+    KEYWORDS: Computational Biomechanics, Finite Element Method, Musculoskeletal Modeling, Bone Remodeling, Orthopedic Implants, Patient-Specific Simulation
+
+--- cluster 34  (28 entries) ---
+    KEYWORDS: Shallow Water Equations, Material Point Method, Landslide Modeling, Debris Flow Simulation, Hydro-Mechanical Coupling, Numerical Modeling
+
+--- cluster 1  (25 entries) ---
+    KEYWORDS: Surrogate models, Machine learning, Multi-fidelity, Uncertainty quantification, Aerodynamics, Deep learning
+
+--- cluster 22  (25 entries) ---
+    KEYWORDS: Uncertainty Quantification, Verification and Validation, Multifidelity Methods, Surrogate Modeling, Sensitivity Analysis, Computational Simulation
+
+--- cluster 61  (25 entries) ---
+    KEYWORDS: Soft Robotics, Smart Materials, Finite Element Modeling, Soft Actuators, Nonlinear Dynamics, Structural Instabilities
+
+--- cluster 12  (24 entries) ---
+    KEYWORDS: Multiscale modeling, Molecular dynamics, Continuum mechanics, Nanomaterials, Machine learning, Mechanical properties
+
+--- cluster 44  (24 entries) ---
+    KEYWORDS: Unfitted finite element methods, Immersed boundary methods, Embedded domain methods, Finite cell method, Shifted boundary method, Computational mechanics
+
+--- cluster 35  (23 entries) ---
+    KEYWORDS: Computational homogenization, FFT-based methods, Multiscale modeling, Heterogeneous materials, Finite element methods, Higher-order homogenization
+
+--- cluster 4  (22 entries) ---
+    KEYWORDS: Finite Element Method, Contact Mechanics, Crack Propagation, Mixed Formulations, Virtual Element Method, Numerical Solvers
+
+--- cluster 55  (19 entries) ---
+    KEYWORDS: Adaptive Mesh Refinement, Computational Fluid Dynamics, Finite Element Methods, Anisotropic Mesh Adaptation, High-Order Numerical Methods, Parallel Computing
+
+--- cluster 20  (17 entries) ---
+    KEYWORDS: Structural Mechanics, Finite Element Method, Nonlinear Analysis, Beam and Rod Mechanics, Nonlocal Continuum Mechanics
+
+--- cluster 51  (17 entries) ---
+    KEYWORDS: Open-source scientific software, Finite element method, Computational mechanics, Multi-physics simulation, High-performance computing, Numerical simulation
+
+--- cluster 76  (17 entries) ---
+    KEYWORDS: Interacting particle systems, Consensus-based optimization, Mean-field limits, Optimal control, Probabilistic sampling, Stochastic differential equations
+
+--- cluster 80  (17 entries) ---
+    KEYWORDS: Deep Reinforcement Learning, Active Flow Control, Optimization, Fluid Dynamics, Structural Engineering, Computational Fluid Dynamics
+
+--- cluster 38  (16 entries) ---
+    KEYWORDS: Artificial Intelligence, Transportation Logistics, Environmental Sustainability, Industrial Applications, Process Optimization, Autonomous Vehicles
+
+--- cluster 60  (16 entries) ---
+    KEYWORDS: Kinetic equations, Moment closures, Model reduction, Numerical methods, Plasma physics, Rarefied gas dynamics
+
+--- cluster 70  (16 entries) ---
+    KEYWORDS: Poroelasticity, Poromechanics, Finite Element Method, Biot's Model, Numerical Simulation, Theory of Porous Media
+
+--- cluster 78  (16 entries) ---
+    KEYWORDS: Vehicle-Infrastructure Interaction, Drive-by Monitoring, Dynamic Structural Identification, Machine Learning, Physics-Informed Neural Networks, Digital Twins
+
+--- cluster 41  (15 entries) ---
+    KEYWORDS: Microstructure, Machine Learning, Homogenization, Representative Volume Elements, Structure-Property Relationships, Computational Materials Science
+
+--- cluster 82  (15 entries) ---
+    KEYWORDS: Plasma physics, Magnetohydrodynamics, Turbulence, Computational fluid dynamics, Fusion energy, Numerical simulations
+
+--- cluster 16  (14 entries) ---
+    KEYWORDS: Mixed-dimensional coupling, Fluid-structure interaction, Stokes problem, Finite element methods, Dimensional reduction, Lagrange multipliers
+
+--- cluster 49  (14 entries) ---
+    KEYWORDS: Computational Fluid Dynamics, Electrohydrodynamics, Aircraft Icing, Droplet Dynamics, Multiphase Flow, Jet Flows
+
+--- cluster 50  (14 entries) ---
+    KEYWORDS: Computational Fluid Dynamics, Discrete Element Method, Lattice Boltzmann Method, Particle Dynamics, Multiphase Flow, Mixing Processes
+
+--- cluster 72  (14 entries) ---
+    KEYWORDS: Numerical modeling, Welding processes, Finite element method, Computational fluid dynamics, Machine learning, Heat transfer
+
+--- cluster 11  (13 entries) ---
+    KEYWORDS: Numerical methods, Partial differential equations, Computational mathematics, Fourier analysis, Multiscale methods, Polynomial approximation
+
+--- cluster 43  (13 entries) ---
+    KEYWORDS: Constitutive modeling, Viscoelasticity, Viscoplasticity, Finite element method, Parameter identification, Thermomechanical behavior
+
+--- cluster 75  (13 entries) ---
+    KEYWORDS: Finite Element Methods, Free-Surface Flows, Level-Set Functions, Remeshing, Moving Boundaries, Fluid-Structure Interaction
+
+--- cluster 67  (12 entries) ---
+    KEYWORDS: Computational Fluid Dynamics, Respiratory System, Aerosol Transport, Airborne Infection, Lung Modeling
+
+--- cluster 18  (9 entries) ---
+    KEYWORDS: Numerical modeling, Heat transfer, Uncertainty quantification, Inverse analysis, Finite element method, Thermophysical properties
+
+--- cluster 79  (9 entries) ---
+    KEYWORDS: Computational modeling, Multi-scale simulation, Battery electrodes, Multiphysics modeling, Microstructure optimization, Energy storage systems
+
+--- cluster 47  (8 entries) ---
+    KEYWORDS: Mathematical modeling, porous media flow, flow and transport, computational simulation, membrane filtration, network modeling
+
+--- cluster 48  (8 entries) ---
+    KEYWORDS: Computational modeling, Finite element method, Electromechanical coupling, Smart materials, Multiscale modeling, Flexoelectricity
+
+--- cluster 56  (8 entries) ---
+    KEYWORDS: Optimal Control, Trajectory Planning, Route Optimization, Autonomous Vehicles, Mathematical Optimization, Dynamic Programming
+
+--- cluster 64  (8 entries) ---
+    KEYWORDS: Fluid-structure interaction, Biomimetic swimming, Computational fluid dynamics, Immersed boundary method, Bio-inspired locomotion, Cilia hydrodynamics
+
+--- cluster 65  (8 entries) ---
+    KEYWORDS: Finite Element Methods, Numerical Modeling, Geophysical Fluid Dynamics, Ocean and Sea Ice Dynamics, Porous Media Flow, Coupled Fluid Systems
+
+--- cluster 2  (7 entries) ---
+    KEYWORDS: Reducuced-order models, Machine learning, Computational fluid dynamics, Design optimization, Bayesian inference, Data-driven modeling
+
+--- cluster 21  (7 entries) ---
+    KEYWORDS: Computational fluid dynamics, Finite element method, Polymer processing, Non-Newtonian rheology, Multiphase flow, Manufacturing simulation
+
+--- cluster 52  (7 entries) ---
+    KEYWORDS: Model Order Reduction, Proper Generalized Decomposition, Proper Orthogonal Decomposition, Real-Time Simulation, Computational Efficiency, Plastic Deformation
+
+--- cluster 57  (7 entries) ---
+    KEYWORDS: High-dimensional data, Dimensionality reduction, Active learning, Machine learning, Feature selection, Classification
+
+--- cluster 58  (7 entries) ---
+    KEYWORDS: Virtual Element Method, Stabilization-free methods, Numerical partial differential equations, Polygonal meshes, Adaptive methods, Computational mechanics
+
+--- cluster 77  (7 entries) ---
+    KEYWORDS: Multi-scale modeling, fibrous materials, composite materials, numerical simulation, homogenization, pore network modeling
+
+--- cluster 28  (6 entries) ---
+    KEYWORDS: Numerical methods, Differential-algebraic equations, Preconditioning, Machine learning, Optimization algorithms, Scientific computing
+
+--- cluster 32  (6 entries) ---
+    KEYWORDS: Multiphysics simulations, Adaptive methods, Solver selection, Partitioned solvers, Model order reduction, Computational efficiency
+
+--- cluster 62  (6 entries) ---
+    KEYWORDS: Smoothed Particle Hydrodynamics, mesh-free methods, numerical simulation, fracture mechanics, Lagrangian formulations, computational mechanics
+
+--- cluster 63  (6 entries) ---
+    KEYWORDS: Material Point Method, Meshless methods, Computational mechanics, Numerical simulation, Constitutive modeling, Particle methods
+
+--- cluster 74  (6 entries) ---
+    KEYWORDS: Data-driven modeling, Computational methods, Engineering optimization, Numerical approximation, Remote sensing, Sustainable engineering
+
+--- cluster 83  (6 entries) ---
+    KEYWORDS: Based on the five abstracts provided, here is a structured summary of the research. These studies collectively highlight the application of computational modeling, machine learning, and simulation techniques to address complex clinical problems, ranging from perioperative prediction to radiotherapy planning, cardiac electrophysiology, and ocular biomechanics.
+
+---
+
+### 1. Predictive Modeling of Intraoperative Hypotension (IOH)
+*   **Objective:** To develop a robust methodology for predicting IOH during general anesthesia using physiological signals, addressing limitations in existing machine learning (ML) approaches.
+*   **Methodology:**
+    *   Investigated physiological signal-based prediction.
+    *   Addressed critiques of previous ML studies regarding database bias and lack of relevant baselines.
+    *   Utilized the open-source **VitalDB database**.
+    *   Applied standard ML algorithms and integrated **explainability** techniques to assist anesthesiologists.
+*   **Key Insight:** The work emphasizes the need for rigorous evaluation against baselines and highlights the clinical utility of explainable AI in high-stakes surgical environments.
+
+### 2. Patient-Specific In Silico Model for Radiation-Induced Pulmonary Fibrosis
+*   **Objective:** To predict the development of pulmonary fibrosis (PF) following radiation therapy (RT) for non-small cell lung cancer, improving upon limited demographic-based prognostic models.
+*   **Methodology:**
+    *   Developed a **patient-specific 3D model** governed by a system of partial differential equations (PDEs).
+    *   Simulated interactions between cancerous cells, fibroblasts, and lung parenchyma.
+    *   Inputs included CT-derived geometries, Hounsfield data, radiation dosage distribution, and lesion position for **10 patients**.
+*   **Results:**
+    *   Simulations reproduced clinically observed fibrosis patterns, including "honeycombing" textures.
+    *   Predicted fibrotic volume and location showed **very good agreement** with actual patient CT scans.
+*   **Clinical Impact:** Potential to optimize radiotherapy planning to minimize fibrosis risk by personalizing dosage based on individual susceptibility models.
+
+### 3. In-Silico Dynamics of Atrial Fibrillation and Fibrotic Remodeling
+*   **Objective:** To evaluate how different types of fibrotic remodeling in low-voltage areas (LVA) affect atrial fibrillation (AF) dynamics and to interpret LVA findings from electroanatomic mapping.
+*   **Methodology:**
+    *   Created personalized electrophysiological models for **10 persistent AF patients**.
+    *   Incorporated anatomical data, voltage mapping, and local activation times (LATs) at pacing intervals of 250ms and 600ms.
+    *   Simulated three fibrosis types: slow conduction velocity, ionic channel changes, and replacement fibrosis (probabilistic percolation).
+    *   Analyzed wavefront propagation and rotational activity after simulated pulmonary vein isolation.
+*   **Results:**
+    *   Rotational activity locations varied significantly based on fibrosis type and pacing rate (e.g., anterior wall vs. posterior wall).
+    *   Models with **ionic changes** resulted in AF termination in over 50% of cases.
+*   **Key Insight:** Low-voltage areas have complex impacts on AF maintenance; incorporating ionic remodeling may improve the understanding of arrhythmia susceptibility and ablation outcomes.
+
+### 4. Finite Element Simulation of the Pseudophakic Eye
+*   **Objective:** To understand the biomechanical factors contributing to late in-the-bag intraocular lens (IOL) dislocation, particularly in eyes with pseudoexfoliation.
+*   **Methodology:**
+    *   Performed **Finite Element (FE) analysis** of healthy, cataract, and pseudophakic states under intact and pseudoexfoliative conditions.
+    *   Emulated zonular weakness by progressively reducing zonular thickness.
+    *   Assessed stress distribution under gravity loads and varying IOL positions.
+*   **Results:**
+    *   Gravity had minimal impact on the pseudophakic complex.
+    *   **Horizontal IOL position** resulted in the least stress.
+    *   Pseudoexfoliation significantly heightened zonular stress in affected areas, potentially driving disease progression.
+    *   Pseudophakic eyes exhibited increased capsular stress, offering insights into "dead bag syndrome."
+*   **Clinical Impact:** Findings support surgical planning strategies, such as optimizing IOL positioning, to mitigate dislocation risks in degenerative conditions.
+
+### 5. Ranolazine Effects on Arrhythmic Substrate in Hypertrophic Cardiomyopathy
+*   **Objective:** To investigate the substrate mechanisms of ranolazine (late Na+ channel blocker) in HCM, specifically regarding its safety and efficacy across different degrees of repolarization impairment.
+*   **Methodology:**
+    *   Used computational models of HCM tissue and ventricles with variable repolarization impairment.
+    *   Applied S1-S2 pacing protocols to quantify arrhythmic risk.
+    *   Simulated treatment with **3μM, 6μM, and 10μM ranolazine**.
+    *   Derived ECG biomarkers from biventricular simulations.
+*   **Results:**
+    *   Ranolazine prevented ventricular tachycardia (VT) in 53%, 73%, and 80% of models at increasing concentrations.
+    *   **Optimal efficacy** was observed in moderate repolarization impairment (JT < 370ms).
+    *   In severe-extreme impairment, ranolazine **increased arrhythmia sustainability** by decreasing refractory periods.
+*   **Conclusion:** Ranolazine therapy must be tailored to the degree of repolarization heterogeneity; it may be beneficial in moderate cases but risky in severe-extreme cases.
+
+---
+
+### Cross-Cutting Themes
+1.  **Patient-Specific Modeling:** Several studies emphasize the shift from generic models to personalized simulations using patient data (CT scans, electroanatomic mapping, individual physiology) to improve clinical relevance.
+2.  **Computational Modalities:** The research employs a diverse toolkit including Machine Learning, PDEs, Electrophysiological simulations, and Finite Element Analysis.
+3.  **Clinical Translation:** All works aim to support clinical decision-making, whether through predictive alerts, treatment planning (radiotherapy/surgery), or drug efficacy assessment.
+4.  **Heterogeneity Management:** A recurring challenge addressed is the high inter-patient variability in disease progression and anatomy, which these models seek to characterize and manage.
+
+--- cluster 33  (5 entries) ---
+    KEYWORDS: Finite element method, Nonlinear stochastic PDEs, Transport phenomena, Uncertainty quantification, Fokker-Planck equations, Numerical PDE solvers
+
+--- cluster 39  (5 entries) ---
+    KEYWORDS: Time integration schemes, Finite element analysis, Nonlinear constitutive models, Numerical algorithms, Computational mechanics
+
+--- cluster 42  (5 entries) ---
+    KEYWORDS: Machine Learning, Artificial Intelligence, Predictive Modeling, Algorithm Development, Software Development, System Design
+
+--- cluster 54  (5 entries) ---
+    KEYWORDS: Finite Element Method, Micromagnetics, Numerical Simulation, Domain Formation, Electromagnetic Modeling, Computational Physics
+
+--- cluster 66  (5 entries) ---
+    KEYWORDS: Inverse Problems, Full Waveform Inversion, Adjoint Methods, PDE-Constrained Optimization, Material Reconstruction, Non-Destructive Testing
+
+--- cluster 68  (5 entries) ---
+    KEYWORDS: Vibroacoustics, Viscoelasticity, Piezoelectric actuators, Structural dynamics, Computational modeling, Multiphysics modeling
+
+--- cluster 69  (5 entries) ---
+    KEYWORDS: Continuum damage modeling, machine learning, phase field method, numerical homogenization, rank-one convexification, constitutive modeling
+
+--- cluster 73  (5 entries) ---
+    KEYWORDS: Quantum Computing, Computational Fluid Dynamics, Computational Mechanics, Quantum Algorithms, Partial Differential Equations, Hybrid Quantum-Classical
+
+--- outliers (49 entries) ---

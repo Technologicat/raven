@@ -1,0 +1,86 @@
+Connected to LLM backend at http://maia.local:1234
+--- cluster 4  (46 entries) ---
+    KEYWORDS: Axially moving viscoelastic systems, Dynamic stability, Transverse vibrations, Nonlinear dynamics, Parametric resonance, Viscoelastic damping
+
+--- cluster 14  (37 entries) ---
+    KEYWORDS: Axially moving membranes, Axially moving plates, Vibration analysis, Stability analysis, Ideal fluid interaction, Dynamic instability
+
+--- cluster 23  (34 entries) ---
+    KEYWORDS: Latin Hypercube Sampling, Experimental Design, Computer Experiments, Uncertainty Analysis, Space-Filling Designs, Statistical Sampling
+
+--- cluster 18  (31 entries) ---
+    KEYWORDS: Paper mechanics, Viscoelasticity, Deformation, Orthotropic properties, Fracture toughness, Fiber orientation
+
+--- cluster 12  (24 entries) ---
+    KEYWORDS: Moving web dynamics, web instability, viscoelastic effects, web vibration, web handling systems, axially moving webs
+
+--- cluster 1  (21 entries) ---
+    KEYWORDS: Fracture Mechanics, Fatigue Crack Propagation, Stress Intensity Factor, Crack Growth, Strength of Materials
+
+--- cluster 15  (17 entries) ---
+    KEYWORDS: Uncertainty visualization, Data visualization, Geospatial data, Spatial data, Model uncertainty, Uncertain data
+
+--- cluster 27  (17 entries) ---
+    KEYWORDS: Free vibration, Rectangular plates, Vibration analysis, Exact solutions, In-plane vibration, Structural dynamics
+
+--- cluster 9  (14 entries) ---
+    KEYWORDS: Aeroelasticity, Flutter instability, Fluid-structure interaction, Sheet flutter, Panel flutter, Axially moving webs
+
+--- cluster 10  (14 entries) ---
+    KEYWORDS: Sensitivity Analysis, Uncertainty Analysis, Design of Computer Experiments, Robust Design, Sampling Methods, Response Surface Methodology
+
+--- cluster 24  (13 entries) ---
+    KEYWORDS: Paper webs, web modeling, web breaks, wet web properties, web tension, paper runnability
+
+--- cluster 5  (12 entries) ---
+    KEYWORDS: Finite Element Method, Finite Element Analysis, Computational Mechanics, Numerical Methods, Partial Differential Equations
+
+--- cluster 0  (10 entries) ---
+    KEYWORDS: Vibration analysis, Cracked plates, Structural stability, Buckling, Dynamic properties, Thin plates
+
+--- cluster 3  (9 entries) ---
+    KEYWORDS: Porous media, Fluid flow, Transport phenomena, Mathematical modeling, Drug diffusion, Stratum corneum
+
+--- cluster 19  (9 entries) ---
+    KEYWORDS: Fluid-structure interaction, Stability analysis, Numerical simulation, Parachutes, Slender structures, Finite element methods
+
+--- cluster 21  (9 entries) ---
+    KEYWORDS: Multiobjective optimization, Multicriteria optimization, Mathematical programming, Optimization algorithms, Decision making
+
+--- cluster 2  (7 entries) ---
+    KEYWORDS: Continuum mechanics, Calculus of variations, Variational principles, Applied mechanics, Mathematical physics
+
+--- cluster 7  (7 entries) ---
+    KEYWORDS: Meshless methods, Gridless methods, Computational fluid dynamics, Smoothed particle hydrodynamics, Euler equations, Aerodynamics
+
+--- cluster 26  (7 entries) ---
+    KEYWORDS: Traveling strings, string vibration, transverse oscillations, elastic foundation, dynamic stability
+
+--- cluster 6  (6 entries) ---
+    KEYWORDS: Numerical methods, Error analysis, Computer simulation, Error estimation, Truncation errors, Measurement uncertainty
+
+--- cluster 11  (6 entries) ---
+    KEYWORDS: Axially travelling beams, Transverse vibrations, Nonlinear dynamics, Euler-Bernoulli beam, Axial tension, Buckling analysis
+
+--- cluster 25  (6 entries) ---
+    KEYWORDS: Gyroscopic systems, Stability analysis, Eigenvalue problems, Vibrations, Critical speed, Quadratic eigenvalue problems
+
+--- cluster 8  (5 entries) ---
+    KEYWORDS: Fluid-structure interaction, Viscoelastic pipes, Viscoelastic panels, Fluid-conveying pipes, Dynamic stability, Stability analysis
+
+--- cluster 13  (5 entries) ---
+    KEYWORDS: structural mechanics, plate theory, reinforced concrete, classical mechanics, applied mathematics, vibrations
+
+--- cluster 16  (5 entries) ---
+    KEYWORDS: Fluid Mechanics, Aerodynamics, Fluid Dynamics, Theoretical Fluid Mechanics, Wing Aerodynamics
+
+--- cluster 17  (5 entries) ---
+    KEYWORDS: statistical methodology, correlation analysis, sampling methods, non-parametric statistics, rank correlation, averages
+
+--- cluster 20  (5 entries) ---
+    KEYWORDS: Perturbation theory, Asymptotic methods, Singular perturbations, Mathematical physics, Renormalization group, Multiple scales analysis
+
+--- cluster 22  (5 entries) ---
+    KEYWORDS: Theory of Elasticity, Elastic Stability, Strength of Materials, Solid Mechanics, Elasticity
+
+--- outliers (145 entries) ---

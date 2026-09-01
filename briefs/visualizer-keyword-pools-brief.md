@@ -105,14 +105,30 @@ wants to be a feature rather than a script somebody ran once.
 requirement is *six discriminating keywords to show*, so keywords burnt on corpus-common terms do not
 count toward it. Counting the burn per cluster on the labelled corpora:
 
-| corpus | "common" at | corpus-common keywords per cluster (median / p90 / max) | must extract for six distinctive |
-|---|---|---|---|
-| arXiv AI | CDF ≥ 10% | 1 / 1 / 1 | 7 / 7 / 7 |
-| AOKK | CDF ≥ 10% | 2 / 4 / 5 | 8 / **10** / **11** |
-| AOKK | CDF ≥ 15% | 2 / 3 / 4 | 8 / 9 / 10 |
-| AOKK | CDF ≥ 25% | 1 / 1 / 2 | 7 / 7 / 8 |
+Measured on all five corpora, at CDF ≥ 10% of clusters:
 
-So **10–12 covers the p90 and worst cases on a crowded corpus.**
+| corpus | records | clusters | corpus-common keywords per cluster (median / p90 / max) | must extract for six distinctive |
+|---|---|---|---|---|
+| arXiv AI | 958 | 61 | 1 / 1 / 1 | 7 |
+| ECCOMAS | 2519 | 84 | 1 / 1 / 3 | 7 |
+| **AOKK** | 5007 | 83 | **2 / 4 / 5** | **10** |
+| hydrogen 1–3 | 11973 | 82 | 1 / 1 / 1 | 7 |
+| banichuk | 531 | 28 | 0 / 1 / 3 | 7 |
+
+**Four of five need only seven. AOKK is the sole hard case, and not for the reason expected.** The guess
+was that *crowding* drives the burn, AOKK being the most crowded corpus by median cosine distance
+(0.516). Hydrogen is nearly as crowded (0.558) and behaves like the loose ones, and it is also the
+largest corpus here — so neither crowding nor size predicts this. What AOKK has is a **single-topic
+search**: every cluster is about AI in education, so `generative ai` and `educational technology` recur
+by construction. Hydrogen production is a broad application domain spanning many subfields.
+
+**Ten covers every measured case. Twelve is the default anyway**, as headroom against a corpus narrower
+than AOKK — the probe shows the model returns ~11.2 when asked for twelve without padding, so the cost
+over ten is small and the failure it guards against is one nobody would notice.
+
+*What none of this bounds: all five corpora are English-language and STEM-ish, which is where this work
+happens. A corpus narrower than AOKK would push the requirement higher and nothing here says by how
+much.*
 
 *The percentages here are not the threshold the mechanism uses — there isn't one. They are three
 readings of "how generic counts as generic", used to bracket how many of a cluster's keywords are
@@ -163,6 +179,29 @@ the only place it has ever been seen. So this section is pure GUI work over an e
 **It does not duplicate the word cloud.** That is built from `entry.keywords` of the *currently
 selected* points (`word_cloud.py:143`), so it is selection-scoped, visual and approximate. This is
 corpus-scoped, numeric and exact. Different questions.
+
+## The parser needs a guard, and the ranking makes that urgent rather than cosmetic
+
+**Measured across 338 clusters of five corpora, 2026-09-01: one reply came back as prose rather than as
+a comma-separated list** — a bulleted "here is a structured summary of the research" — despite the
+prompt asking for a list and saying a program would read it. That is 0.3%, and the importer has no
+validation: `_collect_cluster_keywords` checks only for the literal failure sentinel and otherwise
+splits on commas, so a prose reply becomes twenty-odd fragments of a sentence, recorded as that
+cluster's keywords.
+
+**Under IDF ranking that failure is promoted rather than buried.** Garbage fragments appear in exactly
+one cluster, so they score the maximum IDF and sort to the *front* of what the cluster displays. A rule
+that ranks by rarity is exactly the wrong rule to combine with an unvalidated parser, so the guard is
+part of this design rather than a separate tidy-up.
+
+The shape of the guard is not subtle — a keyword list whose entries run to sentence length, or carry
+Markdown bullets or colons, is not a keyword list — and `importer.py` already carries a
+`# TODO: wrap this in a retry mechanism (up to 3 times?)` at that exact spot. Rejecting and retrying is
+what the TODO asks for, and the rejection test is cheap.
+
+*Note the burn measurements above are unaffected: recomputed with and without the malformed cluster,
+ECCOMAS reads median 1, p90 1, max 3 either way, because the garbage terms are all singletons and so
+never join the common pool.*
 
 ## Settled
 

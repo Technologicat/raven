@@ -1,0 +1,248 @@
+Connected to LLM backend at http://maia.local:1234
+--- cluster 9  (1864 entries) ---
+    KEYWORDS: Photocatalytic hydrogen production, Water splitting, Photocatalysts, Heterojunctions, Solar energy conversion, Nanocomposite catalysts
+
+--- cluster 12  (1855 entries) ---
+    KEYWORDS: Biohydrogen production, Dark fermentation, Organic waste, Process optimization, Anaerobic mixed cultures, Substrate pretreatment
+
+--- cluster 40  (723 entries) ---
+    KEYWORDS: Hydrogen production, Hydrogen economy, Green hydrogen, Hydrogen storage, Sustainable energy, Life cycle assessment
+
+--- cluster 16  (600 entries) ---
+    KEYWORDS: Biohydrogen production, Photofermentation, Photobiological hydrogen production, Microalgae, Photosynthetic bacteria, Photobioreactors
+
+--- cluster 36  (543 entries) ---
+    KEYWORDS: Hydrogen production, Steam reforming, Catalytic reforming, Ethanol reforming, Methanol reforming, Glycerol reforming
+
+--- cluster 37  (540 entries) ---
+    KEYWORDS: Green hydrogen, Hydrogen production, Renewable energy, Water electrolysis, Techno-economic analysis, Power-to-hydrogen
+
+--- cluster 1  (426 entries) ---
+    KEYWORDS: Hydrogen production, Membrane reactors, Steam reforming, Palladium membranes, Techno-economic analysis, Process modeling
+
+--- cluster 47  (399 entries) ---
+    KEYWORDS: Hydrogen production, Biomass gasification, Thermochemical conversion, Supercritical water gasification, Biohydrogen, Syngas production
+
+--- cluster 34  (311 entries) ---
+    KEYWORDS: Biohydrogen production, Dark fermentation, Photofermentation, Metabolic engineering, Algal biomass, Techno-economic analysis
+
+--- cluster 25  (300 entries) ---
+    KEYWORDS: Water electrolysis, Hydrogen production, Electrocatalysts, Green hydrogen, Electrolyzer design, Renewable energy integration
+
+--- cluster 27  (253 entries) ---
+    KEYWORDS: Hydrogen Evolution Reaction, Electrocatalysts, Water Electrolysis, Hydrogen Production, Energy-Saving Hydrogen Production, Non-Precious Metal Catalysts
+
+--- cluster 29  (242 entries) ---
+    KEYWORDS: Hydrogen production, Thermochemical cycles, Copper-chlorine cycle, Solar energy, Geothermal energy, Thermodynamic analysis
+
+--- cluster 2  (233 entries) ---
+    KEYWORDS: Microbial electrolysis cells, Hydrogen production, Bioelectrochemical systems, Wastewater treatment, Cathode catalysts, Reactor design
+
+--- cluster 53  (226 entries) ---
+    KEYWORDS: Hydrogen peroxide production, Hydrogen sulfide production, Hydrogen production, Reactive oxygen species, Oxidative stress, Molecular hydrogen
+
+--- cluster 35  (197 entries) ---
+    KEYWORDS: Nuclear hydrogen production, Sulfur-iodine cycle, Thermochemical water-splitting, High-temperature gas-cooled reactor, Techno-economic analysis, Generation-IV reactor
+
+--- cluster 10  (180 entries) ---
+    KEYWORDS: Biohydrogen production, Metabolic engineering, Hydrogenases, Microbial fermentation, Bioenergy
+
+--- cluster 22  (172 entries) ---
+    KEYWORDS: Biohydrogen production, Lignocellulosic biomass, Pretreatment, Fermentation, Agricultural residues, Bioenergy
+
+--- cluster 0  (156 entries) ---
+    KEYWORDS: Catalytic methane decomposition, Hydrogen production, Heterogeneous catalysts, Carbon nanomaterials, Turquoise hydrogen, Methane pyrolysis
+
+--- cluster 52  (144 entries) ---
+    KEYWORDS: Hydrogen production, Plasma reforming, Microwave plasma, Dielectric barrier discharge, Plasma-catalysis, Non-thermal plasma
+
+--- cluster 15  (140 entries) ---
+    KEYWORDS: Hydrogen production, Aluminum alloys, Aluminum hydrolysis, Hydrogen storage, Fuel cells, Magnesium alloys
+
+--- cluster 20  (140 entries) ---
+    KEYWORDS: Hydrogen production, Sodium borohydride, Ammonia borane, Catalytic hydrolysis, Hydrogen storage, Catalysts
+
+--- cluster 26  (122 entries) ---
+    KEYWORDS: Hydrogen production, Techno-economic analysis, Carbon capture and utilization, Methanol synthesis, Renewable energy integration, Decarbonization
+
+--- cluster 45  (122 entries) ---
+    KEYWORDS: Thermochemical water splitting, Solar hydrogen production, Redox materials, Metal oxides, Concentrated solar energy, Green hydrogen
+
+--- cluster 33  (121 entries) ---
+    KEYWORDS: Chemical looping hydrogen production, Oxygen carriers, Iron-based materials, Redox cycles, CO2 capture, Thermodynamic modeling
+
+--- cluster 72  (111 entries) ---
+    KEYWORDS: Hydrogen production, Catalytic pyrolysis, Steam gasification, Plastic waste, Biomass gasification, Syngas production
+
+--- cluster 54  (101 entries) ---
+    KEYWORDS: Ammonia decomposition, Hydrogen production, Green ammonia, Hydrogen carrier, Catalyst design, Techno-economic analysis
+
+--- cluster 7  (98 entries) ---
+    KEYWORDS: Hydrogen production, Photocatalysis, Biomass, Photoreforming, Biohybrid systems, Artificial photosynthesis
+
+--- cluster 75  (90 entries) ---
+    KEYWORDS: Hydrogen production, Solid oxide electrolysis cells, High-temperature steam electrolysis, Techno-economic analysis, Electrochemical modeling, Efficiency optimization
+
+--- cluster 61  (84 entries) ---
+    KEYWORDS: Hydrogen peroxide, production, electrochemical, photocatalysis, catalysts, oxygen reduction reaction
+
+--- cluster 55  (83 entries) ---
+    KEYWORDS: Biohydrogen production, Algal biomass, Pretreatment, Dark fermentation, Microalgae, Macroalgae
+
+--- cluster 32  (80 entries) ---
+    KEYWORDS: Biohydrogen production, Dark fermentation, Kinetic modeling, Response surface methodology, Process optimization, Experimental design
+
+--- cluster 3  (79 entries) ---
+    KEYWORDS: Nanoparticles, Biohydrogen production, Dark fermentation, Photofermentation, Nanomaterials, Metal oxides
+
+--- cluster 63  (66 entries) ---
+    KEYWORDS: Negative hydrogen ion production, Plasma ion sources, Volume production, Surface production, Cesium seeding, Neutral beam injection
+
+--- cluster 23  (62 entries) ---
+    KEYWORDS: Formic acid decomposition, hydrogen production, catalytic dehydrogenation, nanocatalysts, liquid organic hydrogen carriers, single-atom catalysts
+
+--- cluster 39  (61 entries) ---
+    KEYWORDS: Hydrogen safety, Hydrogen production, Risk assessment, Hydrogen embrittlement, Explosion mitigation, Hydrogen quality
+
+--- cluster 81  (54 entries) ---
+    KEYWORDS: Hydrogen production, Partial oxidation, Syngas, Porous media, Catalytic combustion, Hydrocarbon fuels
+
+--- cluster 50  (51 entries) ---
+    KEYWORDS: Hydrogen production, Photocatalytic hydrogen production, Artificial photosynthesis, Solar hydrogen production, Water splitting, Renewable energy
+
+--- cluster 17  (49 entries) ---
+    KEYWORDS: Hydrogen production, Sonocatalysis, Piezocatalysis, Photocatalysis, Pyroelectric catalysis, Ultrasound
+
+--- cluster 68  (49 entries) ---
+    KEYWORDS: Hydrogen production from biogas, Biogas reforming, Techno-economic analysis, Green hydrogen, Steam reforming, Life cycle assessment
+
+--- cluster 78  (45 entries) ---
+    KEYWORDS: Underground hydrogen storage, Hydrogen production, Reservoir simulation, Geological storage, Cushion gas, Hydrogen energy systems
+
+--- cluster 19  (42 entries) ---
+    KEYWORDS: Biomass-derived hydrogen production, Green hydrogen, Biorefineries, Waste-to-hydrogen, Techno-economic assessment, Biomass gasification
+
+--- cluster 64  (41 entries) ---
+    KEYWORDS: Hydrogen production, Hydrogen sulfide decomposition, Sulfur recovery, Claus process, Hydrogen sulfide reformation, Black Sea hydrogen sulfide
+
+--- cluster 5  (39 entries) ---
+    KEYWORDS: Hydrogen production, Catalytic reforming, Hydrocarbon conversion, In-situ hydrogen generation, Refinery hydrogen, Fuel cell applications
+
+--- cluster 51  (37 entries) ---
+    KEYWORDS: Hydrogen production, Hydrogenases, Bioinspired catalysts, Artificial enzymes, Biohydrogen, Directed evolution
+
+--- cluster 42  (35 entries) ---
+    KEYWORDS: Hydrogen evolution reaction, Electrocatalysis, Transition metal complexes, Molecular catalysts, Reaction mechanism, Catalyst design
+
+--- cluster 43  (34 entries) ---
+    KEYWORDS: Hydrogen production, Water splitting, Mixed ionic-electronic conducting membranes, Oxygen transport membranes, Ceramic membrane reactors, Perovskite materials
+
+--- cluster 44  (34 entries) ---
+    KEYWORDS: Hydrogen production, Catalytic dehydrogenation, Liquid organic hydrogen carriers, Iridium catalysts, Ruthenium catalysts, Aqueous-phase reforming
+
+--- cluster 18  (31 entries) ---
+    KEYWORDS: Hydrogen production, Reverse electrodialysis, Electrodialysis, Salinity gradient energy, Waste heat recovery, SO2 depolarized electrolysis
+
+--- cluster 21  (28 entries) ---
+    KEYWORDS: Photoelectrochemical hydrogen production, Chlor-alkali process, Hybrid photoelectrochemical systems, Cu-Cl cycle, Exergy analysis, Technoeconomic evaluation
+
+--- cluster 31  (28 entries) ---
+    KEYWORDS: Hydrogen production, Wastewater treatment, Electrohydrolysis, Energy recovery, Photoelectrochemical, Bioelectrochemical systems
+
+--- cluster 73  (28 entries) ---
+    KEYWORDS: Hydrogen production, Water radiolysis, Ionizing radiation, Radiation catalysis, Metal oxides, Nuclear waste
+
+--- cluster 41  (25 entries) ---
+    KEYWORDS: Hydrogen addition, Internal combustion engines, On-board hydrogen production, Combustion kinetics, Flame structure, Emissions reduction
+
+--- cluster 58  (23 entries) ---
+    KEYWORDS: Hydrogen production, Machine learning, Artificial neural networks, Process modeling, Biohydrogen, Renewable energy
+
+--- cluster 11  (18 entries) ---
+    KEYWORDS: Hydrogen production, Slush hydrogen, Hydrogen liquefaction, Para-hydrogen production, Hydrogen isotope separation
+
+--- cluster 14  (18 entries) ---
+    KEYWORDS: Hydrogen production, water electrolysis, electrocatalysis, carbon-based materials, energy efficiency, electrode modification
+
+--- cluster 30  (17 entries) ---
+    KEYWORDS: Hydrogen production, Hydrothermal liquefaction, Bio-oil, Waste biomass, Catalytic reforming, Hydrothermal gasification
+
+--- cluster 65  (16 entries) ---
+    KEYWORDS: Water-gas shift reaction, Hydrogen production, Catalysts, Sorption-enhanced water-gas shift, Process modeling, Carbon dioxide capture
+
+--- cluster 6  (15 entries) ---
+    KEYWORDS: Hydrogen production, Water electrolysis, Microfluidic electrolyzers, On-demand hydrogen, Hydrogen bubble dynamics
+
+--- cluster 13  (15 entries) ---
+    KEYWORDS: Hydrogen production, steam reforming, waste heat recovery, heat transfer optimization, reactor design, electrolysis cells
+
+--- cluster 59  (14 entries) ---
+    KEYWORDS: Microreactors, Microchannel reactors, Hydrogen production, Ammonia decomposition, Hydrogen energetics, Catalytic systems
+
+--- cluster 4  (13 entries) ---
+    KEYWORDS: Hydrogen production, Waste heat recovery, Steel slag utilization, Thermodynamic analysis, Techno-economic assessment, Catalytic reforming
+
+--- cluster 28  (13 entries) ---
+    KEYWORDS: Hydrogen production, Fuel reforming, PEM fuel cells, Hydrogen purification, Carbon monoxide removal, Biomass-derived fuels
+
+--- cluster 38  (13 entries) ---
+    KEYWORDS: Biohydrogen production, Lignocellulosic biomass, Fermentation, Pretreatment, Hydrogen yield, Biomass feedstocks
+
+--- cluster 46  (13 entries) ---
+    KEYWORDS: Hydrogen production, Biomass conversion, Electrochemical reforming, Bioalcohols, Green hydrogen, Electrocatalysis
+
+--- cluster 62  (13 entries) ---
+    KEYWORDS: Hydrogen production, catalytic dehydrogenation, hydrogen transfer, biofuel production, biomass conversion, heterogeneous catalysis
+
+--- cluster 70  (12 entries) ---
+    KEYWORDS: Hydrogen production, Microplastics, Polyhydroxyalkanoates, Anaerobic fermentation, Waste activated sludge, Bioplastics
+
+--- cluster 8  (11 entries) ---
+    KEYWORDS: Biohydrogen production, Water hyacinth, Aquatic plants, Anaerobic fermentation, Organic wastewater, Co-digestion
+
+--- cluster 60  (11 entries) ---
+    KEYWORDS: Liquid organic hydrogen carriers, Hydrogen storage, Chemical hydrogen carriers, Hydrogen production, Catalytic dehydrogenation, Hydrogen transport
+
+--- cluster 69  (11 entries) ---
+    KEYWORDS: photocatalytic hydrogen production, water splitting, photocatalytic reactors, microreactors, reactor design, solar photocatalysis
+
+--- cluster 80  (11 entries) ---
+    KEYWORDS: Pressure Swing Adsorption, Hydrogen Production, Hydrogen Purification, Steam Methane Reforming, Heat Integration, Carbon Dioxide Capture
+
+--- cluster 56  (10 entries) ---
+    KEYWORDS: Hydrogen production, Hydrogen fueling stations, Fuel cell vehicles, Residential fuel cells, Hydrogen storage, Clean energy
+
+--- cluster 57  (9 entries) ---
+    KEYWORDS: Solar hydrogen production, Green hydrogen, Hydrogen infrastructure, Renewable energy, Hydrogen refueling stations, South Africa
+
+--- cluster 71  (9 entries) ---
+    KEYWORDS: Hydrogen production, Human urine, Alternative water sources, Wastewater electrolysis, Energy recovery, Circular economy
+
+--- cluster 48  (8 entries) ---
+    KEYWORDS: Biohydrogen production from coal, Coal fermentation, Anaerobic digestion, Liquid phase intermediates, White-rot fungi, Hydrogen cogeneration
+
+--- cluster 67  (8 entries) ---
+    KEYWORDS: Hydrogen production, Sodium hydroxide, Hydrothermal gasification, Alkali promotion, Organic compound degradation, Biomass conversion
+
+--- cluster 74  (8 entries) ---
+    KEYWORDS: Hydrogen production, methane reforming, photocatalysis, laser irradiation, photothermal catalysis, light-driven processes
+
+--- cluster 24  (7 entries) ---
+    KEYWORDS: Hydrogen production, Ionic liquids, Water electrolysis, Hydrogen evolution reaction, Electrochemical hydrogen generation
+
+--- cluster 66  (7 entries) ---
+    KEYWORDS: Hydrogen production, CO2 sequestration, Serpentinization, Catalysts, Metal oxides, Olivine
+
+--- cluster 77  (7 entries) ---
+    KEYWORDS: Hydrogen production, Nanocatalysts, Photocatalysis, Dye degradation, Bimetallic nanoparticles, Wastewater treatment
+
+--- cluster 79  (7 entries) ---
+    KEYWORDS: Biohydrogen production, Microbial consortia, Co-culture, Organic waste utilization, Metabolic cooperation
+
+--- cluster 49  (6 entries) ---
+    KEYWORDS: Hydrogen production, Room-temperature catalysis, Electrocatalysis, Chemical looping, Heterogeneous catalysis, Low-temperature reaction
+
+--- cluster 76  (6 entries) ---
+    KEYWORDS: Hydrogen production, Polyethylene terephthalate, Plastic waste upcycling, Electrocatalysis, Photocatalysis, Value-added chemicals
+
+--- outliers (50 entries) ---

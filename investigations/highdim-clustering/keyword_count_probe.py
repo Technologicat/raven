@@ -33,6 +33,11 @@ import clusterlab
 from show_clusters import drop_undersized_clusters
 
 
+# The prompt spells its keyword count as an English word, so the comparison is driven by words and the
+# reporting needs the numbers back. Only the counts worth asking for are here.
+WORD_NUMBERS = {"six": 6, "eight": 8, "ten": 10, "twelve": 12, "fifteen": 15, "twenty": 20}
+
+
 def ask_for_keywords(llm_settings, agent, base_prompt, texts, count_word):
     """Run one keyword extraction, with the prompt's keyword count swapped to `count_word`."""
     prompt_text = base_prompt.replace("up to six keywords", f"up to {count_word} keywords")
@@ -85,6 +90,9 @@ def main():
     parser.add_argument("--n-clusters", type=int, default=100, help="agglomerative cut level")
     parser.add_argument("--min-cluster-size", type=int, default=5)
     parser.add_argument("--clusters", type=int, default=12, help="how many clusters to probe")
+    parser.add_argument("--counts", nargs=2, default=["six", "twelve"],
+                        help="the two keyword counts to compare, spelled as the prompt spells them "
+                             "(e.g. --counts twelve fifteen)")
     parser.add_argument("--max-prompt-entries", type=int, default=60)
     parser.add_argument("--backend-url", default=None)
     args = parser.parse_args()
@@ -117,30 +125,37 @@ def main():
         titles_by_cluster.append([entries[i][0] for i in members])
 
         base = visualizer_config.clusters_llm_keyword_extraction_prompt
-        got6 = ask_for_keywords(llm_settings, agent, base, texts, "six")
-        got12 = ask_for_keywords(llm_settings, agent, base, texts, "twelve")
+        got6 = ask_for_keywords(llm_settings, agent, base, texts, args.counts[0])
+        got12 = ask_for_keywords(llm_settings, agent, base, texts, args.counts[1])
         six.append(got6)
         twelve.append(got12)
         print(f"cluster {cid} ({len(members)} entries)")
-        print(f"    six   [{len(got6):>2}]: {', '.join(got6)}")
-        print(f"    twelve[{len(got12):>2}]: {', '.join(got12)}")
+        print(f"    {args.counts[0]:<7}[{len(got6):>2}]: {', '.join(got6)}")
+        print(f"    {args.counts[1]:<7}[{len(got12):>2}]: {', '.join(got12)}")
         print(f"            first six: {', '.join(got12[:6])}")
         print(f"            the tail : {', '.join(got12[6:])}")
         print(flush=True)
 
+    # The boundary between "head" and "tail" is wherever the smaller request stopped, so that the tail
+    # is exactly the keywords the larger request added. Hardcoding 6 and 12 would misreport any other
+    # pair, and the whole point of the comparison is the added ones.
+    head = WORD_NUMBERS[args.counts[0]]
+    full = WORD_NUMBERS[args.counts[1]]
+
     print("=" * 78)
-    print(f"asked for six:    mean returned {np.mean([len(k) for k in six]):.1f}")
-    print(f"asked for twelve: mean returned {np.mean([len(k) for k in twelve]):.1f}")
+    print(f"asked for {args.counts[0]}: mean returned {np.mean([len(k) for k in six]):.1f}")
+    print(f"asked for {args.counts[1]}: mean returned {np.mean([len(k) for k in twelve]):.1f}")
     print()
-    print(f"distinctiveness, six-run positions 1-6 : {distinctiveness(six, (0, 6)):.2f}")
-    print(f"distinctiveness, twelve-run positions 1-6 : {distinctiveness(twelve, (0, 6)):.2f}")
-    print(f"distinctiveness, twelve-run positions 7-12: {distinctiveness(twelve, (6, 12)):.2f}")
-    print("   (a fall from 1-6 to 7-12 is what padding would look like)")
+    print(f"distinctiveness, {args.counts[0]}-run positions 1-{head}: {distinctiveness(six, (0, head)):.2f}")
+    print(f"distinctiveness, {args.counts[1]}-run positions 1-{head}: {distinctiveness(twelve, (0, head)):.2f}")
+    print(f"distinctiveness, {args.counts[1]}-run positions {head + 1}-{full}: "
+          f"{distinctiveness(twelve, (head, full)):.2f}")
+    print(f"   (a fall from the head to positions {head + 1}-{full} is what padding would look like)")
     print()
-    g_head = np.nanmean([grounding(k, t, (0, 6)) for k, t in zip(twelve, titles_by_cluster)])
-    g_tail = np.nanmean([grounding(k, t, (6, 12)) for k, t in zip(twelve, titles_by_cluster)])
-    print(f"grounding in the cluster's own titles, positions 1-6 : {g_head:.2f}")
-    print(f"grounding in the cluster's own titles, positions 7-12: {g_tail:.2f}")
+    g_head = np.nanmean([grounding(k, t, (0, head)) for k, t in zip(twelve, titles_by_cluster)])
+    g_tail = np.nanmean([grounding(k, t, (head, full)) for k, t in zip(twelve, titles_by_cluster)])
+    print(f"grounding in the cluster's own titles, positions 1-{head}: {g_head:.2f}")
+    print(f"grounding in the cluster's own titles, positions {head + 1}-{full}: {g_tail:.2f}")
 
 
 if __name__ == "__main__":
