@@ -110,7 +110,12 @@ def get_data_idxs_at_mouse(dataset: env | None = None) -> np.ndarray:
     # Find `k` data points nearest to the mouse cursor.
     # Since the plot aspect ratio is not necessarily square, we need x/y distances separately to judge the pixel distance.
     # Hence the data space distances the `kdtree` gives us are not meaningful for our purposes.
-    data_space_distances_, data_idxs = dataset.kdtree.query(p, k=gui_config.datapoints_at_mouse_max_neighbors)  # `data_idxs`: item indices into `sorted_xxx`
+    data_space_distances, data_idxs = dataset.kdtree.query(p, k=gui_config.datapoints_at_mouse_max_neighbors)  # `data_idxs`: item indices into `sorted_xxx`
+
+    # A dataset with fewer points than the neighbor budget cannot fill the answer, and `query` pads it to
+    # length `k` anyway - with the out-of-range index `n`, and an infinite distance to say so. Slicing
+    # with those raises, so drop them before we do. Bibliographies of a few dozen entries are ordinary.
+    data_idxs = data_idxs[np.isfinite(data_space_distances)]
 
     # Compute pixel distance, from mouse cursor, of each matched data point.
     deltas = dataset.sorted_lowdim_data[data_idxs, :] - p  # Distances from mouse cursor in data space, tensor of shape [k, 2].

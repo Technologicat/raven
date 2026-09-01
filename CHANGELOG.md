@@ -352,6 +352,8 @@
 
 - the info panel's smooth scroll is now really stopped when the panel's content is rebuilt, rather than being told to stop by a call that tidies up after it and leaves it running. A scroll in flight kept moving the panel through the swap, over the position the rebuild had just restored.
 
+- **the plot's mouse hover and click-to-select now work on small datasets.** Finding the datapoints under the cursor asks for a fixed number of nearest neighbours, and a dataset with fewer points than that gets an answer padded out with placeholders; those were read as real datapoints. Below the threshold — a few dozen entries, which is an ordinary size for a focused bibliography — the hover highlight, the annotation tooltip and click-to-select therefore all did nothing at all.
+
 *Raven-avatar*
 
 - in the pose editor, keyboard shortcuts no longer fire behind a modal dialog. Every failed character-image or emotion load is reported through one, and the guard that suppresses hotkeys did not count it as a dialog — so the Enter that dismissed the error also did whatever Enter does in the editor behind it.
