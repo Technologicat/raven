@@ -107,6 +107,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
   - Message attachments. Attach images (on a vision model) and documents (on any model) to your message; a long web page the AI fetches becomes an attachment too, so one fetch cannot bury the conversation it was meant to inform.
     - Documents are read as text, so a text-only model can use them.
     - Attachments are stored alongside the chat, content-addressed, and can be opened from the chat log.
+  - Chat graph. The branching history is drawn as a tree you can navigate: reach any chat you have ever started, look at a branch before switching to it, and see where the one you are considering left the one you are on. See [Chat graph](raven/librarian/README.md#chat-graph) in the Librarian README.
   - Scriptable. `raven.librarian.agent` runs one assistant turn from your own Python — your corpus, the branching chat tree and the tool-calling all in play — and returns a record of what the turn did, including the prompt it actually sent. See [Scripting](raven/librarian/README.md#scripting) in the Librarian README.
   - Anime avatar for the LLM, see *Raven-avatar* below.
     - Speech synthesizer with lipsynced animation.

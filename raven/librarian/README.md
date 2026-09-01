@@ -141,6 +141,22 @@ Finally, sometimes it is interesting or useful to **visit alternative branches**
 
 All such curation, analysis and exploration is facilitated by the natural abstraction that fits best here - a tree structure - and a GUI to navigate it.
 
+### Chat graph
+
+Switch on **Chat graph** in the mode toggles, and the tree is drawn where the avatar was. This is the way to reach a chat that is not the one you are in: the linearized view only ever shows one branch, and the arrow buttons on a message only step between its immediate siblings.
+
+What you see is the branch you are on, drawn as a vertical spine, with a few siblings either side of it at each level. One of those levels is every chat ever started under the current character card, which is as close as this format comes to a list of recent chats. Anything left out is drawn as a clickable **…N more**, so a box with no visible links means the tree really does end there.
+
+Clicking is in two steps, and the first one changes nothing:
+
+- **Click a message** to look at it. If it is on the branch you are on, the chat log scrolls to it. If it is on another branch, the graph redraws around it, bringing its own siblings and continuations into view.
+- **Click it again** to switch the conversation to it. The branch button in the graph's toolbar does the same thing.
+
+Colour says where you are rather than what you are looking at: the branch **HEAD** is on stays highlighted even while you browse elsewhere, so the point at which a branch you are considering left the one you are on is visible.
+
+Clicking a **…N more** navigates instead of selecting. A gap between siblings jumps the window to the middle of what it hides, so a wide fan is crossed in a few clicks rather than one at a time; a gap standing for skipped ancestors shows more of the branch; a gap under an off-branch message opens what continues below it.
+
+
 ### Notes
 
 As someone on the internet pointed out, the term *hallucination* is misleading, since in humans, it refers to **inputs** that are not grounded in external reality - or as WordNet puts it, "*a sensory perception of something that does not exist*". However, the common usage of *LLM hallucination* refers to ungrounded **outputs**. A better semantic match here is "*a fabricated memory believed to be true*", hence a *confabulation*.
@@ -412,7 +428,7 @@ For configuring the AI's voice and the subtitles, see [Configuration](#configura
 
 The avatar has an optional, configurable timeout, after which the avatar video will turn off if there is no activity (to save GPU and CPU compute resources, as well as to eliminate unnecessary fan noise when running on a laptop). The avatar wakes up immediately when there is activity (e.g. navigating the chat tree, rerolling a message, sending a new message to the AI, or asking the avatar to speak a previous message again).
 
-Currently (v0.2.4), the avatar cannot be completely disabled. *Librarian* expects the `avatar` module of *Raven-server* to be running, and will always display the avatar. We recognize this option would be useful for low-VRAM environments, and intend to add it later, once we have something else to show in the right-side panel (e.g. a list of recent chats, or the chat tree).
+Currently, the avatar cannot be completely disabled. *Librarian* expects the `avatar` module of *Raven-server* to be running, and will always load the avatar. We recognize this option would be useful for low-VRAM environments, and intend to add it later. The right-side panel now has something else to show while the avatar is hidden — the [chat graph](#chat-graph) — which was the missing piece; what remains is not loading the avatar at all.
 
 <p align="center">
 <img src="../../img/avatar-subtitled.png" alt="Screenshot from live view of avatar." height="500"/> <br/>
@@ -773,11 +789,7 @@ Areas to improve:
       - The memory feature will provide a form of this.
         - The memory autosearch will need to omit those messages that are currently visible in the context.
 - Improve **GUI to access old chats**
-  - Add recent chats list
-    - As mentioned, "recent chat" is not really defined with the natively nonlinear format; maybe "user's first message" is a good enough splitting point
-  - Add tree view
-    - N levels around chosen point, to keep rendering relatively fast
-    - The graph widget this needs already exists: *Raven-xdot-viewer*'s renderer, written for this purpose. It is not wired to the chat tree yet.
+  - The **chat graph** covers the first two of these; see [Chat graph](#chat-graph) above. It draws the branch you are on plus a few siblings at each level, so the level that acts as a list of recent chats is right there, and everything it leaves out is a clickable "…N more".
   - Add search
     - incremental fragment search (like in *Raven-visualizer*)
     - use the local search engine here, too (since we need to search-index chats for the memory feature, anyway)

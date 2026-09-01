@@ -586,6 +586,48 @@ Two consequences for the panel commit, both cheap now and awkward later:
   without an avatar in it. Today `_get_avatar_panel_size` is what computes it, which is the name to watch:
   the geometry is the *right-hand panel's*, and the avatar is one thing that can fill it.
 
+### First live look, 2026-09-01
+
+The panel rendered on the first run: branch colouring, dashed gap boxes, arrowheads, the HEAD pill, label
+truncation. What did not work, and what wants changing. **Juha's list is his; the two defects below it are
+mine, found in the same run.**
+
+**Raised by Juha, and not yet acted on:**
+
+- **Font size.** He did not say which direction and I have not asked. My own reading of the screenshot is
+  that the labels sit small inside their boxes, but that is a guess about his complaint, not his words.
+- **Nodes need a role name.** The role is currently carried by nothing at all: the plan was role *glyphs*
+  (the PNGs the chat log uses), and those are the last commit of the sequence because they need an
+  `ImageShape` the widget does not have. A text role is available now and does not wait on that. Worth
+  noting that the brief already predicted this hole — *"which leaves role without a channel"* — and
+  answered it with glyphs alone.
+- **Defaulting the view to HEAD leaves the bottom half of the panel blank.** HEAD is at the bottom of its
+  own spine, so centring on it spends half the panel on the empty space below the tree.
+
+**Raised as an idea, to be discussed** (Juha, 2026-09-01): **a message with attachments should show that
+it has them.** The datastore already knows — `general_metadata["sidecars"]` on the payload — so the question
+is what the mark is and whether it distinguishes an image from a document. Note it interacts with the two
+marks already planned for a node, the role glyph and the tool-call badge: three indicators on a box 180×52
+is a crowd, and the answer may be one indicator area rather than three.
+
+**Found while driving it:**
+
+- **`XDotWidget.on_click` does not pass what its docstring says it passes.** The docstring reads
+  *"Receives (node_id, button)"* and this brief quoted it as the hook the feature needs. It actually passes
+  `_describe_element(element)` — a human-readable string, from which no caller can recover which node was
+  clicked. `raven-xdot-viewer` is the only other consumer and prints it to a status bar, so nothing had
+  ever needed the identity and the wrong docstring cost nobody anything until now.
+  - **Proposed fix, on the widget rather than the panel: pass the element.** A description is derivable
+    from identity and not the reverse, and it also covers edges, which have no `internal_name` to pass
+    instead. So `on_click(element, button)` / `on_hover(element_or_None)`, `describe_element` made public,
+    and one line changed in the viewer.
+  - This is the second load-bearing claim in the brief's "why it is cheaper than the record says" section
+    to turn out false on contact. The other was the parser's image comment. Both were read rather than run.
+- **The initial view is never fitted.** `refresh` pans to its anchor and never sets zoom, so the first
+  build renders at zoom 1.0 with the root and the left of the fan off-screen. It wants `zoom_to_fit` on the
+  first build and pan-only afterwards — the pan-only part being what keeps the picture still while a reply
+  is arriving, so the two cannot simply be swapped.
+
 ### Sequencing
 
 Four reviewable commits: the builder and its tests; the panel and its placement, including the avatar pause
