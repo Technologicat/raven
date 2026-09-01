@@ -371,6 +371,54 @@ def test_a_mouse_position_near_but_not_at_the_origin_is_believed(point_at_the_or
 
 
 # --------------------------------------------------------------------------------
+# The select-radius brush outline
+
+def outline(radius_pixels=10.0, scale_x=1.0, scale_y=1.0, center=(0.0, 0.0)):
+    return np.array(plotter.brush_outline_points(center, radius_pixels, scale_x, scale_y))
+
+
+def test_the_brush_outline_is_a_circle_on_screen():
+    # The user aims with a circle, so what has to be round is the *pixel* distance from the cursor to
+    # every point of the outline -- which is the same statement as the brush's own test above.
+    points = outline(radius_pixels=10.0, scale_x=4.0, scale_y=0.25)
+    pixel_offsets = points * np.array([4.0, 0.25])  # data space -> pixels
+    pixel_radii = np.hypot(pixel_offsets[:, 0], pixel_offsets[:, 1])
+    assert np.allclose(pixel_radii, 10.0)
+
+
+def test_the_brush_outline_is_an_ellipse_in_data_space_when_the_axes_differ():
+    # Negative control for the test above: it is only round in pixels. Drawn as a data-space circle it
+    # would sit somewhere other than where the brush reaches, which is the failure being prevented.
+    points = outline(radius_pixels=10.0, scale_x=4.0, scale_y=0.25)
+    assert not np.allclose(np.ptp(points[:, 0]), np.ptp(points[:, 1]))
+
+
+def test_the_brush_outline_is_a_circle_in_data_space_when_the_axes_agree():
+    # ...and the other half of that control: with equal scales the two readings coincide.
+    points = outline(radius_pixels=10.0, scale_x=2.0, scale_y=2.0)
+    assert np.allclose(np.ptp(points[:, 0]), np.ptp(points[:, 1]))
+
+
+def test_the_brush_outline_is_centred_on_the_cursor():
+    # By the bounding box rather than the mean of the points: the ring closes by repeating its first
+    # point, so the mean is pulled towards that point by a sampling artifact rather than by the geometry.
+    points = outline(center=(3.0, -7.0))
+    assert np.allclose((points.max(axis=0) + points.min(axis=0)) / 2, [3.0, -7.0])
+
+
+def test_a_bigger_brush_draws_a_bigger_outline():
+    small = np.ptp(outline(radius_pixels=5.0)[:, 0])
+    large = np.ptp(outline(radius_pixels=20.0)[:, 0])
+    assert large > small
+
+
+def test_the_brush_outline_is_a_closed_loop():
+    # It is handed to `draw_polygon`, so the first and last points have to meet or the ring has a notch.
+    points = outline()
+    assert np.allclose(points[0], points[-1])
+
+
+# --------------------------------------------------------------------------------
 # The highlight brightness curve
 #
 # A calibrated perceptual curve, hand-tuned by eye. Nothing here asserts that the calibration is *right*

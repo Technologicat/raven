@@ -64,7 +64,6 @@ with timer() as tim:
     import os
     import pathlib
     import platform
-    import threading
     from typing import Union
 
     import numpy as np
@@ -1328,67 +1327,6 @@ dpg.set_viewport_resize_callback(_resize_gui)
 # --------------------------------------------------------------------------------
 # Mouse events
 
-select_radius_update_lock = threading.RLock()
-select_radius_draw_item = None
-select_radius_last_pos = None
-select_radius_last_scale_x = None
-select_radius_last_scale_y = None
-
-unit_manygon = np.array([(np.cos(t), np.sin(t)) for t in np.linspace(0, 2 * np.pi, 65)])  # discrete approximation of the unit apeirogon :P
-
-def clear_select_radius_indicator():
-    global select_radius_draw_item
-    global select_radius_last_pos
-    global select_radius_last_scale_x
-    global select_radius_last_scale_y
-    with select_radius_update_lock:
-        if select_radius_draw_item is not None:
-            dpg.delete_item(select_radius_draw_item)
-        select_radius_draw_item = None
-        select_radius_last_pos = None
-        select_radius_last_scale_x = None
-        select_radius_last_scale_y = None
-
-def draw_select_radius_indicator():
-    global select_radius_draw_item
-    global select_radius_last_pos
-    global select_radius_last_scale_x
-    global select_radius_last_scale_y
-
-    # Avoid unnecessary clear/redraw to prevent flickering
-    p = dpg.get_plot_mouse_pos()
-    pixels_per_data_unit_x, pixels_per_data_unit_y = guiutils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")  # tag
-    if pixels_per_data_unit_x == 0.0 or pixels_per_data_unit_y == 0.0:  # no dataset open?
-        clear_select_radius_indicator()
-        return
-    same_pos = (select_radius_last_pos is not None and select_radius_last_pos == p)
-    same_scale_x = (select_radius_last_scale_x is not None and select_radius_last_scale_x == pixels_per_data_unit_x)
-    same_scale_y = (select_radius_last_scale_y is not None and select_radius_last_scale_y == pixels_per_data_unit_y)
-    same_zoom = (same_scale_x and same_scale_y)
-
-    with select_radius_update_lock:
-        select_radius_last_pos = p
-        select_radius_last_scale_x = pixels_per_data_unit_x
-        select_radius_last_scale_y = pixels_per_data_unit_y
-
-        if not (same_pos and same_zoom):
-            clear_select_radius_indicator()  # remove old indicator if any
-
-        # NOTE: To avoid race conditions, we can touch `select_radius_draw_item` only inside the critical section.
-        if (select_radius_draw_item is not None) and (same_pos and same_zoom):
-            return
-        brush_radius_data_x = gui_config.selection_brush_radius_pixels / pixels_per_data_unit_x  # TODO: what if division by zero?
-        brush_radius_data_y = gui_config.selection_brush_radius_pixels / pixels_per_data_unit_y  # TODO: what if division by zero?
-        deltas = np.copy(unit_manygon)  # unit circle
-        # Convert a circle with a radius of the selection brush size, from pixel space to data space (where x and y axes may have different scalings).
-        deltas[:, 0] *= brush_radius_data_x
-        deltas[:, 1] *= brush_radius_data_y
-        points = (np.array(p) + deltas).tolist()
-        select_radius_draw_item = dpg.draw_polygon(points,  # in data space
-                                                   color=(255, 255, 255, 255),
-                                                   fill=(0, 0, 0, 0),
-                                                   parent="plot")  # tag
-
 def mouse_inside_plot_widget():
     """Return whether the mouse cursor is inside the plot widget."""
     return guiutils.is_mouse_inside_widget("plot")  # tag
@@ -1429,7 +1367,7 @@ def mouse_click_callback(sender, app_data):
     # Left-click to select
     if mouse_button == dpg.mvMouseButton_Left:
         lmb_pressed_inside_plot = True
-        draw_select_radius_indicator()
+        plotter.draw_select_radius_indicator()
         selection.update(plotter.get_data_idxs_at_mouse(),
                          selection.keyboard_state_to_mode(),
                          wait=False,
@@ -1478,7 +1416,7 @@ def keydown_callback(sender, app_data):
     if not mouse_inside_plot_widget():
         return
     if key in (dpg.mvKey_LControl, dpg.mvKey_RControl, dpg.mvKey_LShift, dpg.mvKey_RShift):
-        draw_select_radius_indicator()
+        plotter.draw_select_radius_indicator()
 
 def keyup_callback(sender, app_data):
     """Disable selection brush indicator when Shift/Ctrl is released (and the mouse button is not down)."""
@@ -1486,7 +1424,7 @@ def keyup_callback(sender, app_data):
 
     if key in (dpg.mvKey_LControl, dpg.mvKey_RControl, dpg.mvKey_LShift, dpg.mvKey_RShift):
         if not dpg.is_mouse_button_down(dpg.mvMouseButton_Left):
-            clear_select_radius_indicator()
+            plotter.clear_select_radius_indicator()
 
 def mouse_move_callback():
     """Update the relevant GUI elements when the mouse moves.
@@ -1495,7 +1433,7 @@ def mouse_move_callback():
         - Plotter data tooltip.
         - Select radius indicator for mouse-draw select.
     """
-    clear_select_radius_indicator()
+    plotter.clear_select_radius_indicator()
 
     if not mouse_inside_plot_widget():
         annotation.clear_mouse_hover()
@@ -1506,7 +1444,7 @@ def mouse_move_callback():
 
     # mouse-draw select (but only when drag began inside the plot)
     if lmb_pressed_inside_plot and dpg.is_mouse_button_down(dpg.mvMouseButton_Left):
-        draw_select_radius_indicator()
+        plotter.draw_select_radius_indicator()
         selection.update(plotter.get_data_idxs_at_mouse(),
                          selection.keyboard_state_to_mode(),
                          wait=True,
@@ -1527,7 +1465,7 @@ def mouse_release_callback(sender, app_data):
 
     # commit new selection to undo history when mouse-draw select ends
     if mouse_button == dpg.mvMouseButton_Left:
-        clear_select_radius_indicator()
+        plotter.clear_select_radius_indicator()
         selection.commit_change_to_undo_history()
 
 def hotkeys_callback(sender, app_data):

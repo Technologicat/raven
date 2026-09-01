@@ -19,6 +19,9 @@ encapsulated here; external cleanup goes through `clear_cluster_color_themes`.
 __all__ = ["get_visible_datapoints",
            "get_data_idxs_at_mouse",
            "compute_highlight_alpha",
+           "brush_outline_points",
+           "clear_select_radius_indicator",
+           "draw_select_radius_indicator",
            "reset_zoom",
            "parse_dataset_file",
            "load_dataset",
@@ -29,6 +32,7 @@ import itertools
 import logging
 import os
 import pickle
+import threading
 logger = logging.getLogger(__name__)
 
 import numpy as np
@@ -52,6 +56,15 @@ gui_config = visualizer_config.gui_config
 # Module-local state
 
 _cluster_color_themes = []  # DPG theme IDs of the per-cluster scatter-series colour themes; populated by `load_dataset`, consumed by `clear_cluster_color_themes`
+
+# The select-radius brush indicator: the outline drawn around the cursor while selecting, showing how far
+# the brush reaches. Redrawing it every frame flickers, so the last position and scale it was drawn at are
+# kept, and a frame that would draw the same shape again does nothing.
+_select_radius_lock = threading.RLock()
+_select_radius_draw_item = None  # DPG ID of the polygon currently on the plot, or `None`
+_select_radius_last_pos = None  # plot-space mouse position it was drawn at
+_select_radius_last_scale_x = None  # pixels per data unit it was drawn at, x...
+_select_radius_last_scale_y = None  # ...and y
 
 
 # --------------------------------------------------------------------------------
@@ -163,6 +176,87 @@ def compute_highlight_alpha(x, n_data, n_many):
     alpha = a0 + int(a1 * x)
     return alpha
 
+
+# --------------------------------------------------------------------------------
+# The select-radius brush indicator
+
+_UNIT_CIRCLE = np.array([(np.cos(t), np.sin(t)) for t in np.linspace(0, 2 * np.pi, 65)])  # discrete approximation of the unit apeirogon :P
+
+
+def brush_outline_points(center, radius_pixels, pixels_per_data_unit_x, pixels_per_data_unit_y):
+    """Return the outline of the selection brush, in data space, as a list of `[x, y]`.
+
+    `center`: the brush centre, in data space — the mouse position on the plot.
+    `radius_pixels`: the brush radius, on screen.
+    `pixels_per_data_unit_x`, `pixels_per_data_unit_y`: the plot's current scale, per axis.
+
+    The brush is a circle *on screen*, which is what a user aims with, so in data space it is an ellipse
+    whenever the two axis scales differ — which they generally do, the plot not being square and the two
+    axes of a t-SNE map having no reason to share a range. Drawing a data-space circle instead would put
+    the outline somewhere other than where the brush actually reaches.
+
+    Both scales must be nonzero; `draw_select_radius_indicator` checks that before calling.
+    """
+    deltas = np.copy(_UNIT_CIRCLE)
+    deltas[:, 0] *= radius_pixels / pixels_per_data_unit_x
+    deltas[:, 1] *= radius_pixels / pixels_per_data_unit_y
+    return (np.array(center) + deltas).tolist()
+
+
+def clear_select_radius_indicator():
+    """Remove the brush outline from the plot, if one is drawn."""
+    global _select_radius_draw_item
+    global _select_radius_last_pos
+    global _select_radius_last_scale_x
+    global _select_radius_last_scale_y
+    with _select_radius_lock:
+        if _select_radius_draw_item is not None:
+            dpg.delete_item(_select_radius_draw_item)
+        _select_radius_draw_item = None
+        _select_radius_last_pos = None
+        _select_radius_last_scale_x = None
+        _select_radius_last_scale_y = None
+
+
+def draw_select_radius_indicator():
+    """Draw the brush outline at the current mouse position, unless it is already there."""
+    global _select_radius_draw_item
+    global _select_radius_last_pos
+    global _select_radius_last_scale_x
+    global _select_radius_last_scale_y
+
+    # Avoid unnecessary clear/redraw to prevent flickering
+    p = dpg.get_plot_mouse_pos()
+    pixels_per_data_unit_x, pixels_per_data_unit_y = guiutils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")  # tag
+    if pixels_per_data_unit_x == 0.0 or pixels_per_data_unit_y == 0.0:  # no dataset open?
+        clear_select_radius_indicator()
+        return
+    same_pos = (_select_radius_last_pos is not None and _select_radius_last_pos == p)
+    same_scale_x = (_select_radius_last_scale_x is not None and _select_radius_last_scale_x == pixels_per_data_unit_x)
+    same_scale_y = (_select_radius_last_scale_y is not None and _select_radius_last_scale_y == pixels_per_data_unit_y)
+    same_zoom = (same_scale_x and same_scale_y)
+
+    with _select_radius_lock:
+        _select_radius_last_pos = p
+        _select_radius_last_scale_x = pixels_per_data_unit_x
+        _select_radius_last_scale_y = pixels_per_data_unit_y
+
+        if not (same_pos and same_zoom):
+            clear_select_radius_indicator()  # remove old indicator if any
+
+        # NOTE: To avoid race conditions, we can touch `_select_radius_draw_item` only inside the critical section.
+        if (_select_radius_draw_item is not None) and (same_pos and same_zoom):
+            return
+        points = brush_outline_points(p, gui_config.selection_brush_radius_pixels,
+                                      pixels_per_data_unit_x, pixels_per_data_unit_y)
+        _select_radius_draw_item = dpg.draw_polygon(points,  # in data space
+                                                    color=(255, 255, 255, 255),
+                                                    fill=(0, 0, 0, 0),
+                                                    parent="plot")  # tag
+
+
+# --------------------------------------------------------------------------------
+# Zoom
 
 def reset_zoom():
     """Reset the plotter's zoom level to show all data."""

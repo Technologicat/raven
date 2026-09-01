@@ -7,14 +7,14 @@ package, not as a figure to quote. Re-measure before quoting one. `python script
 checks this table against the package, including whether every module is in it.
 
 ```
-app.py            (~1.9k) — GUI app: window layout, event wiring, the main render loop
+app.py            (~1.8k) — GUI app: window layout, event wiring, the main render loop
 info_panel.py     (~1.6k) — the info panel: content build, scrolling, navigation, anchors
 importer.py       (~1.5k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 annotation.py     (~500)  — datapoint annotations and their tooltips
 config.py         (~440)  — Configuration-as-code (import settings, models, stopwords, GUI settings).
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services
-plotter.py        (~290)  — the scatter plot itself
+plotter.py        (~420)  — the scatter plot: dataset loading, plotter-space queries, the select brush
 selection.py      (~270)  — selection state and the lasso/wand tools
 word_cloud.py     (~250)  — word cloud rendering
 entry_renderer.py (~190)  — per-entry rendering shared by panel and tooltip
