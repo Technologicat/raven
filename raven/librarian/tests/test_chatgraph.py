@@ -340,6 +340,15 @@ class TestEmphasis:
         assert ring.pen.dash, "the ring is solid, so nothing says the selection is provisional"
         assert ring.get_bounding_box()[0] < node.get_bounding_box()[0]
 
+    def test_a_dash_mark_is_longer_than_the_stroke_is_thick(self):
+        # Otherwise each mark is wider than it is long, and the rounding of its endpoints -- plus the join
+        # where one spans two segments of a rounded corner -- changes its apparent *weight* rather than its
+        # length. A dashed line of visibly uneven thickness is the result, and it looks like a rendering
+        # fault rather than a style.
+        config = chatgraph.LayoutConfig()
+        assert chatgraph._PREVIEW_DOTS[0] >= 2.0 * config.preview_line_width
+        assert chatgraph._GAP_DASH[0] >= 2.0 * config.line_width
+
     def test_head_can_also_be_the_previewed_box(self, conversation):
         # The two marks are independent, and a reader who clicks the box they are already on should get
         # both rather than either winning.

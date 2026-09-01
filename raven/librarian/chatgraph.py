@@ -66,10 +66,17 @@ PREVIEW_COLOR: xdotconstants.Color = (0.10, 0.35, 0.80, 1.0)
 # here, and a broken outline says that before any label is read.
 _GAP_DASH: Tuple[float, float] = (6.0, 4.0)
 
-# And for the ring around a tentatively selected box. Dotted rather than dashed, and finer than the gap's
-# pattern, so the two broken lines do not read as the same mark -- they are saying related but different
-# things, "this is not here" against "this is not settled".
-_PREVIEW_DOTS: Tuple[float, float] = (2.0, 3.0)
+# And for the ring around a tentatively selected box. Shorter marks than the gap's pattern, so the two
+# broken lines do not read as the same thing -- they say related but different things, "this is not here"
+# against "this is not settled".
+#
+# The on-length has to stay comfortably longer than the stroke is thick. At (2.0, 3.0) against a 2.5-wide
+# stroke each mark came out wider than it was long, and at that ratio the rounding of its endpoints -- and
+# the stroke join where a mark spans two segments of the rounded corner -- change its apparent *weight*
+# rather than its length. The line then reads as dots of uneven thickness, which is what it looked like.
+# Twice as long as thick is enough for the same rounding to move only the ends, where the eye does not
+# mind it; the gap dashes have always been four times, which is why they look even.
+_PREVIEW_DOTS: Tuple[float, float] = (4.0, 3.0)
 
 _ROUNDED_CORNER_SEGMENTS = 4  # per corner; four is already indistinguishable from a curve at these radii
 
@@ -300,7 +307,7 @@ class LayoutConfig:
     # thing on screen, and until now the only thing saying so was a small pill in the margin.
     head_line_width: float = 3.5
     preview_ring_offset: float = 5.0  # how far outside the box the selection ring sits
-    preview_line_width: float = 2.5
+    preview_line_width: float = 2.0  # and see `_PREVIEW_DOTS`: the marks must stay longer than this
     # The same size the rest of Raven's interface uses, so a node reads like the app it belongs to once the
     # reader has zoomed to 1:1. Sourced rather than repeated: two numbers both meaning "the UI font" drift.
     font_size: float = librarian_config.gui_config.font_size
