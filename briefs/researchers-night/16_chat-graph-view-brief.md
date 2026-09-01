@@ -687,6 +687,49 @@ things in a space that fits one.
   first build and pan-only afterwards — the pan-only part being what keeps the picture still while a reply
   is arriving, so the two cannot simply be swapped.
 
+### How much of a branch to show: four rules
+
+Settled 2026-09-01, from a case where clicking back onto the current branch left the message below it
+collapsed as a bare "…1 more" — one hidden box, announced by a box.
+
+1. **A gap that hides fewer boxes than it costs should not be drawn.** A gap occupies a slot, so hiding
+   one is a pure loss and hiding two saves nothing worth the content. Draw a gap from **three** hidden
+   upward and inline anything below that. The same threshold for sibling gaps and depth gaps, since two
+   rules here would disagree in front of the reader.
+   - With the same tolerance the attachment stack gets: a count a little over the limit is shown whole
+     rather than abbreviated. Cut when clearly over, not at the first opportunity.
+2. **The drawn branch is a whole branch, not a stump.** This is the one that removes the reported symptom
+   rather than papering over it. Focusing a node currently *truncates* the spine there, so whatever
+   continues below is somebody's subtree gap by construction. The focus should select a branch and the
+   view should draw it to its tip — `chatutil.descend_to_latest` already walks exactly that. Then "one
+   message below the one you clicked" never arises, because the branch simply carries on.
+3. **The depth window centres on the focus, not on the end of the branch.** Pinned prefix, gap, a window
+   reaching both ways from the focus, gap, tip. With a floor under the downward budget, because one is
+   plainly too few and the current arrangement can produce exactly one.
+4. **When the focus is not HEAD, both want to be on screen.** That comparison — where I would be going
+   against where I am — is the whole reason a preview exists. If the window cannot hold both, the focus
+   wins, and the gap that swallowed HEAD should say that it did rather than letting HEAD vanish without
+   comment.
+
+**The current-branch-is-special question underneath rule 2**: at present chats are short enough to draw
+whole, and rules 3 and 4 are what will matter when they are not. Neither should be written as though the
+short case were the only one.
+
+### The preview mark should be part of the picture, not the widget's highlight
+
+Noticed 2026-09-01: clicking a node leaves it lit, and the light does not go away. It is the preview mark,
+and it is deliberate — a second click commits, so what that click would act on has to be visible first.
+
+**The defect is that it wears hover's clothes.** Both go through `HighlightState` and share one pair of
+highlight colours, so a previewed node and a hovered node are indistinguishable — and a mark that looks
+like hover *ought* to leave when the pointer does.
+
+**So it moves into the built `Graph`**: `ViewState` carries the previewed node, and `_box_shapes` gives it
+an outline of its own. Three things fall out of that, in ascending order of how annoying they are today —
+it cannot be mistaken for hover; it survives a rebuild without help, where `_apply_preview_highlight` now
+has to be re-applied after every one; and the widget's highlight state goes back to meaning hover and
+nothing else.
+
 ### Sequencing
 
 Four reviewable commits: the builder and its tests; the panel and its placement, including the avatar pause
