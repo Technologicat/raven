@@ -605,10 +605,34 @@ mine, found in the same run.**
   own spine, so centring on it spends half the panel on the empty space below the tree.
 
 **Raised as an idea, to be discussed** (Juha, 2026-09-01): **a message with attachments should show that
-it has them.** The datastore already knows — `general_metadata["sidecars"]` on the payload — so the question
-is what the mark is and whether it distinguishes an image from a document. Note it interacts with the two
-marks already planned for a node, the role glyph and the tool-call badge: three indicators on a box 180×52
-is a crowd, and the answer may be one indicator area rather than three.
+it has them**, with images drawn as thumbnails once `ImageShape` exists. The datastore already knows what a
+message carries — `general_metadata["sidecars"]` on the payload.
+
+Checked 2026-09-01, because the guess was that thumbnails already exist somewhere. They do, and the shape
+of the answer is not quite the shape of the guess:
+
+- **The thumbnails exist, as DPG textures already on the GPU.**
+  `DPGChatController.get_inline_image_texture(filename)` reads the sidecar, `fit_contain`s it (which routes
+  through the GPU Lanczos in `common.image.lanczos`), uploads a *static* texture, and caches it under the
+  content-addressed filename — so an image referenced by several messages decodes once, and survives a view
+  rebuild. That cache is keyed by exactly what the graph would look an attachment up by.
+- **The size is wrong, and the cache cannot hold two.** The inline box is
+  `chat_inline_image_h × chat_inline_image_w` = 220×480; a node is 180×52. So the graph wants its own,
+  much smaller texture, and the cache key is the filename alone. Either it becomes `(filename, size)` or
+  the graph keeps its own.
+- **The upload cannot happen during a graph rebuild, and this is the constraint that shapes the design.**
+  `get_inline_image_texture` calls `dpg.split_frame()` twice, deliberately — DPG defers the OpenGL upload
+  and one wait is not enough. The panel rebuilds from its animator hook, and `animator.render_frame()` is
+  called from the app's manual render loop, so a rebuild runs **on the render thread**, where `split_frame`
+  deadlocks. Thumbnails therefore have to be prepared on a background task with the graph drawing a
+  placeholder until they land — the pattern `cleanup_dialog` already uses for its own image grid.
+- **Role glyphs are the cheap case by comparison**, and it is worth not conflating the two:
+  `chat_controller.gui_role_icons` are registered once at class init, so drawing one needs no upload and no
+  `split_frame`. Only per-attachment thumbnails need the background path.
+
+Note the idea interacts with the two marks already planned for a node, the role glyph and the tool-call
+badge: three indicators on a 180×52 box is a crowd, and the answer may be one indicator area rather than
+three.
 
 **Found while driving it:**
 
