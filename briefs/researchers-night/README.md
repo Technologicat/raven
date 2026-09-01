@@ -55,6 +55,41 @@ not settled, and the two sensible axes disagree — closure rate (smallest first
 they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
 deadline actually binds; everything else could slip past September without anything breaking.
 
+### Starting tomorrow, filed 2026-09-01 — two shared-GUI items, both waiting on Librarian
+
+The Visualizer thread of the three below has closed: `done/visualizer-app-py-extraction.md` landed both
+its extractions, `app.py` went 1763 → 1344 lines, and the package went from 4 of its 9 test modules
+running in CI to 8 of 9. What follows are the two items that came out of doing it. **Neither is bound by
+26 September**, and both touch modules the Librarian session is currently in, so they wait for that tree.
+
+1. **Move the Markdown font warm-up into `raven.common.gui`.** `setup_markdown`'s own docstring already
+   says an app "may still" want a dummy element that forces `DearPyGui_Markdown` to load its fonts at
+   startup, tells the reader not to add more than one during startup, and points at
+   `raven.visualizer.app` as the example. That is the shared layer describing a job and handing it to
+   every caller — and **only the Visualizer does it.** `librarian/app.py`, both avatar editors,
+   `xdot_viewer/app.py` and the shared `common/gui/helpcard.py` all render Markdown and none warms up,
+   so they are all exposed to the race the Visualizer's hack exists to avoid.
+
+   Measured 2026-09-01, so it need not be re-derived: a Markdown element **can** be created between
+   `create_context` and `create_viewport`, and it survives `setup_dearpygui`. But **`show=False` will not
+   do** — DPG does not render a hidden window, and the warm-up only fires when the element renders. The
+   Visualizer's version works because its container is *visible* and clips the text away, which is the
+   `park_offscreen` shape `setup_markdown`'s docstring is really describing. Whether the font load
+   actually fires cannot be confirmed headless, since it needs rendered frames, so this one ends with a
+   live check.
+
+2. **Test what each app's `FileDialog`s are configured for.** `importer_gui`'s two got this on
+   2026-09-01 — filters, `multi_selection`, `save_mode` — because a wrong filter fails quietly, showing
+   the user an empty folder rather than an error. Juha's call the same day: if we test those, the rest
+   should be tested too, and there are a lot of them across the apps. `vendor/file_dialog` is already
+   the most heavily tested widget in the tree, so the work is per-app configuration rather than the
+   dialog itself.
+
+**Why both wait**, and it is the lesson directly below rather than a guess: these are shared-GUI changes,
+so they reach `common/gui/utils.py`, `common/gui/helpcard.py` and every app's tests at once — including
+Librarian's. Dividing by module would not divide the test files, which is exactly how the 2026-09-01
+collision happened.
+
 ### Learned 2026-09-01 — dividing threads by module does not divide their test files
 
 The three threads below ran in parallel and collided anyway, in the one place the division did not
@@ -85,7 +120,9 @@ here because they are ready to start, not because they are urgent.
    chat-shaped `Graph` renders through `XDotWidget.set_graph` with no GraphViz and no xdot in the path,
    and `test_widget.py` covers it. So this starts from the feature work rather than from proving the door
    opens.
-2. **Visualizer tests** — `briefs/visualizer-test-coverage-brief.md`, **which is in the parent folder,
+2. **Visualizer tests** — ***done, 2026-09-01***, and it grew an extraction brief of its own on the way;
+   see the subsection above for what closed and what came out of it.
+   `briefs/visualizer-test-coverage-brief.md`, **which is in the parent folder,
    not this one**, being maintenance rather than sprint work. Start at `entry_renderer.py`: 114 SLOC and
    no `dpg.` calls at all, which the brief's difficulty table settles. The package went from zero tests
    to three on 2026-08-31, and that module records what it cost — the `importorskip` guard and `ml`
