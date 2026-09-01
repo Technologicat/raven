@@ -1,0 +1,848 @@
+"""Turn the chat forest into a picture: the `Graph` that Librarian's chat graph view renders.
+
+Pure by design — a datastore and a description of what the user is looking at go in, a `Graph` plus a table
+saying what each graph node *means* comes out. No DearPyGui, no widget, no mutation of the forest. That is
+what makes the layout checkable at all: a position cannot be asserted through a rendered widget, and this
+view's entire difficulty is positions.
+
+The picture is a *focus-plus-context* view rather than the whole forest. Real chat trees are one very wide
+level — every chat ever started under the current character card is a sibling there — plus narrow chains
+hanging off it, so a layout that tries to show everything is unreadable long before it is slow. Instead the
+branch leading to HEAD is drawn as a vertical spine, a few siblings are shown either side of it at each
+level, and everything omitted is drawn as a clickable gap. The gaps are not decoration: a node with no
+visible links has to mean the graph genuinely ends there, or the picture lies.
+
+Coordinates are the widget's: x to the right, y downward, origin at the top left of the graph's bounding
+box, which is what `Viewport.zoom_to_fit` expects.
+"""
+
+__all__ = ["SPINE_FILL_COLOR",
+           "OFF_SPINE_FILL_COLOR",
+           "LINE_COLOR",
+           "GAP_LINE_COLOR",
+
+           "Ref",
+           "ChatNodeRef",
+           "SiblingGapRef",
+           "DepthGapRef",
+           "SubtreeGapRef",
+           "RootGapRef",
+
+           "ViewState",
+           "LayoutConfig",
+           "ChatGraph",
+
+           "build"]
+
+import dataclasses
+import math
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+
+from ..common.gui.xdotwidget import constants as xdotconstants
+from ..common.gui.xdotwidget import graph as xdotgraph
+
+from . import chattree
+from . import chatutil
+
+# Authored for a light background and inverted by the renderer, which is the path a parsed graph takes too
+# -- so the two cannot drift apart, and there is one place to look when a colour is wrong.
+SPINE_FILL_COLOR: xdotconstants.Color = (0.78, 0.93, 0.78, 1.0)  # the linearized branch, green as in the README's tree diagram
+OFF_SPINE_FILL_COLOR: xdotconstants.Color = (0.94, 0.94, 0.94, 1.0)  # everything the current branch did not take
+LINE_COLOR: xdotconstants.Color = (0.15, 0.15, 0.15, 1.0)
+GAP_LINE_COLOR: xdotconstants.Color = (0.45, 0.45, 0.45, 1.0)
+
+# Dash pattern for the outline of a gap, in graph units: on, off. A gap stands for content that is not
+# here, and a broken outline says that before any label is read.
+_GAP_DASH: Tuple[float, float] = (6.0, 4.0)
+
+_ROUNDED_CORNER_SEGMENTS = 4  # per corner; four is already indistinguishable from a curve at these radii
+
+
+# --------------------------------------------------------------------------------
+# What a graph node means
+
+class Ref:
+    """Base class for the descriptors saying what a graph node stands for.
+
+    The widget hands a click back as the node's `internal_name` and nothing else, so every name a `Graph`
+    built here carries has an entry in `ChatGraph.refs`. A caller dispatches on the subclass rather than
+    parsing the name, which is why the naming scheme is private to this module.
+    """
+
+    def __init__(self, name: str):
+        self.name = name
+
+
+class ChatNodeRef(Ref):
+    """A real node of the chat forest.
+
+    `node_id`: Its ID in the datastore. This is also the graph node's name, so `XDotWidget.pan_to_node`
+               takes a chat node ID directly.
+    `role`: "system", "user", "assistant" or "tool".
+    `on_spine`: Whether it lies on the branch leading to HEAD — which is what the fill colour encodes.
+    `tool_call_count`: How many tool calls this message made, for the badge. Zero for everything that made
+                       none, which is nearly every node.
+    `pills`: The pointer labels resting on it, e.g. `("SYS", "NEW")`. A tuple rather than one value because
+             more than one pointer can land on the same node: with the AI greeting turned off, a new chat
+             starts at the system prompt node, so SYS and NEW coincide there.
+    """
+
+    def __init__(self, name: str, node_id: str, role: str, on_spine: bool,
+                 tool_call_count: int, pills: Tuple[str, ...]):
+        super().__init__(name)
+        self.node_id = node_id
+        self.role = role
+        self.on_spine = on_spine
+        self.tool_call_count = tool_call_count
+        self.pills = pills
+
+
+class SiblingGapRef(Ref):
+    """Siblings omitted from one level's window.
+
+    `parent_node_id`: Whose children these are.
+    `hidden_node_ids`: What is not shown, in sibling order.
+    `recenter_on`: The sibling to move the window to when this gap is clicked — the middle of the run, so
+                   that repeated clicks bisect a wide fan rather than walking it at a fixed stride.
+    """
+
+    def __init__(self, name: str, parent_node_id: str,
+                 hidden_node_ids: Tuple[str, ...], recenter_on: str):
+        super().__init__(name)
+        self.parent_node_id = parent_node_id
+        self.hidden_node_ids = hidden_node_ids
+        self.recenter_on = recenter_on
+
+    def _get_hidden_count(self) -> int:
+        """Return how many siblings this gap stands for."""
+        return len(self.hidden_node_ids)
+
+    hidden_count = property(fget=_get_hidden_count,
+                            doc="How many siblings this gap stands for.")
+
+
+class DepthGapRef(Ref):
+    """Ancestors omitted between the root and the shown part of the spine.
+
+    `hidden_node_ids`: What is not shown, oldest first.
+    """
+
+    def __init__(self, name: str, hidden_node_ids: Tuple[str, ...]):
+        super().__init__(name)
+        self.hidden_node_ids = hidden_node_ids
+
+    def _get_hidden_count(self) -> int:
+        """Return how many ancestors this gap stands for."""
+        return len(self.hidden_node_ids)
+
+    hidden_count = property(fget=_get_hidden_count,
+                            doc="How many ancestors this gap stands for.")
+
+
+class SubtreeGapRef(Ref):
+    """The conversation continuing below an off-spine sibling, which this view does not descend into.
+
+    `node_id`: The sibling it hangs under.
+    `child_count`: How many children that sibling has.
+    """
+
+    def __init__(self, name: str, node_id: str, child_count: int):
+        super().__init__(name)
+        self.node_id = node_id
+        self.child_count = child_count
+
+
+class RootGapRef(Ref):
+    """Other roots — that is, chats written under other versions of the character card.
+
+    Inert in v1, and shown anyway: the alternative is a root that looks like the only one there has ever
+    been. Clicking through to another card would leave the configured avatar and voice running against a
+    different system prompt, which wants a decision of its own.
+
+    `hidden_node_ids`: The other roots, in datastore order.
+    """
+
+    def __init__(self, name: str, hidden_node_ids: Tuple[str, ...]):
+        super().__init__(name)
+        self.hidden_node_ids = hidden_node_ids
+
+    def _get_hidden_count(self) -> int:
+        """Return how many other roots this gap stands for."""
+        return len(self.hidden_node_ids)
+
+    hidden_count = property(fget=_get_hidden_count,
+                            doc="How many other roots this gap stands for.")
+
+
+# --------------------------------------------------------------------------------
+# Inputs
+
+@dataclasses.dataclass
+class ViewState:
+    """What the user is currently looking at. Owned by the panel; read here.
+
+    `head_node_id`: The tip of the current branch — `app_state["HEAD"]`. The spine runs from its root down
+                    to here.
+    `new_chat_node_id`: Where a new chat starts — `app_state["new_chat_HEAD"]`. Taken as a parameter rather
+                        than derived, because *what* it points at is changing: it is the AI's greeting
+                        today, and the root itself for a chat started with the greeting turned off. One
+                        datastore will hold both shapes.
+    `expanded_tool_turns`: Assistant node IDs whose tool-result nodes are shown individually instead of
+                           being counted onto a badge.
+    `sibling_focus`: Parent node ID -> which of its children the sibling window is centred on. An override:
+                     a level not listed here centres on whichever child the spine goes through, which is
+                     what the user sees before touching anything.
+    """
+
+    head_node_id: str
+    new_chat_node_id: Optional[str] = None
+    expanded_tool_turns: Set[str] = dataclasses.field(default_factory=set)
+    sibling_focus: Dict[str, str] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass
+class LayoutConfig:
+    """Sizes and counts, in graph units. One graph unit is one pixel at zoom 1.
+
+    `siblings_each_side`: How many siblings to show either side of the focused one. The first and last are
+                          shown regardless, as anchors, so a level can hold up to
+                          `2 * siblings_each_side + 3` items counting the two gaps.
+    `max_visible_depth`: How many spine nodes to draw, the root included. Anything between the root and the
+                         last `max_visible_depth - 1` of them becomes one depth gap.
+    `label_chars`: Coarse cut for a node's label. The widget compacts further when the text will not fit at
+                   the current zoom; this is what keeps a whole chat message from becoming the graph's
+                   width at zoom 1.
+    """
+
+    node_w: float = 180.0
+    node_h: float = 52.0
+    gap_node_w: float = 84.0
+    horizontal_spacing: float = 24.0
+    vertical_spacing: float = 44.0
+    corner_radius: float = 10.0
+    font_size: float = 13.0
+    pill_font_size: float = 10.0
+    pill_w: float = 38.0
+    pill_h: float = 16.0
+    arrowhead_length: float = 10.0
+    arrowhead_halfwidth: float = 4.5
+    margin: float = 20.0
+    label_chars: int = 40
+    siblings_each_side: int = 2
+    max_visible_depth: int = 12
+
+
+# --------------------------------------------------------------------------------
+# Output
+
+class ChatGraph:
+    """A `Graph` ready for `XDotWidget.set_graph`, and the table that makes its clicks meaningful.
+
+    `graph`: The graph.
+    `refs`: Graph node name -> `Ref`. Every node in `graph` appears here.
+    `spine`: The chat node IDs on the branch to HEAD, root first — including the ones the depth window
+             elided and the tool nodes the collapse hid, so a caller can ask "is this node on the current
+             branch?" without rebuilding the picture.
+    """
+
+    def __init__(self, graph: xdotgraph.Graph, refs: Dict[str, Ref], spine: Tuple[str, ...]):
+        self.graph = graph
+        self.refs = refs
+        self.spine = spine
+
+    def ref_for(self, name: str) -> Optional[Ref]:
+        """Return what the graph node called `name` stands for, or `None` if there is no such node."""
+        return self.refs.get(name)
+
+
+# --------------------------------------------------------------------------------
+# Geometry helpers
+
+def _rounded_rect_points(x1: float, y1: float, x2: float, y2: float,
+                         radius: float) -> List[xdotconstants.Point]:
+    """Return the vertices of a rectangle with rounded corners, clockwise from the top left.
+
+    `radius` is clamped to half the shorter side, so a small box degenerates to a stadium rather than
+    turning itself inside out.
+    """
+    radius = min(radius, 0.5 * (x2 - x1), 0.5 * (y2 - y1))
+    if radius <= 0.0:
+        return [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
+
+    points: List[xdotconstants.Point] = []
+    # (centre of the corner's arc, angle at which that arc starts), in drawing order. Angles are measured
+    # with y downward, so increasing angle runs clockwise on screen.
+    corners = [((x1 + radius, y1 + radius), math.pi),
+               ((x2 - radius, y1 + radius), 1.5 * math.pi),
+               ((x2 - radius, y2 - radius), 0.0),
+               ((x1 + radius, y2 - radius), 0.5 * math.pi)]
+    for (cx, cy), start_angle in corners:
+        for k in range(_ROUNDED_CORNER_SEGMENTS + 1):
+            angle = start_angle + 0.5 * math.pi * (k / _ROUNDED_CORNER_SEGMENTS)
+            points.append((cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
+    return points
+
+
+def _arrowhead_points(tip: xdotconstants.Point, tail: xdotconstants.Point,
+                      length: float, halfwidth: float) -> List[xdotconstants.Point]:
+    """Return the three vertices of an arrowhead at `tip`, pointing away from `tail`."""
+    dx, dy = tip[0] - tail[0], tip[1] - tail[1]
+    norm = math.hypot(dx, dy)
+    if norm == 0.0:
+        return [tip, tip, tip]
+    ux, uy = dx / norm, dy / norm
+    base = (tip[0] - length * ux, tip[1] - length * uy)
+    return [tip,
+            (base[0] - halfwidth * uy, base[1] + halfwidth * ux),
+            (base[0] + halfwidth * uy, base[1] - halfwidth * ux)]
+
+
+def _truncate(text: str, limit: int) -> str:
+    """Shorten `text` to `limit` characters, marking that something was cut."""
+    text = " ".join(text.split())  # a message is many lines; a label is one
+    if len(text) <= limit:
+        return text
+    return text[:max(0, limit - 1)].rstrip() + "…"
+
+
+# --------------------------------------------------------------------------------
+# Reading the forest
+#
+# Tolerant on purpose, all of it. This runs against a forest another thread is writing to, and a node that
+# vanishes between the lineage walk and the label lookup should cost the picture one blank box rather than
+# the frame.
+
+def _payload_of(datastore: chattree.Forest, node_id: str) -> Dict[str, Any]:
+    """Return the active payload of `node_id`, or an empty dict if the node or its payload is missing."""
+    try:
+        payload = datastore.get_payload(node_id)
+    except KeyError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _role_of(datastore: chattree.Forest, node_id: str) -> str:
+    """Return the role of the message in `node_id`: "system", "user", "assistant", "tool", or "" if unknown."""
+    message = _payload_of(datastore, node_id).get("message") or {}
+    return message.get("role") or ""
+
+
+def _tool_call_count(datastore: chattree.Forest, node_id: str) -> int:
+    """Return how many tool calls the message in `node_id` requested.
+
+    Read from the assistant message's own `tool_calls` rather than by counting the result nodes below it: a
+    turn that was interrupted has fewer results than calls, and the badge should say what was asked for.
+    """
+    message = _payload_of(datastore, node_id).get("message") or {}
+    return len(message.get("tool_calls") or ())
+
+
+def _label_of(datastore: chattree.Forest, node_id: str, limit: int) -> str:
+    """Return the one-line label for `node_id`."""
+    try:
+        role, persona, text = chatutil.get_node_message_text_without_persona(datastore, node_id)
+    except (KeyError, TypeError):
+        return "(missing)"
+    return _truncate(text, limit) or f"({role or 'empty'})"
+
+
+def _collapse_tool_rounds(datastore: chattree.Forest,
+                          lineage: Sequence[str],
+                          expanded: Set[str]) -> List[str]:
+    """Drop the tool-result nodes of collapsed rounds from a lineage.
+
+    The agent loop chains one `role="tool"` node per call under the assistant message that requested them,
+    so with documents and tools switched on a single conversational turn is three to six nodes, and a
+    visitor looking for "the things it could have said instead" would mostly be shown plumbing. A round is
+    what gets a node here; the calls within it are a count on that node.
+    """
+    kept: List[str] = []
+    owner: Optional[str] = None  # the assistant node whose round we are inside, if any
+    for node_id in lineage:
+        role = _role_of(datastore, node_id)
+        if role == "tool":
+            if owner is not None and owner not in expanded:
+                continue
+        elif role == "assistant":
+            owner = node_id
+        else:
+            owner = None
+        kept.append(node_id)
+    return kept
+
+
+def _pills_for(node_id: str, state: ViewState, is_root: bool) -> Tuple[str, ...]:
+    """Return the pointer labels resting on `node_id`.
+
+    More than one can land on the same node, which is why this is a tuple: with the AI greeting turned off,
+    a new chat starts at the system prompt itself, and SYS and NEW coincide there.
+    """
+    pills = []
+    if is_root:
+        pills.append("SYS")
+    if state.new_chat_node_id is not None and node_id == state.new_chat_node_id:
+        pills.append("NEW")
+    if node_id == state.head_node_id:
+        pills.append("HEAD")
+    return tuple(pills)
+
+
+# --------------------------------------------------------------------------------
+# Choosing what to show
+
+class _Slot:
+    """One position in a row: either a chat node, or a gap standing for several of them.
+
+    Internal to the layout pass — what leaves this module is a `Ref` per graph node.
+    """
+
+    def __init__(self, node_id: Optional[str], hidden: Tuple[str, ...] = ()):
+        self.node_id = node_id
+        self.hidden = hidden
+
+    def _get_is_gap(self) -> bool:
+        """Return whether this slot stands for omitted nodes rather than for one node."""
+        return self.node_id is None
+
+    is_gap = property(fget=_get_is_gap,
+                      doc="Whether this slot stands for omitted nodes rather than for one node.")
+
+
+def _window(items: Sequence[str],
+            focus_index: int,
+            must_include: Set[int],
+            each_side: int) -> List[_Slot]:
+    """Reduce a level to the slots that will be drawn: some items, and a gap per run of omitted ones.
+
+    `focus_index`: Index in `items` the window is centred on.
+    `must_include`: Indices shown whatever the window says — in practice the child the spine goes through,
+                    which cannot be hidden without disconnecting the picture.
+    `each_side`: How many neighbours of the focus to show either side.
+
+    The first and last items are always shown, so a wide level keeps its ends visible and the reader can
+    tell how far the fan reaches.
+    """
+    n = len(items)
+    if n == 0:
+        return []
+
+    shown = {0, n - 1}
+    shown |= {i for i in range(focus_index - each_side, focus_index + each_side + 1) if 0 <= i < n}
+    shown |= {i for i in must_include if 0 <= i < n}
+
+    slots: List[_Slot] = []
+    previous = -1
+    for index in sorted(shown):
+        if index > previous + 1:
+            slots.append(_Slot(node_id=None, hidden=tuple(items[previous + 1:index])))
+        slots.append(_Slot(node_id=items[index]))
+        previous = index
+    if previous < n - 1:
+        slots.append(_Slot(node_id=None, hidden=tuple(items[previous + 1:])))
+    return slots
+
+
+class _Row:
+    """One level of the picture, with the slots to draw and what to line them up on.
+
+    `slots`: Left to right.
+    `anchor_index`: Which slot sits on the spine's vertical line. Aligning every row on its anchor is what
+                    makes the current branch come out as a straight line however wide the fans around it
+                    get — which in turn is what keeps positions steady as the tree grows, since a new
+                    sibling then moves only its own row.
+    `parent_node_id`: Whose children these are, or `None` at the root level.
+    """
+
+    def __init__(self, slots: List[_Slot], anchor_index: int, parent_node_id: Optional[str]):
+        self.slots = slots
+        self.anchor_index = anchor_index
+        self.parent_node_id = parent_node_id
+
+
+# --------------------------------------------------------------------------------
+# Emitting shapes
+
+def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
+                label: str, fill: Optional[xdotconstants.Color],
+                dashed: bool, pills: Tuple[str, ...]) -> List[xdotgraph.Shape]:
+    """Return the shapes for one box: its outline, its label, and any pointer pills above it.
+
+    `width`: The box's width. A gap is narrower than a node, and the row layout allocates it that much
+             room, so drawing it at any other width would put it under its neighbour.
+    `fill`: `None` for an unfilled box, which is what a gap is.
+    `dashed`: Draw the outline broken.
+    """
+    x1, y1 = x - 0.5 * width, y - 0.5 * config.node_h
+    x2, y2 = x + 0.5 * width, y + 0.5 * config.node_h
+
+    outline_pen = xdotgraph.Pen()
+    outline_pen.color = GAP_LINE_COLOR if dashed else LINE_COLOR
+    outline_pen.linewidth = 1.5
+    if dashed:
+        outline_pen.dash = _GAP_DASH
+
+    shapes: List[xdotgraph.Shape] = []
+    corners = _rounded_rect_points(x1, y1, x2, y2, config.corner_radius)
+    if fill is not None:
+        fill_pen = outline_pen.copy()
+        fill_pen.fillcolor = fill
+        fill_pen.dash = ()  # a fill has no outline to break
+        shapes.append(xdotgraph.PolygonShape(fill_pen, corners, filled=True))
+    shapes.append(xdotgraph.PolygonShape(outline_pen, corners, filled=False))
+
+    text_pen = xdotgraph.Pen()
+    text_pen.color = LINE_COLOR
+    text_pen.fontsize = config.font_size
+    # A text shape's y is its baseline, so nudge down by roughly a third of the cap height to sit the label
+    # on the box's centre line rather than above it.
+    shapes.append(xdotgraph.TextShape(text_pen, x, y + 0.35 * config.font_size,
+                                      xdotgraph.TextShape.CENTER, width - 12.0, label))
+
+    # Pills are a separate visual class from nodes -- outlined rather than filled -- so that SYS, NEW and
+    # HEAD read as labels attached to a node rather than as part of what the node says. Two reasons for
+    # each half of that, neither of them taste:
+    #
+    # They sit in the vertical space above the box, right-aligned to it, rather than out to its side. A
+    # column is only as wide as its box, so anything drawn beside one lands on the neighbour; the gap
+    # between rows is empty by construction and is the only free space a node has.
+    #
+    # Outlined, because the renderer picks a contrasting text colour in dark mode from *the element's*
+    # fill, and a node carrying a second filled shape would have some of its text coloured for the wrong
+    # background.
+    pill_pen = xdotgraph.Pen()
+    pill_pen.color = LINE_COLOR
+    pill_pen.linewidth = 1.0
+    pill_text_pen = xdotgraph.Pen()
+    pill_text_pen.color = LINE_COLOR
+    pill_text_pen.fontsize = config.pill_font_size
+    pill_span = len(pills) * config.pill_w + max(0, len(pills) - 1) * 3.0
+    for k, pill in enumerate(pills):
+        px1 = x2 - pill_span + k * (config.pill_w + 3.0)
+        py2 = y1 - 4.0
+        px2, py1 = px1 + config.pill_w, py2 - config.pill_h
+        shapes.append(xdotgraph.PolygonShape(pill_pen,
+                                             _rounded_rect_points(px1, py1, px2, py2, 0.5 * config.pill_h),
+                                             filled=False))
+        shapes.append(xdotgraph.TextShape(pill_text_pen,
+                                          0.5 * (px1 + px2), py2 - 0.3 * config.pill_h,
+                                          xdotgraph.TextShape.CENTER, config.pill_w, pill))
+    return shapes
+
+
+def _edge_between(src: xdotgraph.Node, dst: xdotgraph.Node, config: LayoutConfig) -> xdotgraph.Edge:
+    """Return an edge from the bottom of `src` to the top of `dst`, with an arrowhead at the destination."""
+    start = (src.x, src.y2)
+    end = (dst.x, dst.y1)
+
+    line_pen = xdotgraph.Pen()
+    line_pen.color = LINE_COLOR
+    head_pen = line_pen.copy()
+    head_pen.fillcolor = LINE_COLOR
+
+    head = _arrowhead_points(end, start, config.arrowhead_length, config.arrowhead_halfwidth)
+    shapes: List[xdotgraph.Shape] = [xdotgraph.LineShape(line_pen, [start, head[0]]),
+                                     xdotgraph.PolygonShape(head_pen, head, filled=True)]
+    return xdotgraph.Edge(src, dst, [start, end], shapes)
+
+
+# --------------------------------------------------------------------------------
+# The build
+
+def build(datastore: chattree.Forest,
+          state: ViewState,
+          config: Optional[LayoutConfig] = None) -> ChatGraph:
+    """Build the picture of the chat forest around `state.head_node_id`.
+
+    `datastore`: The chat forest. Read under its own lock, and not modified.
+    `state`: What the user is looking at. See `ViewState`.
+    `config`: Sizes and counts. See `LayoutConfig`.
+
+    Returns a `ChatGraph`: the `Graph` to hand to `XDotWidget.set_graph`, plus the table saying what each
+    of its nodes stands for.
+
+    Raises `KeyError` if `state.head_node_id` is not in the datastore.
+    """
+    config = config or LayoutConfig()
+
+    with datastore.lock:
+        full_spine = datastore.linearize_up(state.head_node_id)
+        visible_spine = _collapse_tool_rounds(datastore, full_spine, state.expanded_tool_turns)
+
+        # Depth window. The root stays: it carries SYS, and it is the only thing naming which version of
+        # the character card this conversation was written under. The rest of the budget goes to the nodes
+        # nearest HEAD, which is where the reader is.
+        elided_ancestors: Tuple[str, ...] = ()
+        if len(visible_spine) > config.max_visible_depth:
+            tail_length = config.max_visible_depth - 1
+            elided_ancestors = tuple(visible_spine[1:-tail_length])
+            visible_spine = [visible_spine[0]] + visible_spine[-tail_length:]
+
+        on_spine = set(visible_spine)
+        rows = _rows_for(datastore, state, config, visible_spine)
+        subtree_counts = _subtree_counts_for(datastore, rows, on_spine)
+
+        # ------------------------------------------------------------------
+        # Vertical placement. A row that has subtree gaps hanging off it, and the root row when ancestors
+        # were elided, get a whole empty row's worth of space below them to hold those gaps -- otherwise a
+        # gap drawn one row down lands on top of the row that is already there.
+
+        needs_band = [bool(subtree_counts[index]) or (index == 0 and bool(elided_ancestors))
+                      for index in range(len(rows))]
+        row_step = config.node_h + config.vertical_spacing
+        row_y: List[float] = []
+        band_y: List[Optional[float]] = []
+        cursor = 0.5 * config.node_h
+        for index in range(len(rows)):
+            row_y.append(cursor)
+            if needs_band[index]:
+                band_y.append(cursor + row_step)
+                cursor += 2 * row_step
+            else:
+                band_y.append(None)
+                cursor += row_step
+
+        # ------------------------------------------------------------------
+        # Horizontal placement and shapes.
+
+        refs: Dict[str, Ref] = {}
+        nodes_by_name: Dict[str, xdotgraph.Node] = {}
+        graph_nodes: List[xdotgraph.Node] = []
+        drawn: List[List[Tuple[_Slot, xdotgraph.Node]]] = []  # parallel to `rows`, for wiring edges after
+
+        gap_serial = 0
+        for row_index, row in enumerate(rows):
+            y = row_y[row_index]
+            widths = [config.gap_node_w if slot.is_gap else config.node_w for slot in row.slots]
+            centers: List[float] = []
+            cursor = 0.0
+            for width in widths:
+                centers.append(cursor + 0.5 * width)
+                cursor += width + config.horizontal_spacing
+            shift = -centers[row.anchor_index]  # put the anchor on x = 0
+
+            drawn_row: List[Tuple[_Slot, xdotgraph.Node]] = []
+            for slot_index, slot in enumerate(row.slots):
+                x = centers[slot_index] + shift
+                width = widths[slot_index]
+                if slot.is_gap:
+                    gap_serial += 1
+                    if row_index == 0:
+                        name = "gap:roots"
+                        ref: Ref = RootGapRef(name, hidden_node_ids=slot.hidden)
+                        label = f"…{len(slot.hidden)} more cards"
+                    else:
+                        name = f"gap:siblings:{gap_serial}"
+                        ref = SiblingGapRef(name, parent_node_id=row.parent_node_id,
+                                            hidden_node_ids=slot.hidden,
+                                            recenter_on=slot.hidden[len(slot.hidden) // 2])
+                        label = f"…{len(slot.hidden)} more"
+                    shapes = _box_shapes(x, y, width, config, label, fill=None, dashed=True, pills=())
+                else:
+                    name = slot.node_id
+                    ref = ChatNodeRef(name, node_id=slot.node_id,
+                                      role=_role_of(datastore, slot.node_id),
+                                      on_spine=(slot.node_id in on_spine),
+                                      tool_call_count=_tool_call_count(datastore, slot.node_id),
+                                      pills=_pills_for(slot.node_id, state, is_root=(row_index == 0)))
+                    shapes = _box_shapes(x, y, width, config,
+                                         _label_of(datastore, slot.node_id, config.label_chars),
+                                         fill=(SPINE_FILL_COLOR if slot.node_id in on_spine
+                                               else OFF_SPINE_FILL_COLOR),
+                                         dashed=False, pills=ref.pills)
+
+                graph_node = xdotgraph.Node(x=x, y=y, w=width, h=config.node_h,
+                                            shapes=shapes, internal_name=name)
+                refs[name] = ref
+                nodes_by_name[name] = graph_node
+                graph_nodes.append(graph_node)
+                drawn_row.append((slot, graph_node))
+            drawn.append(drawn_row)
+
+        # ------------------------------------------------------------------
+        # Gap nodes that live in the bands, and then the edges.
+
+        graph_edges: List[xdotgraph.Edge] = []
+
+        def add_box(name: str, ref: Ref, x: float, y: float, label: str) -> xdotgraph.Node:
+            """Draw one gap box in a band, register it, and return it."""
+            node = xdotgraph.Node(x=x, y=y, w=config.gap_node_w, h=config.node_h,
+                                  shapes=_box_shapes(x, y, config.gap_node_w, config, label,
+                                                     fill=None, dashed=True, pills=()),
+                                  internal_name=name)
+            refs[name] = ref
+            nodes_by_name[name] = node
+            graph_nodes.append(node)
+            return node
+
+        depth_gap_node: Optional[xdotgraph.Node] = None
+        if elided_ancestors:
+            depth_gap_node = add_box("gap:depth",
+                                     DepthGapRef("gap:depth", hidden_node_ids=elided_ancestors),
+                                     x=0.0, y=band_y[0], label=f"…{len(elided_ancestors)} more")
+
+        for row_index, drawn_row in enumerate(drawn):
+            for slot, graph_node in drawn_row:
+                if slot.is_gap:
+                    continue
+                child_count = subtree_counts[row_index].get(slot.node_id)
+                if child_count is None:
+                    continue
+                # An off-spine sibling with children of its own would otherwise look like a chat that
+                # stopped after one message. The same primitive as a sibling gap, pointing down.
+                gap_node = add_box(f"gap:subtree:{slot.node_id}",
+                                   SubtreeGapRef(f"gap:subtree:{slot.node_id}",
+                                                 node_id=slot.node_id, child_count=child_count),
+                                   x=graph_node.x, y=band_y[row_index],
+                                   label=f"…{child_count} more")
+                graph_edges.append(_edge_between(graph_node, gap_node, config))
+
+        for row_index in range(1, len(drawn)):
+            parent_id = rows[row_index].parent_node_id
+            parent_node = nodes_by_name.get(parent_id) if parent_id is not None else None
+            if parent_node is None:
+                # The parent fell outside the depth window. The depth gap stands in for the whole elided
+                # chain, so it is what this row hangs from -- every slot of it, since they are all
+                # descendants of what the gap is hiding.
+                parent_node = depth_gap_node
+                if parent_node is None:
+                    continue
+            for _slot, graph_node in drawn[row_index]:
+                graph_edges.append(_edge_between(parent_node, graph_node, config))
+
+        if depth_gap_node is not None:
+            graph_edges.append(_edge_between(nodes_by_name[visible_spine[0]], depth_gap_node, config))
+
+    # ------------------------------------------------------------------
+    # Normalize into the widget's coordinate box, which `zoom_to_fit` reads as (0, 0)-(width, height).
+
+    x1, y1, _x2, _y2 = _content_bbox(graph_nodes)
+    _translate(graph_nodes, graph_edges, -(x1 - config.margin), -(y1 - config.margin))
+
+    _x1, _y1, x2, y2 = _content_bbox(graph_nodes)
+    graph = xdotgraph.Graph(width=x2 + config.margin, height=y2 + config.margin,
+                            nodes=graph_nodes, edges=graph_edges)
+    return ChatGraph(graph=graph, refs=refs, spine=tuple(full_spine))
+
+
+def _content_bbox(nodes: Sequence[xdotgraph.Node]) -> Tuple[float, float, float, float]:
+    """Return the box enclosing every node *and everything drawn on it*.
+
+    A node's own bounding box is the layout cell it occupies, which is what the row placement reasons
+    about. It is not what has to fit on screen: a pointer pill is drawn in the space above its node, so
+    the topmost row's pills sit outside every node box there is, and a fit computed from those alone
+    clips the one label that says which node HEAD is on.
+    """
+    boxes = []
+    for node in nodes:
+        boxes.append(node.get_bounding_box())
+        boxes.extend(box for box in (shape.get_bounding_box() for shape in node.shapes)
+                     if box is not None)
+    return (min(box[0] for box in boxes), min(box[1] for box in boxes),
+            max(box[2] for box in boxes), max(box[3] for box in boxes))
+
+
+def _rows_for(datastore: chattree.Forest,
+              state: ViewState,
+              config: LayoutConfig,
+              visible_spine: Sequence[str]) -> List[_Row]:
+    """Choose what each level of the picture holds: one row per spine node, plus HEAD's children.
+
+    The caller holds the datastore lock.
+    """
+    rows: List[_Row] = []
+
+    for depth, node_id in enumerate(visible_spine):
+        if depth == 0:
+            # The root level. v1 shows HEAD's own root and a count of the others: a root is a version of
+            # the character card, and clicking through to another one would leave the configured avatar
+            # and voice running against a different system prompt.
+            other_roots = tuple(root_id for root_id in datastore.get_all_root_nodes() if root_id != node_id)
+            slots = [_Slot(node_id=node_id)]
+            anchor_index = 0
+            if other_roots:
+                slots.insert(0, _Slot(node_id=None, hidden=other_roots))
+                anchor_index = 1
+            rows.append(_Row(slots, anchor_index, parent_node_id=None))
+            continue
+
+        parent_id = datastore.get_parent(node_id)
+        siblings, own_index = datastore.get_siblings(node_id)
+        if siblings is None or own_index is None:  # a broken link; draw the node alone rather than nothing
+            rows.append(_Row([_Slot(node_id=node_id)], 0, parent_node_id=parent_id))
+            continue
+
+        focus_id = state.sibling_focus.get(parent_id, node_id)
+        focus_index = siblings.index(focus_id) if focus_id in siblings else own_index
+        slots = _window(siblings, focus_index, must_include={own_index},
+                        each_side=config.siblings_each_side)
+        rows.append(_Row(slots, _index_of_slot(slots, node_id), parent_node_id=parent_id))
+
+    # HEAD's own children, so that the branch does not appear to end at HEAD when it does not.
+    head_children = datastore.get_children(state.head_node_id)
+    if head_children:
+        focus_id = state.sibling_focus.get(state.head_node_id, head_children[0])
+        focus_index = head_children.index(focus_id) if focus_id in head_children else 0
+        slots = _window(head_children, focus_index, must_include=set(),
+                        each_side=config.siblings_each_side)
+        rows.append(_Row(slots, _index_of_slot(slots, head_children[focus_index]),
+                         parent_node_id=state.head_node_id))
+    return rows
+
+
+def _index_of_slot(slots: Sequence[_Slot], node_id: str) -> int:
+    """Return which slot holds `node_id`, or 0 if none does."""
+    for index, slot in enumerate(slots):
+        if slot.node_id == node_id:
+            return index
+    return 0
+
+
+def _subtree_counts_for(datastore: chattree.Forest,
+                        rows: Sequence[_Row],
+                        on_spine: Set[str]) -> List[Dict[str, int]]:
+    """Return, per row, how many children each of its off-spine nodes has — omitting the childless ones.
+
+    The caller holds the datastore lock.
+    """
+    counts: List[Dict[str, int]] = []
+    for row in rows:
+        row_counts: Dict[str, int] = {}
+        for slot in row.slots:
+            if slot.is_gap or slot.node_id in on_spine:
+                continue
+            child_count = len(datastore.get_children(slot.node_id))
+            if child_count:
+                row_counts[slot.node_id] = child_count
+        counts.append(row_counts)
+    return counts
+
+
+def _translate(nodes: Sequence[xdotgraph.Node], edges: Sequence[xdotgraph.Edge],
+               dx: float, dy: float) -> None:
+    """Move every node, edge and shape by (`dx`, `dy`), in place."""
+    for node in nodes:
+        node.x += dx
+        node.y += dy
+        node.x1 += dx
+        node.x2 += dx
+        node.y1 += dy
+        node.y2 += dy
+        _translate_shapes(node.shapes, dx, dy)
+    for edge in edges:
+        edge.points = [(x + dx, y + dy) for x, y in edge.points]
+        _translate_shapes(edge.shapes, dx, dy)
+
+
+def _translate_shapes(shapes: Sequence[xdotgraph.Shape], dx: float, dy: float) -> None:
+    """Move a list of shapes by (`dx`, `dy`), in place."""
+    for shape in shapes:
+        if isinstance(shape, xdotgraph.TextShape):
+            shape.x += dx
+            shape.y += dy
+        elif isinstance(shape, xdotgraph.EllipseShape):
+            shape.x0 += dx
+            shape.y0 += dy
+        elif isinstance(shape, (xdotgraph.PolygonShape, xdotgraph.LineShape, xdotgraph.BezierShape)):
+            shape.points = [(x + dx, y + dy) for x, y in shape.points]
+        elif isinstance(shape, xdotgraph.CompoundShape):
+            _translate_shapes(shape.shapes, dx, dy)

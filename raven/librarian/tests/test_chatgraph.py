@@ -1,0 +1,457 @@
+"""Unit tests for raven.librarian.chatgraph — the chat forest as a renderable graph.
+
+What is worth pinning here is *geometry and selection*, because nothing else can check them. A rendered
+widget cannot be asked whether two boxes overlap or whether the spine came out straight, and the eye that
+could is not present in CI. So these tests assert positions.
+
+The module needs no DearPyGui: the xdot package imports its widget lazily, and everything used here --
+`Graph`, `Node`, the shapes -- is plain data.
+"""
+
+import pytest
+
+from raven.librarian import chatgraph
+from raven.librarian.chattree import Forest
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+def payload(role: str, text: str, tool_calls=None) -> dict:
+    """A chat node payload of the shape `chatutil` writes, with only the fields this module reads."""
+    message = {"role": role, "content": [{"type": "text", "text": text}]}
+    if tool_calls is not None:
+        message["tool_calls"] = tool_calls
+    return {"message": message, "general_metadata": {"persona": None}}
+
+
+def chain(forest: Forest, length: int, parent_id=None) -> list:
+    """Create a linear run of `length` alternating user/assistant nodes. Returns their IDs, root first."""
+    ids = []
+    for k in range(length):
+        role = "user" if k % 2 == 0 else "assistant"
+        parent_id = forest.create_node(payload(role, f"message {k}"), parent_id=parent_id)
+        ids.append(parent_id)
+    return ids
+
+
+@pytest.fixture
+def conversation():
+    """A system prompt, a greeting, and one exchange under it.
+
+        system -> greeting -> user -> assistant
+    """
+    forest = Forest()
+    system = forest.create_node(payload("system", "you are a helpful assistant"), parent_id=None)
+    greeting = forest.create_node(payload("assistant", "hello!"), parent_id=system)
+    user = forest.create_node(payload("user", "what is a multiverse"), parent_id=greeting)
+    reply = forest.create_node(payload("assistant", "many worlds, briefly"), parent_id=user)
+    return forest, system, greeting, user, reply
+
+
+def boxes_of(chat_graph: chatgraph.ChatGraph) -> dict:
+    """Return graph node name -> its bounding box, for the geometry assertions."""
+    return {node.internal_name: node.get_bounding_box() for node in chat_graph.graph.nodes}
+
+
+def overlapping_pairs(chat_graph: chatgraph.ChatGraph) -> list:
+    """Return every pair of graph nodes whose boxes overlap by more than a rounding error."""
+    epsilon = 1e-6
+    named = list(boxes_of(chat_graph).items())
+    found = []
+    for i, (name_a, a) in enumerate(named):
+        for name_b, b in named[i + 1:]:
+            if (a[0] < b[2] - epsilon and b[0] < a[2] - epsilon
+                    and a[1] < b[3] - epsilon and b[1] < a[3] - epsilon):
+                found.append((name_a, name_b))
+    return found
+
+
+def refs_of_type(chat_graph: chatgraph.ChatGraph, ref_type) -> list:
+    """Return every ref of the given kind, in no particular order."""
+    return [ref for ref in chat_graph.refs.values() if isinstance(ref, ref_type)]
+
+
+# ---------------------------------------------------------------------------
+# The spine
+# ---------------------------------------------------------------------------
+
+class TestSpine:
+    def test_a_chain_becomes_one_box_per_message(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        for node_id in (system, greeting, user, reply):
+            assert node_id in built.refs
+
+    def test_the_spine_is_a_straight_vertical_line(self):
+        # The property `TODO.md` asks for by name: a stable picture. Aligning every row on the node the
+        # branch passes through is what keeps a new sibling from moving anything but its own row.
+        #
+        # The fixture needs rows of *differing* width. In a plain chain every row holds one box and starts
+        # at the same offset, so the spine comes out straight whether the rows are aligned on it or merely
+        # all left-aligned by accident -- and the test then passes against a layout with no alignment step
+        # at all.
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=system)
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(12)]
+        head = chats[6]
+        for k in range(3):
+            forest.create_node(payload("assistant", f"reroll {k}"), parent_id=head)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head))
+
+        widths_per_row = {}
+        for node in built.graph.nodes:
+            widths_per_row[node.y] = widths_per_row.get(node.y, 0) + 1
+        assert len(set(widths_per_row.values())) > 1, \
+            "every row here holds the same number of boxes, so this fixture cannot detect a missing alignment"
+
+        xs = {built.graph.get_node_by_name(node_id).x for node_id in (system, greeting, head)}
+        assert len(xs) == 1, f"the branch to HEAD is not on one vertical line: {sorted(xs)}"
+
+    def test_depth_increases_downward(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        ys = [built_y for built_y in
+              (chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+               .graph.get_node_by_name(node_id).y
+               for node_id in (system, greeting, user, reply))]
+        assert ys == sorted(ys) and len(set(ys)) == len(ys)
+
+    def test_a_graph_node_is_named_by_its_chat_node_id(self, conversation):
+        # Not cosmetic: it is what lets the panel call `XDotWidget.pan_to_node(head_node_id)` without
+        # keeping a translation table of its own.
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert built.graph.get_node_by_name(reply) is not None
+
+    def test_every_graph_node_has_a_ref(self, conversation):
+        # A click arrives as a name and nothing else, so a name without a ref is a click that cannot be
+        # acted on.
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert {node.internal_name for node in built.graph.nodes} == set(built.refs)
+
+    def test_head_children_are_shown(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        follow_up = forest.create_node(payload("user", "go on"), parent_id=reply)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert follow_up in built.refs, "a branch that continues below HEAD must not look like it ends there"
+
+    def test_building_does_not_change_the_forest(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        before = forest.generation
+        chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert forest.generation == before
+
+
+# ---------------------------------------------------------------------------
+# Pointer pills
+# ---------------------------------------------------------------------------
+
+class TestPills:
+    def test_the_three_pointers_land_on_their_nodes(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply,
+                                                            new_chat_node_id=greeting))
+        assert built.refs[system].pills == ("SYS",)
+        assert built.refs[greeting].pills == ("NEW",)
+        assert built.refs[reply].pills == ("HEAD",)
+
+    def test_sys_and_new_coincide_when_there_is_no_greeting(self):
+        # The AI greeting is becoming optional, and optional per chat rather than globally -- so one
+        # datastore will hold both shapes and a chat can start at the system prompt itself. A single-valued
+        # pill would have to pick one of the two pointers to lose.
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        user = forest.create_node(payload("user", "hello"), parent_id=system)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=user,
+                                                            new_chat_node_id=system))
+        assert built.refs[system].pills == ("SYS", "NEW")
+
+
+# ---------------------------------------------------------------------------
+# Sibling windowing
+# ---------------------------------------------------------------------------
+
+class TestSiblingWindow:
+    def _fan(self, width: int, spine_index: int = 0):
+        """A system prompt whose greeting has `width` children; the branch goes through one of them."""
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=system)
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting)
+                 for k in range(width)]
+        return forest, system, greeting, chats, chats[spine_index]
+
+    def test_a_narrow_level_is_shown_whole(self):
+        # The negative control for everything below: with three siblings there is nothing to hide, so a
+        # windowing bug that produced gaps unconditionally would show up here rather than passing quietly.
+        forest, system, greeting, chats, head = self._fan(width=3)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head))
+        assert all(chat in built.refs for chat in chats)
+        assert refs_of_type(built, chatgraph.SiblingGapRef) == []
+
+    def test_a_wide_level_is_windowed_and_the_ends_stay_visible(self):
+        forest, system, greeting, chats, head = self._fan(width=20, spine_index=9)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head))
+
+        shown = [chat for chat in chats if chat in built.refs]
+        assert len(shown) < len(chats), "a fan of twenty was not windowed at all"
+        assert chats[0] in built.refs and chats[-1] in built.refs, "the ends of the fan are its anchors"
+        assert head in built.refs
+
+        gaps = refs_of_type(built, chatgraph.SiblingGapRef)
+        hidden = [node_id for gap in gaps for node_id in gap.hidden_node_ids]
+        assert sorted(hidden + shown) == sorted(chats), "every sibling is either shown or inside a gap"
+
+    def test_a_gap_recenters_on_the_middle_of_what_it_hides(self):
+        # Which is what makes repeated clicks bisect a wide fan instead of walking it at a fixed stride --
+        # and is why this view wants no plus-or-minus-ten buttons of its own.
+        forest, system, greeting, chats, head = self._fan(width=20, spine_index=0)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head))
+        gap = refs_of_type(built, chatgraph.SiblingGapRef)[0]
+        assert gap.recenter_on == gap.hidden_node_ids[len(gap.hidden_node_ids) // 2]
+
+    def test_the_branch_stays_visible_when_the_window_is_moved_away_from_it(self):
+        # Moving the window is a preview gesture; it must not disconnect the picture from HEAD.
+        forest, system, greeting, chats, head = self._fan(width=20, spine_index=0)
+        far_away = chats[15]
+        built = chatgraph.build(forest,
+                                chatgraph.ViewState(head_node_id=head,
+                                                    sibling_focus={greeting: far_away}))
+        assert far_away in built.refs, "the window did not move"    # the fixture discriminates
+        assert head in built.refs, "the branch to HEAD was windowed out of its own picture"
+
+
+# ---------------------------------------------------------------------------
+# Tool rounds
+# ---------------------------------------------------------------------------
+
+class TestToolRounds:
+    def _turn_with_tools(self):
+        """user -> assistant(2 calls) -> tool -> tool -> assistant(reply)."""
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        user = forest.create_node(payload("user", "what is the time"), parent_id=system)
+        asking = forest.create_node(payload("assistant", "let me look",
+                                            tool_calls=[{"id": "1"}, {"id": "2"}]), parent_id=user)
+        first = forest.create_node(payload("tool", "12:00"), parent_id=asking)
+        second = forest.create_node(payload("tool", "Tuesday"), parent_id=first)
+        reply = forest.create_node(payload("assistant", "it is noon on Tuesday"), parent_id=second)
+        return forest, asking, (first, second), reply
+
+    def test_tool_results_collapse_onto_the_round_that_asked_for_them(self):
+        forest, asking, tool_nodes, reply = self._turn_with_tools()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert all(node_id not in built.refs for node_id in tool_nodes)
+        assert built.refs[asking].tool_call_count == 2
+        assert asking in built.refs and reply in built.refs, "both rounds keep their own node"
+
+    def test_expanding_a_round_shows_its_results(self):
+        forest, asking, tool_nodes, reply = self._turn_with_tools()
+        built = chatgraph.build(forest,
+                                chatgraph.ViewState(head_node_id=reply,
+                                                    expanded_tool_turns={asking}))
+        assert all(node_id in built.refs for node_id in tool_nodes)
+
+    def test_the_badge_counts_calls_rather_than_results(self):
+        # A turn stopped mid-round has fewer results than calls, and the badge should say what was asked
+        # for. Counting the nodes below would report the interruption as a smaller request.
+        forest = Forest()
+        user = forest.create_node(payload("user", "search for three things"), parent_id=None)
+        asking = forest.create_node(payload("assistant", "on it",
+                                            tool_calls=[{"id": "1"}, {"id": "2"}, {"id": "3"}]),
+                                    parent_id=user)
+        forest.create_node(payload("tool", "only one came back"), parent_id=asking)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=asking))
+        assert built.refs[asking].tool_call_count == 3
+
+
+# ---------------------------------------------------------------------------
+# Truncation, and the rule that it must always show itself
+# ---------------------------------------------------------------------------
+
+class TestTruncation:
+    def test_a_short_branch_has_no_depth_gap(self):
+        # The control for the case below.
+        forest = Forest()
+        ids = chain(forest, length=4)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids[-1]))
+        assert refs_of_type(built, chatgraph.DepthGapRef) == []
+
+    def test_a_long_branch_keeps_its_root_and_gains_one_gap(self):
+        forest = Forest()
+        ids = chain(forest, length=30)
+        config = chatgraph.LayoutConfig(max_visible_depth=8)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids[-1]), config)
+
+        gaps = refs_of_type(built, chatgraph.DepthGapRef)
+        assert len(gaps) == 1
+        assert ids[0] in built.refs, "the root carries SYS and names the card; it is never the part elided"
+        assert ids[-1] in built.refs
+        shown_spine = [node_id for node_id in ids if node_id in built.refs]
+        assert sorted(shown_spine + list(gaps[0].hidden_node_ids)) == sorted(ids)
+
+    def test_the_depth_gap_stands_between_the_root_and_what_follows(self):
+        # The truncation rule in its strict form: a node with no visible links has to mean the graph really
+        # ends there. A root wired straight to a distant descendant would instead be a lie about adjacency.
+        forest = Forest()
+        ids = chain(forest, length=30)
+        config = chatgraph.LayoutConfig(max_visible_depth=8)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids[-1]), config)
+
+        gap_node = built.graph.get_node_by_name("gap:depth")
+        root_node = built.graph.get_node_by_name(ids[0])
+        assert any(edge.src is root_node and edge.dst is gap_node for edge in built.graph.edges)
+        assert any(edge.src is gap_node for edge in built.graph.edges)
+        assert not any(edge.src is root_node and edge.dst is not gap_node for edge in built.graph.edges)
+
+    def test_an_off_spine_sibling_with_children_says_so(self):
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        taken = forest.create_node(payload("user", "the branch we are on"), parent_id=system)
+        not_taken = forest.create_node(payload("user", "the one we are not"), parent_id=system)
+        forest.create_node(payload("assistant", "a whole conversation below here"), parent_id=not_taken)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
+        gaps = refs_of_type(built, chatgraph.SubtreeGapRef)
+        assert [gap.node_id for gap in gaps] == [not_taken]
+        assert gaps[0].child_count == 1
+
+    def test_a_childless_off_spine_sibling_gets_no_gap(self):
+        # The control for the case above: a gap under every sibling would satisfy it just as well.
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        taken = forest.create_node(payload("user", "the branch we are on"), parent_id=system)
+        forest.create_node(payload("user", "a chat that never went anywhere"), parent_id=system)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
+        assert refs_of_type(built, chatgraph.SubtreeGapRef) == []
+
+    def test_other_roots_are_declared_even_though_v1_cannot_visit_them(self):
+        forest = Forest()
+        current = forest.create_node(payload("system", "the card in use"), parent_id=None)
+        head = forest.create_node(payload("user", "hello"), parent_id=current)
+        older = forest.create_node(payload("system", "an older version of the card"), parent_id=None)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head))
+        gaps = refs_of_type(built, chatgraph.RootGapRef)
+        assert len(gaps) == 1 and gaps[0].hidden_node_ids == (older,)
+
+    def test_a_lone_root_declares_nothing(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert refs_of_type(built, chatgraph.RootGapRef) == []
+
+
+# ---------------------------------------------------------------------------
+# Geometry the eye would catch and no other test would
+# ---------------------------------------------------------------------------
+
+class TestGeometry:
+    def _crowded(self):
+        """A tree exercising every box kind at once: a fan, off-spine subtrees, and a wide row below HEAD.
+
+        HEAD needs *several* children, not one. The collision a reserved band exists to prevent is between
+        a subtree gap and the row under it, and a single child sits on the spine's own line -- directly
+        below HEAD, where no off-spine sibling's gap ever is. A one-child fixture therefore cannot fail
+        however the bands are computed.
+        """
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=system)
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(12)]
+        for chat in chats:  # every off-spine sibling has a continuation, so every one wants a subtree gap
+            forest.create_node(payload("assistant", "and so on"), parent_id=chat)
+        head = chats[6]
+        for k in range(4):
+            forest.create_node(payload("assistant", f"reroll {k}"), parent_id=head)
+        return forest, head
+
+    def test_no_two_boxes_overlap(self):
+        forest, head = self._crowded()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head))
+        boxes = boxes_of(built)
+
+        # The control, and it has to be this specific. What makes the band load-bearing is a subtree gap
+        # with something drawn *below its sibling and in its column*; a fixture whose lower row is
+        # narrower than the fan above it passes with or without the band, while looking like a thorough
+        # test of both. Phrased against the sibling rather than against the gap on purpose -- measuring
+        # from the gap would make the control's own answer depend on the placement it is there to check.
+        gap_refs = refs_of_type(built, chatgraph.SubtreeGapRef)
+        assert gap_refs, "no subtree gaps here, so this fixture says nothing about the band"
+        assert any(boxes[ref.node_id][3] < box[1]
+                   and boxes[ref.name][0] < box[2] and box[0] < boxes[ref.name][2]
+                   for ref in gap_refs for box in boxes.values()), \
+            ("nothing is drawn below a sibling that has a subtree gap, and within that gap's column, so "
+             "this fixture cannot tell a reserved band from an unreserved one")
+
+        assert overlapping_pairs(built) == []
+
+    def test_the_graph_box_contains_everything_drawn(self):
+        # Pills are drawn in the space above their node, so they fall outside every node box there is, and
+        # a fit computed from node boxes alone clips the one label that says where HEAD is.
+        #
+        # Zero margin on purpose. At the default margin the pills happen to be exactly as tall as the
+        # margin is wide, so a node-box fit lands them at y = 0 and passes -- an accident of two unrelated
+        # constants, which would go on satisfying this test until somebody changed either one.
+        forest, head = self._crowded()
+        config = chatgraph.LayoutConfig(margin=0.0)
+        built = chatgraph.build(forest,
+                                chatgraph.ViewState(head_node_id=head, new_chat_node_id=head), config)
+
+        shape_boxes = [box for node in built.graph.nodes
+                       for box in (shape.get_bounding_box() for shape in node.shapes)
+                       if box is not None]
+        top_of_boxes = min(node.get_bounding_box()[1] for node in built.graph.nodes)
+        assert min(box[1] for box in shape_boxes) < top_of_boxes, \
+            "nothing is drawn above the topmost node box, so this fixture cannot detect clipping"
+
+        assert min(box[0] for box in shape_boxes) >= 0.0
+        assert min(box[1] for box in shape_boxes) >= 0.0
+        assert max(box[2] for box in shape_boxes) <= built.graph.width
+        assert max(box[3] for box in shape_boxes) <= built.graph.height
+
+    def test_a_gap_is_drawn_at_the_width_the_row_reserved_for_it(self):
+        # Boxes are placed by width, so a box drawn wider than its slot slides under its neighbour --
+        # invisible in any assertion about which nodes exist, and obvious on screen.
+        forest, head = self._crowded()
+        config = chatgraph.LayoutConfig()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head), config)
+        for ref in refs_of_type(built, chatgraph.SiblingGapRef):
+            box = built.graph.get_node_by_name(ref.name).get_bounding_box()
+            assert box[2] - box[0] == pytest.approx(config.gap_node_w)
+
+    def test_the_picture_starts_at_the_origin(self):
+        # `Viewport.zoom_to_fit` fits the box (0, 0)-(width, height) and nothing else, so content placed
+        # outside it is simply not framed.
+        forest, head = self._crowded()
+        config = chatgraph.LayoutConfig()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head), config)
+        boxes = list(boxes_of(built).values())
+        assert min(box[0] for box in boxes) >= 0.0
+        assert min(box[1] for box in boxes) >= 0.0
+        assert built.graph.width > 0.0 and built.graph.height > 0.0
+
+
+# ---------------------------------------------------------------------------
+# Reading a forest that is being written to
+# ---------------------------------------------------------------------------
+
+class TestTolerance:
+    def test_a_node_with_no_payload_still_gets_a_box(self):
+        # The builder runs against a live forest, so a node can lose its payload between the lineage walk
+        # and the label lookup. That should cost one label, not the frame.
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        broken = forest.create_node({}, parent_id=system)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=broken))
+        assert broken in built.refs
+        assert built.refs[broken].role == ""
+
+    def test_an_unknown_head_is_an_error_rather_than_an_empty_picture(self):
+        forest = Forest()
+        forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        with pytest.raises(KeyError):
+            chatgraph.build(forest, chatgraph.ViewState(head_node_id="no-such-node"))
