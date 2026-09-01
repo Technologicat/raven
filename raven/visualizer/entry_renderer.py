@@ -161,32 +161,29 @@ def compile_search_highlight_regexes(search_string):
 _search_highlight_color = "#ff0000"  # what a matched fragment is drawn in, inside an otherwise normally coloured title
 
 
-def apply_search_highlight(text, maybe_regex_case_sensitive, maybe_regex_case_insensitive, *, surrounding_color):
+def apply_search_highlight(text, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
     """Mark up the search-match fragments inside `text`, for the Markdown renderer.
 
     `text`: the title, as it should read when nothing matches.
     `maybe_regex_case_sensitive`, `maybe_regex_case_insensitive`: from `compile_search_highlight_regexes`,
         which see. Either may be `None`, and both are when no search is active — in which case `text`
         comes back unchanged, so no caller needs a special case for "no search".
-    `surrounding_color`: the colour the rest of the title is drawn in, as an RGBA tuple. Needed because
-        the markup has to re-open it after each highlight.
+
+    The colour of the *surrounding* text is not this function's business: pass it to the renderer as
+    `dpg_markdown.add_text(..., color=...)`, which colours whatever the markup does not, so the spans
+    inserted here still win where they apply.
 
     Returns the marked-up text. Comparing it against `text` says whether anything matched, which is
     worth doing: an unhighlighted title renders as plain text, which is much faster than Markdown.
     """
-    # Two things decide the shape of the markup, and both are easy to get wrong by simplifying:
-    #
-    #   - The renderer's font tags do not stack, so a highlight cannot be nested inside the tag setting
-    #     the title colour. It has to close that tag and re-open it afterwards, which is what
-    #     `surrounding_color` is for.
-    #   - The case-insensitive pass runs first. Its fragments are the all-lowercase ones (a fragment
-    #     carrying an uppercase letter is matched case-sensitively), so a fragment like "col" would
-    #     otherwise match inside a `<font color=...>` that an earlier substitution had inserted. Going
-    #     this way round, the only pass that sees inserted markup is the case-sensitive one, and its
-    #     fragments cannot match all-lowercase markup.
+    # The case-insensitive pass runs first. Its fragments are the all-lowercase ones (a fragment carrying
+    # an uppercase letter is matched case-sensitively), so a fragment like "col" would otherwise match
+    # inside a `<font color=...>` that an earlier substitution had inserted. Going this way round, the
+    # only pass that sees inserted markup is the case-sensitive one, and its fragments cannot match
+    # all-lowercase markup.
     for maybe_regex in (maybe_regex_case_insensitive, maybe_regex_case_sensitive):
         if maybe_regex:
             text = re.sub(maybe_regex,
-                          f"</font>**<font color='{_search_highlight_color}'>\\1</font>**<font color='{surrounding_color}'>",
+                          f"**<font color='{_search_highlight_color}'>\\1</font>**",
                           text)
     return text

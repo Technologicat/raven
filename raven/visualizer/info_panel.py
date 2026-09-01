@@ -1382,11 +1382,13 @@ def _update_info_panel(*, task_env=None, env=None):
                 # Item authors, year, title (with search result highlight, if any)
                 entry_title_text = entry_renderer.apply_search_highlight(entry.title,
                                                                          maybe_regex_case_sensitive,
-                                                                         maybe_regex_case_insensitive,
-                                                                         surrounding_color=title_color)
+                                                                         maybe_regex_case_insensitive)
                 if entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
-                    header = f"<font color='{title_color}'>{entry.author} ({entry.year}): {entry_title_text}</font>"
-                    entry_title_group = dpg_markdown.add_text(header, wrap=gui_config.title_wrap_w, parent=entry_title_container_group, tag=f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}")  # MD renderer renders into its own group
+                    header = f"{entry.author} ({entry.year}): {entry_title_text}"
+                    # The title colour goes to the renderer rather than into a `<font>` tag around the
+                    # source: an open tag on the same line as the content makes the whole thing one
+                    # CommonMark paragraph, and the highlight spans still win where they apply.
+                    entry_title_group = dpg_markdown.add_text(header, wrap=gui_config.title_wrap_w, parent=entry_title_container_group, tag=f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}", color=title_color)  # MD renderer renders into its own group
                     if is_search_match:
                         search_result_widgets_new.append(entry_title_container_group)
                         search_result_widget_to_display_idx_new[entry_title_container_group] = len(search_result_widgets_new) - 1

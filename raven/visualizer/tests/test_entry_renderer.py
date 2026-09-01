@@ -279,13 +279,10 @@ def test_a_digit_in_a_fragment_also_matches_its_sub_and_superscript_forms():
 # The markup the tooltip and the info panel both wrap a matched fragment in. It was written twice,
 # identically, before it lived here -- so these are the first assertions about it.
 
-WHITE = (255, 255, 255, 255)
 
-
-def highlighted(text, search_string, surrounding_color=WHITE):
+def highlighted(text, search_string):
     case_sensitive, case_insensitive = entry_renderer.compile_search_highlight_regexes(search_string)
-    return entry_renderer.apply_search_highlight(text, case_sensitive, case_insensitive,
-                                                 surrounding_color=surrounding_color)
+    return entry_renderer.apply_search_highlight(text, case_sensitive, case_insensitive)
 
 
 def test_a_title_with_no_search_running_is_left_exactly_as_it_was():
@@ -305,13 +302,15 @@ def test_a_matched_fragment_is_wrapped_in_its_own_colour():
     assert "<font color='#ff0000'>ablation</font>" in marked
 
 
-def test_the_surrounding_colour_is_closed_and_reopened_around_a_highlight():
-    # The renderer's font tags do not stack, so the highlight cannot nest inside the tag that colours
-    # the title -- it has to close that one and open it again afterwards. Getting this wrong leaves the
-    # rest of the title drawn in the highlight colour.
-    marked = highlighted("Laser ablation", "ablation", surrounding_color=WHITE)
-    assert marked.startswith("Laser </font>"), "the surrounding colour is closed where the highlight starts"
-    assert marked.endswith(f"<font color='{WHITE}'>"), "...and reopened where it ends"
+def test_the_markup_touches_only_the_matched_fragment():
+    # The surrounding text is left alone entirely: its colour reaches the renderer as
+    # `dpg_markdown.add_text(..., color=...)`, which colours whatever the markup does not. So there is no
+    # enclosing tag to close and reopen, and nothing outside the match may be rewritten.
+    marked = highlighted("Laser ablation", "ablation")
+    assert marked.startswith("Laser "), "the text before the match is untouched"
+    assert marked.endswith("**"), "the markup ends with the highlight, adding no trailing tag"
+    assert "</font>**<font" not in marked, "the close-and-reopen dance is gone"
+    assert marked.count("<font") == 1, "one span, for the match alone"
 
 
 def test_a_short_lowercase_fragment_does_not_match_the_markup_a_highlight_inserted():

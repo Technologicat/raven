@@ -338,11 +338,11 @@ def _render_worker(*, task_env, env=None):
                         # info panel, which renders the same markup for the same titles.
                         entry_title_text = entry_renderer.apply_search_highlight(entry.title,
                                                                                  maybe_regex_case_sensitive,
-                                                                                 maybe_regex_case_insensitive,
-                                                                                 surrounding_color=title_color)
+                                                                                 maybe_regex_case_insensitive)
                         if entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
-                            header = f"<font color='{title_color}'>{entry_title_text}</font>"
-                            dpg_markdown.add_text(header, wrap=gui_config.annotation_tooltip_w, parent=item_group, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}")  # MD renderer renders into its own group
+                            # Title colour to the renderer rather than into a `<font>` tag around the
+                            # source; see the same call in `info_panel`.
+                            dpg_markdown.add_text(entry_title_text, wrap=gui_config.annotation_tooltip_w, parent=item_group, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", color=title_color)  # MD renderer renders into its own group
                         else:  # plain text (much faster) when no highlighting needed
                             dpg.add_text(entry.title, color=title_color, wrap=0, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", parent=item_group)  # "A study of stuff..."
 
