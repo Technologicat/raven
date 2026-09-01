@@ -856,6 +856,18 @@ remaining work is the two features below plus the polish the four rules describe
      preference says. `TODO.md:662–663` and the road-mode notes have the two traps — the visibility term
      needs its own path rather than a term in the idle branch, and the switch keys on the idle detector,
      never on whether the video happens to be running, or it deadlocks against its own pause.
+   - **It should also cover startup** (Juha, 2026-09-01): the avatar takes a few seconds to appear after
+     the initial start call, and that gap currently shows nothing worth looking at. The graph filling it
+     is the same mechanism, not a new case.
+   - **Which suggests the condition, stated carefully.** The panel shows the graph when the preference
+     says so, *or* when the avatar is unavailable — where unavailable means **not yet producing frames**
+     or **the idle detector has switched it off**. Both of those are causes independent of what the panel
+     is currently showing. What must stay out of the condition is the pause that being *covered* causes,
+     which is downstream of the switch and would close the loop.
+   - Open, and needing a look rather than a decision: which signal means "producing frames".
+     `avatar_renderer.animator_running` goes True when the animator is *started*, which is before the
+     first frame arrives, so it is probably not the one. `fps_statistics` is fed per received frame and
+     may be the honest test.
 6. **The graph toggle is not persisted.** Every other checkbox in that row round-trips through
    `app_state`; this one reads `dpg.get_value` and writes nothing, so it is off again on restart. A key
    beside the others in `appstate.py`'s defaults (line ~44), read at build time for the checkbox's
