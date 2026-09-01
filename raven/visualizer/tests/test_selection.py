@@ -217,6 +217,24 @@ def test_an_empty_selection_clears_the_highlight(gui):
     assert gui.dpg.values[HIGHLIGHT_SERIES] == [[], []]
 
 
+@pytest.mark.parametrize("mode, argument", [("replace", []),
+                                            ("subtract", [0, 1, 2]),
+                                            ("intersect", [])])
+def test_an_emptied_selection_is_still_an_index_array(gui, mode, argument):
+    # NumPy types `np.array([])` as float64, so a selection emptied by any of these three modes came
+    # back as an array that raises when used to slice with -- which is the one thing a set of indices
+    # into `sorted_xxx` is for. Nothing indexed with it, every consumer checking the length first, so it
+    # never surfaced; it was still a float array being passed around under the name of an index array.
+    #
+    # "add" is absent because it cannot empty a selection.
+    selection.update([0, 1, 2])
+    selection.update(argument, mode=mode)
+    emptied = unbox(app_state.selection_data_idxs_box)
+    assert len(emptied) == 0, "this fixture is supposed to have emptied the selection"
+    assert gui.dataset.sorted_lowdim_data[emptied, 0].shape == (0,), \
+        f"a selection emptied by '{mode}' must still be usable as the index array it is"
+
+
 # --------------------------------------------------------------------------------
 # Undo history
 

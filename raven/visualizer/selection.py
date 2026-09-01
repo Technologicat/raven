@@ -200,6 +200,12 @@ def update(new_selection_data_idxs, mode="replace", *, force=False, wait=False, 
     #
     # Now `new_selection_data_idxs` contains the indices (to `sorted_xxx`) of datapoints
     # that comprise the final new selection, after accounting for `mode`.
+    #
+    # An emptied selection has to stay an *index* array: NumPy types `np.array([])` as float64, which
+    # raises when used to slice with. Every non-empty path above already yields int64, so this is the
+    # empty case only - and it can arrive through any mode except "add".
+    if not len(new_selection_data_idxs):
+        new_selection_data_idxs = common_utils.make_blank_index_array()
     final_new_set = set(new_selection_data_idxs)
 
     # Info panel scroll anchoring.
