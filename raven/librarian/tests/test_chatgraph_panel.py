@@ -9,6 +9,8 @@ A real DPG context is needed (the panel builds widgets) but no rendered frame an
 here asks about layout, and a mapped window would steal the keyboard from whoever is running the suite.
 """
 
+import time
+
 import pytest
 
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
@@ -179,21 +181,36 @@ class TestCommit:
     def test_going_home_abandons_the_preview(self, panel):
         built, forest, app_state, ids, calls = panel
         click(built, ids["not_taken"])
+        assert built._widget.get_highlighted_nodes(), "nothing was previewed, so clearing it proves nothing"
+
         built.go_to_head()
         assert built._chat_graph.spine == tuple(forest.linearize_up(app_state["HEAD"]))
-        # The preview mark is gone; what is lit instead is HEAD, flashed to say where the view landed.
-        assert built._widget.get_highlighted_nodes() == {app_state["HEAD"]}
         assert built._previewed_node_id is None, "the preview survived, so a click would commit it"
+        assert built._widget.get_highlighted_nodes() == set(), "the preview mark is still lit"
 
-    def test_the_flash_expires(self, panel):
-        # It has to, or the mark that means "a second click commits this" would be permanently lit on a
-        # box nobody previewed.
+    def test_going_home_flashes_where_it_landed(self, panel):
+        # The view slides and the zoom changes together, and HEAD is parked off-centre on purpose, so
+        # nothing about the motion says which box was the destination.
         built, forest, app_state, ids, calls = panel
         built.go_to_head()
-        assert built._widget.get_highlighted_nodes(), "nothing was flashed, so expiry proves nothing"
-        built._flash_until_ns = 0  # wind the clock past it rather than sleeping through it
-        built.render_frame(0)
-        assert built._widget.get_highlighted_nodes() == set()
+        highlight = built._widget._highlight
+        flashed = {element.internal_name for element in highlight._fading}
+        assert flashed == {app_state["HEAD"]}
+
+    def test_the_flash_fades_rather_than_switching_off(self, panel):
+        # Through the same fade-out a hover uses. Lighting a box and then cutting it reads as a glitch
+        # beside a hover that fades, which is what the first version of this did.
+        built, forest, app_state, ids, calls = panel
+        built.go_to_head()
+        highlight = built._widget._highlight
+        assert highlight.is_animating(), "the flash is not fading, so it can only be switching off"
+
+        # Wind its start time past the fade rather than sleeping through it.
+        element = next(iter(highlight._fading))
+        highlight._fading[element] = (time.monotonic_ns() - int(2e9 * highlight.fade_duration), 1.0)
+        highlight.update()
+        assert not highlight.is_animating()
+        assert built._widget.get_highlighted_nodes() == set(), "the fade left a permanent mark behind"
 
 
 # ---------------------------------------------------------------------------

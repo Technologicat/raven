@@ -21,7 +21,6 @@ __all__ = ["DPGChatGraphPanel"]
 import dataclasses
 import logging
 import threading
-import time
 import uuid
 from typing import Callable, Optional, Sequence, Tuple, Union
 
@@ -50,9 +49,6 @@ gui_config = librarian_config.gui_config
 _DEPTH_EXPANSION_FACTOR = 2
 
 _TOOLBAR_H = 34  # pixels, the row of view controls above the graph
-
-# How long a box stays marked when the view is sent somewhere and wants to say where, in seconds.
-_FLASH_DURATION = 1.5
 
 # Font atlas sizes for graph labels. The renderer picks whichever is closest to the size it is drawing at,
 # so this is a ladder rather than a choice: a label is legible at one zoom and unreadable at the next, and
@@ -134,7 +130,6 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # "did anything change?" test.
         self._seen_generation: Optional[int] = None
         self._seen_head: Optional[str] = None
-        self._flash_until_ns: Optional[int] = None
 
         self._commit_button_tag = f"chat_graph_commit_button_{self.gui_uuid}"  # tag
         self._dark_mode_button_tag = f"chat_graph_dark_mode_button_{self.gui_uuid}"  # tag
@@ -376,7 +371,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # Flash it. The view slides and the zoom changes at the same time, so "the box you were brought
         # back to" is not obvious from the motion alone -- and HEAD is deliberately off-centre here, which
         # removes the other cue.
-        self._flash(self._view_state.head_node_id)
+        self._widget.flash_nodes({self._view_state.head_node_id})
 
     def destroy(self) -> None:
         """Tear the panel down. Reverse of the order things were set up in."""
@@ -393,10 +388,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
         See `raven.common.gui.animation.Animation`.
         """
-        if self._is_shown:
-            self._expire_flash()
-            if self._is_stale():
-                self.refresh()
+        if self._is_shown and self._is_stale():
+            self.refresh()
         return gui_animation.action_continue
 
     def _is_stale(self) -> bool:
@@ -449,6 +442,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         """Preview a chat node — or commit to it, if it was already the previewed one."""
         with self._lock:
             already_previewed = (ref.node_id == self._previewed_node_id)
+            chat_graph = self._chat_graph
         if already_previewed:
             self._commit(ref.node_id)
             return
@@ -457,20 +451,29 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._previewed_node_id = ref.node_id
         self._enable_commit(True)
 
-        if ref.on_current_branch:
-            # There is a message for this node in the chat log, so the useful thing is to show it there.
-            # The picture does not move: the reader is already looking at the branch they are on.
-            self._apply_preview_highlight()
-            self._widget.pan_to_node(ref.node_id, animate=True)
-            if self._on_preview is not None:
-                self._on_preview(ref.node_id)
-        else:
-            # Nothing in the chat log corresponds to this node, so the graph is the only place it can be
-            # shown. Redraw around it, which also brings its siblings and its children into view -- those
-            # being what the reader is now choosing between.
+        # Two independent questions, and answering the second with the first is a bug this had:
+        #
+        #   - Is the node *drawn as part of the branch on screen*? That decides whether the picture has
+        #     to move. Off the drawn branch, it is shown only as somebody's sibling, and its own
+        #     continuation is a "...N more" -- so the graph redraws around it.
+        #   - Is there a *message in the chat log* for it? That is a question about HEAD's branch, since
+        #     the log shows that one and no other.
+        #
+        # They agree until a preview puts a different branch on screen. Then a node on HEAD's branch can
+        # be off the drawn one, and treating "there is a message for it" as "the picture already shows
+        # it" leaves the reader clicking a box whose conversation stays collapsed behind it.
+        on_drawn_branch = ref.node_id in set(chat_graph.spine) if chat_graph is not None else False
+
+        if not on_drawn_branch:
             with self._lock:
                 self._view_state.focus_node_id = ref.node_id
             self.refresh()
+        else:
+            self._apply_preview_highlight()
+            self._widget.pan_to_node(ref.node_id, animate=True)
+
+        if ref.on_current_branch and self._on_preview is not None:
+            self._on_preview(ref.node_id)
 
     def _move_sibling_window(self, ref: chatgraph.SiblingGapRef) -> None:
         """Re-centre one level's window on the middle of the run this gap hides."""
@@ -526,23 +529,6 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 dpg.enable_item(self._commit_button_tag)
             else:
                 dpg.disable_item(self._commit_button_tag)
-
-    def _flash(self, node_id: str) -> None:
-        """Mark a box for a moment, to say "this one".
-
-        Uses the same highlight channel as the preview mark, which is safe only because every caller
-        clears the preview first; a flash while something is previewed would erase the mark saying what a
-        second click is about to do.
-        """
-        self._widget.set_highlighted_nodes({node_id})
-        self._flash_until_ns = time.monotonic_ns() + int(_FLASH_DURATION * 1e9)
-
-    def _expire_flash(self) -> None:
-        """Clear a flash once its moment has passed. Called once per frame."""
-        if self._flash_until_ns is None or time.monotonic_ns() < self._flash_until_ns:
-            return
-        self._flash_until_ns = None
-        self._apply_preview_highlight()  # back to whatever the preview state says, which is usually nothing
 
     def _apply_preview_highlight(self) -> None:
         """Mark the previewed box, so what a second click would act on is on screen before it happens."""

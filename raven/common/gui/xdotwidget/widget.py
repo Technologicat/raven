@@ -62,7 +62,7 @@ class XDotWidget(gui_animation.Animation):
                  on_open_url: Optional[Callable[[str], None]] = None,
                  input_blocked: Optional[Callable[[], bool]] = None,
                  text_compaction_callback: Optional[Callable[[str, float], str]] = None,
-                 highlight_fade_duration: float = 2.0,
+                 highlight_fade_duration: float = 1.0,
                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
                  mouse_wheel_zoom_factor: float = 1.25,
                  dark_mode: bool = False,
@@ -189,6 +189,9 @@ class XDotWidget(gui_animation.Animation):
         # Used by the app layer to decide whether to preserve focus
         # across layout engine switches.
         self._focus_node_name: Optional[str] = None
+        # Where a left button went down, until it comes up again. A click is a press and a release with no
+        # drag between them, and only the release can know which it was.
+        self._pending_click_pos: Optional[Point] = None
 
         # Build DPG structure
         kwargs = {"parent": parent}
@@ -323,6 +326,19 @@ class XDotWidget(gui_animation.Animation):
     def get_highlighted_nodes(self) -> Set[str]:
         """Return the set of programmatically highlighted node IDs."""
         return self._highlight.get_highlighted_node_ids()
+
+    def flash_nodes(self, node_ids: Set[str]) -> None:
+        """Light the named nodes and let them fade, the way a hover fades when the cursor leaves.
+
+        For saying "here" about a view that has just moved. Nothing has to switch it off again: it is the
+        same fade-out hover uses, seeded at full intensity.
+        """
+        if self._graph is None:
+            return
+        elements = {node for node in (self._graph.get_node_by_name(name) for name in node_ids)
+                    if node is not None}
+        self._highlight.flash(elements)
+        self._needs_render = True
 
     def clear_highlights(self) -> None:
         """Clear all programmatic highlights."""
@@ -854,31 +870,21 @@ class XDotWidget(gui_animation.Animation):
 
         sx, sy = self._get_local_mouse_pos()
 
-        # Right-click on a URL node: open in browser, don't navigate.
+        # Right-click on a URL node: open in browser, don't navigate. Acted on at the press, since it
+        # begins no gesture a drag could turn into something else.
         if button == 1 and self._on_open_url is not None:
             element = hit_test_screen(self._graph, self._viewport, sx, sy)
             if isinstance(element, Node) and element.url:
                 self._on_open_url(element.url)
                 return
 
-        # Clear follow indicator on click (we're about to navigate away)
-        self._follow_indicator_pos = None
-
-        # Check edge-follow first (independent of hit test, so it works
-        # even when a node's bounding box overlaps the edge endpoint).
-        follow_target = self._get_edge_follow_target(sx, sy)
-        if follow_target is not None:
-            self._navigate_to_element(follow_target)
-            if self._on_click:
-                self._on_click(follow_target, button)
-            return
-
-        # Normal hit test
-        element = hit_test_screen(self._graph, self._viewport, sx, sy)
-        if element is not None:
-            self._navigate_to_element(element)
-            if self._on_click:
-                self._on_click(element, button)
+        # A left press is not yet a click. Acting here navigates on the press that *begins a drag*, and
+        # the drag then pans a view that has already jumped elsewhere. Worst when the press lands on an
+        # edge, whose click behaviour zooms to the edge's own bounding box -- two endpoints, so an enormous
+        # zoom -- leaving the reader with no idea where they are. Remembered here, acted on at release, and
+        # only if no drag happened in between.
+        if button == 0:
+            self._pending_click_pos = (sx, sy)
 
     def _nearest_edge_endpoint(self, sx: float, sy: float) -> Optional[Tuple[Edge, str]]:
         """Find the nearest edge endpoint within follow radius.
@@ -1021,8 +1027,34 @@ class XDotWidget(gui_animation.Animation):
         self.pan_by(frame_dx, frame_dy)
 
     def _on_mouse_release(self, sender, app_data) -> None:
-        """Handle mouse release."""
+        """Handle mouse release: where a left click is finally decided, and acted on."""
+        was_dragging = self._dragging
         self._dragging = False
+        pending = self._pending_click_pos
+        self._pending_click_pos = None
+
+        if was_dragging or pending is None or self._graph is None:
+            return  # a drag, or a press this widget never saw
+        if not self._input_allowed():
+            return
+
+        sx, sy = pending
+        self._follow_indicator_pos = None  # about to navigate away
+
+        # Edge-follow first, and independent of the hit test, so it works even where a node's bounding box
+        # overlaps the edge endpoint.
+        follow_target = self._get_edge_follow_target(sx, sy)
+        if follow_target is not None:
+            self._navigate_to_element(follow_target)
+            if self._on_click:
+                self._on_click(follow_target, 0)
+            return
+
+        element = hit_test_screen(self._graph, self._viewport, sx, sy)
+        if element is not None:
+            self._navigate_to_element(element)
+            if self._on_click:
+                self._on_click(element, 0)
 
     # -------------------------------------------------------------------------
     # Cleanup

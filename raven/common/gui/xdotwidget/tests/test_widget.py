@@ -196,8 +196,39 @@ def test_a_click_hands_over_the_element_rather_than_a_caption(widget, monkeypatc
     monkeypatch.setattr(widget, "_get_local_mouse_pos",
                         lambda: widget._viewport.graph_to_screen(target.x1 + 8.0, target.y1 + 8.0))
 
+    # Press and release, because a click is both: acting on the press alone would navigate on the press
+    # that begins a drag.
     widget._on_mouse_click(None, 0)
+    assert received == [], "the press alone acted; a drag starting here would navigate before it panned"
+    widget._on_mouse_release(None, 0)
     assert received == [(target, 0)], "the click did not arrive as the node that was hit"
+
+
+def test_a_drag_does_not_navigate(widget, monkeypatch):
+    """The reason clicks moved to the release.
+
+    A press that turns into a drag used to navigate first and pan afterwards, so the view jumped somewhere
+    and was then dragged from there. Worst on an edge, where the click behaviour zooms to the edge's own
+    bounding box — two endpoints, so a zoom deep enough to lose the graph entirely.
+    """
+    received = []
+    widget._on_click = lambda element, button: received.append(element)
+    widget.zoom_to_fit(animate=False)
+    zoom_before = widget.get_zoom()
+
+    target = widget.get_graph().get_node_by_name("b1")
+    monkeypatch.setattr(widget, "_input_allowed", lambda: True)
+    monkeypatch.setattr(widget, "_is_mouse_inside", lambda: True)
+    monkeypatch.setattr(widget, "_get_local_mouse_pos",
+                        lambda: widget._viewport.graph_to_screen(target.x1 + 8.0, target.y1 + 8.0))
+
+    widget._on_mouse_click(None, 0)          # press on the node
+    widget._on_mouse_drag(None, (0, 40, 40))  # ...then drag: first report only arms the tracking
+    widget._on_mouse_drag(None, (0, 80, 80))  # ...and this one actually pans
+    widget._on_mouse_release(None, 0)
+
+    assert received == [], "the drag was treated as a click"
+    assert widget.get_zoom() == zoom_before, "the drag changed the zoom"
 
 
 def test_a_hover_hands_over_the_element_too(widget, monkeypatch):

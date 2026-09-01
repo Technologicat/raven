@@ -93,6 +93,19 @@ class HighlightState:
         """Return the set of programmatically highlighted node IDs."""
         return set(self._programmatic_node_ids)
 
+    def flash(self, elements: Set[Element]) -> None:
+        """Light `elements` and let them fade out, the way a hover does when the cursor leaves.
+
+        Not the same as `set_highlighted`, which stays lit until something clears it. A flash says "this
+        one, here" about a view that has just moved, and the saying is over in a moment -- so it is seeded
+        directly into the fade-out that hover already uses, rather than lit and then switched off, which
+        reads as a glitch beside a hover that fades.
+        """
+        now = time.monotonic_ns()
+        with self._fading_lock:
+            for element in elements:
+                self._fading[element] = (now, 1.0)
+
     def set_highlighted(self, elements: Set[Element]) -> None:
         """Set the programmatically highlighted elements by element reference.
 
