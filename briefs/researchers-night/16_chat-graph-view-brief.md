@@ -783,6 +783,29 @@ Three things came out of it, and only the first is clearly a feature:
 3. **Auxiliary buttons drawn near a node**, as the general answer to "this view needs verbs". Open, and
    the largest of the three — it wants deciding what the verbs are before deciding they are buttons.
 
+### Panel sizing on a wide screen, and the constraint underneath it
+
+Raised 2026-09-01 (Juha), for discussion. **Not demo-critical** — Researchers' Night runs at 1080p — but it
+matters for daily use.
+
+Widen the window towards 4K and the extra width goes largely to the chat log, where the graph would use it
+better. The obstacle is that the graph shares its rect with the avatar, and **the avatar cannot simply grow:
+its cost is O(pixels), so a bigger panel is a bigger per-frame bill for the same character.**
+
+Three directions, none chosen:
+
+- **Cap the chat log's width.** Worth considering on its own merits rather than as a way to feed the graph:
+  a chat log 1800 px wide is *harder* to read than one at 900, the eye losing the start of the next line —
+  which is why typography has a measure at all. Surplus width then goes right by default.
+- **Let the two occupants of the rect be different sizes.** They are alternatives, never both on screen, so
+  nothing forces the graph to inherit the avatar's dimensions. The split could move when the graph is
+  shown.
+- **Cap what the avatar *renders* and letterbox it.** Then the panel is free to grow while the character
+  costs what it costs today. Cheapest of the three in compute and the most work in plumbing.
+
+The first two are compatible and could both apply. The third is the one that makes the *avatar* panel
+growable, which the other two deliberately avoid needing.
+
 ## Where this stands, end of 2026-09-01
 
 The view is built, wired into Librarian, and has been driven live several times. It is *usable* — the
