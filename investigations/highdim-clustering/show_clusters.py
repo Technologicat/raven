@@ -154,6 +154,9 @@ def main():
                              "Visualizer's own `clusters_keyword_method='llm'` prompt")
     parser.add_argument("--backend-url", default=None,
                         help="LLM backend to use for --llm-keywords, overriding the configured one")
+    parser.add_argument("--max-prompt-entries", type=int, default=60,
+                        help="cap on how many of a cluster's entries go into its keyword prompt "
+                             "(default 60); the ones nearest the cluster centre are kept")
     args = parser.parse_args()
 
     vectors, model_name = clusterlab.load_vectors(args.vectors)
@@ -224,11 +227,26 @@ def main():
 
     keywords_by_cluster = {}
     if args.llm_keywords:
-        # Every member goes to the model, not just the ones printed below: the keywords are meant to
-        # describe the cluster, and a sample of eight would describe the sample.
-        texts_by_cluster = {int(cid): [clusterlab.format_for_keyword_extraction(*entries[i])
-                                       for i in np.flatnonzero(labels == cid)]
-                            for cid in np.unique(labels[labels >= 0])}
+        # Every member goes to the model where the cluster is small enough, because the keywords are meant
+        # to describe the cluster and a sample of the three titles printed below would describe the sample.
+        # A big cluster cannot: on a crowded corpus the largest runs to hundreds of entries, and with
+        # abstracts attached that is a prompt of a quarter of a million tokens. So the biggest clusters are
+        # capped, keeping the entries nearest the centre - the ones that most define what the cluster is
+        # about, which is the question being asked. Clusters at or below the cap are unaffected, and on the
+        # corpora here that is most of them.
+        texts_by_cluster = {}
+        capped = []
+        for cid in np.unique(labels[labels >= 0]):
+            members = np.flatnonzero(labels == cid)
+            if len(members) > args.max_prompt_entries:
+                center = clusterlab.normalize(original[members].mean(axis=0, keepdims=True))
+                members = members[np.argsort(-(original[members] @ center[0]))][:args.max_prompt_entries]
+                capped.append(int(cid))
+            texts_by_cluster[int(cid)] = [clusterlab.format_for_keyword_extraction(*entries[i])
+                                          for i in members]
+        if capped:
+            print(f"{len(capped)} cluster(s) capped at {args.max_prompt_entries} entries for keywording: "
+                  f"{capped}", file=sys.stderr)
         keywords_by_cluster = llm_keywords_for_clusters(texts_by_cluster, backend_url=args.backend_url)
 
     # Print clusters largest first, and within a cluster the titles closest to its centre, so that the

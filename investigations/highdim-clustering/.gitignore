@@ -6,3 +6,7 @@
 # Regenerate with the `show_clusters.py` commands in README.md.
 clusters_raw_eom_5_1.txt
 clusters_centered_eom_5_1.txt
+
+# AOKK keyword dumps carry that corpus's titles too, so they stay local for the same reason as
+# the two above.
+aokk_*.txt
