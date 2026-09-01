@@ -4,3 +4,80 @@ cluster 4 (46 entries)
             first six: Axially moving viscoelastic beams, nonlinear vibrations, dynamic stability, parametric resonance, viscoelastic strings, transverse vibrations
             the tail : geometric nonlinearity, time-dependent tension, internal damping, moving belts, bifurcation analysis, traveling plates, vibration control, axially accelerating systems, flexible moving structures
 
+cluster 14 (37 entries)
+    twelve [10]: Axially moving membranes and plates, Structural dynamics, Vibration analysis, Dynamic stability, Fluid-structure interaction, Buckling phenomena, Orthotropic materials, Finite element method, Continuum mechanics, Transverse vibrations
+    fifteen[15]: Axially moving membranes, Axially moving plates, Structural stability, Vibration analysis, Fluid-structure interaction, Dynamic instability, Nonlinear vibrations, Buckling phenomena, Finite element method, Axial tension, Orthotropic materials, Transient dynamics, Continuum mechanics, Spectral element formulation, Ideal fluid
+            first six: Axially moving membranes, Axially moving plates, Structural stability, Vibration analysis, Fluid-structure interaction, Dynamic instability
+            the tail : Nonlinear vibrations, Buckling phenomena, Finite element method, Axial tension, Orthotropic materials, Transient dynamics, Continuum mechanics, Spectral element formulation, Ideal fluid
+
+cluster 23 (34 entries)
+    twelve [12]: Latin hypercube sampling, experimental design, uncertainty analysis, computer experiments, space-filling designs, orthogonal arrays, correlation control, sensitivity analysis, Monte Carlo simulation, convergence properties, asymptotic theory, optimization algorithms
+    fifteen[13]: Latin hypercube sampling, experimental design, computer experiments, uncertainty analysis, sensitivity analysis, space-filling designs, optimal designs, orthogonal arrays, correlation control, stratified sampling, variance reduction, design of experiments, model input sampling
+            first six: Latin hypercube sampling, experimental design, computer experiments, uncertainty analysis, sensitivity analysis, space-filling designs
+            the tail : optimal designs, orthogonal arrays, correlation control, stratified sampling, variance reduction, design of experiments, model input sampling
+
+cluster 18 (31 entries)
+    twelve [12]: Paper mechanics, Viscoelasticity, Orthotropy, Anisotropy, Plasticity, Fracture resistance, Fiber orientation, Hygro-viscoelasticity, Deformation properties, Elastic constants, Fibrous networks, Paperboard
+    fifteen[14]: Paper, Mechanical properties, Deformation, Viscoelasticity, Elasticity, Plasticity, Fracture, Orthotropy, Fiber orientation, Anisotropy, Stress-strain behavior, Material characterization, Hygro-viscoelasticity, Constitutive modeling
+            first six: Paper, Mechanical properties, Deformation, Viscoelasticity, Elasticity, Plasticity
+            the tail : Fracture, Orthotropy, Fiber orientation, Anisotropy, Stress-strain behavior, Material characterization, Hygro-viscoelasticity, Constitutive modeling
+
+cluster 12 (24 entries)
+    twelve [11]: Moving webs, Web dynamics, Stability analysis, Axially moving webs, Viscoelasticity, Web tension, Vibration analysis, Web handling systems, Fluid-structure interaction, Mathematical modeling, Paper processing
+    fifteen[15]: Moving webs, Axially moving webs, Web dynamics, Web stability, Web instability, Viscoelastic webs, Web vibration, Web handling systems, Web tension, Web fracture, Fluid-structure interaction, Web modeling, Travelling webs, Aerodynamic flutter, Nonlinear vibrations
+            first six: Moving webs, Axially moving webs, Web dynamics, Web stability, Web instability, Viscoelastic webs
+            the tail : Web vibration, Web handling systems, Web tension, Web fracture, Fluid-structure interaction, Web modeling, Travelling webs, Aerodynamic flutter, Nonlinear vibrations
+
+cluster 1 (21 entries)
+    twelve [10]: Fracture mechanics, Fatigue crack growth, Crack propagation, Stress intensity factors, Stochastic fatigue modeling, Structural integrity, Cyclic loading, Fracture analysis, Damage mechanics, Reliability engineering
+    fifteen[14]: Fracture mechanics, Fatigue crack growth, Crack propagation, Stochastic modeling, Random loading, Stress intensity factor, Cyclic loading, Reliability analysis, Nonlinear fracture mechanics, Size effect, Markov models, Numerical fracture analysis, Fatigue fracture, Limit load
+            first six: Fracture mechanics, Fatigue crack growth, Crack propagation, Stochastic modeling, Random loading, Stress intensity factor
+            the tail : Cyclic loading, Reliability analysis, Nonlinear fracture mechanics, Size effect, Markov models, Numerical fracture analysis, Fatigue fracture, Limit load
+
+cluster 15 (17 entries)
+    twelve [11]: Uncertainty Visualization, Spatial Data Visualization, Geospatial Data, Uncertain Data, Data Visualization, Visualization Techniques, Spatial Data Quality, Uncertainty Representation, Geospatial Information, Information Visualization, Model Uncertainty
+    fifteen[15]: Uncertainty Visualization, Spatial Data Visualization, Geospatial Data, Data Visualization, Uncertain Data, Spatial Analysis, Visualization Techniques, Geospatial Information, Data Visualization Methods, Uncertainty Representation, Model Uncertainty, Spatial Visualization, Data Quality, Exploratory Data Analysis, Spatially-Referenced Data
+            first six: Uncertainty Visualization, Spatial Data Visualization, Geospatial Data, Data Visualization, Uncertain Data, Spatial Analysis
+            the tail : Visualization Techniques, Geospatial Information, Data Visualization Methods, Uncertainty Representation, Model Uncertainty, Spatial Visualization, Data Quality, Exploratory Data Analysis, Spatially-Referenced Data
+
+cluster 27 (17 entries)
+    twelve [12]: Free vibration, rectangular plates, in-plane vibration, orthotropic plates, exact solutions, plate theory, structural dynamics, thin plates, vibration analysis, analytical methods, Kirchhoff plates, structural mechanics
+    fifteen[14]: free vibration, rectangular plates, in-plane vibration, exact solutions, orthotropic plates, thin plates, vibration analysis, boundary conditions, elastic plates, symplectic method, wave propagation method, viscoelastic plates, plane stress vibration, plate mechanics
+            first six: free vibration, rectangular plates, in-plane vibration, exact solutions, orthotropic plates, thin plates
+            the tail : vibration analysis, boundary conditions, elastic plates, symplectic method, wave propagation method, viscoelastic plates, plane stress vibration, plate mechanics
+
+cluster 9 (14 entries)
+    twelve [10]: Aeroelastic flutter, Sheet flutter, Panel flutter, Plate flutter, Paper flutter, Web flutter, Fluid-structure interaction, Aeroelastic instability, Axial flow, Analytical modeling
+    fifteen[15]: Flutter, Aeroelasticity, Panel flutter, Sheet flutter, Plate flutter, Fluid-structure interaction, Axial flow, Aerodynamic instability, Moving webs, Incompressible flow, Aeroelastic stability, Analytical modelling, Cantilevered plate, Paper flutter, Subsonic flow
+            first six: Flutter, Aeroelasticity, Panel flutter, Sheet flutter, Plate flutter, Fluid-structure interaction
+            the tail : Axial flow, Aerodynamic instability, Moving webs, Incompressible flow, Aeroelastic stability, Analytical modelling, Cantilevered plate, Paper flutter, Subsonic flow
+
+cluster 10 (14 entries)
+    twelve [ 9]: Design of Computer Experiments, Sensitivity Analysis, Uncertainty Analysis, Sampling Methods, Response Surface Methodology, Robust Design, Optimal Experimental Design, Computational Simulations, Parameter Selection
+    fifteen[14]: Sensitivity Analysis, Uncertainty Analysis, Computer Experiments, Design of Experiments, Sampling Methods, Optimal Design, Robust Design, Response Surface Generation, Computational Simulations, Uncertainty Quantification, Sequential Design, Orthogonal Arrays, Parameter Sensitivity, Model Analysis
+            first six: Sensitivity Analysis, Uncertainty Analysis, Computer Experiments, Design of Experiments, Sampling Methods, Optimal Design
+            the tail : Robust Design, Response Surface Generation, Computational Simulations, Uncertainty Quantification, Sequential Design, Orthogonal Arrays, Parameter Sensitivity, Model Analysis
+
+cluster 24 (13 entries)
+    twelve [12]: Paper webs, web breaks, runnability, wet web, papermaking, web tension, mechanical properties, mathematical modeling, dynamic behaviour, paper structure, machine-direction tension, productivity
+    fifteen[14]: Paper webs, Papermaking, Wet webs, Web breaks, Web tension, Runnability, Web dynamics, Mathematical modeling, Mechanical properties, Paper structure, Rheological behavior, Paper machine operation, Tension profile, Process optimization
+            first six: Paper webs, Papermaking, Wet webs, Web breaks, Web tension, Runnability
+            the tail : Web dynamics, Mathematical modeling, Mechanical properties, Paper structure, Rheological behavior, Paper machine operation, Tension profile, Process optimization
+
+cluster 5 (12 entries)
+    twelve [12]: Finite Element Method, Finite Element Analysis, Computational Mechanics, Numerical Methods, Partial Differential Equations, Computational Fluid Dynamics, Variational Methods, Linear Static Analysis, Dynamic Analysis, Diffuse Approximation, Eulerian-Lagrangian Methods, Engineering Simulation
+    fifteen[15]: Finite Element Method, Finite Element Analysis, Partial Differential Equations, Computational Mechanics, Computational Fluid Dynamics, Finite Element Theory, Variational Problems, Diffuse Approximation, Eulerian Methods, Lagrangian Methods, Flow Problems, Elliptic Problems, Static Analysis, Dynamic Analysis, Numerical Methods
+            first six: Finite Element Method, Finite Element Analysis, Partial Differential Equations, Computational Mechanics, Computational Fluid Dynamics, Finite Element Theory
+            the tail : Variational Problems, Diffuse Approximation, Eulerian Methods, Lagrangian Methods, Flow Problems, Elliptic Problems, Static Analysis, Dynamic Analysis, Numerical Methods
+
+==============================================================================
+asked for twelve: mean returned 10.9
+asked for fifteen: mean returned 14.4
+
+distinctiveness, twelve-run positions 1-12: 0.82
+distinctiveness, fifteen-run positions 1-12: 0.81
+distinctiveness, fifteen-run positions 13-15: 0.97
+   (a fall from the head to positions 13-15 is what padding would look like)
+
+grounding in the cluster's own titles, positions 1-12: 0.87
+grounding in the cluster's own titles, positions 13-15: 0.76

@@ -1,0 +1,83 @@
+cluster 31 (140 entries)
+    twelve [12]: Physics-Informed Neural Networks, Partial Differential Equations, Scientific Machine Learning, Surrogate Modeling, Reduced Order Models, Operator Learning, Computational Fluid Dynamics, Inverse Problems, Deep Learning, Finite Element Method, Neural Operators, PDE Solvers
+    fifteen[15]: Physics-Informed Neural Networks, Partial Differential Equations, Scientific Machine Learning, Deep Learning, Surrogate Modeling, Reduced Order Models, Operator Learning, Computational Fluid Dynamics, Inverse Problems, Model Reduction, Neural Galerkin, Uncertainty Quantification, Hybrid Numerical Methods, Deep Neural Networks, PDE Surrogates
+            first six: Physics-Informed Neural Networks, Partial Differential Equations, Scientific Machine Learning, Deep Learning, Surrogate Modeling, Reduced Order Models
+            the tail : Operator Learning, Computational Fluid Dynamics, Inverse Problems, Model Reduction, Neural Galerkin, Uncertainty Quantification, Hybrid Numerical Methods, Deep Neural Networks, PDE Surrogates
+
+cluster 13 (125 entries)
+    twelve [12]: Phase-field modeling, Fracture mechanics, Crack propagation, Fatigue fracture, Damage modeling, Computational mechanics, Brittle fracture, Ductile fracture, Chemo-mechanical coupling, Numerical simulation, Concrete structures, Multiphysics analysis
+    fifteen[15]: Phase-field modeling, Fracture mechanics, Damage modeling, Fatigue simulation, Crack propagation, Computational fracture, Material degradation, Crack initiation, Cyclic loading, Chemo-mechanical modeling, Multiphysics simulation, Structural integrity, Numerical modeling, Crack nucleation, Concrete durability
+            first six: Phase-field modeling, Fracture mechanics, Damage modeling, Fatigue simulation, Crack propagation, Computational fracture
+            the tail : Material degradation, Crack initiation, Cyclic loading, Chemo-mechanical modeling, Multiphysics simulation, Structural integrity, Numerical modeling, Crack nucleation, Concrete durability
+
+cluster 0 (121 entries)
+    twelve [12]: Computational Fluid Dynamics, Aerodynamics, Wind Turbines, Aircraft Design, Aerostructural Optimization, Fluid-Structure Interaction, High-Lift Systems, Active Flow Control, Turbulence Modeling, Sustainable Aviation, Hybrid-Electric Propulsion, Morphing Wings
+    fifteen[15]: Computational Fluid Dynamics, Aerodynamics, Wind Turbines, Aircraft Design, High-Aspect Ratio Wings, Active Flow Control, Multidisciplinary Optimization, Sustainable Aviation, Turbulence Modeling, Global Stability Analysis, Aerostructural Design, Load Alleviation, Hybrid-Electric Propulsion, Flow Separation Control, Boundary Layer Dynamics
+            first six: Computational Fluid Dynamics, Aerodynamics, Wind Turbines, Aircraft Design, High-Aspect Ratio Wings, Active Flow Control
+            the tail : Multidisciplinary Optimization, Sustainable Aviation, Turbulence Modeling, Global Stability Analysis, Aerostructural Design, Load Alleviation, Hybrid-Electric Propulsion, Flow Separation Control, Boundary Layer Dynamics
+
+cluster 26 (118 entries)
+    twelve [12]: Cardiovascular modeling, Hemodynamics, Fluid-structure interaction, Patient-specific simulation, Computational fluid dynamics, Finite element method, Blood flow, Atherosclerosis, Cerebral aneurysm, Heart valve, Stent deployment, Digital twin
+    fifteen[15]: Cardiovascular hemodynamics, Computational fluid dynamics, Fluid-structure interaction, Patient-specific modeling, Blood flow simulation, Atherosclerosis progression, Cerebral aneurysms, Heart valve mechanics, In-stent restenosis, Multiscale modeling, Agent-based modeling, Growth and remodeling, Non-Newtonian blood rheology, Image-based biomechanics, Medical device simulation
+            first six: Cardiovascular hemodynamics, Computational fluid dynamics, Fluid-structure interaction, Patient-specific modeling, Blood flow simulation, Atherosclerosis progression
+            the tail : Cerebral aneurysms, Heart valve mechanics, In-stent restenosis, Multiscale modeling, Agent-based modeling, Growth and remodeling, Non-Newtonian blood rheology, Image-based biomechanics, Medical device simulation
+
+cluster 27 (112 entries)
+    twelve [12]: Large Eddy Simulation, Turbulent Flows, Computational Fluid Dynamics, Machine Learning, Subgrid-Scale Models, Spectral Element Methods, Turbulent Combustion, High-Order Numerical Methods, Data-Driven Modeling, Turbulence Closure Models, Hybrid RANS-LES, Scale-Resolving Simulations
+    fifteen[15]: Large Eddy Simulation, Turbulence Modeling, Computational Fluid Dynamics, Subgrid-Scale Closure Models, High-Order Numerical Methods, Data-Driven Modeling, Machine Learning Surrogates, Combustion Simulation, Compressible Flow, Wall-Modeling Techniques, Reduced-Order Modeling, Reynolds-Averaged Navier-Stokes, Spectral-Hp Element Methods, Adaptive Mesh Refinement, High-Performance Computing
+            first six: Large Eddy Simulation, Turbulence Modeling, Computational Fluid Dynamics, Subgrid-Scale Closure Models, High-Order Numerical Methods, Data-Driven Modeling
+            the tail : Machine Learning Surrogates, Combustion Simulation, Compressible Flow, Wall-Modeling Techniques, Reduced-Order Modeling, Reynolds-Averaged Navier-Stokes, Spectral-Hp Element Methods, Adaptive Mesh Refinement, High-Performance Computing
+
+cluster 45 (93 entries)
+    twelve [12]: Topology Optimization, Additive Manufacturing, Structural Optimization, Stress Constraints, Multi-material Optimization, Lattice Structures, Manufacturability Constraints, Density-based Optimization, Level Set Method, Composite Materials, Lightweight Design, Machine Learning
+    fifteen[15]: Topology Optimization, Structural Optimization, Additive Manufacturing, Multi-Material Optimization, Stress-Constrained Optimization, Level Set Method, Density-Based Optimization, Lattice Structures, Manufacturing Constraints, Machine Learning, Isogeometric Analysis, Thermal-Structural Optimization, Compliant Mechanisms, Homogenization, Shape Optimization
+            first six: Topology Optimization, Structural Optimization, Additive Manufacturing, Multi-Material Optimization, Stress-Constrained Optimization, Level Set Method
+            the tail : Density-Based Optimization, Lattice Structures, Manufacturing Constraints, Machine Learning, Isogeometric Analysis, Thermal-Structural Optimization, Compliant Mechanisms, Homogenization, Shape Optimization
+
+cluster 24 (77 entries)
+    twelve [12]: Additive Manufacturing, Numerical Simulation, Phase-Field Modeling, Microstructure Evolution, Thermal History, Residual Stress, Finite Element Analysis, Machine Learning, Multiscale Modeling, Dendrite Growth, Sintering, Melt Pool Dynamics
+    fifteen[15]: Additive manufacturing, numerical simulation, microstructure evolution, phase-field modeling, thermal-mechanical analysis, powder bed fusion, fused deposition modeling, melt pool dynamics, residual stress, machine learning, deep learning, computational acceleration, grain growth, solidification, finite element method
+            first six: Additive manufacturing, numerical simulation, microstructure evolution, phase-field modeling, thermal-mechanical analysis, powder bed fusion
+            the tail : fused deposition modeling, melt pool dynamics, residual stress, machine learning, deep learning, computational acceleration, grain growth, solidification, finite element method
+
+cluster 5 (73 entries)
+    twelve [12]: Reduced Order Models, Model Order Reduction, Parametric Partial Differential Equations, Scientific Machine Learning, Computational Fluid Dynamics, Fluid-Structure Interaction, Proper Orthogonal Decomposition, Non-intrusive Model Reduction, Real-time Simulation, Uncertainty Quantification, Structural Mechanics, Deep Learning-based ROMs
+    fifteen[15]: Model Order Reduction, Reduced Order Models, Computational Fluid Dynamics, Deep Learning, Parametric Partial Differential Equations, Proper Orthogonal Decomposition, Data-Driven Methods, Hyper-Reduction, Fluid-Structure Interaction, Finite Element Method, Turbulence, Operator Inference, Spectral Submanifolds, Nonlinear Systems, Machine Learning
+            first six: Model Order Reduction, Reduced Order Models, Computational Fluid Dynamics, Deep Learning, Parametric Partial Differential Equations, Proper Orthogonal Decomposition
+            the tail : Data-Driven Methods, Hyper-Reduction, Fluid-Structure Interaction, Finite Element Method, Turbulence, Operator Inference, Spectral Submanifolds, Nonlinear Systems, Machine Learning
+
+cluster 25 (67 entries)
+    twelve [10]: Multiphase flow, Diffuse-interface models, Phase-field methods, Fluid-structure interaction, Interface capturing, Numerical discretization, Surface tension, Contact line dynamics, Phase transition, Compressible flow
+    fifteen[12]: Multiphase flows, Two-phase flows, Fluid-structure interaction, Diffuse-interface models, Phase-field methods, Level-set method, Volume-of-fluid method, Phase change, Surface tension, Contact line dynamics, Adaptive mesh refinement, Computational fluid dynamics
+            first six: Multiphase flows, Two-phase flows, Fluid-structure interaction, Diffuse-interface models, Phase-field methods, Level-set method
+            the tail : Volume-of-fluid method, Phase change, Surface tension, Contact line dynamics, Adaptive mesh refinement, Computational fluid dynamics
+
+cluster 36 (67 entries)
+    twelve [12]: Mechanical metamaterials, acoustic metamaterials, lattice structures, unit cell design, topology optimization, multiscale modeling, computational homogenization, wave propagation control, vibration attenuation, additive manufacturing, programmable materials, band gap engineering
+    fifteen[15]: Mechanical metamaterials, lattice structures, topology optimization, computational homogenization, multiscale modeling, wave propagation, band gaps, model order reduction, programmable metamaterials, additive manufacturing, vibration control, phononic crystals, energy dissipation, inverse design, smart materials
+            first six: Mechanical metamaterials, lattice structures, topology optimization, computational homogenization, multiscale modeling, wave propagation
+            the tail : band gaps, model order reduction, programmable metamaterials, additive manufacturing, vibration control, phononic crystals, energy dissipation, inverse design, smart materials
+
+cluster 14 (62 entries)
+    twelve [12]: Composite materials, Finite element analysis, Continuum damage mechanics, Phase-field fracture, Multiscale modeling, Uncertainty quantification, Fatigue modeling, Hygro-mechanical coupling, Stochastic analysis, Machine learning in materials, Wood mechanics, Delamination analysis
+    fifteen[12]: Computational mechanics, finite element analysis, fiber-reinforced polymers, progressive damage modeling, fracture mechanics, multiscale simulation, stochastic material modeling, phase-field modeling, cohesive zone modeling, wood and timber composites, hygro-mechanical coupling, uncertainty quantification
+            first six: Computational mechanics, finite element analysis, fiber-reinforced polymers, progressive damage modeling, fracture mechanics, multiscale simulation
+            the tail : stochastic material modeling, phase-field modeling, cohesive zone modeling, wood and timber composites, hygro-mechanical coupling, uncertainty quantification
+
+cluster 81 (58 entries)
+    twelve [12]: Physics-informed neural networks, Constitutive modeling, Multiscale modeling, Computational homogenization, Surrogate models, Topology optimization, Metamaterials, Inverse design, Graph neural networks, Finite element method, Machine learning, Deep learning
+    fifteen[15]: Physics-informed neural networks, Constitutive modeling, Machine learning, Multiscale modeling, Computational homogenization, Topology optimization, Metamaterials, Graph neural networks, Surrogate modeling, Inverse design, Material modeling, Finite element analysis, Generative models, Physics-augmented neural networks, Architected materials
+            first six: Physics-informed neural networks, Constitutive modeling, Machine learning, Multiscale modeling, Computational homogenization, Topology optimization
+            the tail : Metamaterials, Graph neural networks, Surrogate modeling, Inverse design, Material modeling, Finite element analysis, Generative models, Physics-augmented neural networks, Architected materials
+
+==============================================================================
+asked for twelve: mean returned 11.8
+asked for fifteen: mean returned 14.5
+
+distinctiveness, twelve-run positions 1-12: 0.66
+distinctiveness, fifteen-run positions 1-12: 0.65
+distinctiveness, fifteen-run positions 13-15: 0.87
+   (a fall from the head to positions 13-15 is what padding would look like)
+
+grounding in the cluster's own titles, positions 1-12: 0.92
+grounding in the cluster's own titles, positions 13-15: 0.97

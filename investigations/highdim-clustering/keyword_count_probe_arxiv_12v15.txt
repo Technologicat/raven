@@ -1,0 +1,83 @@
+cluster 1 (52 entries)
+    twelve [10]: Large Language Models, AI Alignment, Model Reasoning, Self-Correction, Evaluation, Benchmarking, LLM-as-a-Judge, Fairness, Prompt Politeness, Small Language Models
+    fifteen[15]: Large Language Models, Reasoning, Planning, Alignment, Safety, Model Evaluation, Self-Correction, Algorithmic Fairness, Prompt Sensitivity, Machine Psychology, Causal Inference, Small Language Models, Emergent Abilities, Benchmarking, Generative AI
+            first six: Large Language Models, Reasoning, Planning, Alignment, Safety, Model Evaluation
+            the tail : Self-Correction, Algorithmic Fairness, Prompt Sensitivity, Machine Psychology, Causal Inference, Small Language Models, Emergent Abilities, Benchmarking, Generative AI
+
+cluster 18 (45 entries)
+    twelve [12]: Diffusion Models, Image Synthesis, Text-to-Image Generation, Latent Diffusion Models, Stable Diffusion, Consistency Models, Negative Prompts, Control Networks, Adversarial Distillation, SDE Solvers, ODE Solvers, Prompt Tuning
+    fifteen[14]: Diffusion Models, Text-to-Image Generation, Image Synthesis, Stable Diffusion, Latent Diffusion Models, Consistency Models, Prompt Tuning, Model Distillation, Conditional Generation, Image Editing, Super-Resolution, Data Privacy, ODE Solvers, Classifier-Free Guidance
+            first six: Diffusion Models, Text-to-Image Generation, Image Synthesis, Stable Diffusion, Latent Diffusion Models, Consistency Models
+            the tail : Prompt Tuning, Model Distillation, Conditional Generation, Image Editing, Super-Resolution, Data Privacy, ODE Solvers, Classifier-Free Guidance
+
+cluster 23 (45 entries)
+    twelve [10]: Chain-of-Thought Reasoning, Large Language Models, Logical Reasoning, Mathematical Reasoning, Symbolic Reasoning, Reasoning Faithfulness, Latent Reasoning, Test-Time Compute, Reasoning Evaluation, Interpretability
+    fifteen[15]: Chain-of-Thought Reasoning, Large Language Models, Step-by-Step Reasoning, Mathematical Reasoning, Logical Reasoning, Faithfulness, Latent Reasoning, Test-Time Compute, Inference Scaling, Prompting, Problem Solving, Reasoning Evaluation, Algorithmic Reasoning, Search Strategies, Reasoning Robustness
+            first six: Chain-of-Thought Reasoning, Large Language Models, Step-by-Step Reasoning, Mathematical Reasoning, Logical Reasoning, Faithfulness
+            the tail : Latent Reasoning, Test-Time Compute, Inference Scaling, Prompting, Problem Solving, Reasoning Evaluation, Algorithmic Reasoning, Search Strategies, Reasoning Robustness
+
+cluster 52 (41 entries)
+    twelve [12]: AI Safety, AI Alignment, Agentic AI, Power-Seeking, AI Consciousness, Existential Risk, AI Evaluation, Benchmarking, AI Welfare, Mechanistic Interpretability, Mesa-Optimization, AI Risk
+    fifteen[12]: AI safety, AI alignment, AI risk, AI agents, existential risk, AI governance, AI consciousness, AI benchmarking, AI interpretability, power-seeking AI, AI ethics, machine learning safety
+            first six: AI safety, AI alignment, AI risk, AI agents, existential risk, AI governance
+            the tail : AI consciousness, AI benchmarking, AI interpretability, power-seeking AI, AI ethics, machine learning safety
+
+cluster 28 (35 entries)
+    twelve [12]: Reinforcement Learning from Human Feedback, Large Language Models, Preference Optimization, AI Alignment, Reward Modeling, AI Safety, Direct Preference Optimization, Reward Misspecification, Language Model Alignment, Reinforcement Learning, Goal Misgeneralization, Reward Hacking
+    fifteen[13]: Reinforcement Learning from Human Feedback, Preference Optimization, AI Alignment, Reward Modeling, Large Language Models, Human Preferences, Reward Hacking, Direct Preference Optimization, AI Safety, Reward Misspecification, Goodhart's Law, Preference Learning, Language Model Alignment
+            first six: Reinforcement Learning from Human Feedback, Preference Optimization, AI Alignment, Reward Modeling, Large Language Models, Human Preferences
+            the tail : Reward Hacking, Direct Preference Optimization, AI Safety, Reward Misspecification, Goodhart's Law, Preference Learning, Language Model Alignment
+
+cluster 9 (33 entries)
+    twelve [12]: Large Language Models, AI Safety, AI Alignment, Adversarial Attacks, Jailbreak Attacks, Prompt Injection, Data Poisoning, Backdoor Attacks, Red-teaming, Safety Fine-tuning, Harmful Content Generation, Model Subversion
+    fifteen[14]: Large Language Models, Adversarial Attacks, Jailbreaking, Prompt Injection, Safety Alignment, Data Poisoning, LLM Security, Adversarial Prompts, Red Teaming, Backdoor Attacks, Model Robustness, Refusal Mechanisms, Safety Evaluation, Alignment Failures
+            first six: Large Language Models, Adversarial Attacks, Jailbreaking, Prompt Injection, Safety Alignment, Data Poisoning
+            the tail : LLM Security, Adversarial Prompts, Red Teaming, Backdoor Attacks, Model Robustness, Refusal Mechanisms, Safety Evaluation, Alignment Failures
+
+cluster 25 (32 entries)
+    twelve [12]: Reinforcement Learning, Large Language Models, Reasoning, Chain-of-Thought, Verifiable Rewards, Test-Time Scaling, Long-Context Reasoning, Multimodal Reasoning, Self-Evolution, Search-Augmented Reasoning, Open-Source Frameworks, Agentic AI
+    fifteen[15]: Reinforcement Learning, Large Language Models, Reasoning, Reinforcement Learning with Verifiable Rewards, Chain-of-Thought Reasoning, Post-Training, AI Agents, Multimodal LLMs, Long-Context Reasoning, Test-Time Scaling, Policy Optimization, Reward Models, Self-Evolving Models, Open-Source Frameworks, Large Reasoning Models
+            first six: Reinforcement Learning, Large Language Models, Reasoning, Reinforcement Learning with Verifiable Rewards, Chain-of-Thought Reasoning, Post-Training
+            the tail : AI Agents, Multimodal LLMs, Long-Context Reasoning, Test-Time Scaling, Policy Optimization, Reward Models, Self-Evolving Models, Open-Source Frameworks, Large Reasoning Models
+
+cluster 38 (32 entries)
+    twelve [12]: Deep learning, Generalization, Over-parameterization, Interpolation, Double descent, Neural tangent kernel, Lottery ticket hypothesis, Implicit regularization, Mode connectivity, Training dynamics, Inductive bias, VC dimension
+    fifteen[15]: Generalization, Overparameterization, Double Descent, Neural Tangent Kernel, Stochastic Gradient Descent, Lottery Ticket Hypothesis, Mode Connectivity, Implicit Regularization, Training Dynamics, Inductive Bias, Learning Curves, VC-dimension, Interpolation, Loss Landscape, Deep Learning Theory
+            first six: Generalization, Overparameterization, Double Descent, Neural Tangent Kernel, Stochastic Gradient Descent, Lottery Ticket Hypothesis
+            the tail : Mode Connectivity, Implicit Regularization, Training Dynamics, Inductive Bias, Learning Curves, VC-dimension, Interpolation, Loss Landscape, Deep Learning Theory
+
+cluster 30 (29 entries)
+    twelve [12]: Transformers, Self-attention, Long sequence modeling, Linear attention, Sparse attention, Memory-efficient attention, Fast attention kernels, Sequence modeling, Attention mechanisms, Computational efficiency, FlashAttention, Recurrent networks
+    fifteen[15]: Transformers, Self-attention, Long sequences, Linear attention, Memory efficiency, FlashAttention, Computational complexity, Sequence modeling, Large language models, Efficient inference, Attention mechanisms, Transformer architecture, Recurrent neural networks, Fast Weight Programmers, Sparse attention
+            first six: Transformers, Self-attention, Long sequences, Linear attention, Memory efficiency, FlashAttention
+            the tail : Computational complexity, Sequence modeling, Large language models, Efficient inference, Attention mechanisms, Transformer architecture, Recurrent neural networks, Fast Weight Programmers, Sparse attention
+
+cluster 7 (28 entries)
+    twelve [12]: Theoretical physics, Astrophysics, Cosmology, General relativity, Black holes, Wormholes, Gravitational waves, SETI, Space exploration, Mathematical physics, Quantum mechanics, Symbolic regression
+    fifteen[14]: Astrophysics, Cosmology, General Relativity, Black Holes, Wormholes, Warp Drives, Space Exploration, Space Propulsion, Astrobiology, Gravitational Waves, SETI, Early Universe, Solar System Dynamics, Theoretical Physics
+            first six: Astrophysics, Cosmology, General Relativity, Black Holes, Wormholes, Warp Drives
+            the tail : Space Exploration, Space Propulsion, Astrobiology, Gravitational Waves, SETI, Early Universe, Solar System Dynamics, Theoretical Physics
+
+cluster 13 (24 entries)
+    twelve [12]: Transformers, In-context learning, Chain of thought, Compositional reasoning, Expressivity bounds, Computational complexity, Mechanistic interpretability, Induction heads, Feed-forward layers, Layer normalization, Autoregressive models, Formal logic
+    fifteen[15]: Transformers, In-context learning, Chain of thought, Compositionality, Expressivity, Computational complexity, Induction heads, Feed-forward layers, Training dynamics, Mechanistic interpretability, Logic, Automata, Optimization, Attention mechanism, Formal analysis
+            first six: Transformers, In-context learning, Chain of thought, Compositionality, Expressivity, Computational complexity
+            the tail : Induction heads, Feed-forward layers, Training dynamics, Mechanistic interpretability, Logic, Automata, Optimization, Attention mechanism, Formal analysis
+
+cluster 20 (19 entries)
+    twelve [10]: Continual learning, Lifelong learning, Meta-learning, Fast adaptation, Catastrophic forgetting, Reinforcement learning, Meta-reinforcement learning, Few-shot learning, Non-stationary learning, Incremental learning
+    fifteen[12]: Meta-learning, Continual learning, Lifelong learning, Fast adaptation, Few-shot learning, Catastrophic forgetting, Reinforcement learning, Sequential learning, Memory-based learning, Neural network consolidation, Adaptive systems, Online learning
+            first six: Meta-learning, Continual learning, Lifelong learning, Fast adaptation, Few-shot learning, Catastrophic forgetting
+            the tail : Reinforcement learning, Sequential learning, Memory-based learning, Neural network consolidation, Adaptive systems, Online learning
+
+==============================================================================
+asked for twelve: mean returned 11.5
+asked for fifteen: mean returned 14.1
+
+distinctiveness, twelve-run positions 1-12: 0.83
+distinctiveness, fifteen-run positions 1-12: 0.83
+distinctiveness, fifteen-run positions 13-15: 1.00
+   (a fall from the head to positions 13-15 is what padding would look like)
+
+grounding in the cluster's own titles, positions 1-12: 0.77
+grounding in the cluster's own titles, positions 13-15: 0.50

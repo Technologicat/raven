@@ -122,24 +122,35 @@ largest corpus here — so neither crowding nor size predicts this. What AOKK ha
 search**: every cluster is about AI in education, so `generative ai` and `educational technology` recur
 by construction. Hydrogen production is a broad application domain spanning many subfields.
 
-**Ten covers every measured case, and the count to ship is twelve or fifteen** — pending the fifteen
-measurement across all five corpora, in flight 2026-09-01. Twelve is safe on the evidence already in:
-the model returns ~11.8 of twelve without padding, so the cost over ten is small.
+**Ten covers every measured case. Ship fifteen** — measured on all five corpora, 2026-09-01, with the
+same result on every one.
 
-**Fifteen looks better than expected, on AOKK.** Asked for fifteen it returned 14.2 on average — nine
-clusters of twelve gave all fifteen, three gave twelve, so it stops when it runs out rather than
-padding. And **positions 13–15 are *more* distinctive than 1–12** (0.52 against 0.40), which is the
-opposite of padding and the same effect the IDF finding describes seen from the other end: the model
-front-loads the general terms, so what it adds last is what is specific to this cluster. The extra
-three land exactly where the design wants them.
+| corpus | asked 12 → returned | asked 15 → returned | distinctiveness 1–12 | **distinctiveness 13–15** |
+|---|---|---|---|---|
+| arXiv AI | 11.5 | 14.1 | 0.83 | **1.00** |
+| ECCOMAS | 11.8 | 14.5 | 0.65 | **0.87** |
+| AOKK | 11.8 | 14.2 | 0.40 | **0.52** |
+| hydrogen 1–3 | 11.2 | 14.3 | 0.66 | 0.68 |
+| banichuk | 10.9 | 14.4 | 0.81 | **0.97** |
 
-*Grounding falls 0.97 → 0.85 across that boundary, the one number pointing the other way. Not read as
-invention: the check is near-saturated at these cluster sizes, and a keyword abstracting over the
-titles rather than quoting them is a good keyword. Recorded rather than buried.*
+**Positions 13–15 are more distinctive than 1–12 on all five, without exception.** That is the opposite
+of padding, and it is the IDF finding seen from the other end: the model front-loads the general terms,
+so whatever it adds last is what is specific to that cluster. The extra three land exactly where the
+design wants them. Hydrogen is the narrowest margin (+0.02, effectively flat) and still not negative.
 
-The decision waits for the other four corpora because twelve itself rests on five and fifteen so far
-rests on one (Juha, 2026-09-01). "Qwen tolerates fifteen" is a sufficient claim, this being the model
-Raven runs — it does not need to hold for models in general.
+**It never pads to fill the quota.** Asked for fifteen it returns 14.1–14.5 on every corpus; asked for
+twelve, 10.9–11.8. Roughly `n − 0.7` either way, which is the shape of a model answering with what it
+has rather than with what it was asked for.
+
+*Grounding across that boundary is mixed — it falls on arXiv (0.77 → 0.50), banichuk and AOKK, and holds
+on ECCOMAS and hydrogen. Not read as invention. The check is near-saturated where clusters are large,
+and arXiv's are the smallest here at 52 members, so its haystack is smallest and an abstraction over the
+titles has least chance of appearing verbatim — which is what a good keyword often is. Recorded rather
+than buried, being the one measure not pointing the same way.*
+
+The claim being made is **"Qwen3.6 tolerates fifteen"**, and that is sufficient: it is the model Raven
+runs (Juha, 2026-09-01). It need not hold for models in general, and the failure if a future one pads is
+not silent — see the note above on malformed versus merely wrong.
 
 *What none of this bounds: all five corpora are English-language and STEM-ish, which is where this work
 happens. A corpus narrower than AOKK would push the requirement higher and nothing here says by how

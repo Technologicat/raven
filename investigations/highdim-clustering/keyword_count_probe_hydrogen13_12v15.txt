@@ -1,0 +1,83 @@
+cluster 9 (1864 entries)
+    twelve [10]: Photocatalytic hydrogen production, Water splitting, Heterojunction photocatalysts, Solar-driven hydrogen evolution, Visible light photocatalysis, Semiconductor nanocomposites, Charge separation, Cocatalysts, Carbon nanomaterials, Photoelectrochemical cells
+    fifteen[15]: Photocatalytic hydrogen production, Water splitting, Solar hydrogen, Heterojunctions, Nanocomposites, Photocatalysts, Photoelectrochemical water splitting, Visible light, Charge separation, Cocatalysts, Semiconductor nanomaterials, Graphitic carbon nitride, Titanium dioxide, Hydrogen evolution, Solar energy
+            first six: Photocatalytic hydrogen production, Water splitting, Solar hydrogen, Heterojunctions, Nanocomposites, Photocatalysts
+            the tail : Photoelectrochemical water splitting, Visible light, Charge separation, Cocatalysts, Semiconductor nanomaterials, Graphitic carbon nitride, Titanium dioxide, Hydrogen evolution, Solar energy
+
+cluster 12 (1855 entries)
+    twelve [ 9]: Biohydrogen production, Dark fermentation, Anaerobic fermentation, Wastewater treatment, Biomass valorization, Microbial communities, Process optimization, Substrate pretreatment, Thermophilic fermentation
+    fifteen[12]: Biohydrogen production, Dark fermentation, Anaerobic fermentation, Organic waste valorization, Operational parameters, Microbial consortia, Thermophilic fermentation, Hydraulic retention time, Volatile fatty acids, Substrate pretreatment, Reactor optimization, Wastewater treatment
+            first six: Biohydrogen production, Dark fermentation, Anaerobic fermentation, Organic waste valorization, Operational parameters, Microbial consortia
+            the tail : Thermophilic fermentation, Hydraulic retention time, Volatile fatty acids, Substrate pretreatment, Reactor optimization, Wastewater treatment
+
+cluster 40 (723 entries)
+    twelve [12]: Hydrogen production, Green hydrogen, Hydrogen economy, Hydrogen storage, Renewable energy, Life cycle assessment, Techno-economic analysis, Hydrogen supply chain, Decarbonization, Electrolysis, Sustainable energy, Hydrogen fuel cells
+    fifteen[15]: Hydrogen production, Green hydrogen, Renewable energy, Hydrogen storage, Supply chain optimization, Life cycle assessment, Techno-economic analysis, Hydrogen economy, Decarbonization, Electrolysis, Energy carrier, Fuel cells, Sustainability assessment, Hydrogen infrastructure, Cost reduction
+            first six: Hydrogen production, Green hydrogen, Renewable energy, Hydrogen storage, Supply chain optimization, Life cycle assessment
+            the tail : Techno-economic analysis, Hydrogen economy, Decarbonization, Electrolysis, Energy carrier, Fuel cells, Sustainability assessment, Hydrogen infrastructure, Cost reduction
+
+cluster 16 (600 entries)
+    twelve [12]: Biohydrogen production, Photobiological hydrogen production, Photofermentation, Biophotolysis, Chlamydomonas reinhardtii, Rhodobacter sphaeroides, Photobioreactors, Nutrient deprivation, Photosynthetic bacteria, Wastewater treatment, Green algae, Genetic engineering
+    fifteen[15]: Biohydrogen production, Photobiological hydrogen, Photofermentation, Photosynthetic bacteria, Purple non-sulfur bacteria, Microalgae, Cyanobacteria, Photobioreactors, Nutrient deprivation, Wastewater treatment, Hydrogen yield, Chlamydomonas, Rhodobacter, Rhodopseudomonas, Metabolic engineering
+            first six: Biohydrogen production, Photobiological hydrogen, Photofermentation, Photosynthetic bacteria, Purple non-sulfur bacteria, Microalgae
+            the tail : Cyanobacteria, Photobioreactors, Nutrient deprivation, Wastewater treatment, Hydrogen yield, Chlamydomonas, Rhodobacter, Rhodopseudomonas, Metabolic engineering
+
+cluster 36 (543 entries)
+    twelve [12]: Hydrogen production, Steam reforming, Autothermal reforming, Ethanol reforming, Methanol reforming, Glycerol reforming, Bio-oil reforming, Nickel catalysts, Fuel cell applications, Process modeling, Thermodynamic analysis, Microreactor design
+    fifteen[15]: Hydrogen production, Steam reforming, Catalytic reforming, Ethanol steam reforming, Methanol steam reforming, Glycerol reforming, Bio-oil, Ni-based catalysts, Autothermal reforming, Fuel cell applications, Renewable hydrogen, Catalyst optimization, Thermodynamic analysis, Microreactor design, Sustainable energy
+            first six: Hydrogen production, Steam reforming, Catalytic reforming, Ethanol steam reforming, Methanol steam reforming, Glycerol reforming
+            the tail : Bio-oil, Ni-based catalysts, Autothermal reforming, Fuel cell applications, Renewable hydrogen, Catalyst optimization, Thermodynamic analysis, Microreactor design, Sustainable energy
+
+cluster 37 (540 entries)
+    twelve [12]: Green hydrogen production, Water electrolysis, Renewable energy integration, Techno-economic analysis, Solar photovoltaic, Wind energy, Hybrid energy systems, Hydrogen storage, System optimization, Decarbonization, Sustainable energy transition, Electrolyzer technologies
+    fifteen[15]: Green hydrogen production, Water electrolysis, Renewable energy, Photovoltaic systems, Wind power, Techno-economic analysis, Hybrid energy systems, Electrolyzer optimization, Capacity sizing, Power-to-hydrogen, Hydrogen storage, Energy modeling, Location assessment, Decarbonization, Hydrogen economy
+            first six: Green hydrogen production, Water electrolysis, Renewable energy, Photovoltaic systems, Wind power, Techno-economic analysis
+            the tail : Hybrid energy systems, Electrolyzer optimization, Capacity sizing, Power-to-hydrogen, Hydrogen storage, Energy modeling, Location assessment, Decarbonization, Hydrogen economy
+
+cluster 1 (426 entries)
+    twelve [12]: Hydrogen production, Membrane reactor, Steam reforming, Methane reforming, Hydrogen purification, Process modeling, Techno-economic analysis, Palladium membrane, Low-carbon hydrogen, Catalyst, Fuel cell, Distributed hydrogen production
+    fifteen[15]: Hydrogen production, Membrane reactors, Catalytic membrane reactors, Steam reforming, Methane reforming, Palladium membranes, Process modeling, Techno-economic analysis, Low-carbon hydrogen, Decarbonization, Catalyst optimization, Hydrogen purification, Thermodynamic analysis, Distributed hydrogen production, Syngas production
+            first six: Hydrogen production, Membrane reactors, Catalytic membrane reactors, Steam reforming, Methane reforming, Palladium membranes
+            the tail : Process modeling, Techno-economic analysis, Low-carbon hydrogen, Decarbonization, Catalyst optimization, Hydrogen purification, Thermodynamic analysis, Distributed hydrogen production, Syngas production
+
+cluster 47 (399 entries)
+    twelve [10]: Hydrogen production, Biomass gasification, Supercritical water gasification, Thermochemical conversion, Syngas production, Catalytic gasification, Co-gasification, Techno-economic analysis, Renewable hydrogen, Process optimization
+    fifteen[15]: Hydrogen production, Biomass gasification, Supercritical water gasification, Thermochemical conversion, Syngas production, Catalytic gasification, Techno-economic analysis, Biohydrogen, Co-gasification, Steam gasification, Carbon capture, Process simulation, Exergy analysis, Municipal solid waste gasification, Waste-to-hydrogen
+            first six: Hydrogen production, Biomass gasification, Supercritical water gasification, Thermochemical conversion, Syngas production, Catalytic gasification
+            the tail : Techno-economic analysis, Biohydrogen, Co-gasification, Steam gasification, Carbon capture, Process simulation, Exergy analysis, Municipal solid waste gasification, Waste-to-hydrogen
+
+cluster 34 (311 entries)
+    twelve [12]: Biohydrogen production, Dark fermentation, Photo-fermentation, Microalgae, Cyanobacteria, Biomass, Wastewater, Metabolic engineering, Genetic engineering, Bioreactors, Nanomaterials, Hydrogen economy
+    fifteen[15]: Biohydrogen production, dark fermentation, photofermentation, microalgae, cyanobacteria, biomass, wastewater, metabolic engineering, genetic engineering, bioreactor design, clean energy, hydrogen economy, process optimization, enzymatic hydrogen production, sustainable energy
+            first six: Biohydrogen production, dark fermentation, photofermentation, microalgae, cyanobacteria, biomass
+            the tail : wastewater, metabolic engineering, genetic engineering, bioreactor design, clean energy, hydrogen economy, process optimization, enzymatic hydrogen production, sustainable energy
+
+cluster 25 (300 entries)
+    twelve [12]: Water electrolysis, Hydrogen production, Green hydrogen, Electrocatalysts, Water splitting, PEM electrolysis, Renewable energy, Hydrogen evolution reaction, Oxygen evolution reaction, Seawater electrolysis, Electrolyzer, Alkaline electrolysis
+    fifteen[15]: Hydrogen production, Water electrolysis, Electrocatalysis, Green hydrogen, Hydrogen evolution reaction, Oxygen evolution reaction, PEM electrolysis, Alkaline electrolysis, Seawater electrolysis, Renewable energy integration, Catalyst design, Energy efficiency, Decoupled water electrolysis, Photoelectrocatalysis, Hybrid water splitting
+            first six: Hydrogen production, Water electrolysis, Electrocatalysis, Green hydrogen, Hydrogen evolution reaction, Oxygen evolution reaction
+            the tail : PEM electrolysis, Alkaline electrolysis, Seawater electrolysis, Renewable energy integration, Catalyst design, Energy efficiency, Decoupled water electrolysis, Photoelectrocatalysis, Hybrid water splitting
+
+cluster 27 (253 entries)
+    twelve [10]: Hydrogen Evolution Reaction, Electrocatalytic Hydrogen Production, Electrochemical Water Splitting, Non-Precious Metal Electrocatalysts, Transition Metal Compounds, Coupled Anodic Reactions, Heterostructure Engineering, Single-Atom Catalysts, Green Hydrogen, Energy-Saving Electrolysis
+    fifteen[13]: Hydrogen Evolution Reaction, Water Electrolysis, Green Hydrogen Production, Non-precious Metal Electrocatalysts, Heterojunction Nanomaterials, Single-atom Catalysts, Coupled Electrosynthesis, Energy-efficient Hydrogen Generation, Transition Metal Compounds, Alternative Anodic Reactions, Electrochemical Water Splitting, Nanostructured Electrocatalysts, Reformed Water Electrolysis
+            first six: Hydrogen Evolution Reaction, Water Electrolysis, Green Hydrogen Production, Non-precious Metal Electrocatalysts, Heterojunction Nanomaterials, Single-atom Catalysts
+            the tail : Coupled Electrosynthesis, Energy-efficient Hydrogen Generation, Transition Metal Compounds, Alternative Anodic Reactions, Electrochemical Water Splitting, Nanostructured Electrocatalysts, Reformed Water Electrolysis
+
+cluster 29 (242 entries)
+    twelve [12]: Hydrogen production, Thermochemical cycles, Copper-chlorine cycle, Exergy analysis, Solar energy, Geothermal energy, Nuclear energy, Polygeneration systems, Organic Rankine cycle, Water electrolysis, Thermodynamic analysis, Process optimization
+    fifteen[12]: Hydrogen production, Thermochemical cycles, Copper-chlorine cycle, Solar thermal energy, Geothermal energy, Nuclear energy, Exergy analysis, Thermodynamic analysis, Polygeneration systems, Water electrolysis, Waste heat recovery, Exergoeconomic optimization
+            first six: Hydrogen production, Thermochemical cycles, Copper-chlorine cycle, Solar thermal energy, Geothermal energy, Nuclear energy
+            the tail : Exergy analysis, Thermodynamic analysis, Polygeneration systems, Water electrolysis, Waste heat recovery, Exergoeconomic optimization
+
+==============================================================================
+asked for twelve: mean returned 11.2
+asked for fifteen: mean returned 14.3
+
+distinctiveness, twelve-run positions 1-12: 0.66
+distinctiveness, fifteen-run positions 1-12: 0.66
+distinctiveness, fifteen-run positions 13-15: 0.68
+   (a fall from the head to positions 13-15 is what padding would look like)
+
+grounding in the cluster's own titles, positions 1-12: 0.98
+grounding in the cluster's own titles, positions 13-15: 0.97
