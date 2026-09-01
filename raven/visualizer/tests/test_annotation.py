@@ -123,6 +123,94 @@ def prime_mouse_at(gui, position):
 
 
 # --------------------------------------------------------------------------------
+# How one item is decorated
+#
+# The tooltip's whole vocabulary: a reader glances at it and reads, per item, whether it is in the info
+# panel, whether it is selected, and whether the search found it. Pure, so it needs none of the fixtures
+# above.
+
+def marks(*, in_info_panel=False, in_selection=False, search_active=False, is_search_match=False):
+    return annotation.decorate_item(in_info_panel=in_info_panel, in_selection=in_selection,
+                                    search_active=search_active, is_search_match=is_search_match)
+
+
+def test_an_item_in_the_info_panel_gets_the_filled_clipboard(gui):
+    m = marks(in_info_panel=True, in_selection=True)
+    assert m.selection_status is annotation.ITEM_IN_INFO_PANEL
+    assert m.selection_mark_is_solid, "the filled glyph and the solid font are one difference, not two"
+
+
+def test_an_item_not_in_the_info_panel_gets_the_empty_clipboard(gui):
+    m = marks(in_info_panel=False, in_selection=True)
+    assert m.selection_status is annotation.ITEM_SELECTED
+    assert not m.selection_mark_is_solid
+
+
+def test_a_selected_item_outside_the_panel_is_told_apart_from_an_unselected_one(gui):
+    assert marks(in_selection=True).selection_status is annotation.ITEM_SELECTED
+    assert marks(in_selection=False).selection_status is annotation.ITEM_NOT_SELECTED
+    assert marks(in_selection=True).selection_mark_color != marks(in_selection=False).selection_mark_color
+
+
+def test_an_item_in_the_panel_but_out_of_the_selection_keeps_the_panel_glyph_and_loses_the_colour(gui):
+    # This is the disagreement that shows while the panel is updating: the old content stays on screen
+    # until the new is ready, so it can still list items the new selection has dropped. The icon says
+    # "in the panel" either way, and the colour is what reports it.
+    listed_and_selected = marks(in_info_panel=True, in_selection=True)
+    listed_only = marks(in_info_panel=True, in_selection=False)
+    assert listed_only.selection_mark_glyph == listed_and_selected.selection_mark_glyph
+    assert listed_only.selection_status is listed_and_selected.selection_status
+    assert listed_only.selection_mark_color != listed_and_selected.selection_mark_color
+
+
+def test_no_search_mark_is_drawn_when_no_search_is_running(gui):
+    m = marks(search_active=False)
+    assert m.search_mark_color is None, "no colour means no magnifying glass at all, not a colourless one"
+    assert m.search_status is annotation.ITEM_SEARCH_OFF
+
+
+def test_a_search_match_and_a_non_match_are_told_apart(gui):
+    matched = marks(search_active=True, is_search_match=True)
+    missed = marks(search_active=True, is_search_match=False)
+    assert matched.search_status is annotation.ITEM_SEARCH_MATCH
+    assert missed.search_status is annotation.ITEM_SEARCH_NOMATCH
+    assert matched.search_mark_color != missed.search_mark_color
+
+
+def test_a_non_matching_item_is_dimmed_while_a_search_runs(gui):
+    # The titles the search did not find stay visible but recede, so the tooltip still says what is under
+    # the cursor while making the answer to the query obvious.
+    assert marks(search_active=True, is_search_match=False).title_color != \
+        marks(search_active=True, is_search_match=True).title_color
+
+
+def test_every_title_is_at_full_brightness_when_no_search_is_running(gui):
+    # Negative control for the test above: dimming is what a search does, so with none running the two
+    # would-be cases have to agree. Without this, a `decorate_item` that dimmed by `is_search_match`
+    # alone would satisfy everything above.
+    assert marks(search_active=False, is_search_match=False).title_color == \
+        marks(search_active=False, is_search_match=True).title_color
+    assert marks(search_active=False).title_color == marks(search_active=True, is_search_match=True).title_color
+
+
+def test_an_item_in_the_panel_can_be_jumped_to(gui):
+    # Right-clicking the plot scrolls the info panel to an item under the cursor, and the tooltip shows
+    # the help line for that only when there is one to jump to.
+    assert annotation.is_jumpable(marks(in_info_panel=True, in_selection=True))
+
+
+def test_an_item_outside_the_panel_cannot_be_jumped_to(gui):
+    # There is nothing in the panel to scroll to.
+    assert not annotation.is_jumpable(marks(in_info_panel=False, in_selection=True))
+
+
+def test_an_item_the_search_did_not_find_cannot_be_jumped_to(gui):
+    # It is dimmed rather than offered as a destination, even though it is listed in the panel.
+    assert not annotation.is_jumpable(marks(in_info_panel=True, search_active=True, is_search_match=False))
+    assert annotation.is_jumpable(marks(in_info_panel=True, search_active=True, is_search_match=True))
+
+
+# --------------------------------------------------------------------------------
 # The plot highlight, which `update` does immediately rather than in the background
 
 def test_the_datapoints_under_the_cursor_are_highlighted_at_once(gui):
@@ -244,6 +332,20 @@ def test_the_list_of_shown_items_is_emptied_when_the_cursor_is_over_nothing(gui)
     # click acts on items that are no longer on screen.
     annotation.data_idxs.extend([1, 3])
     gui.at_mouse["idxs"] = np.array([], dtype=np.int64)
+    run_worker()
+    assert annotation.data_idxs == []
+
+
+@pytest.mark.parametrize("guard", ["modal", "outside_the_plot"])
+def test_the_list_of_shown_items_is_emptied_by_every_path_that_takes_the_tooltip_down(gui, monkeypatch, guard):
+    # The same reasoning as the test above, and the reason it is parameterized: three paths hide the
+    # tooltip, and `data_idxs` describes what the tooltip is showing, so all three have to agree. Two of
+    # them used to return before clearing it.
+    if guard == "modal":
+        monkeypatch.setattr(app_state, "is_any_modal_window_visible", lambda: True, raising=False)
+    else:
+        monkeypatch.setattr(app_state, "mouse_inside_plot_widget", lambda: False, raising=False)
+    annotation.data_idxs.extend([1, 3])
     run_worker()
     assert annotation.data_idxs == []
 

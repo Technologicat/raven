@@ -27,6 +27,12 @@ via `from . import info_panel`.
 
 __all__ = ["content_lock",
            "data_idxs",
+
+           "ITEM_IN_INFO_PANEL", "ITEM_SELECTED", "ITEM_NOT_SELECTED",
+           "ITEM_SEARCH_MATCH", "ITEM_SEARCH_NOMATCH", "ITEM_SEARCH_OFF",
+           "decorate_item",
+           "is_jumpable",
+
            "build_window",
            "update",
            "clear_mouse_hover",
@@ -71,6 +77,92 @@ _build_number = 0  # Sequence number of the last completed tooltip build.
 _current_group = None  # DPG widget ID of the group currently holding the tooltip content (set by `build_window`, reassigned on each successful swap in `_render_worker`).
 
 _task_manager = None  # bgtask.TaskManager, lazily created on first `update` call (needs `app_state.bg`).
+
+
+# --------------------------------------------------------------------------------
+# How one item is decorated in the tooltip
+#
+# Interned, so these compare identical to a `sym` of the same name made anywhere else.
+
+ITEM_IN_INFO_PANEL = sym("ininfo")
+ITEM_SELECTED = sym("selected")
+ITEM_NOT_SELECTED = sym("notselected")
+ITEM_SEARCH_MATCH = sym("match")
+ITEM_SEARCH_NOMATCH = sym("nomatch")
+ITEM_SEARCH_OFF = sym("searchoff")
+
+_ICON_COLOR_ACTIVE = (120, 180, 255)  # blue: this item is in the selection
+_ICON_COLOR_INACTIVE = (80, 80, 80)  # very dark gray: it is not
+_ICON_COLOR_SEARCH_MATCH = (180, 255, 180)  # "search green"
+_TITLE_COLOR_NORMAL = (255, 255, 255, 255)
+_TITLE_COLOR_DIMMED = (140, 140, 140, 255)  # a search is running and this item is not one of its results
+
+
+def decorate_item(*, in_info_panel, in_selection, search_active, is_search_match):
+    """Decide how one item in the tooltip is decorated, from what is true about it.
+
+    `in_info_panel`: whether the item is currently listed in the info panel.
+    `in_selection`: whether it is in the current selection.
+    `search_active`: whether a search is running at all.
+    `is_search_match`: whether it is one of that search's results. Ignored when no search is running.
+
+    Returns an `env` with:
+        `title_color`: RGBA for the item's title.
+        `selection_mark_glyph`, `selection_mark_color`: the clipboard icon and its colour.
+        `selection_mark_is_solid`: whether the glyph wants the solid icon font rather than the regular
+                                   one. A filled clipboard and the solid font go together — the glyph is
+                                   only half the difference between "in the panel" and "not".
+        `selection_status`, `search_status`: which of the `ITEM_*` symbols apply. The legend at the
+                                   bottom of the tooltip explains whichever ones turned up.
+        `search_mark_color`: colour for the magnifying glass, or `None` when no search is running, in
+                             which case no search mark is drawn at all.
+
+    Pure: this decides, and the caller draws.
+    """
+    title_color = _TITLE_COLOR_NORMAL if (not search_active or is_search_match) else _TITLE_COLOR_DIMMED
+
+    if in_info_panel:
+        # An item in the info panel is normally also in the selection. It can fail to be, briefly, while
+        # the panel is updating: the old content stays on screen until the new content is ready, so it
+        # can still list items the new selection has dropped. The icon says "in the panel" either way,
+        # and the colour is what reports the disagreement.
+        selection_status = ITEM_IN_INFO_PANEL
+        selection_mark_glyph = fa.ICON_CLIPBOARD_CHECK
+        selection_mark_is_solid = True
+    else:
+        selection_status = ITEM_SELECTED if in_selection else ITEM_NOT_SELECTED
+        selection_mark_glyph = fa.ICON_CLIPBOARD
+        selection_mark_is_solid = False
+    selection_mark_color = _ICON_COLOR_ACTIVE if in_selection else _ICON_COLOR_INACTIVE
+
+    if not search_active:
+        search_status = ITEM_SEARCH_OFF
+        search_mark_color = None
+    elif is_search_match:
+        search_status = ITEM_SEARCH_MATCH
+        search_mark_color = _ICON_COLOR_SEARCH_MATCH
+    else:
+        search_status = ITEM_SEARCH_NOMATCH
+        search_mark_color = _ICON_COLOR_INACTIVE
+
+    return envcls(title_color=title_color,
+                  selection_status=selection_status,
+                  selection_mark_glyph=selection_mark_glyph,
+                  selection_mark_color=selection_mark_color,
+                  selection_mark_is_solid=selection_mark_is_solid,
+                  search_status=search_status,
+                  search_mark_color=search_mark_color)
+
+
+def is_jumpable(marks):
+    """Whether the info panel can be scrolled to this item, given its `decorate_item` result.
+
+    True when the item is listed in the panel at all, and — if a search is running — is one of its
+    results, since a non-matching item is dimmed rather than offered as a destination. This is what
+    decides whether the tooltip shows the help line about right-clicking to jump.
+    """
+    return (marks.selection_status is ITEM_IN_INFO_PANEL and
+            marks.search_status in (ITEM_SEARCH_OFF, ITEM_SEARCH_MATCH))
 
 
 def _get_task_manager():
@@ -174,6 +266,8 @@ def _render_worker(*, task_env, env=None):
     #  - The mouse moved outside the plot area while the update was waiting in the queue
     if app_state.is_any_modal_window_visible() or not app_state.mouse_inside_plot_widget():
         dpg.hide_item("annotation_tooltip_window")  # tag
+        with content_lock:
+            data_idxs.clear()  # nothing is listed once the tooltip is down, and `app.py`'s right-click handler reads this
         # logger.debug(f"_render_worker: {task_env.task_name}: Annotation update task completed. No items under mouse, so nothing to do.")
         return
 
@@ -210,12 +304,6 @@ def _render_worker(*, task_env, env=None):
             clusters_at_mouse = entry_renderer.order_cluster_ids(entries_by_cluster.keys())
 
             have_jumpable_item = False  # for whether we should show the help for that
-            item_ininfo = sym("ininfo")
-            item_selected = sym("selected")
-            item_notselected = sym("notselected")
-            item_match = sym("match")
-            item_nomatch = sym("nomatch")
-            item_searchoff = sym("searchoff")
 
             with info_panel.content_lock:
                 for cluster_id in clusters_at_mouse:
@@ -230,47 +318,21 @@ def _render_worker(*, task_env, env=None):
                         if task_env is not None and task_env.cancelled:
                             break
 
-                        # Highlight search results, but only when a search is active.
-                        # When no search active, show all items at full brightness.
-                        if not search_string or data_idx in search_result_data_idxs:
-                            title_color = (255, 255, 255, 255)
-                        else:  # Search active, non-matching item -> dim it.
-                            title_color = (140, 140, 140, 255)
+                        marks = decorate_item(in_info_panel=(data_idx in info_panel.entry_title_widgets),
+                                              in_selection=(data_idx in selection_data_idxs),
+                                              search_active=bool(search_string),
+                                              is_search_match=(data_idx in search_result_data_idxs))
+                        title_color = marks.title_color
 
-                        if data_idx in info_panel.entry_title_widgets:  # shown in the info panel
-                            item_selection_status = item_ininfo
-                            selection_mark_text = fa.ICON_CLIPBOARD_CHECK
-                            selection_mark_font = app_state.themes_and_fonts.icon_font_solid
-                            if data_idx in selection_data_idxs:  # Usually, all items in the info panel are in the selection...
-                                selection_mark_color = (120, 180, 255)  # blue
-                            else:  # ...but while the info panel is updating, the old content (shown until the update completes) may have some items that are no longer included in the new selection.
-                                item_selection_status = item_ininfo
-                                selection_mark_color = (80, 80, 80)  # very dark gray  # (255, 180, 120)  # orange
-                        else:  # not shown in the info panel
-                            selection_mark_text = fa.ICON_CLIPBOARD
-                            selection_mark_font = app_state.themes_and_fonts.icon_font_regular
-                            if data_idx in selection_data_idxs:  # selected
-                                item_selection_status = item_selected
-                                selection_mark_color = (120, 180, 255)  # blue
-                            else:  # not selected
-                                item_selection_status = item_notselected
-                                selection_mark_color = (80, 80, 80)  # very dark gray  # (255, 180, 120)  # orange
-
+                        selection_mark_font = (app_state.themes_and_fonts.icon_font_solid if marks.selection_mark_is_solid
+                                               else app_state.themes_and_fonts.icon_font_regular)
                         item_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_group_build{env.internal_build_number}", parent=annotation_target_group)
-                        mark_widget = dpg.add_text(selection_mark_text, color=selection_mark_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_selection_mark_build{env.internal_build_number}", parent=item_group)
+                        mark_widget = dpg.add_text(marks.selection_mark_glyph, color=marks.selection_mark_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_selection_mark_build{env.internal_build_number}", parent=item_group)
                         dpg.bind_item_font(mark_widget, selection_mark_font)
 
-                        if search_string:
-                            if data_idx in search_result_data_idxs:
-                                item_search_status = item_match
-                                search_mark_color = (180, 255, 180)  # "search green"
-                            else:  # not in results
-                                item_search_status = item_nomatch
-                                search_mark_color = (80, 80, 80)  # very dark gray
-                            mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=search_mark_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_search_mark_build{env.internal_build_number}", parent=item_group)
+                        if marks.search_mark_color is not None:  # `None` means no search is running, so no search mark
+                            mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=marks.search_mark_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_search_mark_build{env.internal_build_number}", parent=item_group)
                             dpg.bind_item_font(mark_widget, app_state.themes_and_fonts.icon_font_solid)
-                        else:  # no search active
-                            item_search_status = item_searchoff
 
                         # Per-fragment search highlighting in the title (when matched). Shared with the
                         # info panel, which renders the same markup for the same titles.
@@ -284,7 +346,7 @@ def _render_worker(*, task_env, env=None):
                         else:  # plain text (much faster) when no highlighting needed
                             dpg.add_text(entry.title, color=title_color, wrap=0, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", parent=item_group)  # "A study of stuff..."
 
-                        if item_selection_status is item_ininfo and (not search_string or item_search_status is item_match):
+                        if is_jumpable(marks):
                             have_jumpable_item = True
 
                         data_idxs.append(data_idx)
