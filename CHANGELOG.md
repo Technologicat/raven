@@ -183,6 +183,10 @@
 
 *Raven-visualizer*
 
+- **keyword extraction now counts nouns and proper nouns, and leaves the verbs out.** A topic keyword is nearly always a noun, while the verbs of academic prose — *provide*, *improve*, *develop*, *investigate*, *identify*, *propose* — describe what a paper **does**, are the same in every field, and were crowding the head of the frequency list without saying anything. Measured on a corpus about AI in education: dropping them lifts *chatbot*, *agent*, *interaction*, *language* and *task* into the top of the list instead, and removes about a third of the distinct words.
+  - This is why *learning* and *learn* are counted separately, and should be: as a noun it is the topic, as a verb it is prose, and they are different words. The verb sense is now dropped along with the rest.
+  - Affects the word cloud, the per-entry keywords and the frequency-based cluster keywords, for datasets imported from now on. `nlptools.count_frequencies` takes `accepted_pos=None` for the old, wider behavior.
+
 - the info panel marks its ends when the wheel *arrives* at one, where previously it only did so once you were already there and turned the wheel again. A single click of the wheel onto the end used to be silent.
 
 - a blue dot now marks the current info panel item — the same mark, in the same shape, that Raven-librarian puts beside the chat message its hotkeys will act on, in place of the glow the item's buttons used to have. It is drawn as part of the panel, so whatever covers the panel covers it too; the old glow floated on top of the word cloud window.

@@ -781,7 +781,8 @@ def count_frequencies(tokens: Union[List[spacy.tokens.token.Token],
                       lemmatize: bool = True,
                       stopwords: Container = default_stopwords,
                       min_length: int = 3,
-                      min_occurrences: int = 2) -> Dict[str, int]:
+                      min_occurrences: int = 2,
+                      accepted_pos: Optional[Container[str]] = ("NOUN", "PROPN")) -> Dict[str, int]:
     """Count the number of occurrences of each word in document(s).
 
     The result will be aggregated over the whole input, resulting in one big dict.
@@ -824,6 +825,26 @@ def count_frequencies(tokens: Union[List[spacy.tokens.token.Token],
     `min_occurrences`: How many times a word must appear, across the whole corpus,
                        before it is accepted. Words rarer than this are dropped
                        from the final results.
+
+    `accepted_pos`: Which parts of speech to count, as spaCy's `pos_` tags. The default keeps nouns and
+                    proper nouns, which is what a topic keyword usually is.
+
+                    Pass `None` to instead accept everything except the structural parts of speech
+                    (adpositions, auxiliaries, conjunctions, determiners, numerals, pronouns,
+                    punctuation), which is the wider net.
+
+                    The narrow default is what makes the result read as a list of topics rather than a
+                    list of things papers do. Measured over 600 records of a corpus on AI in education:
+                    the wider net puts `use`, `base`, `provide`, `improve`, `develop`, `generate`,
+                    `include`, `integrate`, `find`, `identify`, `create` and their like among the most
+                    frequent words, which describe what a paper *does* and are the same for every paper
+                    in every field. Dropping them lifts `chatbot`, `agent`, `interaction`, `language`
+                    and `task` into the top of the list instead.
+
+                    Note this is also why a deverbal noun and its verb count separately, and should:
+                    "learning" tagged NOUN lemmatizes to `learning` while "learning" tagged VERB
+                    lemmatizes to `learn`. The noun is the topic; the verb is prose. The default keeps
+                    the first and drops the second, which is the distinction one usually wants.
 
     Returns a dict `{word0: count0, ...}`, ordered by count (descending, i.e. more common words first).
 
@@ -895,7 +916,10 @@ def count_frequencies(tokens: Union[List[spacy.tokens.token.Token],
             #     SYM: symbol
             #     VERB: verb
             #     X: other
-            if x.pos_ in ("ADP", "AUX", "CCONJ", "DET", "NUM", "PRON", "PUNCT", "SCONJ"):  # filter out parts of speech that are useless as keywords
+            if accepted_pos is not None:
+                if x.pos_ not in accepted_pos:
+                    continue
+            elif x.pos_ in ("ADP", "AUX", "CCONJ", "DET", "NUM", "PRON", "PUNCT", "SCONJ"):  # filter out parts of speech that are useless as keywords
                 continue
             if not x.lemma_.isalnum():  # filter out punctuation
                 continue

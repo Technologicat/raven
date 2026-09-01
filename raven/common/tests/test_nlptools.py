@@ -357,6 +357,37 @@ def test_count_frequencies_basic(sample_docs):
     counts = list(freqs.values())
     assert counts == sorted(counts, reverse=True)
 
+def test_count_frequencies_keeps_nouns_and_drops_verbs_by_default(spacy_pipe):
+    # A topic keyword is nearly always a noun, and the verbs of academic prose -- describing what a paper
+    # *does* rather than what it is about -- are the same in every field, so they crowd the head of the
+    # frequency list without saying anything. The default `accepted_pos` keeps nouns and proper nouns.
+    #
+    # This also pins the deverbal-noun distinction, which is the reason a POS filter is the right tool
+    # rather than a stopword list: "learning" tagged NOUN lemmatizes to "learning" and is the topic,
+    # while "learning" tagged VERB lemmatizes to "learn" and is prose. They are different lexemes and
+    # merging them would lose the difference between "machine learning" and "students learn".
+    docs = nlptools.spacy_analyze(spacy_pipe,
+                                  ["Machine learning improves outcomes. "
+                                   "Researchers investigate methods and develop systems. "
+                                   "Students are learning to use the system."])
+    nouns_only = nlptools.count_frequencies(docs[0], min_occurrences=1, min_length=3)
+    everything = nlptools.count_frequencies(docs[0], min_occurrences=1, min_length=3, accepted_pos=None)
+
+    # The nouns survive under both settings, so the filter is not simply emptying the result.
+    for noun in ("learning", "method", "system"):
+        assert noun in nouns_only, f"{noun!r} is a noun and should survive the default filter"
+        assert noun in everything
+
+    # The verbs are the difference. Note this is the negative control as well as the assertion: if
+    # `accepted_pos=None` also dropped them, the two settings would agree and the test would pass
+    # against a filter that did nothing.
+    dropped = {"investigate", "develop", "learn"}
+    assert dropped & set(everything), \
+        f"the wider net should keep verbs, else this fixture cannot tell the two apart; got {sorted(everything)}"
+    assert not (dropped & set(nouns_only)), \
+        f"the default should drop verbs; got {sorted(set(nouns_only) & dropped)}"
+
+
 def test_count_frequencies_lemmatize_flag(sample_docs):
     freqs_lemmatized = nlptools.count_frequencies(sample_docs[0], lemmatize=True, min_occurrences=1, min_length=3)
     freqs_raw = nlptools.count_frequencies(sample_docs[0], lemmatize=False, min_occurrences=1, min_length=3)
