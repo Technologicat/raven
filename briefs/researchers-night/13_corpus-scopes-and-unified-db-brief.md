@@ -130,7 +130,43 @@ when it runs. Everything in this section is [P] and wants arguing with.
   - **[P] cuML** has GPU HDBSCAN and UMAP, sklearn-compatible, with UMAP the bigger win — but it drags in
     RAPIDS, is CUDA-version-pinned, and collides with the "easy install with a chosen CUDA version" deferred
     item. Take the dependency only if measurement demands it.
-- **[N] Test UTU's Clust-Splitter.** Context from March 2026: Turku group (Lampainen, Karmitsa, Joki,
+- **[X] ~~Test UTU's Clust-Splitter.~~ Measured 2026-09-01 without wrapping it, and the answer is no —
+  not for clustering quality.** The question this item existed to settle was whether MSSC loses to
+  density- and linkage-based methods because the *objective* is wrong for literature embeddings, or
+  because Lloyd's algorithm finds bad optima of a fine objective. Those predict the same table, so
+  k-means's poor showing could not distinguish them.
+
+  **Ward linkage settles it, and costs ten minutes rather than an f2py wrap of 8975 lines of Fortran.**
+  Ward minimizes within-cluster sum of squares agglomeratively — the same objective Clust-Splitter
+  solves, reached by a better search than Lloyd's. Scored on the matched control of
+  `investigations/highdim-clustering/`:
+
+  | | arXiv | AOKK |
+  |---|---|---|
+  | average-linkage (the method chosen) | **+0.067** | **+0.089** |
+  | Ward — MSSC objective, greedy search | +0.048 | +0.049 |
+  | k-means — MSSC objective, Lloyd's | +0.019 | +0.042 |
+
+  So **part of k-means's weakness really was the solver** — Ward beats it, by 2.5× on arXiv, which is
+  the point that was in Clust-Splitter's favour and it is real. But **the objective still loses when
+  solved better**: Ward lands between k-means and average-linkage on both corpora. Overtaking
+  average-linkage would need another 40–80% over Ward on an objective Ward already optimizes
+  competently, which is a great deal to ask of a solver.
+
+  *Two caveats, so nobody re-opens this on a technicality: sklearn's Ward requires euclidean, so it is
+  not a cosine-MSSC — on unit vectors the two are closely related (`‖a−b‖² = 2−2cos`) but not identical
+  — and Ward is greedy, so it is a lower bound on what a real MSSC solver reaches. Neither gap looks
+  like 40–80%.*
+
+  **What stays open is the other reason to want it**, and it is not about cluster quality: MSSC yields
+  *optimized* centroids, so placing a new document on an existing map is an exact `argmin` over k.
+  Agglomerative gives centroids computed after the fact, which were never optimized for that. If the
+  incremental-map work (brief 11 item 4, Procrustes) needs exact placement and post-hoc centroids prove
+  inadequate, revisit **on that ground**. The `subgrad_help_b` bug report to the authors stands
+  regardless.
+
+- **[N] ~~Test UTU's Clust-Splitter.~~** *Original note, kept for the references and the March 2026
+  context.* Turku group (Lampainen, Karmitsa, Joki,
   Mäkelä), MSSC via LMBM, 8975 lines of Fortran, incremental in k. Conclusion then: **f2py-wrap it as-is
   first** to test fit before considering a PyTorch port — the objective/subgradient is O(n·k·d) and dominates
   roughly 1000:1, but internal callbacks make that layer awkward to reach through f2py. A suspected bug at

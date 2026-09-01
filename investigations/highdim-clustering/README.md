@@ -289,6 +289,84 @@ every paper to a cluster is drawing boundaries through the continuum. **The hone
 That is a product decision as much as a technical one, since the current map shows 74% coverage and the
 high-D fit would show less.
 
+**9. The outliers are mostly between clusters, not apart from them — and mostly an artifact of the size
+threshold.** Asked by Juha on 2026-09-01: are unplaced records genuinely unlike everything, or is the
+clustering failing to place them? `outlier_anatomy.py` separates those, and the two possibilities want
+different responses.
+
+Run on all five corpora, medians throughout, clustered → outlier:
+
+| corpus | n | outliers | nearest center | **margin** | local density | singletons |
+|---|---|---|---|---|---|---|
+| hydrogen | 21378 | 28 (0.1%) | 0.753 → 0.674 | 0.042 → **0.010** | 0.728 → 0.618 | **0** |
+| AOKK | 5007 | 57 (1.1%) | 0.776 → 0.687 | 0.048 → **0.010** | 0.706 → 0.638 | 1 |
+| ECCOMAS | 2519 | 49 (1.9%) | 0.731 → 0.637 | 0.064 → **0.012** | 0.617 → 0.551 | 1 |
+| arXiv AI | 958 | 98 (10.2%) | 0.773 → 0.655 | 0.090 → **0.016** | 0.625 → 0.579 | 9 |
+| *banichuk* | 531 | 145 (27.3%) | 0.957 → 0.903 | 0.039 → **0.008** | 0.930 → 0.892 | 30 |
+
+**The margin collapses four- to sixfold on every corpus while local density barely moves.** Local density
+is the measure that does not depend on the clustering at all, so it carries the conclusion: the outliers
+are not in sparse regions. They sit in normally-populated ones, near-equidistant between two clusters —
+which is a *[spork](../../../substrate-independent/glossary.md)* in the exact sense, a case satisfying
+two branches that were assumed exclusive, and evidence about the taxonomy rather than about the paper.
+Here the taxonomy is the cut level: a pile of records sitting between A and B says A and B are one
+cluster at this resolution.
+
+*Read the margin with one caveat: a point further from everything compresses all its similarities, so
+margin and distance are not independent. Local density is the clean measurement.*
+
+**Almost none are alone.** Hydrogen has **no** singletons among its 28 outliers, AOKK and ECCOMAS one
+each; the rest arrive in groups of 2 to 4 that failed `min_cluster_size=5`. So the threshold
+manufactures most of what the map calls an outlier. Only banichuk, whose geometry is pathological
+throughout, has a real population of isolated records — 30, and it is the corpus this write-up otherwise
+discounts.
+
+**10. Cohesion is a better filter for small clusters than size, and it calibrates itself.** Lowering the
+size threshold to 3 recovers 69 of arXiv's 98 outliers, but it buys real topics and junk drawers
+together. Three of the recovered clusters, with their mean pairwise cosine:
+
+| cluster | size | cohesion | what is in it |
+|---|---|---|---|
+| 73 | 3 | **0.644** | *Distilling the Knowledge in a Neural Network*, a distillation survey, *Distillation Scaling Laws* |
+| 39 | 4 | **0.524** | the original diffusion paper, discrete diffusion, creativity in diffusion models |
+| 60 | 4 | **0.307** | mind uploading, river-crossing algebra, protected attributes, crash data — grouped by exclusion |
+
+Cluster 60's is the **lowest cohesion of any small cluster** in the corpus, and its contents are visibly
+unrelated: average linkage merges what is left over, so a small cluster can be a residue rather than a
+topic. Cohesion tells the two apart where size cannot.
+
+**Small clusters are not worse than big ones on any corpus**, and on two they are better:
+
+| corpus | median cohesion, clusters ≥5 | median cohesion, clusters <5 | small clusters kept | outliers recovered |
+|---|---|---|---|---|
+| hydrogen | 0.567 | 0.548 | 10 of 12 | 23 of 28 |
+| AOKK | 0.543 | **0.568** | 14 of 16 | 48 of 57 |
+| ECCOMAS | 0.513 | **0.525** | 14 of 15 | 45 of 49 |
+| arXiv AI | 0.572 | 0.572 | 25 of 30 | 71 of 98 |
+| *banichuk* | 0.908 | 0.903 | 32 of 42 | 88 of 145 |
+
+Only the tail is residue. Keeping a small cluster when its cohesion clears the established clusters'
+10th percentile recovers **more records than lowering the size threshold does, and leaves the residue
+out** — on arXiv, 71 against the size rule's 69.
+
+**And the criterion needs no size knob at all.** The calibration above splits clusters at
+`min_cluster_size` to decide which are "established", which would smuggle the knob back in. It does not
+have to: weighting every cluster's cohesion by its membership and taking the 10th percentile of *that*
+gives the same threshold, because the big clusters dominate the weight anyway.
+
+| corpus | p10 over clusters ≥5 | p10 size-weighted over all | difference |
+|---|---|---|---|
+| arXiv AI | 0.516 | 0.516 | **+0.000** |
+| AOKK | 0.489 | 0.510 | +0.020 |
+| ECCOMAS | 0.461 | 0.474 | +0.013 |
+
+So the rule is: **a cluster survives when it is at least as coherent as this corpus's clusters
+generally are.** No size threshold, and nothing for a user to have an opinion about — a size cut asks
+"how small is too small?", which nobody can answer without seeing the corpus, where this asks a question
+the corpus answers itself. What remains is a structural floor of two, since a singleton has no pairs to
+be coherent over, which yields a definition worth having: **an outlier is a record that is alone, or one
+in a group less coherent than the corpus's real clusters.**
+
 ## What this suggests for the rework
 
 Not yet decided — this is the measurement, and the shape of the change is Juha's call. What the numbers
@@ -341,6 +419,14 @@ support:
     move that avoids the question.
   - **It also cuts cluster counts against what ships today, which was the hope going in.** AOKK: 183
     clusters in the shipped 2D map, 83 here, with coverage up from 74% to 99%.
+  - **Keep a small cluster on its cohesion, not on its size, and expose no knob for it** (Juha,
+    2026-09-01: "the fewer single outlier points we leave, the better, as long as those points are not
+    in sparsely populated regions that really don't have anything else" — and, once the measurements
+    were in, "if cohesion wins, we might not need a cluster size knob for the user"). Finding 10 says a
+    small cluster is worth keeping when its members are actually similar to each other; that recovers
+    more records than lowering a size threshold does, leaves the residue clusters out, and calibrates
+    itself against the corpus. Only the floor of two survives, and it is structural rather than a
+    setting.
   - **Cost at 21378 records: 1 min 44 s and 3.9 GB peak**, so `maia`'s 32 GB is not troubled at this
     size. The n² distance matrix still governs, and ~50k would need about 20 GB, so the existing
     `max_n` sampling does not go away — it moves further out.
