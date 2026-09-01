@@ -630,9 +630,30 @@ of the answer is not quite the shape of the guess:
   `chat_controller.gui_role_icons` are registered once at class init, so drawing one needs no upload and no
   `split_frame`. Only per-attachment thumbnails need the background path.
 
-Note the idea interacts with the two marks already planned for a node, the role glyph and the tool-call
-badge: three indicators on a 180×52 box is a crowd, and the answer may be one indicator area rather than
-three.
+**The shape, sketched 2026-09-01 and settled:** the thumbnail **straddles the node's right edge**, sized
+to about the node's height, with part of it hanging outside the box. Several attachments **stack, each
+overhanging further**, like a fanned deck.
+
+That placement is what makes the third-indicator problem go away. It costs no label width, it needs none of
+the box's interior, and it leaves the left edge to the role glyph — so the node is not asked to hold three
+things in a space that fits one.
+
+- **The image gets a border, in the graph's own line pen rather than a special grey.** Every other element
+  here is outlined — nodes, gaps, pills, edges — so a picture without one is the single element that does
+  not belong to the drawing, which is exactly why it reads as an unanchored texture rather than a tile.
+  - **With stacking the border stops being decoration.** Two overlapping photographs of similar tone merge
+    into one shape, and the count is the whole point of showing more than one. The line is what separates
+    them.
+- **Watch that the dark-mode remap does not touch the picture.** The renderer inverts lightness for pen
+  colours, which is right for the border and would be wrong for the image; an `ImageShape` drawn through
+  `dpg.draw_image` takes no pen colour, so it should be unaffected — but that is reasoning, not a
+  measurement, and it is worth a look on the first render.
+- **The overhang eats the gap between siblings**, which is `horizontal_spacing = 24` against a stack that
+  can reach further than that. Either the spacing grows when a row has attachments, or the stack caps at a
+  few and says "+N". Undecided; it needs a row of attachment-bearing siblings to look at.
+- **No test would currently notice a collision.** `overlapping_pairs` compares *node* boxes, and a
+  thumbnail lives outside its node's box exactly as a pill does. Whichever way the overhang is bounded,
+  that test wants extending to shape extents, or the bound is unenforced.
 
 **Found while driving it:**
 
