@@ -411,11 +411,15 @@ graph — a selection ring specified as 2.0-on against a 2.5-wide stroke came ou
 straight runs, while the gap boxes beside it (6.0-on at 1.5 wide, four times) had always looked even. The
 ring at 4.0-on against 2.0 wide looks consistent.
 
-**A thin stroke is the stronger remedy, and the one to reach for first.** ImGui has a separate
-texture-based antialiasing path for thin lines (`anti_aliased_lines_use_tex`, on by default), whose
-coverage does not depend on where the mark falls between pixels; thicker strokes go through the polygon
-path, where the end caps do. So a 1-wide dotted line comes out even at any zoom, and the same pattern at
-2 does not. Raven's chat graph settles on 1.0 for the selection ring and 1.5 for the gap outlines.
+**A thin stroke is the stronger remedy, and the one to reach for first.** Raven's chat graph draws both
+its gap outlines and its selection ring at 1.5 and neither looks ragged, where the same ring at 2.0 did.
+
+*Why* thinner helps is not established. The tempting explanation is ImGui's texture-based antialiasing
+path for thin lines (`anti_aliased_lines_use_tex`, on by default), whose coverage would not depend on
+sub-pixel phase — but that path is understood to apply only at thickness 1.0 or below, which would leave
+1.5 on the ordinary polygon path and unexplained. So the mechanism is more likely just that a wider stroke
+magnifies the same positional wobble into a visible weight difference. Recorded as an observation with a
+guess attached, rather than as a mechanism, because the two lead to different next moves if this recurs.
 
 **Making the cycle divide evenly is a real fix that cannot be relied on.** If the cycle's length in
 *pixels* is a whole number, every mark begins at the same sub-pixel offset and they all render alike — no
