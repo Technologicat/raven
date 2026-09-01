@@ -2,16 +2,16 @@
 
 ~6.7k lines across 11 modules. The `app.py` split has landed.
 
-Sizes are rounded to two significant figures, measured **2026-08-24** — they are here for the shape of the
+Sizes are rounded to two significant figures, measured **2026-09-01** — they are here for the shape of the
 package, not as a figure to quote. Re-measure before quoting one. `python scripts/check_module_maps.py`
 checks this table against the package, including whether every module is in it.
 
 ```
 app.py            (~1.9k) — GUI app: window layout, event wiring, search, the main render loop
 info_panel.py     (~1.5k) — the info panel: content build, scrolling, navigation, anchors
-importer.py       (~1.3k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
+importer.py       (~1.4k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 annotation.py     (~450)  — datapoint annotations and their tooltips
-config.py         (~410)  — Configuration-as-code (import settings, models, stopwords, GUI settings).
+config.py         (~430)  — Configuration-as-code (import settings, models, stopwords, GUI settings).
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services
 plotter.py        (~280)  — the scatter plot itself
@@ -22,9 +22,15 @@ importer_cli.py    (~80)  — `raven-importer` entry point
 app_state.py       (~58)  — top-level app state containers
 ```
 
-**Almost no tests, and still the priority.** `raven/visualizer/tests/test_importer.py` is the whole of it
-— three tests covering `_parse_input_files`, added 2026-08-31 alongside the per-record error guard they
-pin. Everything else in the package is untested.
+**Thinly tested, and still the priority.** 70 tests over three of the eleven modules, as of 2026-09-01:
+
+```
+tests/test_selection.py       (36) — the four combine modes, undo/redo, scroll anchors, modifier keys
+tests/test_entry_renderer.py  (27) — grouping, alphabetization, the `max_n` budget, search highlighters
+tests/test_importer.py         (7) — `_parse_input_files`, and cluster-keyword canonicalization
+```
+
+The plan for the rest, ordered by measured difficulty, is `briefs/visualizer-test-coverage-brief.md`.
 
 The original rationale was to catch regressions *during* the refactor; that refactor has since landed
 without them, so what remains is the other half — pinning down the API boundaries the split created,
@@ -32,14 +38,23 @@ before feature work starts leaning on them. The extracted modules are the tracta
 smaller and having real seams; `app.py` was never the place to start. `importer.py` also serves as a
 standalone CLI app (`raven-importer`).
 
-**What the first test module establishes, so the next one need not rediscover it:** `importer` imports
-cleanly under pytest — everything expensive is lazy, the LLM connection is set up at import time only
-when the config asks for cluster keywords or summaries — so its functions can be driven against a `.bib`
-written into `tmp_path`. It does reach sklearn, torch and spaCy, which CI does not install, so the module
-is guarded with `pytest.importorskip("raven.visualizer.importer")` and marked `ml`; without the guard a
-module-level import failure is a *collection* error and turns the matrix red rather than skipping.
-`python scripts/check_ci_imports.py` is what reports that, and is worth running before pushing a new test
-module here.
+**What the existing test modules establish, so the next one need not rediscover it:**
+
+- **`importer` imports cleanly under pytest** — everything expensive is lazy, and the LLM connection is
+  set up at import time only when the config asks for cluster keywords or summaries — so its functions
+  can be driven against a `.bib` written into `tmp_path`. It does reach sklearn, torch and spaCy, which
+  CI does not install, so the module is guarded with `pytest.importorskip("raven.visualizer.importer")`
+  and marked `ml`; without the guard a module-level import failure is a *collection* error and turns the
+  matrix red rather than skipping. `python scripts/check_ci_imports.py` is what reports that, and is
+  worth running before pushing a new test module here.
+- **`entry_renderer` needs no guard at all**, reaching nothing beyond numpy and `unpythonic`, so its
+  tests run on every push.
+- **A module whose DPG use is a handful of calls does not need a context.** `selection` makes four kinds
+  of DPG call, and `test_selection.py` monkeypatches a recording stand-in over the module's `dpg` binding
+  that delegates everything else to the real toolkit — so assertions are about what the module asked the
+  GUI to do, and the key constants are still DPG's own. Per-module contexts are fine where a test really
+  needs one (`dpg-notes.md`, "Testing DPG code"); the point is that the heavier Visualizer modules can be
+  approached one seam at a time rather than all-or-nothing.
 
 ## How app.py Is Organized
 

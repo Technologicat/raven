@@ -687,23 +687,26 @@ inside the guideline, and splitting it would move prose around rather than simpl
 
 ### Test coverage
 
-88 test modules as of 2026-08-20, ~2750 tests (`pytest -m "not ml"`). Library and utility code is broadly
-covered, and the GUI layer is no longer the hole it was; what remains untested is the Visualizer and the
-large DPG frontends.
+105 test modules as of 2026-09-01, ~3540 tests (`pytest -m "not ml"`). Library and utility code is broadly
+covered, and the GUI layer is no longer the hole it was; what remains thin is the Visualizer, and untested
+are the large DPG frontends.
 
 - **`common/`** — bgtask, datastorelock, deviceinfo, docextract, filelisting, logsetup, netutil, nlptools, numutils, readcsv, running_average, smoothvalue, stringmaps, utils; `text/` (normalize, speakable); `audio/` (codec, resample, utils) and `audio/speech/` (tts, stt, lipsync, and a TTS→STT round trip); `image/` (codec, lanczos, utils); `video/` (colorspace, compositor, postprocessor, upscaler); `gui/` (animation, filedrop, filegrid, fontsetup, gridnav, helpcard, layout_math, messagebox, tablecursor, thumbnailgrid, tileicons, tooltip, utils, a characterization of DPG's own focus semantics, and all of `xdotwidget/`).
 - **`librarian/`** — agent, appstate, chat_controller, chattree, chatutil, cleanup, hybridir, imagestore, indexer, llmclient, scaffold, sidecarstore, textfilestore.
+- **`visualizer/`** — importer, entry_renderer, selection. Three modules of eleven; see below.
 - **Elsewhere** — `vendor/file_dialog` (the largest single module's worth, at ~175 tests), `client/` (api, mayberemote), `papers/*`, `cherrypick/*`, `server/webfetch`, `xdot_viewer/dot_utils`.
 
 What is **not** covered:
 
-- **Visualizer is very nearly untested.** Still the biggest gap, and the refactor that motivated writing
-  tests landed without them — so what they would pin now is the new module boundaries rather than a
-  rewrite in flight. The package broke its duck on 2026-08-31 with
-  `raven/visualizer/tests/test_importer.py`, three tests on `_parse_input_files` written alongside the
-  per-record error guard they pin; nothing else in the package is covered. That module also records what
-  it costs to test this package at all — the `importorskip` guard and `ml` marker `importer` needs to
-  stay out of CI's way — so the next one starts from there rather than from nothing.
+- **Visualizer is still the biggest gap, but no longer a blank.** The refactor that motivated wanting
+  tests landed without them, so what they pin now is the module boundaries the split created rather than
+  a rewrite in flight. 70 tests as of 2026-09-01, over three of the eleven modules: `importer`
+  (`_parse_input_files` and the cluster-keyword canonicalization), `entry_renderer` and `selection`.
+  `briefs/visualizer-test-coverage-brief.md` is the plan for the rest, ordered by measured difficulty.
+  Two things the existing modules record so the next one need not rediscover them: what it costs to
+  reach `importer` at all — the `importorskip` guard and `ml` marker it needs to stay out of CI's way —
+  and that a module whose DPG use is a handful of calls can be tested against a recording stand-in
+  instead of a context (`test_selection.py`).
 - **The DPG frontends**: librarian `app` and `cleanup_dialog`, and every Visualizer GUI module. **Not
   because DPG resists testing** — it runs without a mapped window, and `common/gui/tests/` already drives a
   real context with an unmapped viewport. See `dpg-notes.md`, "Testing DPG code". The barrier is that nobody
@@ -758,7 +761,7 @@ Size follows VRAM in the usual way — a ~30B MoE wants 24 GB or more, a ~4B fit
 
 ## Known Issues / TODOs
 - Visualizer: the `app.py` split has landed (see `raven/visualizer/CLAUDE.md` for the module map). What remains is ordinary tidying — `info_panel.py` at ~1.5k lines is the next split candidate, and `importer.py` could use stage separation — not a god-object rescue
-- Visualizer is very nearly untested — only `importer`'s `_parse_input_files` is covered (the librarian gaps this used to list — `scaffold`, `appstate`, `llmclient` — are all covered now)
+- Visualizer is thinly tested — `importer`, `entry_renderer` and `selection` are covered, the other eight modules are not; `briefs/visualizer-test-coverage-brief.md` has the order (the librarian gaps this used to list — `scaffold`, `appstate`, `llmclient` — are all covered now)
 - DearPyGui_Markdown decorations land in the wrong place — now tracked in `TODO_DEFERRED.md`, "Markdown
   decorations are placed by measuring the text". All five of them are drawlists positioned from a
   measurement that nothing waits for. The URL *colour* sitting one character off is filed there as probably
