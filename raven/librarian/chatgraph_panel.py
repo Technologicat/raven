@@ -123,6 +123,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._layout = chatgraph.LayoutConfig()
         self._previewed_node_id: Optional[str] = None
         self._is_shown = bool(show)
+        # Whether the view has been framed yet. The first build fits the branch; later ones must not, or
+        # the picture would re-frame itself under a reader once per turn of the conversation.
+        self._framed = False
         # What the last rebuild was made from. Compared once per frame; a mismatch is the whole
         # "did anything change?" test.
         self._seen_generation: Optional[int] = None
@@ -262,10 +265,22 @@ class DPGChatGraphPanel(gui_animation.Animation):
                       or self._view_state.focus_node_id
                       or self._view_state.head_node_id)
 
-        # `set_graph` leaves pan and zoom alone, so an anchor that kept its place needs nothing done; one
-        # that moved is followed smoothly. That is what keeps the picture from jumping under a reader while
-        # a reply is arriving and the tree is gaining a node per round.
-        if chat_graph.graph.get_node_by_name(anchor) is not None:
+        # The first picture is framed; every one after it only follows the anchor.
+        #
+        # Framing means fitting the *branch*, not the graph. A windowed level runs to thousands of units
+        # against a panel a few hundred wide, so fitting the whole picture lands at a zoom where the
+        # renderer stops drawing text at all -- a graph with no words in it. The branch is a narrow column,
+        # so fitting that is height-limited, which leaves the labels legible and the width free to overflow
+        # into a pan.
+        #
+        # And only the first, because `set_graph` leaves pan and zoom alone: an anchor that kept its place
+        # then needs nothing done, and one that moved is followed smoothly. That is what keeps the picture
+        # still while a reply is arriving and the tree gains a node per round -- a re-fit on every rebuild
+        # would make it lurch once per turn.
+        if not self._framed:
+            self._framed = True
+            self._widget.zoom_to_bbox(*chat_graph.spine_bbox, animate=False)
+        elif chat_graph.graph.get_node_by_name(anchor) is not None:
             self._widget.pan_to_node(anchor, animate=True)
         else:
             self._widget.zoom_to_fit(animate=True)
@@ -278,12 +293,34 @@ class DPGChatGraphPanel(gui_animation.Animation):
             return None
 
     def go_to_head(self) -> None:
-        """Abandon any preview and draw the picture around HEAD again."""
+        """Abandon any preview and put the reader back at HEAD, at 1:1.
+
+        Deliberately a different framing from the one the panel opens with. Opening asks *where am I in
+        this conversation*, which the whole branch answers; asking to be returned to HEAD asks to read what
+        is there, which wants full size.
+
+        HEAD is placed in the lower third rather than the middle, because what a reader wants around it is
+        what came before — below HEAD there is at most one row of replies, so centring it spends half the
+        panel on nothing.
+        """
         with self._lock:
             self._view_state.focus_node_id = None
             self._previewed_node_id = None
         self._enable_commit(False)
+        self._framed = True  # this is a framing of its own; the refresh below must not override it
         self.refresh()
+
+        head_node = None
+        with self._lock:
+            if self._chat_graph is not None:
+                head_node = self._chat_graph.graph.get_node_by_name(self._view_state.head_node_id)
+        if head_node is None:
+            return
+        self._widget.set_zoom(1.0, animate=True)
+        # A sixth of the panel's height above centre puts HEAD two-thirds of the way down. In graph units
+        # at 1:1, which is what the zoom above is settling to.
+        _, panel_h = self._widget.get_size()
+        self._widget.pan_to_point(head_node.x, head_node.y - panel_h / 6.0, animate=True)
 
     def destroy(self) -> None:
         """Tear the panel down. Reverse of the order things were set up in."""

@@ -8,6 +8,8 @@ The module needs no DearPyGui: the xdot package imports its widget lazily, and e
 `Graph`, `Node`, the shapes -- is plain data.
 """
 
+import math
+
 import pytest
 
 from raven.common.gui.xdotwidget import graph as xdotgraph
@@ -318,13 +320,20 @@ class TestPills:
         assert len(stadium) < 4 * (chatgraph._ROUNDED_CORNER_SEGMENTS + 1), \
             ("this box is not degenerate enough to have coincident arc centres, so it cannot show the "
              "duplicate-vertex problem at all")
-        repeats = [k for k in range(1, len(stadium)) if stadium[k] == stadium[k - 1]]
+        # `range(len(...))` rather than `range(1, ...)`, so that k=0 compares the first vertex with the
+        # last. That wrap-around *is* the closing segment, and checking only interior joins is how the
+        # first version of this test agreed with a spur that was still there: the two arcs meeting at the
+        # seam are the ones the walk starts and ends on, which for a stadium is its leftmost point.
+        repeats = [k for k in range(len(stadium))
+                   if math.dist(stadium[k], stadium[k - 1]) <= chatgraph._COINCIDENT_POINT_TOLERANCE]
         assert repeats == [], f"repeated vertices at {repeats}"
 
         # And the same for what actually gets drawn, since the pill above is only the helper's output.
         for shape in built.graph.get_node_by_name(system).shapes:
             if isinstance(shape, xdotgraph.PolygonShape):
-                doubled = [k for k in range(1, len(shape.points)) if shape.points[k] == shape.points[k - 1]]
+                doubled = [k for k in range(len(shape.points))
+                           if math.dist(shape.points[k],
+                                        shape.points[k - 1]) <= chatgraph._COINCIDENT_POINT_TOLERANCE]
                 assert doubled == [], f"repeated vertices at {doubled} in a drawn outline"
 
     def test_a_pill_label_is_measured_rather_than_given_the_box_width(self):

@@ -254,6 +254,26 @@ class XDotWidget(gui_animation.Animation):
             self._viewport.zoom_to_fit(self._graph, animate=animate)
             self._needs_render = True
 
+    def zoom_to_bbox(self, x1: float, y1: float, x2: float, y2: float,
+                     margin: int = 12, animate: bool = True) -> None:
+        """Adjust pan/zoom to fit a rectangle of the graph, in graph coordinates.
+
+        The zoom that fits *both* dimensions is chosen, so a box taller than it is wide -- against a
+        widget that is wider than it is tall -- comes out fitted by height with the width free to overflow.
+        That is the way to frame one part of a graph too wide to show whole.
+        """
+        self._viewport.zoom_to_bbox(x1, y1, x2, y2, margin=margin, animate=animate)
+        self._needs_render = True
+
+    def pan_to_point(self, gx: float, gy: float, animate: bool = True) -> None:
+        """Centre the view on a point in graph coordinates. Pan only; the zoom is left alone.
+
+        `pan_to_node` centres a node; this is for putting something somewhere other than the middle, which
+        needs a point the caller has worked out rather than a node.
+        """
+        self._viewport.pan_to_point(gx, gy, animate=animate)
+        self._needs_render = True
+
     def pan_to_node(self, node_id: str, animate: bool = True) -> None:
         """Pan the view to center on a specific node.
 

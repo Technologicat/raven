@@ -70,6 +70,9 @@ _COINCIDENT_POINT_TOLERANCE = 1e-9
 # Horizontal breathing room between a box's edge and its text, in graph units.
 _LABEL_INSET = 8.0
 
+# Vertical space between the speaker line and the label below it, in graph units.
+_LINE_GAP = 2.0
+
 
 # --------------------------------------------------------------------------------
 # What a graph node means
@@ -246,6 +249,11 @@ class LayoutConfig:
     # reader has zoomed to 1:1. Sourced rather than repeated: two numbers both meaning "the UI font" drift.
     font_size: float = librarian_config.gui_config.font_size
     role_font_size: float = 0.7 * librarian_config.gui_config.font_size
+    # How far above the box's centre the two text lines sit. Centring them by cap height alone comes out
+    # looking low -- descenders hang below the last baseline and the eye counts them -- so the block is
+    # nudged up by half a speaker line. Raise it to move the text further up; a full `role_font_size` puts
+    # the speaker's caps flush against the top edge.
+    text_block_lift: float = 0.5 * 0.7 * librarian_config.gui_config.font_size
     pill_font_size: float = 10.0
     pill_h: float = 16.0  # a pill's width follows its own label; see `_box_shapes`
     arrowhead_length: float = 10.0
@@ -277,12 +285,19 @@ class ChatGraph:
     `spine`: The chat node IDs on the branch to HEAD, root first — including the ones the depth window
              elided and the tool nodes the collapse hid, so a caller can ask "is this node on the current
              branch?" without rebuilding the picture.
+    `spine_bbox`: `(x1, y1, x2, y2)` around the boxes of the drawn spine — the branch, and nothing beside
+                  it. This is what a view should frame on opening: the whole picture is far too wide to
+                  fit and still be legible (a windowed level runs to thousands of units against a panel
+                  of hundreds), while the branch is a narrow column, so fitting *this* is fitting the
+                  answer to "where am I" at a zoom that leaves the words readable.
     """
 
-    def __init__(self, graph: xdotgraph.Graph, refs: Dict[str, Ref], spine: Tuple[str, ...]):
+    def __init__(self, graph: xdotgraph.Graph, refs: Dict[str, Ref], spine: Tuple[str, ...],
+                 spine_bbox: Tuple[float, float, float, float]):
         self.graph = graph
         self.refs = refs
         self.spine = spine
+        self.spine_bbox = spine_bbox
 
     def ref_for(self, name: str) -> Optional[Ref]:
         """Return what the graph node called `name` stands for, or `None` if there is no such node."""
@@ -326,6 +341,11 @@ def _rounded_rect_points(x1: float, y1: float, x2: float, y2: float,
             # exact test drops nothing and the spur survives, looking for all the world like the fix is in.
             if not points or math.dist(point, points[-1]) > _COINCIDENT_POINT_TOLERANCE:
                 points.append(point)
+    # And the seam. The outline closes from the last vertex back to the first, so a last vertex sitting on
+    # the first is a zero-length *closing* segment -- the same spur as an interior one, at the point where
+    # the walk began. For a stadium that is the leftmost point, which is where it shows.
+    if len(points) > 1 and math.dist(points[0], points[-1]) <= _COINCIDENT_POINT_TOLERANCE:
+        points.pop()
     return points
 
 
@@ -559,13 +579,19 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         speaker_pen = xdotgraph.Pen()
         speaker_pen.color = LINE_COLOR
         speaker_pen.fontsize = config.role_font_size
+        # The two lines are laid out as one block, centred in the box and then lifted. Centring by cap
+        # heights alone leaves the block looking low, because a cap height ignores the descenders below the
+        # last baseline while the eye does not -- so the visual mass sits below the geometric centre, and
+        # the gap above the speaker line reads as slack.
+        block_h = config.role_font_size + _LINE_GAP + config.font_size
+        block_top = y - 0.5 * block_h - config.text_block_lift
+        speaker_y = block_top + config.role_font_size
+        label_y = block_top + config.role_font_size + _LINE_GAP + config.font_size
         # Left-aligned, unlike the label. The speaker is the same handful of short words on every node, so
         # a common left edge lets the eye read the column of them without tracking a centre that moves.
-        shapes.append(xdotgraph.TextShape(speaker_pen, x1 + _LABEL_INSET,
-                                          y - 0.15 * config.node_h + 0.35 * config.role_font_size,
+        shapes.append(xdotgraph.TextShape(speaker_pen, x1 + _LABEL_INSET, speaker_y,
                                           xdotgraph.TextShape.LEFT,
                                           width - 2 * _LABEL_INSET, speaker))
-        label_y = y + 0.22 * config.node_h + 0.35 * config.font_size
     else:
         label_y = y + 0.35 * config.font_size
     shapes.append(xdotgraph.TextShape(text_pen, x, label_y,
@@ -819,7 +845,17 @@ def build(datastore: chattree.Forest,
     _x1, _y1, x2, y2 = _content_bbox(graph_nodes)
     graph = xdotgraph.Graph(width=x2 + config.margin, height=y2 + config.margin,
                             nodes=graph_nodes, edges=graph_edges)
-    return ChatGraph(graph=graph, refs=refs, spine=tuple(full_spine))
+
+    # Measured after the translation above, so it is in the same coordinates as everything else.
+    spine_boxes = [nodes_by_name[node_id].get_bounding_box()
+                   for node_id in visible_spine if node_id in nodes_by_name]
+    if spine_boxes:
+        spine_bbox = (min(box[0] for box in spine_boxes), min(box[1] for box in spine_boxes),
+                      max(box[2] for box in spine_boxes), max(box[3] for box in spine_boxes))
+    else:  # nothing of the branch survived; framing the whole picture is the only answer left
+        spine_bbox = (0.0, 0.0, graph.width, graph.height)
+
+    return ChatGraph(graph=graph, refs=refs, spine=tuple(full_spine), spine_bbox=spine_bbox)
 
 
 def _content_bbox(nodes: Sequence[xdotgraph.Node]) -> Tuple[float, float, float, float]:

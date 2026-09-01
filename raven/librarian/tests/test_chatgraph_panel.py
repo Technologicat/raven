@@ -185,6 +185,39 @@ class TestCommit:
 
 
 # ---------------------------------------------------------------------------
+# Framing
+# ---------------------------------------------------------------------------
+
+class TestFraming:
+    def test_the_first_build_frames_the_branch(self, panel):
+        built, forest, app_state, ids, calls = panel
+        # The fixture already refreshed once. What that must have fitted is the branch, not the graph: a
+        # windowed level is thousands of units wide against a panel of hundreds, and fitting *that* lands
+        # at a zoom where the renderer stops drawing text at all.
+        x1, y1, x2, y2 = built._chat_graph.spine_bbox
+        assert x2 - x1 < built._chat_graph.graph.width, \
+            "the branch is as wide as the whole picture here, so this fixture cannot tell the two fits apart"
+        assert built._framed
+
+    def test_later_rebuilds_do_not_reframe(self, panel):
+        # The picture must stay still while a reply arrives. The tree gains a node per round, so a re-fit
+        # per rebuild is a lurch per turn of the conversation.
+        built, forest, app_state, ids, calls = panel
+        before = built._widget.get_zoom()
+        forest.create_node(payload("assistant", "a fresh reroll"), parent_id=ids["taken"])
+        built.refresh()
+        assert built._widget.get_zoom() == before
+
+    def test_going_home_reframes(self, panel):
+        # The one deliberate exception: asking to be returned to HEAD is asking for a framing.
+        built, forest, app_state, ids, calls = panel
+        built._widget.set_zoom(0.3, animate=False)
+        built.go_to_head()
+        assert built._widget._viewport.zoom.target == pytest.approx(1.0), \
+            "the crosshair should return the reader to full size"
+
+
+# ---------------------------------------------------------------------------
 # Gaps
 # ---------------------------------------------------------------------------
 
