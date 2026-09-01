@@ -411,9 +411,19 @@ graph — a selection ring specified as 2.0-on against a 2.5-wide stroke came ou
 straight runs, while the gap boxes beside it (6.0-on at 1.5 wide, four times) had always looked even. The
 ring at 4.0-on against 2.0 wide looks consistent.
 
-If a genuinely fine dotted pattern is wanted, the remedy is snapping the dash phase to whole pixels in
-screen space rather than shortening the marks further. Not needed so far, and it would distort diagonals
-and curves, so it is a last resort rather than the default.
+**A thin stroke is the stronger remedy, and the one to reach for first.** ImGui has a separate
+texture-based antialiasing path for thin lines (`anti_aliased_lines_use_tex`, on by default), whose
+coverage does not depend on where the mark falls between pixels; thicker strokes go through the polygon
+path, where the end caps do. So a 1-wide dotted line comes out even at any zoom, and the same pattern at
+2 does not. Raven's chat graph settles on 1.0 for the selection ring and 1.5 for the gap outlines.
+
+**Making the cycle divide evenly is a real fix that cannot be relied on.** If the cycle's length in
+*pixels* is a whole number, every mark begins at the same sub-pixel offset and they all render alike — no
+drift. But that length is the cycle times the zoom, and the zoom is continuous, so the property holds at
+isolated zoom levels and is gone as soon as the wheel moves.
+
+Snapping the dash phase to whole pixels in screen space would fix it at every zoom, and would distort
+diagonals and curves. A last resort, not needed so far.
 
 ## Diagnosing background-task races
 
