@@ -610,20 +610,21 @@ class Forest:
 
         For convenience, returns `node_id`.
         """
-        node = self.nodes[node_id]
-        parent_node_id = node["parent"]
-        if parent_node_id is not None:  # a root node has no parent
-            try:
-                parent_node = self.nodes[parent_node_id]
-            except KeyError:
-                logger.warning(f"Forest.detach_subtree: while detaching node '{node_id}' from its parent: its parent node '{parent_node_id}' does not exist. Ignoring error.")
-            else:
+        with self.lock:
+            node = self.nodes[node_id]  # this will raise KeyError if `node_id` is not found
+            parent_node_id = node["parent"]
+            if parent_node_id is not None:  # a root node has no parent
                 try:
-                    parent_node["children"].remove(node_id)
-                except ValueError:
-                    logger.warning(f"Forest.detach_subtree: while detaching node '{node_id}' from its parent: this node was not listed in the children of its parent node '{parent_node_id}'. Ignoring error.")
-        node["parent"] = None
-        self.touch()
+                    parent_node = self.nodes[parent_node_id]
+                except KeyError:
+                    logger.warning(f"Forest.detach_subtree: while detaching node '{node_id}' from its parent: its parent node '{parent_node_id}' does not exist. Ignoring error.")
+                else:
+                    try:
+                        parent_node["children"].remove(node_id)
+                    except ValueError:
+                        logger.warning(f"Forest.detach_subtree: while detaching node '{node_id}' from its parent: this node was not listed in the children of its parent node '{parent_node_id}'. Ignoring error.")
+            node["parent"] = None
+            self.touch()
         return node_id
 
     # TODO: do we need `reparent_children`, for symmetry with `reparent_subtree`?

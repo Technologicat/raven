@@ -3,6 +3,7 @@
 import json
 import logging
 import pathlib
+import threading
 
 import pytest
 
@@ -1135,3 +1136,63 @@ class TestGeneration:
         # `_load` runs during construction, so what is checked is that the load left a mark at all -- a
         # counter still at its initial value would mean a reload cannot be distinguished from no forest.
         assert read_back.generation != Forest().generation
+
+
+# ---------------------------------------------------------------------------
+# Locking
+# ---------------------------------------------------------------------------
+
+def _lock_is_free(lock) -> bool:
+    """Whether `lock` can be taken right now, asked from another thread.
+
+    A re-entrant lock cannot answer this on the thread that owns it -- the acquire would simply succeed by
+    re-entering -- so the question has to be put from outside.
+    """
+    answer = []
+
+    def probe():
+        acquired = lock.acquire(blocking=False)
+        if acquired:
+            lock.release()
+        answer.append(acquired)
+
+    thread = threading.Thread(target=probe)
+    thread.start()
+    thread.join()
+    return answer[0]
+
+
+class TestLocking:
+    """The detach operations must hold the lock while they walk links, not merely while they finish.
+
+    Both are documented as public API, and both rewrite two nodes -- the one being detached and the one it
+    was attached to -- so a reader arriving between those writes sees a half-severed link. `detach_subtree`
+    shipped without any lock at all while its sibling had one, which is the shape of an oversight rather
+    than of a decision.
+    """
+
+    @pytest.mark.parametrize("name,operation", [
+        ("detach_subtree", lambda f, n: f.detach_subtree(n)),
+        ("detach_children", lambda f, n: f.detach_children(n)),
+    ])
+    def test_a_detach_holds_the_lock_while_it_reads_nodes(self, name, operation):
+        forest = Forest()
+        parent = forest.create_node("parent", parent_id=None)
+        node = forest.create_node("node", parent_id=parent)
+        forest.create_node("child", parent_id=node)
+
+        # Every lookup the operation makes is asked, from another thread, whether the lock was free at that
+        # moment. Installed after the setup above, so only the operation under test is watched.
+        was_free = []
+
+        class WatchedNodes(dict):
+            def __getitem__(self, key):
+                was_free.append(_lock_is_free(forest.lock))
+                return super().__getitem__(key)
+
+        forest.nodes = WatchedNodes(forest.nodes)
+        operation(forest, node)
+
+        assert was_free, ("the operation never looked a node up, so this fixture cannot tell a locked "
+                          "operation from an unlocked one")
+        assert not any(was_free), f"`{name}` read `nodes` without holding the lock"
