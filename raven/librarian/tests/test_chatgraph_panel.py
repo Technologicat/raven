@@ -181,6 +181,18 @@ class TestCommit:
         click(built, ids["not_taken"])
         built.go_to_head()
         assert built._chat_graph.spine == tuple(forest.linearize_up(app_state["HEAD"]))
+        # The preview mark is gone; what is lit instead is HEAD, flashed to say where the view landed.
+        assert built._widget.get_highlighted_nodes() == {app_state["HEAD"]}
+        assert built._previewed_node_id is None, "the preview survived, so a click would commit it"
+
+    def test_the_flash_expires(self, panel):
+        # It has to, or the mark that means "a second click commits this" would be permanently lit on a
+        # box nobody previewed.
+        built, forest, app_state, ids, calls = panel
+        built.go_to_head()
+        assert built._widget.get_highlighted_nodes(), "nothing was flashed, so expiry proves nothing"
+        built._flash_until_ns = 0  # wind the clock past it rather than sleeping through it
+        built.render_frame(0)
         assert built._widget.get_highlighted_nodes() == set()
 
 

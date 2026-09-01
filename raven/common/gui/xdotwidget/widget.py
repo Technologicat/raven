@@ -64,7 +64,7 @@ class XDotWidget(gui_animation.Animation):
                  text_compaction_callback: Optional[Callable[[str, float], str]] = None,
                  highlight_fade_duration: float = 2.0,
                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
-                 mouse_wheel_zoom_factor: float = 1.1,
+                 mouse_wheel_zoom_factor: float = 1.25,
                  dark_mode: bool = False,
                  dark_bg_color: DPGColor = (45, 45, 48, 255),
                  light_bg_color: DPGColor = (255, 255, 255, 255)):
@@ -98,7 +98,9 @@ class XDotWidget(gui_animation.Animation):
                                      a node won't fit inside that node visually.
                                      Receives (text, available_width_px).
                                      Must return compacted text.
-        `mouse_wheel_zoom_factor`: Zoom factor per mouse wheel notch.
+        `mouse_wheel_zoom_factor`: Zoom factor per mouse wheel notch. 1.25 needs three notches to double,
+                                   which is about the coarsest that still feels controllable; the earlier
+                                   1.1 took seven and read as an unresponsive wheel.
         `on_open_url`: Callback when a node with a URL is right-clicked.
                         Receives the URL string.
         `dark_mode`: If True, invert graph lightness for dark backgrounds.

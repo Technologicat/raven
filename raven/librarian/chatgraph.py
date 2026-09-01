@@ -31,12 +31,17 @@ __all__ = ["SPINE_FILL_COLOR",
            "ViewState",
            "LayoutConfig",
            "ChatGraph",
+           "MeasureText",
 
            "build"]
 
 import dataclasses
+import logging
 import math
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+import textwrap
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+
+logger = logging.getLogger(__name__)
 
 from ..common.gui.xdotwidget import constants as xdotconstants
 from ..common.gui.xdotwidget import graph as xdotgraph
@@ -58,10 +63,40 @@ _GAP_DASH: Tuple[float, float] = (6.0, 4.0)
 
 _ROUNDED_CORNER_SEGMENTS = 4  # per corner; four is already indistinguishable from a curve at these radii
 
-# Average glyph advance as a fraction of font size, for estimating how wide a short uppercase label comes
-# out. Only the pointer pills need this, and only to size a box around three known words; anything wanting
-# a real measurement has to ask DPG, which this module deliberately cannot do.
+# Average glyph advance as a fraction of font size. Two figures, because the two kinds of text here are
+# not the same width: the pills are short uppercase words, and capitals are appreciably wider than the
+# mixed-case prose of a chat message. Using the uppercase figure for a message cut its label about a
+# quarter early -- "How can I help you to..." for a line that ends "today?". Anything wanting a real
+# measurement has to ask DPG, which this module deliberately cannot do.
 _PILL_ADVANCE_PER_CHAR = 0.62
+_LABEL_ADVANCE_PER_CHAR = 0.5
+
+# How a caller lets this module ask what text actually measures: `(text, font size) -> width or None`, in
+# graph units. Optional, because the module is pure and DPG is where the answer lives -- with no measurer
+# it falls back to an average advance, which is good enough to size a box and not good enough to centre
+# text inside one.
+#
+# `None` is the answer for "cannot say right now", which is an ordinary state rather than a fault: a font
+# atlas does not exist until a frame has been rendered, so anything drawing before the first one -- or in
+# a test suite, which renders none -- gets the estimate and no complaint. An exception means something
+# actually went wrong, and is logged.
+MeasureText = Callable[[str, float], Optional[float]]
+
+
+def _text_width(text: str, font_size: float,
+                measure_text: Optional[MeasureText], advance_per_char: float) -> float:
+    """Return how wide `text` is at `font_size`, measured where that is possible and estimated where not."""
+    if measure_text is not None:
+        try:
+            measured = measure_text(text, font_size)
+        except Exception:  # noqa: BLE001 -- a measurer that fails must not cost the whole picture
+            logger.warning(f"_text_width: measuring '{text}' failed; falling back to an estimate",
+                           exc_info=True)
+        else:
+            if measured is not None:
+                return measured
+    return font_size * advance_per_char * len(text)
+
 
 # Two outline vertices closer together than this are the same point. In graph units, which are pixels at
 # zoom 1, so this is far below anything a display can tell apart and far above float rounding.
@@ -240,7 +275,7 @@ class LayoutConfig:
     """
 
     node_w: float = 300.0
-    node_h: float = 64.0
+    node_h: float = 84.0
     gap_node_w: float = 120.0
     horizontal_spacing: float = 24.0
     vertical_spacing: float = 44.0
@@ -249,23 +284,24 @@ class LayoutConfig:
     # reader has zoomed to 1:1. Sourced rather than repeated: two numbers both meaning "the UI font" drift.
     font_size: float = librarian_config.gui_config.font_size
     role_font_size: float = 0.7 * librarian_config.gui_config.font_size
-    # How far above the box's centre the two text lines sit. Centring them by cap height alone comes out
-    # looking low -- descenders hang below the last baseline and the eye counts them -- so the block is
-    # nudged up by half a speaker line. Raise it to move the text further up; a full `role_font_size` puts
-    # the speaker's caps flush against the top edge.
-    text_block_lift: float = 0.5 * 0.7 * librarian_config.gui_config.font_size
+    # Where the text starts, measured down from the box's top edge. Anchored to the top rather than
+    # centred, because a message wraps to one line or two and centring would leave the short ones floating
+    # at a different height from their neighbours -- in a row of boxes that reads as raggedness rather
+    # than as a shorter message. Lower this to move the text up.
+    text_top_inset: float = 8.0
     pill_font_size: float = 10.0
     pill_h: float = 16.0  # a pill's width follows its own label; see `_box_shapes`
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
     margin: float = 20.0
     label_chars: Optional[int] = None
+    label_lines: int = 2
 
     def _get_effective_label_chars(self) -> int:
         """Return `label_chars`, or how many characters fit across a node when it was left unset."""
         if self.label_chars is not None:
             return self.label_chars
-        return max(1, int((self.node_w - 2 * _LABEL_INSET) / (self.font_size * _PILL_ADVANCE_PER_CHAR)))
+        return max(1, int((self.node_w - 2 * _LABEL_INSET) / (self.font_size * _LABEL_ADVANCE_PER_CHAR)))
 
     # These two are the ones a user has a reason to change, so they live in `config` and are picked up from
     # there; the rest of this class is drawing detail. Neither is speed-bound in any range worth using --
@@ -363,12 +399,17 @@ def _arrowhead_points(tip: xdotconstants.Point, tail: xdotconstants.Point,
             (base[0] + halfwidth * uy, base[1] - halfwidth * ux)]
 
 
-def _truncate(text: str, limit: int) -> str:
-    """Shorten `text` to `limit` characters, marking that something was cut."""
-    text = " ".join(text.split())  # a message is many lines; a label is one
-    if len(text) <= limit:
-        return text
-    return text[:max(0, limit - 1)].rstrip() + "…"
+def _wrap(text: str, width: int, max_lines: int) -> List[str]:
+    """Fold `text` into at most `max_lines` lines of about `width` characters, marking anything cut.
+
+    The message's own line breaks go first — `split` collapses every run of whitespace, so a message that
+    opens "Hi!" and continues after a blank line becomes one flowing string. That is the point: a blank
+    line copied faithfully into a two-line label spends half of it on nothing.
+    """
+    text = " ".join(text.split())
+    if not text:
+        return []
+    return textwrap.wrap(text, width=width, max_lines=max_lines, placeholder="…") or [text[:width]]
 
 
 # --------------------------------------------------------------------------------
@@ -409,8 +450,9 @@ def _tool_call_count(datastore: chattree.Forest, node_id: str) -> int:
 _ROLE_CAPTIONS = {"system": "SYSTEM", "tool": "TOOL", "user": "USER", "assistant": "AI"}
 
 
-def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, limit: int) -> Tuple[str, str]:
-    """Return `(who said it, what they said)` for `node_id`, both ready to draw.
+def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
+                          width: int, max_lines: int) -> Tuple[str, List[str]]:
+    """Return `(who said it, the lines of what they said)` for `node_id`, ready to draw.
 
     The speaker is the message's stored persona where it has one, and the role otherwise — the same
     preference the chat log shows, so the two views name the same participants the same way.
@@ -418,9 +460,9 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, limit: int) 
     try:
         role, persona, text = chatutil.get_node_message_text_without_persona(datastore, node_id)
     except (KeyError, TypeError):
-        return "?", "(missing)"
+        return "?", ["(missing)"]
     speaker = persona or _ROLE_CAPTIONS.get(role, (role or "?").upper())
-    return speaker, (_truncate(text, limit) or "(empty)")
+    return speaker, (_wrap(text, width, max_lines) or ["(empty)"])
 
 
 def _collapse_tool_rounds(datastore: chattree.Forest,
@@ -540,9 +582,10 @@ class _Row:
 # Emitting shapes
 
 def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
-                label: str, fill: Optional[xdotconstants.Color],
+                label_lines: Sequence[str], fill: Optional[xdotconstants.Color],
                 dashed: bool, pills: Tuple[str, ...],
-                speaker: Optional[str] = None) -> List[xdotgraph.Shape]:
+                speaker: Optional[str] = None,
+                measure_text: Optional[MeasureText] = None) -> List[xdotgraph.Shape]:
     """Return the shapes for one box: its outline, its text, and any pointer pills above it.
 
     `width`: The box's width. A gap is narrower than a node, and the row layout allocates it that much
@@ -576,26 +619,28 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     # A text shape's y is its baseline, so a line sits on the y given plus about a third of its cap height.
     # With a speaker the two lines straddle the centre; without one the label takes the centre itself.
     if speaker is not None:
+        # Anchored to the top edge, not centred. A message wraps to one line or two, and centring would
+        # hang the short ones at a different height from their neighbours -- which along a row reads as
+        # raggedness rather than as a shorter message.
         speaker_pen = xdotgraph.Pen()
         speaker_pen.color = LINE_COLOR
         speaker_pen.fontsize = config.role_font_size
-        # The two lines are laid out as one block, centred in the box and then lifted. Centring by cap
-        # heights alone leaves the block looking low, because a cap height ignores the descenders below the
-        # last baseline while the eye does not -- so the visual mass sits below the geometric centre, and
-        # the gap above the speaker line reads as slack.
-        block_h = config.role_font_size + _LINE_GAP + config.font_size
-        block_top = y - 0.5 * block_h - config.text_block_lift
-        speaker_y = block_top + config.role_font_size
-        label_y = block_top + config.role_font_size + _LINE_GAP + config.font_size
+        cursor = y1 + config.text_top_inset + config.role_font_size
         # Left-aligned, unlike the label. The speaker is the same handful of short words on every node, so
         # a common left edge lets the eye read the column of them without tracking a centre that moves.
-        shapes.append(xdotgraph.TextShape(speaker_pen, x1 + _LABEL_INSET, speaker_y,
+        shapes.append(xdotgraph.TextShape(speaker_pen, x1 + _LABEL_INSET, cursor,
                                           xdotgraph.TextShape.LEFT,
                                           width - 2 * _LABEL_INSET, speaker))
+        cursor += _LINE_GAP
     else:
-        label_y = y + 0.35 * config.font_size
-    shapes.append(xdotgraph.TextShape(text_pen, x, label_y,
-                                      xdotgraph.TextShape.CENTER, width - 2 * _LABEL_INSET, label))
+        # A gap box has one line and nobody to attribute it to, so it takes the middle.
+        cursor = y - 0.5 * config.font_size
+
+    for line in label_lines:
+        cursor += config.font_size
+        shapes.append(xdotgraph.TextShape(text_pen, x, cursor,
+                                          xdotgraph.TextShape.CENTER, width - 2 * _LABEL_INSET, line))
+        cursor += _LINE_GAP
 
     # Pills are a separate visual class from nodes -- outlined rather than filled -- so that SYS, NEW and
     # HEAD read as labels attached to a node rather than as part of what the node says. Two reasons for
@@ -623,11 +668,13 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     # measures: pass the box width instead and a label narrower than the box begins half the difference too
     # far left, which puts "SYS" inside its own rounded cap.
     #
-    # The width is estimated rather than measured -- this module holds no DPG and cannot ask a font
-    # anything. The pills carry three short uppercase words, so an average advance is close enough; a
-    # label whose glyphs are unusually wide would sit a little right of centre, never outside the box,
-    # because the padding is a full cap at each end.
-    text_widths = [config.pill_font_size * _PILL_ADVANCE_PER_CHAR * len(pill) for pill in pills]
+    # The width comes from `measure_text` when the caller supplied one, and from an average advance
+    # otherwise. Measuring matters here more than the size of the box suggests: the renderer centres text
+    # by starting it at `centre - w/2` and drawing left-aligned, so an error in `w` displaces the glyphs by
+    # half of it. Estimating "HEAD" at 10 px gave 24.8 against a true 19.5, and the label sat visibly left
+    # inside its own pill -- an error invisible in the box's geometry and obvious on screen.
+    text_widths = [_text_width(pill, config.pill_font_size, measure_text, _PILL_ADVANCE_PER_CHAR)
+                   for pill in pills]
     box_widths = [text_w + config.pill_h for text_w in text_widths]  # a cap's worth of room at each end
     pill_span = sum(box_widths) + max(0, len(pills) - 1) * 3.0
 
@@ -667,12 +714,16 @@ def _edge_between(src: xdotgraph.Node, dst: xdotgraph.Node, config: LayoutConfig
 
 def build(datastore: chattree.Forest,
           state: ViewState,
-          config: Optional[LayoutConfig] = None) -> ChatGraph:
+          config: Optional[LayoutConfig] = None,
+          measure_text: Optional[MeasureText] = None) -> ChatGraph:
     """Build the picture of the chat forest around `state.focus_node_id`, or HEAD if none is given.
 
     `datastore`: The chat forest. Read under its own lock, and not modified.
     `state`: What the user is looking at. See `ViewState`.
     `config`: Sizes and counts. See `LayoutConfig`.
+    `measure_text`: How to ask what a string actually measures — `(text, font size) -> width`. Optional;
+                    without it, widths are estimated from an average glyph advance, which is enough to
+                    size a box and not enough to centre text inside one. See `MeasureText`.
 
     Returns a `ChatGraph`: the `Graph` to hand to `XDotWidget.set_graph`, plus the table saying what each
     of its nodes stands for.
@@ -757,7 +808,8 @@ def build(datastore: chattree.Forest,
                                             hidden_node_ids=slot.hidden,
                                             recenter_on=slot.hidden[len(slot.hidden) // 2])
                         label = f"…{len(slot.hidden)} more"
-                    shapes = _box_shapes(x, y, width, config, label, fill=None, dashed=True, pills=())
+                    shapes = _box_shapes(x, y, width, config, [label], fill=None, dashed=True, pills=(),
+                                         measure_text=measure_text)
                 else:
                     name = slot.node_id
                     ref = ChatNodeRef(name, node_id=slot.node_id,
@@ -765,12 +817,14 @@ def build(datastore: chattree.Forest,
                                       on_current_branch=(slot.node_id in current_branch),
                                       tool_call_count=_tool_call_count(datastore, slot.node_id),
                                       pills=_pills_for(slot.node_id, state, is_root=(row_index == 0)))
-                    speaker, label = _speaker_and_label_of(datastore, slot.node_id,
-                                                          config._get_effective_label_chars())
-                    shapes = _box_shapes(x, y, width, config, label,
+                    speaker, label_lines = _speaker_and_label_of(
+                        datastore, slot.node_id,
+                        config._get_effective_label_chars(), config.label_lines)
+                    shapes = _box_shapes(x, y, width, config, label_lines,
                                          fill=(SPINE_FILL_COLOR if slot.node_id in current_branch
                                                else OFF_SPINE_FILL_COLOR),
-                                         dashed=False, pills=ref.pills, speaker=speaker)
+                                         dashed=False, pills=ref.pills, speaker=speaker,
+                                         measure_text=measure_text)
 
                 graph_node = xdotgraph.Node(x=x, y=y, w=width, h=config.node_h,
                                             shapes=shapes, internal_name=name)
@@ -788,8 +842,9 @@ def build(datastore: chattree.Forest,
         def add_box(name: str, ref: Ref, x: float, y: float, label: str) -> xdotgraph.Node:
             """Draw one gap box in a band, register it, and return it."""
             node = xdotgraph.Node(x=x, y=y, w=config.gap_node_w, h=config.node_h,
-                                  shapes=_box_shapes(x, y, config.gap_node_w, config, label,
-                                                     fill=None, dashed=True, pills=()),
+                                  shapes=_box_shapes(x, y, config.gap_node_w, config, [label],
+                                                     fill=None, dashed=True, pills=(),
+                                                     measure_text=measure_text),
                                   internal_name=name)
             refs[name] = ref
             nodes_by_name[name] = node

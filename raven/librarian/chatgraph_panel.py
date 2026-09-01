@@ -21,6 +21,7 @@ __all__ = ["DPGChatGraphPanel"]
 import dataclasses
 import logging
 import threading
+import time
 import uuid
 from typing import Callable, Optional, Sequence, Tuple, Union
 
@@ -49,6 +50,9 @@ gui_config = librarian_config.gui_config
 _DEPTH_EXPANSION_FACTOR = 2
 
 _TOOLBAR_H = 34  # pixels, the row of view controls above the graph
+
+# How long a box stays marked when the view is sent somewhere and wants to say where, in seconds.
+_FLASH_DURATION = 1.5
 
 # Font atlas sizes for graph labels. The renderer picks whichever is closest to the size it is drawing at,
 # so this is a ladder rather than a choice: a label is legible at one zoom and unreadable at the next, and
@@ -130,18 +134,21 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # "did anything change?" test.
         self._seen_generation: Optional[int] = None
         self._seen_head: Optional[str] = None
+        self._flash_until_ns: Optional[int] = None
 
         self._commit_button_tag = f"chat_graph_commit_button_{self.gui_uuid}"  # tag
+        self._dark_mode_button_tag = f"chat_graph_dark_mode_button_{self.gui_uuid}"  # tag
         self._container = dpg.add_child_window(parent=gui_parent,
                                                width=width, height=height,
                                                no_scrollbar=True, no_scroll_with_mouse=True,
                                                show=self._is_shown,
                                                tag=f"chat_graph_panel_{self.gui_uuid}")  # tag
-        self._build_toolbar()
+        self._build_toolbar(dark_mode=dark_mode)
         if graph_text_fonts is None:
             graph_text_fonts = [(size, guiutils.load_extra_font(themes_and_fonts, size,
                                                                 "OpenSans", "Regular")[1])
                                 for size in _GRAPH_TEXT_FONT_SIZES]
+        self._graph_text_fonts = list(graph_text_fonts)
         self._widget = XDotWidget(parent=self._container,
                                   width=self._graph_w(width),
                                   height=self._graph_h(height),
@@ -166,25 +173,42 @@ class DPGChatGraphPanel(gui_animation.Animation):
         """Return the graph widget's height inside a panel of height `panel_h`."""
         return max(1, panel_h - _TOOLBAR_H - 2 * gui_config.margin)
 
-    def _build_toolbar(self) -> None:
-        """Build the row of view controls above the graph."""
+    def _build_toolbar(self, dark_mode: bool) -> None:
+        """Build the row of view controls above the graph.
+
+        `dark_mode`: the widget's starting mode. An argument rather than something read off the widget,
+        which does not exist yet — the toolbar is built first so that DPG lays it out above the graph.
+
+        The view controls use the same glyphs, in the same order, as `raven-xdot-viewer`'s toolbar. The two
+        show the same widget, so a reader who has used one should not have to relearn the other; where they
+        differ it should be because the *job* differs, which is what the two buttons after the separator
+        are.
+        """
         def add_button(icon: str, callback: Callable, caption: str, tag: str,
-                       enabled: bool = True) -> None:
+                       enabled: bool = True, solid: bool = True) -> None:
             dpg.add_button(label=icon, callback=callback, width=gui_config.toolbutton_w,
                            enabled=enabled, tag=tag)
-            dpg.bind_item_font(tag, self.themes_and_fonts.icon_font_solid)  # tag
+            font = (self.themes_and_fonts.icon_font_solid if solid
+                    else self.themes_and_fonts.icon_font_regular)
+            dpg.bind_item_font(tag, font)  # tag
             dpg.bind_item_theme(tag, self.themes_and_fonts.disablable_widget_theme)  # tag
             # A caption that never changes, so a plain DPG tooltip rather than the self-sizing one.
             with dpg.tooltip(tag):  # tag
                 dpg.add_text(caption)
 
         with dpg.group(horizontal=True, parent=self._container):
-            add_button(fa.ICON_EXPAND, lambda: self._widget.zoom_to_fit(),
-                       "Fit the whole picture", f"chat_graph_fit_button_{self.gui_uuid}")  # tag
+            add_button(fa.ICON_SQUARE, lambda: self._widget.zoom_to_fit(),
+                       "Zoom to fit", f"chat_graph_fit_button_{self.gui_uuid}",  # tag
+                       solid=False)
+            add_button(fa.ICON_MAGNIFYING_GLASS, self.zoom_1_to_1,
+                       "Actual size (1:1)", f"chat_graph_actual_size_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_MAGNIFYING_GLASS_PLUS, lambda: self._widget.zoom_in(),
                        "Zoom in", f"chat_graph_zoom_in_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_MAGNIFYING_GLASS_MINUS, lambda: self._widget.zoom_out(),
                        "Zoom out", f"chat_graph_zoom_out_button_{self.gui_uuid}")  # tag
+            add_button(fa.ICON_SUN if dark_mode else fa.ICON_MOON, self.toggle_dark_mode,
+                       "Switch to light mode" if dark_mode else "Switch to dark mode",
+                       self._dark_mode_button_tag)
 
             guiutils.add_toolbar_separator(horizontal=True, toolbar_extent=_TOOLBAR_H,
                                            size=gui_config.toolbar_separator_w, line=False)
@@ -196,6 +220,17 @@ class DPGChatGraphPanel(gui_animation.Animation):
             add_button(fa.ICON_CODE_BRANCH, self._commit_previewed,
                        "Switch to the previewed branch\n(or click its box a second time)",
                        self._commit_button_tag, enabled=False)
+
+    def zoom_1_to_1(self) -> None:
+        """Set the zoom to 1:1, leaving the pan where it is."""
+        self._widget.set_zoom(1.0, animate=True)
+
+    def toggle_dark_mode(self) -> None:
+        """Flip the graph between the dark and light palettes, and relabel the button."""
+        self._widget.dark_mode = not self._widget.dark_mode
+        dark = self._widget.dark_mode
+        with guiutils.nonexistent_ok():
+            dpg.set_item_label(self._dark_mode_button_tag, fa.ICON_SUN if dark else fa.ICON_MOON)
 
     # ------------------------------------------------------------------
     # Public API
@@ -288,9 +323,26 @@ class DPGChatGraphPanel(gui_animation.Animation):
     def _try_build(self) -> Optional[chatgraph.ChatGraph]:
         """Build the picture, or return `None` if the node it would be drawn around is gone."""
         try:
-            return chatgraph.build(self.datastore, self._view_state, self._layout)
+            return chatgraph.build(self.datastore, self._view_state, self._layout,
+                                   measure_text=self._measure_text)
         except KeyError:
             return None
+
+    def _measure_text(self, text: str, font_size: float) -> Optional[float]:
+        """Return how wide `text` is at `font_size`, in graph units, or `None` if DPG cannot say yet.
+
+        This is what `chatgraph` cannot do for itself: it holds no DPG, and an average glyph advance is
+        enough to size a box but not to centre text inside one — the renderer starts centred text at
+        `centre - w/2`, so an error in the width displaces the glyphs by half of it.
+
+        Measured against whichever font atlas is nearest the requested size and scaled, the atlases being
+        a ladder rather than a continuum.
+        """
+        atlas_size, font_id = min(self._graph_text_fonts, key=lambda pair: abs(pair[0] - font_size))
+        measured = dpg.get_text_size(text, font=font_id)
+        if not measured:  # no atlas until a frame has been rendered; an ordinary state, not a fault
+            return None
+        return measured[0] * (font_size / atlas_size)
 
     def go_to_head(self) -> None:
         """Abandon any preview and put the reader back at HEAD, at 1:1.
@@ -321,6 +373,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # at 1:1, which is what the zoom above is settling to.
         _, panel_h = self._widget.get_size()
         self._widget.pan_to_point(head_node.x, head_node.y - panel_h / 6.0, animate=True)
+        # Flash it. The view slides and the zoom changes at the same time, so "the box you were brought
+        # back to" is not obvious from the motion alone -- and HEAD is deliberately off-centre here, which
+        # removes the other cue.
+        self._flash(self._view_state.head_node_id)
 
     def destroy(self) -> None:
         """Tear the panel down. Reverse of the order things were set up in."""
@@ -337,8 +393,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
         See `raven.common.gui.animation.Animation`.
         """
-        if self._is_shown and self._is_stale():
-            self.refresh()
+        if self._is_shown:
+            self._expire_flash()
+            if self._is_stale():
+                self.refresh()
         return gui_animation.action_continue
 
     def _is_stale(self) -> bool:
@@ -468,6 +526,23 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 dpg.enable_item(self._commit_button_tag)
             else:
                 dpg.disable_item(self._commit_button_tag)
+
+    def _flash(self, node_id: str) -> None:
+        """Mark a box for a moment, to say "this one".
+
+        Uses the same highlight channel as the preview mark, which is safe only because every caller
+        clears the preview first; a flash while something is previewed would erase the mark saying what a
+        second click is about to do.
+        """
+        self._widget.set_highlighted_nodes({node_id})
+        self._flash_until_ns = time.monotonic_ns() + int(_FLASH_DURATION * 1e9)
+
+    def _expire_flash(self) -> None:
+        """Clear a flash once its moment has passed. Called once per frame."""
+        if self._flash_until_ns is None or time.monotonic_ns() < self._flash_until_ns:
+            return
+        self._flash_until_ns = None
+        self._apply_preview_highlight()  # back to whatever the preview state says, which is usually nothing
 
     def _apply_preview_highlight(self) -> None:
         """Mark the previewed box, so what a second click would act on is on screen before it happens."""

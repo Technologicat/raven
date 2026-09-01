@@ -31,7 +31,8 @@ PAN_AMOUNT = 10
 # Zoom factors.
 ZOOM_IN_FACTOR = 1.2           # per keypress / toolbar button click
 ZOOM_OUT_FACTOR = 1.2          # applied as 1/factor
-MOUSE_WHEEL_ZOOM_FACTOR = 1.1  # per wheel notch (finer than keyboard)
+MOUSE_WHEEL_ZOOM_FACTOR = 1.25  # per wheel notch; three notches to double. 1.1 took seven and read
+                                # as a wheel that was not doing anything.
 
 # Dark mode — invert graph lightness for DPG's dark theme.
 DARK_MODE = True
