@@ -1,8 +1,28 @@
 # Brief: finishing the Visualizer's `app.py` split
 
-**Filed 2026-09-01**, from a survey done while writing the package's tests. Not deadline-bound, and not a
-bug list: nothing here is broken. It is the remainder of the refactor that produced `info_panel`,
-`selection`, `plotter`, `annotation`, `word_cloud`, `entry_renderer`, `app_state` and `search`.
+**Filed 2026-09-01, closed 2026-09-01.** Filed from a survey done while writing the package's tests. Not
+deadline-bound, and not a bug list: nothing here was broken. It is the remainder of the refactor that
+produced `info_panel`, `selection`, `plotter`, `annotation`, `word_cloud`, `entry_renderer`, `app_state`
+and `search`.
+
+## How it closed
+
+- **Item 1, the BibTeX importer's GUI** — extracted to `importer_gui.py`, with 36 tests.
+- **Item 2, the info panel's header and navigation bar** — moved to `info_panel.build_header()` and
+  `build_navigation_controls()`, with 13 tests. `app_state.copy_report_tooltip` retired to module-local
+  state on the way.
+- **Item 3, the help-card content** — **declined**; see its section below for the reasoning.
+
+`app.py` went 1763 → 1344 lines. The package's tests went 230 → 326, and the number of its test modules
+that actually run in CI went 4 of 9 → 8 of 9, which was the argument for the whole exercise.
+
+**Two things this brief mentions are deliberately not carried forward**, rather than being filed:
+
+- **The word cloud window's layout (~14 lines).** The same argument as item 2 and much weaker, on a tenth
+  of the code. If it ever matters it is re-derivable in a minute from the shape of item 2; an entry for it
+  would charge more attention than it could ever repay.
+- **The sixteen `# TODO: DRY duplicate definitions for labels`.** Those are markers in the code, so they
+  carry themselves and need no home here.
 
 ## What the file is for, and how far off it is
 
