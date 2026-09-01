@@ -84,7 +84,6 @@ with timer() as tim:
     from ..client import config as client_config
 
     from ..common import bgtask
-    from ..common import numutils
     from ..common import utils as common_utils
 
     from ..common.gui import animation as gui_animation
@@ -539,35 +538,6 @@ class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is instal
         super().__init__(ambient=True)
         self.cycle_duration = cycle_duration
 
-    @classmethod
-    def _compute_alpha(cls, x, n_data, n_many):
-        """Compute translucency for plotter highlight, accounting for the effect of data mass on perceived translucency.
-
-        High alpha per datapoint when very few datapoints; low alpha per datapoint when many datapoints.
-
-        `x`: float, [0, 1]. The animation control channel. More means brighter.
-        `n_data`: int, how many datapoints there are in the set being highlighted.
-        `m_many`: int, how many datapoints are so many that the minimum per-datapoint alpha should be used.
-
-        Returns the `alpha` value (int, [0, 255]).
-        """
-        # Coefficients for `alpha = a0 + a1 * x`, in the maximally bright and maximally dim cases.
-        # These have been manually calibrated (via a coarse eyeball estimate) to give the same
-        # perceived brightness for the highlighted set of datapoints regardless of the amount of data.
-        a0_bright = 64
-        a1_bright = 255 - a0_bright
-        a0_dim = 32
-        a1_dim = 64
-        # Interpolate the coefficients from bright to dim, smoothly, depending on relative data mass.
-        relative_data_mass = numutils.clamp(n_data / n_many)  # 0 ... 1, linear clamp
-        r = numutils.nonanalytic_smooth_transition(relative_data_mass, m=2.0)  # 0 ... 1, smoothed
-        a0 = a0_bright * (1.0 - r) + a0_dim * r
-        a1 = a1_bright * (1.0 - r) + a1_dim * r
-        # Compute the final alpha using the interpolated coefficients.
-        alpha = a0 + int(a1 * x)
-        # logger.debug(f"compute_data_highlight_alpha: relative data mass = {relative_data_mass}, smooth parameter = {r}, animation control value = {x}; result alpha = {alpha}")
-        return alpha
-
     def render_frame(self, t):
         dt = (t - self.t0) / 10**9  # seconds since t0
         cycle_pos = dt / self.cycle_duration  # number of cycles since t0
@@ -586,12 +556,12 @@ class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is instal
         # Convert animation cycle position to animation control channel value.
         # Same approach as in the AI avatar code, see `raven.server.modules.avatar.animate_breathing`.
         animation_pos = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
-        alpha_search = self._compute_alpha(animation_pos,
-                                           len(unbox(search.search_result_data_idxs_box)),
-                                           gui_config.n_many_searchresults)
-        alpha_selection = self._compute_alpha(1.0 - animation_pos,
-                                              len(unbox(app_state.selection_data_idxs_box)),
-                                              gui_config.n_many_selection)
+        alpha_search = plotter.compute_highlight_alpha(animation_pos,
+                                                       len(unbox(search.search_result_data_idxs_box)),
+                                                       gui_config.n_many_searchresults)
+        alpha_selection = plotter.compute_highlight_alpha(1.0 - animation_pos,
+                                                          len(unbox(app_state.selection_data_idxs_box)),
+                                                          gui_config.n_many_selection)
         dpg.set_value(search_results_highlight_color, (*gui_config.plotter_search_results_highlight_color, alpha_search))
         dpg.set_value(selection_highlight_color, (*gui_config.plotter_selection_highlight_color, alpha_selection))
 

@@ -18,6 +18,7 @@ encapsulated here; external cleanup goes through `clear_cluster_color_themes`.
 
 __all__ = ["get_visible_datapoints",
            "get_data_idxs_at_mouse",
+           "compute_highlight_alpha",
            "reset_zoom",
            "parse_dataset_file",
            "load_dataset",
@@ -38,6 +39,7 @@ import dearpygui.dearpygui as dpg
 from unpythonic import call, timer, window
 from unpythonic.env import env
 
+from ..common import numutils
 from ..common import utils as common_utils
 from ..common.gui import utils as guiutils
 
@@ -127,6 +129,39 @@ def get_data_idxs_at_mouse(dataset: env | None = None) -> np.ndarray:
     filt = (pixel_distance <= gui_config.selection_brush_radius_pixels)
 
     return data_idxs[filt]
+
+
+def compute_highlight_alpha(x, n_data, n_many):
+    """Compute translucency for a plotter highlight, accounting for how data mass changes perceived brightness.
+
+    High alpha per datapoint when there are very few of them; low alpha per datapoint when there are many.
+    The point is that a highlighted *set* looks equally bright whether it holds five points or five
+    thousand, since a crowd of translucent dots accumulates into an opaque blob without this.
+
+    `x`: float, [0, 1]. The animation control channel. More means brighter.
+    `n_data`: int, how many datapoints there are in the set being highlighted.
+    `n_many`: int, how many datapoints are so many that the minimum per-datapoint alpha should be used.
+
+    Returns the `alpha` value (int, [0, 255]).
+
+    Drives the pulsating glow on the search-result and selection highlight series; the animation lives
+    in `app.py`, and this is the curve it reads.
+    """
+    # Coefficients for `alpha = a0 + a1 * x`, in the maximally bright and maximally dim cases.
+    # These have been manually calibrated (via a coarse eyeball estimate) to give the same
+    # perceived brightness for the highlighted set of datapoints regardless of the amount of data.
+    a0_bright = 64
+    a1_bright = 255 - a0_bright
+    a0_dim = 32
+    a1_dim = 64
+    # Interpolate the coefficients from bright to dim, smoothly, depending on relative data mass.
+    relative_data_mass = numutils.clamp(n_data / n_many)  # 0 ... 1, linear clamp
+    r = numutils.nonanalytic_smooth_transition(relative_data_mass, m=2.0)  # 0 ... 1, smoothed
+    a0 = a0_bright * (1.0 - r) + a0_dim * r
+    a1 = a1_bright * (1.0 - r) + a1_dim * r
+    # Compute the final alpha using the interpolated coefficients.
+    alpha = a0 + int(a1 * x)
+    return alpha
 
 
 def reset_zoom():

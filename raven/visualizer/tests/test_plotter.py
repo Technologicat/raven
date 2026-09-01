@@ -371,6 +371,58 @@ def test_a_mouse_position_near_but_not_at_the_origin_is_believed(point_at_the_or
 
 
 # --------------------------------------------------------------------------------
+# The highlight brightness curve
+#
+# A calibrated perceptual curve, hand-tuned by eye. Nothing here asserts that the calibration is *right*
+# -- that is a judgement about how it looks -- only that the shape it was tuned to have is the shape it
+# still has, so a later change to the coefficients cannot quietly invert or flatten it.
+
+N_MANY = 100
+
+
+def test_the_highlight_brightens_with_the_animation_channel():
+    dim = plotter.compute_highlight_alpha(0.0, n_data=10, n_many=N_MANY)
+    bright = plotter.compute_highlight_alpha(1.0, n_data=10, n_many=N_MANY)
+    assert dim < bright
+
+
+def test_the_highlight_is_monotonic_in_the_animation_channel():
+    # It is a pulsation, so a dip anywhere in the cycle would read as a stutter.
+    alphas = [plotter.compute_highlight_alpha(x / 20, n_data=10, n_many=N_MANY) for x in range(21)]
+    assert alphas == sorted(alphas)
+
+
+def test_a_larger_set_is_drawn_more_faintly_per_datapoint():
+    # The whole reason the curve takes `n_data`: translucent dots accumulate, so a crowd drawn at the
+    # brightness of a handful becomes an opaque blob.
+    few = plotter.compute_highlight_alpha(1.0, n_data=1, n_many=N_MANY)
+    many = plotter.compute_highlight_alpha(1.0, n_data=N_MANY, n_many=N_MANY)
+    assert many < few
+
+
+def test_the_per_datapoint_alpha_stops_falling_once_the_set_is_large():
+    # `n_many` is "this is already as many as it needs to be", so beyond it the curve is flat rather
+    # than continuing down towards invisibility on a very large selection.
+    at_the_limit = plotter.compute_highlight_alpha(1.0, n_data=N_MANY, n_many=N_MANY)
+    far_beyond = plotter.compute_highlight_alpha(1.0, n_data=50 * N_MANY, n_many=N_MANY)
+    assert at_the_limit == far_beyond
+
+
+def test_the_alpha_stays_inside_the_range_a_colour_channel_has():
+    # Sampled across both parameters, since the coefficients are interpolated between two hand-tuned
+    # pairs and nothing else bounds the result.
+    for n_data in (0, 1, 10, N_MANY, 10 * N_MANY):
+        for x in (0.0, 0.25, 0.5, 0.75, 1.0):
+            alpha = plotter.compute_highlight_alpha(x, n_data=n_data, n_many=N_MANY)
+            assert 0 <= alpha <= 255, f"alpha {alpha} out of range at x={x}, n_data={n_data}"
+
+
+def test_the_dimmest_a_highlight_gets_is_still_visible():
+    # A highlight that faded to nothing at the bottom of its cycle would blink rather than pulsate.
+    assert plotter.compute_highlight_alpha(0.0, n_data=10 * N_MANY, n_many=N_MANY) > 0
+
+
+# --------------------------------------------------------------------------------
 # Zoom and lifecycle
 
 def test_resetting_the_zoom_fits_both_axes(gui):
