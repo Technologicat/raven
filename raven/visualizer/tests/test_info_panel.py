@@ -16,6 +16,9 @@ answers "which item is at the top of the panel", and the interesting part is wha
 with it. Stubbing exactly there is what makes the rest reachable.
 """
 
+import ast
+import pathlib
+
 import pytest
 
 info_panel = pytest.importorskip("raven.visualizer.info_panel")
@@ -26,6 +29,30 @@ from unpythonic.env import env  # noqa: E402 -- ditto
 from raven.visualizer.app_state import app_state  # noqa: E402 -- ditto
 
 SEARCH_FIELD = "search_field"  # tag
+
+
+def test_spacy_is_not_imported_at_module_level():
+    """Asserted against the source, because another test may have imported spaCy by the time this runs.
+
+    The module needs one static thing from spaCy -- the English stopword set, for one search-field
+    convenience -- and reaching it costs about 2.4 s and three thousand modules. Paying that at import
+    time also takes this whole file out of CI, where spaCy is deliberately absent, and the only visible
+    consequence would be a skip that reads as a pass. `_get_stopwords` is the way in.
+    """
+    tree = ast.parse(pathlib.Path(info_panel.__file__).read_text(encoding="utf-8"))
+    offenders = [node.lineno for node in tree.body
+                 if (isinstance(node, ast.ImportFrom) and (node.module or "").startswith("spacy"))
+                 or (isinstance(node, ast.Import) and any(a.name.startswith("spacy") for a in node.names))]
+    assert not offenders, (f"info_panel.py imports spaCy at module level (line(s) {offenders}); "
+                           f"that takes this whole test file out of CI")
+
+
+def test_the_stopword_set_is_the_english_one_and_is_cached():
+    first = info_panel._get_stopwords()
+    assert "the" in first and "of" in first, "this does not look like an English stopword set"
+    assert "titanium" not in first, "an ordinary content word must not be filtered out of a search"
+    assert info_panel._get_stopwords() is first, "the set is rebuilt on every call, which is the cost the "\
+                                                 "lazy load exists to pay only once"
 
 
 class RecordingDPG:

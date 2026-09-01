@@ -91,6 +91,28 @@ def test_every_fragment_has_to_match(dataset):
     assert titles_matching(dataset, "cat methanol") == ["Photocatalytic degradation of methanol"]
 
 
+def test_a_lowercase_stopword_matches_inside_longer_words(dataset):
+    """Why the info panel's arrow button strips stopwords before sending a title here as a query.
+
+    Matching is by substring rather than by word, so a short common word matches wherever its letters
+    happen to fall — which for a title-shaped query is nearly everywhere, and the highlighter then paints
+    those fragments across the panel. Stripping them is the caller's policy; *this* is the property that
+    makes it necessary, and it belongs here because it is `find_matches` that could stop being true.
+
+    If this test ever has to change, look at `info_panel._search_or_select_entry`: the stripping there
+    exists only for this, and may have become unnecessary or wrong.
+    """
+    # "an" is inside meth·an·ol, and inside abl·a·tion? No -- but inside "degradation" it is not either.
+    # It is the one in "methanol" that matters, and one hit is enough to make the point.
+    assert titles_matching(dataset, "an") == ["Photocatalytic degradation of methanol"]
+
+    # An uppercase letter makes a fragment case-sensitive, so the same word typed the way someone
+    # deliberately searching for it would type it does not do this. That is the escape hatch, and it is
+    # also the control here: without it, this test would pass against a matcher that ignored case
+    # entirely and the case rule could be lost without anything failing.
+    assert titles_matching(dataset, "An") == []
+
+
 def test_the_titles_are_matched_in_their_normalized_form(dataset):
     # The query is normalized too, so a title written "CO₂" has to be findable by typing "CO2" -- which
     # is what someone reading the subscript on screen will type.

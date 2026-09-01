@@ -104,8 +104,6 @@ logger = logging.getLogger(__name__)
 
 import dearpygui.dearpygui as dpg
 
-from spacy.lang.en import English
-
 from unpythonic import box, dlet, islice, unbox
 from unpythonic.env import env as envcls
 
@@ -127,8 +125,27 @@ from .app_state import app_state
 
 gui_config = visualizer_config.gui_config
 
-_nlp_en = English()
-_stopwords = _nlp_en.Defaults.stop_words
+_stopwords = None  # English stopword set, loaded on first use by `_get_stopwords`
+
+def _get_stopwords():
+    """Return the English stopword set, loading it on first use.
+
+    Used in one place, to keep a search built from an entry's title from being mostly short common words.
+
+    Loaded lazily because the list is static data reached through a heavy import: spaCy's English class
+    costs about 2.4 s and three thousand modules to construct, for a frozenset. Paying that at import time
+    would make this module as expensive as the NLP stack, and would keep its tests out of CI, where spaCy
+    is deliberately absent.
+
+    `raven.common.nlptools.default_stopwords` is the same list, already lowercased, and is what the
+    importer and the RAG indexer use — but reaching it costs more still (it imports torch, transformers,
+    sentence-transformers and flair on the way), so this stays a separate, cheaper route to the same data.
+    """
+    global _stopwords
+    if _stopwords is None:
+        from spacy.lang.en import English
+        _stopwords = English().Defaults.stop_words
+    return _stopwords
 
 
 # --------------------------------------------------------------------------------
@@ -580,9 +597,13 @@ def _search_or_select_entry(entry, action):
     elif action == "deselect":
         selection.update([entry.data_idx], mode="subtract", wait=False)
     else:  # action == "search"
-        # Exclude stopwords so the MD renderer has fewer short sequences to highlight;
-        # also makes "Methanol" not match the "an" inside it (case-insensitive fragments match first).
-        filtered_title = " ".join(word for word in entry.title.strip().split() if word.lower() not in _stopwords)
+        # A title makes a poor query unstripped: the search matches by substring, so its short common
+        # words match almost everywhere and the highlighter then paints them across the panel. Stripping
+        # them is this button's policy — searching for "and" from the field itself stays allowed. The
+        # property that makes it necessary belongs to the search, and is pinned by
+        # `test_search.test_a_lowercase_stopword_matches_inside_longer_words`.
+        stopwords = _get_stopwords()
+        filtered_title = " ".join(word for word in entry.title.strip().split() if word.lower() not in stopwords)
         if dpg.get_value("search_field") != filtered_title:  # tag
             dpg.set_value("search_field", filtered_title)  # tag
         else:  # already searching for this item -> clear the search
