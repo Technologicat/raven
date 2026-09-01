@@ -187,9 +187,15 @@ corpus-scoped, numeric and exact. Different questions.
   distribution is bimodal (34, then 5), where AOKK's is a smooth gradient (31, 21, 20, 17, 17, 16, 13,
   12, 11, 11 …) with no gap for any threshold to find. A rule that needed a cutoff would have had to be
   tuned per corpus; this one does not.
-- **Does the split apply to `"frequencies"` mode too?** That method already discriminates, so the
-  per-cluster half is largely redundant for it. The dialog applies either way.
-- **Does the corpus-level display want the low-IDF terms, or the raw frequency head, or both?** They are
-  different lists — the first is "what every cluster mentions", the second is "what the corpus is made
-  of" — and both have a claim on the phrase *what this dataset is about*. Cheap to show both; worth
-  looking at once before deciding.
+- ~~**Does the split apply to `"frequencies"` mode too?**~~ **Not worth building for it** (Juha,
+  2026-09-01: that method "tends to give low-quality keywords"). It already discriminates, being
+  TF-IDF-shaped, so the per-cluster half would be redundant even if its keywords were good. The dialog
+  applies either way, since `all_keywords` is produced regardless of which method labels the clusters.
+  - Worth noting what happened here rather than only the outcome: keyword extraction is a long-standing
+    NLP problem that frequency methods solved indifferently and an LLM solves well. The `"frequencies"`
+    method stays as the offline path for an import with no backend, not as a peer.
+- **Does the corpus-level display want the low-IDF terms, or the raw frequency head, or both?**
+  **Probably both, and the decision waits for something to look at** (Juha). They are different lists —
+  the first is "what every cluster mentions", the second is "what the corpus is made of" — and both have
+  a claim on the phrase *what this dataset is about*. Cheap to show both, and a judgement that wants a
+  GUI in front of it rather than a table in a brief.
