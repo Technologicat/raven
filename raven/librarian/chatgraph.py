@@ -846,12 +846,13 @@ def build(datastore: chattree.Forest,
     graph = xdotgraph.Graph(width=x2 + config.margin, height=y2 + config.margin,
                             nodes=graph_nodes, edges=graph_edges)
 
-    # Measured after the translation above, so it is in the same coordinates as everything else.
-    spine_boxes = [nodes_by_name[node_id].get_bounding_box()
-                   for node_id in visible_spine if node_id in nodes_by_name]
-    if spine_boxes:
-        spine_bbox = (min(box[0] for box in spine_boxes), min(box[1] for box in spine_boxes),
-                      max(box[2] for box in spine_boxes), max(box[3] for box in spine_boxes))
+    # Measured after the translation above, so it is in the same coordinates as everything else -- and
+    # measured over what is *drawn*, not over the node boxes. A pointer pill hangs above its node, so the
+    # topmost box of the branch has its pill outside its own rectangle, and a frame computed from
+    # rectangles clips the SYS pill off the top of the view.
+    spine_nodes = [nodes_by_name[node_id] for node_id in visible_spine if node_id in nodes_by_name]
+    if spine_nodes:
+        spine_bbox = _content_bbox(spine_nodes)
     else:  # nothing of the branch survived; framing the whole picture is the only answer left
         spine_bbox = (0.0, 0.0, graph.width, graph.height)
 

@@ -648,12 +648,26 @@ things in a space that fits one.
   colours, which is right for the border and would be wrong for the image; an `ImageShape` drawn through
   `dpg.draw_image` takes no pen colour, so it should be unaffected — but that is reasoning, not a
   measurement, and it is worth a look on the first render.
-- **The overhang eats the gap between siblings**, which is `horizontal_spacing = 24` against a stack that
-  can reach further than that. Either the spacing grows when a row has attachments, or the stack caps at a
-  few and says "+N". Undecided; it needs a row of attachment-bearing siblings to look at.
-- **No test would currently notice a collision.** `overlapping_pairs` compares *node* boxes, and a
-  thumbnail lives outside its node's box exactly as a pill does. Whichever way the overhang is bounded,
-  that test wants extending to shape extents, or the bound is unenforced.
+- **The stack is capped, because somebody will attach fifty files** (Juha, 2026-09-01). Show them all up
+  to five or six; past that, the first two, an ellipsis, and the last two.
+  - **With a wrapping algorithm's tolerance**: a count a little over the limit is shown whole rather than
+    abbreviated, since replacing three thumbnails with two and an ellipsis saves nothing and costs the
+    reader a count. Cut only when clearly over.
+  - Worth noticing that this is the **sibling window again, one axis down** — some items, anchors at both
+    ends, a gap standing for the run between. Whether the two share code or merely a shape is an
+    implementation question; that they should not disagree about the *rule* is not.
+- **The overhang still eats the gap between siblings**, which is `horizontal_spacing = 24` against a stack
+  of up to six. The cap bounds it but does not size it: either the spacing grows when a row has
+  attachments, or the per-thumbnail offset is small enough that six fit. Wants a row of them to look at.
+- **No test would currently notice the resulting overlap.** `overlapping_pairs` compares *node* boxes, and
+  a thumbnail lives outside its node's box exactly as a pill does. Whichever way the overhang is bounded,
+  that test wants extending to shape extents, or the bound is unenforced. The overlap meant here is
+  visual — two things drawn on top of each other — rather than anything the layout or the hit test would
+  call an error.
+- **The overhang is outside the node's hit box, and that decides one thing later.** `hit_test` asks
+  `Node.is_inside`, which is the rectangle; the part of a thumbnail hanging past the right edge belongs to
+  no node. Harmless while a thumbnail is a marker. The day clicking one should open the attachment, the
+  clickable area and the drawn area are not the same shape, and something has to give.
 
 **Found while driving it:**
 

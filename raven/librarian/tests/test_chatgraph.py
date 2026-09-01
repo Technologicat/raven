@@ -699,6 +699,23 @@ class TestGeometry:
             box = built.graph.get_node_by_name(ref.name).get_bounding_box()
             assert box[2] - box[0] == pytest.approx(config.gap_node_w)
 
+    def test_the_branchs_frame_contains_what_is_drawn_on_the_branch(self):
+        """What a view fits on opening. A pill hangs above its node, so the topmost box of the branch has
+        part of itself outside its own rectangle — and a frame built from rectangles clips the SYS pill off
+        the top, which is the one label saying which card this conversation belongs to."""
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        user = forest.create_node(payload("user", "hello"), parent_id=system)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=user, new_chat_node_id=system))
+
+        top_node = built.graph.get_node_by_name(system)
+        assert built.refs[system].pills, "the top of this branch wears no pill, so nothing can be clipped"
+        shape_tops = [box[1] for box in (s.get_bounding_box() for s in top_node.shapes) if box is not None]
+        assert min(shape_tops) < top_node.get_bounding_box()[1], \
+            "nothing is drawn above the top node's box, so this fixture cannot detect the clipping"
+
+        assert built.spine_bbox[1] <= min(shape_tops)
+
     def test_the_picture_starts_at_the_origin(self):
         # `Viewport.zoom_to_fit` fits the box (0, 0)-(width, height) and nothing else, so content placed
         # outside it is simply not framed.
