@@ -755,6 +755,34 @@ thing turns on, because the failure was exactly a collision between two of them:
 Four reviewable commits: the builder and its tests; the panel and its placement, including the avatar pause
 gate; the interactions; the tool badges and role icons.
 
+### Getting back: the view has no history
+
+Raised 2026-09-01, from a live run. Switch to *"How can I help you today?"* — two clicks — and the position
+you were reading from is gone, with no convenient way back. Panning to it by hand across a wide level is
+not a way back; it is a search.
+
+Three things came out of it, and only the first is clearly a feature:
+
+1. **A navigation history, back and forward.** `raven/visualizer/selection.py` is the precedent and the
+   shape to copy: a module-local stack with a cursor, `commit_change_to_undo_history` / `undo` / `redo`.
+   Here it would be panel-local and the unit on the stack is a `ViewState` — the focus, the sibling
+   windows, the expanded turns.
+   - **It is a history of *views*, not of HEAD**, and conflating the two is the obvious mistake waiting to
+     be made. Going back should restore where you were *looking*; it should not un-commit a branch switch.
+     Moving HEAD is already reversible by navigating, and an undo that silently moved it back would break
+     the one promise this view makes — that only a deliberate act changes state.
+   - Open: whether pan and zoom go on the stack too. The framing rules would otherwise re-derive a
+     position, which is not the same as the one you left.
+2. **A way back to the newest sibling without panning.** Possibly already there and worth *checking before
+   building*: the sibling window keeps the first and last as anchors, so at the session level the last
+   anchor is the newest chat and clicking it should do it. If that works, what is missing is not the
+   operation but knowing it is there.
+   - Note this is the operation the chat log's *switch to last sibling* button performs, so the two should
+     agree. It is also distinct from the ±10 stepping that the gap-click bisection replaced: an anchor
+     jump, not a step.
+3. **Auxiliary buttons drawn near a node**, as the general answer to "this view needs verbs". Open, and
+   the largest of the three — it wants deciding what the verbs are before deciding they are buttons.
+
 ## Where this stands, end of 2026-09-01
 
 The view is built, wired into Librarian, and has been driven live several times. It is *usable* — the
@@ -779,16 +807,18 @@ remaining work is the two features below plus the polish the four rules describe
 
 1. **The four rules above** (whole branch rather than a stump; no gap below three hidden; the depth window
    centred on the focus; focus and HEAD both on screen). Pure `chatgraph` work, visible immediately.
-2. **`ImageShape` in the widget.** Unblocks two things at once and they are not the same size: role glyphs
+2. **A navigation history**, per the section above — the view keeps none, so a branch switch strands the
+   reader. Cheap, and the precedent is written.
+3. **`ImageShape` in the widget.** Unblocks two things at once and they are not the same size: role glyphs
    need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
    thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render
    thread where `split_frame` deadlocks.
-3. **Attachment thumbnails**, to the design above: straddling the right edge, stacked and capped, bordered
+4. **Attachment thumbnails**, to the design above: straddling the right edge, stacked and capped, bordered
    in the graph's line pen, prepared on a background task with a placeholder meanwhile.
-4. **The avatar pause gate.** Never built. `TODO.md:662–663` and the road-mode notes above have the
+5. **The avatar pause gate.** Never built. `TODO.md:662–663` and the road-mode notes above have the
    traps: the visibility term needs its own path rather than a term in the idle branch, and the switch
    keys on the idle detector rather than on whether the video happens to be running.
-5. **Fragment search across the tree**, which was always v2 and is brief 14's companion.
+6. **Fragment search across the tree**, which was always v2 and is brief 14's companion.
 
 **Open, needing a decision rather than work:** whether `raven-xdot-viewer` gets the actual-size button
 too, for the consistency that now runs the other way.
