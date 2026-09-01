@@ -62,6 +62,11 @@ should not be doing anything else, so anything found in there worth testing is a
 another module, not that the entry point needs a test. Testing it would also mean testing the wiring
 against itself. So `info_panel.py` is the last module in this plan, not the second to last.
 
+**What is still in `app.py` that should not be is a separate document**,
+`visualizer-app-py-extraction-brief.md`, written from a survey done while these tests were. Its argument
+is this one turned around: `app.py` cannot be imported under pytest, so everything left in it is
+untestable by construction, and each extraction converts code that cannot be tested into code that can.
+
 **The `dpg.` count is the right proxy, but it overstates the cost where the calls are few and simple.**
 `selection`'s eighteen are four distinct calls — `enable_item`, `disable_item`, `set_value`,
 `is_key_down` — so `test_selection.py` monkeypatches a recording stand-in over the module's `dpg`
