@@ -186,12 +186,17 @@ def test_an_unknown_report_format_is_refused(gui):
         info_panel._copy_report_to_clipboard(report_format="pdf")
 
 
-def test_copying_one_entry_puts_its_authors_year_and_title_on_the_clipboard(gui, monkeypatch):
-    # The citation shape someone pastes into notes or an email, so the format is the feature.
+def test_an_entry_is_cited_as_authors_year_and_title(gui):
+    # The citation shape someone pastes into notes or an email, so the format is the feature. It takes
+    # the entry rather than the widget showing it, which is what lets it be read at all.
+    assert info_panel.format_entry_citation(gui.entries[1]) == "Author, An (2024): A study of methanol"
+
+
+def test_copying_one_entry_puts_its_citation_on_the_clipboard(gui, monkeypatch):
     gui.dpg.user_data[99] = ("copy_entry_to_clipboard_button", (object(), "Copy this entry"))
     monkeypatch.setattr(info_panel.widgetfinder, "find_widget_depth_first", lambda item, accept: 99)
     info_panel._copy_entry_to_clipboard(11)
-    assert gui.dpg.clipboard == "Author, An (2024): A study of methanol"
+    assert gui.dpg.clipboard == info_panel.format_entry_citation(gui.entries[1])
 
 
 def test_copying_the_current_entry_copies_the_one_at_the_top_of_the_panel(gui, monkeypatch):
@@ -244,7 +249,14 @@ def test_holding_shift_selects_the_current_entry_alone(gui, monkeypatch):
     gui.dpg.keys_down = {gui.dpg.mvKey_LShift}
     info_panel.search_or_select_current_entry()
     assert gui.selections == [([1], "replace", {"wait": False})]
-    assert SEARCH_FIELD not in gui.dpg.values, "the selection modes leave the search alone"
+    assert SEARCH_FIELD not in gui.dpg.values, "the selection actions leave the search alone"
+
+
+def test_an_unknown_search_or_select_action_is_refused(gui):
+    # The action arrives as a string from whichever handler read the gesture, so a typo should not
+    # quietly fall through to the search branch, which is the one with no modifier attached to it.
+    with pytest.raises(ValueError):
+        info_panel._search_or_select_entry(gui.entries[1], "seach")
 
 
 def test_holding_ctrl_removes_the_current_entry_from_the_selection(gui, monkeypatch):
@@ -329,19 +341,27 @@ def test_a_cluster_not_currently_shown_offers_nowhere_to_navigate(gui, monkeypat
 # Selecting a whole cluster
 
 def test_selecting_a_cluster_selects_every_entry_in_it(gui):
-    info_panel.select_cluster_by_id(0)
+    info_panel.select_cluster_by_id(0, "replace")
     data_idxs, mode, _ = gui.selections[0]
     assert sorted(data_idxs) == [0, 1], "both entries of cluster 0, and neither of cluster 1"
     assert mode == "replace"
 
 
-def test_selecting_a_cluster_honors_the_keyboard_modifiers(gui):
-    # Negative control for the mode in the test above: it comes from the keyboard rather than being
-    # hardcoded, so a cluster can be added to or removed from a selection being built up.
+def test_the_combine_mode_is_passed_through_rather_than_decided_here(gui):
+    # Negative control for the mode in the test above: it is the caller's, so a cluster can be added to
+    # or subtracted from a selection being built up.
+    info_panel.select_cluster_by_id(1, "add")
+    _, mode, _ = gui.selections[0]
+    assert mode == "add"
+
+
+def test_selecting_the_current_cluster_reads_the_modifiers_at_the_gesture(gui, monkeypatch):
+    # The hotkey handler is where the keyboard is read, because that is where the gesture is. The
+    # operation below it takes the answer, so it cannot read a modifier the user has since let go of.
+    be_current(monkeypatch, 12)
     gui.dpg.keys_down = {gui.dpg.mvKey_LShift}
-    info_panel.select_cluster_by_id(1)
-    data_idxs, mode, _ = gui.selections[0]
-    assert data_idxs == [2]
+    info_panel.select_current_cluster()
+    _, mode, _ = gui.selections[0]
     assert mode == "add"
 
 

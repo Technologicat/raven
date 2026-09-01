@@ -75,6 +75,7 @@ __all__ = ["content_lock",
            "page_down",
            "copy_report_to_clipboard",
            "copy_current_entry_to_clipboard",
+           "format_entry_citation",
            "search_or_select_current_entry",
            "scroll_position_changed",
            "update_current_search_result_status",
@@ -488,11 +489,22 @@ def copy_current_entry_to_clipboard():
         _copy_entry_to_clipboard(item)
 
 
+def format_entry_citation(entry):
+    """Format one entry as the short citation that goes on the clipboard.
+
+    `entry`: a record of `dataset.sorted_entries`.
+
+    The shape someone pastes into their notes or an email: authors, year, title.
+    """
+    return f"{entry.author} ({entry.year}): {entry.title}"
+
+
 def _copy_entry_to_clipboard(item):
     """Implementation. `item` is the DPG ID/tag of the entry title container group.
 
     We take the widget (not the raw entry) because we need access to the button to play the
-    acknowledgment animation on it.
+    acknowledgment animation on it. What goes *on* the clipboard is `format_entry_citation`, which
+    takes the entry — so the format can be read, and changed, without a widget tree to hang it from.
     """
     with content_lock:
         data_idx = widget_to_data_idx[item]
@@ -503,7 +515,7 @@ def _copy_entry_to_clipboard(item):
         kind_, data = user_data
         tooltip, tooltip_text = data
 
-    dpg.set_clipboard_text(f"{entry.author} ({entry.year}): {entry.title}")
+    dpg.set_clipboard_text(format_entry_citation(entry))
 
     gui_animation.flash_button(button=button,
                                message="Copied to clipboard!",
@@ -515,11 +527,31 @@ def _copy_entry_to_clipboard(item):
 # --------------------------------------------------------------------------------
 # Search-or-select: act on the current item
 
+def _keyboard_state_to_search_or_select_action():
+    """Map current keyboard modifier state (Shift, Ctrl) to a search-or-select action.
+
+    Returns one of:
+        "select" (Shift):    set the selection to this entry only
+        "deselect" (Ctrl):   remove this entry from the selection
+        "search" (neither):  toggle-search for this entry in the plotter
+
+    Companion to `selection.keyboard_state_to_mode`, which does the same job for the combine modes.
+    """
+    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+    ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+    if shift_pressed:
+        return "select"
+    elif ctrl_pressed:
+        return "deselect"
+    return "search"
+
+
 def search_or_select_current_entry():
     """Search for the current item in the plotter, or change the selection. Hotkey handler.
 
     The current item is the topmost item visible in the info panel.
     """
+    action = _keyboard_state_to_search_or_select_action()  # read the gesture here, while the key is still down
     with content_lock:  # faster to acquire just once instead of again inside `_get_current_item`
         item = _get_current_item()
         if item is None:
@@ -527,27 +559,28 @@ def search_or_select_current_entry():
             return
         data_idx = widget_to_data_idx[item]
     entry = app_state.dataset.sorted_entries[data_idx]
-    _search_or_select_entry(entry)
+    _search_or_select_entry(entry, action)
 
 
-def _search_or_select_entry(entry):
+def _search_or_select_entry(entry, action):
     """Search for `entry` in the plotter, or change the selection. Implementation.
 
-    Alternative modes:
-        no modifier: toggle-search for `entry` in the plotter
-        Shift: set selection to `entry` only
-        Ctrl:  remove `entry` from selection
+    `action`: one of "search", "select", "deselect"; see `_keyboard_state_to_search_or_select_action`.
 
-    The selection-modifying modes trigger an info panel update.
+    The action comes in rather than being read off the keyboard here, so that it is the state at the
+    moment of the gesture. A handler reads it and passes it down; this then works the same whenever it
+    is called, including from anywhere that does not run in the event dispatch.
+
+    The selection-modifying actions trigger an info panel update.
     """
-    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
-    ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+    if action not in ("search", "select", "deselect"):
+        raise ValueError(f"Unknown action '{action}'; expected one of 'search', 'select', 'deselect'.")
 
-    if shift_pressed:
+    if action == "select":
         selection.update([entry.data_idx], mode="replace", wait=False)
-    elif ctrl_pressed:
+    elif action == "deselect":
         selection.update([entry.data_idx], mode="subtract", wait=False)
-    else:
+    else:  # action == "search"
         # Exclude stopwords so the MD renderer has fewer short sequences to highlight;
         # also makes "Methanol" not match the "an" inside it (case-insensitive fragments match first).
         filtered_title = " ".join(word for word in entry.title.strip().split() if word.lower() not in _stopwords)
@@ -770,17 +803,25 @@ def scroll_to_top_of_current_cluster():
         _scroll_to_cluster_by_id(cluster_id)
 
 
-def select_cluster_by_id(cluster_id):
+def select_cluster_by_id(cluster_id, mode):
     """Select all data in cluster `cluster_id`.
 
-    Shift/Ctrl/Ctrl+Shift modes available. Triggers an info panel update if the selection changes.
+    `mode`: the combine mode, one of those `selection.update` accepts. Handlers get it from
+            `selection.keyboard_state_to_mode`, which is where Shift/Ctrl/Ctrl+Shift are read.
+
+    Triggers an info panel update if the selection changes.
+
+    The mode comes in rather than being read off the keyboard here, so that it is the modifier state at
+    the moment of the gesture. A handler reads it and passes it down; this then works the same whenever
+    it is called, including from anywhere that does not run in the event dispatch.
     """
     data_idxs = [data_idx for data_idx, entry in enumerate(app_state.dataset.sorted_entries) if entry.cluster_id == cluster_id]
-    selection.update(data_idxs, selection.keyboard_state_to_mode(), wait=False)
+    selection.update(data_idxs, mode, wait=False)
 
 
 def select_current_cluster():
     """Select all data in the same cluster as the current item. Hotkey handler."""
+    mode = selection.keyboard_state_to_mode()  # read the gesture here, while the key is still down
     with content_lock:  # faster to acquire just once instead of again inside `_get_current_item`
         item = _get_current_item()
         if item is None:
@@ -788,7 +829,7 @@ def select_current_cluster():
             return
         data_idx = widget_to_data_idx[item]
     entry = app_state.dataset.sorted_entries[data_idx]
-    select_cluster_by_id(entry.cluster_id)
+    select_cluster_by_id(entry.cluster_id, mode)
 
 
 # --------------------------------------------------------------------------------
@@ -1173,7 +1214,7 @@ def _update_info_panel(*, task_env=None, env=None):
         def make_search_or_select_entry(entry):
             """Callback to search for the given item in the plotter, or change the selection."""
             def search_or_select():
-                _search_or_select_entry(entry)
+                _search_or_select_entry(entry, _keyboard_state_to_search_or_select_action())
             return search_or_select
 
         def make_select_cluster(cluster_id):
@@ -1182,7 +1223,7 @@ def _update_info_panel(*, task_env=None, env=None):
             Shift, Ctrl, Ctrl+Shift modes available. Triggers an info panel update.
             """
             def select_this_cluster():
-                select_cluster_by_id(cluster_id)
+                select_cluster_by_id(cluster_id, selection.keyboard_state_to_mode())
             return select_this_cluster
 
         # Build info panel content and write report.
