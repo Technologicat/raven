@@ -291,6 +291,66 @@ class TestSpeaker:
 
 
 # ---------------------------------------------------------------------------
+# Which box is which
+# ---------------------------------------------------------------------------
+
+class TestEmphasis:
+    """Three states a box can be in, and none of them may be mistaken for another.
+
+    The hover highlight is the widget's and belongs to the pointer. HEAD is where the reader *is*. A
+    preview is where a second click *would* take them. Drawing any two of these the same way is what makes
+    a lit box read as "this is the current one" when it is nothing of the sort.
+    """
+
+    def _outline_widths(self, built, node_id):
+        node = built.graph.get_node_by_name(node_id)
+        return [s.pen.linewidth for s in node.shapes
+                if isinstance(s, xdotgraph.PolygonShape) and not s.filled]
+
+    def _rings(self, built, node_id):
+        node = built.graph.get_node_by_name(node_id)
+        return [s for s in node.shapes
+                if isinstance(s, xdotgraph.PolygonShape) and s.pen.color == chatgraph.PREVIEW_COLOR]
+
+    def test_head_is_drawn_heavier_than_the_rest(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        config = chatgraph.LayoutConfig()
+        assert config.head_line_width > config.line_width, \
+            "the two weights are equal, so this fixture cannot tell them apart"
+        assert max(self._outline_widths(built, reply)) == pytest.approx(config.head_line_width)
+        assert max(self._outline_widths(built, user)) == pytest.approx(config.line_width)
+
+    def test_a_previewed_box_gets_a_ring_of_its_own(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply,
+                                                            previewed_node_id=user))
+        assert len(self._rings(built, user)) == 1
+        assert self._rings(built, reply) == [], "the ring is on every box, so it marks nothing"
+
+    def test_the_ring_sits_outside_the_box_and_is_dotted(self, conversation):
+        # Outside, because the box's own outline is already saying something -- solid or dashed, heavy for
+        # HEAD -- and a selection has to be legible over every combination of those. Dotted, because the
+        # selection is tentative until a second click.
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply,
+                                                            previewed_node_id=user))
+        node = built.graph.get_node_by_name(user)
+        ring = self._rings(built, user)[0]
+        assert ring.pen.dash, "the ring is solid, so nothing says the selection is provisional"
+        assert ring.get_bounding_box()[0] < node.get_bounding_box()[0]
+
+    def test_head_can_also_be_the_previewed_box(self, conversation):
+        # The two marks are independent, and a reader who clicks the box they are already on should get
+        # both rather than either winning.
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply, previewed_node_id=reply))
+        config = chatgraph.LayoutConfig()
+        assert len(self._rings(built, reply)) == 1
+        assert max(self._outline_widths(built, reply)) == pytest.approx(config.head_line_width)
+
+
+# ---------------------------------------------------------------------------
 # Pointer pills
 # ---------------------------------------------------------------------------
 

@@ -20,6 +20,9 @@ __all__ = ["SPINE_FILL_COLOR",
            "OFF_SPINE_FILL_COLOR",
            "LINE_COLOR",
            "GAP_LINE_COLOR",
+           "PREVIEW_COLOR",
+
+           "MeasureText",
 
            "Ref",
            "ChatNodeRef",
@@ -31,7 +34,6 @@ __all__ = ["SPINE_FILL_COLOR",
            "ViewState",
            "LayoutConfig",
            "ChatGraph",
-           "MeasureText",
 
            "build"]
 
@@ -56,10 +58,18 @@ SPINE_FILL_COLOR: xdotconstants.Color = (0.78, 0.93, 0.78, 1.0)  # the linearize
 OFF_SPINE_FILL_COLOR: xdotconstants.Color = (0.94, 0.94, 0.94, 1.0)  # everything the current branch did not take
 LINE_COLOR: xdotconstants.Color = (0.15, 0.15, 0.15, 1.0)
 GAP_LINE_COLOR: xdotconstants.Color = (0.45, 0.45, 0.45, 1.0)
+# The ring around the box a click has selected. A colour of its own, and used for nothing else, because
+# the two things it must not be mistaken for are both already on screen: the hover highlight, and HEAD.
+PREVIEW_COLOR: xdotconstants.Color = (0.10, 0.35, 0.80, 1.0)
 
 # Dash pattern for the outline of a gap, in graph units: on, off. A gap stands for content that is not
 # here, and a broken outline says that before any label is read.
 _GAP_DASH: Tuple[float, float] = (6.0, 4.0)
+
+# And for the ring around a tentatively selected box. Dotted rather than dashed, and finer than the gap's
+# pattern, so the two broken lines do not read as the same mark -- they are saying related but different
+# things, "this is not here" against "this is not settled".
+_PREVIEW_DOTS: Tuple[float, float] = (2.0, 3.0)
 
 _ROUNDED_CORNER_SEGMENTS = 4  # per corner; four is already indistinguishable from a curve at these radii
 
@@ -237,6 +247,10 @@ class ViewState:
 
     `head_node_id`: The tip of the current branch — `app_state["HEAD"]`. Where the user actually is, which
                     is what the fill colour and the HEAD pill report.
+    `previewed_node_id`: The node a click has selected, drawn with a ring of its own. Part of the picture
+                         rather than of the widget's highlight state, so that it cannot be confused with a
+                         hover — they would otherwise share one pair of colours — and so that it survives
+                         a rebuild without anyone re-applying it.
     `focus_node_id`: The node the picture is drawn around, defaulting to `head_node_id`. These come apart
                      while previewing: clicking a node on another branch re-lays the graph out around it
                      and refreshes the siblings near it, without moving HEAD. Browsing the multiverse
@@ -254,6 +268,7 @@ class ViewState:
 
     head_node_id: str
     focus_node_id: Optional[str] = None
+    previewed_node_id: Optional[str] = None
     new_chat_node_id: Optional[str] = None
     expanded_tool_turns: Set[str] = dataclasses.field(default_factory=set)
     sibling_focus: Dict[str, str] = dataclasses.field(default_factory=dict)
@@ -280,6 +295,12 @@ class LayoutConfig:
     horizontal_spacing: float = 24.0
     vertical_spacing: float = 44.0
     corner_radius: float = 10.0
+    line_width: float = 1.5
+    # HEAD's box is drawn heavier than the rest. Being where the reader actually is is the most important
+    # thing on screen, and until now the only thing saying so was a small pill in the margin.
+    head_line_width: float = 3.5
+    preview_ring_offset: float = 5.0  # how far outside the box the selection ring sits
+    preview_line_width: float = 2.5
     # The same size the rest of Raven's interface uses, so a node reads like the app it belongs to once the
     # reader has zoomed to 1:1. Sourced rather than repeated: two numbers both meaning "the UI font" drift.
     font_size: float = librarian_config.gui_config.font_size
@@ -585,7 +606,8 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                 label_lines: Sequence[str], fill: Optional[xdotconstants.Color],
                 dashed: bool, pills: Tuple[str, ...],
                 speaker: Optional[str] = None,
-                measure_text: Optional[MeasureText] = None) -> List[xdotgraph.Shape]:
+                measure_text: Optional[MeasureText] = None,
+                emphasized: bool = False, previewed: bool = False) -> List[xdotgraph.Shape]:
     """Return the shapes for one box: its outline, its text, and any pointer pills above it.
 
     `width`: The box's width. A gap is narrower than a node, and the row layout allocates it that much
@@ -593,13 +615,17 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     `fill`: `None` for an unfilled box, which is what a gap is.
     `dashed`: Draw the outline broken.
     `speaker`: Who said it, drawn small above the label. `None` for a gap, which nobody said.
+    `emphasized`: Draw the outline heavy. This is HEAD, and where the reader actually is deserves to be
+                  the loudest thing in the picture.
+    `previewed`: Draw a dotted ring outside the box. This is what a click has selected, and what a second
+                 click would commit to — dotted because that selection is tentative until the second one.
     """
     x1, y1 = x - 0.5 * width, y - 0.5 * config.node_h
     x2, y2 = x + 0.5 * width, y + 0.5 * config.node_h
 
     outline_pen = xdotgraph.Pen()
     outline_pen.color = GAP_LINE_COLOR if dashed else LINE_COLOR
-    outline_pen.linewidth = 1.5
+    outline_pen.linewidth = config.head_line_width if emphasized else config.line_width
     if dashed:
         outline_pen.dash = _GAP_DASH
 
@@ -611,6 +637,21 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         fill_pen.dash = ()  # a fill has no outline to break
         shapes.append(xdotgraph.PolygonShape(fill_pen, corners, filled=True))
     shapes.append(xdotgraph.PolygonShape(outline_pen, corners, filled=False))
+
+    if previewed:
+        # A ring outside the box rather than a change to the box itself. The box's own outline is already
+        # saying something -- solid or dashed, heavy for HEAD -- and a selection has to be legible on top
+        # of every combination of those without overwriting any of them.
+        ring_pen = xdotgraph.Pen()
+        ring_pen.color = PREVIEW_COLOR
+        ring_pen.linewidth = config.preview_line_width
+        ring_pen.dash = _PREVIEW_DOTS  # dotted, because the selection is tentative until a second click
+        offset = config.preview_ring_offset
+        shapes.append(xdotgraph.PolygonShape(
+            ring_pen,
+            _rounded_rect_points(x1 - offset, y1 - offset, x2 + offset, y2 + offset,
+                                 config.corner_radius + offset),
+            filled=False))
 
     text_pen = xdotgraph.Pen()
     text_pen.color = LINE_COLOR
@@ -824,7 +865,9 @@ def build(datastore: chattree.Forest,
                                          fill=(SPINE_FILL_COLOR if slot.node_id in current_branch
                                                else OFF_SPINE_FILL_COLOR),
                                          dashed=False, pills=ref.pills, speaker=speaker,
-                                         measure_text=measure_text)
+                                         measure_text=measure_text,
+                                         emphasized=(slot.node_id == state.head_node_id),
+                                         previewed=(slot.node_id == state.previewed_node_id))
 
                 graph_node = xdotgraph.Node(x=x, y=y, w=width, h=config.node_h,
                                             shapes=shapes, internal_name=name)

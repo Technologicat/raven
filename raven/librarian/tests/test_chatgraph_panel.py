@@ -130,12 +130,21 @@ class TestPreview:
         assert calls.committed == []
         assert app_state["HEAD"] == head_before
 
-    def test_the_previewed_box_is_highlighted(self, panel):
+    def test_the_previewed_box_is_marked(self, panel):
         # What a second click will act on has to be visible before it happens, or commit-on-second-click is
-        # a trap rather than a gesture.
+        # a trap rather than a gesture. The mark goes into the picture; that it is *drawn* is asserted in
+        # the builder's own tests, and what this one pins is that the panel asks for it.
         built, forest, app_state, ids, calls = panel
         click(built, ids["taken"])
-        assert built._widget.get_highlighted_nodes() == {ids["taken"]}
+        assert built._view_state.previewed_node_id == ids["taken"]
+
+    def test_previewing_does_not_touch_the_hover_highlight(self, panel):
+        # That channel is shared with hover and has one pair of colours, so a preview drawn through it is
+        # indistinguishable from a hover -- and a node left lit reads as *the important one*, which is
+        # HEAD's job.
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["taken"])
+        assert built._widget.get_highlighted_nodes() == set()
 
 
 # ---------------------------------------------------------------------------
@@ -181,12 +190,12 @@ class TestCommit:
     def test_going_home_abandons_the_preview(self, panel):
         built, forest, app_state, ids, calls = panel
         click(built, ids["not_taken"])
-        assert built._widget.get_highlighted_nodes(), "nothing was previewed, so clearing it proves nothing"
+        assert built._view_state.previewed_node_id, "nothing was previewed, so clearing it proves nothing"
 
         built.go_to_head()
         assert built._chat_graph.spine == tuple(forest.linearize_up(app_state["HEAD"]))
         assert built._previewed_node_id is None, "the preview survived, so a click would commit it"
-        assert built._widget.get_highlighted_nodes() == set(), "the preview mark is still lit"
+        assert built._view_state.previewed_node_id is None, "the ring is still drawn"
 
     def test_going_home_flashes_where_it_landed(self, panel):
         # The view slides and the zoom changes together, and HEAD is parked off-centre on purpose, so

@@ -724,13 +724,71 @@ and it is deliberate — a second click commits, so what that click would act on
 highlight colours, so a previewed node and a hovered node are indistinguishable — and a mark that looks
 like hover *ought* to leave when the pointer does.
 
-**So it moves into the built `Graph`**: `ViewState` carries the previewed node, and `_box_shapes` gives it
-an outline of its own. Three things fall out of that, in ascending order of how annoying they are today —
-it cannot be mistaken for hover; it survives a rebuild without help, where `_apply_preview_highlight` now
-has to be re-applied after every one; and the widget's highlight state goes back to meaning hover and
-nothing else.
+**So it moved into the built `Graph`** (done 2026-09-01): `ViewState.previewed_node_id`, and `_box_shapes`
+draws it a ring of its own. Three things fell out of that, in ascending order of how annoying they were —
+it cannot be mistaken for hover; it survives a rebuild without help, where `_apply_preview_highlight` had
+to be re-applied after every one; and the widget's highlight state goes back to meaning hover and the
+deliberate attention-grabbing flash, and nothing else.
+
+**Three states, three marks, and none of them may be mistaken for another** — that is the rule the whole
+thing turns on, because the failure was exactly a collision between two of them:
+
+| state | mark | why that one |
+|---|---|---|
+| hovered | the widget's highlight, fading | belongs to the pointer, and goes when the pointer does |
+| HEAD | a heavier box outline, plus the pill | where the reader *is*; the loudest thing in the picture |
+| previewed | a **dotted ring outside** the box | where a second click *would* take them |
+
+- **HEAD got heavier because of what the collision revealed.** A lit box reads as "this is the current
+  one" — so while the preview was borrowing the highlight, the picture had two things claiming to be HEAD
+  and the real one was saying so with a small pill in the margin. Emphasis on the box itself is what makes
+  that unambiguous (Juha, 2026-09-01).
+- **The ring is outside the box, not a change to it.** The box's own outline is already carrying
+  information — solid or dashed, heavy for HEAD — and a selection has to be legible over every combination
+  of those without overwriting any.
+- **Dotted, because the selection is tentative** until the second click (Juha, 2026-09-01). A finer
+  pattern than the gaps' dash, so the two broken lines do not read as one mark: they are saying related
+  but different things, *this is not here* against *this is not settled*.
 
 ### Sequencing
 
 Four reviewable commits: the builder and its tests; the panel and its placement, including the avatar pause
 gate; the interactions; the tool badges and role icons.
+
+## Where this stands, end of 2026-09-01
+
+The view is built, wired into Librarian, and has been driven live several times. It is *usable* — the
+remaining work is the two features below plus the polish the four rules describe.
+
+**Built and landed:**
+
+- `chatgraph.py` — the layout, pure and DPG-free, with its own test suite covering geometry and selection.
+- `chatgraph_panel.py` — the widget, the toolbar, click routing, and rebuild-on-change by polling
+  `chattree.Forest.generation` (added for this) plus HEAD.
+- Wired into `app.py`: the **Chat graph** checkbox in the mode-toggle row, the panel sharing the avatar's
+  rect, `chat_open_graph_button` deleted. `DPGLinearizedChatView.jump_to_node` is the preview's other half.
+- Opening frames the branch; the crosshair returns to HEAD at 1:1 with a fading flash.
+- Two-line labels at the interface's own font size, speaker names from the stored persona, pointer pills,
+  the four gap kinds, HEAD emphasis and the preview ring.
+- In the shared widget, so `raven-xdot-viewer` has them too: `on_click`/`on_hover` hand over the element
+  rather than a caption, a drag no longer navigates, `flash_nodes`, a 1 s fade-out, a 1.25 wheel notch.
+- Docs updated — a **Chat graph** section in `raven/librarian/README.md`, a line in the main README, and
+  the roadmap item shrunk to what is genuinely left.
+
+**Not built, in the order worth doing:**
+
+1. **The four rules above** (whole branch rather than a stump; no gap below three hidden; the depth window
+   centred on the focus; focus and HEAD both on screen). Pure `chatgraph` work, visible immediately.
+2. **`ImageShape` in the widget.** Unblocks two things at once and they are not the same size: role glyphs
+   need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
+   thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render
+   thread where `split_frame` deadlocks.
+3. **Attachment thumbnails**, to the design above: straddling the right edge, stacked and capped, bordered
+   in the graph's line pen, prepared on a background task with a placeholder meanwhile.
+4. **The avatar pause gate.** Never built. `TODO.md:662–663` and the road-mode notes above have the
+   traps: the visibility term needs its own path rather than a term in the idle branch, and the switch
+   keys on the idle detector rather than on whether the video happens to be running.
+5. **Fragment search across the tree**, which was always v2 and is brief 14's companion.
+
+**Open, needing a decision rather than work:** whether `raven-xdot-viewer` gets the actual-size button
+too, for the consistency that now runs the other way.

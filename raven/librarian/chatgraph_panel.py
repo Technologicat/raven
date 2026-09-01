@@ -290,7 +290,6 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._seen_generation = generation
             self._seen_head = self._view_state.head_node_id
             self._widget.set_graph(chat_graph.graph)
-            self._apply_preview_highlight()
             anchor = (self._previewed_node_id
                       or self._view_state.focus_node_id
                       or self._view_state.head_node_id)
@@ -339,7 +338,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             return None
         return measured[0] * (font_size / atlas_size)
 
-    def go_to_head(self) -> None:
+    def go_to_head(self) -> None:  # noqa: D401 -- the docstring below is a description, not an imperative
         """Abandon any preview and put the reader back at HEAD, at 1:1.
 
         Deliberately a different framing from the one the panel opens with. Opening asks *where am I in
@@ -352,9 +351,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
         """
         with self._lock:
             self._view_state.focus_node_id = None
-            self._previewed_node_id = None
-        self._enable_commit(False)
         self._framed = True  # this is a framing of its own; the refresh below must not override it
+        self._set_preview(None)
         self.refresh()
 
         head_node = None
@@ -447,10 +445,6 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._commit(ref.node_id)
             return
 
-        with self._lock:
-            self._previewed_node_id = ref.node_id
-        self._enable_commit(True)
-
         # Two independent questions, and answering the second with the first is a bug this had:
         #
         #   - Is the node *drawn as part of the branch on screen*? That decides whether the picture has
@@ -467,10 +461,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
         if not on_drawn_branch:
             with self._lock:
                 self._view_state.focus_node_id = ref.node_id
-            self.refresh()
-        else:
-            self._apply_preview_highlight()
-            self._widget.pan_to_node(ref.node_id, animate=True)
+        self._set_preview(ref.node_id)  # redraws, so the branch change above lands with it
+        self._widget.pan_to_node(ref.node_id, animate=True)
 
         if ref.on_current_branch and self._on_preview is not None:
             self._on_preview(ref.node_id)
@@ -479,8 +471,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         """Re-centre one level's window on the middle of the run this gap hides."""
         with self._lock:
             self._view_state.sibling_focus[ref.parent_node_id] = ref.recenter_on
-            self._previewed_node_id = None
-        self._enable_commit(False)
+        self._set_preview(None)  # navigation, not a choice of node, so nothing is left armed
         self.refresh()
         self._widget.pan_to_node(ref.recenter_on, animate=True)
 
@@ -496,9 +487,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         """Draw the picture around an off-branch node, so that what continues below it becomes visible."""
         with self._lock:
             self._view_state.focus_node_id = ref.node_id
-            self._previewed_node_id = ref.node_id
-        self._enable_commit(True)
-        self.refresh()
+        self._set_preview(ref.node_id)
 
     # ------------------------------------------------------------------
     # Committing
@@ -513,9 +502,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
     def _commit(self, node_id: str) -> None:
         """Move HEAD to `node_id`, through the caller."""
         with self._lock:
-            self._previewed_node_id = None
             self._view_state.focus_node_id = None
-        self._enable_commit(False)
+        self._set_preview(None)
         if self._on_commit is not None:
             self._on_commit(node_id)
         else:
@@ -530,8 +518,18 @@ class DPGChatGraphPanel(gui_animation.Animation):
             else:
                 dpg.disable_item(self._commit_button_tag)
 
-    def _apply_preview_highlight(self) -> None:
-        """Mark the previewed box, so what a second click would act on is on screen before it happens."""
+    def _set_preview(self, node_id: Optional[str]) -> None:
+        """Select a box, or clear the selection, and redraw so the ring moves with it.
+
+        The mark lives in the picture rather than in the widget's highlight state. That state is shared
+        with hover and has one pair of colours, so a preview drawn through it is indistinguishable from a
+        hover — and worse, a node lit and left lit reads as *the important one*, which is HEAD's job.
+        Keeping it in the `Graph` also means it survives a rebuild without being re-applied.
+        """
         with self._lock:
-            node_id = self._previewed_node_id
-        self._widget.set_highlighted_nodes({node_id} if node_id is not None else set())
+            if self._previewed_node_id == node_id:
+                return
+            self._previewed_node_id = node_id
+            self._view_state.previewed_node_id = node_id
+        self._enable_commit(node_id is not None)
+        self.refresh()
