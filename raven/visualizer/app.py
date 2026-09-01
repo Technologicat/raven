@@ -101,6 +101,7 @@ with timer() as tim:
     from . import importer  # BibTeX importer
     from . import info_panel
     from . import plotter
+    from . import search
     from . import selection
     from . import word_cloud
 
@@ -240,7 +241,7 @@ def reset_app_state(_update_gui=True):
 
         # Clear the search
         dpg.set_value("search_field", "")  # tag
-        update_search(wait=False)
+        search.update(wait=False)
 
         # Remove old data series, if any
         dpg.delete_item("axis1", children_only=True)  # tag
@@ -528,67 +529,6 @@ def start_or_stop_importer():
 # --------------------------------------------------------------------------------
 # Animations, live updates
 
-search_string_box = box("")
-search_result_data_idxs_box = box(common_utils.make_blank_index_array())
-
-# Publish on `app_state` so the annotation tooltip (and later the info panel / search module) can read them.
-app_state.search_string_box = search_string_box
-app_state.search_result_data_idxs_box = search_result_data_idxs_box
-
-def update_search(wait=True):
-    """Perform search and update the search results.
-
-    This gets called automatically when the content of the search field changes via keyboard input.
-    This is also explicitly called by a few other use sites, which modify the search field content.
-
-    `wait`: Whether to wait for more keyboard input before starting to render the info panel and
-            tooltip annotation updates.
-
-            Passed to `update_info_panel` and to `update_mouse_hover`, which see.
-    """
-    search_string = dpg.get_value("search_field")  # tag
-    if not search_string:
-        search_result_data_idxs = common_utils.make_blank_index_array()
-    else:
-        # Simple O(n) scan for exact matches, ANDed across all fragments. No stopwording, lemmatization or anything fancy.
-        # TODO: Search also in document authors (full author list). For this, need to update the GUI wherever we show author names - e.g. searching for "Virtanen" in a paper "Aaltonen et al." that has 200 authors.
-        # TODO: With `raven.librarian.hybridir.HybridIR`, we could integrate also a semi-intelligent (keyword + semantic) fulltext search here. Think about the GUI, as the classic mode is useful too.
-        matches_search = common_utils.make_search_matcher(search_string)
-        search_result_data_idxs = []
-        for data_idx, entry in enumerate(app_state.dataset.sorted_entries):  # `data_idx`: index to `sorted_xxx`
-            if matches_search(entry.normalized_title):
-                search_result_data_idxs.append(data_idx)
-        search_result_data_idxs = np.array(search_result_data_idxs)
-
-    # Send the new data into the boxes
-    search_string_box << search_string
-    search_result_data_idxs_box << search_result_data_idxs
-
-    if len(search_result_data_idxs):
-        # Highlight the search result data points (by plotting them as another series on top).
-        dpg.set_value("my_search_results_scatter_series", [list(app_state.dataset.sorted_lowdim_data[search_result_data_idxs, 0]),  # tag
-                                                           list(app_state.dataset.sorted_lowdim_data[search_result_data_idxs, 1])])
-        # Re-use the "Search" header to show the number of matches.
-        plural_s = "es" if len(search_result_data_idxs) != 1 else ""
-        dpg.set_value(search_header_text, f"[{len(search_result_data_idxs)} match{plural_s}]")
-    else:
-        dpg.set_value("my_search_results_scatter_series", [[], []])  # tag
-        if not search_string:  # Search not active, restore the "Search" header
-            dpg.set_value(search_header_text, "Search")  # TODO: DRY duplicate definitions for labels
-        else:  # Search active, but no matches
-            dpg.set_value(search_header_text, "[no matches]")
-
-    # Update tooltip and info panel to update the highlight status.
-    # TODO: Currently, this may cause the set of data points considered to be under the mouse cursor to change
-    #       the first time this happens at a given mouse position (upon a click in the plot area). Debug this.
-    #       If the plot mouse position is one frame out of date (update order?), that would explain it.
-    app_state.update_info_panel(wait=wait)
-    app_state.update_mouse_hover(force=True, wait=wait)
-
-# Register on `app_state` so submodules (e.g. `info_panel`) can call it.
-app_state.update_search = update_search
-
-
 class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is installed once, at app startup
     def __init__(self, cycle_duration):
         """Cyclic animation to pulsate the glow highlight for search result datapoints and selected datapoints."""
@@ -647,7 +587,7 @@ class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is instal
         # Same approach as in the AI avatar code, see `raven.server.modules.avatar.animate_breathing`.
         animation_pos = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
         alpha_search = self._compute_alpha(animation_pos,
-                                           len(unbox(search_result_data_idxs_box)),
+                                           len(unbox(search.search_result_data_idxs_box)),
                                            gui_config.n_many_searchresults)
         alpha_selection = self._compute_alpha(1.0 - animation_pos,
                                               len(unbox(app_state.selection_data_idxs_box)),
@@ -690,17 +630,7 @@ def update_animations():
     # ----------------------------------------
     # Update search-related GUI elements
 
-    # Color the search field
-    search_string = unbox(search_string_box)
-    search_result_data_idxs = unbox(search_result_data_idxs_box)
-    if not search_string:
-        dpg.set_value(search_field_text_color, (255, 255, 255))  # no search active
-    else:
-        if len(search_result_data_idxs):
-            dpg.set_value(search_field_text_color, (180, 255, 180))  # found, green
-        else:
-            dpg.set_value(search_field_text_color, (255, 128, 128))  # not found, red
-
+    search.update_field_color()
     info_panel.update_current_search_result_status()  # The "[x/x]" topmost currently visible search result indicator (also moves the keyboard mark onto the current item)
 
     # ----------------------------------------
@@ -993,7 +923,7 @@ with timer() as tim:
 
                 def select_search_results():
                     """Select all datapoints matching the current search."""
-                    selection.update(unbox(search_result_data_idxs_box),
+                    selection.update(unbox(search.search_result_data_idxs_box),
                                      selection.keyboard_state_to_mode())
                 dpg.add_button(label=fa.ICON_MAGNIFYING_GLASS,
                                tag="select_search_results_button",
@@ -1066,11 +996,11 @@ with timer() as tim:
                 # The plotter can't take height=-1 if it's the first item, so for now, put the search at the top.
                 with dpg.group(tag="search_group",
                                horizontal=True):
-                    search_header_text = dpg.add_text("Search", color=(140, 140, 140), tag="search_header_text")  # TODO: DRY duplicate definitions for labels
+                    dpg.add_text("Search", color=(140, 140, 140), tag="search_header_text")  # tag  # TODO: DRY duplicate definitions for labels
 
                     def clear_search():
                         dpg.set_value("search_field", "")  # tag
-                        update_search()  # we should wait, because this button may get hammered.
+                        search.update()  # we should wait, because this button may get hammered.
                         dpg.focus_item("search_field")  # tag
                     dpg.add_button(label=fa.ICON_X, callback=clear_search, tag="clear_search_button")
                     dpg.bind_item_font("clear_search_button", app_state.themes_and_fonts.icon_font_solid)  # tag
@@ -1086,11 +1016,11 @@ with timer() as tim:
                                        default_value="",
                                        hint="[Ctrl+F] [incremental fragment search in document titles; 'cat photo' matches 'photocatalytic'; lowercase = case-insensitive]",
                                        width=-1,
-                                       callback=update_search)
+                                       callback=search.search_field_callback)
 
                     with dpg.theme(tag="search_field_theme"):
                         with dpg.theme_component(dpg.mvInputText):
-                            search_field_text_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255))
+                            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255), tag="search_field_text_color")
                             dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, (140, 140, 140))
                     dpg.bind_item_theme("search_field", "search_field_theme")  # tag
 
@@ -1546,13 +1476,13 @@ def mouse_click_callback(sender, app_data):
         #   - If a search is active, the item should also match the current search.
         with annotation.content_lock:
             annotation_data_idxs_set = set(annotation.data_idxs)  # performance - better to amortize this here, or O(n) lookup for each `in` test?
-            search_string = unbox(search_string_box)
+            search_string = unbox(search.search_string_box)
             with info_panel.content_lock:  # we need to access `info_panel.entry_title_widgets`
                 if not search_string:  # no search active
                     jumpable_data_idxs = {data_idx for data_idx in data_idxs_at_mouse
                                           if (data_idx in annotation_data_idxs_set) and (data_idx in info_panel.entry_title_widgets)}
                 else:
-                    search_result_data_idxs_set = set(unbox(search_result_data_idxs_box))
+                    search_result_data_idxs_set = set(unbox(search.search_result_data_idxs_box))
                     jumpable_data_idxs = {data_idx for data_idx in data_idxs_at_mouse
                                           if (data_idx in annotation_data_idxs_set) and (data_idx in search_result_data_idxs_set) and (data_idx in info_panel.entry_title_widgets)}
                 if not jumpable_data_idxs:

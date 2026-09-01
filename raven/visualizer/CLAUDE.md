@@ -1,37 +1,39 @@
 # Visualizer — CLAUDE.md
 
-~6.7k lines across 11 modules. The `app.py` split has landed.
+~7.1k lines across 12 modules. The `app.py` split has landed.
 
 Sizes are rounded to two significant figures, measured **2026-09-01** — they are here for the shape of the
 package, not as a figure to quote. Re-measure before quoting one. `python scripts/check_module_maps.py`
 checks this table against the package, including whether every module is in it.
 
 ```
-app.py            (~1.9k) — GUI app: window layout, event wiring, search, the main render loop
-info_panel.py     (~1.5k) — the info panel: content build, scrolling, navigation, anchors
-importer.py       (~1.4k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
-annotation.py     (~450)  — datapoint annotations and their tooltips
-config.py         (~430)  — Configuration-as-code (import settings, models, stopwords, GUI settings).
+app.py            (~1.9k) — GUI app: window layout, event wiring, the main render loop
+info_panel.py     (~1.6k) — the info panel: content build, scrolling, navigation, anchors
+importer.py       (~1.5k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
+annotation.py     (~500)  — datapoint annotations and their tooltips
+config.py         (~440)  — Configuration-as-code (import settings, models, stopwords, GUI settings).
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services
-plotter.py        (~280)  — the scatter plot itself
-selection.py      (~260)  — selection state and the lasso/wand tools
+plotter.py        (~290)  — the scatter plot itself
+selection.py      (~270)  — selection state and the lasso/wand tools
 word_cloud.py     (~250)  — word cloud rendering
-entry_renderer.py (~150)  — per-entry rendering shared by panel and tooltip
-importer_cli.py    (~80)  — `raven-importer` entry point
+entry_renderer.py (~190)  — per-entry rendering shared by panel and tooltip
+search.py         (~150)  — the title scan, and the three GUI elements reporting its result
+importer_cli.py    (~82)  — `raven-importer` entry point
 app_state.py       (~58)  — top-level app state containers
 ```
 
-**Under test as of 2026-09-01** — 177 tests over seven modules, which is every module the coverage plan
+**Under test as of 2026-09-01** — 218 tests over eight modules, which is every module the coverage plan
 covers:
 
 ```
 tests/test_selection.py       (39) — the four combine modes, undo/redo, scroll anchors, modifier keys
-tests/test_info_panel.py      (31) — hotkey decisions, the clipboard, cluster navigation, widget kinds
+tests/test_info_panel.py      (34) — hotkey decisions, the clipboard, cluster navigation, widget kinds
+tests/test_entry_renderer.py  (33) — grouping, the `max_n` budget, search highlighter compile and apply
+tests/test_annotation.py      (30) — the item decoration table, and the guards on showing a tooltip
 tests/test_word_cloud.py      (28) — the two render guards, keyword summing, cancellation, saving
-tests/test_entry_renderer.py  (27) — grouping, alphabetization, the `max_n` budget, search highlighters
 tests/test_plotter.py         (26) — the cluster sort, and the plotter-space queries
-tests/test_annotation.py      (17) — the guards that decide whether a tooltip is shown at all
+tests/test_search.py          (19) — what counts as a match, and the three GUI elements reporting it
 tests/test_importer.py         (9) — `_parse_input_files`, and cluster-keyword canonicalization
 ```
 
