@@ -1,0 +1,6 @@
+cluster 4 (46 entries)
+    twelve [10]: Axially moving viscoelastic structures, Transverse vibration, Nonlinear dynamics, Parametric resonance, Dynamic stability, Viscoelastic damping, Geometric nonlinearity, Parametric excitation, Vibration control, Structural dynamics
+    fifteen[15]: Axially moving viscoelastic beams, nonlinear vibrations, dynamic stability, parametric resonance, viscoelastic strings, transverse vibrations, geometric nonlinearity, time-dependent tension, internal damping, moving belts, bifurcation analysis, traveling plates, vibration control, axially accelerating systems, flexible moving structures
+            first six: Axially moving viscoelastic beams, nonlinear vibrations, dynamic stability, parametric resonance, viscoelastic strings, transverse vibrations
+            the tail : geometric nonlinearity, time-dependent tension, internal damping, moving belts, bifurcation analysis, traveling plates, vibration control, axially accelerating systems, flexible moving structures
+

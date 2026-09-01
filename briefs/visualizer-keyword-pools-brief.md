@@ -122,9 +122,24 @@ largest corpus here — so neither crowding nor size predicts this. What AOKK ha
 search**: every cluster is about AI in education, so `generative ai` and `educational technology` recur
 by construction. Hydrogen production is a broad application domain spanning many subfields.
 
-**Ten covers every measured case. Twelve is the default anyway**, as headroom against a corpus narrower
-than AOKK — the probe shows the model returns ~11.2 when asked for twelve without padding, so the cost
-over ten is small and the failure it guards against is one nobody would notice.
+**Ten covers every measured case, and the count to ship is twelve or fifteen** — pending the fifteen
+measurement across all five corpora, in flight 2026-09-01. Twelve is safe on the evidence already in:
+the model returns ~11.8 of twelve without padding, so the cost over ten is small.
+
+**Fifteen looks better than expected, on AOKK.** Asked for fifteen it returned 14.2 on average — nine
+clusters of twelve gave all fifteen, three gave twelve, so it stops when it runs out rather than
+padding. And **positions 13–15 are *more* distinctive than 1–12** (0.52 against 0.40), which is the
+opposite of padding and the same effect the IDF finding describes seen from the other end: the model
+front-loads the general terms, so what it adds last is what is specific to this cluster. The extra
+three land exactly where the design wants them.
+
+*Grounding falls 0.97 → 0.85 across that boundary, the one number pointing the other way. Not read as
+invention: the check is near-saturated at these cluster sizes, and a keyword abstracting over the
+titles rather than quoting them is a good keyword. Recorded rather than buried.*
+
+The decision waits for the other four corpora because twelve itself rests on five and fifteen so far
+rests on one (Juha, 2026-09-01). "Qwen tolerates fifteen" is a sufficient claim, this being the model
+Raven runs — it does not need to hold for models in general.
 
 *What none of this bounds: all five corpora are English-language and STEM-ish, which is where this work
 happens. A corpus narrower than AOKK would push the requirement higher and nothing here says by how
@@ -193,6 +208,13 @@ cluster's keywords.
 one cluster, so they score the maximum IDF and sort to the *front* of what the cluster displays. A rule
 that ranks by rarity is exactly the wrong rule to combine with an unvalidated parser, so the guard is
 part of this design rather than a separate tidy-up.
+
+**The same reasoning does *not* extend to a model that pads**, and it is worth being clear about why,
+because the two failures look alike from the code's side. Padding would also rank first, being rare —
+but unlike a parse failure it produces keywords that are *well-formed and useless*, which no validation
+can detect and which a reader spots immediately: the labels on the map stop meaning anything and
+somebody asks why (Juha, 2026-09-01). That belongs in the user manual, not in a guard. The distinction
+is whether the output is malformed or merely wrong, and only the first is a program's business.
 
 The shape of the guard is not subtle — a keyword list whose entries run to sentence length, or carry
 Markdown bullets or colons, is not a keyword list — and `importer.py` already carries a
