@@ -1319,6 +1319,15 @@ Create the context once per module: it is not cheap, and DPG holds global state,
 
 Tests that *map* a window are the separate case and stay out: they carry the `gui` marker and need `pytest --run-gui`.
 
+**The operating rule, in one line: unmapped contexts, one per module; mapped contexts, one per process, even serially.**
+
+- **Unmapped** is what almost every DPG test wants, and a module-scoped fixture like the one above is what the suite does — every module under `raven/common/gui/tests/` builds and destroys its own.
+- **Mapped is the strict half.** Every `gui` test shares the one session-scoped `mapped_gui_context` in the root `conftest.py`, and a test that maps its own is skipped whenever anything sharing that one is also collected. Not a second mapped context anywhere in the run, however far apart the two fall in collection order — "we destroyed the first one first" is not a defence.
+
+Why the two halves differ is not fully identified. "Context recreation is not reliably safe once real widgets have rendered" below has what was measured, and what a function-scoped mapped fixture cost before the rule was stated this way.
+
+**A module whose DPG use is a handful of *commands* needs no context at all.** Where the module only tells DPG to do things — `show_item`, `set_value`, `set_item_label`, `enable_item` — and reads nothing back but simple state, monkeypatching a recording stand-in over the module's own `dpg` binding is cheaper and asserts the more useful thing: what the module decided to ask for, rather than what DPG did with it. Have the stand-in delegate unknown attributes to the real module, so key and style constants stay the toolkit's own. `raven/visualizer/tests/test_selection.py` and `test_word_cloud.py` are the worked examples. This stops being the right tool the moment a module *measures* something — geometry, text extents, scroll extents — because then the answer has to come from a real widget.
+
 **Know the ceiling before writing one: "DPG runs headless" is narrower than it sounds** (measured 2026-08-03, on a machine *with* a display). Contexts, widgets, themes and item state all work with an unshown viewport. But `dpg.render_dearpygui_frame()` **aborts the process** — `SIGABRT` on the GLFW assertion `window != NULL` in `glfwWindowShouldClose`, not a catchable exception — so nothing that needs *layout* is reachable: no real scroll extents, no `get_y_scroll_max`, no hit-testing, no measured text sizes.
 
 That is why the existing tests step `animation.animator.render_frame()` — Raven's own animator, pure Python — rather than DPG's frame, and why `test_animation.py`'s `SmoothScrolling` tests assert against state transitions instead of against pixels. The tier this buys is "widget and state logic", not "the GUI works"; someone who reads it the cheap way will write a layout-dependent test and get a core dump rather than a failure. Whether a software GL stack (`xvfb-run`, or Mesa's llvmpipe) lifts the `render_dearpygui_frame` restriction as well as initialization is a separate unknown, and unmeasured.
