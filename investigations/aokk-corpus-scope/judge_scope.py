@@ -117,11 +117,6 @@ ABSTRACT_CHARS = 4000
 # adjudicated by hand without opening the .bib.
 ABSTRACT_PREVIEW_CHARS = 300
 
-# Below this, an abstract carrying an ellipsis is taken to be a truncated teaser rather than a short
-# abstract. See `looks_truncated`; the corpus's median abstract is 1334 characters, so this is well clear
-# of anything complete.
-TEASER_CHARS = 600
-
 _SCOPE_RUBRIC = """\
 These records came out of a literature search for: {question}. Every one of them already matched that \
 search. Your job is to find the ones that matched it by accident - the ones that are demonstrably about \
@@ -198,31 +193,34 @@ Items:
 {items}
 """
 
-TRUNCATION_CAVEAT = """
-NOTE: this abstract is a truncated preview - the publisher cut it off, and it ends mid-sentence. Judge \
-ONLY from what is actually present. Whatever the abstract has not reached yet is not evidence of \
-anything, so lower your confidence rather than concluding from what is missing.
-"""
-
 PASS2_INSTRUCTIONS = """\
 You are screening a literature-search result for records that are not about the topic it was searching for.
 
 {rubric}
 
-The title of this record said too little to judge it from, so here is its abstract as well.
-{caveat}
-Title: {title}
-{venue}
---- abstract ---
-{abstract}
---- end ---
+The titles of the records below said too little to judge them from, so each is given with its abstract.
+Judge each record only on its own text; they are unrelated to one another and their order means nothing.
 
-Answer with a single JSON object and nothing else:
+An abstract marked TRUNCATED is a publisher's preview that breaks off mid-sentence. Judge it only on what \
+is actually there - whatever it has not reached is not evidence of anything, so lower your confidence \
+rather than concluding from what is missing.
+
+For each item, answer:
+  "i"              the item's number, copied exactly
   "no_ai"          true or false, as above
   "not_education"  true or false, as above
   "wrong_level"    true or false, as above
   "confidence"     "high", "medium" or "low"
   "why"            at most twelve words
+  "truncated"      true if the abstract stops in the middle - it ends mid-sentence, or breaks off before \
+the work has said what it did. Judge the text, not its length: a short abstract that finishes its point is \
+NOT truncated. Answering this honestly costs nothing, a truncated abstract being a record that tells you \
+less rather than a worse one.
+
+Answer with a JSON array of objects and nothing else. One object per item, in order, no commentary, no \
+markdown fences.
+
+{items}
 """
 
 
@@ -312,17 +310,24 @@ def looks_uninformative(title: str) -> bool:
 
 
 def looks_truncated(abstract: str) -> bool:
-    """Whether an "abstract" is really a publisher's teaser, cut off before it says anything.
+    """Whether an abstract visibly breaks off — a publisher's teaser rather than the whole thing.
 
-    Measured on this corpus: 435 records (10.1% of those that have an abstract) both carry an ellipsis
-    and run under `TEASER_CHARS`, against a median abstract of 1334 characters. They break off
-    mid-sentence — "Given this ...", "with an increased ..." — so they stop well before any statement of
-    method or setting.
+    Keyed on an ellipsis **at the end**, which is the only place one settles anything. Mid-text an
+    ellipsis is ordinary rhetoric — an elided quotation, a trailing "and so on" — so its presence there
+    says nothing about whether the text is complete. About a tenth of the abstracts here end in one,
+    breaking off as "Given this ..." or "with an increased ...".
 
-    Both conditions together, because either alone is wrong: a full abstract may quote an ellipsis from a
-    title, and a genuinely terse abstract is short without being cut off.
+    Length is deliberately not part of it. Some abstracts are simply short, and measured on this corpus
+    the bound never fired on its own anyway: no ellipsis-ended abstract ran past it, so it could only ever
+    have excluded a genuine teaser for being long.
+
+    **It cannot see a publisher who truncates silently**, and no text-level rule can. "Ends without
+    terminal punctuation" was tried as a second signal and rejected on the data — it selects records that
+    are complete, ending in a URL, a DOI or a keyword list, with a median length *longer* than the
+    corpus's. That gap is what the judge's own `truncated` answer is for; this half is the one
+    that needs no model and cannot be argued with.
     """
-    return bool(abstract) and len(abstract) < TEASER_CHARS and ("..." in abstract or "…" in abstract)
+    return bool(abstract) and bool(re.search(r"(\.\.\.|\u2026)\s*$", abstract.strip()))
 
 
 def describe_abstract(record: env) -> str:
@@ -361,26 +366,82 @@ def judge_titles(llm_settings: env, batch: list[env]) -> dict[int, dict]:
     return out
 
 
-def judge_abstract(llm_settings: env, record: env) -> dict:
-    """Pass 2 over one record, reading its abstract as well as its title."""
-    if not record.abstract:
-        return {"no_ai": None, "not_education": None, "wrong_level": None, "confidence": "low",
-                "why": "no abstract to read"}
-    # A tenth of this corpus's abstracts are publisher teasers that break off mid-sentence, so the model
-    # is told when it is looking at one. Without that it reads a truncated blurb as a whole abstract and
-    # concludes from what is missing — which is the same silence-is-not-evidence mistake the rubric spends
-    # three paragraphs on, arriving by a different door.
-    caveat = (TRUNCATION_CAVEAT if looks_truncated(record.abstract) else "")
-    reply = agent.ask(llm_settings, PASS2_INSTRUCTIONS.format(rubric=_SCOPE_RUBRIC.format(question=SCOPE_QUESTION),
-                                                              caveat=caveat,
-                                                              title=record.title,
-                                                              venue=(f"Published in: {record.venue}\n"
-                                                                     if record.venue else ""),
-                                                              abstract=record.abstract[:ABSTRACT_CHARS]))
-    answer = agent.parse_json_reply(reply)
-    if isinstance(answer, list) and answer:
-        answer = answer[0]
-    return answer
+def _format_for_pass2(index: int, record: env) -> str:
+    """One record as pass 2 sees it: its number, title, venue, and abstract, with a truncation marker."""
+    marked = " (TRUNCATED)" if looks_truncated(record.abstract) else ""
+    venue = f"Published in: {record.venue}\n" if record.venue else ""
+    return (f"--- item {index} ---\n"
+            f"Title: {record.title}\n"
+            f"{venue}"
+            f"Abstract{marked}: {record.abstract[:ABSTRACT_CHARS]}\n")
+
+
+def judge_abstracts(llm_settings: env, batch: list[env]) -> dict[int, dict]:
+    """Pass 2 over a batch of records, reading each one's abstract as well as its title.
+
+    Returns `{position within batch: answer}`, index-keyed and short-tolerant exactly as `judge_titles`
+    is — an answer whose number does not resolve is dropped rather than guessed at, and a record left
+    unanswered stays in the next run's to-do list.
+
+    Batched because pass 2 is the expensive half: one call per record put it at several hours against
+    pass 1's one, for a fifth of the corpus. Abstracts here average well under two thousand characters,
+    so a batch of ten is a few thousand tokens of prompt — the same shape pass 1 already runs in.
+    """
+    items = "\n".join(_format_for_pass2(i, record) for i, record in enumerate(batch))
+    reply = agent.ask(llm_settings,
+                      PASS2_INSTRUCTIONS.format(rubric=_SCOPE_RUBRIC.format(question=SCOPE_QUESTION),
+                                                items=items))
+    answers = agent.parse_json_reply(reply)
+    if not isinstance(answers, list):
+        raise ValueError(f"expected a JSON array, got {type(answers).__name__}")
+    out = {}
+    for answer in answers:
+        if not isinstance(answer, dict) or "i" not in answer:
+            continue
+        try:
+            i = int(answer["i"])
+        except (TypeError, ValueError):
+            continue
+        if 0 <= i < len(batch):
+            out[i] = answer
+    return out
+
+
+def temper_for_truncation(answer: dict, record: env) -> dict:
+    """Withhold a *drop* that rests on a publisher's teaser, and never let one read as certain.
+
+    A truncated abstract breaks off before it reaches the methods, so an absence in it is not evidence
+    of anything — which is what the rubric says at length and what the prompt marks each such item with.
+    Measured: the model reads the marker and concludes from the absence anyway, at *high* confidence, on
+    a 511-character preview that never reaches the method it is asserting about. So this is decided here
+    instead, where the model cannot argue with it — the same reason the thin-title trigger is computed
+    rather than asked.
+
+    Deterministic *given* the detection, which is itself a heuristic — see `looks_truncated`, which can
+    only see a publisher who marks the cut. This tempers what it catches and cannot temper what it
+    misses.
+
+    A drop becomes an unknown, which is kept and flagged for a reader rather than removed, and the
+    confidence drops to "low" whatever the model claimed. The `why` keeps what the model said, prefixed
+    so the record explains itself. Positive evidence is not rescued from this: a teaser naming a medical
+    congress is still naming one, and a reader looking at the reason can see which kind it is.
+
+    Rarely reached in the real pipeline — `raven-siftbib --require abstract --min-chars abstract=600`
+    removes teasers before the judge sees them — which is exactly why it belongs here as well. A guard
+    that only holds when an upstream flag was remembered is not a guard.
+    """
+    # Either signal is enough. The visible one cannot see a silent cut and the model's cannot be trusted
+    # to *act*, but it can be trusted to *look* — which is the division this rests on.
+    if not (looks_truncated(record.abstract) or answer.get("truncated") is True):
+        return answer
+    tempered = dict(answer)
+    tempered["confidence"] = "low"
+    if verdict_of(normalize(answer, record.key, "abstract")) == "drop":
+        for name in ("no_ai", "not_education", "wrong_level"):
+            if tempered.get(name) is True:
+                tempered[name] = None
+        tempered["why"] = f"withheld, abstract is a truncated preview: {answer.get('why', '')}".strip()
+    return tempered
 
 
 def normalize(answer: dict, key: str, source: str) -> dict:
@@ -579,6 +640,9 @@ def main() -> int:
                              "a random sample of any affordable size contains almost none — so the criterion "
                              "they exist to test cannot be tested by drawing one")
     parser.add_argument("--batch", type=int, default=40, help="titles per model call in pass 1")
+    parser.add_argument("--batch2", type=int, default=10, metavar="N",
+                        help="records per model call in pass 2. Smaller than pass 1's, each item carrying "
+                             "a whole abstract rather than a title")
     parser.add_argument("--no-escalate", action="store_true",
                         help="skip pass 2, leaving pass 1's answers as the verdict")
     parser.add_argument("--backend-url", default=None,
@@ -648,16 +712,33 @@ def main() -> int:
                     if record.key in done
                     and done[record.key]["source"] == "title"
                     and needs_escalation(done[record.key], record)]
-        print(f"pass 2 — abstracts, {len(escalate)} records:")
-        for n, record in enumerate(escalate, start=1):
-            try:
-                answer = judge_abstract(llm_settings, record)
-            except Exception as exc:  # noqa: BLE001 -- one bad record must not end the run
-                print(f"  {n}/{len(escalate)}: {record.key}: FAILED ({type(exc)}: {exc})", flush=True)
-                continue
-            normalized = normalize(answer, record.key, source="abstract")
-            append_state(state_path, normalized)
-            print(f"  {n}/{len(escalate)}: {record.title[:60]:<60} -> {verdict_of(normalized)}", flush=True)
+        # A record with nothing to read is answered here rather than sent: an empty abstract asks the
+        # model a question it has no material for, and the verdict is already known — unknown, which is
+        # kept. Sending them would also dilute a batch with items carrying no text.
+        unreadable = [record for record in escalate if not record.abstract]
+        readable = [record for record in escalate if record.abstract]
+        for record in unreadable:
+            append_state(state_path, normalize({"no_ai": None, "not_education": None, "wrong_level": None,
+                                                "confidence": "low", "why": "no abstract to read"},
+                                               record.key, source="abstract"))
+
+        batches = [readable[i:i + opts.batch2] for i in range(0, len(readable), opts.batch2)]
+        print(f"pass 2 — abstracts, {len(readable)} records in {len(batches)} batches "
+              f"({len(unreadable)} had no abstract and were answered without asking):")
+        for n, batch in enumerate(batches, start=1):
+            with timer() as tim:
+                try:
+                    answers = judge_abstracts(llm_settings, batch)
+                except Exception as exc:  # noqa: BLE001 -- one bad batch must not end the run
+                    print(f"  batch {n}/{len(batches)}: FAILED ({type(exc)}: {exc}); "
+                          f"will retry on a later run", flush=True)
+                    continue
+            for i, record in enumerate(batch):
+                if i in answers:
+                    answer = temper_for_truncation(answers[i], record)
+                    append_state(state_path, normalize(answer, record.key, source="abstract"))
+            print(f"  batch {n}/{len(batches)}: {len(answers)}/{len(batch)} answered in {tim.dt:.1f}s",
+                  flush=True)
         done = load_state(state_path)
 
     summarize([(by_key[key], answer) for key, answer in done.items() if key in by_key])

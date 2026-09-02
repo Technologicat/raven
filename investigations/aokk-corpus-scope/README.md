@@ -171,6 +171,35 @@ acronyms — but it introduces a false-drop mode of its own, in a corpus where a
 routinely published in the venue of whatever field it is applied to. That is an argument for escalating
 uncertain drops rather than for withholding the field.
 
+### A truncated abstract, and why the model perceives it but must not act on it
+
+A tenth of this corpus's abstracts are publisher teasers that break off mid-sentence, and pass 2 escalates
+precisely the uncertain records — so for one in ten of them the "extra evidence" stops before the methods.
+Told about it in the prompt, the model concluded from the absence anyway, at **high** confidence, on a
+511-character preview that never reaches the method it was asserting about.
+
+So the policy is enforced in Python: an uncertain-by-truncation **drop** is withheld and recorded as
+unknown, which keeps the record and flags it for a reader, and the confidence is forced to `low` whatever
+the model claimed. The division that makes this work is *perception versus restraint* — the model is
+reliable at seeing that a text breaks off and unreliable at declining to conclude from it, so it is asked
+the first and never trusted with the second.
+
+**Detection has two halves, and neither is sufficient.**
+
+- **An ellipsis at the end**, which needs no model. Not an ellipsis *anywhere*: mid-text it is ordinary
+  rhetoric and says nothing. Not length either — some abstracts are simply short, and a complete
+  96-character abstract ("Public sector AI procurement checklists can help guide efforts to create
+  regulatable AI systems.") is a real record rather than a stub.
+- **The model's own `truncated` answer**, for the publisher who cuts silently. There is no text-level
+  signal for that: "ends without terminal punctuation" was tried and rejected on the data, selecting 115
+  records that are *complete* — ending in a URL, a DOI or a keyword list — with a median length longer
+  than the corpus's.
+
+**The visible half's false-positive rate is measured across five corpora**, since a rhetorical trailing
+ellipsis would trip it: outside this corpus, across more than 15,000 abstracts, exactly **one** ends in
+one, and it is a bullet list of questions trailing off. The cost of that case is a single withheld drop,
+which a reader sees rather than loses.
+
 ### Unscreenable is not the same claim as off topic
 
 `--require-abstract` sets aside the records with no abstract *before* judging, into `unscreenable.tsv`
