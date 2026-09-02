@@ -394,18 +394,21 @@ does, and which Cherrypick's exit path does not call.
 
 Discovered while chasing the FileDialog help card's cosmetic pass (2026-08-21).
 
-## Main-row `+` and `-` both zoom out on a non-US keyboard
+## The main keyboard offers no zoom, on any layout
 
 *Cluster: keyboard-accessibility · Cost: S, once the keys are chosen · Gate: needs a decision on which keys carry zoom · Filed: 2026-08-21 · See also: `dpg-notes.md` → "A punctuation `mvKey_*` is a US-layout assumption"*
 
-`raven-cherrypick` and `raven-xdot-viewer` zoom in on `(mvKey_Plus, mvKey_Add)` and out on
-`(mvKey_Minus, mvKey_Subtract)`. Measured on a Finnish layout: **both main-row keys report `mvKey_Minus`
-(598)**, so `+` and `-` alike zoom out and the main keyboard offers no zoom-in. `mvKey_Plus` is 61, a stale
-pre-2.0 code that cannot fire on any layout, so that half of the pair is dead everywhere. Confirmed twice —
-by a keycode probe and by Juha's own use of both apps.
+**The misbehaviour is fixed (2026-09-02); the hole is what is left.** `raven-cherrypick` and
+`raven-xdot-viewer` used to zoom in on `(mvKey_Plus, mvKey_Add)` and out on `(mvKey_Minus, mvKey_Subtract)`.
+Measured on a Finnish layout: **both main-row keys report `mvKey_Minus` (598)**, so `+` and `-` alike zoomed
+out. `mvKey_Plus` is 61, a stale pre-2.0 code that cannot fire on any layout, so that half was dead
+everywhere. Confirmed twice — by a keycode probe and by Juha's own use of both apps.
 
-The numpad works, and so does the mouse, which is why nobody reported it. It is still a keyboard-accessibility
-hole, in the sprint that is about exactly that.
+Both bindings are now numpad-only, and Librarian's chat graph was written that way from the start, so the
+three agree. A key that does the opposite of what it says is worse than one that does nothing.
+
+What remains is the original ask: **layout-stable aliases**, so the main keyboard can zoom at all. The
+numpad works and so does the mouse, which is why nobody reported it, but a laptop has no numpad.
 
 **Why this needs a decision rather than a patch:** 598 cannot be reassigned, because on a US layout it is
 genuinely the `-` key and must keep meaning zoom out. The same code means opposite things on the two
