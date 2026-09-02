@@ -55,21 +55,22 @@ title that merely fails to say, and those drops look exactly like real ones in t
 
 ## Findings
 
-### The sibling run's failure mode does not reproduce here
+### Whether the model confabulates on a thin title depends on what the rubric invites
 
 `agent-batch-classification` found the model at its most confident exactly where the input carried least:
 it classified `2006.05563.pdf` as AI with **high** confidence, explaining that the arXiv id was GPT-3's.
 That is why the escalation rule there could not be driven by the model's confidence alone.
 
-Measured here on all 35 records whose title runs to fewer than five informative words —
-`judge_scope.py --thin`, the whole group rather than a sample — **28 of 35 came back `low`**, with reasons
-that are accurate about their own poverty: *"Generic title, subject and setting unclear"*, *"Missing
-title, cannot evaluate"*, *"Placeholder text"*. No confident invention anywhere in the group.
+Asked only *what is present* — the first two rubrics — the model is honest about thin input: **28 of the
+35 short titles came back `low`**, with reasons accurate about their own poverty (*"Generic title,
+subject and setting unclear"*, *"Placeholder text"*). Asked to reason from what is *absent*, the same
+model on the same 35 titles invents subjects for names it does not know, at high confidence. Same model,
+same inputs, opposite behaviour, and the rubric is the only variable.
 
-So on this corpus the model's self-report is roughly honest, and the structural criterion is mostly
-redundant — the confidence field alone would have escalated 28 of the 35. It is kept because it costs
-nothing and covers the other 7, and because "roughly honest on 35 records of one corpus" is not a property
-to build a run on.
+So the finding to carry forward is not "this model does or does not confabulate" but that **the rubric
+decides whether it has room to.** Which is also why the structural escalation criterion stays: on the
+honest rubrics it is nearly redundant, and there is no version of this where its redundancy can be
+verified in advance.
 
 ### Asked as a test of being on topic, the model reads an unstated setting as the wrong setting
 
@@ -96,10 +97,10 @@ to re-confirm that filter turns every silence into a rejection. Ask for the cont
 
 ### The corpus is noisier than the brief's two shapes suggested
 
-Over a random 200 (`--pilot 200`, seed 42, titles only), pass 1 answered every record and **dropped 49 of
-them — 24.5%**, at high confidence for 30. That is far more than a picture of a corpus with a few strays
-in it, so the first thing to ask is whether the judge is over-dropping. Reading the 30 high-confidence
-drops says it is not: link prediction, synthetic data generation, smart-grid security, crash analysis,
+Over a random 200 (`--pilot 200`, seed 42, titles only), pass 1 answered every record and **dropped 55 of
+them — 27.5%**, at high confidence for 36. That is far more than a picture of a corpus with a few strays
+in it, so the first thing to ask is whether the judge is over-dropping. Reading the high-confidence drops
+says it is not: link prediction, synthetic data generation, smart-grid security, crash analysis,
 financial LLMs, computer vision and privacy-preserving neural networks, none of which mention education
 at all — and a large contingent the higher-education block never excluded, on preschool, K-12, secondary
 school, rural teachers, and children with neurodevelopmental disabilities.
@@ -113,9 +114,22 @@ and off-level education research, neither of which stands out until something as
 
 | | pass 1 over a random 200 |
 |---|---|
-| keep | 151 (high 70, medium 44, low 37) |
-| drop | 49 (high 30, medium 18, low 1) |
-| escalated to pass 2 | 38 (19%) |
+| keep | 145 (high 85, medium 20, low 40) |
+| drop | 55 (high 36, medium 16, low 3) |
+| escalated to pass 2 | 43 (22%) |
+
+**Which test fires says the same thing quantitatively**, and is the argument for having split them:
+
+| test | drops |
+|---|---|
+| `not_education` alone | 40 |
+| `wrong_level` alone | 8 |
+| `no_ai` alone | 4 |
+| more than one | 3 |
+
+So **three quarters of the cut is "this is not about education at all"** — the test that did not exist in
+the first two rubrics, and whose absence let a link-prediction survey through. The two shapes the brief
+was written around are the small remainder.
 
 ### The full run is an overnight job, and pass 2 is the half worth batching
 
@@ -127,7 +141,7 @@ Abstracts here average 1362 characters, so ten of them in one call is around 4k 
 pass 2 the way pass 1 is already batched would cut its half to well under an hour. Worth doing before the
 full run, and not worth doing before the calibration says the design holds.
 
-### A random sample cannot test the thin-title criterion
+### A random sample cannot test the thin-title criterion, and the thin group became the regression fixture
 
 The thin titles are 35 of 5167, so a random sample of 200 is expected to contain **1.4 of them, and the
 one actually drawn contained none.** The criterion exists to be tested, and a sample of any affordable
@@ -136,6 +150,70 @@ size cannot test it.
 Hence `--thin`, which judges the whole group rather than a draw from it — few enough to read in full,
 which is what the brief meant by calling them "a hand-checkable list". It is a separate calibration run
 from `--pilot`, not a subset of one, so that neither contaminates the other's error rate.
+
+**What it turned into is more useful than what it was for.** One batch, ~85 s, 35 records that are all
+worst case by construction — so it is the fixture a rubric change is checked against, and it caught two
+defects that the 200-record sample could not have. Run it after any edit to the prompt, before spending
+ten minutes on the larger one.
+
+### Every version of this rubric has failed in the same direction, and each failure has a different door
+
+Three iterations in one afternoon, each fixing the previous one's blind spot:
+
+1. **`about_ai` / `higher_ed`, asked as tests of being on topic.** The model answered "not higher
+   education" for any title that failed to state a level — 9 of 35, five at medium or high confidence,
+   none of which the escalation rule would have caught.
+2. **Reframed to `no_ai` / `wrong_field`, asking for evidence of being off topic.** Fixed that, and
+   opened the mirror hole: a pure machine-learning paper is not set at the *wrong* level, it is not set
+   anywhere, so both booleans came back false and a link-prediction survey was kept. Pass 1 and pass 2
+   read the same rubric differently, which is how it surfaced — pass 2 flipped 8 of 30 high-confidence
+   drops to keep while its stated reasons said *"zero educational content"*.
+3. **Split into `no_ai` / `not_education` / `wrong_level`.** Fixed that, and the sentence that made it
+   work — *"the absence IS the evidence"* — turned out to be a licence to assert on no evidence at all. A
+   three-word title is nothing but absence, so `Reportronic` was dropped at **high** confidence as a
+   "clinical reporting tool" (it is a Finnish research-project management system used by universities),
+   and `A theology rhizome` likewise, a record whose abstract says outright that it is about teaching
+   theology students with ChatGPT.
+
+**So the sibling investigation's finding does reproduce here after all**, and the earlier note in this
+file saying it did not was measured against a rubric that gave the model nothing to confabulate *with*.
+Invited to reason from absence, the model invents what an unfamiliar proper noun refers to and says so at
+high confidence — which is `2006.05563.pdf` exactly. The repair is that investigation's own, which should
+have been carried across at the start: an identifier is not a description, and the model is told not to
+claim recognition of a name it does not know. `Reportronic` and `Intelligent Communities` came back
+`keep`/`low` immediately afterwards, quoting the instruction.
+
+The generalizable shape, since a `raven.papers` version of this will meet it again: **a rubric that asks
+about absence needs a body of text for the absence to be measured in.** So `not_education` is asked in two
+ordered steps — *can you name the subject at all?* first, and *is that subject outside education?* only
+if the first is yes. A test that skips the precondition is answered from the model's imagination.
+
+## Where this is headed: a `raven.papers` corpus filter
+
+Decided 2026-09-02, and deliberately **not** acted on yet — the AOKK framing is what the calibration is
+measured against, and generalizing before it is settled would mean calibrating a moving target. Recorded
+here because the seam is visible now, while the code is in front of us, and would have to be re-derived
+later.
+
+Nothing about the machinery is AOKK-specific. What is:
+
+| AOKK-specific | Already general |
+|---|---|
+| `SCOPE_QUESTION` — the corpus's own topic | the two-pass structure: batched titles, then abstracts for the unsure |
+| the rubric's three tests and their domain examples | the escalation rule, and its structural half being computed rather than asked |
+| `MIN_INFORMATIVE_WORDS`, `TEASER_CHARS` — both measured *from this corpus* | resumable JSONL keyed on citekey; `.bib` in, filtered `.bib` plus reasons out |
+| | the review TSV, and the verdict × confidence sort that makes it readable |
+
+**The three tests are the interesting part of the generalization, not the boilerplate.** They are not a
+fixed rubric that a second corpus would inherit — they are this corpus's answer to "which ways can a
+record be off topic?", and a different boolean search has different ways. What generalizes is the
+*shape*: one test per way, each asking for positive evidence of being off topic, with silence keeping. So
+the tool's parameter is a list of named tests with their descriptions, and the AOKK three become its
+first worked example rather than its schema.
+
+The two corpus-measured constants want deriving from the corpus at run time rather than being carried
+across, for the same reason — a corpus whose titles run short would need a different informative bound,
+and inheriting 5 would silently escalate everything or nothing.
 
 ## Files
 

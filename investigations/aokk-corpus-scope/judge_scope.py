@@ -11,17 +11,23 @@ The judgement is against the broad question the search actually asked:
 
     Studies on different aspects of the use of AI agents in higher education.
 
-It is asked as two booleans rather than one, because a drop is only reviewable if it says which half
-failed — "no AI in it" and "not higher education" are different mistakes to check for. And each is asked
-as evidence of being *off* topic rather than as a test of being on it: every record here already matched
-the search, so silence about the setting is not evidence against it. Asked the other way round the model
-answers "not higher education" for any title that merely fails to say, which drops real studies without
-anything in the output looking wrong.
+It is asked as three booleans rather than one, because a drop is only reviewable if it says which test
+failed: no AI in it, no education in it, or the wrong level of education. Each is asked as evidence of
+being *off* topic rather than as a test of being on it — every record here already matched the search, so
+a title that does not restate the setting says nothing against it. Asked the other way round, the model
+answers "not higher education" for any title that merely fails to say, and drops real studies with
+nothing in the output looking wrong.
 
-Two passes. Pass 1 asks about titles in batches, which is enough for the clear cases in both shapes and
-is what makes 5167 records affordable. Pass 2 re-asks about title *and* abstract, one record at a time,
-for everything pass 1 was unsure about — 83% of this corpus has an abstract, so the second pass has real
-extra evidence rather than a second opinion on the same words.
+Which is why "no education at all" is a test of its own rather than part of the level question, and it is
+the one place where absence *is* the evidence. A machine-learning methods paper is not set at the wrong
+level; it is not set anywhere. Folded into the level test it slips through — the model reads "positively
+set somewhere other than higher education", finds no setting at all, and keeps a link-prediction survey.
+
+Two passes. Pass 1 asks about titles in batches, which is enough for the clear cases and is what makes
+5167 records affordable. Pass 2 re-asks about title *and* abstract, one record at a time, for everything
+pass 1 was unsure about. 83% of this corpus has an abstract — though a tenth of those are publisher
+teasers that break off mid-sentence, which pass 2 is told about, since a blurb read as a whole abstract
+invites exactly the concluding-from-absence the rubric otherwise forbids.
 
 Escalation fires on either a low-confidence answer or a title with too few words in it. The second
 condition is computed here rather than asked of the model, and that is the point: a sibling run over a
@@ -75,27 +81,55 @@ ABSTRACT_CHARS = 4000
 # adjudicated by hand without opening the .bib.
 ABSTRACT_PREVIEW_CHARS = 300
 
+# Below this, an abstract carrying an ellipsis is taken to be a truncated teaser rather than a short
+# abstract. See `looks_truncated`; the corpus's median abstract is 1334 characters, so this is well clear
+# of anything complete.
+TEASER_CHARS = 600
+
 _SCOPE_RUBRIC = """\
 These records came out of a literature search for: {question}. Every one of them already matched that \
 search. Your job is to find the ones that matched it by accident - the ones that are demonstrably about \
 something else.
 
 So do NOT ask whether each record is on topic. Ask whether there is positive evidence that it is off \
-topic, and answer two things separately:
+topic, and answer three things separately. Answer each one on its own; a record can fail any one of them \
+and pass the other two.
 
-  "no_ai"        true ONLY if the work is positively about something with no artificial intelligence in \
-it - human teaching staff, human tutors, human undergraduate learning assistants, a non-AI technology, or \
-a subject in which no AI appears at all. False when AI is present in any way (an AI agent, assistant, \
-chatbot, tutor or LLM-based tool, or AI in general - including its use, its effects, attitudes towards it, \
-policy and ethics about it, and AI literacy), AND false when you cannot tell.
-  "wrong_field"  true ONLY if the work is positively set somewhere other than higher education - a \
-primary or secondary school, a hospital, a workplace, industry, the general public, or another domain \
-altogether. False when the setting is a university, college or polytechnic, or its students, teachers, \
-courses or institutions, AND false when the setting is not stated.
+  "no_ai"          true ONLY if the work is positively about something with no artificial intelligence in \
+it - human teaching staff, human tutors, human undergraduate learning assistants, or a non-AI technology. \
+False when AI is present in any way (an AI agent, assistant, chatbot, tutor or LLM-based tool, or AI in \
+general - including its use, its effects, attitudes towards it, policy and ethics about it, and AI \
+literacy), AND false when the work does not say what it used.
+  "not_education"  answered in two steps, in this order. FIRST: can you name what this work is about, \
+from what you were given? If you cannot - the title is generic, an editorial or a section heading, or a \
+proper noun or acronym you do not recognize - then answer FALSE and "low", and stop. SECOND, only if you \
+can name the subject: is that subject entirely outside education? Answer true only for a subject you can \
+name that plainly involves no teaching, learning, students or courses - a machine-learning methods paper, \
+a computer-vision or natural-language-processing study, a finance, engineering, energy or medical \
+application. Teaching, learning, students, courses, curricula, training and education policy all count as \
+an educational dimension, at ANY level.
+  "wrong_level"    true ONLY if the work is positively set at a level other than higher education - \
+preschool, primary or secondary school, K-12, workplace or professional training outside a university, or \
+the general public. False when the setting is a university, college or polytechnic, or its students, \
+teachers or courses, AND false when the work does not say what level it is set at.
 
-Say it plainly: silence is not evidence. If a record does not say where it is set, that is NOT \
-"wrong_field": these records all matched a higher-education search term already. Answer false and lower \
-your confidence.
+Two of these are about silence and one is not, so read this carefully:
+
+  - If a record does not say WHAT LEVEL it is set at, that is NOT "wrong_level". These records all matched \
+a higher-education search term already. Answer false and lower your confidence.
+  - If a record does not say WHAT METHOD it used, that is NOT "no_ai". Answer false and lower your \
+confidence.
+  - But a work whose subject you CAN name, where that subject has no teaching, no learning, no students \
+and no courses in it, IS "not_education". There the absence is evidence, because a study about education \
+says so. A survey of machine-learning techniques that never mentions a learner is "not_education" true, \
+however much AI is in it.
+
+That last one is the dangerous test, so guard it: a short title is mostly absence no matter what the \
+paper is, and absence you cannot interpret is not evidence. An identifier is not a description. If you \
+are given a bare proper noun, an acronym, a project name, a journal section or a heading, you do NOT know \
+what the work is about - answer false to all three and say "low". Do NOT claim to recognize what an \
+unfamiliar name refers to; you cannot, and a guess dressed as recognition is worse than admitting the \
+title says nothing.
 
 A phrase can match in a sense the search did not mean, and this is the main thing to look for. "Learning \
 assistant" names an AI tool, and it is ALSO the established term in STEM education research for a HUMAN \
@@ -104,7 +138,7 @@ undergraduate who helps teach a course - that second sense has no AI in it and i
 the work, not the phrase that matched.
 
 Report your confidence honestly. A generic title - "Book Review", "Generative AI", "Machine culture" - \
-gives you no evidence either way: answer false to both and say "low". Do not guess confidently."""
+gives you no evidence either way: answer false to all three and say "low". Do not guess confidently."""
 
 PASS1_INSTRUCTIONS = """\
 You are screening a literature-search result for records that are not about the topic it was searching for.
@@ -112,11 +146,12 @@ You are screening a literature-search result for records that are not about the 
 {rubric}
 
 For each numbered item below you are given a paper's title, and nothing else. For each item, answer:
-  "i"            the item's number, copied exactly
-  "no_ai"        true or false, as above
-  "wrong_field"  true or false, as above
-  "confidence"   "high", "medium" or "low" - how sure you are, given only the title
-  "why"          at most twelve words, why you answered that way
+  "i"              the item's number, copied exactly
+  "no_ai"          true or false, as above
+  "not_education"  true or false, as above
+  "wrong_level"    true or false, as above
+  "confidence"     "high", "medium" or "low" - how sure you are, given only the title
+  "why"            at most twelve words, why you answered that way
 
 Answer with a JSON array of objects and nothing else. One object per item, in order, no commentary, no \
 markdown fences.
@@ -125,13 +160,19 @@ Items:
 {items}
 """
 
+TRUNCATION_CAVEAT = """
+NOTE: this abstract is a truncated preview - the publisher cut it off, and it ends mid-sentence. Judge \
+ONLY from what is actually present. Whatever the abstract has not reached yet is not evidence of \
+anything, so lower your confidence rather than concluding from what is missing.
+"""
+
 PASS2_INSTRUCTIONS = """\
 You are screening a literature-search result for records that are not about the topic it was searching for.
 
 {rubric}
 
 The title of this record said too little to judge it from, so here is its abstract as well.
-
+{caveat}
 Title: {title}
 
 --- abstract ---
@@ -139,10 +180,11 @@ Title: {title}
 --- end ---
 
 Answer with a single JSON object and nothing else:
-  "no_ai"        true or false, as above
-  "wrong_field"  true or false, as above
-  "confidence"   "high", "medium" or "low"
-  "why"          at most twelve words
+  "no_ai"          true or false, as above
+  "not_education"  true or false, as above
+  "wrong_level"    true or false, as above
+  "confidence"     "high", "medium" or "low"
+  "why"            at most twelve words
 """
 
 
@@ -179,39 +221,25 @@ def looks_uninformative(title: str) -> bool:
     return informative_words(title) < MIN_INFORMATIVE_WORDS
 
 
-def parse_json_payload(text: str):
-    """The JSON in a model reply, tolerating code fences and stray prose around it."""
-    text = text.strip()
-    fenced = re.search(r"```(?:json)?\s*(.+?)\s*```", text, re.DOTALL)
-    if fenced:
-        text = fenced.group(1).strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    # Fall back to the outermost bracketed span, which survives a chatty preamble.
-    for opener, closer in (("[", "]"), ("{", "}")):
-        start, end = text.find(opener), text.rfind(closer)
-        if start != -1 and end > start:
-            try:
-                return json.loads(text[start:end + 1])
-            except json.JSONDecodeError:
-                continue
-    raise ValueError(f"no JSON found in reply: {text[:200]!r}")
+def looks_truncated(abstract: str) -> bool:
+    """Whether an "abstract" is really a publisher's teaser, cut off before it says anything.
+
+    Measured on this corpus: 435 records (10.1% of those that have an abstract) both carry an ellipsis
+    and run under `TEASER_CHARS`, against a median abstract of 1334 characters. They break off
+    mid-sentence — "Given this ...", "with an increased ..." — so they stop well before any statement of
+    method or setting.
+
+    Both conditions together, because either alone is wrong: a full abstract may quote an ellipsis from a
+    title, and a genuinely terse abstract is short without being cut off.
+    """
+    return bool(abstract) and len(abstract) < TEASER_CHARS and ("..." in abstract or "…" in abstract)
 
 
-def ask(llm_settings: env, prompt: str) -> str:
-    """One stateless turn: no character, no tools, no retrieval, no history."""
-    record = agent.turn(llm_settings,
-                        prompt,
-                        use_character_card=False,
-                        tools_enabled=False,
-                        internet_enabled=False,
-                        docs_enabled=False,
-                        markup=None)
-    if record.generation is None:
-        raise RuntimeError("the backend returned no generation")
-    return record.reply or ""
+def describe_abstract(record: env) -> str:
+    """What kind of evidence this record's abstract is, for the reviewer's column: none, teaser, or full."""
+    if not record.abstract:
+        return "none"
+    return "teaser" if looks_truncated(record.abstract) else "full"
 
 
 def judge_titles(llm_settings: env, batch: list[env]) -> dict[int, dict]:
@@ -223,9 +251,9 @@ def judge_titles(llm_settings: env, batch: list[env]) -> dict[int, dict]:
     path for a failed batch.
     """
     items = "\n".join(f"{i}. {record.title}" for i, record in enumerate(batch))
-    reply = ask(llm_settings, PASS1_INSTRUCTIONS.format(rubric=_SCOPE_RUBRIC.format(question=SCOPE_QUESTION),
+    reply = agent.ask(llm_settings, PASS1_INSTRUCTIONS.format(rubric=_SCOPE_RUBRIC.format(question=SCOPE_QUESTION),
                                                         items=items))
-    answers = parse_json_payload(reply)
+    answers = agent.parse_json_reply(reply)
     if not isinstance(answers, list):
         raise ValueError(f"expected a JSON array, got {type(answers).__name__}")
     out = {}
@@ -244,12 +272,18 @@ def judge_titles(llm_settings: env, batch: list[env]) -> dict[int, dict]:
 def judge_abstract(llm_settings: env, record: env) -> dict:
     """Pass 2 over one record, reading its abstract as well as its title."""
     if not record.abstract:
-        return {"no_ai": None, "wrong_field": None, "confidence": "low",
+        return {"no_ai": None, "not_education": None, "wrong_level": None, "confidence": "low",
                 "why": "no abstract to read"}
-    reply = ask(llm_settings, PASS2_INSTRUCTIONS.format(rubric=_SCOPE_RUBRIC.format(question=SCOPE_QUESTION),
-                                                        title=record.title,
-                                                        abstract=record.abstract[:ABSTRACT_CHARS]))
-    answer = parse_json_payload(reply)
+    # A tenth of this corpus's abstracts are publisher teasers that break off mid-sentence, so the model
+    # is told when it is looking at one. Without that it reads a truncated blurb as a whole abstract and
+    # concludes from what is missing — which is the same silence-is-not-evidence mistake the rubric spends
+    # three paragraphs on, arriving by a different door.
+    caveat = (TRUNCATION_CAVEAT if looks_truncated(record.abstract) else "")
+    reply = agent.ask(llm_settings, PASS2_INSTRUCTIONS.format(rubric=_SCOPE_RUBRIC.format(question=SCOPE_QUESTION),
+                                                              caveat=caveat,
+                                                              title=record.title,
+                                                              abstract=record.abstract[:ABSTRACT_CHARS]))
+    answer = agent.parse_json_reply(reply)
     if isinstance(answer, list) and answer:
         answer = answer[0]
     return answer
@@ -266,7 +300,8 @@ def normalize(answer: dict, key: str, source: str) -> dict:
         confidence = "low"
     return {"key": key,
             "no_ai": boolean("no_ai"),
-            "wrong_field": boolean("wrong_field"),
+            "not_education": boolean("not_education"),
+            "wrong_level": boolean("wrong_level"),
             "confidence": confidence,
             "why": _clean(str(answer.get("why") or "")),
             "source": source}
@@ -279,7 +314,7 @@ def verdict_of(answer: dict) -> str:
     neither stays. An unanswered half withholds the verdict rather than deciding it — an unknown is a
     record for a reader to look at, not a record to throw away.
     """
-    halves = (answer["no_ai"], answer["wrong_field"])
+    halves = (answer["no_ai"], answer["not_education"], answer["wrong_level"])
     if True in halves:
         return "drop"
     if None in halves:
@@ -346,7 +381,8 @@ def write_review_tsv(rows: list[tuple[env, dict]], path: pathlib.Path) -> None:
     they are only countable separately if they can be read separately.
     """
     with path.open("w", encoding="utf-8") as f:
-        f.write("mark\tn\tkey\tverdict\tconfidence\tno_ai\twrong_field\tescalates\twhy\ttitle\tabstract_head\n")
+        f.write("mark\tn\tkey\tverdict\tconfidence\tno_ai\tnot_edu\twrong_level\tabstract\tescalates"
+                "\twhy\ttitle\tabstract_head\n")
         ordered = sorted(rows, key=lambda row: (verdict_of(row[1]),
                                                 CONFIDENCE_ORDER[row[1]["confidence"]],
                                                 row[0].key))
@@ -355,7 +391,8 @@ def write_review_tsv(rows: list[tuple[env, dict]], path: pathlib.Path) -> None:
                 return {True: "yes", False: "no", None: "?"}[value]
             preview = record.abstract[:ABSTRACT_PREVIEW_CHARS]
             f.write(f"\t{n}\t{record.key}\t{verdict_of(answer)}\t{answer['confidence']}\t"
-                    f"{shown(answer['no_ai'])}\t{shown(answer['wrong_field'])}\t"
+                    f"{shown(answer['no_ai'])}\t{shown(answer['not_education'])}\t"
+                    f"{shown(answer['wrong_level'])}\t{describe_abstract(record)}\t"
                     f"{'yes' if needs_escalation(answer, record) else 'no'}\t"
                     f"{answer['why']}\t{record.title}\t{preview}\n")
 
@@ -398,14 +435,15 @@ def write_outputs(records: list[env], done: dict[str, dict],
 
     by_key = {record.key: record for record in records}
     with dropped_path.open("w", encoding="utf-8") as f:
-        f.write("key\tno_ai\twrong_field\tconfidence\tsource\twhy\ttitle\n")
+        f.write("key\tno_ai\tnot_edu\twrong_level\tconfidence\tsource\tabstract\twhy\ttitle\n")
         for key in sorted(dropped_keys):
             answer = done[key]
             record = by_key.get(key)
             def shown(value):
                 return {True: "yes", False: "no", None: "?"}[value]
-            f.write(f"{key}\t{shown(answer['no_ai'])}\t{shown(answer['wrong_field'])}\t"
-                    f"{answer['confidence']}\t{answer['source']}\t{answer['why']}\t"
+            f.write(f"{key}\t{shown(answer['no_ai'])}\t{shown(answer['not_education'])}\t"
+                    f"{shown(answer['wrong_level'])}\t{answer['confidence']}\t{answer['source']}\t"
+                    f"{describe_abstract(record) if record else '?'}\t{answer['why']}\t"
                     f"{record.title if record else ''}\n")
 
     unknown = sum(1 for answer in done.values() if verdict_of(answer) == "unknown")
