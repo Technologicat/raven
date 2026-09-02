@@ -115,7 +115,7 @@
 - **a new tool, `raven-deduplicate`**, for the bibliography a multi-database literature search leaves behind. Search Scopus, Web of Science, ProQuest, Springer and arXiv for the same question and concatenate what they give you, and the file holds every paper once per database that indexes it — each copy in that database's dialect, with a different subset of the fields filled in. This finds those copies and merges them into one record.
 
   ```
-  raven-deduplicate search.bib -o deduped.bib --audit audit.tsv
+  raven-deduplicate search.bib -o deduped.bib
   ```
 
   - **Two keys decide, and neither is a guess**: the DOI, and the title reduced until two databases' spellings of one title agree. Matching is transitive, so a record sharing a DOI with one twin and a title with another brings all three together — which is what makes the two keys complementary, since neither is present on every record.
@@ -125,13 +125,27 @@
   - **Abstracts have the publisher's rights notice removed before they are compared** — and only for the comparison; what gets written is the abstract as its database wrote it. Two copies of one abstract usually differ *only* by that notice, so without stripping first "keep the longest" would be picking a record for the size of its copyright line.
   - **It reads through everything `raven-fixbib` does**, so records the parser would refuse are still counted and HTML a database left in the field values is still decoded — you get an honest number, and a citable file, from one command. Running `raven-fixbib` first changes nothing about the result.
   - **Normalized and stripped forms decide *which* value to keep, and never reach the output.** The record that wins a merge is written as it stands, not composed from the ones that lost. The one field kept from *every* copy is `copyright`: each notice names one of the exports the record came from, so a merged record says where all of it came from.
-  - **The audit TSV is the real output.** A scoping review has to report how many duplicates it removed and stand behind the number, and this is what that number is computed from: one row per merge, naming what was kept, what was merged away, which key matched, and every value that differed. It carries Raven's version, so a method section can cite a tool rather than somebody's script.
+  - **The audit TSV is the real output, and is written by default** — beside the deduplicated file, as `<output>_audit.tsv`. A scoping review has to report how many duplicates it removed and stand behind the number, and this is what that number is computed from: one row per merge, naming what was kept, what was merged away, which key matched, and every value that differed. It carries Raven's version, so a method section can cite a tool rather than somebody's script. `--audit PATH` puts it elsewhere; `--no-audit` declines it, at the cost of the only record of what the merge did.
   - **Nothing is written unless you ask.** Without `-o` it reports what it would do; the input file is never modified. It reads through the same repair `raven-fixbib` applies, so records the parser would refuse are still counted — you do not have to run the two in sequence to get an honest number.
   - **`--judge`** additionally asks an LLM about near-miss titles that no exact key joined, and about merges whose records disagree about the DOI. Off by default, since it needs a backend. The model proposes and Raven disposes: a "same work" verdict contradicted by the records themselves is dropped, so a confident wrong answer cannot create a merge the ordinary rules would have refused. The run is resumable, and its answers are kept in a JSONL beside the audit.
     - **It also decides which DOI a merged work actually keeps.** Where the records of one work disagree about the identifier, one of them can simply be wrong, and the merge would otherwise pick by completeness and write it into your bibliography. So each candidate is checked against the venue named by the record carrying it — an astronomy journal on a paper about classroom assessment is visible, where the identifier alone is not — and a rejected DOI is dropped along with that venue, with the audit saying which and why.
       - **It is asked about the venue and never about the identifier.** A DOI says nothing to a reader who does not already know it, and a model asked what one resolves to will answer from a recognition it cannot have; the venue beside it is something the record actually states.
       - The bias is toward keeping: a venue that is general, interdisciplinary or merely unfamiliar fits, an unparseable answer fits, and a work whose every identifier is rejected keeps them all — that is a model recognizing nothing rather than a bibliography where nothing is right.
   - **It errs toward leaving duplicates rather than making them up.** A missed merge leaves a visible duplicate that a reviewer can act on; a false merge deletes a paper from the review and nothing downstream can notice. So two records carrying the same genre label — `Editorial`, `Book Review` — are merged only if they agree about the author and the year, and two authorless records carrying a serial's recurring section heading are not merged when their DOIs disagree.
+
+*Raven-siftbib*
+
+- **a new tool, `raven-siftbib`**, for the records a literature search returns that a review cannot actually use. A record carrying nothing but a title is not off topic — nobody can tell what it is — it simply has no text to screen on, and a screening pass has to account for it rather than quietly carry it into the count. This removes such records and writes down what went.
+
+  ```
+  raven-siftbib corpus.bib --require abstract
+  ```
+
+  - **The criterion is yours, not the tool's.** `--require FIELD` keeps the records carrying that field; `--min-chars FIELD=N` keeps those whose field reaches a given length. Either may be given more than once, and a record must satisfy all of them. A run with no criteria is refused rather than defaulted — a default would be the tool holding an opinion about what a usable record is, which is the caller's to hold.
+  - **`--min-chars` is for the field that is present and useless.** Publishers routinely export a truncated teaser in place of the abstract, a sentence or two ending mid-word, which satisfies `--require abstract` while giving a reader no more to go on than an empty field would.
+  - **The audit TSV says what came out and why**: one row per removed record, naming the record, where it was published, and which criterion it failed, under a header stamping the tool version, the inputs and the tests applied. There is no way to switch it off, a removal nobody recorded being the thing it exists to prevent. The venue is in there because it is what tells you whether a dropped record is worth chasing up by hand.
+  - **Deterministic and offline.** No model, no network: the same bibliography and the same flags produce the same two files on any machine. Whether a record is *about* the right subject is a judgement rather than a test, and belongs to a different tool.
+  - `--dry-run` reports what would go and writes nothing; the input file is never modified.
 
 *Constellation-wide*
 

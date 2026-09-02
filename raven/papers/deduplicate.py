@@ -1427,7 +1427,9 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("-o", "--output", dest="output", default=None, type=str, metavar="deduped.bib",
                         help="Where to write the deduplicated bibliography. Without it, the run reports what it would do and writes nothing.")
     parser.add_argument("-a", "--audit", dest="audit", default=None, type=str, metavar="audit.tsv",
-                        help="Where to write the audit of every merge: what was kept, what was merged away, which key matched, and every value that differed from the one kept.")
+                        help="Where to write the audit of every merge: what was kept, what was merged away, which key matched, and every value that differed from the one kept. Defaults to sitting beside the output, as `<output>_audit.tsv`.")
+    parser.add_argument("--no-audit", dest="no_audit", action="store_true", default=False,
+                        help="Do not write the audit. A merge cannot be read back out of the merged file, so this discards the only record of what happened.")
     parser.add_argument("--judge", dest="judge", action="store_true", default=False,
                         help="Also ask an LLM about near-miss titles that no exact key joined. Needs a backend; off by default.")
     parser.add_argument("--judge-state", dest="judge_state", default=None, type=str, metavar="PATH",
@@ -1478,10 +1480,19 @@ def main() -> None:  # pragma: no cover
 
     library, rows = deduplicate(clusters, rejected)
 
+    # An explicit `--audit` is honoured even on a dry run, since asking for the audit by name is asking
+    # for it. Otherwise it goes beside the output, and only when there *is* an output: a run with no
+    # `-o` has written nothing to account for.
+    audit_path = None
     if opts.audit:
         audit_path = pathlib.Path(opts.audit).expanduser().resolve()
+    elif opts.output and not opts.no_audit:
+        output_path = pathlib.Path(opts.output).expanduser().resolve()
+        audit_path = output_path.with_name(f"{output_path.stem}_audit.tsv")
+    if audit_path is not None:
         write_audit(audit_path, rows, sources)
         print(f"audit written to {audit_path}")
+
     if not opts.output:
         print("nothing written (no -o/--output given).")
         return

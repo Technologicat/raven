@@ -279,6 +279,7 @@ Beside the desktop apps, Raven installs a set of headless tools. They exist so t
 - **`raven-wos2bib`**, **`raven-csv2bib`**, **`raven-pdf2bib`** convert Web of Science exports, CSV, and PDF metadata into BibTeX.
 - **`raven-fixbib`** repairs what a database export does to a `.bib`: entries naming the same field two or three times, field values whose braces do not balance, HTML character entities left behind by a database that exported its web page rather than its record, and a publisher's rights notice sitting inside the `abstract`. A parser refuses a broken entry whole — title, authors and all — so a search export can lose a large share of itself to faults nothing reports. `-n` says what it would repair and writes nothing, `-l` names every record rather than counting them, and your file is overwritten only if you ask with `-i`.
 - **`raven-deduplicate`** merges the copies a multi-database search leaves behind: the same paper once per database that indexes it, each in that database's dialect with a different subset of the fields filled in. Two keys decide, and neither is a guess — the DOI, and the title reduced until two databases' spellings of one title agree — unioned transitively, so a record sharing a DOI with one twin and a title with another brings all three together. The surviving copy is the most complete one, with every field it lacks filled in from a twin that has one, and every merge is written to an audit TSV.
+- **`raven-siftbib`** removes the records you cannot screen. A search export carries records of wildly uneven completeness, and one holding nothing but a title is not off topic — nobody can tell what it is — it just has no text to form a view about, and carrying it into the screening count overstates what was actually read. You say what a usable record must have (`--require abstract`, `--min-chars abstract=600` for the truncated teaser a publisher exports in place of one, `--require year`, as many as you like), and everything removed goes to an audit TSV naming the record, its venue and which criterion it failed. Deterministic and offline: no model, no network, same answer every time. Whether a record is *about* your subject is a judgement and a different question; this one only asks whether there is anything to judge.
 
 **From several databases into one bibliography**
 
@@ -477,6 +478,7 @@ raven-arxiv-search                →    python -m raven.papers.search
 raven-burstbib                    →    python -m raven.papers.burstbib
 raven-fixbib                      →    python -m raven.papers.fixbib
 raven-deduplicate                 →    python -m raven.papers.deduplicate
+raven-siftbib                     →    python -m raven.papers.siftbib
 raven-dehyphenate                 →    python -m raven.tools.dehyphenate
 raven-qoi2png                     →    python -m raven.tools.qoi2png
 raven-csv2bib                     →    python -m raven.papers.csv2bib

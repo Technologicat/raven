@@ -235,6 +235,7 @@ raven-arxiv-search = "raven.papers.search:main"
 raven-burstbib = "raven.papers.burstbib:main"
 raven-fixbib = "raven.papers.fixbib:main"
 raven-deduplicate = "raven.papers.deduplicate:main"  # merge the duplicates a multi-database search leaves
+raven-siftbib = "raven.papers.siftbib:main"  # remove the records a review cannot screen, and account for them
 raven-dehyphenate = "raven.tools.dehyphenate:main"
 raven-csv2bib = "raven.papers.csv2bib:main"
 raven-pdf2bib = "raven.papers.pdf2bib:main"

@@ -221,6 +221,7 @@ on the Librarian backend).
 | `raven-arxiv2bib` | arXiv identifiers → BibTeX (records the version arXiv *returned*) |
 | `raven-arxiv-download` | fetch fulltext PDFs for identifiers; `--save-bib` writes the BibTeX from metadata it already fetched, so the two runs cost one set of politeness delays |
 | `raven-deduplicate` | merge the duplicate records a multi-database literature search leaves. Matches on DOI and on normalized title, writes an audit TSV of every merge, and reads through `fixbib`'s repair so the count is honest. `--judge` adds an opt-in LLM pass over the near-misses |
+| `raven-siftbib` | remove the records a review cannot screen — no abstract, or a truncated one — on criteria the caller names (`--require FIELD`, `--min-chars FIELD=N`), with an audit TSV of what went and why. Deterministic and offline; *unusable* is its question, where relevance is a judgement for something else |
 | `raven-burstbib` | split a multi-entry BibTeX file into one file per entry |
 | `raven-wos2bib`, `raven-csv2bib`, `raven-pdf2bib` | bibliography converters from Web of Science exports, CSV, and PDF metadata |
 | `raven-dehyphenate` | undo line-break hyphenation in extracted text |
