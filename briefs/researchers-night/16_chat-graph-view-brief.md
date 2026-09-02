@@ -983,6 +983,20 @@ Three things came out of it, and only the first is clearly a feature:
      "which branch was I looking at", the other "which message was I reading" — so answering yes means
      deciding whether they interleave or sit side by side.
 
+   - **Whether a *second* history should track HEAD is open** (Juha, 2026-09-02, unfiled until now). Not
+     this one, which is a history of views and deliberately does not move HEAD — a separate stack over
+     **manual position moves only**: a commit from the graph, and the chat log's branch, descend and
+     sibling buttons. Messages arriving below the current HEAD would update it in place rather than
+     pushing an entry, since nobody navigated.
+     - The objection that stopped this being folded in is that Back sits among browsing gestures, and
+       browsing must not change state. Juha's framing dodges it: undoing a deliberate act is itself
+       deliberate. And the demo-safety half of that objection turned out to rest on a false premise —
+       see the corrected note above about who actually drives at Researchers' Night.
+     - What it needs deciding, if taken: whether the two stacks interleave or sit side by side, and
+       whether one pair of buttons drives both. Two questions, one of which ("which branch was I looking
+       at" against "which message was I reading") is the same shape as the open question in the item
+       above, so they probably want answering together.
+
 2. **A way back to the newest sibling without panning.** Possibly already there and worth *checking before
    building*: the sibling window keeps the first and last as anchors, so at the session level the last
    anchor is the newest chat and clicking it should do it. If that works, what is missing is not the
