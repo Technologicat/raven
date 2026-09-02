@@ -48,7 +48,9 @@ Two properties worth knowing before scripting against it:
     so two runs in one process cannot contaminate each other.
 """
 
-__all__ = ["TurnRecord", "describe_turn", "turn",
+__all__ = ["DEFAULT_MAX_REPLY_TOKENS",
+
+           "TurnRecord", "describe_turn", "turn",
 
            "ask", "parse_json_reply"]
 
@@ -58,6 +60,18 @@ logger = logging.getLogger(__name__)
 import dataclasses
 import json
 import re
+
+# What `ask` caps a reply at unless told otherwise. Raven's own default is the whole context window,
+# which for a frontend is right — a user asking for a long answer should get one — and for an unattended
+# batch is no cap at all: a model that falls into a repetition loop then generates until it fills 128k,
+# taking half an hour to produce a reply that cannot parse, once per stuck batch.
+#
+# Set from a measurement rather than from taste, because the first guess was wrong in the expensive
+# direction. A batch of forty items answered in JSON came to 10554 output tokens, **8662 of them
+# thinking** — so a cap of 8192 sat below the reasoning alone and produced empty replies, which reads as
+# a backend fault rather than as a cap. This is threefold that, covering a caller batching a hundred
+# items, and still fails a runaway four times sooner than the context window would.
+DEFAULT_MAX_REPLY_TOKENS = 32768
 
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING
@@ -510,31 +524,57 @@ def turn(llm_settings: env,
                          prompts=tuple(prompts))
 
 
-def ask(llm_settings: env, prompt: str) -> str:
+def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS) -> str:
     """Ask one question and get the answer text: no character, no tools, no retrieval, no history.
 
     `llm_settings`: as `turn`, which see.
 
     `prompt`: the whole question — a task instruction and the data it applies to.
 
+    `max_tokens`: cap on the reply, `None` to use whatever `llm_settings` carries. The default is *not*
+                  that setting, deliberately — see below.
+
     Returns the reply text, with nothing else around it.
 
     Raises `RuntimeError` if the backend did not generate — which `turn` does not do, and is the
     difference that matters here. Use `turn` instead when the reasoning trace, the tool counts or the
     node ids are wanted, or when a failed question should be retried rather than raised.
+
+    **The reasoning trace is logged at DEBUG**, being the thing this function otherwise throws away. A
+    caller here has asked for the answer text and gets it; the trace is what explains a reply that makes
+    no sense, and an unattended run is exactly where nobody saw it happen. So `--log-level DEBUG --log
+    PATH` on any tool built over this keeps it.
     """
-    # The whole point of this wrapper, and the reason it exists rather than being five keyword arguments
-    # at each call site: `ai_turn` materializes a backend failure as an assistant message, so `turn`
-    # hands back a record whose `reply` reads like an answer and is not one. A frontend wants that — the
-    # user sees the failure and can reroll it. An unattended batch wants the opposite, because the
-    # fabricated text parses as badly as it reads and does so ten thousand times without anyone watching.
-    record = turn(llm_settings,
-                  prompt,
-                  use_character_card=False,
-                  tools_enabled=False,
-                  internet_enabled=False,
-                  docs_enabled=False,
-                  markup=None)
+    # `request_data` is what `invoke` deep-copies per call, so the cap has to go through it — and be put
+    # back, since the object belongs to the caller and outlives this function. Not safe against two
+    # threads sharing one `llm_settings`; per-run configuration living on that object is the documented
+    # arrangement (see `turn`), and two runs wanting different caps want two of them.
+    previous = llm_settings.request_data.get("max_tokens")
+    if max_tokens is not None:
+        llm_settings.request_data["max_tokens"] = max_tokens
+    try:
+        # The whole point of this wrapper, and the reason it exists rather than being five keyword
+        # arguments at each call site: `ai_turn` materializes a backend failure as an assistant message,
+        # so `turn` hands back a record whose `reply` reads like an answer and is not one. A frontend
+        # wants that — the user sees the failure and can reroll it. An unattended batch wants the
+        # opposite, because the fabricated text parses as badly as it reads and does so ten thousand
+        # times without anyone watching.
+        record = turn(llm_settings,
+                      prompt,
+                      use_character_card=False,
+                      tools_enabled=False,
+                      internet_enabled=False,
+                      docs_enabled=False,
+                      markup=None)
+    finally:
+        if max_tokens is not None:
+            if previous is None:
+                llm_settings.request_data.pop("max_tokens", None)
+            else:
+                llm_settings.request_data["max_tokens"] = previous
+
+    for reasoning in record.reasoning:
+        logger.debug(f"ask: reasoning trace ({len(reasoning)} characters):\n{reasoning}")
     if record.generation is None:
         raise RuntimeError("the backend returned no generation")
     return record.reply or ""
@@ -569,4 +609,12 @@ def parse_json_reply(text: str):
                 return json.loads(text[start:end + 1])
             except json.JSONDecodeError:
                 continue
-    raise ValueError(f"no JSON found in reply: {text[:200]!r}")
+    # Both ends, because they fail differently and the tail is the one nobody thinks to keep: a model
+    # that has fallen into a repetition loop looks perfectly ordinary at the start and gives itself away
+    # only where it stopped. Logged rather than raised, so the exception message stays short enough to
+    # read while the evidence survives for anyone running with DEBUG on.
+    logger.error(f"parse_json_reply: no JSON in a reply of {len(text)} characters. "
+                 f"Head: {text[:500]!r}")
+    if len(text) > 500:
+        logger.error(f"parse_json_reply: ...tail: {text[-500:]!r}")
+    raise ValueError(f"no JSON found in a reply of {len(text)} characters: {text[:200]!r}")

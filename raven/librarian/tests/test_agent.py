@@ -580,6 +580,47 @@ class TestAsk:
         with pytest.raises(RuntimeError):
             agent.ask(llm_settings, "Question?")
 
+    def test_the_reply_is_capped_and_the_caller_s_settings_survive_it(self, monkeypatch, llm_settings):
+        # Raven's own default is the whole context window, which for an unattended batch is no cap: a
+        # repetition loop then runs to 128k. The cap has to reach the wire, and it has to be put back --
+        # `llm_settings` belongs to the caller and outlives the call.
+        sent = []
+
+        def fake_invoke(**kw):
+            sent.append(kw["settings"].request_data.get("max_tokens"))
+            return make_invoke_result(content="ok")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        # Set to what a *live* setup carries, which is the backend's whole context window -- `setup`
+        # raises `max_tokens` to it, and that is the value this cap exists to override. The fixture's own
+        # default happens to equal `DEFAULT_MAX_REPLY_TOKENS`, so leaving it would make the assertions
+        # below pass whether or not the cap was ever applied.
+        llm_settings.request_data["max_tokens"] = 131072
+        before = llm_settings.request_data["max_tokens"]
+        assert before != agent.DEFAULT_MAX_REPLY_TOKENS, (
+            "the settings carry the default cap, so this fixture cannot show it is applied")
+
+        agent.ask(llm_settings, "Question?")
+        assert sent[0] == agent.DEFAULT_MAX_REPLY_TOKENS
+        assert llm_settings.request_data.get("max_tokens") == before, "the caller's settings were mutated"
+
+        agent.ask(llm_settings, "Question?", max_tokens=99)
+        assert sent[1] == 99
+        agent.ask(llm_settings, "Question?", max_tokens=None)
+        assert sent[2] == before, "max_tokens=None should leave whatever the settings carry"
+
+    def test_a_failure_to_parse_reports_both_ends_of_what_came_back(self, caplog):
+        # A model in a repetition loop looks ordinary at the start and gives itself away only where it
+        # stopped, so the tail is the half nobody thinks to keep -- and the half that explains it.
+        runaway = "Here is my answer. " + ("the same thing over and over. " * 400)
+        with caplog.at_level(logging.ERROR, logger="raven.librarian.agent"):
+            with pytest.raises(ValueError, match="no JSON found"):
+                agent.parse_json_reply(runaway)
+        logged = " ".join(record.message for record in caplog.records)
+        assert "Head:" in logged and "tail:" in logged
+        # The reported length is of the *stripped* text, which is what the parser actually worked on.
+        assert str(len(runaway.strip())) in logged, "the reply's length is what says a runaway happened"
+
     def test_an_empty_reply_is_an_answer_rather_than_a_failure(self, monkeypatch, llm_settings):
         # A model that generated nothing still generated: the batch records an empty field, which is a
         # result its parser can act on, rather than an exception that ends the run.

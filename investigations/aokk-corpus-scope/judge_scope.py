@@ -661,6 +661,13 @@ def main() -> int:
     parser.add_argument("--backend-url", default=None,
                         help=f"the LLM backend (default: {librarian_config.llm_backend_url})")
     parser.add_argument("--model", default=None, help="model id to judge with (default: whatever the backend offers)")
+    parser.add_argument("--max-reply-tokens", type=int, default=agent.DEFAULT_MAX_REPLY_TOKENS, metavar="N",
+                        help="cap on one reply. Raven's default is the whole context window, which for an "
+                             "unattended batch is no cap at all: a model that falls into a repetition "
+                             "loop generates until it fills 128k, taking half an hour to produce a reply "
+                             "that cannot parse. Measured: a batch of forty needs about 10.5k output "
+                             "tokens, most of it thinking, so the default has room and still fails a "
+                             "runaway several times sooner")
     parser.add_argument("--out-dir", default=None, help="where the outputs go (default: beside this script)")
     opts = parser.parse_args()
 
@@ -697,6 +704,7 @@ def main() -> int:
         # `request_data["model"]` is the field actually sent; `model_id` is what gets reported.
         llm_settings.request_data["model"] = opts.model
         llm_settings.model_id = opts.model
+    llm_settings.request_data["max_tokens"] = opts.max_reply_tokens
     print(f"backend: {backend_url}, model: {llm_settings.model_id}")
 
     done = load_state(state_path)
