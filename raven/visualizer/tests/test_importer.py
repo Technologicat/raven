@@ -91,8 +91,13 @@ MISSING_FIELDS = """
 
 @article{noauthor2023,
   year = {2023},
-  title = {A whole proceedings volume, which is not a study},
-  abstract = {The front matter of a conference proceedings.}
+  title = {A paper whose database omitted its authors},
+  abstract = {ECCOMAS 2024 exported records in this shape.}
+}
+
+@article{noyear2023,
+  author = {Epsilon, Eve},
+  title = {A paper whose database omitted its year}
 }
 
 @article{nothing2023,
@@ -109,27 +114,44 @@ def missing_fields_bib(tmp_path):
     return path
 
 
-def test_a_record_with_no_title_is_imported_under_a_placeholder(missing_fields_bib, monkeypatch, caplog):
-    # A missing title is not a missing record: the abstract is the part a reader forms a view from, and
-    # skipping the entry loses that too. A missing *author* still skips -- that is what a whole
-    # proceedings volume looks like, and it is not a study.
+def test_an_incomplete_record_is_imported_with_each_missing_field_named(missing_fields_bib, monkeypatch, caplog):
+    # A database export can omit any of the bibliographic fields while carrying the rest, and dropping
+    # the record loses everything it did carry. So each of the three is named as absent rather than
+    # costing the record its place, and all three are handled alike.
     monkeypatch.setattr(visualizer_config, "dehyphenate", False)
     with caplog.at_level(logging.WARNING, logger="raven.visualizer.importer"):
         entries = parsed_entries(importer._parse_input_files(str(missing_fields_bib)))
 
-    assert len(entries) == 1, ("only the title is excused: the authorless record and the one with "
-                               "nothing to read should both still be skipped")
-    assert entries[0].title == importer.MISSING_TITLE
-    # ...and it kept what made it worth keeping.
-    assert "exported everything except the title" in entries[0].abstract
+    by_placeholder = {entry.title: entry for entry in entries}
+    assert len(entries) == 3, "only the record with nothing to read should be skipped"
 
-    # Each skip and each substitution says so. A reader meeting the placeholder later has no way to tell
-    # it from a title someone actually wrote, and a record that never arrived leaves nothing to notice.
-    assert any("no title" in record.message for record in caplog.records)
-    assert any("noauthor2023" in record.message and "no author" in record.message
-               for record in caplog.records)
-    # A record with neither a title nor an abstract has nothing to read, and the placeholder is the same
-    # string for every one of them — importing those would cluster Raven's own boilerplate.
+    no_title = by_placeholder[importer.MISSING_TITLE]
+    assert "everything except the title" in no_title.abstract, "it kept what made it worth keeping"
+
+    no_author = next(e for e in entries if e.author == importer.MISSING_AUTHOR)
+    assert no_author.title == "A paper whose database omitted its authors"
+    no_year = next(e for e in entries if e.year == importer.MISSING_YEAR)
+    assert no_year.title == "A paper whose database omitted its year"
+
+    # Each substitution says so. A reader meeting a placeholder later has no way to tell it from
+    # something a database actually said.
+    messages = [record.message for record in caplog.records]
+    for key in ("notitle2023", "noauthor2023", "noyear2023"):
+        assert any(key in message and "has no" in message for message in messages)
+
+
+def test_a_record_with_neither_a_title_nor_an_abstract_is_skipped(missing_fields_bib, monkeypatch, caplog):
+    # The one thing a record cannot do without is something to read. The title placeholder is the same
+    # string on every such record, so importing them would cluster them on Raven's own boilerplate.
+    monkeypatch.setattr(visualizer_config, "dehyphenate", False)
+    with caplog.at_level(logging.WARNING, logger="raven.visualizer.importer"):
+        entries = parsed_entries(importer._parse_input_files(str(missing_fields_bib)))
+
+    assert "nothing2023" not in {entry.title for entry in entries}
+    # The negative control: the other two incomplete records are also missing a mandatory-looking field
+    # and *are* imported, so this fixture is showing that having nothing to read is what decides, rather
+    # than incompleteness in general.
+    assert len(entries) == 3
     assert any("nothing2023" in record.message and "no title and no abstract" in record.message
                for record in caplog.records)
 

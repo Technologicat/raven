@@ -131,6 +131,54 @@ So **three quarters of the cut is "this is not about education at all"** — the
 the first two rubrics, and whose absence let a link-prediction survey through. The two shapes the brief
 was written around are the small remainder.
 
+### The venue is the field the record already has and the title does not
+
+The prompt sent title and abstract, and threw the journal away. It should not have: **85.3% of this
+corpus carries a venue, and — the case that matters — so do 852 of the 853 records with no abstract at
+all.** Exactly one record in 5167 has neither.
+
+A venue is often the strongest evidence in the record. *Proceedings of the Learning Analytics and
+Knowledge Conference*, *CEPS Journal: Center for Educational Policy Studies*, *Journal of English as a
+Lingua Franca* — each settles the domain question outright, and none of it needs the model to recall
+anything.
+
+**The case that shows why this matters is `bedi_generative_2025`, whose whole title is "Generative AI in
+CALL".** Without the venue the model answered correctly — CALL is Computer-Assisted Language Learning —
+but it answered *from recall of an acronym*, which is indistinguishable from the confabulation two
+sections above until you check. Its venue is *The Palgrave Encyclopedia of Computer-Assisted Language
+Learning*. Given that, the same verdict arrives with the evidence attached, and the model says so.
+
+So the improvement is not accuracy, it is **groundedness**: the same answer, reached from the record
+instead of from the model. And it is free — the field was already parsed and discarded.
+
+It does not make the model credulous, which was the risk: given *KI - Künstliche Intelligenz* as the venue
+for `Project VoLL-KI`, it still declines to guess what the project is and answers `low`.
+
+Two cautions are in the rubric, because a venue is weaker evidence than it looks in two specific ways. It
+rarely states the *level* — an education journal covers schools and universities alike — so it says little
+about `wrong_level`. And it describes where the work was published rather than what the work is: a book
+review in an education journal is still a book review.
+
+### Unscreenable is not the same claim as off topic
+
+`--require-abstract` sets aside the records with no abstract *before* judging, into `unscreenable.tsv`
+with a reason of their own.
+
+The distinction is the point. A record with a bare title is not off topic — nobody knows what it is — it
+is **useless to a review study**, which has nothing to read. Those are different claims, and merging them
+would put a sixth of the corpus into the topical drop list with an empty reason column, where a reviewer
+could neither audit them nor chase them down by DOI.
+
+Note this is unrelated to whether the *model* can judge them: with the venue in the prompt it usually can.
+The filter is about what a human reviewer can screen, which a venue name does not help with at all.
+
+**It probably belongs in its own tool rather than here** (Juha's question, 2026-09-02, and the answer is
+provisional). It needs no LLM — it is a mechanical `.bib` → `.bib` question, the same shape as
+`raven-fixbib` and `raven-deduplicate` — and running it *first* removes 853 records and takes roughly 16.5%
+off the LLM run, about 35 minutes of pass 1. Bundled into the judge, that is time spent classifying records
+already destined to be discarded. It lives here for now because extracting it would be building the
+generalization before the prototype has settled.
+
 ### The full run is an overnight job, and pass 2 is the half worth batching
 
 Measured at the pilot's own rate: pass 1 runs ~104 s per batch of 40, so 5167 records is **~3.8 h**. Pass 2
@@ -214,6 +262,24 @@ first worked example rather than its schema.
 The two corpus-measured constants want deriving from the corpus at run time rather than being carried
 across, for the same reason — a corpus whose titles run short would need a different informative bound,
 and inheriting 5 would silently escalate everything or nothing.
+
+## The run plan, and why sifting comes second rather than first
+
+Decided 2026-09-02. `raven-siftbib --require abstract` would remove 853 of the 5167 records and take
+roughly 16.5% off the LLM run, so the tempting order is to sift first and judge less. **It is the wrong
+order while the judge is still being calibrated**, and right once it is not:
+
+1. **Calibrate against everything, abstract or no.** A sixth of this corpus is title-only, and that is
+   the hardest input the judge will meet — the case where a rubric that reasons from absence invents a
+   subject, which is how two of the three rubric defects above were found. Sifting first would take
+   exactly those records out of the calibration and leave the judge untested on the inputs most likely
+   to break it.
+2. **Sift, then run.** The final scoping-review corpus does not want records that cannot be screened,
+   so they go before the full pass rather than being judged and then discarded — which also buys back
+   the 16.5%.
+
+So the sift is a step in the pipeline and *not* a step in the calibration, and the two pilots deliberately
+run against the unsifted corpus.
 
 ## Files
 

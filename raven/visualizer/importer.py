@@ -7,7 +7,8 @@ the `raven-importer` CLI shell. The CLI entry point lives in `importer_cli.py`; 
 module stays free of argparse and logging configuration so the GUI can host it safely.
 """
 
-__all__ = ["MISSING_TITLE",
+__all__ = ["MISSING_TITLE", "MISSING_AUTHOR", "MISSING_YEAR",
+           "MISSING_FIELD_PLACEHOLDERS", "is_missing_field",
 
            "result_successful", "result_cancelled", "result_errored",
            "init", "start_task", "has_task", "cancel_task",
@@ -52,10 +53,18 @@ from ..papers import bibtex
 
 from . import config as visualizer_config
 
-# What a record's title becomes when its BibTeX entry has none. Shown, rather than left blank, so that a
-# reader meets a stated fact about the data instead of what looks like a rendering fault. The brackets
-# are what mark it as ours rather than as somebody's actual title.
+# What a record's bibliographic fields become when its BibTeX entry omits them. Shown, rather than left
+# blank, so that a reader meets a stated fact about the data instead of what looks like a rendering
+# fault; the brackets mark them as ours rather than as something a database actually said.
+#
+# All three are display only. `author` and `year` never reach the analysis stages at all — they say who
+# and when rather than what — and `_analysis_title` keeps the title placeholder out of them, since it
+# would otherwise be the same text on every such record and would cluster them on it.
 MISSING_TITLE = "[Title not specified]"
+MISSING_AUTHOR = "[Author not specified]"
+MISSING_YEAR = "[Year not specified]"
+
+MISSING_FIELD_PLACEHOLDERS = frozenset({MISSING_TITLE, MISSING_AUTHOR, MISSING_YEAR})
 
 if visualizer_config.clusters_keyword_method == "llm" or visualizer_config.summarize:
     logger.info("LLM backend needed (for cluster keywords and/or summarization). Setting up connection.")
@@ -254,42 +263,29 @@ def _parse_input_files(*filenames):
                 try:
                     fields = entry.fields_dict
 
-                    # Validate presence of mandatory fields
-                    entry_valid = True
-                    for field in ("author", "year"):
-                        if field not in fields or not fields[field].value:
-                            logger.warning(f"_parse_input_files: skipping entry '{entry.key}', reason: no {field}")
-                            entry_valid = False
-                            break
-                    if not entry_valid:
+                    # An incomplete record is not a missing record. A database export can omit any of the
+                    # bibliographic fields while carrying the rest — conference proceedings arrive
+                    # without authors, and repository deposits without titles — and dropping the entry
+                    # loses everything it *did* carry, which for a record with an abstract is the part a
+                    # reader forms a view from. So each missing field is named as absent and the record
+                    # is kept.
+                    #
+                    # The one thing it cannot do without is something to read. With neither a title nor
+                    # an abstract there is no text at all, and the placeholder is the same string for
+                    # every such record — so importing them would build a cluster out of Raven's own
+                    # boilerplate rather than out of anything they have in common.
+                    if not (("title" in fields and fields["title"].value) or
+                            ("abstract" in fields and fields["abstract"].value)):
+                        logger.warning(f"_parse_input_files: skipping entry '{entry.key}', "
+                                       f"reason: no title and no abstract")
                         progress.tick()
                         continue
 
-                    authors_str = common_utils.format_bibtex_authors(fields["author"].value)
-                    year = fields["year"].value
-
-                    # A missing title is not a missing record. Some database exports carry the abstract,
-                    # the authors and the DOI while leaving the title out, and that is still a record
-                    # worth reading — the abstract is the part a reader forms a view from, and dropping
-                    # the entry would lose that along with the title. So the title is named as absent
-                    # rather than the record being skipped: `MISSING_TITLE` is what a reader meets in the
-                    # search list and the info panel, where a blank would read as a rendering fault
-                    # instead of as a fact about the data. It is *display* only — `_analysis_title` keeps
-                    # it out of the embedding and the keyword extraction, which see the abstract alone.
-                    if "title" in fields and fields["title"].value:
-                        title = common_utils.normalize_whitespace(common_utils.unicodize_basic_markup(fields["title"].value))
-                    else:
-                        # ...but a record with no title *and* no abstract has nothing to read at all, and
-                        # the placeholder is the same string for every one of them — so importing those
-                        # would build a cluster out of Raven's own boilerplate.
-                        if "abstract" not in fields or not fields["abstract"].value:
-                            logger.warning(f"_parse_input_files: skipping entry '{entry.key}', "
-                                           f"reason: no title and no abstract")
-                            progress.tick()
-                            continue
-                        logger.warning(f"_parse_input_files: entry '{entry.key}' has no title; "
-                                       f"importing it as {MISSING_TITLE}, from its abstract alone")
-                        title = MISSING_TITLE
+                    title = _field_or_placeholder(fields, "title", MISSING_TITLE, entry.key,
+                                                  lambda value: common_utils.normalize_whitespace(common_utils.unicodize_basic_markup(value)))
+                    authors_str = _field_or_placeholder(fields, "author", MISSING_AUTHOR, entry.key,
+                                                        common_utils.format_bibtex_authors)
+                    year = _field_or_placeholder(fields, "year", MISSING_YEAR, entry.key)
 
                     # abstract is optional
                     if "abstract" in fields and fields["abstract"].value:
@@ -322,8 +318,11 @@ def _parse_input_files(*filenames):
                     # TODO: Preserve what other fields? Or include a full dump of `entry` as-is? Or its `fields_dict`?
 
                     # Preserving the full author list in BibTeX format allows us to BibTeX export interesting entries from the GUI.
+                    # `None` where the record named no authors, rather than the display placeholder: this
+                    # is the value a re-export writes back into a `.bib`, and writing our own words there
+                    # would put them in somebody's bibliography as though a database had said them.
                     parsed_data_by_filename[filename].append(env(author=authors_str,
-                                                                 bibtex_author=fields["author"].value,
+                                                                 bibtex_author=fields["author"].value if "author" in fields else None,
                                                                  year=year,
                                                                  title=title,
                                                                  abstract=abstract))
@@ -648,6 +647,35 @@ def _cluster_lowdim_data(input_data, lowdim_data):
     return vis_data, vis_clusterer.labels_, n_vis_clusters, n_vis_outliers
 
 
+def _field_or_placeholder(fields, name: str, placeholder: str, entry_key: str, transform=None) -> str:
+    """One bibliographic field of a record, or a placeholder naming it as absent.
+
+    `transform` is applied to a value that is present — whitespace normalization for a title, name
+    formatting for an author list — and never to the placeholder, which is already the text to display.
+
+    The absence is logged per record rather than counted, because the two questions a reader has about an
+    import are *how many* and *which ones*, and only the second lets them go and look.
+    """
+    if name in fields and fields[name].value:
+        value = fields[name].value
+        return transform(value) if transform is not None else value
+    logger.warning(f"_parse_input_files: entry '{entry_key}' has no {name}; "
+                   f"importing it as {placeholder}")
+    return placeholder
+
+
+def is_missing_field(value: str) -> bool:
+    """Whether a field holds one of Raven's placeholders rather than something a database actually said.
+
+    Worth asking wherever a field is *computed with* rather than shown. `_analysis_title` is the caller
+    today; the one that makes this public is the Visualizer's planned date-range filter, which will meet
+    `MISSING_YEAR` in a field that is otherwise a bare four-digit number on essentially every record a
+    database exports. A filter parsing `year` needs a branch for a value it cannot read either way; this
+    is how it tells ours from a database's own oddity.
+    """
+    return value in MISSING_FIELD_PLACEHOLDERS
+
+
 def _analysis_title(entry: env) -> str:
     """The entry's title as the analysis stages should see it: empty where Raven supplied the placeholder.
 
@@ -656,7 +684,7 @@ def _analysis_title(entry: env) -> str:
     boilerplate for every such record, so it would pull them together into a cluster whose members have
     nothing in common but a field their database omitted.
     """
-    return "" if entry.title == MISSING_TITLE else entry.title
+    return "" if is_missing_field(entry.title) else entry.title
 
 
 def _format_entry_for_analysis(entry: env) -> str:
