@@ -131,6 +131,8 @@ what the work is about - answer false to all three and say "low". Do NOT claim t
 unfamiliar name refers to; you cannot, and a guess dressed as recognition is worse than admitting the \
 title says nothing.
 
+Some records also carry the journal, book or conference they appeared in, shown as "[published in: ...]". Use it - it is often the strongest evidence there is, especially when the title is short. A venue named for a field tells you the field: "Journal of Chemical Education" or "Proceedings of the Learning Analytics and Knowledge Conference" is educational research, and "IEEE Transactions on Smart Grid" is not. Two cautions. A venue rarely says the LEVEL - an education journal covers schools and universities alike - so it is weak evidence for "wrong_level". And it describes where the work was published, not what the work is: a book review in an education journal is still a book review.
+
 A phrase can match in a sense the search did not mean, and this is the main thing to look for. "Learning \
 assistant" names an AI tool, and it is ALSO the established term in STEM education research for a HUMAN \
 undergraduate who helps teach a course - that second sense has no AI in it and is "no_ai" true. \
@@ -174,7 +176,7 @@ You are screening a literature-search result for records that are not about the 
 The title of this record said too little to judge it from, so here is its abstract as well.
 {caveat}
 Title: {title}
-
+{venue}
 --- abstract ---
 {abstract}
 --- end ---
@@ -202,8 +204,23 @@ def load_records(bib_path: pathlib.Path) -> list[env]:
         abstract = fields["abstract"].value if "abstract" in fields else ""
         records.append(env(key=entry.key,
                            title=_clean(title.replace("{", "").replace("}", "")),
+                           venue=_venue(fields),
                            abstract=_clean(abstract)))
     return records
+
+
+def _venue(fields) -> str:
+    """Where the record was published, from the first field that names it.
+
+    Worth sending because it is evidence the title often does not carry, and it is *there*: 85.3% of this
+    corpus has one, and — the case that matters — so do 852 of the 853 records with no abstract at all.
+    A venue like "CEPS Journal: Center for Educational Policy Studies" or "Proceedings of the Learning
+    Analytics and Knowledge Conference" settles the domain question outright.
+    """
+    for key in ("journal", "booktitle", "series", "publisher"):
+        if key in fields and str(fields[key].value).strip():
+            return _clean(str(fields[key].value).replace("{", "").replace("}", ""))
+    return ""
 
 
 def _clean(text: str) -> str:
@@ -250,7 +267,8 @@ def judge_titles(llm_settings: env, batch: list[env]) -> dict[int, dict]:
     unanswered, which puts them in the next run's to-do list — and is what makes a re-run the recovery
     path for a failed batch.
     """
-    items = "\n".join(f"{i}. {record.title}" for i, record in enumerate(batch))
+    items = "\n".join(f"{i}. {record.title}" + (f"\n   [published in: {record.venue}]" if record.venue else "")
+                      for i, record in enumerate(batch))
     reply = agent.ask(llm_settings, PASS1_INSTRUCTIONS.format(rubric=_SCOPE_RUBRIC.format(question=SCOPE_QUESTION),
                                                         items=items))
     answers = agent.parse_json_reply(reply)
@@ -282,6 +300,8 @@ def judge_abstract(llm_settings: env, record: env) -> dict:
     reply = agent.ask(llm_settings, PASS2_INSTRUCTIONS.format(rubric=_SCOPE_RUBRIC.format(question=SCOPE_QUESTION),
                                                               caveat=caveat,
                                                               title=record.title,
+                                                              venue=(f"Published in: {record.venue}\n"
+                                                                     if record.venue else ""),
                                                               abstract=record.abstract[:ABSTRACT_CHARS]))
     answer = agent.parse_json_reply(reply)
     if isinstance(answer, list) and answer:
@@ -363,11 +383,24 @@ def run_pass1(llm_settings: env, todo: list[env], state_path: pathlib.Path, batc
 def needs_escalation(answer: dict, record: env) -> bool:
     """Whether pass 1's answer for this record should be re-asked with the abstract in hand.
 
-    Either the model said it was unsure, or the title has too little in it for the question to have been
-    answerable — the second measured from the input, so that the case where the model is confidently
-    wrong about a thin title cannot talk its way out of a second look.
+    Three triggers, and only the first is the model's own opinion of itself:
+
+      - it said it was unsure;
+      - the title has too little in it for the question to have been answerable, measured from the input,
+        so a model confidently wrong about a thin title cannot talk its way out of a second look;
+      - it wants to *drop* the record and was less than certain.
+
+    The third is the asymmetry rather than a second guess at the confidence. A false keep costs a reader
+    one line; a false drop removes a study from the review and leaves nothing behind to notice it by. So
+    the two verdicts do not deserve the same standard of proof, and a drop has to clear a higher one.
+
+    Both hand-checked false drops found during calibration were of exactly this shape: a medium-confidence
+    drop of a record whose abstract, once read, put it plainly in scope. Both happened to escalate anyway
+    on the thin-title rule, which is luck — the same answers on a normal-length title would have stood.
     """
-    return answer["confidence"] == "low" or looks_uninformative(record.title)
+    return (answer["confidence"] == "low"
+            or looks_uninformative(record.title)
+            or (verdict_of(answer) == "drop" and answer["confidence"] != "high"))
 
 
 CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
@@ -382,7 +415,7 @@ def write_review_tsv(rows: list[tuple[env, dict]], path: pathlib.Path) -> None:
     """
     with path.open("w", encoding="utf-8") as f:
         f.write("mark\tn\tkey\tverdict\tconfidence\tno_ai\tnot_edu\twrong_level\tabstract\tescalates"
-                "\twhy\ttitle\tabstract_head\n")
+                "\twhy\ttitle\tvenue\tabstract_head\n")
         ordered = sorted(rows, key=lambda row: (verdict_of(row[1]),
                                                 CONFIDENCE_ORDER[row[1]["confidence"]],
                                                 row[0].key))
@@ -394,7 +427,7 @@ def write_review_tsv(rows: list[tuple[env, dict]], path: pathlib.Path) -> None:
                     f"{shown(answer['no_ai'])}\t{shown(answer['not_education'])}\t"
                     f"{shown(answer['wrong_level'])}\t{describe_abstract(record)}\t"
                     f"{'yes' if needs_escalation(answer, record) else 'no'}\t"
-                    f"{answer['why']}\t{record.title}\t{preview}\n")
+                    f"{answer['why']}\t{record.title}\t{record.venue}\t{preview}\n")
 
 
 def summarize(rows: list[tuple[env, dict]]) -> None:
@@ -421,7 +454,11 @@ def write_outputs(records: list[env], done: dict[str, dict],
     under-filters rather than silently losing studies.
     """
     library = bibtex.parse_file(str(bib_path), split_names=False)
-    dropped_keys = {key for key, answer in done.items() if verdict_of(answer) == "drop"}
+    # A record leaves the bibliography for one reason here — the model judged it off topic — and the
+    # reason is in `dropped.tsv` beside it. Records that cannot be screened at all, having no abstract,
+    # are `raven-siftbib`'s business and are expected to be gone before this runs.
+    judged_off_topic = {key for key, answer in done.items() if verdict_of(answer) == "drop"}
+    dropped_keys = judged_off_topic
 
     # Filtered at the *block* level rather than by rebuilding from `library.entries`, so that whatever
     # else the file carries — a preamble, `@string` definitions, comments between records — survives into
@@ -436,7 +473,7 @@ def write_outputs(records: list[env], done: dict[str, dict],
     by_key = {record.key: record for record in records}
     with dropped_path.open("w", encoding="utf-8") as f:
         f.write("key\tno_ai\tnot_edu\twrong_level\tconfidence\tsource\tabstract\twhy\ttitle\n")
-        for key in sorted(dropped_keys):
+        for key in sorted(judged_off_topic):
             answer = done[key]
             record = by_key.get(key)
             def shown(value):
@@ -449,7 +486,7 @@ def write_outputs(records: list[env], done: dict[str, dict],
     unknown = sum(1 for answer in done.values() if verdict_of(answer) == "unknown")
     unanswered = len(records) - len(done)
     print(f"\nwrote {kept_path}  ({len(kept.entries)} of {len(library.entries)} records kept)")
-    print(f"wrote {dropped_path}  ({len(dropped_keys)} dropped)")
+    print(f"wrote {dropped_path}  ({len(judged_off_topic)} judged off topic)")
     if unknown or unanswered:
         print(f"  kept anyway: {unknown} judged unknown, {unanswered} never answered")
 

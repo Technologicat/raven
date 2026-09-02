@@ -159,6 +159,18 @@ rarely states the *level* — an education journal covers schools and universiti
 about `wrong_level`. And it describes where the work was published rather than what the work is: a book
 review in an education journal is still a book review.
 
+**The second caution is in the rubric and the model overrode it anyway**, which is worth knowing before
+trusting this field. A monograph titled *Search as Learning*, published in a venue whose name is about
+information retrieval, was dropped as `not_education` at medium confidence — and its abstract turns out to
+review education research on learning objectives and strategies, self-regulated learning, learning
+retention and transfer, and tools to support learning during search. It is not merely educational; that is
+its subject. A technical venue name outweighed a title that says *learning* twice.
+
+So the venue is worth adding — it grounds the judgement, and the alternative was the model recalling
+acronyms — but it introduces a false-drop mode of its own, in a corpus where an education topic is
+routinely published in the venue of whatever field it is applied to. That is an argument for escalating
+uncertain drops rather than for withholding the field.
+
 ### Unscreenable is not the same claim as off topic
 
 `--require-abstract` sets aside the records with no abstract *before* judging, into `unscreenable.tsv`
@@ -178,6 +190,21 @@ provisional). It needs no LLM — it is a mechanical `.bib` → `.bib` question,
 off the LLM run, about 35 minutes of pass 1. Bundled into the judge, that is time spent classifying records
 already destined to be discarded. It lives here for now because extracting it would be building the
 generalization before the prototype has settled.
+
+### A drop and a keep do not deserve the same standard of proof
+
+Escalation began as "the model said `low`, or the title is too thin to have been answerable". Both hand-
+checked false verdicts found during calibration slipped through it: *A theology rhizome* and *Search as
+Learning*, each dropped at **medium** confidence, each plainly in scope once its abstract is read. Both
+escalated anyway — but only because their titles are short enough to trip the structural rule, which is
+luck. The same answers on a normal-length title would have stood, and the record would be gone.
+
+So an uncertain **drop** now escalates where an uncertain keep does not. This is the brief's own asymmetry
+made operational rather than a second guess at the confidence field: a false keep costs a reader one line
+of review, and a false drop removes a study from the review with nothing left behind to notice it by.
+
+Measured on the 200-record sample, it takes escalation from **5% to 15%** — which is affordable, and is
+the strongest argument for batching pass 2 before the full run.
 
 ### The full run is an overnight job, and pass 2 is the half worth batching
 
