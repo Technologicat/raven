@@ -391,6 +391,80 @@ class TestGaps:
 
 
 # ---------------------------------------------------------------------------
+# The keyboard
+# ---------------------------------------------------------------------------
+
+class TestKeyboard:
+    def test_a_hidden_panel_gives_up_the_keyboard(self, panel):
+        # Its border is not on screen to say it has the keys, so a reader pressing them would be aiming
+        # at something they cannot see.
+        built, forest, app_state, ids, calls = panel
+        built.has_keyboard = True
+        assert built.has_keyboard, "the panel is shown, so it should have been able to take the keyboard"
+        built.hide()
+        assert not built.has_keyboard
+
+    def test_a_hidden_panel_cannot_be_given_the_keyboard(self, panel):
+        # The other half, and the one that keeps the state coherent rather than merely tidy: answering
+        # True while showing no border would be claiming keys the reader cannot see it holding.
+        built, forest, app_state, ids, calls = panel
+        built.hide()
+        built.has_keyboard = True
+        assert not built.has_keyboard
+
+    def test_keys_it_does_not_claim_are_passed_on(self, panel):
+        # The whole reason it can use bare letters: F1 and the rest still reach the app from inside it.
+        built, forest, app_state, ids, calls = panel
+        assert built.handle_key(dpg.mvKey_F1) is False
+        assert built.handle_key(dpg.mvKey_Z) is False
+
+    def test_a_modified_key_is_left_to_the_app(self, panel):
+        # Ctrl+N starts a new chat wherever the keyboard is; claiming bare letters must not claim chords
+        # built on them.
+        built, forest, app_state, ids, calls = panel
+        assert built.handle_key(dpg.mvKey_F, ctrl=True) is False
+        assert built.handle_key(dpg.mvKey_Home, shift=True) is False
+
+    def test_the_arrows_pan(self, panel):
+        built, forest, app_state, ids, calls = panel
+        before = built._widget._viewport.pan_y.target
+        assert built.handle_key(dpg.mvKey_Up) is True
+        assert built._widget._viewport.pan_y.target != before
+
+    def test_shift_arrows_pan(self, panel):
+        built, forest, app_state, ids, calls = panel
+        before = built._widget._viewport.pan_x.target
+        assert built.handle_key(dpg.mvKey_Right, shift=True) is True
+        assert built._widget._viewport.pan_x.target != before
+
+    def test_enter_is_not_claimed(self, panel):
+        # It would commit the previewed node, and no key can move the preview — so from the keyboard
+        # alone it could only act on whatever the mouse last touched. It waits for the node cursor.
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["taken"])  # a preview exists, so this is not passing for want of one
+        assert built._previewed_node_id is not None
+        assert built.handle_key(dpg.mvKey_Return) is False
+        assert calls.committed == [], "Enter committed a branch the keyboard could not have chosen"
+
+    def test_alt_arrows_walk_the_history(self, panel):
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["not_taken"])
+        moved_to = built._chat_graph.spine
+        assert built.handle_key(dpg.mvKey_Left, alt=True) is True
+        assert built._chat_graph.spine != moved_to, "Alt+Left did not go back"
+        assert built.handle_key(dpg.mvKey_Right, alt=True) is True
+        assert built._chat_graph.spine == moved_to, "Alt+Right did not return"
+
+    def test_a_bare_arrow_is_not_a_history_step(self, panel):
+        # The control for the above: an Alt that was ignored would make the two indistinguishable.
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["not_taken"])
+        showing = built._chat_graph.spine
+        built.handle_key(dpg.mvKey_Left)
+        assert built._chat_graph.spine == showing, "a bare arrow walked the history instead of panning"
+
+
+# ---------------------------------------------------------------------------
 # Where the reader has been
 # ---------------------------------------------------------------------------
 

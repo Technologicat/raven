@@ -307,6 +307,17 @@ class Mark:
         # and from whichever thread is building the widget it will sit on — and DPG's container stack is
         # one process-wide global shared by themes and widgets alike, so a `with` here can capture what
         # another thread is adding. See `dpg-notes.md`, "DPG parent management".
+        # A `PANEL` scopes itself to child windows unless the caller says otherwise, because an `mvAll`
+        # component bound to a panel does not stay on the panel: it composes down the parent chain into
+        # every *tooltip and popup* opened from anything inside it. Only the border *size* is
+        # child-window-specific; the border colour and the padding are not, so a marked panel handed its
+        # toolbar's tooltips a blue edge and, with `padding=(0, 0)`, squeezed their text against it.
+        #
+        # Which is what the docstring above already promised — "every child window under a `PANEL`" — so
+        # this is the code catching up with it rather than a new rule.
+        if kind is MarkKind.PANEL and item_type == dpg.mvAll:
+            item_type = dpg.mvChildWindow
+
         theme = dpg.add_theme()
         component = dpg.add_theme_component(item_type, parent=theme)
         if kind is MarkKind.DOT:

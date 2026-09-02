@@ -39,7 +39,7 @@ Layer 5 - Applications:     app.py (~2.7k), minichat.py (~730, minimal reference
                             indexer.py (~170, the `raven-indexer` CLI; also where the frontends get their
                             shared `open_document_store`)
 Layer 4 - Controller/GUI:   chat_controller.py (~5.0k), cleanup_dialog.py (~410), audio_input_panel.py (~700),
-                            chatgraph_panel.py (~680)
+                            chatgraph_panel.py (~790)
 Layer 4 - Scripting:        agent.py (~570), the headless sibling of the controller
 Layer 3 - Orchestration:    scaffold.py (~1.5k)
 Layer 2 - Backends:         llmclient.py (~2.4k), llmtools.py (~990), hybridir.py (~1.9k)

@@ -32,6 +32,7 @@ from unpythonic import env, sym
 
 from ..common import navhistory
 from ..common.gui import animation as gui_animation
+from ..common.gui import keyboardmark
 from ..common.gui import utils as guiutils
 from ..common.gui.xdotwidget import graph as xdotgraph
 from ..common.gui.xdotwidget.widget import XDotWidget
@@ -48,6 +49,10 @@ gui_config = librarian_config.gui_config
 # A factor rather than a step, because what is being escaped is a chat long enough that a step would have to
 # be pressed many times over.
 _DEPTH_EXPANSION_FACTOR = 2
+
+# How far one arrow press moves the view, in screen pixels. `raven-xdot-viewer`'s value, because
+# these are its keys and a reader who has learnt them there should find them behaving the same.
+_PAN_AMOUNT = 10
 
 _TOOLBAR_H = 34  # pixels, the row of view controls above the graph
 
@@ -140,11 +145,19 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # Where the reader has been. Panel-local: two panels would be two readers, and a shared history
         # would hand each of them the other's places.
         self._history = navhistory.NavigationHistory(is_valid=self._snapshot_is_reachable)
+        self._has_keyboard = False  # set by the app, which owns the Tab cycle
+        # `border=True` only so there is an edge for the keyboard mark to recolour. It costs nothing
+        # visually: an unlit mark is transparent, and the `padding=(0, 0)` below undoes the window padding
+        # that ImGui switches on along with the border, restoring the borderless layout to the pixel.
         self._container = dpg.add_child_window(parent=gui_parent,
                                                width=width, height=height,
                                                no_scrollbar=True, no_scroll_with_mouse=True,
+                                               border=True,
                                                show=self._is_shown,
                                                tag=f"chat_graph_panel_{self.gui_uuid}")  # tag
+        self._keyboard_mark = keyboardmark.Mark(self._container,
+                                                kind=keyboardmark.MarkKind.PANEL,
+                                                padding=(0, 0))
         self._build_toolbar(dark_mode=dark_mode)
         if graph_text_fonts is None:
             graph_text_fonts = [(size, guiutils.load_extra_font(themes_and_fonts, size,
@@ -335,6 +348,99 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._history.forward(apply=self._restore_snapshot)
         self._update_history_buttons()
 
+    # ------------------------------------------------------------------
+    # The keyboard
+
+    def _get_has_keyboard(self) -> bool:
+        """Return whether this panel is the one the keys are going to."""
+        return self._has_keyboard
+
+    def _set_has_keyboard(self, value: bool) -> None:
+        """Take or release the keyboard, lighting or darkening the panel's border to say which.
+
+        A hidden panel refuses to take it, rather than taking it and hiding the fact. The two are
+        different states and only one of them is coherent: a panel that answered `True` while showing no
+        border would be claiming keys the reader has no way to see it holding.
+        """
+        self._has_keyboard = bool(value) and self._is_shown
+        self._keyboard_mark.lit = self._has_keyboard
+
+    has_keyboard = property(fget=_get_has_keyboard, fset=_set_has_keyboard,
+                            doc="Whether the keys are going to this panel. Set by the app, which owns the "
+                                "cycle; the panel's job is to say so, which it does in the blue every "
+                                "other keyboard home in the constellation wears. A hidden panel cannot "
+                                "hold it — assigning `True` to one leaves this `False`.")
+
+    def handle_key(self, key: int, ctrl: bool = False, shift: bool = False, alt: bool = False) -> bool:
+        """Act on a key that belongs to this panel. Returns whether it was one.
+
+        The view controls are `raven-xdot-viewer`'s, key for key, for the reason the toolbar's glyphs are:
+        the two show the same widget, so a reader who has learnt one should not have to learn the other.
+        What is added here is what this panel has and that viewer does not — a history, a branch to frame,
+        and a HEAD to come back to.
+
+        Returns `False` for anything it does not claim, so the caller can go on looking.
+        """
+        # Alt+Left / Alt+Right for history, which is what a browser and every file manager bind, and what
+        # the file dialog's own navigation history is specified to use.
+        if alt:
+            if key == dpg.mvKey_Left:
+                self.go_back()
+                return True
+            if key == dpg.mvKey_Right:
+                self.go_forward()
+                return True
+            return False
+        # Shift+arrows pan. Panning is the secondary gesture here -- the mouse drags, the wheel zooms, and
+        # what the *keyboard* wants from a graph it can commit from is to move between boxes. So the bare
+        # arrows are reserved for that cursor, and pan meanwhile: one binding whose meaning changes once,
+        # rather than a set that has to be relearnt when the cursor lands.
+        if shift:
+            if key == dpg.mvKey_Up:
+                self._widget.pan_by(dx=0, dy=+_PAN_AMOUNT)
+            elif key == dpg.mvKey_Down:
+                self._widget.pan_by(dx=0, dy=-_PAN_AMOUNT)
+            elif key == dpg.mvKey_Left:
+                self._widget.pan_by(dx=+_PAN_AMOUNT, dy=0)
+            elif key == dpg.mvKey_Right:
+                self._widget.pan_by(dx=-_PAN_AMOUNT, dy=0)
+            else:
+                return False
+            return True
+        if ctrl:
+            return False
+
+        if key == dpg.mvKey_Up:
+            self._widget.pan_by(dx=0, dy=+_PAN_AMOUNT)
+        elif key == dpg.mvKey_Down:
+            self._widget.pan_by(dx=0, dy=-_PAN_AMOUNT)
+        elif key == dpg.mvKey_Left:
+            self._widget.pan_by(dx=+_PAN_AMOUNT, dy=0)
+        elif key == dpg.mvKey_Right:
+            self._widget.pan_by(dx=-_PAN_AMOUNT, dy=0)
+        # Numpad only, and the main row deliberately left out. `mvKey_Plus` is a pre-2.0 constant (61)
+        # against a key that arrives as 602 -- measured, in `briefs/reference/dpg-keycodes.md` -- so a
+        # branch on it never runs, and the main-row pair is separately known to misbehave on a Nordic
+        # layout (`TODO_DEFERRED.md`, "Main-row `+` and `-` both zoom out"). Binding it here would add a
+        # fourth broken instance of a filed bug rather than a working key; the wheel and the toolbar cover
+        # zoom meanwhile.
+        elif key == dpg.mvKey_Add:
+            self._widget.zoom_in()
+        elif key == dpg.mvKey_Subtract:
+            self._widget.zoom_out()
+        elif key == dpg.mvKey_F:
+            self._widget.zoom_to_fit()
+        elif key == dpg.mvKey_B:
+            self.fit_branch()
+        elif key == dpg.mvKey_Home:
+            self.go_to_head()
+        # No Enter yet, deliberately. It would commit *the previewed node*, and nothing on the keyboard
+        # can move the preview -- so from the keyboard alone it could only act on whatever the mouse last
+        # touched, which is a gesture with half its input missing. It belongs with the node cursor.
+        else:
+            return False
+        return True
+
     def zoom_1_to_1(self) -> None:
         """Set the zoom to 1:1, leaving the pan where it is."""
         self._widget.set_zoom(1.0, animate=True)
@@ -377,8 +483,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
             dpg.show_item(self._container)
 
     def hide(self) -> None:
-        """Hide the panel."""
+        """Hide the panel, and give up the keyboard if it had it."""
         self._is_shown = False
+        # A hidden panel cannot be the keyboard home: its border is not on screen to say so, and the
+        # keys would go somewhere the reader cannot see.
+        self.has_keyboard = False
         with guiutils.nonexistent_ok():
             dpg.hide_item(self._container)
 
@@ -511,6 +620,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
     def destroy(self) -> None:
         """Tear the panel down. Reverse of the order things were set up in."""
         gui_animation.animator.cancel(self)
+        self._keyboard_mark.detach()
         self._widget.destroy()
         with guiutils.nonexistent_ok():
             dpg.delete_item(self._container)

@@ -2150,6 +2150,40 @@ def is_any_modal_window_visible() -> bool:
             messagebox.is_visible())
 
 combobox_choice_map = None   # DPG tag or ID -> (choice_strings, callback)
+def _cycle_keyboard_home(backwards: bool = False) -> None:
+    """Move the keyboard to the next pane, or the previous one. What Tab and Shift+Tab do.
+
+    Three panes at one level — the composer, the chat log, and the graph while it is on screen — so Tab
+    cycles rather than descending into anything, and Shift+Tab is worth having because with three of them
+    "the one before" is otherwise two presses away.
+
+    **The current home is derived, not stored**, and that is deliberate: the composer can be entered by
+    clicking it or with Ctrl+Space, neither of which goes through here, so a stored answer would be wrong
+    whenever it was not the last thing to have set it. What is stored is only the bit that DPG cannot
+    answer — whether the graph has the keys — and that is meaningful only while the composer does not.
+    """
+    graph_available = chat_graph_panel.is_shown
+    homes = ["composer", "log"] + (["graph"] if graph_available else [])
+
+    if dpg.is_item_active("chat_field"):  # tag
+        current = "composer"
+    elif graph_available and chat_graph_panel.has_keyboard:
+        current = "graph"
+    else:
+        current = "log"
+
+    target = homes[(homes.index(current) + (-1 if backwards else 1)) % len(homes)]
+
+    # The composer is left by parking focus on a real widget, which is the only thing that deactivates an
+    # ImGui text field from the outside. A button is the safe place to park: DPG leaves ImGui's keyboard
+    # navigation activation off, so a focused button ignores Space and Enter rather than pressing itself.
+    if target == "composer":
+        dpg.focus_item("chat_field")  # tag
+    else:
+        dpg.focus_item("chat_send_button")  # tag  # deactivate the composer's ImGui edit buffer
+    chat_graph_panel.has_keyboard = (target == "graph")
+
+
 def librarian_hotkeys_callback(sender, app_data):
     global _last_input_ns
     _last_input_ns = time.monotonic_ns()
@@ -2163,6 +2197,7 @@ def librarian_hotkeys_callback(sender, app_data):
     key = app_data
     ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
     shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+    alt_pressed = dpg.is_key_down(dpg.mvKey_LAlt) or dpg.is_key_down(dpg.mvKey_RAlt)
 
     # ------------------------------------------------------------
     # Helpers for operating on the most recent chat message
@@ -2214,6 +2249,21 @@ def librarian_hotkeys_callback(sender, app_data):
     elif audio_input_panel.has_keyboard() and audio_input_panel.handle_key(key):
         pass
 
+    # The chat graph, on the same terms as the audio panel above: it takes the keys only while it is the
+    # keyboard home, and passes on anything it does not claim, so F1 and the rest still work from inside
+    # it. Above the composer's own branches, because a reader who has Tabbed to the graph means Enter to
+    # commit a branch rather than to send an empty message.
+    #
+    # **Not a keyboard handler of its own, which is how the constellation usually gives a view its keys.**
+    # That pattern belongs to *modals*: a modal owns the keyboard outright, so the main handler can punt
+    # the moment one is open and neither side needs to know what the other binds. Neither of these two is
+    # modal — the reader can be typing in the composer with the graph on screen — so "is it open?" is the
+    # wrong question and "does it hold the keyboard?" is the right one. Which makes it a branch here, in
+    # the chain that already answers that question for every other pane.
+    elif (chat_graph_panel.has_keyboard
+          and chat_graph_panel.handle_key(key, ctrl=ctrl_pressed, shift=shift_pressed, alt=alt_pressed)):
+        pass
+
     # Hotkeys for main window, while no modal window is shown
     elif key == dpg.mvKey_F9:  # a bare key, because it is reached with a microphone in one hand
         audio_input_panel.toggle()
@@ -2242,6 +2292,12 @@ def librarian_hotkeys_callback(sender, app_data):
             dpg.show_font_manager()
         elif key == dpg.mvKey_L:
             dpg.show_style_editor()
+    # Tab moves the keyboard between the panes, Shift+Tab the other way. Above the Ctrl branch and above
+    # the composer's own branch, because it has to be reachable *from* the composer: Tab types nothing
+    # into a multiline field, so it was doing nothing at all there.
+    elif key == dpg.mvKey_Tab:
+        _cycle_keyboard_home(backwards=shift_pressed)
+
     # Ctrl+...
     elif ctrl_pressed:
         if key == dpg.mvKey_Spacebar:
