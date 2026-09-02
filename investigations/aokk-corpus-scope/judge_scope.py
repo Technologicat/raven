@@ -48,6 +48,7 @@ written against, and the filtered `.bib` is one of the two things this produces.
 """
 
 import argparse
+import functools
 import json
 import logging
 import pathlib
@@ -72,23 +73,41 @@ from raven.visualizer import config as visualizer_config
 # a corpus that has already had its obvious strays taken out.
 SCOPE_QUESTION = "studies on different aspects of the use of AI agents in higher education"
 
-# What counts as too little to judge from, asked two ways because either alone is fooled.
+# When a title is too thin to judge from. Two tests, because a title can fail in two unrelated ways and
+# no single number catches both.
 #
-# A bare word count is fooled by padding: "and and and the the the" clears any threshold while naming no
-# subject at all. A content-word count is fooled the other way, by a short title that is all subject —
-# three or four words, every one of them load-bearing. So a title is thin if it is short by *either*
-# measure, which never un-flags anything the word count caught and adds the padded case.
+# **A count catches the short and empty.** "Rethinking the paradigm" names nothing, and neither does a
+# heading or a bare proper noun.
 #
-# Both bounds are set from the corpus rather than by taste, and the flagged group is small enough to read
-# in full — which is what `--thin` is for.
-MIN_INFORMATIVE_WORDS = 5
+# **A density catches the long and padded**, which a count cannot: academic prose pads indefinitely, so
+# "Tackling the possible advantages and potential challenges of a technical understanding in the present
+# context" runs to fifteen words and three content words. Raising the count bound until it caught that
+# was the wrong repair — measured across five corpora it flagged a quarter of one of them, because a
+# *short and precise* title scores the same three or four. "Distilling the Knowledge in a Neural
+# Network", "Unfitted finite element methods" and "On the instability of an axially moving elastic
+# plate" all score 4, and all say exactly what they are about. Count does not separate the populations;
+# the share of the title that is load-bearing does.
+#
+# Calibrated on five corpora in unrelated domains — education and AI, computational mechanics, applied
+# mechanics, arXiv AI, hydrogen production — where these bounds flag 0.7% to 4.9%, and on a set of
+# hand-written filler and genuine titles that it separates completely. Note this is *not* a classifier
+# for vagueness and cannot be one: it is the backstop for the single case the model's own confidence
+# cannot cover, which is being sure about an input that says nothing.
 MIN_CONTENT_WORDS = 3
+MIN_CONTENT_DENSITY = 0.40
+
+# Below this many words, density says nothing — one function word in a four-word title swings it by a
+# quarter — so a short title is judged on the count alone.
+MIN_WORDS_FOR_DENSITY = 8
 
 # Function words plus the project's own hand-tuned academic-prose list, which is the half that matters
 # here: a title reading "Exploring the Potential of..." is padding a reader recognizes instantly and a
 # word count does not. Reusing the Visualizer's list rather than writing a second one keeps "content
 # word" meaning the same thing in the screen as it does in the keyword extraction downstream.
 STOPWORDS = frozenset(nlptools.default_stopwords) | frozenset(visualizer_config.custom_stopwords)
+
+# Small and CPU-friendly, which is what this needs: a few thousand short titles, lemmas only, no GPU.
+SPACY_MODEL = "en_core_web_sm"
 
 # How much of an abstract pass 2 sends. Comfortably more than an abstract normally runs to; the cap is
 # against the occasional record whose "abstract" field holds a whole introduction.
@@ -245,27 +264,51 @@ def _clean(text: str) -> str:
     return " ".join((text or "").split())
 
 
+@functools.lru_cache(maxsize=None)
+def _nlp():
+    """The spaCy pipeline, loaded once on first use.
+
+    On the CPU deliberately. It is a small model doing a few thousand short titles, and the GPU may be
+    busy serving the very backend this script is talking to — a single card for everything is an ordinary
+    way to run Raven rather than a degraded one.
+    """
+    return nlptools.load_spacy_pipeline(SPACY_MODEL, "cpu")
+
+
+@functools.lru_cache(maxsize=None)
+def content_words(title: str) -> int:
+    """How many words of the title are neither function words nor academic filler.
+
+    Counted on *lemmas*, which is the part that cannot be skipped: the stopword lists enumerate base
+    forms, so a surface-form match lets any inflection through. "Tackling possible advantage of technical
+    understanding" scores zero and the same sentence pluralized scores three, which is a gap ordinary
+    English steps into constantly rather than one an adversary has to look for.
+
+    Lemmatizing also makes this agree with the Visualizer's keyword extraction, which lemmatizes before
+    applying the same lists — the reason for borrowing them rather than writing a second set was that
+    "content word" should mean one thing across the pipeline, and a surface-form count quietly broke that.
+
+    Both the lemma and the surface form are checked, since a list holding an irregular form directly is
+    still a hit.
+    """
+    return len([token for token in _nlp()(title)
+                if token.is_alpha
+                and token.lemma_.lower() not in STOPWORDS
+                and token.text.lower() not in STOPWORDS])
+
+
 def informative_words(title: str) -> int:
     """How many words of the title carry letters — digits and punctuation say nothing about a subject."""
     return len([word for word in re.split(r"[\s\-_/]+", title) if any(c.isalpha() for c in word)])
 
 
-def content_words(title: str) -> int:
-    """How many words of the title are neither function words nor academic filler.
-
-    A rough count rather than a parse: the words are lowercased and stripped of punctuation, not
-    lemmatized, so an inflected form of a listed stopword is counted as content. That errs toward
-    calling a title informative, which is the safe direction for a screen whose job is deciding what to
-    look at twice.
-    """
-    words = (word.strip(".,:;!?()[]{}\"'\u2019").lower() for word in re.split(r"[\s\-_/]+", title))
-    return len([word for word in words
-                if word and any(c.isalpha() for c in word) and word not in STOPWORDS])
-
-
 def looks_uninformative(title: str) -> bool:
-    """Whether a title is too thin to judge from — the half of the escalation rule the model cannot veto."""
-    return informative_words(title) < MIN_INFORMATIVE_WORDS or content_words(title) < MIN_CONTENT_WORDS
+    """Whether a title is too thin to judge from — the trigger of the escalation rule the model cannot veto."""
+    content = content_words(title)
+    if content < MIN_CONTENT_WORDS:
+        return True
+    total = informative_words(title)
+    return total >= MIN_WORDS_FOR_DENSITY and content / total < MIN_CONTENT_DENSITY
 
 
 def looks_truncated(abstract: str) -> bool:
@@ -554,14 +597,14 @@ def main() -> int:
     print(f"{bib_path.name}: {len(records)} records, "
           f"{sum(1 for r in records if r.abstract)} with an abstract, "
           f"{sum(1 for r in records if looks_uninformative(r.title))} with a title under "
-          f"{MIN_INFORMATIVE_WORDS} words")
+          f"{MIN_CONTENT_WORDS} content words or too padded to judge")
 
     piloting = opts.thin or opts.pilot is not None
     if opts.thin:
         sample = [record for record in records if looks_uninformative(record.title)]
-        run_name = f"pilot-thin-{MIN_INFORMATIVE_WORDS}"
-        print(f"calibration pilot: all {len(sample)} records with a title under "
-              f"{MIN_INFORMATIVE_WORDS} words, titles only")
+        run_name = "pilot-thin"
+        print(f"calibration pilot: all {len(sample)} records whose title is too thin "
+              f"to judge from, titles only")
     elif opts.pilot is not None:
         sample = random.Random(opts.seed).sample(records, min(opts.pilot, len(records)))
         run_name = f"pilot-{opts.seed}-{len(sample)}"
