@@ -961,13 +961,23 @@ list is a judgement about how the picture reads, and those are decided in front 
    the section above. `chatgraph.py` grew by about a third; nothing else moved.
 2. **A navigation history**, per the section above — the view keeps none, so a branch switch strands the
    reader. Cheap, and the precedent is written.
-3. **`ImageShape` in the widget.** Unblocks two things at once and they are not the same size: role glyphs
+3. **Keyboard access to the graph, which it has none of** (Juha, 2026-09-02). Every other view in Raven is
+   drivable from the keyboard and this one is mouse-only, so it is the odd one out rather than a feature
+   nobody got to.
+   - **Placed here because two later items would otherwise each grow their own half of it.** A history
+     wants Back and Forward on keys, and search wants a query field, Enter, and a way to step between
+     matches — so the keys arrive three times, in three shapes, unless they arrive once first.
+   - What it needs designing around: what "the keyboard is here" *looks* like in a graph, which is not the
+     row-and-column problem `keyboardmark` and `tablecursor` already solve; and how moving between boxes
+     maps onto arrow keys when a level is windowed and the thing to the left may be a gap rather than a
+     sibling. Both are questions about the picture, so decide them in front of it.
+4. **`ImageShape` in the widget.** Unblocks two things at once and they are not the same size: role glyphs
    need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
    thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render
    thread where `split_frame` deadlocks.
-4. **Attachment thumbnails**, to the design above: straddling the right edge, stacked and capped, bordered
+5. **Attachment thumbnails**, to the design above: straddling the right edge, stacked and capped, bordered
    in the graph's line pen, prepared on a background task with a placeholder meanwhile.
-5. **The avatar pause gate, and the auto-switch that goes with it.** Never built — so the two symptoms
+6. **The avatar pause gate, and the auto-switch that goes with it.** Never built — so the two symptoms
    reported on 2026-09-01 are the feature's absence rather than defects in it: the avatar's video keeps
    rendering behind the graph, and switching itself off leaves *"[Video is off]"* on screen instead of
    handing the panel to the graph.
@@ -997,18 +1007,30 @@ list is a judgement about how the picture reads, and those are decided in front 
      up, and the avatar never returns. A live flag is worth having for something else entirely, a stalled
      stream or a server that went away, which today shows a frozen last frame and says nothing. The switch
      keys on causes; the one signal its own effect can flip is the one it must not read.
-~~6. **The graph toggle is not persisted.**~~ Done 2026-09-01: `chat_graph_shown` in the flag defaults,
+~~7. **The graph toggle is not persisted.**~~ Done 2026-09-01: `chat_graph_shown` in the flag defaults,
    applied on frame 4 so the avatar renderer never initializes into a hidden panel.
-7. **Search, both halves.** Tree-wide search here, copying `raven-xdot-viewer`'s UX, *and* brief 14's
+8. **Search, both halves.** Tree-wide search here, copying `raven-xdot-viewer`'s UX, *and* brief 14's
    in-branch search in the chat log — one piece of work with two halves rather than two items, since
    shipping the first without the second is a worse state than having neither. See the search section
    above.
-8. **Bookmarks**, reusing the pill mechanism in a colour of their own. Design first; see the section
+9. **Bookmarks**, reusing the pill mechanism in a colour of their own. Design first; see the section
    above, and note it wants answering together with the "buttons near a node" question, both being about
    giving this view verbs.
+10. **A once-over for the look** (Juha, 2026-09-02): final colours, final font sizes, that sort of thing.
+    Last on purpose — every item above it adds something to look at, and a palette settled before the
+    thumbnails and the role glyphs land is a palette settled without them. What it should collect: the
+    colours currently declared at the top of `chatgraph.py`, the three font sizes, the pill and gap
+    metrics, and whatever the dark-mode inversion does to all of them.
+    - `TODO_DEFERRED.md` already carries a **sweep the GUI styling constants into one module** item,
+      gated on the FileDialog keyboard brief. This view's constants are more of the same, and the two
+      should probably be one pass rather than two.
 
 **Open, needing a decision rather than work:** whether `raven-xdot-viewer` gets the actual-size button
 too, for the consistency that now runs the other way.
+
+**Settled by looking and left alone (2026-09-02):** where the tree is shorter than the panel at 1:1 the
+clamp centres it, since there is nothing to pan to. Juha: *"I think it looks good now. Let's revisit later
+if needed."* So top-alignment is not rejected, merely not needed yet.
 
 ### Dead space, and where the clamp for it belongs (2026-09-02)
 
@@ -1051,16 +1073,27 @@ questions: fitting the picture shows how wide the tree is, fitting the branch sh
 
 ## 2026-09-02
 
-The four branch-extent rules, plus the subtree inlining above. Two things worth carrying forward:
+Five rounds, each one a live look followed by a fix. What landed: the four branch-extent rules; subtree
+inlining, and then the one vocabulary that followed from it; every marker placed at the depth it stands
+for, which is also what removed the dead vertical space; pan clamping in the viewport; one framing for the
+panel; the fit-branch button; pills at a readable size. Each has its own section above.
 
-- **The picture is missing from `CHANGELOG.md` entirely.** The view landed on 2026-09-01 with no entry,
-  which is the failure the house rule about writing entries while the context is fresh exists to prevent.
-  Left alone on purpose for now — the feature is still growing, and one entry rewritten six times is worse
-  than one written when the shape settles — but it is a debt with a due date, and the due date is the
-  release.
-- **Yesterday's habit paid again, and in the same coin.** Every behaviour was checked by patching it back
-  out and confirming the suite rejects it; three of the new tests did not, and each was leaning on a
-  *different pin* than the one it named — the tip test on HEAD's pin, the window test on HEAD's pin, and
-  one asserting a gap that the inlining had already removed. Reading them found nothing. The apparatus
-  asserts its own anchor matched before believing any negative, which is the other half of the same
-  lesson.
+**The shape of the day is worth more than the list.** Every one of these came from looking at the picture,
+and none of them from a test — the tests came after, to hold the answer. Two in particular could not have
+been found any other way: a `…1 more` box hiding five messages, and a level of the tree that appeared to
+be missing because one gap box far off screen was stretching the row.
+
+Three things to carry forward:
+
+- **`CHANGELOG.md` has a stub, not an entry.** Written 2026-09-02 with the part unlikely to change — what
+  the view is, and how to switch it on — and an HTML comment listing what a finished entry has to cover.
+  The debt comes due at the release.
+- **The habit paid again, twice, and the second time it was the instrument.** Every behaviour was checked
+  by patching it back out; three tests failed to reject their own subject, each leaning on a *different
+  pin* than the one it named. Then a clamp test flaked — and the cause was the probe: CPython treats a
+  `.pyc` as current when the source's size matches and the mtime agrees to the whole second, so a
+  length-preserving revert runs the previous version and poisons the cache for later runs. Every
+  length-preserving revert of the day was re-run against a hardened probe; all still discriminate. Written
+  up in the fleet notes.
+- **Keyboard access is missing and is now item 3.** Placed before the history's Back/Forward and before
+  search's query field, so the keys are designed once rather than three times.
