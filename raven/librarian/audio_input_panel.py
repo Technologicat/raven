@@ -574,7 +574,7 @@ class DPGAudioInputPanel:
                       parent=device_row,
                       tag="audio_input_device_combo")  # tag
         device_tooltip = dpg.add_tooltip("audio_input_device_combo")  # tag
-        dpg.add_text("Which microphone to record from [D].\n\n"
+        dpg.add_text("Choose the microphone to record from [D]\n\n"
                      "Up, Down, Home and End step through the list.\n"
                      "Monitoring inputs are left out: those record what is\n"
                      "being played, so one would transcribe the AI itself.",
@@ -620,7 +620,7 @@ class DPGAudioInputPanel:
         # Plain DPG rather than `gui_tooltip.Tooltip`: this caption is written once and never changes,
         # so there is no resize for the class to protect against.
         measure_tooltip = dpg.add_tooltip("audio_input_measure_button")  # tag
-        dpg.add_text(f"Measure the room [M].\n\n"
+        dpg.add_text(f"Measure the room [M]\n\n"
                      f"Sets the silence threshold from the last {FLOOR_WINDOW:0.6g} seconds:\n"
                      f"the loudest moment in them, plus {silencegate.DEFAULT_SILENCE_MARGIN:0.6g} dB.\n\n"
                      "Ask the room to be quiet first. The figure it will use is\n"
@@ -659,8 +659,8 @@ class DPGAudioInputPanel:
                          parent=window_id,
                          tag="audio_input_autodetect_checkbox")  # tag
         autodetect_tooltip = dpg.add_tooltip("audio_input_autodetect_checkbox")  # tag
-        dpg.add_text("Measure the level at the start of each recording [A],\n"
-                     "instead of holding the one set above.\n\n"
+        dpg.add_text("Re-measure the level at each recording [A]\n\n"
+                     "Instead of holding the one set above.\n\n"
                      "It measures the first tenth of a second, so it cannot work\n"
                      "if the speaker starts talking immediately, or if the input\n"
                      "has a noise gate in front of it.",
@@ -673,7 +673,8 @@ class DPGAudioInputPanel:
                          parent=window_id,
                          tag="audio_input_autostop_checkbox")  # tag
         autostop_tooltip = dpg.add_tooltip("audio_input_autostop_checkbox")  # tag
-        dpg.add_text("End the recording by itself once the speaker falls silent [S].\n\n"
+        dpg.add_text("Stop the recording on silence [S]\n\n"
+                     "It then ends by itself once the speaker stops talking.\n\n"
                      "Switch it off in a room too loud to separate speech from noise:\n"
                      "the microphone button is then the only way to stop, which always\n"
                      "works. Dragging the slider below switches this back on.",
@@ -697,7 +698,8 @@ class DPGAudioInputPanel:
                        parent=window_id,
                        tag="audio_input_reset_button")  # tag
         reset_tooltip = dpg.add_tooltip("audio_input_reset_button")  # tag
-        dpg.add_text("Put back everything `raven.client.config` says [R]:\n"
-                     "the microphone, the level, the stop and the peak hold.\n\n"
+        dpg.add_text("Reset to the configured settings [R]\n\n"
+                     "Puts back everything `raven.client.config` says: the\n"
+                     "microphone, the level, the stop and the peak hold.\n\n"
                      "Esc closes the panel.",
                      parent=reset_tooltip)

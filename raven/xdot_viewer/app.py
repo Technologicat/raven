@@ -702,7 +702,7 @@ def main() -> int:
                 width=80,
             )
             with dpg.tooltip("filter_combo"):  # tag
-                dpg.add_text("GraphViz layout engine\n(Ctrl+E; then Up, Down, Home, End to jump; Esc to return)")
+                dpg.add_text("GraphViz layout engine [Ctrl+E]\nThen Up, Down, Home, End to jump; Esc to return.")
 
             dpg.add_button(label=fa.ICON_EXPAND, tag="fullscreen_button", callback=toggle_fullscreen, width=30)
             dpg.bind_item_font("fullscreen_button", themes_and_fonts.icon_font_solid)  # tag
