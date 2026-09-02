@@ -227,15 +227,28 @@ class TestCommit:
 # ---------------------------------------------------------------------------
 
 class TestFraming:
-    def test_the_first_build_frames_the_branch(self, panel):
-        built, forest, app_state, ids, calls = panel
-        # The fixture already refreshed once. What that must have fitted is the branch, not the graph: a
-        # windowed level is thousands of units wide against a panel of hundreds, and fitting *that* lands
-        # at a zoom where the renderer stops drawing text at all.
-        x1, y1, x2, y2 = built._chat_graph.spine_bbox
-        assert x2 - x1 < built._chat_graph.graph.width, \
-            "the branch is as wide as the whole picture here, so this fixture cannot tell the two fits apart"
+    def test_the_first_build_opens_at_full_size(self, panel):
+        built, forest, app_state, ids, calls = panel  # the fixture already refreshed once
         assert built._framed
+        assert built._widget._viewport.zoom.target == pytest.approx(1.0), \
+            "the view opens at a computed zoom, which is a size no button can return the reader to"
+
+    def test_opening_and_the_crosshair_frame_alike(self, panel):
+        # One framing, not two. A view the reader arrives at on startup and cannot get back to is a view
+        # they lose the moment they touch anything -- and only the crosshair has a button.
+        built, forest, app_state, ids, calls = panel
+        viewport = built._widget._viewport
+        opened = (viewport.zoom.target, viewport.pan_x.target, viewport.pan_y.target)
+
+        built._widget.set_zoom(0.3, animate=False)
+        built._widget.pan_to_point(9999.0, 9999.0, animate=False)
+        assert (viewport.zoom.target, viewport.pan_x.target) != opened[:2], \
+            "the view did not move, so this fixture cannot tell a re-framing from doing nothing"
+
+        built.go_to_head()
+        assert (viewport.zoom.target, viewport.pan_x.target,
+                viewport.pan_y.target) == pytest.approx(opened), \
+            "the crosshair puts the reader somewhere other than where the panel opened"
 
     def test_later_rebuilds_do_not_reframe(self, panel):
         # The picture must stay still while a reply arrives. The tree gains a node per round, so a re-fit

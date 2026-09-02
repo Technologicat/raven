@@ -110,17 +110,6 @@ def texts_on(chat_graph: chatgraph.ChatGraph, node_name: str) -> list:
     return [shape.t for shape in node.shapes if isinstance(shape, xdotgraph.TextShape)]
 
 
-def _dashed_lines_on(chat_graph: chatgraph.ChatGraph, node_name: str) -> list:
-    """Return the dashed open polylines drawn on one graph node — the continuation stubs.
-
-    A stub is a `LineShape` rather than an `Edge` because it reaches no second node, so it belongs to the
-    box that owns it and is found here rather than among the graph's edges.
-    """
-    node = chat_graph.graph.get_node_by_name(node_name)
-    return [shape for shape in node.shapes
-            if isinstance(shape, xdotgraph.LineShape) and shape.pen.dash]
-
-
 def _width_of(shape) -> float:
     """Return the width of a shape's bounding box."""
     box = shape.get_bounding_box()
@@ -962,7 +951,8 @@ class TestBranchExtent:
         # one. The child is drawn there instead, as itself and clickable as itself.
         forest, taken, not_taken, kids = self._off_spine_with(1)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
-        assert refs_of_type(built, chatgraph.SubtreeGapRef) == []
+        assert [ref for ref in refs_of_type(built, chatgraph.SubtreeGapRef)
+                if ref.node_id == not_taken] == []
         assert kids[0] in built.refs, "the only child was neither drawn nor announced"
         assert isinstance(built.refs[kids[0]], chatgraph.ChatNodeRef), \
             "the inlined child is not a chat node, so clicking it cannot preview the message"
@@ -975,30 +965,34 @@ class TestBranchExtent:
                             chatgraph.SubtreeGapRef)
         assert [gap.node_id for gap in gaps] == [not_taken]
 
-    def test_an_inlined_child_with_children_of_its_own_says_the_branch_goes_on(self):
+    def test_an_inlined_child_with_children_of_its_own_gets_a_gap_of_its_own(self):
         # Otherwise it is a node with no visible links, which in this picture means the graph ends here.
+        # It gets the same marker as anything else whose continuation is not drawn: one vocabulary, so a
+        # reader who has learnt what one dashed box means has learnt them all.
         forest, taken, not_taken, kids = self._off_spine_with(1)
         forest.create_node(payload("user", "and it went on"), parent_id=kids[0])
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
 
-        stubs = _dashed_lines_on(built, kids[0])
-        assert len(stubs) == 1, f"expected one continuation stub under the inlined child, got {len(stubs)}"
+        assert kids[0] in built.refs, "the only child was not inlined, so there is nothing below it to mark"
+        gaps = [ref for ref in refs_of_type(built, chatgraph.SubtreeGapRef) if ref.node_id == kids[0]]
+        assert len(gaps) == 1, "the inlined child's own continuation is not announced anywhere"
 
     def test_an_inlined_leaf_says_nothing_of_the_sort(self):
-        # The control: a stub under every inlined child would satisfy the test above and would be a lie
+        # The control: a gap under every inlined child would satisfy the test above and would be a lie
         # here, where the branch really does end.
         forest, taken, not_taken, kids = self._off_spine_with(1)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
-        assert _dashed_lines_on(built, kids[0]) == [], \
+        assert refs_of_type(built, chatgraph.SubtreeGapRef) == [], \
             "a leaf claims the branch continues below it"
 
-    def test_a_spine_node_needs_no_stub(self):
-        # The other control, and the reason the caller decides rather than the box: a node whose children
-        # are the row below it has visible links already, so a stub there would be noise on every box.
-        forest, taken, not_taken, kids = self._off_spine_with(1)
+    def test_a_node_whose_children_are_drawn_needs_no_gap(self):
+        # The other control: a node on the spine has children and they are the row below it, which needs
+        # no saying. A marker there would be noise on every box in the picture.
+        forest, taken, not_taken, kids = self._off_spine_with(0)
         forest.create_node(payload("assistant", "the reply"), parent_id=taken)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
-        assert _dashed_lines_on(built, taken) == [], "a node whose children are drawn still claims more"
+        assert [ref for ref in refs_of_type(built, chatgraph.SubtreeGapRef)
+                if ref.node_id == taken] == [], "a node whose children are drawn still claims more"
 
     def test_an_inlined_child_is_drawn_at_the_depth_it_has(self):
         # It is a real message, so it has a real depth, and the spine's own next node has the same one.
@@ -1017,68 +1011,159 @@ class TestBranchExtent:
                 == built.graph.get_node_by_name(deeper).y), \
             "the inlined child and the spine's next node are the same depth and were drawn on two rows"
 
-    def test_an_inlined_child_falls_back_to_the_band_when_its_column_is_taken(self):
+    def test_a_subtree_gap_is_drawn_at_the_depth_it_stands_for(self):
+        # It stands for messages one level below the node it hangs from, so it has a depth like anything
+        # else. Putting it in a band cost a whole row of height for the *entire* level -- and the level
+        # is as wide as the widest fan, so one gap far off to the side stretched the part the reader was
+        # actually looking at. Seen on 2026-09-02: a box at x=170 pushed everything from x=638 rightward
+        # down a row, and the middle of the picture went empty.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        taken = forest.create_node(payload("user", "the branch we are on"), parent_id=root)
+        deeper = forest.create_node(payload("assistant", "the reply, one level down"), parent_id=taken)
+        not_taken = forest.create_node(payload("user", "the one we are not"), parent_id=root)
+        for k in range(2):  # two children, so this stays a gap rather than being inlined
+            forest.create_node(payload("assistant", f"reroll {k}"), parent_id=not_taken)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=deeper))
+        gap = self._gap_under(built, not_taken)
+        assert (built.graph.get_node_by_name(gap).y
+                == built.graph.get_node_by_name(deeper).y), \
+            "the gap stands for content one level down and was drawn on a row of its own"
+        assert len({node.y for node in built.graph.nodes}) == 3, \
+            "the tree is three levels deep and the picture uses more, so a band was reserved after all"
+
+    def test_a_subtree_gap_with_nowhere_to_go_takes_a_band(self):
+        # The control for the above, and what the band is still for: where the level below has no free
+        # column, adjacent beats overlapping.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        taken = forest.create_node(payload("user", "the branch we are on"), parent_id=root)
+        kids = [forest.create_node(payload("assistant", f"reply {k}"), parent_id=taken) for k in range(9)]
+        not_taken = forest.create_node(payload("user", "the one we are not"), parent_id=root)
+        for k in range(2):
+            forest.create_node(payload("assistant", f"reroll {k}"), parent_id=not_taken)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=kids[4]))
+        row_ys = {built.graph.get_node_by_name(k).y for k in kids if k in built.refs}
+        assert len(row_ys) == 1, "the fan is not one row, so this fixture cannot say a column was taken"
+        assert built.graph.get_node_by_name(self._gap_under(built, not_taken)).y not in row_ys, \
+            "the gap was placed into an occupied column instead of falling back to a band"
+        assert overlapping_pairs(built) == []
+
+    def test_a_child_with_nowhere_to_go_is_counted_rather_than_misplaced(self):
         # Rows pack independently, so the level below does not reserve a column under every parent. Where
-        # it has none free the child goes in the band, which is a row of its own and collides with
-        # nothing -- adjacent rather than correct, which beats overlapping.
+        # it has none free, inlining is not worth it: the gap box says truthfully that something is not
+        # drawn, while a message drawn a level away from its own depth says something false about where
+        # it sits, which is the fault the depth placement exists to remove.
         forest = Forest()
         root = forest.create_node(payload("system", "the card"), parent_id=None)
         taken = forest.create_node(payload("user", "the branch we are on"), parent_id=root)
         # A wide fan one level down, so every column at that depth is occupied.
         kids = [forest.create_node(payload("assistant", f"reply {k}"), parent_id=taken) for k in range(9)]
         not_taken = forest.create_node(payload("user", "the one we are not"), parent_id=root)
-        inlined = forest.create_node(payload("assistant", "nowhere to go"), parent_id=not_taken)
+        crowded_out = forest.create_node(payload("assistant", "nowhere to go"), parent_id=not_taken)
 
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=kids[4]))
-        assert inlined in built.refs
         row_ys = {built.graph.get_node_by_name(k).y for k in kids if k in built.refs}
         assert len(row_ys) == 1, "the fan is not one row, so this fixture cannot say a column was taken"
-        assert built.graph.get_node_by_name(inlined).y not in row_ys, \
-            "the child was placed into an occupied column instead of falling back to the band"
+        assert crowded_out not in built.refs, \
+            "the child was drawn even though its own level had no room for it"
+        assert [ref.node_id for ref in refs_of_type(built, chatgraph.SubtreeGapRef)] == [not_taken]
         assert overlapping_pairs(built) == []
 
-    def test_the_stub_says_how_many_levels_are_down_there(self):
+    def _gap_under(self, built, node_id):
+        """Return the graph node of the subtree gap hanging from `node_id`."""
+        ref = next(r for r in refs_of_type(built, chatgraph.SubtreeGapRef) if r.node_id == node_id)
+        return ref.name
+
+    def test_a_downward_gap_says_both_how_many_and_how_deep(self):
+        # One number cannot describe a subtree. A fan of five leaves and a chain of five messages are
+        # both "five", and they are not the same thing to a reader deciding whether to click -- so the
+        # label counts the messages and a quieter second line says how far down they go.
         forest, taken, not_taken, kids = self._off_spine_with(1)
         node = kids[0]
         for _ in range(3):
             node = forest.create_node(payload("user", "on and on"), parent_id=node)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
-        assert "3 more" in texts_on(built, kids[0]), \
-            f"the stub says {texts_on(built, kids[0])}, which does not name the three levels below it"
+        texts = texts_on(built, self._gap_under(built, kids[0]))
+        assert "…3 more" in texts and "3 levels" in texts, \
+            f"the gap says {texts}, which does not give both the count and the depth"
+
+    def test_a_flat_fan_is_not_reported_as_one(self):
+        # The control, and the case that decided the unit: five leaves under one node are five messages
+        # one level down. Counting levels alone called that "…1 more" on the live datastore.
+        forest, taken, not_taken, kids = self._off_spine_with(1)
+        for k in range(5):
+            forest.create_node(payload("user", f"a reroll {k}"), parent_id=kids[0])
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
+        texts = texts_on(built, self._gap_under(built, kids[0]))
+        assert "…5 more" in texts, f"the gap says {texts}, understating five messages"
+        assert "1 level" in texts, f"the gap says {texts}; the fan is one level deep and should say so"
 
     def test_a_forked_continuation_gets_a_range(self):
-        # A branch that forks has no single answer, and the short arm is as much use as the long one.
+        # A branch that forks has no single answer for its depth, and the short arm is as much use as
+        # the long one.
         forest, taken, not_taken, kids = self._off_spine_with(1)
         forest.create_node(payload("user", "the short arm"), parent_id=kids[0])
         node = forest.create_node(payload("user", "the long arm"), parent_id=kids[0])
         for _ in range(3):
             node = forest.create_node(payload("user", "on and on"), parent_id=node)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
-        assert "1…4 more" in texts_on(built, kids[0]), \
-            f"the stub says {texts_on(built, kids[0])}, which does not report both arms"
+        texts = texts_on(built, self._gap_under(built, kids[0]))
+        assert "…5 more" in texts and "1–4 levels" in texts, \
+            f"the gap says {texts}, which does not report both arms"
+
+    def test_every_gap_wears_the_ellipsis(self):
+        # One phrasing across all of them: the leading ellipsis is what marks a box as standing for
+        # content rather than holding any, and a reader who has seen one has seen them all.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
+        head = chain(forest, length=15, parent_id=chats[3])[-1]        # long enough for a depth gap
+        for k in range(2):                                             # two children: a subtree gap
+            forest.create_node(payload("assistant", f"reroll {k}"), parent_id=chats[7])
+        forest.create_node(payload("system", "an older card"), parent_id=None)  # a root gap
+
+        config = chatgraph.LayoutConfig(max_visible_depth=8)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head,
+                                                            new_chat_node_id=greeting), config)
+
+        kinds = {chatgraph.SiblingGapRef, chatgraph.DepthGapRef,
+                 chatgraph.SubtreeGapRef, chatgraph.RootGapRef}
+        seen = {type(ref) for ref in built.refs.values()} & kinds
+        assert seen == kinds, f"only {sorted(k.__name__ for k in seen)} here; not all four are checked"
+        for ref in built.refs.values():
+            if type(ref) in kinds:
+                texts = texts_on(built, ref.name)
+                assert any(text.startswith("…") for text in texts), \
+                    f"{type(ref).__name__} says {texts}, without the ellipsis every other gap wears"
 
     def test_nothing_hanging_off_a_box_reaches_another_one(self):
-        # The overlap test compares *node* boxes, and a stub and its labels are drawn outside the box
-        # they belong to -- so neither is visible to it. That blind spot hid a HEAD pill under a stub
-        # overlapping the row below by 7.2 units of a 44-unit gap.
+        # The overlap test compares *node* boxes, and a pill is drawn in the space above the box it
+        # belongs to -- so it is visible to neither. That blind spot hid a marker overlapping the row
+        # above it by 7.2 units of a 44-unit gap.
         forest, old_chat, head, new_chat = self._head_buried(branches=1)
-        for k in range(4):  # a row below the stub for it to reach into
+        for k in range(4):
             forest.create_node(payload("user", f"another chat {k}"), parent_id=new_chat)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head, focus_node_id=new_chat))
 
-        stubbed = [n for n in built.graph.nodes if _dashed_lines_on(built, n.internal_name)]
-        assert stubbed, "nothing here has a stub, so this fixture checks nothing"
         boxes = boxes_of(built)
-        for node in stubbed:
+        overhanging = [n for n in built.graph.nodes
+                       if any(s.get_bounding_box() is not None
+                              and (s.get_bounding_box()[1] < boxes[n.internal_name][1] - 0.5
+                                   or s.get_bounding_box()[3] > boxes[n.internal_name][3] + 0.5)
+                              for s in n.shapes)]
+        assert overhanging, "nothing is drawn outside its own box here, so this fixture checks nothing"
+        for node in overhanging:
             drawn = [s.get_bounding_box() for s in node.shapes if s.get_bounding_box() is not None]
-            reach = max(box[3] for box in drawn)
-            below = [(name, box) for name, box in boxes.items()
-                     if name != node.internal_name and box[3] > boxes[node.internal_name][3]]
-            assert below, "nothing is drawn below the stub, so it cannot reach anything"
-            for name, box in below:
-                if box[0] < node.x < box[2]:
-                    assert reach < box[1], \
-                        f"what hangs off {node.internal_name[-8:]} reaches into {name[-8:]}"
+            top, bottom = min(b[1] for b in drawn), max(b[3] for b in drawn)
+            for name, box in boxes.items():
+                if name == node.internal_name or not (box[0] < node.x < box[2]):
+                    continue
+                assert box[3] <= top or box[1] >= bottom, \
+                    f"what hangs off {node.internal_name[-8:]} reaches into {name[-8:]}"
 
     def test_a_depth_overrun_of_two_is_drawn_rather_than_gapped(self):
         # The same threshold, and deliberately the same number: two rules here would disagree in front of
@@ -1222,19 +1307,20 @@ class TestBranchExtent:
         pills = texts_on(built, gap.name)
         assert "HEAD" in pills, f"the gap hiding HEAD carries {pills}, so HEAD vanished without comment"
 
-    def test_an_inlined_child_that_leads_to_head_says_so_too(self):
-        # The same obligation where there is no gap box to carry it: one continuation is inlined, so the
-        # pointer hangs off its stub instead. Below the box rather than on it -- a pill *on* a box says
-        # "this one is HEAD", which would be a lie about a box that is merely on the way.
+    def test_the_obligation_follows_the_marker_one_level_down(self):
+        # Inlining moves the question rather than answering it: the child is drawn, so it is the *child's*
+        # gap that now hides HEAD, and that is where the pointer has to be. A pill on the child's own box
+        # would say "this one is HEAD", which is a lie about a box that is merely on the way.
         forest, old_chat, head, new_chat = self._head_buried(branches=1)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head, focus_node_id=new_chat))
         assert head not in built.refs, \
             "HEAD is on screen after all, so this fixture cannot check what happens when it is not"
-        assert refs_of_type(built, chatgraph.SubtreeGapRef) == [], \
-            "the branch came back as a gap, so this is the case the test above already covers"
         inlined = forest.get_children(old_chat)[0]
         assert inlined in built.refs, "the only child was not inlined"
-        assert "HEAD" in texts_on(built, inlined), "HEAD vanished under an inlined child without comment"
+        assert "HEAD" not in texts_on(built, inlined), \
+            "the inlined child claims to be HEAD; it is only on the way to it"
+        assert "HEAD" in texts_on(built, self._gap_under(built, inlined)), \
+            "HEAD vanished under an inlined child without comment"
 
     def test_an_ordinary_gap_wears_no_head_pill(self):
         # The control for the above: a pill drawn on every gap would satisfy it and mean nothing.
