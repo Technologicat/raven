@@ -68,9 +68,19 @@ import re
 #
 # Set from a measurement rather than from taste, because the first guess was wrong in the expensive
 # direction. A batch of forty items answered in JSON came to 10554 output tokens, **8662 of them
-# thinking** — so a cap of 8192 sat below the reasoning alone and produced empty replies, which reads as
-# a backend fault rather than as a cap. This is threefold that, covering a caller batching a hundred
-# items, and still fails a runaway four times sooner than the context window would.
+# thinking** — so a cap of 8192 sat below the reasoning alone and produced empty replies. This is
+# threefold that, and still fails a runaway four times sooner than the context window would.
+#
+# **Measured on one model, and reasoning length is the part that varies most between them.** That was
+# Qwen 3.6; 3.8 thinks considerably longer for the same question, and a future model may again. So this
+# is a floor that happens to hold today rather than a bound anything guarantees, and a caller batching
+# many items or running a chattier model should raise it — `judge_scope.py --max-reply-tokens` is the
+# worked example.
+#
+# **The symptom of it being too low is an empty reply**, which is the trap: it reads as a backend fault
+# or a refusal rather than as a budget spent on reasoning before any answer was written. A run that
+# starts returning nothing, on prompts that worked before, has usually met this rather than a broken
+# backend — and `ask` logging the trace at DEBUG is how to tell the two apart in one run.
 DEFAULT_MAX_REPLY_TOKENS = 32768
 
 from collections.abc import Callable, Mapping
