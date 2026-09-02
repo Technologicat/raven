@@ -1,0 +1,7 @@
+# Everything this run produces lists the contents of a corpus under `00_stuff/`, which is gitignored
+# research data rather than repo content, and this repository is public — so the same reasoning that
+# keeps the corpus out keeps its titles, its citekeys and a filtered copy of it out. Only the script
+# and the write-up are committed; regenerate the rest with the commands in README.md.
+*.jsonl
+*.tsv
+*.bib

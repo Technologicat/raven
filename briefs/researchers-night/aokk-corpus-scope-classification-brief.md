@@ -66,6 +66,13 @@ carrying each AI term, invert, look at what is left — which is a better home f
 Modelled on `investigations/agent-batch-classification/classify_papers.py`, which did the same shape of
 job over ~1600 arXiv papers, and lands as its own investigation bundle beside it.
 
+**The bundle is `investigations/aokk-corpus-scope/`, and from 2026-09-02 it is where the measurements
+live** — including two that change what is written below. The corpus is judged from
+`tekoalyagentti_tutkimus_deduped.bib` rather than from `multisource.pickle`, the citekey being a key the
+outputs can be written against; and both halves of the question are asked as evidence of being *off*
+topic rather than as a test of being on it, because every record has already passed the search and a
+model asked to re-confirm that reads every silence as a rejection.
+
 **Start with step 0.** It is the measurement this design rests on and has not been taken, and the project's
 habit is to measure before building rather than after (decided 2026-09-01).
 
