@@ -612,9 +612,11 @@ def _on_key(sender, app_data) -> None:
             _zoom_out()
         elif key == dpg.mvKey_F:
             _zoom_to_fit()
-        # A digit, because digits sit in the same place on every layout this has to work on -- unlike
-        # the punctuation that carries zoom elsewhere. "1" for 1:1.
-        elif key == dpg.mvKey_1:
+        # "1" for 1:1, on the main row and the numpad both. The main row is where the key is on a US,
+        # Nordic or German layout; on a French one the digits are shifted, so the physical key sends
+        # this code while its cap reads "&" and the key labelled 1 sends nothing we bind. The numpad is
+        # the layout-stable path, exactly as it is for zoom, and binding both costs a line.
+        elif key in (dpg.mvKey_1, dpg.mvKey_NumPad1):
             _zoom_actual_size()
         elif key == dpg.mvKey_Up:
             widget.pan_by(dx=0, dy=+config.PAN_AMOUNT)
@@ -695,7 +697,7 @@ def main() -> int:
                            callback=_zoom_actual_size, width=30)
             dpg.bind_item_font("actual_size_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("actual_size_button"):  # tag
-                dpg.add_text("Actual size (1:1) [1]")
+                dpg.add_text("Actual size (1:1) [1 / numpad 1]")
 
             dpg.add_button(label=fa.ICON_MAGNIFYING_GLASS_PLUS, tag="zoom_in_button", callback=_zoom_in, width=30)
             dpg.bind_item_font("zoom_in_button", themes_and_fonts.icon_font_solid)  # tag
@@ -807,7 +809,7 @@ def main() -> int:
         # Column 2: navigation & app
         env(key_indent=0, key="Numpad +", action_indent=0, action="Zoom in", notes=""),
         env(key_indent=0, key="Numpad -", action_indent=0, action="Zoom out", notes=""),
-        env(key_indent=0, key="1", action_indent=0, action="Actual size (1:1)", notes=""),
+        env(key_indent=0, key="1  / Numpad 1", action_indent=0, action="Actual size (1:1)", notes=""),
         env(key_indent=0, key="F", action_indent=0, action="Zoom to fit", notes=""),
         env(key_indent=0, key="Arrow keys", action_indent=0, action="Pan view", notes=""),
         env(key_indent=0, key="Mouse wheel", action_indent=0, action="Zoom at cursor", notes=""),

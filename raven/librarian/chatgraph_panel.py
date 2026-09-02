@@ -234,7 +234,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                        "Zoom to fit [F]", f"chat_graph_fit_button_{self.gui_uuid}",  # tag
                        solid=False)
             add_button(fa.ICON_MAGNIFYING_GLASS, self.zoom_1_to_1,
-                       "Actual size (1:1) [1]", f"chat_graph_actual_size_button_{self.gui_uuid}")  # tag
+                       "Actual size (1:1) [1 / numpad 1]", f"chat_graph_actual_size_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_MAGNIFYING_GLASS_PLUS, lambda: self._widget.zoom_in(),
                        "Zoom in [numpad +]", f"chat_graph_zoom_in_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_MAGNIFYING_GLASS_MINUS, lambda: self._widget.zoom_out(),
@@ -442,9 +442,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._widget.zoom_out()
         elif key == dpg.mvKey_F:
             self._widget.zoom_to_fit()
-        # A digit, because digits sit in the same place on every layout this has to work on -- unlike
-        # the punctuation that used to carry zoom here. "1" for 1:1.
-        elif key == dpg.mvKey_1:
+        # "1" for 1:1, on the main row and the numpad both. The main row is where the key is on a US,
+        # Nordic or German layout; on a French one the digits are shifted, so the physical key sends
+        # this code while its cap reads "&" and the key labelled 1 sends nothing we bind. The numpad is
+        # the layout-stable path, exactly as it is for zoom, and binding both costs a line.
+        elif key in (dpg.mvKey_1, dpg.mvKey_NumPad1):
             self.zoom_1_to_1()
         elif key == dpg.mvKey_B:
             self.fit_branch()

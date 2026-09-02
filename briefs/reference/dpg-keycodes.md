@@ -51,6 +51,36 @@ Home/End/Insert/Delete, Backspace/Enter/Space/Escape, the L/R Control-Shift-Alt
 pairs, Menu, the numpad, and the remaining punctuation all have constants that
 equal their runtime codes.
 
+## "Safe" here means one thing, and a reader wants two
+
+**This note answers "does the constant equal the code?" and nothing else.** The
+other question — "does the key a user presses deliver that code, on their
+keyboard?" — is about *layout*, and is not addressed anywhere below. A key can
+be perfectly safe by this document and still be the wrong key to bind.
+
+They come apart in both directions:
+
+- `mvKey_Minus` equals its runtime code, so it is "safe" here. On a Finnish
+  layout, measured, the main-row `+` **also** reports it, so binding it made `+`
+  zoom out in two apps. See `TODO_DEFERRED.md`, "The main keyboard offers no
+  zoom, on any layout".
+- Digits are "safe" here too. On a French layout the digit row is shifted, so
+  the physical key that delivers `mvKey_1` is capped `&`, and the key a French
+  user thinks of as 1 is Shift on that same key. A binding on `mvKey_1` works,
+  and its *documentation* misleads.
+
+**Layouts measured: US and Finnish.** Everything said about any other is
+inference from those two, including the French example above, which nobody
+here has a keyboard to check. The numpad is the usual escape — its codes are
+distinct from the main row — but whether a given layout also remaps it is,
+again, unmeasured.
+
+The rule of thumb the two cases share: **a binding that survives a layout
+change is a letter, a function key, or the numpad.** Punctuation and the digit
+row are conveniences for the layouts that happen to have them where you think.
+
+See `dpg-notes.md`, "A punctuation `mvKey_*` is a US-layout assumption".
+
 ## Why this happens
 
 History, because it's load-bearing here. In **DPG 1.x**, key presses were
