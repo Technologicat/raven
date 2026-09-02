@@ -441,11 +441,46 @@ Component order is fixed, so a reader learns where to look: *Raven-librarian*, *
 
 **File a new entry into its group when you write it.** The failure this prevents: 0.2.8 accumulated 58 flat entries — 24 of them opening with `*Raven-librarian*:` — before anyone noticed the prefix was a heading doing prose duty, and regrouping after the fact is a large, error-prone reshuffle that has to be verified entry by entry.
 
-**Measurements from a particular corpus stay out.** "1598 of 6934 records", "1650 occurrences of `©` down to 1" — a number like that is evidence *for* the change, and it is evidence drawn from one dataset that happened to be on a JAMK researcher's disk. A reader of the changelog has a different corpus and wants to know what the feature does for theirs, so the entry says the *kind* of effect and its shape ("this can account for a large share of a file", "publisher names largely gone from the word cloud"), and the figures go where they belong: the commit message, and the brief if there is one.
+**Measurements from a particular corpus stay out** — see *Name the shape, not the dataset* below, of which this is the changelog's case. The entry says the *kind* of effect ("this can account for a large share of a file", "publisher names largely gone from the word cloud"), and the figures go to the commit message and the brief.
 
 The pull toward including them is strong and worth naming, because it is not laziness — a measured number is the most honest thing in the room, and it feels like the strongest sentence available. It is, for the audience that shares the corpus. The changelog's audience does not. (Caught twice in one session, 2026-08-28, in entries for `raven-fixbib` and the abstract boilerplate stripper — both written immediately after the measuring, which is exactly when the numbers are most vivid and least transferable.)
 
 This is Raven-local, not fleet-wide: elsewhere in the fleet a project *is* the component, so a header would be noise. Wording rules (density, nesting, users-not-commits, "was it broken in the last tagged release?") are fleet-wide and live in the `changelog` skill.
+
+### Name the shape, not the dataset
+
+**Comments, docstrings, `README.md` and `CHANGELOG.md` describe what the code does for *any* corpus. They
+do not name the one it was developed against, and they carry no counts drawn from it.** Write the shape
+instead: *"conference proceedings arrive without authors"*, not *"ECCOMAS 2024's authors"*; *"a bare
+four-digit number on essentially every record"*, not *"5166 of 5167"*.
+
+**The test is one question: would this sentence still be true, and still useful, for a reader whose corpus
+is not ours?** A shape survives that. A dataset name becomes a reference the reader cannot follow, and a
+count becomes a fact about somebody else's disk.
+
+Two separate reasons, and they bite in different places:
+
+- **Transferability.** A number measured here is the most honest thing in the room and feels like the
+  strongest sentence available — which it is, for an audience that shares the corpus. A reader of a
+  docstring does not. The measurement is evidence *for* the change, not a description *of* it.
+- **Privacy.** Some of these corpora are a researcher's own and cannot be shared, while this repository is
+  public. Naming one in shipped source publishes its existence and its shape even when the data stays out.
+
+**Where the specifics belong**: the commit message, the brief, and the investigation.
+
+**Investigation write-ups are the exception, and not a grudging one.** A bundle under `investigations/` is
+often *about* a particular corpus — that is what makes it a measurement rather than an opinion — so naming
+it there, with its counts, is the point. The data itself still stays out of git (`.gitignore` per bundle,
+as `highdim-clustering/` does); what is committed is the analysis.
+
+**The absolute rule, which is narrower than the default and admits nothing**: private corpus *files* are
+never committed, uploaded, or sent anywhere. That is about the data, and no exception applies to it.
+
+**This recurs, so it is a default rather than a reminder.** The pull is strongest immediately after
+measuring something, which is exactly when the numbers are most vivid and least transferable — and the
+sentence being written at that moment is usually a docstring for the code that did the measuring. Three
+corrections in one session (2026-09-02) plus two in another (2026-08-28) are what promoted it from the
+changelog rule above to this one.
 
 ### Live GUI testing on a shared desktop
 
