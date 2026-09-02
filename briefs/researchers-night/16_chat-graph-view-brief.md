@@ -393,6 +393,33 @@ tree sizes with windowed siblings. Revisit only if measurement says otherwise.
 - **Revisions**, per above — they belong with message editing.
 - **A forest view across all roots.** The windowed wide level covers what the demo needs. Reopened when
   roots became first-class on 2026-08-12, and closed again on 2026-09-01 — see decision 7 below.
+- **Animated transitions when the topology changes** — filed for v2 on 2026-09-02, see below.
+
+### Animating a change of topology (v2, filed 2026-09-02)
+
+**Raven animates every GUI transition, so that nothing ever jumps discontinuously** — the house reason
+being that a pair working at one screen can follow what just happened without either of them narrating it.
+This view breaks that rule at its most important moment: click a sibling and the whole picture is replaced
+between one frame and the next, which is exactly the transition a reader most needs to follow. Where did
+the branch I was on go? Is this the same tree?
+
+**Why it is a v2 item rather than a small one.** Everything else Raven animates is *one widget changing a
+property* — a colour, a position, an alpha — over a known duration. Here the graph is rebuilt from scratch:
+`build` returns a new `Graph` whose nodes are new objects, and the widget swaps the whole thing. Animating
+it means matching the two pictures node by node (the same chat node before and after), then interpolating
+the survivors' positions while fading the departed out and the arrivals in. That is a different kind of
+machinery from `gui_animation.Animation`, and it wants:
+
+- **A correspondence between two builds.** Cheap in principle, since a graph node's name *is* its chat node
+  id, so the match is a dict intersection. The pairs that matter are the survivors; the rest fade.
+- **Interpolated rendering in the widget**, which currently draws one `Graph`. Either it learns to draw a
+  blend of two, or `chatgraph` grows the ability to emit an intermediate build — and the second is worse,
+  because a rebuild is where the cost is.
+- **A decision about what the camera does.** The view also re-frames on a click; a picture that morphs
+  while the camera moves is two motions at once, and they can fight.
+
+Worth doing, and worth doing after the view has stopped changing shape — an animation between two layouts
+has to be rewritten every time either layout does.
 
 ## Settled 2026-09-01
 
