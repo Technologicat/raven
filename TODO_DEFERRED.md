@@ -488,6 +488,22 @@ does, and which Cherrypick's exit path does not call.
 
 Discovered while chasing the FileDialog help card's cosmetic pass (2026-08-21).
 
+## The first Ctrl+Shift+O flashes the button but opens nothing
+
+*Cluster: keyboard-accessibility · Cost: ? · Gate: none · Filed: 2026-09-02*
+
+Reported by Juha, 2026-09-02, in `raven-librarian`: the **first** press of Ctrl+Shift+O flashes the toolbar
+button as though the hotkey landed, and no dialog appears. Every press after that works. So the key reaches
+the handler and the handler runs far enough to flash — what fails is downstream of that, on the first call
+only.
+
+The shape suggests something built lazily on first use and returned before it is ready, rather than a
+missing binding. Worth checking whether the dialog instance is constructed on demand, and whether whatever
+shows it needs a frame to have passed first — the constellation has a standing pattern of deferring
+first-time GUI work to a frame callback for exactly that reason.
+
+Not investigated; recorded so the observation is not lost with the session it was noticed in.
+
 ## The main keyboard offers no zoom, on any layout
 
 *Cluster: keyboard-accessibility · Cost: S, once the keys are chosen · Gate: needs a decision on which keys carry zoom · Filed: 2026-08-21 · See also: `dpg-notes.md` → "A punctuation `mvKey_*` is a US-layout assumption"*

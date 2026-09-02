@@ -16,9 +16,7 @@ Coordinates are the widget's: x to the right, y downward, origin at the top left
 box, which is what `Viewport.zoom_to_fit` expects.
 """
 
-__all__ = ["SPINE_FILL_COLOR",
-           "OFF_SPINE_FILL_COLOR",
-           "LINE_COLOR",
+__all__ = ["LINE_COLOR",
            "GAP_LINE_COLOR",
            "PREVIEW_COLOR",
 
@@ -37,6 +35,7 @@ __all__ = ["SPINE_FILL_COLOR",
 
            "build"]
 
+import colorsys
 import dataclasses
 import logging
 import math
@@ -47,6 +46,7 @@ logger = logging.getLogger(__name__)
 
 from ..common.gui.xdotwidget import constants as xdotconstants
 from ..common.gui.xdotwidget import graph as xdotgraph
+from ..common.gui.xdotwidget import renderer as xdotrenderer
 
 from . import chattree
 from . import chatutil
@@ -54,8 +54,53 @@ from . import config as librarian_config
 
 # Authored for a light background and inverted by the renderer, which is the path a parsed graph takes too
 # -- so the two cannot drift apart, and there is one place to look when a colour is wrong.
-SPINE_FILL_COLOR: xdotconstants.Color = (0.78, 0.93, 0.78, 1.0)  # the linearized branch, green as in the README's tree diagram
-OFF_SPINE_FILL_COLOR: xdotconstants.Color = (0.94, 0.94, 0.94, 1.0)  # everything the current branch did not take
+#
+# The fills are written as what they should look like *in dark mode*, and turned back into light-mode
+# values here, because dark is what Raven runs in and a number chosen for the other end is a number nobody
+# can check. The renderer remaps lightness and leaves hue and saturation alone, so only the L round-trips.
+
+
+def _authored_for_dark(hue_deg: float, saturation: float, lightness: float) -> xdotconstants.Color:
+    """Return the light-mode fill that the renderer's dark mode turns into (hue, saturation, lightness)."""
+    # The inverse of the renderer's lightness remap. Its endpoints live in `xdotwidget.renderer`; repeating
+    # them here would be two numbers that have to agree, so they are read from it.
+    span = xdotrenderer._DARK_MODE_L_MAX - xdotrenderer._DARK_MODE_L_MIN
+    authored_l = (xdotrenderer._DARK_MODE_L_MAX - lightness) / span
+    return (*colorsys.hls_to_rgb(hue_deg / 360.0, authored_l, saturation), 1.0)
+
+
+# What a box says, in two channels that do not compete: **hue is the role, saturation is the branch.**
+#
+# Hue follows the chat log — green for the system prompt, orange for a tool result — and the conversation
+# itself takes the green of the tree in the README, so the branch a reader is on is *coloured* and
+# everything else is grey. That is the same thing the old single green said, and it says it while leaving
+# room for the roles.
+#
+# Assistant and user are one hue at two lightnesses. The log tells them apart the same way (`#c6c6c6`
+# against `#8e8e8e`), and since they alternate strictly down a branch the pair stripes it — what ruled
+# paper and a spreadsheet do to make rows easy to parse (Juha, 2026-09-02).
+#
+# **Saturation is real, not timid.** Raven's *chrome* is near-neutral, but its content is not: the
+# Visualizer's semantic map is saturated dots on dark, the avatar panel is vivid, and the file dialog's
+# folders are yellow. The graph is content. An earlier pass here read the panel background as the whole
+# aesthetic and washed everything to grey, which lost the branch along with the glare.
+_BRANCH_HUE = 120  # green, as the tree diagram in the README
+_TOOL_HUE = 33  # orange, as the log's TOOL
+_ON_BRANCH_SATURATION = 0.42
+_OFF_BRANCH_SATURATION = 0.05  # not zero: a trace of hue keeps a washed box from reading as a gap box
+
+# The zebra, by lightness. The values sit above the panel's own L=0.18 so a box reads as a card on it.
+_ASSISTANT_L, _USER_L, _OTHER_L = 0.32, 0.25, 0.285
+
+
+def _fill_for(role: str, on_current_branch: bool) -> xdotconstants.Color:
+    """Return the fill for a message box: the role's hue, at full strength only on the current branch."""
+    hue = _TOOL_HUE if role == "tool" else _BRANCH_HUE
+    lightness = {"assistant": _ASSISTANT_L, "user": _USER_L}.get(role, _OTHER_L)
+    saturation = _ON_BRANCH_SATURATION if on_current_branch else _OFF_BRANCH_SATURATION
+    return _authored_for_dark(hue, saturation, lightness)
+
+
 LINE_COLOR: xdotconstants.Color = (0.15, 0.15, 0.15, 1.0)
 GAP_LINE_COLOR: xdotconstants.Color = (0.45, 0.45, 0.45, 1.0)
 # The ring around the box a click has selected. A colour of its own, and used for nothing else, because
@@ -1148,8 +1193,7 @@ def build(datastore: chattree.Forest,
             speaker, label_lines = _speaker_and_label_of(
                 datastore, node_id, config._get_effective_label_chars(), config.label_lines)
             shapes = _box_shapes(x, y, config.node_w, config, label_lines,
-                                 fill=(SPINE_FILL_COLOR if node_id in current_branch
-                                       else OFF_SPINE_FILL_COLOR),
+                                 fill=_fill_for(ref.role, node_id in current_branch),
                                  dashed=False, pills=ref.pills, speaker=speaker,
                                  measure_text=measure_text,
                                  emphasized=(node_id == state.head_node_id),
