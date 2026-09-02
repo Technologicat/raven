@@ -441,7 +441,7 @@ Component order is fixed, so a reader learns where to look: *Raven-librarian*, *
 
 **File a new entry into its group when you write it.** The failure this prevents: 0.2.8 accumulated 58 flat entries — 24 of them opening with `*Raven-librarian*:` — before anyone noticed the prefix was a heading doing prose duty, and regrouping after the fact is a large, error-prone reshuffle that has to be verified entry by entry.
 
-**Measurements from a particular corpus stay out** — see *Name the shape, not the dataset* below, of which this is the changelog's case. The entry says the *kind* of effect ("this can account for a large share of a file", "publisher names largely gone from the word cloud"), and the figures go to the commit message and the brief.
+**Measurements from a particular corpus stay out** — see *Name the shape, not the dataset* below, of which this is the changelog's case. The entry says the *kind* of effect ("this can account for a large share of a file", "publisher names largely gone from the word cloud"); the figures go to a brief or an investigation report, and nowhere else.
 
 The pull toward including them is strong and worth naming, because it is not laziness — a measured number is the most honest thing in the room, and it feels like the strongest sentence available. It is, for the audience that shares the corpus. The changelog's audience does not. (Caught twice in one session, 2026-08-28, in entries for `raven-fixbib` and the abstract boilerplate stripper — both written immediately after the measuring, which is exactly when the numbers are most vivid and least transferable.)
 
@@ -466,12 +466,16 @@ Two separate reasons, and they bite in different places:
 - **Privacy.** Some of these corpora are a researcher's own and cannot be shared, while this repository is
   public. Naming one in shipped source publishes its existence and its shape even when the data stays out.
 
-**Where the specifics belong**: the commit message, the brief, and the investigation.
+**Two places may carry the specifics, and no others: a brief, or an investigation report.** There the
+corpus is the subject rather than the decoration, and a reader arrives already asking about it — a bundle
+under `investigations/` is usually *about* a particular corpus, which is what makes it a measurement
+rather than an opinion, so naming it with its counts is the point. The data itself still stays out of git
+(a `.gitignore` per bundle, as `highdim-clustering/` has); what is committed is the analysis.
 
-**Investigation write-ups are the exception, and not a grudging one.** A bundle under `investigations/` is
-often *about* a particular corpus — that is what makes it a measurement rather than an opinion — so naming
-it there, with its counts, is the point. The data itself still stays out of git (`.gitignore` per bundle,
-as `highdim-clustering/` does); what is committed is the analysis.
+**A commit message is not one of the two**, which is the one that surprises. It is as public and as
+permanent as the source, and its reader is looking at the code rather than at the corpus — the same
+audience a docstring has. A commit resting on a measurement points at the bundle holding it
+(`investigations/<name>/`) instead of restating the numbers.
 
 **The absolute rule, which is narrower than the default and admits nothing**: private corpus *files* are
 never committed, uploaded, or sent anywhere. That is about the data, and no exception applies to it.
