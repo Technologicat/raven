@@ -214,7 +214,7 @@
   - **The placeholder is shown, never analyzed.** It is Raven's word rather than the record's, and the same word on every such record, so feeding it to the keyword extractor and the semantic vector would gather those records into a cluster whose members share nothing but a field their database omitted. Both stages read the abstract alone instead — which also fills a gap they had: an entry with an abstract and no title previously had no case at all.
   - **A record with neither a title nor an abstract is skipped**, with a warning naming it. There is nothing to read, and nothing for the analysis to be about.
 
-- the info panel marks its ends when the wheel *arrives* at one, where previously it only did so once you were already there and turned the wheel again. A single click of the wheel onto the end used to be silent.
+- the info panel marks its ends when the mouse wheel *arrives* at one, where previously it only did so once you were already there and turned the wheel again. A single click of the wheel onto the end used to be silent.
 
 - a blue dot now marks the current info panel item — the same mark, in the same shape, that Raven-librarian puts beside the chat message its hotkeys will act on, in place of the glow the item's buttons used to have. It is drawn as part of the panel, so whatever covers the panel covers it too; the old glow floated on top of the word cloud window.
 
