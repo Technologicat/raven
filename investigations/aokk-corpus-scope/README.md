@@ -10,8 +10,8 @@ confirmed false-positive shapes and the argument for a two-pass design. This dir
 apparatus, and the measurements the brief left open.
 
 Modelled on `investigations/agent-batch-classification/`, which did the same shape of job over ~1600
-arXiv papers, and whose finding about escalation is the reason the escalation rule here has two triggers
-rather than one.
+arXiv papers, and whose finding about escalation is the reason the escalation rule here is computed from the
+input rather than taken from the model's own confidence.
 
 ## What is judged, and against what
 
@@ -35,23 +35,31 @@ volume records — *"13th International Conference on the Future of Education (F
 `.bib` also puts 160 near-certain strays in front of the judge instead of inheriting a filter that
 happened to remove them.
 
-## Both halves ask for evidence of being *off* topic
+## All three tests ask for evidence of being *off* topic
 
-This is the one design decision that is not obvious, and it was measured rather than reasoned (below).
-Each record is judged on two booleans:
+This is the design decision that is not obvious, and every part of it was measured rather than reasoned
+(below). Each record is judged on three booleans:
 
 - **`no_ai`** — true only if the work is positively about something with no AI in it: human teaching
   staff, human undergraduate learning assistants, a non-AI technology.
-- **`wrong_field`** — true only if the work is positively set somewhere other than higher education: a
-  school, a hospital, industry, the general public.
+- **`not_education`** — true only if the work has no educational dimension at all: a machine-learning
+  methods paper, a computer-vision study, a finance or energy application. Asked in two ordered steps —
+  *can you name the subject?* first, and only then *is it outside education?*
+- **`wrong_level`** — true only if the work is positively set at a level other than higher education: a
+  school, a workplace, the general public.
 
-Either one true drops the record; an unanswered half withholds the verdict rather than deciding it, so an
+Any one true drops the record; an unanswered half withholds the verdict rather than deciding it, so an
 incomplete run under-filters rather than silently losing studies.
 
 **The direction matters because silence is the common case and it is not evidence.** Every record here
 already matched a higher-education search term, so a title that does not restate the setting says nothing
 against it. Asked the other way round — *is this in higher education?* — the model answers **no** for any
 title that merely fails to say, and those drops look exactly like real ones in the output.
+
+**`not_education` is the exception, and the one place absence *is* evidence** — a machine-learning paper
+is not set at the wrong level, it is not set anywhere — which is why it is a test of its own rather than
+part of the level question, and why it needs the name-the-subject precondition to stop that licence
+becoming a licence to invent.
 
 ## Findings
 
