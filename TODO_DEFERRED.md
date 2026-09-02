@@ -13,6 +13,100 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## An option to hold the avatar's video off until the answer is complete
+
+*Cluster: avatar-during-generation · Cost: S · Gate: none, but the condition has to be manufactured to see it at all · Filed: 2026-09-02 · See also: "Start synthesizing speech while the reply is still streaming"*
+
+Today the avatar wakes as soon as the user's message is sent: `DPGLinearizedChatView.build` calls
+`avatar_controller.ping`, and `scaffold.ai_turn` then wraps the whole turn in `idle_override`, so the video
+runs for the entire generation. **That is the right behavior and stays the default** — it acknowledges
+receipt, which is what a user needs from those seconds, and on a machine with headroom there is nothing to
+fix.
+
+It is wrong on a **single-GPU, low-VRAM setup**, where the avatar and the LLM contend for the same cores
+and the acknowledgement is bought with generation speed. Wanted: an option that defers the wake to the
+point the full answer completes.
+
+**It has never bitten anyone, and that is a fact about the development environment rather than about the
+item** (Juha, 2026-08-26): the eGPU is attached at the desk whenever work happens, so the configuration
+this is *for* is the one nobody develops in. Untried rather than unimportant — whoever builds it has to
+manufacture the condition to see it, by hiding the eGPU from the process and letting the avatar and the LLM
+land on one card.
+
+**The road configuration is supported, not exceptional** (Juha, 2026-08-26): the laptop away from the desk,
+wherever there is a power outlet. Within it, the occasion to design for is the **unplanned demo** — *"I have
+my laptop with me, want to see it?"* — which is the least forgiving use of the mode: the audience is
+standing there, the attention lasts about a minute, and a sluggish avatar spends it. It is also unplanned by
+definition, so the item cannot be built when it is needed.
+
+Cut from the Researchers' Night sprint on 2026-08-26 because the exhibit runs the full rig: the 24 GB card
+is dedicated to the LLM and everything else runs on the internal dGPU, so the contention this relieves is
+not present there.
+
+Raised by Juha (2026-08-26) as one of three items about what the avatar, the emotion detector and the TTS
+each do *during* a reply. The third — the avatar's expression following the spoken words rather than the
+streaming ones — was scheduled instead, as the sprint's band-2 item 11. Filed here 2026-09-02, the write-up
+in `briefs/researchers-night/README.md` ("Raised 2026-08-26 — what the avatar does while a reply is being
+generated") having been its only record, and that file moves to `briefs/done/` when the sprint closes.
+
+## Start synthesizing speech while the reply is still streaming
+
+*Cluster: avatar-during-generation · Cost: L · Gate: a decision about what a batch means once a reply is split across several · Filed: 2026-09-02 · See also: "An option to hold the avatar's video off until the answer is complete"*
+
+`on_done` submits the finished reply to TTS as one batch, so nothing can start until the last token has
+landed. The preprocessor already precomputes audio per sentence as early as it can — its docstring says
+`on_audio_ready` "may trigger long before the sentence is actually spoken out loud" — so the machinery is
+there; what blocks it is *when the work is handed over*. Submitting each sentence as it completes would let
+synthesis overlap generation, cutting time-to-first-spoken-word.
+
+**This matters most when TTS runs on the CPU, and there it is specifically the first sentence that is the
+whole latency.** Kokoro on CPU is slightly faster than realtime (Juha, 2026-08-26), so once speech has
+started, every later sentence renders comfortably within the time the previous ones take to speak. The
+pipeline only ever stalls at its head.
+
+**That bounds the work**, and suggests a variant worth weighing rather than a decided design: getting the
+first sentence submitted the moment it completes captures nearly all of the win, so the rest of the reply
+could still go over as one batch. That is a smaller change than "submit each sentence as it arrives", and
+leaves one extra batch boundary per reply rather than one per sentence — but it buys that by making the
+reply's first sentence a special case, which per-sentence submission does not. Which of the two is cleaner
+is for whoever builds it.
+
+**It ends the assumption that nothing is spoken until the reply is whole**, which something else relies on.
+On a backend that leaves reasoning-tag parsing to us, a thinking model whose template opened the block
+streams its reasoning indistinguishably from an answer until the closing tag lands; Raven corrects that when
+it lands (`reasoning_retcon`) by moving the text into the thought bubble. That correction is safe today only
+because the TTS batch is submitted after the whole reply, so whatever was mis-shown was never spoken. Hand a
+sentence over as it completes, and a correction arriving afterwards means the avatar has already said a
+"sentence" that was reasoning, with nothing able to unsay it.
+
+**Decided (Juha, 2026-08-26): hold the first submission until the text is known to be the answer.** Speech
+is the one output that cannot be taken back, so it is the one that has to wait for certainty.
+
+**"Known" has an exact meaning here**, and it is worth taking from the parser rather than re-deriving: a
+retcon fires at most once per stream and only while `StreamParser._may_retcon` is set, which it clears as
+soon as reasoning has been identified by any other route — a native `reasoning_content` channel, a properly
+opened block, or a retcon already spent. So the condition is "that flag is clear", and the natural
+implementation is for the parser to say when the window shuts rather than for a consumer to infer it.
+
+**The case it costs is worth knowing before building:** a model that does not reason at all, on a backend
+that does not split the reasoning channel. Nothing ever closes the window there, because nothing ever proves
+a close tag is not still coming — so that combination gets no speedup. It is also the combination this whole
+hazard is confined to; where reasoning arrives on its own channel, the window shuts on the first thinking
+token and long before any sentence completes.
+
+**The division of concerns is what needs deciding**, and it is the reason this is not simply a smaller
+`send_text_to_tts` call. The batch is currently the unit that `on_start_speaking` / `on_stop_speaking`
+describe, and ordering across batches is preserved by queueing each one whole. A reply split into many
+batches keeps its order but changes what those events mean, and anything keyed on "the reply started being
+spoken" has to be found and re-anchored. Check what subtitling and the recording hooks assume before costing
+this.
+
+Cut from the Researchers' Night sprint on 2026-08-26: the exhibit runs TTS on the internal dGPU rather than
+the CPU, so there is no first-sentence latency to hide. The measurement stands either way.
+
+Raised by Juha (2026-08-26), in the same batch as "An option to hold the avatar's video off until the answer
+is complete"; see that item for where the batch was written up and why both were filed here.
+
 ## Import warnings should be visible in the GUI, and stored in the dataset
 
 *Cluster: importer reporting · Cost: M · Gate: belongs with the import keyword report GUI, designed 2026-09-01 · Filed: 2026-09-02*

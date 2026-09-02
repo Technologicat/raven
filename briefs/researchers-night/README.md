@@ -618,6 +618,11 @@ with the eGPU attached, so items 1 and 3 below — both filed for the single-GPU
 configuration — buy little there and **stay out of the sprint**. Item 2 went into band 2 as its item 11:
 speech is on whenever the avatar talks, so it is live all evening regardless of what the machine can spare.
 
+**Both are now in `TODO_DEFERRED.md`** (2026-09-02), as *An option to hold the avatar's video off until the
+answer is complete* and *Start synthesizing speech while the reply is still streaming* — they outlive the
+sprint, and this folder moves to `briefs/done/` when it closes. Everything below is carried over there;
+what stays here is the ranking itself, which is a decision about this exhibit.
+
 **How the rig is budgeted is what makes both of those firm** (Juha, 2026-08-26): the 24 GB card is
 dedicated to the LLM, and everything else — avatar, TTS, and the rest of the server's models — runs on the
 internal dGPU. So the two premises the items were filed on are both absent here. There is no contention
