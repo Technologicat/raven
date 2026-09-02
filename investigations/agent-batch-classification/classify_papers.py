@@ -124,46 +124,11 @@ def collect_entries(directory: pathlib.Path) -> tuple[list[pathlib.Path], dict[s
     return entries, skipped
 
 
-def parse_json_payload(text: str):
-    """Pull the JSON out of a model reply, tolerating fences and stray prose around it."""
-    text = text.strip()
-    fenced = re.search(r"```(?:json)?\s*(.+?)\s*```", text, re.DOTALL)
-    if fenced:
-        text = fenced.group(1).strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    # Fall back to the outermost bracketed span, which survives a chatty preamble.
-    for opener, closer in (("[", "]"), ("{", "}")):
-        start, end = text.find(opener), text.rfind(closer)
-        if start != -1 and end > start:
-            try:
-                return json.loads(text[start:end + 1])
-            except json.JSONDecodeError:
-                continue
-    raise ValueError(f"no JSON found in reply: {text[:200]!r}")
-
-
-def ask(llm_settings: env, prompt: str) -> str:
-    """One stateless turn: no character, no tools, no retrieval, no history."""
-    record = agent.turn(llm_settings,
-                        prompt,
-                        use_character_card=False,
-                        tools_enabled=False,
-                        internet_enabled=False,
-                        docs_enabled=False,
-                        markup=None)
-    if record.generation is None:
-        raise RuntimeError("the backend returned no generation")
-    return record.reply or ""
-
-
 def classify_batch(llm_settings: env, batch: list[pathlib.Path]) -> dict[int, dict]:
     """Classify a batch of filenames. Returns {index within batch: answer}; missing entries are the caller's problem."""
     items = "\n".join(f"{i}. {path.name}" for i, path in enumerate(batch))
-    reply = ask(llm_settings, INSTRUCTIONS.format(fields=", ".join(FIELDS), items=items))
-    answers = parse_json_payload(reply)
+    reply = agent.ask(llm_settings, INSTRUCTIONS.format(fields=", ".join(FIELDS), items=items))
+    answers = agent.parse_json_reply(reply)
     if not isinstance(answers, list):
         raise ValueError(f"expected a JSON array, got {type(answers).__name__}")
     out = {}
@@ -189,10 +154,10 @@ def escalate(llm_settings: env, path: pathlib.Path) -> dict:
     if not text.strip():
         return {"about_ai": None, "field": "unknown", "confidence": "low",
                 "why": "no extractable text"}
-    reply = ask(llm_settings, ESCALATION_INSTRUCTIONS.format(name=path.name,
+    reply = agent.ask(llm_settings, ESCALATION_INSTRUCTIONS.format(name=path.name,
                                                              excerpt=text[:EXCERPT_CHARS],
                                                              fields=", ".join(FIELDS)))
-    answer = parse_json_payload(reply)
+    answer = agent.parse_json_reply(reply)
     if isinstance(answer, list) and answer:
         answer = answer[0]
     return answer

@@ -758,39 +758,28 @@ def refused_doi_edges(records: list[Record]) -> list[tuple[Record, Record]]:
     return sorted(refused, key=lambda pair: (pair[0].index, pair[1].index))
 
 
-def _parse_json_payload(text: str):
-    """The JSON in a model reply, tolerating code fences and stray prose around it."""
-    text = text.strip()
-    fenced = re.search(r"```(?:json)?\s*(.+?)\s*```", text, re.DOTALL)
-    if fenced:
-        text = fenced.group(1).strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    for opener, closer in (("[", "]"), ("{", "}")):
-        start, end = text.find(opener), text.rfind(closer)
-        if start != -1 and end > start:
-            try:
-                return json.loads(text[start:end + 1])
-            except json.JSONDecodeError:
-                continue
-    raise ValueError(f"no JSON found in reply: {text[:200]!r}")
-
-
 def _ask_judge(llm_settings, prompt: str) -> str:
-    """One stateless turn: no character, no tools, no retrieval, no history."""
+    """One stateless turn, returning the reply text. Raises if the backend did not generate.
+
+    Deferred alias for `agent.ask`, and the import is deferred because the LLM pass is opt-in — `--judge`
+    and `--judge-dois`, both off by default — while the rules run on every invocation. Measured
+    2026-09-02: importing `librarian.agent` costs 1376 ms against this module's own 211 ms, so at module
+    scope every run that never asks the model would pay seven-eighths of its startup for a feature it did
+    not use.
+
+    Kept separate from `_parse_json_payload` below rather than fused into one ask-and-parse call, because
+    the two are separate seams: the tests substitute this one to hand `judge_batch` a reply the model
+    might really send — prose, a refusal, an array one item short — and a fused version can only be given
+    something that has already parsed.
+    """
     from ..librarian import agent
-    record = agent.turn(llm_settings,
-                        prompt,
-                        use_character_card=False,
-                        tools_enabled=False,
-                        internet_enabled=False,
-                        docs_enabled=False,
-                        markup=None)
-    if record.generation is None:
-        raise RuntimeError("the backend returned no generation")
-    return record.reply or ""
+    return agent.ask(llm_settings, prompt)
+
+
+def _parse_json_payload(text: str):
+    """The JSON in a model reply. Deferred alias for `agent.parse_json_reply`, as `_ask_judge` above."""
+    from ..librarian import agent
+    return agent.parse_json_reply(text)
 
 
 def judge_batch(llm_settings, batch: list[tuple[str, str, str]]) -> dict[int, dict]:

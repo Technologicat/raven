@@ -542,6 +542,80 @@ class TestTurn:
         assert set(llm_settings.document_tool_names).issubset(offered[0])
 
 
+class TestAsk:
+    """The one-shot batch shape: give me the answer text, and tell me if there wasn't one."""
+
+    def test_it_returns_the_reply_text_and_sends_the_task_and_nothing_else(self, monkeypatch, llm_settings):
+        # The five keyword arguments composed: no character, so no system message and no greeting; no
+        # tools, so no staged clock exchange in front of the instruction. Asserted on the wire rather
+        # than on `tool_names`, which stays populated either way -- `tools_enabled` is what withdraws the
+        # offer, and the staged call is what a bare task must not carry.
+        prompts = []
+
+        def fake_invoke(**kw):
+            prompts.append(llmclient.serialize_history_for_wire(kw["settings"], kw["history"],
+                                                                continue_=kw["continue_"]))
+            return make_invoke_result(content="raven, corvid")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        assert agent.ask(llm_settings, "Extract the keywords.") == "raven, corvid"
+
+        sent = prompts[0]
+        assert [message["role"] for message in sent] == ["user"]
+        assert not any(message.get("tool_calls") for message in sent)
+
+    def test_a_backend_failure_raises_here_where_turn_returns_a_replylike_string(self, monkeypatch, llm_settings):
+        def failing_invoke(**kw):
+            raise RuntimeError("backend went away")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", failing_invoke)
+
+        # The negative control, and the entire reason this function exists: `turn` on the very same
+        # broken seam does not raise, and hands back something that reads like an answer. Without this
+        # line the test below cannot tell "ask raises on failure" from "this seam raises at all".
+        tolerated = agent.turn(llm_settings, "Question?")
+        assert tolerated.generation is None and tolerated.reply, (
+            "the fake backend did not produce a materialized failure, so this fixture cannot tell "
+            "ask's raise apart from an exception escaping the loop")
+
+        with pytest.raises(RuntimeError):
+            agent.ask(llm_settings, "Question?")
+
+    def test_an_empty_reply_is_an_answer_rather_than_a_failure(self, monkeypatch, llm_settings):
+        # A model that generated nothing still generated: the batch records an empty field, which is a
+        # result its parser can act on, rather than an exception that ends the run.
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content=""))
+        assert agent.ask(llm_settings, "Question?") == ""
+
+
+class TestParseJsonReply:
+    """What a model actually sends back when asked for JSON and nothing else."""
+
+    @pytest.mark.parametrize("reply, expected", [
+        ('{"a": 1}', {"a": 1}),
+        ('[{"i": 0}, {"i": 1}]', [{"i": 0}, {"i": 1}]),
+        ('```json\n{"a": 1}\n```', {"a": 1}),
+        ('```\n{"a": 1}\n```', {"a": 1}),
+        ('  \n {"a": 1}  \n ', {"a": 1}),
+        ('Here you go:\n{"a": 1}\nHope that helps!', {"a": 1}),
+        ('Sure!\n[1, 2, 3]\nLet me know if you need more.', [1, 2, 3]),
+        ('```json\n[{"i": 0, "why": "it is a {brace} in a string"}]\n```',
+         [{"i": 0, "why": "it is a {brace} in a string"}]),
+    ])
+    def test_the_shapes_a_model_wraps_its_json_in(self, reply, expected):
+        assert agent.parse_json_reply(reply) == expected
+
+    def test_a_reply_with_no_json_in_it_is_an_error_naming_what_came_back(self):
+        with pytest.raises(ValueError, match="no JSON found"):
+            agent.parse_json_reply("I'm afraid I can't help with that.")
+
+    def test_a_wrong_answer_of_the_right_shape_is_the_caller_s_problem(self):
+        # Deliberately not validated here. A batch keys its items by index and drops the answers whose
+        # index does not resolve, which is one rule covering a short array, a renumbered one and a
+        # hallucinated entry alike -- three checks this function would need to duplicate badly.
+        assert agent.parse_json_reply('[{"i": 99, "verdict": "banana"}]') == [{"i": 99, "verdict": "banana"}]
+
+
 class TestTheSurfaceIsDeclared:
     """A scripting surface that is only nominally public breaks its callers silently.
 
@@ -551,7 +625,7 @@ class TestTheSurfaceIsDeclared:
     """
 
     def test_the_names_a_script_uses_are_exported(self):
-        for name in ("TurnRecord", "describe_turn", "turn"):
+        for name in ("TurnRecord", "describe_turn", "turn", "ask", "parse_json_reply"):
             assert name in agent.__all__
 
     def test_the_record_names_what_a_probe_asserts_on(self):

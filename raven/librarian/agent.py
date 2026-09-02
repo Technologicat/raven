@@ -48,12 +48,16 @@ Two properties worth knowing before scripting against it:
     so two runs in one process cannot contaminate each other.
 """
 
-__all__ = ["TurnRecord", "describe_turn", "turn"]
+__all__ = ["TurnRecord", "describe_turn", "turn",
+
+           "ask", "parse_json_reply"]
 
 import logging
 logger = logging.getLogger(__name__)
 
 import dataclasses
+import json
+import re
 
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING
@@ -504,3 +508,65 @@ def turn(llm_settings: env,
                          head_node_id=final_node_id,
                          since_node_id=since_node_id,
                          prompts=tuple(prompts))
+
+
+def ask(llm_settings: env, prompt: str) -> str:
+    """Ask one question and get the answer text: no character, no tools, no retrieval, no history.
+
+    `llm_settings`: as `turn`, which see.
+
+    `prompt`: the whole question — a task instruction and the data it applies to.
+
+    Returns the reply text, with nothing else around it.
+
+    Raises `RuntimeError` if the backend did not generate — which `turn` does not do, and is the
+    difference that matters here. Use `turn` instead when the reasoning trace, the tool counts or the
+    node ids are wanted, or when a failed question should be retried rather than raised.
+    """
+    # The whole point of this wrapper, and the reason it exists rather than being five keyword arguments
+    # at each call site: `ai_turn` materializes a backend failure as an assistant message, so `turn`
+    # hands back a record whose `reply` reads like an answer and is not one. A frontend wants that — the
+    # user sees the failure and can reroll it. An unattended batch wants the opposite, because the
+    # fabricated text parses as badly as it reads and does so ten thousand times without anyone watching.
+    record = turn(llm_settings,
+                  prompt,
+                  use_character_card=False,
+                  tools_enabled=False,
+                  internet_enabled=False,
+                  docs_enabled=False,
+                  markup=None)
+    if record.generation is None:
+        raise RuntimeError("the backend returned no generation")
+    return record.reply or ""
+
+
+def parse_json_reply(text: str):
+    """The JSON in a model reply, tolerating code fences and stray prose around it.
+
+    Returns whatever the JSON decodes to — usually a `dict` or a `list`, since those are what a prompt
+    asking for structured output gets back.
+
+    Raises `ValueError` if there is no JSON in `text` at all. A reply that is merely *wrong* — the right
+    shape carrying nonsense, or an array one item short of what was asked for — parses fine and is the
+    caller's problem; see `turn`'s notes on index-keyed batches for why that is the better division.
+    """
+    # Three fallbacks rather than one `json.loads`, because "and nothing else" in a prompt is a request
+    # rather than a guarantee: models fence their JSON, introduce it, and apologize after it, and any of
+    # those makes a strict parse fail on output that is otherwise perfectly good.
+    text = text.strip()
+    fenced = re.search(r"```(?:json)?\s*(.+?)\s*```", text, re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # The outermost bracketed span, which survives a chatty preamble and a trailing remark.
+    for opener, closer in (("[", "]"), ("{", "}")):
+        start, end = text.find(opener), text.rfind(closer)
+        if start != -1 and end > start:
+            try:
+                return json.loads(text[start:end + 1])
+            except json.JSONDecodeError:
+                continue
+    raise ValueError(f"no JSON found in reply: {text[:200]!r}")
