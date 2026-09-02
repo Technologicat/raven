@@ -239,6 +239,17 @@ class Mark:
                   `FRAME`, every child window under a `PANEL`. For a row of buttons that is the intent;
                   where it is not, narrow it with `item_type`.
 
+                  **A `PANEL` reaches further than that, and `item_type` does not call it back.** DPG
+                  composes a theme down the whole parent chain, and a tooltip opened from a widget inside
+                  the marked panel is on that chain: it arrives wearing the mark's border colour, and its
+                  padding. With `padding=(0, 0)` — which a converted panel wants, see below — the effect
+                  is a blue-edged tooltip with its text pressed against the edge. Narrowing to
+                  `dpg.mvChildWindow` was tried on 2026-09-02 and changed nothing.
+
+                  So the remedy is structural: mark **an inner window holding only the thing being
+                  marked**, with the buttons and their tooltips outside it. That is usually the better
+                  layout regardless — the mark then frames the content rather than the chrome above it.
+
         `kind`: See `MarkKind`. Which of the two border styles is set, or `DOT` for a glyph that is coloured
                 instead of outlined.
 
@@ -307,17 +318,6 @@ class Mark:
         # and from whichever thread is building the widget it will sit on — and DPG's container stack is
         # one process-wide global shared by themes and widgets alike, so a `with` here can capture what
         # another thread is adding. See `dpg-notes.md`, "DPG parent management".
-        # A `PANEL` scopes itself to child windows unless the caller says otherwise, because an `mvAll`
-        # component bound to a panel does not stay on the panel: it composes down the parent chain into
-        # every *tooltip and popup* opened from anything inside it. Only the border *size* is
-        # child-window-specific; the border colour and the padding are not, so a marked panel handed its
-        # toolbar's tooltips a blue edge and, with `padding=(0, 0)`, squeezed their text against it.
-        #
-        # Which is what the docstring above already promised — "every child window under a `PANEL`" — so
-        # this is the code catching up with it rather than a new rule.
-        if kind is MarkKind.PANEL and item_type == dpg.mvAll:
-            item_type = dpg.mvChildWindow
-
         theme = dpg.add_theme()
         component = dpg.add_theme_component(item_type, parent=theme)
         if kind is MarkKind.DOT:

@@ -146,25 +146,37 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # would hand each of them the other's places.
         self._history = navhistory.NavigationHistory(is_valid=self._snapshot_is_reachable)
         self._has_keyboard = False  # set by the app, which owns the Tab cycle
-        # `border=True` only so there is an edge for the keyboard mark to recolour. It costs nothing
-        # visually: an unlit mark is transparent, and the `padding=(0, 0)` below undoes the window padding
-        # that ImGui switches on along with the border, restoring the borderless layout to the pixel.
         self._container = dpg.add_child_window(parent=gui_parent,
                                                width=width, height=height,
                                                no_scrollbar=True, no_scroll_with_mouse=True,
-                                               border=True,
                                                show=self._is_shown,
                                                tag=f"chat_graph_panel_{self.gui_uuid}")  # tag
-        self._keyboard_mark = keyboardmark.Mark(self._container,
-                                                kind=keyboardmark.MarkKind.PANEL,
-                                                padding=(0, 0))
         self._build_toolbar(dark_mode=dark_mode)
         if graph_text_fonts is None:
             graph_text_fonts = [(size, guiutils.load_extra_font(themes_and_fonts, size,
                                                                 "OpenSans", "Regular")[1])
                                 for size in _GRAPH_TEXT_FONT_SIZES]
         self._graph_text_fonts = list(graph_text_fonts)
-        self._widget = XDotWidget(parent=self._container,
+        # An inner window holding nothing but the graph, so the keyboard mark has something to frame that
+        # is *not* the toolbar. A `Mark` binds a theme to its target, and DPG composes a theme down the
+        # whole parent chain — so a mark on the outer panel reaches the toolbar's tooltips, which came out
+        # blue-edged with their text squeezed against the border. Narrowing the theme by item type does
+        # not stop it; putting the toolbar outside the marked subtree does, and the mark belongs on the
+        # picture rather than on the buttons above it either way.
+        #
+        # `border=True` only so there is an edge to recolour. It costs nothing visually: an unlit mark is
+        # transparent, and `padding=(0, 0)` undoes the window padding ImGui switches on with the border,
+        # restoring the borderless layout to the pixel.
+        self._canvas = dpg.add_child_window(parent=self._container,
+                                            width=self._graph_w(width), height=self._graph_h(height),
+                                            no_scrollbar=True, no_scroll_with_mouse=True,
+                                            border=True,
+                                            tag=f"chat_graph_canvas_{self.gui_uuid}")  # tag
+        self._keyboard_mark = keyboardmark.Mark(self._canvas,
+                                                kind=keyboardmark.MarkKind.PANEL,
+                                                padding=(0, 0))
+
+        self._widget = XDotWidget(parent=self._canvas,
                                   width=self._graph_w(width),
                                   height=self._graph_h(height),
                                   on_click=self._on_click,
@@ -219,14 +231,14 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
         with dpg.group(horizontal=True, parent=self._container):
             add_button(fa.ICON_SQUARE, lambda: self._widget.zoom_to_fit(),
-                       "Zoom to fit", f"chat_graph_fit_button_{self.gui_uuid}",  # tag
+                       "Zoom to fit [F]", f"chat_graph_fit_button_{self.gui_uuid}",  # tag
                        solid=False)
             add_button(fa.ICON_MAGNIFYING_GLASS, self.zoom_1_to_1,
                        "Actual size (1:1)", f"chat_graph_actual_size_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_MAGNIFYING_GLASS_PLUS, lambda: self._widget.zoom_in(),
-                       "Zoom in", f"chat_graph_zoom_in_button_{self.gui_uuid}")  # tag
+                       "Zoom in [numpad +]", f"chat_graph_zoom_in_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_MAGNIFYING_GLASS_MINUS, lambda: self._widget.zoom_out(),
-                       "Zoom out", f"chat_graph_zoom_out_button_{self.gui_uuid}")  # tag
+                       "Zoom out [numpad -]", f"chat_graph_zoom_out_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_SUN if dark_mode else fa.ICON_MOON, self.toggle_dark_mode,
                        "Switch to light mode" if dark_mode else "Switch to dark mode",
                        self._dark_mode_button_tag)
@@ -238,17 +250,17 @@ class DPGChatGraphPanel(gui_animation.Animation):
             # to go, which is the convention Visualizer set: a button is enabled exactly when pressing it
             # would do something.
             add_button(fa.ICON_ARROW_LEFT, self.go_back,
-                       "Back to the previous view", self._back_button_tag, enabled=False)
+                       "Back to the previous view [Alt+Left]", self._back_button_tag, enabled=False)
             add_button(fa.ICON_ARROW_RIGHT, self.go_forward,
-                       "Forward again", self._forward_button_tag, enabled=False)
+                       "Forward again [Alt+Right]", self._forward_button_tag, enabled=False)
 
             # After the separator because a *branch* is a chat idea, where the plain fit beside the zoom
             # controls is the widget's own. The two answer different questions: fitting the picture shows
             # how wide the tree is, and fitting the branch shows the conversation.
             add_button(fa.ICON_ARROWS_UP_DOWN, self.fit_branch,
-                       "Fit the current branch", f"chat_graph_fit_branch_button_{self.gui_uuid}")  # tag
+                       "Fit the current branch [B]", f"chat_graph_fit_branch_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_LOCATION_CROSSHAIRS, self.go_to_head,
-                       "Back to where you are", f"chat_graph_home_button_{self.gui_uuid}")  # tag
+                       "Back to where you are [Home]", f"chat_graph_home_button_{self.gui_uuid}")  # tag
             # The discoverable half of the commit gesture. Its caption names the fluent half, which is
             # otherwise unfindable: a second click on a box already clicked once.
             add_button(fa.ICON_CODE_BRANCH, self._commit_previewed,
@@ -504,6 +516,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
         with guiutils.nonexistent_ok():
             dpg.set_item_width(self._container, width)
             dpg.set_item_height(self._container, height)
+            dpg.set_item_width(self._canvas, self._graph_w(width))
+            dpg.set_item_height(self._canvas, self._graph_h(height))
         self._widget.set_size(self._graph_w(width), self._graph_h(height))
 
     def refresh(self) -> None:
