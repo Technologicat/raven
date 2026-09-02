@@ -992,12 +992,16 @@ def _on_key(sender, app_data) -> None:
     if key == dpg.mvKey_F11:
         _toggle_fullscreen()
         return
-    # Zoom keys.
-    if key in (dpg.mvKey_Plus, dpg.mvKey_Add):
+    # Zoom keys, numpad only. The main row is left out on purpose: `mvKey_Plus` is a pre-2.0 constant
+    # (61) that cannot fire on any layout, and on a Finnish keyboard *both* main-row keys report
+    # `mvKey_Minus`, so binding it makes `+` zoom out. A key that does the opposite of what it says is
+    # worse than one that does nothing. See `TODO_DEFERRED.md`, "Main-row `+` and `-` on a non-US
+    # keyboard", which is about choosing layout-stable aliases to put here instead.
+    if key == dpg.mvKey_Add:
         if iv is not None:
             iv.zoom_in()
         return
-    if key in (dpg.mvKey_Minus, dpg.mvKey_Subtract):
+    if key == dpg.mvKey_Subtract:
         if iv is not None:
             iv.zoom_out()
         return
