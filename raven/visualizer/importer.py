@@ -1245,7 +1245,7 @@ def _summarize(input_data):
 
                 if entry.abstract:
                     _update_status_and_log(f"[input file {k} out of {len(input_data.parsed_data_by_filename)}] Summarizing entry {j} out of {len(entries)}: {entry.author} ({entry.year}): {entry.title}",
-                                          log_indent=2)
+                                           log_indent=2)
                     entry_text = f"Title: {entry.title}\n\nAbstract: {entry.abstract}"
                     prompt = f"{visualizer_config.summarize_llm_prompt}\n-----\n\n{entry_text}"
 
@@ -1269,7 +1269,7 @@ def _summarize(input_data):
                         summary = scrubbed_output_text.strip()
                 else:
                     _update_status_and_log(f"[input file {k} out of {len(input_data.parsed_data_by_filename)}] Skipping entry {j} out of {len(entries)} (no abstract to _summarize): {entry.author} ({entry.year}): {entry.title}",
-                                          log_indent=2)
+                                           log_indent=2)
                     summary = None
                 entry.summary = summary
                 progress.tick()
