@@ -78,6 +78,27 @@ _PREVIEW_DOTS: Tuple[float, float] = (3.0, 3.0)
 
 _ROUNDED_CORNER_SEGMENTS = 4  # per corner; four is already indistinguishable from a curve at these radii
 
+# How many nodes a gap must hide before it is worth drawing. A gap occupies a slot, so hiding one is a
+# pure loss -- a box that says "a box is missing" -- and hiding two trades two nodes for one box that
+# names neither. Below the threshold the omitted nodes are drawn instead, which overruns the window by up
+# to two and is the cheaper of the two wrongs.
+#
+# One threshold for sibling gaps and depth gaps both. Two would disagree in front of the reader, who sees
+# only that one row inlined its leftovers and another did not.
+_MIN_HIDDEN_FOR_GAP = 3
+
+# How far the depth window reaches either side of the focus before the budget gets a say. Both are floors
+# rather than shares: whatever the pins have already spent, the window is at least this big.
+#
+# Below, because one is plainly too few and one is what the arrangement produces without a floor -- the
+# budget is handed out from the top of the branch downward, so the focus gets the remainder.
+#
+# Above, because the node directly above the focus is the step-up handle. Hide it in a gap and moving one
+# level towards the root stops being a click and becomes a bisection of the hidden run; one node is the
+# whole of what that costs to fix, which is why the two floors are not the same number.
+_MIN_BELOW_FOCUS = 3
+_MIN_ABOVE_FOCUS = 1
+
 # Average glyph advance as a fraction of font size. Two figures, because the two kinds of text here are
 # not the same width: the pills are short uppercase words, and capitals are appreciably wider than the
 # mixed-case prose of a chat message. Using the uppercase figure for a message cut its label about a
@@ -553,6 +574,24 @@ class _Slot:
                       doc="Whether this slot stands for omitted nodes rather than for one node.")
 
 
+def _runs_too_short_to_hide(shown: Set[int], n: int) -> Set[int]:
+    """Return the indices of `range(n)` that are omitted in runs shorter than `_MIN_HIDDEN_FOR_GAP`.
+
+    Adding these back to `shown` is how the threshold gets applied: a run long enough to be worth a gap
+    box stays hidden, and anything shorter is drawn.
+    """
+    rescued: Set[int] = set()
+    run: List[int] = []
+    for index in range(n + 1):  # one past the end, so a trailing run is closed by the same branch
+        if index in shown or index == n:
+            if 0 < len(run) < _MIN_HIDDEN_FOR_GAP:
+                rescued |= set(run)
+            run = []
+        else:
+            run.append(index)
+    return rescued
+
+
 def _window(items: Sequence[str],
             focus_index: int,
             must_include: Set[int],
@@ -566,6 +605,8 @@ def _window(items: Sequence[str],
 
     The first and last items are always shown, so a wide level keeps its ends visible and the reader can
     tell how far the fan reaches.
+
+    A run of omitted items shorter than `_MIN_HIDDEN_FOR_GAP` is drawn instead of hidden.
     """
     n = len(items)
     if n == 0:
@@ -574,6 +615,7 @@ def _window(items: Sequence[str],
     shown = {0, n - 1}
     shown |= {i for i in range(focus_index - each_side, focus_index + each_side + 1) if 0 <= i < n}
     shown |= {i for i in must_include if 0 <= i < n}
+    shown |= _runs_too_short_to_hide(shown, n)
 
     slots: List[_Slot] = []
     previous = -1
@@ -585,6 +627,19 @@ def _window(items: Sequence[str],
     if previous < n - 1:
         slots.append(_Slot(node_id=None, hidden=tuple(items[previous + 1:])))
     return slots
+
+
+class _DepthGap:
+    """A run of the branch left out of the depth window, and where its box hangs.
+
+    `after_index`: Index into the kept spine of the node the gap hangs below. The rows below it are the
+                   run's descendants, so this also says which row has to hang off the gap instead of off
+                   a parent that is not drawn.
+    """
+
+    def __init__(self, after_index: int, hidden: Tuple[str, ...]):
+        self.after_index = after_index
+        self.hidden = hidden
 
 
 class _Row:
@@ -699,6 +754,25 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     # Outlined, because the renderer picks a contrasting text colour in dark mode from *the element's*
     # fill, and a node carrying a second filled shape would have some of its text coloured for the wrong
     # background.
+    shapes.extend(_pill_shapes(pills, x2, y1 - 4.0, config, measure_text))
+    return shapes
+
+
+_PILL_SPACING = 3.0  # between two pills sharing one node
+
+
+def _pill_shapes(pills: Tuple[str, ...], anchor_x: float, bottom_y: float, config: LayoutConfig,
+                 measure_text: Optional[MeasureText], centered: bool = False) -> List[xdotgraph.Shape]:
+    """Return the shapes for a row of pointer pills, sitting with their bottom edge on `bottom_y`.
+
+    `anchor_x`: The row's right edge, or its centre when `centered`.
+    `centered`: Centre the row on `anchor_x` instead of right-aligning it there. Right-aligned against a
+                box, whose right edge is a real edge to line up with; centred under a stub, which is a
+                line and has only a middle.
+    """
+    if not pills:
+        return []
+
     pill_pen = xdotgraph.Pen()
     pill_pen.color = LINE_COLOR
     pill_pen.linewidth = 1.0
@@ -715,27 +789,54 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     # far left, which puts "SYS" inside its own rounded cap.
     #
     # The width comes from `measure_text` when the caller supplied one, and from an average advance
-    # otherwise. Measuring matters here more than the size of the box suggests: the renderer centres text
-    # by starting it at `centre - w/2` and drawing left-aligned, so an error in `w` displaces the glyphs by
-    # half of it. Estimating "HEAD" at 10 px gave 24.8 against a true 19.5, and the label sat visibly left
-    # inside its own pill -- an error invisible in the box's geometry and obvious on screen.
+    # otherwise. Measuring matters here more than the size of the box suggests: an error in `w` displaces
+    # the glyphs by half of it. Estimating "HEAD" at 10 px gave 24.8 against a true 19.5, and the label sat
+    # visibly left inside its own pill -- invisible in the box's geometry and obvious on screen.
     text_widths = [_text_width(pill, config.pill_font_size, measure_text, _PILL_ADVANCE_PER_CHAR)
                    for pill in pills]
     box_widths = [text_w + config.pill_h for text_w in text_widths]  # a cap's worth of room at each end
-    pill_span = sum(box_widths) + max(0, len(pills) - 1) * 3.0
+    pill_span = sum(box_widths) + max(0, len(pills) - 1) * _PILL_SPACING
 
-    cursor = x2 - pill_span
+    shapes: List[xdotgraph.Shape] = []
+    cursor = (anchor_x - 0.5 * pill_span) if centered else (anchor_x - pill_span)
     for pill, text_w, box_w in zip(pills, text_widths, box_widths):
         px1, px2 = cursor, cursor + box_w
-        py2 = y1 - 4.0
-        py1 = py2 - config.pill_h
+        py1 = bottom_y - config.pill_h
         shapes.append(xdotgraph.PolygonShape(pill_pen,
-                                             _rounded_rect_points(px1, py1, px2, py2, 0.5 * config.pill_h),
+                                             _rounded_rect_points(px1, py1, px2, bottom_y,
+                                                                  0.5 * config.pill_h),
                                              filled=False))
         shapes.append(xdotgraph.TextShape(pill_text_pen,
-                                          0.5 * (px1 + px2), py2 - 0.3 * config.pill_h,
+                                          0.5 * (px1 + px2), bottom_y - 0.3 * config.pill_h,
                                           xdotgraph.TextShape.CENTER, text_w, pill))
-        cursor = px2 + 3.0
+        cursor = px2 + _PILL_SPACING
+    return shapes
+
+
+def _continues_stub(x: float, y_bottom: float, config: LayoutConfig,
+                    pills: Tuple[str, ...] = (),
+                    measure_text: Optional[MeasureText] = None) -> List[xdotgraph.Shape]:
+    """Return a short dashed line hanging off the bottom of a box, going nowhere, and any pills under it.
+
+    It says the branch continues below a box whose children the picture does not draw. A shape rather
+    than an `Edge`, since there is no second node for an edge to reach, and no arrowhead, since an arrow
+    points *at* something.
+
+    `pills`: Pointers to things that are down there rather than on this box -- HEAD, when a preview has
+             left it buried. They hang at the stub's end, centred, so they read as labelling the
+             direction rather than the box: a pill *on* a box says "this one is HEAD", which would be a
+             lie about a box that is merely on the way.
+    """
+    pen = xdotgraph.Pen()
+    pen.color = GAP_LINE_COLOR
+    pen.linewidth = config.line_width
+    pen.dash = _GAP_DASH
+    # Most of the room between this box and whatever the next row put below it, rather than a token
+    # tick. `_GAP_DASH` has a period of ten graph units, so half the spacing is two dashes and reads as
+    # a speck; at four fifths it is four, which reads as a line that stops.
+    end_y = y_bottom + config.vertical_spacing * 0.8
+    shapes: List[xdotgraph.Shape] = [xdotgraph.LineShape(pen, [(x, y_bottom), (x, end_y)])]
+    shapes.extend(_pill_shapes(pills, x, end_y + config.pill_h, config, measure_text, centered=True))
     return shapes
 
 
@@ -780,7 +881,18 @@ def build(datastore: chattree.Forest,
 
     with datastore.lock:
         focus_node_id = state.focus_node_id or state.head_node_id
-        full_spine = datastore.linearize_up(focus_node_id)
+
+        # The focus picks a *branch*, and the branch is drawn to its tip. Linearizing up from the focus
+        # alone would stop the spine there, so whatever the conversation went on to say would come back
+        # as a subtree gap hanging off the focused node -- "…1 more" below the box just clicked, which is
+        # a box spent to announce a box. Descending first means the question never arises: the branch
+        # carries on, and the focus is somewhere along it rather than at the end of it.
+        try:
+            branch_tip = chatutil.descend_to_latest(datastore, focus_node_id)
+        except KeyError:  # a payload with no timestamp; which child is latest is unanswerable, so stop here
+            logger.warning(f"build: cannot order the children of {focus_node_id}; drawing the branch as far as the focus")
+            branch_tip = focus_node_id
+        full_spine = datastore.linearize_up(branch_tip)
         visible_spine = _collapse_tool_rounds(datastore, full_spine, state.expanded_tool_turns)
 
         # Two different questions, and conflating them is what would make a preview look like a move.
@@ -792,11 +904,13 @@ def build(datastore: chattree.Forest,
         except KeyError:  # HEAD is gone, mid-cleanup or mid-delete; the picture is still worth drawing
             current_branch = set()
 
-        visible_spine, elided_ancestors, depth_gap_row = _depth_window(
-            visible_spine, state.new_chat_node_id, config.max_visible_depth)
+        visible_spine, depth_gaps = _depth_window(
+            visible_spine, state.new_chat_node_id, focus_node_id, state.head_node_id,
+            config.max_visible_depth)
+        depth_gap_rows = {gap.after_index: gap for gap in depth_gaps}
 
         drawn_spine = set(visible_spine)
-        rows = _rows_for(datastore, state, config, visible_spine, focus_node_id)
+        rows = _rows_for(datastore, state, config, visible_spine, branch_tip, state.head_node_id)
         subtree_counts = _subtree_counts_for(datastore, rows, drawn_spine)
 
         # ------------------------------------------------------------------
@@ -804,7 +918,7 @@ def build(datastore: chattree.Forest,
         # were elided, get a whole empty row's worth of space below them to hold those gaps -- otherwise a
         # gap drawn one row down lands on top of the row that is already there.
 
-        needs_band = [bool(subtree_counts[index]) or index == depth_gap_row
+        needs_band = [bool(subtree_counts[index]) or index in depth_gap_rows
                       for index in range(len(rows))]
         row_step = config.node_h + config.vertical_spacing
         row_y: List[float] = []
@@ -826,6 +940,45 @@ def build(datastore: chattree.Forest,
         nodes_by_name: Dict[str, xdotgraph.Node] = {}
         graph_nodes: List[xdotgraph.Node] = []
         drawn: List[List[Tuple[_Slot, xdotgraph.Node]]] = []  # parallel to `rows`, for wiring edges after
+
+        def chat_box(node_id: str, x: float, y: float, is_root: bool,
+                     continues: bool = False,
+                     head_below: bool = False) -> Tuple[ChatNodeRef, List[xdotgraph.Shape]]:
+            """Return the ref and the shapes for one message's box, at node width.
+
+            Used from the rows and from a band, since an only child is drawn in the band rather than
+            announced by a gap there -- and it has to come out looking like the message it is.
+
+            `continues`: Whether this box has children that the picture does *not* draw. The caller
+                         decides, because the answer is about the layout rather than about the node: a
+                         node on the spine has children and they are the row below it, which needs no
+                         saying.
+            `head_below`: Whether HEAD is somewhere under those undrawn children, in which case the stub
+                          carries the pointer to it.
+            """
+            ref = ChatNodeRef(node_id, node_id=node_id,
+                              role=_role_of(datastore, node_id),
+                              on_current_branch=(node_id in current_branch),
+                              tool_call_count=_tool_call_count(datastore, node_id),
+                              pills=_pills_for(node_id, state, is_root=is_root))
+            speaker, label_lines = _speaker_and_label_of(
+                datastore, node_id, config._get_effective_label_chars(), config.label_lines)
+            shapes = _box_shapes(x, y, config.node_w, config, label_lines,
+                                 fill=(SPINE_FILL_COLOR if node_id in current_branch
+                                       else OFF_SPINE_FILL_COLOR),
+                                 dashed=False, pills=ref.pills, speaker=speaker,
+                                 measure_text=measure_text,
+                                 emphasized=(node_id == state.head_node_id),
+                                 previewed=(node_id == state.previewed_node_id))
+            if continues:
+                # The branch goes on below this box and the next row is somebody else's, so say so with
+                # an edge that connects to nothing: the picture's own two marks for "there is a link" and
+                # "this is not drawn here", used together and meaning exactly their sum. Without it the
+                # box would be a node with no visible links, which in this picture means the graph ends.
+                shapes.extend(_continues_stub(x, y + 0.5 * config.node_h, config,
+                                              pills=("HEAD",) if head_below else (),
+                                              measure_text=measure_text))
+            return ref, shapes
 
         gap_serial = 0
         for row_index, row in enumerate(rows):
@@ -854,25 +1007,14 @@ def build(datastore: chattree.Forest,
                                             hidden_node_ids=slot.hidden,
                                             recenter_on=slot.hidden[len(slot.hidden) // 2])
                         label = f"…{len(slot.hidden)} more"
-                    shapes = _box_shapes(x, y, width, config, [label], fill=None, dashed=True, pills=(),
-                                         measure_text=measure_text)
+                    # A hidden sibling that is on HEAD's branch is either HEAD or its ancestor, so HEAD
+                    # is behind this gap either way.
+                    gap_pills = ("HEAD",) if (set(slot.hidden) & current_branch) else ()
+                    shapes = _box_shapes(x, y, width, config, [label], fill=None, dashed=True,
+                                         pills=gap_pills, measure_text=measure_text)
                 else:
                     name = slot.node_id
-                    ref = ChatNodeRef(name, node_id=slot.node_id,
-                                      role=_role_of(datastore, slot.node_id),
-                                      on_current_branch=(slot.node_id in current_branch),
-                                      tool_call_count=_tool_call_count(datastore, slot.node_id),
-                                      pills=_pills_for(slot.node_id, state, is_root=(row_index == 0)))
-                    speaker, label_lines = _speaker_and_label_of(
-                        datastore, slot.node_id,
-                        config._get_effective_label_chars(), config.label_lines)
-                    shapes = _box_shapes(x, y, width, config, label_lines,
-                                         fill=(SPINE_FILL_COLOR if slot.node_id in current_branch
-                                               else OFF_SPINE_FILL_COLOR),
-                                         dashed=False, pills=ref.pills, speaker=speaker,
-                                         measure_text=measure_text,
-                                         emphasized=(slot.node_id == state.head_node_id),
-                                         previewed=(slot.node_id == state.previewed_node_id))
+                    ref, shapes = chat_box(slot.node_id, x, y, is_root=(row_index == 0))
 
                 graph_node = xdotgraph.Node(x=x, y=y, w=width, h=config.node_h,
                                             shapes=shapes, internal_name=name)
@@ -887,11 +1029,20 @@ def build(datastore: chattree.Forest,
 
         graph_edges: List[xdotgraph.Edge] = []
 
-        def add_box(name: str, ref: Ref, x: float, y: float, label: str) -> xdotgraph.Node:
-            """Draw one gap box in a band, register it, and return it."""
+        def add_box(name: str, ref: Ref, x: float, y: float, label: str,
+                    hides_head: bool = False) -> xdotgraph.Node:
+            """Draw one gap box in a band, register it, and return it.
+
+            `hides_head`: Whether HEAD is somewhere in what this gap stands for. The box then wears the
+                          HEAD pill, which on a dashed box reads as "in this direction" rather than "this
+                          one" -- the same pointer, pointing at absent content. Without it HEAD can leave
+                          the picture with nothing saying where it went, which is exactly the comparison
+                          a preview exists to make.
+            """
             node = xdotgraph.Node(x=x, y=y, w=config.gap_node_w, h=config.node_h,
                                   shapes=_box_shapes(x, y, config.gap_node_w, config, [label],
-                                                     fill=None, dashed=True, pills=(),
+                                                     fill=None, dashed=True,
+                                                     pills=("HEAD",) if hides_head else (),
                                                      measure_text=measure_text),
                                   internal_name=name)
             refs[name] = ref
@@ -899,12 +1050,18 @@ def build(datastore: chattree.Forest,
             graph_nodes.append(node)
             return node
 
-        depth_gap_node: Optional[xdotgraph.Node] = None
-        if elided_ancestors:
-            depth_gap_node = add_box("gap:depth",
-                                     DepthGapRef("gap:depth", hidden_node_ids=elided_ancestors),
-                                     x=0.0, y=band_y[depth_gap_row],
-                                     label=f"…{len(elided_ancestors)} more")
+        # Keyed by the row the gap hangs below, so a row whose parent was elided can find the gap that
+        # stands in for it.
+        depth_gap_nodes: Dict[int, xdotgraph.Node] = {}
+        for gap in depth_gaps:
+            # Named for the first node it hides rather than for its position, so the name survives the
+            # window moving -- hover and click both key on it.
+            name = f"gap:depth:{gap.hidden[0]}"
+            depth_gap_nodes[gap.after_index] = add_box(
+                name, DepthGapRef(name, hidden_node_ids=gap.hidden),
+                x=0.0, y=band_y[gap.after_index],
+                label=f"…{len(gap.hidden)} more",
+                hides_head=state.head_node_id in gap.hidden)
 
         for row_index, drawn_row in enumerate(drawn):
             for slot, graph_node in drawn_row:
@@ -914,30 +1071,58 @@ def build(datastore: chattree.Forest,
                 if child_count is None:
                     continue
                 # An off-spine sibling with children of its own would otherwise look like a chat that
-                # stopped after one message. The same primitive as a sibling gap, pointing down.
+                # stopped after one message.
+                if child_count == 1:
+                    # One child costs a whole box to announce, so draw the child instead: the band is the
+                    # slot the box would have taken, and a message in it says more than the number 1. The
+                    # click is better too -- previewing the child redraws around the child, where the gap
+                    # redrew around its parent.
+                    #
+                    # Only at one, so this is not the threshold sibling and depth gaps share. Those hide a
+                    # run in slots the row already has, and inlining costs nothing; here the slot is one
+                    # column wide, and two node-width boxes do not fit it. Drawn narrow enough to fit,
+                    # they would have no room for a label, which is the whole point of inlining.
+                    child_id = datastore.get_children(slot.node_id)[0]
+                    if child_id not in nodes_by_name:
+                        child_ref, child_shapes = chat_box(
+                            child_id, x=graph_node.x, y=band_y[row_index], is_root=False,
+                            continues=bool(datastore.get_children(child_id)),
+                            head_below=(child_id in current_branch
+                                        and child_id != state.head_node_id))
+                        child_node = xdotgraph.Node(x=graph_node.x, y=band_y[row_index],
+                                                    w=config.node_w, h=config.node_h,
+                                                    shapes=child_shapes, internal_name=child_id)
+                        refs[child_id] = child_ref
+                        nodes_by_name[child_id] = child_node
+                        graph_nodes.append(child_node)
+                        graph_edges.append(_edge_between(graph_node, child_node, config))
+                    continue
+                # An off-spine node that is nonetheless an ancestor of HEAD means HEAD is down there
+                # somewhere -- which is what previewing a branch near the top of a long chat does to it.
                 gap_node = add_box(f"gap:subtree:{slot.node_id}",
                                    SubtreeGapRef(f"gap:subtree:{slot.node_id}",
                                                  node_id=slot.node_id, child_count=child_count),
                                    x=graph_node.x, y=band_y[row_index],
-                                   label=f"…{child_count} more")
+                                   label=f"…{child_count} more",
+                                   hides_head=(slot.node_id in current_branch
+                                               and slot.node_id != state.head_node_id))
                 graph_edges.append(_edge_between(graph_node, gap_node, config))
 
         for row_index in range(1, len(drawn)):
             parent_id = rows[row_index].parent_node_id
             parent_node = nodes_by_name.get(parent_id) if parent_id is not None else None
             if parent_node is None:
-                # The parent fell outside the depth window. The depth gap stands in for the whole elided
-                # chain, so it is what this row hangs from -- every slot of it, since they are all
-                # descendants of what the gap is hiding.
-                parent_node = depth_gap_node
+                # The parent fell outside the depth window. The gap directly above this row stands in for
+                # the whole elided chain, so it is what the row hangs from -- every slot of it, since they
+                # are all descendants of what the gap is hiding.
+                parent_node = depth_gap_nodes.get(row_index - 1)
                 if parent_node is None:
                     continue
             for _slot, graph_node in drawn[row_index]:
                 graph_edges.append(_edge_between(parent_node, graph_node, config))
 
-        if depth_gap_node is not None:
-            graph_edges.append(_edge_between(nodes_by_name[visible_spine[depth_gap_row]],
-                                             depth_gap_node, config))
+        for after_index, gap_node in depth_gap_nodes.items():
+            graph_edges.append(_edge_between(nodes_by_name[visible_spine[after_index]], gap_node, config))
 
     # ------------------------------------------------------------------
     # Normalize into the widget's coordinate box, which `zoom_to_fit` reads as (0, 0)-(width, height).
@@ -983,8 +1168,15 @@ def _rows_for(datastore: chattree.Forest,
               state: ViewState,
               config: LayoutConfig,
               visible_spine: Sequence[str],
-              focus_node_id: str) -> List[_Row]:
-    """Choose what each level of the picture holds: one row per spine node, plus HEAD's children.
+              branch_tip: str,
+              head_node_id: Optional[str]) -> List[_Row]:
+    """Choose what each level of the picture holds: one row per spine node, plus the tip's children.
+
+    `branch_tip`: The last node of the branch being drawn, whose children become the final row. Normally
+                  a leaf, and then there is no final row — but a collapsed tool round or a depth window
+                  can end the drawn spine short of one.
+    `head_node_id`: Kept in its own row whatever the sibling window says, so that a preview of one branch
+                    can still be compared against where the reader actually is.
 
     The caller holds the datastore lock.
     """
@@ -1012,66 +1204,119 @@ def _rows_for(datastore: chattree.Forest,
 
         focus_id = state.sibling_focus.get(parent_id, node_id)
         focus_index = siblings.index(focus_id) if focus_id in siblings else own_index
-        slots = _window(siblings, focus_index, must_include={own_index},
+        must_include = {own_index}
+        if head_node_id is not None and head_node_id in siblings:
+            must_include.add(siblings.index(head_node_id))
+        slots = _window(siblings, focus_index, must_include=must_include,
                         each_side=config.siblings_each_side)
         rows.append(_Row(slots, _index_of_slot(slots, node_id), parent_node_id=parent_id))
 
     # The children of the node at the bottom of the spine, so that the branch does not appear to end
     # there when it does not.
-    children = datastore.get_children(focus_node_id)
+    children = datastore.get_children(branch_tip)
     if children:
-        chosen = state.sibling_focus.get(focus_node_id, children[0])
+        chosen = state.sibling_focus.get(branch_tip, children[0])
         chosen_index = children.index(chosen) if chosen in children else 0
-        slots = _window(children, chosen_index, must_include=set(),
+        must_include = set()
+        if head_node_id is not None and head_node_id in children:
+            must_include.add(children.index(head_node_id))
+        slots = _window(children, chosen_index, must_include=must_include,
                         each_side=config.siblings_each_side)
         rows.append(_Row(slots, _index_of_slot(slots, children[chosen_index]),
-                         parent_node_id=focus_node_id))
+                         parent_node_id=branch_tip))
     return rows
 
 
 def _depth_window(visible_spine: Sequence[str],
                   new_chat_node_id: Optional[str],
-                  max_visible_depth: int) -> Tuple[List[str], Tuple[str, ...], int]:
-    """Choose which of the branch's nodes to draw. Returns (kept, elided, row the gap sits below).
+                  focus_node_id: str,
+                  head_node_id: Optional[str],
+                  max_visible_depth: int) -> Tuple[List[str], List[_DepthGap]]:
+    """Choose which of the branch's nodes to draw. Returns (kept, the gaps standing for the rest).
 
-    The budget goes to a prefix at the top of the tree and a run at the bottom, with one gap between them.
-    The bottom is where the reader is. The top is what says *where* they are, and it is two things rather
-    than one:
+    The shape is: a pinned prefix at the top, then a window reaching both ways from the focus, then the
+    tip — with a gap wherever a run was left out. Each part answers a different question, which is why
+    none of them can be dropped to pay for another:
 
-    - **The root**, which carries SYS and names the version of the character card this was written under.
+    - **The root** carries SYS and names the version of the character card this was written under.
     - **The session level** — the child of `new_chat_node_id` this branch began at, and its siblings, which
       are every other chat started under the same card. That level doubles as the list of recent chats, so
       losing it costs the only way out of the current conversation.
+    - **The window** is what the reader is actually looking at, and it follows the focus rather than the
+      end of the branch: previewing a node twenty messages back is a request to see that neighbourhood.
+    - **The tip** says where the branch ends. Without it a long branch fades out mid-conversation and the
+      reader cannot tell whether they are near the end.
+    - **HEAD**, when it is on this branch, because comparing where a click would go against where the
+      reader is *is* what the preview is for.
 
-    The second is the reason this is not simply "keep the root". A chat twenty messages deep has a spine
-    longer than the budget, and the elided middle swallows the session level — which is to say the way out
-    disappears exactly when the conversation is long enough to want one.
-
-    The prefix is kept whole rather than as the two pinned nodes alone. `new_chat_node_id` normally sits
+    The prefix is kept whole rather than as its two pinned nodes alone. `new_chat_node_id` normally sits
     directly under the root, so the whole prefix is three nodes; pinning only the ends of it would split
     the elision into two runs and spend a gap box on hiding a single node.
 
-    Falls back to the root alone when the prefix would leave no room for the tail, or when
-    `new_chat_node_id` is not on this branch — which is what a chat under an older card looks like.
+    Falls back to the root alone when the prefix would crowd out the window, or when `new_chat_node_id`
+    is not on this branch — which is what a chat under an older card looks like.
 
-    `row the gap sits below`: index into `kept`. Meaningless when nothing was elided.
+    `max_visible_depth` is a budget rather than a bound, and two things overrun it deliberately: the pins
+    above, and a leftover run too short to be worth a gap box. Both overshoot by a bounded handful, and
+    the alternative in each case is a picture that is smaller and says less.
     """
-    if len(visible_spine) <= max_visible_depth:
-        return list(visible_spine), (), 0
+    n = len(visible_spine)
+    if n <= max_visible_depth:
+        return list(visible_spine), []
 
     prefix_length = 1  # the root
     if new_chat_node_id is not None and new_chat_node_id in visible_spine:
         prefix_length = visible_spine.index(new_chat_node_id) + 2  # the anchor, plus the session node
-    # Leave at least half the budget for the nodes nearest HEAD; a prefix that crowds those out has
-    # answered "where am I" at the cost of "what is happening".
+    # Leave at least half the budget for the window; a prefix that crowds it out has answered "where am
+    # I" at the cost of "what is happening".
     if prefix_length > max_visible_depth // 2:
         prefix_length = 1
-    prefix_length = min(prefix_length, len(visible_spine))
+    prefix_length = min(prefix_length, n)
 
-    tail_length = max_visible_depth - prefix_length
-    elided = tuple(visible_spine[prefix_length:len(visible_spine) - tail_length])
-    kept = list(visible_spine[:prefix_length]) + list(visible_spine[-tail_length:])
-    return kept, elided, prefix_length - 1
+    try:
+        focus_index = visible_spine.index(focus_node_id)
+    except ValueError:  # the focus was collapsed into a tool round; the tip is the next best centre
+        focus_index = n - 1
+
+    keep = set(range(prefix_length))
+    keep.add(n - 1)
+    if head_node_id is not None and head_node_id in visible_spine:
+        keep.add(visible_spine.index(head_node_id))
+
+    # The window's floors, before the budget gets a say -- they are what makes the focus navigable at
+    # all, and a budget already spent on pins would otherwise leave it stranded between two gaps.
+    low = max(0, focus_index - _MIN_ABOVE_FOCUS)
+    high = min(n - 1, focus_index + _MIN_BELOW_FOCUS)
+    keep |= set(range(low, high + 1))
+
+    # Then spend what is left reaching both ways, a step at a time, so the window stays centred.
+    while len(keep) < max_visible_depth:
+        grew = False
+        if low - 1 >= prefix_length:
+            low -= 1
+            keep.add(low)
+            grew = True
+        if len(keep) < max_visible_depth and high + 1 <= n - 2:
+            high += 1
+            keep.add(high)
+            grew = True
+        if not grew:
+            break
+
+    keep |= _runs_too_short_to_hide(keep, n)
+
+    kept: List[str] = []
+    gaps: List[_DepthGap] = []
+    run: List[str] = []
+    for index in range(n):
+        if index in keep:
+            if run:
+                gaps.append(_DepthGap(after_index=len(kept) - 1, hidden=tuple(run)))
+                run = []
+            kept.append(visible_spine[index])
+        else:
+            run.append(visible_spine[index])
+    return kept, gaps
 
 
 def _index_of_slot(slots: Sequence[_Slot], node_id: str) -> int:
