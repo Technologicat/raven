@@ -29,11 +29,13 @@ pass 1 was unsure about. 83% of this corpus has an abstract — though a tenth o
 teasers that break off mid-sentence, which pass 2 is told about, since a blurb read as a whole abstract
 invites exactly the concluding-from-absence the rubric otherwise forbids.
 
-Escalation fires on either a low-confidence answer or a title with too few words in it. The second
-condition is computed here rather than asked of the model, and that is the point: a sibling run over a
-paper pile found the model at its most confident exactly where the input carried least — confidently
-naming the subject of a file called `2006.05563.pdf` — so a rule driven by the model's own confidence is
-blind in precisely the place it most needs to look.
+Escalation fires on a low-confidence answer, on a title too thin to have been answerable, or on any drop
+the model was not certain of. The last two are decided here rather than asked of the model, and that is
+the point: a sibling run over a paper pile found the model at its most confident exactly where the input
+carried least — confidently naming the subject of a file called `2006.05563.pdf` — so a rule driven by
+the model's own confidence is blind in precisely the place it most needs to look. And the two verdicts do
+not deserve the same standard of proof, a false keep costing a reader one line where a false drop removes
+a study and leaves nothing behind to notice it by.
 
 Resumable. Every answer is appended to a JSONL as it arrives and a re-run skips what is already there, so
 a backend hiccup two-thirds of the way through costs the current batch rather than the run.
@@ -59,8 +61,10 @@ from bibtexparser.model import Entry
 from unpythonic import timer
 from unpythonic.env import env
 
+from raven.common import nlptools
 from raven.librarian import agent, config as librarian_config, llmclient
 from raven.papers import bibtex
+from raven.visualizer import config as visualizer_config
 
 # The question the corpus is supposed to answer, quoted into both prompts so the two passes judge the
 # same thing. `00_stuff/rawdata/AOKK/search-phrase.txt` is the boolean query this paraphrases; the
@@ -68,10 +72,23 @@ from raven.papers import bibtex
 # a corpus that has already had its obvious strays taken out.
 SCOPE_QUESTION = "studies on different aspects of the use of AI agents in higher education"
 
-# What counts as too little to judge from. Set from the corpus rather than by taste: titles here run to a
-# median of 13 words with a 5th percentile of 7, and the 41 records (0.8%) below this bound are genuinely
-# the uninformative ones — "Book Review", "Machine culture", "Generative AI".
+# What counts as too little to judge from, asked two ways because either alone is fooled.
+#
+# A bare word count is fooled by padding: "and and and the the the" clears any threshold while naming no
+# subject at all. A content-word count is fooled the other way, by a short title that is all subject —
+# three or four words, every one of them load-bearing. So a title is thin if it is short by *either*
+# measure, which never un-flags anything the word count caught and adds the padded case.
+#
+# Both bounds are set from the corpus rather than by taste, and the flagged group is small enough to read
+# in full — which is what `--thin` is for.
 MIN_INFORMATIVE_WORDS = 5
+MIN_CONTENT_WORDS = 3
+
+# Function words plus the project's own hand-tuned academic-prose list, which is the half that matters
+# here: a title reading "Exploring the Potential of..." is padding a reader recognizes instantly and a
+# word count does not. Reusing the Visualizer's list rather than writing a second one keeps "content
+# word" meaning the same thing in the screen as it does in the keyword extraction downstream.
+STOPWORDS = frozenset(nlptools.default_stopwords) | frozenset(visualizer_config.custom_stopwords)
 
 # How much of an abstract pass 2 sends. Comfortably more than an abstract normally runs to; the cap is
 # against the occasional record whose "abstract" field holds a whole introduction.
@@ -233,9 +250,22 @@ def informative_words(title: str) -> int:
     return len([word for word in re.split(r"[\s\-_/]+", title) if any(c.isalpha() for c in word)])
 
 
+def content_words(title: str) -> int:
+    """How many words of the title are neither function words nor academic filler.
+
+    A rough count rather than a parse: the words are lowercased and stripped of punctuation, not
+    lemmatized, so an inflected form of a listed stopword is counted as content. That errs toward
+    calling a title informative, which is the safe direction for a screen whose job is deciding what to
+    look at twice.
+    """
+    words = (word.strip(".,:;!?()[]{}\"'\u2019").lower() for word in re.split(r"[\s\-_/]+", title))
+    return len([word for word in words
+                if word and any(c.isalpha() for c in word) and word not in STOPWORDS])
+
+
 def looks_uninformative(title: str) -> bool:
     """Whether a title is too thin to judge from — the half of the escalation rule the model cannot veto."""
-    return informative_words(title) < MIN_INFORMATIVE_WORDS
+    return informative_words(title) < MIN_INFORMATIVE_WORDS or content_words(title) < MIN_CONTENT_WORDS
 
 
 def looks_truncated(abstract: str) -> bool:
@@ -269,8 +299,9 @@ def judge_titles(llm_settings: env, batch: list[env]) -> dict[int, dict]:
     """
     items = "\n".join(f"{i}. {record.title}" + (f"\n   [published in: {record.venue}]" if record.venue else "")
                       for i, record in enumerate(batch))
-    reply = agent.ask(llm_settings, PASS1_INSTRUCTIONS.format(rubric=_SCOPE_RUBRIC.format(question=SCOPE_QUESTION),
-                                                        items=items))
+    reply = agent.ask(llm_settings,
+                      PASS1_INSTRUCTIONS.format(rubric=_SCOPE_RUBRIC.format(question=SCOPE_QUESTION),
+                                                items=items))
     answers = agent.parse_json_reply(reply)
     if not isinstance(answers, list):
         raise ValueError(f"expected a JSON array, got {type(answers).__name__}")
