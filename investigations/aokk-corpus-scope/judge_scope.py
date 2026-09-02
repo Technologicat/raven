@@ -608,7 +608,20 @@ def write_outputs(records: list[env], done: dict[str, dict],
     by_key = {record.key: record for record in records}
     with dropped_path.open("w", encoding="utf-8") as f:
         f.write("key\tno_ai\tnot_edu\twrong_level\tconfidence\tsource\tabstract\twhy\ttitle\n")
-        for key in sorted(judged_off_topic):
+        # Least-defended first, because this list is read top-down and never to the end. A run over a
+        # corpus this size drops hundreds of records, so the order decides which of them a reader
+        # actually sees: the shakiest verdicts, not the alphabetically luckiest.
+        #
+        # Two keys, in this order. Confidence, obviously. Then whether the record was judged from its
+        # abstract or only from its title — a drop that pass 2 never re-examined rests on less evidence
+        # than one that did, whatever the model said about its own certainty.
+        def least_defended(key):
+            answer = done[key]
+            return (CONFIDENCE_ORDER[answer["confidence"]],
+                    0 if answer["source"] == "title" else 1,
+                    key)
+
+        for key in sorted(judged_off_topic, key=least_defended):
             answer = done[key]
             record = by_key.get(key)
             def shown(value):
