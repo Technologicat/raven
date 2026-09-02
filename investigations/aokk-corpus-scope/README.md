@@ -206,6 +206,22 @@ of review, and a false drop removes a study from the review with nothing left be
 Measured on the 200-record sample, it takes escalation from **5% to 15%** — which is affordable, and is
 the strongest argument for batching pass 2 before the full run.
 
+### One predicted pass-2 failure, worth checking when the full run lands
+
+Pass 1 correctly drops a monograph titled *Translation in the Wild* as having no educational dimension:
+it asks why large language models can translate at all — incidental bilingualism in pre-training data,
+context windows, batch training — and no student appears anywhere in it.
+
+**Its abstract is nonetheless a trap for pass 2**, which is where it goes next. The word *learning*
+occurs six times in it — "Local learning", "Global learning", "deep learning" — every one of them the
+*model's* learning. The rubric tells the judge that teaching, learning, students and courses count as an
+educational dimension, so a literal reading flips this record to keep.
+
+That is the `"learning assistant"` collision one layer down, and it is not special to this record: any
+machine-learning paper's abstract is dense in exactly the vocabulary the rubric uses to recognize
+education. Worth checking specifically once pass 2 has run over the corpus, rather than trusting that the
+title-level fix covers it.
+
 ### The full run is an overnight job, and pass 2 is the half worth batching
 
 Measured at the pilot's own rate: pass 1 runs ~104 s per batch of 40, so 5167 records is **~3.8 h**. Pass 2
