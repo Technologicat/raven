@@ -1000,6 +1000,86 @@ class TestBranchExtent:
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
         assert _dashed_lines_on(built, taken) == [], "a node whose children are drawn still claims more"
 
+    def test_an_inlined_child_is_drawn_at_the_depth_it_has(self):
+        # It is a real message, so it has a real depth, and the spine's own next node has the same one.
+        # Putting them on two rows makes the spine appear to skip a level while its neighbours have
+        # content at that level -- the picture lying about the thing it exists to show.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        taken = forest.create_node(payload("user", "the branch we are on"), parent_id=root)
+        deeper = forest.create_node(payload("assistant", "the reply, one level down"), parent_id=taken)
+        not_taken = forest.create_node(payload("user", "the one we are not"), parent_id=root)
+        inlined = forest.create_node(payload("assistant", "also one level down"), parent_id=not_taken)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=deeper))
+        assert inlined in built.refs, "the only child was not inlined, so there is no placement to check"
+        assert (built.graph.get_node_by_name(inlined).y
+                == built.graph.get_node_by_name(deeper).y), \
+            "the inlined child and the spine's next node are the same depth and were drawn on two rows"
+
+    def test_an_inlined_child_falls_back_to_the_band_when_its_column_is_taken(self):
+        # Rows pack independently, so the level below does not reserve a column under every parent. Where
+        # it has none free the child goes in the band, which is a row of its own and collides with
+        # nothing -- adjacent rather than correct, which beats overlapping.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        taken = forest.create_node(payload("user", "the branch we are on"), parent_id=root)
+        # A wide fan one level down, so every column at that depth is occupied.
+        kids = [forest.create_node(payload("assistant", f"reply {k}"), parent_id=taken) for k in range(9)]
+        not_taken = forest.create_node(payload("user", "the one we are not"), parent_id=root)
+        inlined = forest.create_node(payload("assistant", "nowhere to go"), parent_id=not_taken)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=kids[4]))
+        assert inlined in built.refs
+        row_ys = {built.graph.get_node_by_name(k).y for k in kids if k in built.refs}
+        assert len(row_ys) == 1, "the fan is not one row, so this fixture cannot say a column was taken"
+        assert built.graph.get_node_by_name(inlined).y not in row_ys, \
+            "the child was placed into an occupied column instead of falling back to the band"
+        assert overlapping_pairs(built) == []
+
+    def test_the_stub_says_how_many_levels_are_down_there(self):
+        forest, taken, not_taken, kids = self._off_spine_with(1)
+        node = kids[0]
+        for _ in range(3):
+            node = forest.create_node(payload("user", "on and on"), parent_id=node)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
+        assert "3 more" in texts_on(built, kids[0]), \
+            f"the stub says {texts_on(built, kids[0])}, which does not name the three levels below it"
+
+    def test_a_forked_continuation_gets_a_range(self):
+        # A branch that forks has no single answer, and the short arm is as much use as the long one.
+        forest, taken, not_taken, kids = self._off_spine_with(1)
+        forest.create_node(payload("user", "the short arm"), parent_id=kids[0])
+        node = forest.create_node(payload("user", "the long arm"), parent_id=kids[0])
+        for _ in range(3):
+            node = forest.create_node(payload("user", "on and on"), parent_id=node)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
+        assert "1…4 more" in texts_on(built, kids[0]), \
+            f"the stub says {texts_on(built, kids[0])}, which does not report both arms"
+
+    def test_nothing_hanging_off_a_box_reaches_another_one(self):
+        # The overlap test compares *node* boxes, and a stub and its labels are drawn outside the box
+        # they belong to -- so neither is visible to it. That blind spot hid a HEAD pill under a stub
+        # overlapping the row below by 7.2 units of a 44-unit gap.
+        forest, old_chat, head, new_chat = self._head_buried(branches=1)
+        for k in range(4):  # a row below the stub for it to reach into
+            forest.create_node(payload("user", f"another chat {k}"), parent_id=new_chat)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head, focus_node_id=new_chat))
+
+        stubbed = [n for n in built.graph.nodes if _dashed_lines_on(built, n.internal_name)]
+        assert stubbed, "nothing here has a stub, so this fixture checks nothing"
+        boxes = boxes_of(built)
+        for node in stubbed:
+            drawn = [s.get_bounding_box() for s in node.shapes if s.get_bounding_box() is not None]
+            reach = max(box[3] for box in drawn)
+            below = [(name, box) for name, box in boxes.items()
+                     if name != node.internal_name and box[3] > boxes[node.internal_name][3]]
+            assert below, "nothing is drawn below the stub, so it cannot reach anything"
+            for name, box in below:
+                if box[0] < node.x < box[2]:
+                    assert reach < box[1], \
+                        f"what hangs off {node.internal_name[-8:]} reaches into {name[-8:]}"
+
     def test_a_depth_overrun_of_two_is_drawn_rather_than_gapped(self):
         # The same threshold, and deliberately the same number: two rules here would disagree in front of
         # the reader, who sees only that one row inlined its leftovers and another did not.

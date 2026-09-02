@@ -99,6 +99,12 @@ _MIN_HIDDEN_FOR_GAP = 3
 _MIN_BELOW_FOCUS = 3
 _MIN_ABOVE_FOCUS = 1
 
+# How far a continuation stub hangs below its box, as a fraction of the row gap, and how far its labels
+# stand off to the side. Short enough that it cannot be mistaken for an edge reaching the row below --
+# `_GAP_DASH` has a ten-unit period, so this is three dashes and reads as a line that stops.
+_STUB_LENGTH_FRACTION = 0.6
+_STUB_LABEL_INSET = 6.0
+
 # Average glyph advance as a fraction of font size. Two figures, because the two kinds of text here are
 # not the same width: the pills are short uppercase words, and capitals are appreciably wider than the
 # mixed-case prose of a chat message. Using the uppercase figure for a message cut its label about a
@@ -336,8 +342,15 @@ class LayoutConfig:
     # at a different height from their neighbours -- in a row of boxes that reads as raggedness rather
     # than as a shorter message. Lower this to move the text up.
     text_top_inset: float = 8.0
-    pill_font_size: float = 10.0
-    pill_h: float = 16.0  # a pill's width follows its own label; see `_box_shapes`
+    # Sourced from the interface font for the same reason the role caption is, and the same size as one:
+    # a pill is a short word read at a glance, so it can be smaller than a message and not smaller than
+    # the smallest thing the app otherwise asks anyone to read. A fixed number does not follow the
+    # reader's font setting, and it does not stay in proportion to the boxes either -- at 10 against an
+    # interface font of 20 the pills were hard to read beside a node drawn at a comfortable size.
+    pill_font_size: float = 0.7 * librarian_config.gui_config.font_size
+    # A pill's *width* follows its own label; see `_pill_shapes`. Its height is the font plus room to
+    # breathe inside the stadium's caps.
+    pill_h: float = 0.7 * librarian_config.gui_config.font_size + 6.0
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
     margin: float = 20.0
@@ -762,13 +775,12 @@ _PILL_SPACING = 3.0  # between two pills sharing one node
 
 
 def _pill_shapes(pills: Tuple[str, ...], anchor_x: float, bottom_y: float, config: LayoutConfig,
-                 measure_text: Optional[MeasureText], centered: bool = False) -> List[xdotgraph.Shape]:
+                 measure_text: Optional[MeasureText], align: str = "right") -> List[xdotgraph.Shape]:
     """Return the shapes for a row of pointer pills, sitting with their bottom edge on `bottom_y`.
 
-    `anchor_x`: The row's right edge, or its centre when `centered`.
-    `centered`: Centre the row on `anchor_x` instead of right-aligning it there. Right-aligned against a
-                box, whose right edge is a real edge to line up with; centred under a stub, which is a
-                line and has only a middle.
+    `anchor_x`: Where the row is pinned; which edge that is depends on `align`.
+    `align`: `"right"` against a box, whose right edge is a real edge to line up with; `"left"` beside a
+             stub, which has no edges and where the room is to the side; `"center"` where neither.
     """
     if not pills:
         return []
@@ -798,7 +810,9 @@ def _pill_shapes(pills: Tuple[str, ...], anchor_x: float, bottom_y: float, confi
     pill_span = sum(box_widths) + max(0, len(pills) - 1) * _PILL_SPACING
 
     shapes: List[xdotgraph.Shape] = []
-    cursor = (anchor_x - 0.5 * pill_span) if centered else (anchor_x - pill_span)
+    cursor = {"left": anchor_x,
+              "center": anchor_x - 0.5 * pill_span,
+              "right": anchor_x - pill_span}[align]
     for pill, text_w, box_w in zip(pills, text_widths, box_widths):
         px1, px2 = cursor, cursor + box_w
         py1 = bottom_y - config.pill_h
@@ -813,30 +827,77 @@ def _pill_shapes(pills: Tuple[str, ...], anchor_x: float, bottom_y: float, confi
     return shapes
 
 
+def _column_is_free(x: float, width: float,
+                    centers: Sequence[float], widths: Sequence[float], clearance: float) -> bool:
+    """Return whether a box of `width` centred on `x` clears every box in a row, by at least `clearance`."""
+    return all(abs(x - center) >= 0.5 * (width + other) + clearance
+               for center, other in zip(centers, widths))
+
+
+def _depth_range_below(datastore: chattree.Forest, node_id: str) -> Tuple[int, int]:
+    """Return `(shortest, longest)` number of levels from `node_id` down to a leaf under it.
+
+    Levels rather than nodes, because a stub is a piece of the spine and a spine measures depth: what it
+    is saying is "this many more messages down this way", and a wide shallow fan should not inflate that
+    into a large number. `(0, 0)` for a leaf, which no caller draws.
+    """
+    shortest = longest = 0
+    frontier = [(node_id, 0)]
+    while frontier:
+        current, depth = frontier.pop()
+        children = datastore.get_children(current)
+        if not children:
+            longest = max(longest, depth)
+            shortest = depth if shortest == 0 else min(shortest, depth)
+            continue
+        frontier.extend((child, depth + 1) for child in children)
+    return shortest, longest
+
+
 def _continues_stub(x: float, y_bottom: float, config: LayoutConfig,
+                    depth_range: Tuple[int, int] = (0, 0),
                     pills: Tuple[str, ...] = (),
                     measure_text: Optional[MeasureText] = None) -> List[xdotgraph.Shape]:
-    """Return a short dashed line hanging off the bottom of a box, going nowhere, and any pills under it.
+    """Return a short dashed line hanging off the bottom of a box, going nowhere, and its labels.
 
     It says the branch continues below a box whose children the picture does not draw. A shape rather
     than an `Edge`, since there is no second node for an edge to reach, and no arrowhead, since an arrow
     points *at* something.
 
+    `depth_range`: `(shortest, longest)` levels below, drawn beside the stub as "3 more" or "1…5 more".
+                   Two numbers where the continuations differ in length, since a branch that forks has no
+                   single answer and the shorter one is as much use as the longer.
     `pills`: Pointers to things that are down there rather than on this box -- HEAD, when a preview has
-             left it buried. They hang at the stub's end, centred, so they read as labelling the
-             direction rather than the box: a pill *on* a box says "this one is HEAD", which would be a
-             lie about a box that is merely on the way.
+             left it buried. Beside the stub with the count, so they read as labelling the direction
+             rather than the box: a pill *on* a box says "this one is HEAD", which would be a lie about a
+             box that is merely on the way.
+
+    Everything but the line goes to the *side*, which is what stops the assembly reaching the row below.
+    A dashed line ending just above an unrelated box reads as an edge to it, and the vertical room here
+    is one row gap: at four fifths of it the stub was clearing the next box by 8.8 units of 44, and a
+    pill under the stub overlapped that box outright.
     """
     pen = xdotgraph.Pen()
     pen.color = GAP_LINE_COLOR
     pen.linewidth = config.line_width
     pen.dash = _GAP_DASH
-    # Most of the room between this box and whatever the next row put below it, rather than a token
-    # tick. `_GAP_DASH` has a period of ten graph units, so half the spacing is two dashes and reads as
-    # a speck; at four fifths it is four, which reads as a line that stops.
-    end_y = y_bottom + config.vertical_spacing * 0.8
+    end_y = y_bottom + config.vertical_spacing * _STUB_LENGTH_FRACTION
     shapes: List[xdotgraph.Shape] = [xdotgraph.LineShape(pen, [(x, y_bottom), (x, end_y)])]
-    shapes.extend(_pill_shapes(pills, x, end_y + config.pill_h, config, measure_text, centered=True))
+
+    label_y = 0.5 * (y_bottom + end_y)
+    cursor = x + _STUB_LABEL_INSET
+    shortest, longest = depth_range
+    if longest:
+        text = f"{longest} more" if shortest == longest else f"{shortest}…{longest} more"
+        text_pen = xdotgraph.Pen()
+        text_pen.color = GAP_LINE_COLOR
+        text_pen.fontsize = config.pill_font_size
+        width = _text_width(text, config.pill_font_size, measure_text, _PILL_ADVANCE_PER_CHAR)
+        shapes.append(xdotgraph.TextShape(text_pen, cursor, label_y + 0.3 * config.pill_font_size,
+                                          xdotgraph.TextShape.LEFT, width, text))
+        cursor += width + _STUB_LABEL_INSET
+    shapes.extend(_pill_shapes(pills, cursor, label_y + 0.5 * config.pill_h, config, measure_text,
+                               align="left"))
     return shapes
 
 
@@ -914,11 +975,63 @@ def build(datastore: chattree.Forest,
         subtree_counts = _subtree_counts_for(datastore, rows, drawn_spine)
 
         # ------------------------------------------------------------------
-        # Vertical placement. A row that has subtree gaps hanging off it, and the root row when ancestors
-        # were elided, get a whole empty row's worth of space below them to hold those gaps -- otherwise a
-        # gap drawn one row down lands on top of the row that is already there.
+        # Horizontal placement, which has to come first: whether a row needs a band under it turns on
+        # whether the level below has room for what would otherwise go in one.
 
-        needs_band = [bool(subtree_counts[index]) or index in depth_gap_rows
+        row_x: List[List[float]] = []      # slot centres, per row, aligned on the row's anchor
+        row_w: List[List[float]] = []
+        for row in rows:
+            widths = [config.gap_node_w if slot.is_gap else config.node_w for slot in row.slots]
+            centers: List[float] = []
+            cursor = 0.0
+            for width in widths:
+                centers.append(cursor + 0.5 * width)
+                cursor += width + config.horizontal_spacing
+            shift = -centers[row.anchor_index]  # put the anchor on x = 0
+            row_x.append([center + shift for center in centers])
+            row_w.append(widths)
+
+        # An only child is drawn rather than counted, and being a real message it has a real depth -- the
+        # same one as the spine's own next node. So it belongs in that row, not in a band below it, or
+        # the picture puts two nodes of one level on two levels and the spine appears to skip one.
+        #
+        # The catch is that rows are packed independently, each centred on the node the branch goes
+        # through, so a level does not reserve a column under every parent. The child goes into the row
+        # below when its parent's column happens to be free there, and into the band when it is not --
+        # correct where the layout allows and merely adjacent where it does not.
+        #
+        # If that reads badly in practice the answer is a layout that packs the levels against each other
+        # rather than a cleverer fallback here.
+        inlined_in_row: List[Dict[str, str]] = [{} for _ in rows]   # parent -> child, placed at depth
+        inlined_in_band: List[Dict[str, str]] = [{} for _ in rows]  # parent -> child, placed in the band
+        subtree_gaps: List[Dict[str, int]] = [{} for _ in rows]     # parent -> child count, as a gap box
+        for row_index, row in enumerate(rows):
+            below_x = row_x[row_index + 1] if row_index + 1 < len(rows) else []
+            below_w = row_w[row_index + 1] if row_index + 1 < len(rows) else []
+            for slot_index, slot in enumerate(row.slots):
+                if slot.is_gap:
+                    continue
+                child_count = subtree_counts[row_index].get(slot.node_id)
+                if child_count is None:
+                    continue
+                if child_count > 1:
+                    subtree_gaps[row_index][slot.node_id] = child_count
+                    continue
+                child_id = datastore.get_children(slot.node_id)[0]
+                x = row_x[row_index][slot_index]
+                if below_x and _column_is_free(x, config.node_w, below_x, below_w,
+                                               config.horizontal_spacing):
+                    inlined_in_row[row_index][slot.node_id] = child_id
+                else:
+                    inlined_in_band[row_index][slot.node_id] = child_id
+
+        # ------------------------------------------------------------------
+        # Vertical placement. A row gets a whole empty row's worth of space below it when something has to
+        # be drawn there that the next level has no room for -- a gap box, which belongs to no level at
+        # all, or an inlined child whose column was taken.
+
+        needs_band = [bool(subtree_gaps[index]) or bool(inlined_in_band[index])
+                      or index in depth_gap_rows
                       for index in range(len(rows))]
         row_step = config.node_h + config.vertical_spacing
         row_y: List[float] = []
@@ -934,7 +1047,7 @@ def build(datastore: chattree.Forest,
                 cursor += row_step
 
         # ------------------------------------------------------------------
-        # Horizontal placement and shapes.
+        # Shapes.
 
         refs: Dict[str, Ref] = {}
         nodes_by_name: Dict[str, xdotgraph.Node] = {}
@@ -976,6 +1089,7 @@ def build(datastore: chattree.Forest,
                 # "this is not drawn here", used together and meaning exactly their sum. Without it the
                 # box would be a node with no visible links, which in this picture means the graph ends.
                 shapes.extend(_continues_stub(x, y + 0.5 * config.node_h, config,
+                                              depth_range=_depth_range_below(datastore, node_id),
                                               pills=("HEAD",) if head_below else (),
                                               measure_text=measure_text))
             return ref, shapes
@@ -983,18 +1097,10 @@ def build(datastore: chattree.Forest,
         gap_serial = 0
         for row_index, row in enumerate(rows):
             y = row_y[row_index]
-            widths = [config.gap_node_w if slot.is_gap else config.node_w for slot in row.slots]
-            centers: List[float] = []
-            cursor = 0.0
-            for width in widths:
-                centers.append(cursor + 0.5 * width)
-                cursor += width + config.horizontal_spacing
-            shift = -centers[row.anchor_index]  # put the anchor on x = 0
-
             drawn_row: List[Tuple[_Slot, xdotgraph.Node]] = []
             for slot_index, slot in enumerate(row.slots):
-                x = centers[slot_index] + shift
-                width = widths[slot_index]
+                x = row_x[row_index][slot_index]
+                width = row_w[row_index][slot_index]
                 if slot.is_gap:
                     gap_serial += 1
                     if row_index == 0:
@@ -1063,42 +1169,43 @@ def build(datastore: chattree.Forest,
                 label=f"…{len(gap.hidden)} more",
                 hides_head=state.head_node_id in gap.hidden)
 
+        # One child is drawn rather than counted: a message says more than the number 1, and the click is
+        # better too -- previewing the child redraws around the child, where a gap redrew around its
+        # parent. It goes at its own depth where the level below had a free column and in the band
+        # otherwise; both were decided with the horizontal placement, above.
+        #
+        # Only at one, so this is not the threshold sibling and depth gaps share. Those hide a run in
+        # slots the row already has, and inlining costs nothing; here the slot is one column wide, and two
+        # node-width boxes do not fit it. Drawn narrow enough to fit, they would have no room for a label,
+        # which is the whole point of inlining.
         for row_index, drawn_row in enumerate(drawn):
             for slot, graph_node in drawn_row:
                 if slot.is_gap:
                     continue
-                child_count = subtree_counts[row_index].get(slot.node_id)
+                for source, y_of_child in ((inlined_in_row[row_index], row_y[row_index + 1]
+                                            if row_index + 1 < len(rows) else None),
+                                           (inlined_in_band[row_index], band_y[row_index])):
+                    child_id = source.get(slot.node_id)
+                    if child_id is None or y_of_child is None or child_id in nodes_by_name:
+                        continue
+                    child_ref, child_shapes = chat_box(
+                        child_id, x=graph_node.x, y=y_of_child, is_root=False,
+                        continues=bool(datastore.get_children(child_id)),
+                        head_below=(child_id in current_branch and child_id != state.head_node_id))
+                    child_node = xdotgraph.Node(x=graph_node.x, y=y_of_child,
+                                                w=config.node_w, h=config.node_h,
+                                                shapes=child_shapes, internal_name=child_id)
+                    refs[child_id] = child_ref
+                    nodes_by_name[child_id] = child_node
+                    graph_nodes.append(child_node)
+                    graph_edges.append(_edge_between(graph_node, child_node, config))
+
+                child_count = subtree_gaps[row_index].get(slot.node_id)
                 if child_count is None:
                     continue
                 # An off-spine sibling with children of its own would otherwise look like a chat that
-                # stopped after one message.
-                if child_count == 1:
-                    # One child costs a whole box to announce, so draw the child instead: the band is the
-                    # slot the box would have taken, and a message in it says more than the number 1. The
-                    # click is better too -- previewing the child redraws around the child, where the gap
-                    # redrew around its parent.
-                    #
-                    # Only at one, so this is not the threshold sibling and depth gaps share. Those hide a
-                    # run in slots the row already has, and inlining costs nothing; here the slot is one
-                    # column wide, and two node-width boxes do not fit it. Drawn narrow enough to fit,
-                    # they would have no room for a label, which is the whole point of inlining.
-                    child_id = datastore.get_children(slot.node_id)[0]
-                    if child_id not in nodes_by_name:
-                        child_ref, child_shapes = chat_box(
-                            child_id, x=graph_node.x, y=band_y[row_index], is_root=False,
-                            continues=bool(datastore.get_children(child_id)),
-                            head_below=(child_id in current_branch
-                                        and child_id != state.head_node_id))
-                        child_node = xdotgraph.Node(x=graph_node.x, y=band_y[row_index],
-                                                    w=config.node_w, h=config.node_h,
-                                                    shapes=child_shapes, internal_name=child_id)
-                        refs[child_id] = child_ref
-                        nodes_by_name[child_id] = child_node
-                        graph_nodes.append(child_node)
-                        graph_edges.append(_edge_between(graph_node, child_node, config))
-                    continue
-                # An off-spine node that is nonetheless an ancestor of HEAD means HEAD is down there
-                # somewhere -- which is what previewing a branch near the top of a long chat does to it.
+                # stopped after one message. An off-spine node that is nonetheless an ancestor of HEAD
+                # means HEAD is down there -- what previewing a branch near the top of a long chat does.
                 gap_node = add_box(f"gap:subtree:{slot.node_id}",
                                    SubtreeGapRef(f"gap:subtree:{slot.node_id}",
                                                  node_id=slot.node_id, child_count=child_count),
