@@ -77,6 +77,7 @@ with timer() as tim:
 
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
+    from ..common.gui import keyboardmark
     from ..common.gui import messagebox
     from ..common.gui import filedrop
     from ..common.gui import qroverlay
@@ -1311,7 +1312,7 @@ with timer() as tim:
                             dpg.add_text("Compose messages to the AI here.\n"
                                          f"    [{_newline_keys_label()}]: insert a new line\n"
                                          f"    [{_send_key_label()}]: send to the AI\n"
-                                         "Ctrl+Space to focus this field.")
+                                         "    [Ctrl+Space]: focus this field")
 
                         # Staged-image thumbnail strip. Hidden until the user attaches an image; populated by the
                         # attach handler. Shown by stealing height from the text field (the composer's outer
@@ -2666,6 +2667,11 @@ def _apply_saved_panel_choice(sender, app_data) -> None:
         return
     if app_state["chat_graph_shown"]:
         toggle_chat_graph()
+
+    # The blue that says where the keyboard is, on the composer. A *caret* follower, not a focus one:
+    # ImGui gives nav focus to the first navigable item of a window by itself, so the composer reports
+    # focused from the first frame and a focus-driven mark would be lit before anyone had touched it.
+    keyboardmark.install_caret_follower(["chat_field"])  # tag
 dpg.set_frame_callback(4, _apply_saved_panel_choice)
 
 logger.info("App render loop starting.")

@@ -31,7 +31,7 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 __all__ = ["COLOR", "PULSE_SECONDS",  # the vocabulary
            "join_pulse", "leave_pulse", "pulse_is_running",  # the one rhythm, for a widget that paints itself
            "DOT_GLYPH", "DOT_SLOT_W", "add_dot",  # the glyph a DOT mark lights
-           "MarkKind", "Mark", "install_focus_follower"]  # the mark as a component
+           "MarkKind", "Mark", "install_caret_follower", "install_focus_follower"]  # the mark as a component
 
 import logging
 logger = logging.getLogger(__name__)
@@ -420,6 +420,49 @@ class Mark:
         """
         self.target = None  # which darkens it and gives the widget back its theme
         guiutils.maybe_delete_item(self._theme)
+
+
+def install_caret_follower(widgets: Sequence[str | int],
+                           kind: MarkKind = MarkKind.FRAME,
+                           thickness: int = 2) -> gui_animation.Animation:
+    """Mark whichever of `widgets` currently holds the *caret*. One call per app.
+
+    The sibling of `install_focus_follower`, and the difference is the whole reason both exist. ImGui
+    hands nav focus to the first navigable item of a window by itself, so a text field reports *focused*
+    from the first frame with nobody having gone near it — a mark following focus would be lit at startup,
+    saying the keyboard is somewhere it is not. *Active* is the state that means the field owns the caret:
+    False when merely auto-focused and after Escape, True from entering the field until leaving it.
+
+    So: **focus follower for a combo or a listing, caret follower for anything with a text cursor.** Both
+    say "the keyboard is here"; only the second is asking a question DPG's focus cannot answer.
+
+    `widgets`: DPG tags or IDs of the fields. Each is both the widget whose activity is tested and the
+               widget that wears the mark — which is why there is no `item_type` here as there is on
+               `Mark`: separating the two would mean testing one widget and marking another, and a
+               caller needing that (the file dialog, whose path field shares a row with two buttons)
+               drives its own `Mark` from its own state rather than following anything.
+
+    Returns the animation driving it, for `gui_animation.animator.cancel` if it should ever stop. The marks
+    it holds are detached when it is cancelled.
+    """
+    marks = [(widget, Mark(widget, kind=kind, thickness=thickness)) for widget in widgets]
+
+    class _CaretFollower(gui_animation.Animation):
+        def __init__(self):
+            # Ambient: it says where the keyboard is, not that anything is happening.
+            super().__init__(ambient=True)
+
+        def render_frame(self, t: int) -> sym:
+            for widget, mark in marks:
+                with guiutils.nonexistent_ok():
+                    mark.lit = dpg.is_item_active(widget)
+            return gui_animation.action_continue
+
+        def finish(self) -> None:
+            for _widget_, mark in marks:
+                mark.detach()
+
+    return gui_animation.animator.add(_CaretFollower())
 
 
 def install_focus_follower(widgets: Sequence[str | int],
