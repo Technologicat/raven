@@ -234,12 +234,18 @@ class SubtreeGapRef(Ref):
 
     `node_id`: The sibling it hangs under.
     `child_count`: How many children that sibling has.
+    `hidden_node_ids`: Every node behind it, at any depth — what it is the representative *of*. The other
+                       two gap kinds have carried this from the start; this one did not, for no reason
+                       that survives, and the walk that fills it was already being made twice over for
+                       the caption.
     """
 
-    def __init__(self, name: str, node_id: str, child_count: int):
+    def __init__(self, name: str, node_id: str, child_count: int,
+                 hidden_node_ids: Tuple[str, ...] = ()):
         super().__init__(name)
         self.node_id = node_id
         self.child_count = child_count
+        self.hidden_node_ids = hidden_node_ids
 
 
 class RootGapRef(Ref):
@@ -656,17 +662,20 @@ class _Extra:
             the gap box standing in for what is not drawn below `owner`.
     `owner`: The node it hangs from, which is also where its edge starts.
     `node_id`: The message, for a child. Unused for a gap.
+    `hidden`: Every node the gap stands for, at any depth. Unused for a child.
     `depth_range`: `(shortest, longest)` levels the gap stands for. Unused for a child.
     `row` / `band_row`: Exactly one is set — the level it goes on, or the level whose band took it.
     """
 
     def __init__(self, kind: str, owner: str, x: float,
-                 node_id: Optional[str] = None, depth_range: Tuple[int, int] = (0, 0),
+                 node_id: Optional[str] = None, hidden: Tuple[str, ...] = (),
+                 depth_range: Tuple[int, int] = (0, 0),
                  row: Optional[int] = None, band_row: Optional[int] = None):
         self.kind = kind
         self.owner = owner
         self.x = x
         self.node_id = node_id
+        self.hidden = hidden
         self.depth_range = depth_range
         self.row = row
         self.band_row = band_row
@@ -885,8 +894,9 @@ def _extra_subtree(datastore: chattree.Forest, owner: str, x: float, owner_row: 
     """Return the gap box standing in for what is not drawn below `owner`, placed as deep as it fits."""
     at_depth = owner_row + 1
     fits = _row_has_room(at_depth, x, config.gap_node_w, rows, row_x, widths, config)
+    hidden, depth_range = _subtree_below(datastore, owner)
     return _Extra("subtree", owner=owner, x=x,
-                  depth_range=_depth_range_below(datastore, owner),
+                  hidden=hidden, depth_range=depth_range,
                   row=at_depth if fits else None,
                   band_row=None if fits else owner_row)
 
@@ -909,34 +919,32 @@ def _depth_label(depth_range: Tuple[int, int]) -> str:
     return f"{shortest}–{longest} levels"
 
 
-def _count_below(datastore: chattree.Forest, node_id: str) -> int:
-    """Return how many messages hang below `node_id`, at any depth."""
-    total = -1  # `node_id` itself is not below itself
-    frontier = [node_id]
-    while frontier:
-        total += 1
-        frontier.extend(datastore.get_children(frontier.pop()))
-    return total
+def _subtree_below(datastore: chattree.Forest, node_id: str) -> Tuple[Tuple[str, ...], Tuple[int, int]]:
+    """Return `(every node under `node_id`, (shortest, longest) levels down to a leaf)`.
 
+    One traversal for all three of the things a subtree gap has to say — how many messages it stands for,
+    how far they reach, and *which* they are. The first two are its caption. The third is what lets
+    something outside this module ask where a node that is not drawn would have been: a gap is the
+    representative of everything behind it, and the animation between two layouts is built on being able
+    to look that up.
 
-def _depth_range_below(datastore: chattree.Forest, node_id: str) -> Tuple[int, int]:
-    """Return `(shortest, longest)` number of levels from `node_id` down to a leaf under it.
-
-    Levels rather than nodes, because a stub is a piece of the spine and a spine measures depth: what it
-    is saying is "this many more messages down this way", and a wide shallow fan should not inflate that
-    into a large number. `(0, 0)` for a leaf, which no caller draws.
+    Levels rather than nodes for the depth, because a wide shallow fan should not read as a long
+    conversation. `((), (0, 0))` for a leaf, which no caller draws a gap for.
     """
+    hidden = []
     shortest = longest = 0
     frontier = [(node_id, 0)]
     while frontier:
         current, depth = frontier.pop()
+        if depth:  # `node_id` is not below itself
+            hidden.append(current)
         children = datastore.get_children(current)
         if not children:
             longest = max(longest, depth)
             shortest = depth if shortest == 0 else min(shortest, depth)
             continue
         frontier.extend((child, depth + 1) for child in children)
-    return shortest, longest
+    return tuple(hidden), (shortest, longest)
 
 
 def _edge_between(src: xdotgraph.Node, dst: xdotgraph.Node, config: LayoutConfig) -> xdotgraph.Edge:
@@ -1148,7 +1156,6 @@ def build(datastore: chattree.Forest,
                                  previewed=(node_id == state.previewed_node_id))
             return ref, shapes
 
-        gap_serial = 0
         for row_index, row in enumerate(rows):
             y = row_y[row_index]
             drawn_row: List[Tuple[_Slot, xdotgraph.Node]] = []
@@ -1156,13 +1163,17 @@ def build(datastore: chattree.Forest,
                 x = row_x[row_index][slot_index]
                 width = row_w[row_index][slot_index]
                 if slot.is_gap:
-                    gap_serial += 1
                     if row_index == 0:
                         name = "gap:roots"
                         ref: Ref = RootGapRef(name, hidden_node_ids=slot.hidden)
                         label = _more_label(len(slot.hidden)) + " cards"
                     else:
-                        name = f"gap:siblings:{gap_serial}"
+                        # Named for the first node it hides, as the depth gap is, so the name says the
+                        # same thing in two builds. A serial would not: it counts the gaps emitted before
+                        # this one, so the very act of moving a window -- which is what changes the runs
+                        # -- can renumber a gap that hides exactly what it hid before. Anything matching
+                        # one build against another by name would then pair the wrong boxes.
+                        name = f"gap:siblings:{slot.hidden[0]}"
                         ref = SiblingGapRef(name, parent_node_id=row.parent_node_id,
                                             hidden_node_ids=slot.hidden,
                                             recenter_on=slot.hidden[len(slot.hidden) // 2])
@@ -1249,9 +1260,10 @@ def build(datastore: chattree.Forest,
                 name = f"gap:subtree:{extra.owner}"
                 node = add_box(name,
                                SubtreeGapRef(name, node_id=extra.owner,
-                                             child_count=len(datastore.get_children(extra.owner))),
+                                             child_count=len(datastore.get_children(extra.owner)),
+                                             hidden_node_ids=extra.hidden),
                                x=extra.x, y=y_of,
-                               label=_more_label(_count_below(datastore, extra.owner)),
+                               label=_more_label(len(extra.hidden)),
                                sub_label=_depth_label(extra.depth_range),
                                hides_head=(extra.owner in current_branch
                                            and extra.owner != state.head_node_id))

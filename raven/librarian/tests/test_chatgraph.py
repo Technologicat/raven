@@ -1334,6 +1334,84 @@ class TestBranchExtent:
                 "a gap hiding nothing of HEAD's still claims to point at it"
 
 
+class TestGapIdentity:
+    """Every gap is named for what it hides, so two builds can be matched against each other.
+
+    Which is what an animated transition between layouts needs: pair the boxes by name, tween the ones in
+    both, and look up where a node that is not drawn would have been. A name that encodes *where the box
+    was in the build order* instead pairs the wrong boxes precisely when something moved.
+    """
+
+    def test_a_sibling_gap_keeps_its_name_when_another_level_gains_one(self):
+        # The case a serial gets wrong, and it needs a fixture that isolates it: a run that is hidden
+        # *identically* in both builds, with a new gap appearing at a level emitted before it. A counter
+        # counts the gaps ahead of this one, so the untouched run is renumbered by something that happened
+        # somewhere else — and anything matching two builds by name then pairs the wrong boxes.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        opening = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=opening) for k in range(30)]
+
+        def gaps_by_hidden():
+            built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=chats[0]))
+            return {ref.hidden_node_ids: ref.name
+                    for ref in refs_of_type(built, chatgraph.SiblingGapRef)}
+
+        before = gaps_by_hidden()
+        assert before, "no sibling gap in the first picture, so there is nothing to rename"
+
+        # A fan at the level *above*, which gaps too and is emitted first. The chats' own window is
+        # untouched: they are `opening`'s children, and this adds `opening`'s siblings.
+        for k in range(30):
+            forest.create_node(payload("assistant", f"another opening {k}"), parent_id=root)
+        after = gaps_by_hidden()
+        assert len(after) > len(before), "no gap was added ahead of it, so nothing would renumber"
+
+        shared = set(before) & set(after)
+        assert shared, "the run this is about is not hidden in both pictures"
+        for hidden in shared:
+            assert before[hidden] == after[hidden], \
+                "the same hidden run got two different names, so the two builds cannot be matched"
+
+    def test_every_gap_says_what_it_stands_for(self):
+        # Uniform across the kinds, because whatever looks a node up has to do it the same way for all of
+        # them. `SubtreeGapRef` was the odd one out.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
+        head = chain(forest, length=15, parent_id=chats[3])[-1]
+        for k in range(2):
+            forest.create_node(payload("assistant", f"reroll {k}"), parent_id=chats[7])
+        config = chatgraph.LayoutConfig(max_visible_depth=8)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head,
+                                                            new_chat_node_id=greeting), config)
+
+        kinds = (chatgraph.SiblingGapRef, chatgraph.DepthGapRef, chatgraph.SubtreeGapRef)
+        for kind in kinds:
+            found = refs_of_type(built, kind)
+            assert found, f"no {kind.__name__} here, so it is not being checked"
+            for ref in found:
+                assert ref.hidden_node_ids, f"{kind.__name__} says nothing about what it stands for"
+
+    def test_a_subtree_gap_names_its_whole_subtree_not_just_its_children(self):
+        # The lookup has to answer for a node at any depth behind the gap, not only the level below it.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        taken = forest.create_node(payload("user", "the branch we are on"), parent_id=root)
+        not_taken = forest.create_node(payload("user", "the one we are not"), parent_id=root)
+        buried = chain(forest, length=4, parent_id=not_taken)
+        for k in range(2):  # two children, so this stays a gap rather than being inlined
+            forest.create_node(payload("assistant", f"reroll {k}"), parent_id=not_taken)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
+        gap = next(r for r in refs_of_type(built, chatgraph.SubtreeGapRef) if r.node_id == not_taken)
+        assert gap.child_count == 3, "the fixture changed shape; the counts below assume three children"
+        assert buried[-1] in gap.hidden_node_ids, \
+            "a node four levels down is behind this gap and the gap does not know it"
+        assert not_taken not in gap.hidden_node_ids, "the owner is drawn; it is not behind its own gap"
+
+
 class TestTolerance:
     def test_a_node_with_no_payload_still_gets_a_box(self):
         # The builder runs against a live forest, so a node can lose its payload between the lineage walk
