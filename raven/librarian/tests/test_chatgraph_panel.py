@@ -24,9 +24,20 @@ from raven.librarian.chattree import Forest  # noqa: E402 -- after importorskip 
 
 
 def payload(role: str, text: str) -> dict:
-    """A chat node payload of the shape `chatutil` writes."""
+    """A chat node payload of the shape `chatutil` writes.
+
+    The timestamp is not filler. `chatutil.descend_to_latest` orders siblings by it, and `chatgraph.build`
+    uses that to run the drawn branch to its tip; without one it cannot say which child is latest, logs a
+    warning, and draws the branch only as far as the focus. A fixture missing it therefore exercises a
+    degraded builder while looking like it exercises the real one.
+    """
+    global _payload_serial
+    _payload_serial += 1
     return {"message": {"role": role, "content": [{"type": "text", "text": text}]},
-            "general_metadata": {"persona": None}}
+            "general_metadata": {"persona": None, "timestamp": _payload_serial}}
+
+
+_payload_serial = 0
 
 
 @pytest.fixture(scope="module")
@@ -45,10 +56,23 @@ def dpg_context():
 
 
 class Calls:
-    """Records what the panel asked its caller to do."""
-    def __init__(self):
+    """Records what the panel asked its caller to do, and does the app's half of it.
+
+    Recording alone is not enough for the commit. The panel does not move HEAD itself — it asks, and the
+    app moves it — so a callback that only appends leaves HEAD where it was and the panel goes on drawing
+    the branch it was already on. Every test of what happens *after* a commit would then be testing a
+    commit that did not happen.
+    """
+    def __init__(self, app_state=None):
         self.previewed = []
         self.committed = []
+        self._app_state = app_state
+
+    def commit(self, node_id):
+        """Record a commit, and move HEAD as `app.switch_to_chat_node` does."""
+        self.committed.append(node_id)
+        if self._app_state is not None:
+            self._app_state["HEAD"] = node_id
 
 
 @pytest.fixture
@@ -69,7 +93,7 @@ def panel(dpg_context):
     ids["not_taken_tip"] = forest.create_node(payload("user", "elsewhere"), parent_id=ids["not_taken"])
 
     app_state = {"HEAD": ids["taken_tip"], "new_chat_HEAD": ids["user"]}
-    calls = Calls()
+    calls = Calls(app_state)
 
     with dpg.window() as holder:
         built = chatgraph_panel.DPGChatGraphPanel(
@@ -79,7 +103,7 @@ def panel(dpg_context):
             themes_and_fonts=themes_and_fonts,
             width=400, height=300,
             on_preview=calls.previewed.append,
-            on_commit=calls.committed.append,
+            on_commit=calls.commit,
             show=True)
     built.refresh()
 
@@ -118,7 +142,10 @@ class TestPreview:
         click(built, ids["not_taken"])
         assert calls.previewed == [], "a node off the branch has no message in the log to scroll to"
         assert calls.committed == []
-        assert built._chat_graph.spine == tuple(forest.linearize_up(ids["not_taken"]))
+        # To the *tip* of that branch, not to the node clicked: the focus picks a branch and the branch is
+        # drawn whole. Stopping at the click would make everything below it a gap hanging off the box just
+        # pressed.
+        assert built._chat_graph.spine == tuple(forest.linearize_up(ids["not_taken_tip"]))
 
     def test_no_preview_moves_head(self, panel):
         # The property a visitor depends on, stated once for every kind of box there is: browsing leaves
@@ -358,6 +385,146 @@ class TestGaps:
             after = sum(1 for ref in built._chat_graph.refs.values()
                         if isinstance(ref, chatgraph.ChatNodeRef))
             assert after > before, f"clicking the depth gap showed no more of the branch ({before} -> {after})"
+        finally:
+            built.destroy()
+            dpg.delete_item(holder)
+
+
+# ---------------------------------------------------------------------------
+# Where the reader has been
+# ---------------------------------------------------------------------------
+
+class TestHistory:
+    """Going back to where you were looking, which is not the same as undoing where you are."""
+
+    def test_the_view_opens_with_nowhere_to_go(self, panel):
+        built, forest, app_state, ids, calls = panel
+        assert not built._history.can_go_back and not built._history.can_go_forward
+
+    def test_a_branch_switch_leaves_a_way_back(self, panel):
+        # The reported case: switch to another branch, and the position you were reading from is gone
+        # with no convenient way back. Panning to it across a wide level is a search, not a way back.
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["not_taken"])
+        assert built._history.can_go_back
+        built.go_back()
+        assert built._chat_graph.spine[-1] == ids["taken_tip"], \
+            "back did not restore the branch we came from"
+
+    def test_previewing_then_committing_is_one_step_back(self, panel):
+        # Found by driving, 2026-09-02: it took three presses of Back to leave a branch switched to with
+        # two clicks, and the first two appeared to do nothing.
+        #
+        # Two faults, one fix. The second click moves HEAD but draws the same branch, so it is not
+        # somewhere the reader went — and the entries were identified by the *focus*, where `None` means
+        # "follow HEAD" and therefore resolved to the new branch once HEAD had moved. Naming the branch
+        # that was drawn fixes both: the commit dedupes, and what is remembered stays put.
+        built, forest, app_state, ids, calls = panel
+        started_on = built._chat_graph.spine[-1]
+
+        click(built, ids["not_taken"])   # preview: the picture moves
+        click(built, ids["not_taken"])   # commit: HEAD moves, the picture does not
+        assert calls.committed, "the second click did not commit, so this is not the sequence reported"
+
+        assert built.go_back() is None and built._chat_graph.spine[-1] == started_on, \
+            "one Back should be enough to leave a branch that was entered with two clicks"
+
+    def test_committing_alone_records_nothing(self, panel):
+        # The control for the above, and the narrower claim: a commit moves HEAD and the picture stays,
+        # so there is no new place to remember. Without this, a history that simply never grew would
+        # satisfy the test above.
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["not_taken"])
+        depth = len(built._history)
+        click(built, ids["not_taken"])
+        assert calls.committed
+        assert len(built._history) == depth, "committing a branch switch filled the history"
+
+    def test_going_back_does_not_move_head(self, panel):
+        # The mistake this design exists to avoid. Moving HEAD is a deliberate act and stays reversible by
+        # navigating; an undo that silently put it back would break the one promise the view makes.
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["not_taken"])
+        click(built, ids["not_taken"])   # the second click commits the branch switch
+        assert calls.committed, "nothing was committed, so this fixture cannot check that back leaves it"
+        head_after_commit = built._view_state.head_node_id
+        built.go_back()
+        assert built._view_state.head_node_id == head_after_commit, "back un-committed a branch switch"
+
+    def test_forward_returns_to_where_back_was_pressed(self, panel):
+        # Compared by the branch drawn rather than by the focus: a restored view names its branch by the
+        # tip, so the focus that arrives is not the node that was clicked to get there — and the picture,
+        # which is what "where I was" means, is the same either way.
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["not_taken"])
+        was_showing = built._chat_graph.spine
+        built.go_back()
+        assert built._chat_graph.spine != was_showing, \
+            "back did not move the picture, so forward has nothing to undo"
+        built.go_forward()
+        assert built._chat_graph.spine == was_showing
+
+    def test_a_click_that_moves_nothing_leaves_no_step(self, panel):
+        # A first click on a node already on the drawn branch scrolls the chat log and previews it; the
+        # picture does not move. That is not a place the reader went, and Back should not have to walk
+        # through it. (A *second* click on the same box commits a branch switch, which is a move.)
+        built, forest, app_state, ids, calls = panel
+        depth = len(built._history)
+        click(built, ids["taken"])
+        assert built._previewed_node_id == ids["taken"], \
+            "the click did nothing at all, so this fixture cannot tell a no-op commit from a no-op click"
+        assert built._view_state.focus_node_id is None, "the view moved, so there is a step to record"
+        assert len(built._history) == depth, "a click that moved no view filled the history"
+
+    def _three_branches(self, dpg_context):
+        """A card, a greeting, and three chats under it — three views a click apart."""
+        themes_and_fonts = dpg_context
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(3)]
+        app_state = {"HEAD": chats[0], "new_chat_HEAD": greeting}
+        with dpg.window() as holder:
+            built = chatgraph_panel.DPGChatGraphPanel(
+                gui_parent=holder, datastore=forest, app_state=app_state,
+                themes_and_fonts=themes_and_fonts, width=400, height=300, show=True)
+        built.refresh()
+        return built, forest, chats, holder
+
+    def test_back_steps_over_a_view_whose_focus_was_deleted(self, dpg_context):
+        # The forest is written by others: a cleanup pass removes nodes. A remembered view that named one
+        # cannot be returned to, and stopping there would make Back appear to do nothing.
+        built, forest, chats, holder = self._three_branches(dpg_context)
+        try:
+            click(built, chats[1])
+            click(built, chats[2])
+            assert built._history.states[-2][0] == chats[1], \
+                "chat 1 is not the step behind, so deleting it does not test the skip"
+
+            forest.delete_subtree(chats[1])
+
+            assert built._history.can_go_back, "nothing to go back to, so the walk below checks nothing"
+            built.go_back()
+            # Asserted on the cursor rather than on the picture, because the picture cannot tell the two
+            # apart: `refresh` falls back to HEAD when it cannot draw around a focus, so a Back that
+            # walked *into* the dead entry produces the same view as one that stepped over it. What
+            # differs is where the history now thinks the reader is — and a cursor resting on a phantom
+            # makes the next Back, and every Forward, wrong.
+            assert built._history.current[0] != chats[1], \
+                "the history came to rest on a view whose branch no longer exists"
+        finally:
+            built.destroy()
+            dpg.delete_item(holder)
+
+    def test_back_lands_on_the_deleted_view_s_neighbour_when_it_is_alive(self, dpg_context):
+        # The control: a back that always skipped, or that always refused, would satisfy the test above.
+        built, forest, chats, holder = self._three_branches(dpg_context)
+        try:
+            click(built, chats[1])
+            click(built, chats[2])
+            built.go_back()
+            assert built._view_state.focus_node_id == chats[1], \
+                "chat 1 is alive and one step behind; back should land exactly there"
         finally:
             built.destroy()
             dpg.delete_item(holder)

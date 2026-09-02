@@ -23,6 +23,7 @@ import dearpygui.dearpygui as dpg
 
 from unpythonic import box, unbox
 
+from ..common import navhistory
 from ..common import utils as common_utils
 
 from .app_state import app_state
@@ -31,8 +32,12 @@ from . import word_cloud
 # --------------------------------------------------------------------------------
 # Module-local state
 
-_undo_stack = []  # list of `np.array`; populated by `reset_undo_history`
-_undo_pos = 0  # current cursor into `_undo_stack`
+# The states are `np.array`s of data indices, compared as *sets*: the same items in another order are the
+# same selection, and committing one should not record a move nobody made.
+#
+# No validity predicate. `reset_undo_history` fires on dataset load, so the stack never outlives the
+# dataset its indices point into, and there is no way for an entry to go stale while it sits here.
+_history = navhistory.NavigationHistory(same=lambda a, b: set(a) == set(b))
 
 
 # --------------------------------------------------------------------------------
@@ -44,16 +49,18 @@ def reset_undo_history(_update_gui=True):
     `_update_gui`: internal, used during app initialization.
                    Everywhere else, should be the default `True`.
     """
-    global _undo_stack
-    global _undo_pos
     app_state.selection_data_idxs_box = box(common_utils.make_blank_index_array())
-    _undo_stack = [unbox(app_state.selection_data_idxs_box)]
-    _undo_pos = 0
+    _history.reset(unbox(app_state.selection_data_idxs_box))
     app_state.selection_changed = False  # ...after last completed info panel update (that was finalized); used for scroll anchoring
     app_state.selection_anchor_data_idxs_set = set()  # items common across previous and current selection; used for scroll anchoring  # indices to `sorted_xxx`
     if _update_gui:
-        dpg.disable_item("selection_undo_button")  # tag
-        dpg.disable_item("selection_redo_button")  # tag
+        _update_undo_buttons()
+
+
+def _update_undo_buttons():
+    """Enable each of the undo/redo buttons exactly when there is somewhere to go in that direction."""
+    (dpg.enable_item if _history.can_go_back else dpg.disable_item)("selection_undo_button")  # tag
+    (dpg.enable_item if _history.can_go_forward else dpg.disable_item)("selection_redo_button")  # tag
 
 
 def commit_change_to_undo_history():
@@ -64,24 +71,35 @@ def commit_change_to_undo_history():
 
     Return whether a commit was actually needed.
     """
-    global _undo_stack
-    global _undo_pos
-
-    # Only proceed with the commit if the selection is actually different from what we have at the current undo position.
-    old_selection_data_idxs = _undo_stack[_undo_pos]
-    new_selection_data_idxs = unbox(app_state.selection_data_idxs_box)
-    old_selection_data_idxs_set = set(old_selection_data_idxs)
-    new_selection_data_idxs_set = set(new_selection_data_idxs)
-    if new_selection_data_idxs_set == old_selection_data_idxs_set:
+    if not _history.commit(unbox(app_state.selection_data_idxs_box)):
         return False
+    _update_undo_buttons()
+    return True
 
-    _undo_stack = _undo_stack[:_undo_pos + 1]
-    _undo_stack.append(new_selection_data_idxs)
-    _undo_pos = len(_undo_stack) - 1
 
-    dpg.enable_item("selection_undo_button")  # tag
-    dpg.disable_item("selection_redo_button")  # tag
+def _go(step):
+    """Walk one step through the undo history and bring the selection with it. Returns whether it moved.
 
+    The two directions differ only in which way they step, so they share this: the arrival is the same
+    work either way, and it is the half that has to agree between them.
+    """
+    if not step():
+        return False
+    _update_undo_buttons()
+
+    old_selection_data_idxs = unbox(app_state.selection_data_idxs_box)
+    new_selection_data_idxs = _history.current
+
+    app_state.selection_data_idxs_box << new_selection_data_idxs
+
+    app_state.selection_anchor_data_idxs_set = set(new_selection_data_idxs).intersection(set(old_selection_data_idxs))
+    app_state.selection_changed = True
+
+    update_highlight()
+    # Wait, because undo/redo may be clicked or hotkeyed several times in quick succession.
+    app_state.update_info_panel(wait=True)
+    app_state.update_mouse_hover(force=True, wait=True)
+    word_cloud.update(new_selection_data_idxs, only_if_visible=True, wait=True)
     return True
 
 
@@ -92,27 +110,7 @@ def undo():
 
     No return value.
     """
-    global _undo_pos
-    if _undo_pos == 0:
-        return
-    _undo_pos -= 1
-    if _undo_pos == 0:
-        dpg.disable_item("selection_undo_button")  # tag
-    dpg.enable_item("selection_redo_button")  # tag
-
-    # See also `commit_change_to_undo_history` and `update`; we must do some of the same things here.
-    old_selection_data_idxs = unbox(app_state.selection_data_idxs_box)
-    new_selection_data_idxs = _undo_stack[_undo_pos]
-
-    app_state.selection_data_idxs_box << new_selection_data_idxs
-
-    app_state.selection_anchor_data_idxs_set = set(new_selection_data_idxs).intersection(set(old_selection_data_idxs))
-    app_state.selection_changed = True
-
-    update_highlight()
-    app_state.update_info_panel(wait=True)  # wait, because undo may be clicked/hotkeyed several times quickly in succession
-    app_state.update_mouse_hover(force=True, wait=True)
-    word_cloud.update(new_selection_data_idxs, only_if_visible=True, wait=True)
+    _go(_history.back)
 
 
 def redo():
@@ -122,27 +120,7 @@ def redo():
 
     No return value.
     """
-    global _undo_pos
-    if _undo_pos == len(_undo_stack) - 1:
-        return
-    _undo_pos += 1
-    if _undo_pos == len(_undo_stack) - 1:
-        dpg.disable_item("selection_redo_button")  # tag
-    dpg.enable_item("selection_undo_button")  # tag
-
-    # See also `commit_change_to_undo_history` and `update`; we must do some of the same things here.
-    old_selection_data_idxs = unbox(app_state.selection_data_idxs_box)
-    new_selection_data_idxs = _undo_stack[_undo_pos]
-
-    app_state.selection_data_idxs_box << new_selection_data_idxs
-
-    app_state.selection_anchor_data_idxs_set = set(new_selection_data_idxs).intersection(set(old_selection_data_idxs))
-    app_state.selection_changed = True
-
-    update_highlight()
-    app_state.update_info_panel(wait=True)  # wait, because redo may be clicked/hotkeyed several times quickly in succession
-    app_state.update_mouse_hover(force=True, wait=True)
-    word_cloud.update(new_selection_data_idxs, only_if_visible=True, wait=True)
+    _go(_history.forward)
 
 
 # --------------------------------------------------------------------------------

@@ -17,7 +17,7 @@ config.py         (~440)  — Configuration-as-code (import settings, models, st
                             constellation, since these stages are `mayberemote` services
 plotter.py        (~420)  — the scatter plot: dataset loading, plotter-space queries, the select brush
 importer_gui.py   (~430)  — the importer's window, its two file dialogs, and its start/stop lifecycle
-selection.py      (~270)  — selection state and the lasso/wand tools
+selection.py      (~250)  — selection state and the lasso/wand tools
 word_cloud.py     (~250)  — word cloud rendering
 entry_renderer.py (~190)  — per-entry rendering shared by panel and tooltip
 search.py         (~150)  — the title scan, and the three GUI elements reporting its result

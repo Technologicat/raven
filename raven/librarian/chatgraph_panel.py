@@ -30,6 +30,7 @@ import dearpygui.dearpygui as dpg
 
 from unpythonic import env, sym
 
+from ..common import navhistory
 from ..common.gui import animation as gui_animation
 from ..common.gui import utils as guiutils
 from ..common.gui.xdotwidget import graph as xdotgraph
@@ -133,6 +134,12 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
         self._commit_button_tag = f"chat_graph_commit_button_{self.gui_uuid}"  # tag
         self._dark_mode_button_tag = f"chat_graph_dark_mode_button_{self.gui_uuid}"  # tag
+        self._back_button_tag = f"chat_graph_back_button_{self.gui_uuid}"  # tag
+        self._forward_button_tag = f"chat_graph_forward_button_{self.gui_uuid}"  # tag
+
+        # Where the reader has been. Panel-local: two panels would be two readers, and a shared history
+        # would hand each of them the other's places.
+        self._history = navhistory.NavigationHistory(is_valid=self._snapshot_is_reachable)
         self._container = dpg.add_child_window(parent=gui_parent,
                                                width=width, height=height,
                                                no_scrollbar=True, no_scroll_with_mouse=True,
@@ -214,6 +221,14 @@ class DPGChatGraphPanel(gui_animation.Animation):
             guiutils.add_toolbar_separator(horizontal=True, toolbar_extent=_TOOLBAR_H,
                                            size=gui_config.toolbar_separator_w, line=False)
 
+            # Back and forward through the views this panel has shown. Disabled until there is somewhere
+            # to go, which is the convention Visualizer set: a button is enabled exactly when pressing it
+            # would do something.
+            add_button(fa.ICON_ARROW_LEFT, self.go_back,
+                       "Back to the previous view", self._back_button_tag, enabled=False)
+            add_button(fa.ICON_ARROW_RIGHT, self.go_forward,
+                       "Forward again", self._forward_button_tag, enabled=False)
+
             # After the separator because a *branch* is a chat idea, where the plain fit beside the zoom
             # controls is the widget's own. The two answer different questions: fitting the picture shows
             # how wide the tree is, and fitting the branch shows the conversation.
@@ -226,6 +241,99 @@ class DPGChatGraphPanel(gui_animation.Animation):
             add_button(fa.ICON_CODE_BRANCH, self._commit_previewed,
                        "Switch to the previewed branch\n(or click its box a second time)",
                        self._commit_button_tag, enabled=False)
+
+    # ------------------------------------------------------------------
+    # Where the reader has been
+
+    def _view_snapshot(self) -> Optional[Tuple]:
+        """Return what the view is showing now, as something the history can hold and compare.
+
+        **Identified by the picture, not by the state that produced it.** The branch is named by the tip
+        it was drawn to, because that is what a reader means by "where I was looking" — and because the
+        obvious alternative, the focus, does not survive being remembered. A focus of `None` means *follow
+        HEAD*, so a snapshot holding one resolves to wherever HEAD is when it is restored rather than
+        where it was when it was taken. Commit a branch switch and every such entry silently becomes the
+        branch you just moved to, so Back walks through views that are all the same one.
+
+        Naming the branch is also what makes the granularity right. Previewing a node moves the picture
+        and is a step; clicking the same box again commits the switch, which moves HEAD and draws the very
+        same branch — no step, because the reader did not go anywhere.
+
+        A tuple rather than the `ViewState`: immutable, so a later edit cannot reach back and change what
+        was remembered, and comparable by value, which is what a commit needs.
+
+        The preview ring is deliberately left out. It is a question waiting for a second click, and
+        arriving somewhere with someone else's question already posed is not what Back means.
+
+        Returns `None` before the first picture exists, there being no view to record yet.
+
+        The caller holds the lock.
+        """
+        if self._chat_graph is None or not self._chat_graph.spine:
+            return None
+        state = self._view_state
+        return (self._chat_graph.spine[-1],
+                tuple(sorted(state.sibling_focus.items())),
+                frozenset(state.expanded_tool_turns))
+
+    def _snapshot_is_reachable(self, snapshot: Tuple) -> bool:
+        """Return whether a remembered view can still be gone back to.
+
+        Only the branch tip is checked. The rest of a snapshot degrades on its own — a sibling window
+        centred on a node that has gone falls back to the branch, which is what it does for a level nobody
+        has touched — where a tip that has gone is the one thing `chatgraph.build` cannot draw around.
+
+        The chat forest is written by others: a reply in progress adds nodes, and the cleanup dialog
+        removes them. So this is asked again on every step rather than once, and a node that is gone is
+        stepped over rather than stopping the walk.
+        """
+        with self.datastore.lock:
+            return snapshot[0] in self.datastore.nodes
+
+    def _restore_snapshot(self, snapshot: Tuple) -> bool:
+        """Put the view back to a remembered snapshot. Returns whether it was applied.
+
+        The tip is handed back as the focus, which draws the branch it was the tip of. HEAD is not
+        touched: this restores what the reader was *looking at*, never where they are.
+        """
+        branch_tip, sibling_focus, expanded = snapshot
+        with self._lock:
+            self._view_state.focus_node_id = branch_tip
+            self._view_state.sibling_focus = dict(sibling_focus)
+            self._view_state.expanded_tool_turns = set(expanded)
+        self._set_preview(None)
+        self.refresh()
+        return True
+
+    def _remember_view(self) -> None:
+        """Record where the view is now, if it has moved. Cheap to call after any gesture.
+
+        A commit that changes nothing is a no-op, so this does not need to know which gestures move the
+        view — which is what keeps the knowledge in one place instead of at each of the four call sites.
+        """
+        with self._lock:
+            snapshot = self._view_snapshot()
+        if snapshot is None:
+            return
+        self._history.commit(snapshot)
+        self._update_history_buttons()
+
+    def _update_history_buttons(self) -> None:
+        """Enable each history button exactly when there is a view to go to in that direction."""
+        for tag, enabled in ((self._back_button_tag, self._history.can_go_back),
+                             (self._forward_button_tag, self._history.can_go_forward)):
+            if dpg.does_item_exist(tag):  # tag
+                (dpg.enable_item if enabled else dpg.disable_item)(tag)  # tag
+
+    def go_back(self) -> None:
+        """Return to the previous view. Does not move HEAD."""
+        self._history.back(apply=self._restore_snapshot)
+        self._update_history_buttons()
+
+    def go_forward(self) -> None:
+        """Undo a `go_back`. Does not move HEAD."""
+        self._history.forward(apply=self._restore_snapshot)
+        self._update_history_buttons()
 
     def zoom_1_to_1(self) -> None:
         """Set the zoom to 1:1, leaving the pan where it is."""
@@ -332,6 +440,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         if not self._framed:
             self._framed = True
             self._frame_on_head(chat_graph, animate=False)
+            self._remember_view()  # the view opened on is the one Back should eventually reach
         elif chat_graph.graph.get_node_by_name(anchor) is not None:
             self._widget.pan_to_node(anchor, animate=True)
         else:
@@ -387,6 +496,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._framed = True  # this is a framing of its own; the refresh below must not override it
         self._set_preview(None)
         self.refresh()
+
+        self._remember_view()  # returning to HEAD is a place too, and one worth being able to leave again
 
         with self._lock:
             chat_graph = self._chat_graph
@@ -462,6 +573,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
             logger.info(f"DPGChatGraphPanel._on_click: {ref.hidden_count} chat(s) under other cards; "
                         "reaching them is not implemented")
 
+        # Once, here, rather than in each of the four branches above. A commit that changes nothing is a
+        # no-op, so the ones that only scrolled the chat log cost nothing and need no special case.
+        self._remember_view()
+
     def _click_chat_node(self, ref: chatgraph.ChatNodeRef) -> None:
         """Preview a chat node — or commit to it, if it was already the previewed one."""
         with self._lock:
@@ -534,7 +649,14 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._on_commit(node_id)
         else:
             logger.warning("DPGChatGraphPanel._commit: no `on_commit` was given; HEAD not moved")
-        # The move arrives through the change poll like any other, so there is nothing to rebuild here.
+
+        # Adopt the move now rather than waiting for the poll to notice it next frame. Waiting draws one
+        # frame of the branch just left -- the focus has been cleared, so the picture falls back to a HEAD
+        # that has not caught up yet -- and, worse, anything reading the view in between sees that stale
+        # branch as though it were where the reader is. The history is the thing that reads it.
+        with self._lock:
+            self._view_state.head_node_id = self.app_state["HEAD"]
+        self.refresh()
 
     def _enable_commit(self, enabled: bool) -> None:
         """Enable or disable the toolbar's commit button."""
