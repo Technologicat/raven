@@ -25,11 +25,41 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `aokk-corpus-scope-classification-brief.md` | An LLM batch pass over the AOKK corpus, flagging records the boolean search pulled in that are not about AI agents in higher education | Filed 2026-08-31. **Next up, and the only near-term item with a date**: needed within two weeks of 2026-09-01, and its two open questions were settled that day, so it starts from a decided spec. The problem is confirmed rather than suspected: `"conversational agent"` caught a child-helpline paper, and `"learning assistant"` matches 40 records across *two senses* — the AI tool, and the STEM term of art for a human undergraduate Learning Assistant. Carries a warning about reusing `agent-batch-classification`'s confidence-based escalation, whose known failure mode applies directly |
 | `14_chat-search-brief.md` | Search within the chat log | v0.2.9. The match unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer implementation rebuilds the whole panel and so does not transfer to an incrementally-built chat log |
 
-## Open, to resolve soon
+## Closed
 
-*Small things that are neither a brief nor archive material. They sit here rather than in
-`TODO_DEFERRED.md` because that file has passed 150 items and anything short goes missing in it — the
-dehydration pass that drains it is itself a post-sprint job.*
+| Brief | What | Landed |
+|---|---|---|
+| `done/15_headless-agent-driver-brief.md` | A scripting surface over the scaffold — `raven.librarian.agent`, plus the backend-status work and the per-variety system prompt storage that came out of it | 2026-08-12, v0.2.9 |
+| `done/filedialog-thumbnails-brief.md` | Image previews in the file dialog, as a toggled grid view | 2026-08-14 |
+| `done/filedialog-keyboard-brief.md` | Operating the file dialog without a pointing device, and saying where the keyboard is | 2026-08-21 |
+| `done/in-progress-reply-as-a-node.md` | Band-2 item 9: the reply is a node in the datastore while it streams, so an interrupted one survives | 2026-08-28 |
+| `done/stt-audio-input-panel.md` | Band-2 item 10: the microphone set up where it will be used — level, automatic stop, peak hold and the device itself, as a panel rather than as config knobs | 2026-08-28. Written and closed the same day. Its closing section is worth reading for the eight faults live testing found that no desk testing would have, and for what it took to make the test stub worth anything |
+| `done/crt-display.md` | Avatar postprocessor: the character drawn by a scanning electron beam | 2026-08-31, in about ninety minutes. Its §7 is the one to read: the brief was right about *what* to build and wrong about four *whys*, including one that shipped as a rendering bug. It also records the half-precision hazard that any filter drawing structure at the pixel pitch will hit |
+| `done/atmospheric-dust.md` | Avatar postprocessor: light-catching motes drifting in the air | 2026-08-31, the same session as `crt`. Its closing section records a brightness formula the brief got wrong — and, more usefully, a test that passed against the very mistake it was written to reject, found by deliberately breaking the source rather than by reading the test |
+
+The keyboard brief's last item became a constellation-wide component — `raven.common.gui.keyboardmark`, the
+blue pulse that says *the keyboard is here* — so its closing section is worth reading outside the file
+dialog's context. It also ends with an unbuilt piece re-homed rather than dropped:
+`briefs/filedialog-navigation-history-brief.md`, unscheduled.
+
+It raised one question it did not settle, and the analysis is worth finding: **the character card carries
+character-independent text** (`setup_interaction_style` — deployment facts, conversational manner, and the
+two backend facts, which are three different things sharing one block). The live queue entry for it is
+`TODO_DEFERRED.md`, "Modernize the Librarian system prompt / character card"; the argument for why the block
+cannot move as a unit is in the closed brief's last section.
+
+## Ordering
+
+**15 is done** (2026-08-12); the amortization argument below is why it went first. After that the ordering is
+not settled, and the two sensible axes disagree — closure rate (smallest first, so briefs shut faster than
+they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
+deadline actually binds; everything else could slip past September without anything breaking.
+
+### Loose ends, filed 2026-09-02 — the chat graph's palette, and a first-press bug
+
+Two loose ends from the chat-graph run, neither of them a brief. They are here rather than in
+`TODO_DEFERRED.md` because that file has passed 150 items and anything short goes missing in it — and
+the dehydration pass that would drain it is itself a post-sprint job.
 
 **The chat graph's palette is unfinished** (2026-09-02). What is settled: hue carries the *role* and
 saturation carries the *branch*, so the branch a reader is on is coloured and everything else greys out;
@@ -60,36 +90,6 @@ key reaches the handler and the handler runs far enough to flash — what fails 
 call only. The shape suggests something built lazily on first use and returned before it is ready; the
 constellation has a standing pattern of deferring first-time GUI work to a frame callback for exactly that
 reason. Not investigated.
-
-## Closed
-
-| Brief | What | Landed |
-|---|---|---|
-| `done/15_headless-agent-driver-brief.md` | A scripting surface over the scaffold — `raven.librarian.agent`, plus the backend-status work and the per-variety system prompt storage that came out of it | 2026-08-12, v0.2.9 |
-| `done/filedialog-thumbnails-brief.md` | Image previews in the file dialog, as a toggled grid view | 2026-08-14 |
-| `done/filedialog-keyboard-brief.md` | Operating the file dialog without a pointing device, and saying where the keyboard is | 2026-08-21 |
-| `done/in-progress-reply-as-a-node.md` | Band-2 item 9: the reply is a node in the datastore while it streams, so an interrupted one survives | 2026-08-28 |
-| `done/stt-audio-input-panel.md` | Band-2 item 10: the microphone set up where it will be used — level, automatic stop, peak hold and the device itself, as a panel rather than as config knobs | 2026-08-28. Written and closed the same day. Its closing section is worth reading for the eight faults live testing found that no desk testing would have, and for what it took to make the test stub worth anything |
-| `done/crt-display.md` | Avatar postprocessor: the character drawn by a scanning electron beam | 2026-08-31, in about ninety minutes. Its §7 is the one to read: the brief was right about *what* to build and wrong about four *whys*, including one that shipped as a rendering bug. It also records the half-precision hazard that any filter drawing structure at the pixel pitch will hit |
-| `done/atmospheric-dust.md` | Avatar postprocessor: light-catching motes drifting in the air | 2026-08-31, the same session as `crt`. Its closing section records a brightness formula the brief got wrong — and, more usefully, a test that passed against the very mistake it was written to reject, found by deliberately breaking the source rather than by reading the test |
-
-The keyboard brief's last item became a constellation-wide component — `raven.common.gui.keyboardmark`, the
-blue pulse that says *the keyboard is here* — so its closing section is worth reading outside the file
-dialog's context. It also ends with an unbuilt piece re-homed rather than dropped:
-`briefs/filedialog-navigation-history-brief.md`, unscheduled.
-
-It raised one question it did not settle, and the analysis is worth finding: **the character card carries
-character-independent text** (`setup_interaction_style` — deployment facts, conversational manner, and the
-two backend facts, which are three different things sharing one block). The live queue entry for it is
-`TODO_DEFERRED.md`, "Modernize the Librarian system prompt / character card"; the argument for why the block
-cannot move as a unit is in the closed brief's last section.
-
-## Ordering
-
-**15 is done** (2026-08-12); the amortization argument below is why it went first. After that the ordering is
-not settled, and the two sensible axes disagree — closure rate (smallest first, so briefs shut faster than
-they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
-deadline actually binds; everything else could slip past September without anything breaking.
 
 ### Starting tomorrow, filed 2026-09-01 — the AOKK judge pass, then two shared-GUI items
 
