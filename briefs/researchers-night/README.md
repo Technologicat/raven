@@ -25,6 +25,42 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `aokk-corpus-scope-classification-brief.md` | An LLM batch pass over the AOKK corpus, flagging records the boolean search pulled in that are not about AI agents in higher education | Filed 2026-08-31. **Next up, and the only near-term item with a date**: needed within two weeks of 2026-09-01, and its two open questions were settled that day, so it starts from a decided spec. The problem is confirmed rather than suspected: `"conversational agent"` caught a child-helpline paper, and `"learning assistant"` matches 40 records across *two senses* — the AI tool, and the STEM term of art for a human undergraduate Learning Assistant. Carries a warning about reusing `agent-batch-classification`'s confidence-based escalation, whose known failure mode applies directly |
 | `14_chat-search-brief.md` | Search within the chat log | v0.2.9. The match unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer implementation rebuilds the whole panel and so does not transfer to an incrementally-built chat log |
 
+## Open, to resolve soon
+
+*Small things that are neither a brief nor archive material. They sit here rather than in
+`TODO_DEFERRED.md` because that file has passed 150 items and anything short goes missing in it — the
+dehydration pass that drains it is itself a post-sprint job.*
+
+**The chat graph's palette is unfinished** (2026-09-02). What is settled: hue carries the *role* and
+saturation carries the *branch*, so the branch a reader is on is coloured and everything else greys out;
+SYSTEM keeps the chat log's green and TOOL its orange; assistant and user are one hue at two lightnesses,
+striping the branch the way ruled paper stripes a page. What is not settled is **which hue the
+conversation itself takes**:
+
+- Green shipped, and reads oddly — though the retrofuturistic green-monitor implication is worth keeping in
+  mind rather than dismissing.
+- Amber was tried the same day and comes out **brown** at the lightness the design needs. A real amber
+  phosphor glows; this sits. It also lands 5° from the TOOL orange, which would make the two roles
+  indistinguishable.
+- Which leaves **blue** for assistant/user, since green and orange are spoken for by the two roles that
+  keep them (Juha). The objection to blue was that the preview ring and the keyboard mark already use it —
+  but those are bright, dotted or pulsating *outlines*, and a dark low-saturation *fill* is a different
+  channel. The rule that no two marks may be mistaken for one another survives as long as the ring stays
+  clearly the brighter thing.
+- **Constraint on all of them: the fills stay dark.** The chat graph draws light text, and that is not up
+  for renegotiation to win a colour.
+
+The knob is one constant, `chatgraph._BRANCH_HUE`, so trying a candidate is a word and a restart. Judge it
+on screen; three passes have now shown that reasoning about the authored numbers predicts the result badly,
+because the renderer inverts lightness and the two ends look nothing alike.
+
+**The first Ctrl+Shift+O opens nothing** (2026-09-02, Juha). In `raven-librarian`: the first press flashes
+the toolbar button as though the hotkey landed, and no dialog appears; every press after that works. So the
+key reaches the handler and the handler runs far enough to flash — what fails is downstream, on the first
+call only. The shape suggests something built lazily on first use and returned before it is ready; the
+constellation has a standing pattern of deferring first-time GUI work to a frame callback for exactly that
+reason. Not investigated.
+
 ## Closed
 
 | Brief | What | Landed |
