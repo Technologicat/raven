@@ -355,9 +355,35 @@ Decided 2026-08-05:
 - **Committing (moving HEAD) is a second, deliberate gesture.** Click again, a button, or something else;
   this wants a decision or a prototype.
 
-The two-tier shape is worth stating as a principle rather than a mechanism, because it is also a demo-safety
-property: **browsing the multiverse is non-destructive, and only a deliberate act changes state.** A visitor
-can explore freely without leaving the session somewhere the next visitor inherits.
+The two-tier shape is worth stating as a principle rather than a mechanism: **browsing the multiverse is
+non-destructive, and only a deliberate act changes state.**
+
+**The demo-safety reading of that was wrong, and was load-bearing until 2026-09-02.** This section used to
+justify the property by a visitor exploring the graph freely and not leaving the session somewhere the
+next visitor inherits. That is not how the evening goes.
+
+**What actually happens at Researchers' Night** (Juha, 2026-09-02), because it changes what this view is
+for and should be read before deciding anything else about it:
+
+- **Visitors interact by asking questions** — possibly by voice, which is this year's new addition. They
+  do not drive the graph.
+- **Juha resets to a new chat between visitors**, so nothing is inherited in the first place.
+- **He pops the graph up to *explain*** — when the conversation turns to the multiversal nature of LLMs,
+  or when he needs to reroll and wants to show what a reroll actually does.
+
+So the graph is an **explanatory instrument shown to an audience over a shoulder**, not a thing anyone
+browses. Three consequences, and the second is the one that reorders the remaining work:
+
+- **It is read at a glance, by people who have never seen it, from further away than a desk.** That is the
+  audience the look pass (item 10) should be sized for.
+- **Its subject at RN is a topology change.** Explaining a reroll means showing the tree *become* forked;
+  a picture that jump-cuts between two layouts is the explanation failing at the exact moment it matters.
+  See the v2 animation item, which this promotes.
+- **The avatar/graph contention is mild at RN**, since the graph is up only while something is being
+  explained.
+
+The non-destructive property is still worth having, for the reason that survives: in daily use, nudging
+HEAD while reading around the tree is a nuisance whoever is at the keyboard.
 
 **Right-click is ruled out** (2026-08-05): `XDotWidget.__init__` already binds `on_open_url` to right-click
 for nodes carrying a URL. Left-click is spent on preview, so the commit gesture is a second left-click on an
@@ -418,8 +444,22 @@ machinery from `gui_animation.Animation`, and it wants:
 - **A decision about what the camera does.** The view also re-frames on a click; a picture that morphs
   while the camera moves is two motions at once, and they can fight.
 
-Worth doing, and worth doing after the view has stopped changing shape — an animation between two layouts
-has to be rewritten every time either layout does.
+Worth doing after the view has stopped changing shape — an animation between two layouts has to be
+rewritten every time either layout does.
+
+**Two things on 2026-09-02 argued it is more than polish, and neither was known when this was filed.**
+
+- **Back and forward make the discontinuity frequent and worse.** A history step lands the reader on a
+  picture they *have* seen, which is precisely when a jump-cut is most confusing: everything is in a
+  different place, and the one cue that would say "this is where you were" — watching it get there — is
+  the thing missing. Juha, having driven it: *"the back/forward navigation can be confusing, as it
+  changes what is visually at the 'same' position in the graph view."*
+- **At Researchers' Night this view's job is to explain a topology change.** The graph is popped up to
+  show what a reroll does; the tree forking *is* the thing being shown. A picture that cuts between
+  before and after fails at the moment it is being used for.
+
+So it is still v2 by cost and still wants a settled layout first, but it is on the path to the demo rather
+than beside it. If the layout is stable a fortnight before RN2026, this is what that fortnight is for.
 
 ## Settled 2026-09-01
 
@@ -873,6 +913,22 @@ Three things came out of it, and only the first is clearly a feature:
      the one promise this view makes — that only a deliberate act changes state.
    - Open: whether pan and zoom go on the stack too. The framing rules would otherwise re-derive a
      position, which is not the same as the one you left.
+   - **Built 2026-09-02, on `raven.common.navhistory`** — see that module and the FileDialog brief, whose
+     open extraction question this answered. Two things about the result are decisions rather than
+     details, and the second is unsettled.
+   - **A view is identified by the branch drawn**, not by the focus that produced it. A focus of `None`
+     means "follow HEAD", so a remembered one resolves to wherever HEAD is at the time it is restored;
+     after a branch switch every earlier entry silently becomes the branch just moved to. Naming the
+     branch also makes the granularity right — previewing moves the picture and is a step, committing
+     moves HEAD and draws the same branch, so it is not.
+   - **Which makes it a history of *branches visited*, not of *nodes visited*** — and that is a different
+     mental model, noticed at once on driving it (Juha, 2026-09-02): *"navigating in the graph along the
+     same branch doesn't create navigation history snapshots."* True, and by construction: clicking a node
+     already on the drawn branch scrolls the chat log and moves no picture. Whether Back should also
+     retrace *reading positions* along one branch is open. Note the two are not the same stack — one is
+     "which branch was I looking at", the other "which message was I reading" — so answering yes means
+     deciding whether they interleave or sit side by side.
+
 2. **A way back to the newest sibling without panning.** Possibly already there and worth *checking before
    building*: the sibling window keeps the first and last as anchors, so at the session level the last
    anchor is the newest chat and clicking it should do it. If that works, what is missing is not the
@@ -959,8 +1015,10 @@ list is a judgement about how the picture reads, and those are decided in front 
 
 ~~1. **The four rules above.**~~ Done 2026-09-02, together with the subtree case they did not name — see
    the section above. `chatgraph.py` grew by about a third; nothing else moved.
-2. **A navigation history**, per the section above — the view keeps none, so a branch switch strands the
-   reader. Cheap, and the precedent is written.
+~~2. **A navigation history.**~~ Done 2026-09-02, on `raven.common.navhistory`, extracted from
+   Visualizer's selection undo and now shared by both — see the section above for what it turned out to
+   be a history *of*, which is not quite what was expected. FileDialog's copy is the third consumer and
+   is now mostly wiring.
 3. **Keyboard access to the graph, which it has none of** (Juha, 2026-09-02). Every other view in Raven is
    drivable from the keyboard and this one is mouse-only, so it is the odd one out rather than a feature
    nobody got to.

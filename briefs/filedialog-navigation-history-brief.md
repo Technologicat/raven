@@ -1,5 +1,21 @@
 # FileDialog: navigation history
 
+> **The stack exists now, and this brief is smaller for it (2026-09-02).** The open design question at the
+> bottom — whether to share it with Visualizer — was answered by a third consumer arriving: Librarian's
+> chat graph wanted the same thing, so `raven.common.navhistory` was written and `selection.py` ported to
+> it. The honest test this brief set (does Visualizer come out *simpler*, or merely different?) came out
+> **simpler**: 79 SLOC to 54, six `global` statements gone, the cursor arithmetic gone, a duplicated
+> function body gone, and the button-enabling edge cases consolidated into one predicate-driven call. Its
+> 39 tests pass unchanged.
+>
+> **What that leaves for this brief.** The four parts it spent most of its words on are built and tested:
+> stepping over states that have gone, symmetric skipping so Back and Forward stay inverse, the arrival
+> veto for a state that passes validation and still cannot be entered (`chdir` failing on permissions is
+> the case that named it), and `can_go_back` / `can_go_forward` computed from the validity predicate
+> rather than from the cursor's position. What remains is the dialog's own half: the two predicates, the
+> keys, `chdir` reporting success, per-instance persistence, and the icon cluster — which is where the
+> real remaining design is.
+
 **Status: designed, not started, unscheduled.** Split out of
 `briefs/researchers-night/done/filedialog-keyboard-brief.md` on 2026-08-21 (Juha) so that brief can close: the
 keyboard work has run a week, every key the design named is built, and this is a *new capability* rather
