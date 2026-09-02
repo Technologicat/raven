@@ -1582,6 +1582,29 @@ with timer() as tim:
                                                        size=gui_config.toolbar_separator_w,
                                                        line=False)
 
+                        # A group of its own, between how the chat log is shown and what the avatar does,
+                        # because it is neither: it governs *which panel* fills the right-hand side. That
+                        # is the same widening a no-avatar mode makes — the panel is what a mode varies,
+                        # and the avatar is one thing that can fill it. Grouped with Speech and Subtitles
+                        # it read as a third avatar control, which is the one thing it is not.
+                        dpg.add_checkbox(label="Chat graph",
+                                         default_value=app_state["chat_graph_shown"],
+                                         callback=toggle_chat_graph, tag="chat_graph_checkbox")  # tag
+                        dpg.add_tooltip("chat_graph_checkbox", tag="chat_graph_tooltip")  # tag
+                        dpg.add_text("Show the chat tree in place of the avatar.\n\n"
+                                     "Every chat ever started is in there, branching. Clicking a message\n"
+                                     "shows it; clicking it again switches the conversation to it, so you\n"
+                                     "can look around without changing anything.\n\n"
+                                     "The avatar's video pauses while it is covered.",
+                                     parent="chat_graph_tooltip")  # tag
+
+                        # No line, matching the toolbar below the chat, which separates its sections by
+                        # spacing alone at every one of its call sites.
+                        guiutils.add_toolbar_separator(horizontal=True,
+                                                       toolbar_extent=gui_config.mode_toggle_row_h,
+                                                       size=gui_config.toolbar_separator_w,
+                                                       line=False)
+
                         dpg.add_checkbox(label="Speech", default_value=app_state["avatar_speech_enabled"], callback=toggle_speech_enabled, tag="speech_enabled_checkbox")
                         dpg.add_tooltip("speech_enabled_checkbox", tag="speech_enabled_tooltip")  # tag
                         dpg.add_text("Have the avatar speak the final response (TTS, text to speech).", parent="speech_enabled_tooltip")  # tag
@@ -1593,20 +1616,6 @@ with timer() as tim:
                         else:
                             subtitle_explanation_str = "Closed-caption (CC) the avatar's speech."
                         dpg.add_text(f"{subtitle_explanation_str}\nUsed when TTS is ON.\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
-
-                        # This group governs the right-hand panel rather than the avatar specifically, which
-                        # is the same widening a no-avatar mode makes: the panel is what a mode varies, and
-                        # the avatar is one thing that can fill it.
-                        dpg.add_checkbox(label="Chat graph",
-                                         default_value=app_state["chat_graph_shown"],
-                                         callback=toggle_chat_graph, tag="chat_graph_checkbox")  # tag
-                        dpg.add_tooltip("chat_graph_checkbox", tag="chat_graph_tooltip")  # tag
-                        dpg.add_text("Show the chat tree in place of the avatar.\n\n"
-                                     "Every chat ever started is in there, branching. Clicking a message\n"
-                                     "shows it; clicking it again switches the conversation to it, so you\n"
-                                     "can look around without changing anything.\n\n"
-                                     "The avatar's video pauses while it is covered.",
-                                     parent="chat_graph_tooltip")  # tag
 
                     # Utility actions — one-shot actions, kept a visually distinct group from the
                     # persistent-state toggles above (their own rows, under a separator). The panel below the
