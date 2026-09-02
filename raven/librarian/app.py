@@ -2172,6 +2172,14 @@ def _cycle_keyboard_home(backwards: bool = False) -> None:
     else:
         current = "log"
 
+    # Which also settles where the keyboard lands when the graph *disappears* while holding it — the
+    # toggle switched off, or, once the avatar hand-off is built, the video coming back. The graph stops
+    # being available, so this falls through to the log, and that is the right place rather than an
+    # accident of the ordering: the log is the neutral home. Nothing there grabs the caret, bare keys
+    # merely scroll, and the message that would be acted on already wears the blue dot. Landing on the
+    # *composer* instead would take the caret because a panel the reader dismissed went away, which is a
+    # side effect nobody asked for.
+
     target = homes[(homes.index(current) + (-1 if backwards else 1)) % len(homes)]
 
     # The composer is left by parking focus on a real widget, which is the only thing that deactivates an

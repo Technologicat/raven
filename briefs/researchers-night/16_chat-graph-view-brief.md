@@ -1019,9 +1019,31 @@ list is a judgement about how the picture reads, and those are decided in front 
    Visualizer's selection undo and now shared by both — see the section above for what it turned out to
    be a history *of*, which is not quite what was expected. FileDialog's copy is the third consumer and
    is now mostly wiring.
-3. **Keyboard access to the graph, which it has none of** (Juha, 2026-09-02). Every other view in Raven is
-   drivable from the keyboard and this one is mouse-only, so it is the odd one out rather than a feature
-   nobody got to.
+3. **Keyboard access to the graph.** *Mostly built 2026-09-02 — what is left is the node cursor.*
+   - **Tab and Shift+Tab cycle three panes at one level**: the composer, the chat log, and the graph while
+     it is on screen. Tab typed nothing into a multiline composer and did nothing anywhere else, so it was
+     free. The current home is *derived* rather than stored — the composer can also be entered by clicking
+     it or with Ctrl+Space, neither of which goes through the cycle — and the only thing stored is the bit
+     DPG cannot answer, whether the graph holds the keys.
+   - **The graph wears the blue** `keyboardmark`, on an inner window holding only the picture. The chat log
+     needs none: bare keys already scroll it, and the message they would act on carries the blue dot.
+   - **When the graph disappears while holding the keyboard** — the toggle switched off, or the avatar
+     coming back once that hand-off exists — **the keyboard falls to the chat log** (Juha, 2026-09-02).
+     The log is the neutral home: nothing there grabs the caret and bare keys merely scroll. Landing on
+     the composer would take the caret because a panel the reader dismissed went away.
+   - **Keys**: `raven-xdot-viewer`'s where they overlap, plus Alt+Left/Right for the history, `B` to fit
+     the branch, `Home` for HEAD, `1` for actual size. Shift+arrows pan.
+   - **Not Enter, and not the bare arrows.** Enter would commit the *previewed* node while no key can move
+     the preview — half a gesture. The bare arrows pan for now and are reserved for the cursor below, so
+     exactly one binding changes meaning when it lands.
+
+   **What remains is the node cursor**, and it is the part that needs deciding in front of the picture:
+   - **What "the keyboard is here" looks like on a box.** Three marks already exist and none may be
+     mistaken for another — hover, HEAD, previewed — so this is a fourth in a vocabulary that has already
+     had one collision. It is also not the row-and-column problem `keyboardmark` and `tablecursor` solve.
+   - **How the arrows move over a windowed level**, where the thing to the left may be a gap rather than a
+     sibling, and where down may be a gap box rather than a message.
+   - Once it exists, Enter commits what the cursor is on, and the bare arrows become its.
    - **Placed here because two later items would otherwise each grow their own half of it.** A history
      wants Back and Forward on keys, and search wants a query field, Enter, and a way to step between
      matches — so the keys arrive three times, in three shapes, unless they arrive once first.
