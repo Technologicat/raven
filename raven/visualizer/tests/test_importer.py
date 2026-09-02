@@ -9,6 +9,7 @@ can be exercised against a `.bib` written into `tmp_path`, with the one remote s
 
 import concurrent.futures
 import itertools
+import logging
 import threading
 
 import pytest
@@ -79,6 +80,58 @@ def test_parse_input_files_reads_both_records(two_record_bib, monkeypatch):
     assert len(entries) == 2
     assert entries[0].title == "A first paper about something"
     assert entries[1].title == "A second paper about something else"
+
+
+MISSING_FIELDS = """
+@article{notitle2023,
+  author = {Gamma, Gemma},
+  year = {2023},
+  abstract = {A record whose database exported everything except the title.}
+}
+
+@article{noauthor2023,
+  year = {2023},
+  title = {A whole proceedings volume, which is not a study},
+  abstract = {The front matter of a conference proceedings.}
+}
+
+@article{nothing2023,
+  author = {Delta, Dee},
+  year = {2023}
+}
+"""
+
+
+@pytest.fixture
+def missing_fields_bib(tmp_path):
+    path = tmp_path / "missing_fields.bib"
+    path.write_text(MISSING_FIELDS, encoding="utf-8")
+    return path
+
+
+def test_a_record_with_no_title_is_imported_under_a_placeholder(missing_fields_bib, monkeypatch, caplog):
+    # A missing title is not a missing record: the abstract is the part a reader forms a view from, and
+    # skipping the entry loses that too. A missing *author* still skips -- that is what a whole
+    # proceedings volume looks like, and it is not a study.
+    monkeypatch.setattr(visualizer_config, "dehyphenate", False)
+    with caplog.at_level(logging.WARNING, logger="raven.visualizer.importer"):
+        entries = parsed_entries(importer._parse_input_files(str(missing_fields_bib)))
+
+    assert len(entries) == 1, ("only the title is excused: the authorless record and the one with "
+                               "nothing to read should both still be skipped")
+    assert entries[0].title == importer.MISSING_TITLE
+    # ...and it kept what made it worth keeping.
+    assert "exported everything except the title" in entries[0].abstract
+
+    # Each skip and each substitution says so. A reader meeting the placeholder later has no way to tell
+    # it from a title someone actually wrote, and a record that never arrived leaves nothing to notice.
+    assert any("no title" in record.message for record in caplog.records)
+    assert any("noauthor2023" in record.message and "no author" in record.message
+               for record in caplog.records)
+    # A record with neither a title nor an abstract has nothing to read, and the placeholder is the same
+    # string for every one of them — importing those would cluster Raven's own boilerplate.
+    assert any("nothing2023" in record.message and "no title and no abstract" in record.message
+               for record in caplog.records)
 
 
 def test_parse_input_files_survives_a_failing_dehyphenator(two_record_bib, monkeypatch, caplog):
@@ -442,6 +495,20 @@ def test_an_entry_without_an_abstract_is_its_bare_title():
     from unpythonic.env import env
     entry = env(title="A title", abstract="", author="Alpha, Anna", year="2024")
     assert importer._format_entry_for_keyword_extraction(entry) == "A title"
+
+
+def test_an_entry_whose_title_is_the_placeholder_is_analyzed_from_its_abstract_alone():
+    # `MISSING_TITLE` is Raven's word, not the record's, and it is the *same* word on every such record —
+    # so letting it reach the embedder or the keyword extractor would gather those records into a cluster
+    # whose members share nothing but a field their database omitted.
+    from unpythonic.env import env
+    entry = env(title=importer.MISSING_TITLE, abstract="An abstract.", author="Alpha, Anna", year="2024")
+    assert importer._format_entry_for_keyword_extraction(entry) == "An abstract."
+
+    # The negative control: an ordinary title in the same position *is* joined on, so this fixture is
+    # showing that the placeholder is treated specially rather than that the abstract wins in general.
+    ordinary = env(title="A title", abstract="An abstract.", author="Alpha, Anna", year="2024")
+    assert importer._format_entry_for_keyword_extraction(ordinary) == "A title.\n\nAn abstract."
 
 
 def test_authors_and_year_are_left_out():

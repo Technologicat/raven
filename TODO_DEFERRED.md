@@ -13,6 +13,31 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Import warnings should be visible in the GUI, and stored in the dataset
+
+*Cluster: importer reporting · Cost: M · Gate: belongs with the import keyword report GUI, designed 2026-09-01 · Filed: 2026-09-02*
+
+The importer reports what it did to the log and nowhere else — records skipped for a missing author,
+records imported under `[Title not specified]`, records the parser refused and the ones `fixbib`'s repair
+recovered. **Most users import through the GUI**, where the log is not in front of them, so a run that
+quietly dropped a tenth of a bibliography looks exactly like one that did not.
+
+Two halves, and the second is what makes the first worth doing:
+
+- **Show them.** The natural home is the import keyword report GUI whose design was sketched on
+  2026-09-01 — same audience, same moment, and a reader looking at "what did this import produce"
+  is the one who wants "what did it decline to produce".
+- **Store them in the dataset file.** A warning that lives only in a running app's window is gone by
+  the time anyone asks. Kept in the `.pickle`, the question "what came out of this dataset, and what
+  never got in" is answerable months later, by someone who did not run the import — which is what a
+  method section needs and what a second machine cannot otherwise reconstruct.
+
+Note the corpus-level version of this question is now `raven-siftbib`'s audit TSV, which accounts for
+records removed *before* import. This is the same accounting one stage later, for records the importer
+itself declined or altered, and the two should read alike.
+
+Raised by Juha (2026-09-02), while reviewing an AOKK record the importer had skipped for having no title.
+
 ## VU meters occasionally blank for a frame or two
 
 *Cluster: DPG drawing · Cost: S · Gate: not reproduced on demand — see the check below, which settles it from a recording · Filed: 2026-08-31*

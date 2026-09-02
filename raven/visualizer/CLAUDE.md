@@ -10,7 +10,7 @@ checks this table against the package, including whether every module is in it.
 app.py            (~1.4k) — GUI app: window layout, event wiring, the main render loop
 info_panel.py     (~1.7k) — the info panel: its header and navigation bar, content build, scrolling,
                             navigation, anchors
-importer.py       (~1.5k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
+importer.py       (~1.6k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 annotation.py     (~500)  — datapoint annotations and their tooltips
 config.py         (~440)  — Configuration-as-code (import settings, models, stopwords, GUI settings).
                             Compute devices live in `raven.client.config.devices` — one map for the
@@ -25,12 +25,13 @@ importer_cli.py    (~82)  — `raven-importer` entry point
 app_state.py       (~62)  — top-level app state containers
 ```
 
-**Under test as of 2026-09-01** — 326 tests over nine modules, which is every module the coverage plan
+**Under test as of 2026-09-02** — 328 tests over nine modules, which is every module the coverage plan
 covers:
 
 ```
-tests/test_importer.py        (55) — parsing and record recovery, cluster keywords, clustering,
-                                     progress, the background task, embeddings and summarization
+tests/test_importer.py        (57) — parsing and record recovery, the mandatory-field rules, cluster
+                                     keywords, clustering, progress, the background task, embeddings
+                                     and summarization
 tests/test_info_panel.py      (47) — hotkey decisions, the clipboard, cluster navigation, widget kinds,
                                      and the header and navigation bar it now builds itself
 tests/test_selection.py       (39) — the four combine modes, undo/redo, scroll anchors, modifier keys

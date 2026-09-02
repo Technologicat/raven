@@ -7,7 +7,9 @@ the `raven-importer` CLI shell. The CLI entry point lives in `importer_cli.py`; 
 module stays free of argparse and logging configuration so the GUI can host it safely.
 """
 
-__all__ = ["result_successful", "result_cancelled", "result_errored",
+__all__ = ["MISSING_TITLE",
+
+           "result_successful", "result_cancelled", "result_errored",
            "init", "start_task", "has_task", "cancel_task",
            "import_bibtex"]
 
@@ -49,6 +51,11 @@ from ..common import utils as common_utils
 from ..papers import bibtex
 
 from . import config as visualizer_config
+
+# What a record's title becomes when its BibTeX entry has none. Shown, rather than left blank, so that a
+# reader meets a stated fact about the data instead of what looks like a rendering fault. The brackets
+# are what mark it as ours rather than as somebody's actual title.
+MISSING_TITLE = "[Title not specified]"
 
 if visualizer_config.clusters_keyword_method == "llm" or visualizer_config.summarize:
     logger.info("LLM backend needed (for cluster keywords and/or summarization). Setting up connection.")
@@ -249,9 +256,9 @@ def _parse_input_files(*filenames):
 
                     # Validate presence of mandatory fields
                     entry_valid = True
-                    for field in ("author", "year", "title"):
+                    for field in ("author", "year"):
                         if field not in fields or not fields[field].value:
-                            logger.warning(f"Skipping entry '{entry.key}', reason: no {field}")
+                            logger.warning(f"_parse_input_files: skipping entry '{entry.key}', reason: no {field}")
                             entry_valid = False
                             break
                     if not entry_valid:
@@ -260,7 +267,29 @@ def _parse_input_files(*filenames):
 
                     authors_str = common_utils.format_bibtex_authors(fields["author"].value)
                     year = fields["year"].value
-                    title = common_utils.normalize_whitespace(common_utils.unicodize_basic_markup(fields["title"].value))
+
+                    # A missing title is not a missing record. Some database exports carry the abstract,
+                    # the authors and the DOI while leaving the title out, and that is still a record
+                    # worth reading — the abstract is the part a reader forms a view from, and dropping
+                    # the entry would lose that along with the title. So the title is named as absent
+                    # rather than the record being skipped: `MISSING_TITLE` is what a reader meets in the
+                    # search list and the info panel, where a blank would read as a rendering fault
+                    # instead of as a fact about the data. It is *display* only — `_analysis_title` keeps
+                    # it out of the embedding and the keyword extraction, which see the abstract alone.
+                    if "title" in fields and fields["title"].value:
+                        title = common_utils.normalize_whitespace(common_utils.unicodize_basic_markup(fields["title"].value))
+                    else:
+                        # ...but a record with no title *and* no abstract has nothing to read at all, and
+                        # the placeholder is the same string for every one of them — so importing those
+                        # would build a cluster out of Raven's own boilerplate.
+                        if "abstract" not in fields or not fields["abstract"].value:
+                            logger.warning(f"_parse_input_files: skipping entry '{entry.key}', "
+                                           f"reason: no title and no abstract")
+                            progress.tick()
+                            continue
+                        logger.warning(f"_parse_input_files: entry '{entry.key}' has no title; "
+                                       f"importing it as {MISSING_TITLE}, from its abstract alone")
+                        title = MISSING_TITLE
 
                     # abstract is optional
                     if "abstract" in fields and fields["abstract"].value:
@@ -367,18 +396,10 @@ def _get_highdim_semantic_vectors(input_data):
                                                 dtype=client_config.devices["embeddings"]["dtype"])
             logger.info("        Encoding...")
             with timer() as tim:
-                def format_entry_for_vectorization(entry: env) -> str:
-                    # return entry.title  # original solution - with mpnet, this works best (and we don't always necessarily have an abstract)
-                    # return entry.abstract  # early versions with snowflake used this
-                    # return " ".join(entry.keywords)  # meh, not all entries have keywords
-
-                    # Maybe best of both worlds?
-                    if entry.abstract:
-                        return entry.title + ".\n\n" + entry.abstract
-                    else:
-                        return entry.title
-
-                all_inputs = [format_entry_for_vectorization(entry) for entry in entries]
+                # What to embed was arrived at by trying the alternatives: the title alone worked best
+                # with mpnet, early snowflake versions used the abstract alone, and the keywords are no
+                # good because not every entry has them. Title and abstract together is the best of both.
+                all_inputs = [_format_entry_for_analysis(entry) for entry in entries]
                 all_vectors = embedder.encode(all_inputs)
                 # Round-trip to force truncation, if needed.
                 # This matters to make the "cluster centers" coincide with the original datapoints when clustering is disabled.
@@ -627,12 +648,38 @@ def _cluster_lowdim_data(input_data, lowdim_data):
     return vis_data, vis_clusterer.labels_, n_vis_clusters, n_vis_outliers
 
 
+def _analysis_title(entry: env) -> str:
+    """The entry's title as the analysis stages should see it: empty where Raven supplied the placeholder.
+
+    `MISSING_TITLE` is our word rather than the record's, so handing it to the embedder or the keyword
+    extractor would have Raven analyzing its own boilerplate. That is not merely noise: it is the *same*
+    boilerplate for every such record, so it would pull them together into a cluster whose members have
+    nothing in common but a field their database omitted.
+    """
+    return "" if entry.title == MISSING_TITLE else entry.title
+
+
+def _format_entry_for_analysis(entry: env) -> str:
+    """The text of an entry, for any stage that reads it for meaning — vectorization, keyword extraction.
+
+    Three cases, because a record can be missing either half: title and abstract are joined by a full stop
+    and a blank line, and either one alone is used as it stands. Authors and year are left out; they say
+    who and when rather than what, and neither stage is asking that.
+
+    `_parse_input_files` refuses a record with neither, so the result is never empty.
+    """
+    title = _analysis_title(entry)
+    if title and entry.abstract:
+        return title + ".\n\n" + entry.abstract
+    return title or entry.abstract
+
+
 def _format_entry_for_keyword_extraction(entry: env) -> str:
     """Format a BibTeX entry into plain text for the keyword extraction step.
 
     Output format:
 
-        If the entry has an abstract:
+        If the entry has both a title and an abstract:
 
             Entry title here.
 
@@ -642,20 +689,17 @@ def _format_entry_for_keyword_extraction(entry: env) -> str:
         The full-stop and the two newlines after the title are added.
         Both the title and the abstract are pasted as-is.
 
-        If the entry does NOT have an abstract:
+        If the entry has only one of them — no abstract, or a title its database omitted:
 
-            Entry title here
+            Entry title or abstract here
 
-        The title is pasted as-is.
+        That one is pasted as-is.
 
-    Note that in either case, authors and year are not mentioned.
+    Note that authors and year are never mentioned.
     This is because they are not relevant for keyword extraction.
     """
-    # return entry.title
-    if entry.abstract:
-        return entry.title + ".\n\n" + entry.abstract
-    else:
-        return entry.title
+    return _format_entry_for_analysis(entry)
+
 
 def _extract_keywords(input_data, max_vis_kw=6):
     """Extract keywords for the dataset.
