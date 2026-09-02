@@ -703,7 +703,8 @@ things in a space that fits one.
 ### How much of a branch to show: four rules
 
 Settled 2026-09-01, from a case where clicking back onto the current branch left the message below it
-collapsed as a bare "…1 more" — one hidden box, announced by a box.
+collapsed as a bare "…1 more" — one hidden box, announced by a box. **All four built 2026-09-02**, along
+with the subtree case below, which the rules as written did not cover.
 
 1. **A gap that hides fewer boxes than it costs should not be drawn.** A gap occupies a slot, so hiding
    one is a pure loss and hiding two saves nothing worth the content. Draw a gap from **three** hidden
@@ -727,6 +728,41 @@ collapsed as a bare "…1 more" — one hidden box, announced by a box.
 **The current-branch-is-special question underneath rule 2**: at present chats are short enough to draw
 whole, and rules 3 and 4 are what will matter when they are not. Neither should be written as though the
 short case were the only one.
+
+#### The subtree gap, which rule 1 did not name (Juha's call, 2026-09-02)
+
+Rule 1 says *sibling gaps and depth gaps*, and the first live look after building it showed why that was
+not the whole answer: two "…1 more" boxes were still on screen, both **subtree** gaps — the kind hanging
+under an off-spine node whose branch continues. The rule's motivating symptom, still there.
+
+The case against extending it was that a subtree is not a run: a sibling or depth gap hides a finite set
+that the row or column could simply have drawn, where a subtree gap's count is *direct children* and what
+is below is unbounded. **Juha's call was to extend it anyway**, accepting that the inlined child then needs
+a continuation marker of its own.
+
+What that turned into, and the two measurements that shaped it:
+
+- **Inline at one, not at three.** The threshold here is not the one the other two share, and the reason
+  is width rather than worth: the slot is one column, and two node-width boxes do not fit it. Drawn narrow
+  enough to fit, they have no room for a label, which is the whole point of inlining. That difference is
+  visible in the picture, which is what makes it tolerable next to rule 1's "two rules would disagree in
+  front of the reader".
+- **A leaf-only rule would not have been enough.** The first design was to inline only when the child is
+  itself a leaf, which needs no marker at all. Measured against the live datastore: of 244 parents with one
+  or two children, **57** bottom out immediately and 187 have real subtrees. So it would have cleared under
+  a quarter of the boxes, and the marker was unavoidable.
+- **The marker is a dashed stub** — a short broken line off the bottom of the box, reaching nowhere. The
+  picture already has a mark for "there is a link" (an edge) and one for "this is not drawn here" (a dash);
+  the stub is both, and means their sum. No arrowhead, an arrow pointing *at* something.
+  - At half the row spacing it rendered as three specks, `_GAP_DASH` having a ten-unit period. Four fifths
+    reads as a line that stops. Seen on screen, not calculated.
+- **HEAD gets a pill on the stub, not on the box.** A pill on a box says "this one is HEAD"; hung under the
+  stub, centred, it says "down this way". `_pill_shapes` came out of `_box_shapes` for it, which is also
+  what the bookmark pills will want.
+
+**Not extended to the root gap.** Other roots are deliberately not visitable in v1 — clicking through to
+another card would leave the configured avatar and voice running against a different system prompt — so
+inlining one would offer a click that the design withholds on purpose.
 
 ### The preview mark should be part of the picture, not the widget's highlight
 
@@ -894,8 +930,8 @@ list is a judgement about how the picture reads, and those are decided in front 
 
 **Not built, in the order worth doing:**
 
-1. **The four rules above** (whole branch rather than a stump; no gap below three hidden; the depth window
-   centred on the focus; focus and HEAD both on screen). Pure `chatgraph` work, visible immediately.
+~~1. **The four rules above.**~~ Done 2026-09-02, together with the subtree case they did not name — see
+   the section above. `chatgraph.py` grew by about a third; nothing else moved.
 2. **A navigation history**, per the section above — the view keeps none, so a branch switch strands the
    reader. Cheap, and the precedent is written.
 3. **`ImageShape` in the widget.** Unblocks two things at once and they are not the same size: role glyphs
@@ -946,3 +982,19 @@ list is a judgement about how the picture reads, and those are decided in front 
 
 **Open, needing a decision rather than work:** whether `raven-xdot-viewer` gets the actual-size button
 too, for the consistency that now runs the other way.
+
+## 2026-09-02
+
+The four branch-extent rules, plus the subtree inlining above. Two things worth carrying forward:
+
+- **The picture is missing from `CHANGELOG.md` entirely.** The view landed on 2026-09-01 with no entry,
+  which is the failure the house rule about writing entries while the context is fresh exists to prevent.
+  Left alone on purpose for now — the feature is still growing, and one entry rewritten six times is worse
+  than one written when the shape settles — but it is a debt with a due date, and the due date is the
+  release.
+- **Yesterday's habit paid again, and in the same coin.** Every behaviour was checked by patching it back
+  out and confirming the suite rejects it; three of the new tests did not, and each was leaning on a
+  *different pin* than the one it named — the tip test on HEAD's pin, the window test on HEAD's pin, and
+  one asserting a gap that the inlining had already removed. Reading them found nothing. The apparatus
+  asserts its own anchor matched before believing any negative, which is the other half of the same
+  lesson.
