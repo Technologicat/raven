@@ -65,6 +65,7 @@ class XDotWidget(gui_animation.Animation):
                  highlight_fade_duration: float = 1.0,
                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
                  mouse_wheel_zoom_factor: float = 1.25,
+                 clamp_pan_to_graph: bool = False,
                  dark_mode: bool = False,
                  dark_bg_color: DPGColor = (45, 45, 48, 255),
                  light_bg_color: DPGColor = (255, 255, 255, 255)):
@@ -101,6 +102,12 @@ class XDotWidget(gui_animation.Animation):
         `mouse_wheel_zoom_factor`: Zoom factor per mouse wheel notch. 1.25 needs three notches to double,
                                    which is about the coarsest that still feels controllable; the earlier
                                    1.1 took seven and read as an unresponsive wheel.
+        `clamp_pan_to_graph`: If True, the view cannot be moved to show empty space beyond the graph;
+                              an axis on which the graph is smaller than the viewport is centred instead.
+                              Off by default: a viewer of arbitrary graphs may want the space, to compare
+                              two distant parts or simply to have somewhere to put the pointer. Worth
+                              switching on where the graph *is* the content, and space beside it is only
+                              distance the reader has to pan back across.
         `on_open_url`: Callback when a node with a URL is right-clicked.
                         Receives the URL string.
         `dark_mode`: If True, invert graph lightness for dark backgrounds.
@@ -128,6 +135,7 @@ class XDotWidget(gui_animation.Animation):
 
         self._graph: Optional[Graph] = None
         self._viewport = Viewport(width, height)
+        self._viewport.clamp_pan = clamp_pan_to_graph
         self._highlight = HighlightState(fade_duration=highlight_fade_duration)
         self._search = SearchState()
 

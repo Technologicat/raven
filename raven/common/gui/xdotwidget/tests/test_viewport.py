@@ -283,3 +283,67 @@ class TestViewport:
         # Current unchanged
         assert approx(vp.pan_x.current, 0)
         assert approx(vp.pan_y.current, 0)
+
+
+class TestPanClamping:
+    """Keeping the view over the graph, so a pan cannot buy empty space the reader must cross back."""
+
+    def _over_a_tall_graph(self, clamp: bool = True) -> Viewport:
+        """A 400x300 viewport at 1:1 over a 600x2000 graph — taller than the view, narrower than it."""
+        vp = Viewport(width=400, height=300)
+        vp.set_graph_bounds(600.0, 2000.0)
+        vp.clamp_pan = clamp
+        return vp
+
+    def test_off_by_default(self):
+        # A viewer of arbitrary graphs may want the space; the clamp is for a view whose graph *is* the
+        # content. This is also the control for everything below: without it they would pass against a
+        # viewport that simply refused to pan.
+        vp = Viewport(width=400, height=300)
+        vp.set_graph_bounds(600.0, 2000.0)
+        vp.pan_to_point(0.0, 99999.0, animate=False)
+        assert approx(vp.pan_y.current, 99999.0)
+
+    def test_a_pan_past_the_bottom_stops_at_the_bottom(self):
+        vp = self._over_a_tall_graph()
+        vp.pan_to_point(300.0, 99999.0, animate=False)
+        # Half the viewport is 150 graph units at 1:1, so the lowest centre that shows no void is 2000-150.
+        assert approx(vp.pan_y.current, 1850.0)
+
+    def test_a_pan_past_the_top_stops_at_the_top(self):
+        vp = self._over_a_tall_graph()
+        vp.pan_to_point(300.0, -99999.0, animate=False)
+        assert approx(vp.pan_y.current, 150.0)
+
+    def test_a_pan_inside_the_graph_is_left_alone(self):
+        # The other control: a clamp that pinned every pan would satisfy the two above perfectly.
+        vp = self._over_a_tall_graph()
+        vp.pan_to_point(300.0, 900.0, animate=False)
+        assert approx(vp.pan_y.current, 900.0)
+
+    def test_an_axis_the_graph_does_not_fill_is_centred(self):
+        # 600 wide against 400 of viewport is wider, so x clamps; but zoomed out to 0.5 the viewport
+        # spans 800 units and the graph cannot fill it, so there is nothing to clamp *to*. Centre it,
+        # which is the arrangement that looks deliberate rather than stuck against one edge.
+        vp = self._over_a_tall_graph()
+        vp.zoom.target = 0.5
+        vp.pan_to_point(99999.0, 900.0, animate=False)
+        assert approx(vp.pan_x.current, 300.0)
+
+    def test_the_bound_follows_the_zoom(self):
+        # How much of the graph fits is what the bound depends on, so a zoom change re-clamps. Without
+        # this, zooming out at the bottom edge shows void below the graph and the pan never recovers.
+        vp = self._over_a_tall_graph()
+        vp.pan_to_point(300.0, 99999.0, animate=False)
+        assert approx(vp.pan_y.current, 1850.0)
+        vp.zoom.target = 0.5           # the viewport now spans 600 units, so the bound moves up
+        vp.update()
+        assert approx(vp.pan_y.target, 1700.0)
+
+    def test_zoom_to_bbox_is_clamped_against_the_zoom_it_is_going_to(self):
+        # The bbox sits at the very bottom of the graph, so centring on it would show void below. The
+        # clamp has to read the *new* zoom: against the old one it would compute the wrong bound.
+        vp = self._over_a_tall_graph()
+        vp.zoom_to_bbox(0.0, 1900.0, 600.0, 2000.0, margin=0, animate=False)
+        half_view = 0.5 * vp.height / vp.zoom.current
+        assert approx(vp.pan_y.current, 2000.0 - half_view)

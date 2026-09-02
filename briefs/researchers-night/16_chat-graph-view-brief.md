@@ -1010,6 +1010,45 @@ list is a judgement about how the picture reads, and those are decided in front 
 **Open, needing a decision rather than work:** whether `raven-xdot-viewer` gets the actual-size button
 too, for the consistency that now runs the other way.
 
+### Dead space, and where the clamp for it belongs (2026-09-02)
+
+Reported by Juha: half the panel's height often goes unused. Two causes, one of them the layout's and one
+the viewport's.
+
+**The layout's half is the band**, and it is fixed — see the subtree section above. A band cost a whole
+row of height for the *entire* level, so a single gap box far off to one side stretched the part being
+read. Measured before the fix: a box at x=170 with the level below it empty until x=638, pushing
+everything down 128 units for nothing.
+
+**The viewport's half is that nothing stopped the view leaving the graph.** Centring a node near the
+bottom of the tree spends the lower half of the panel on empty space, and so does returning to a HEAD
+with no replies under it — which is the ordinary case, a conversation usually being at its own end.
+
+`Viewport.clamp_pan` is the answer, and it lives in the widget rather than in the panel because it is
+about *the view*, not about chats: the pan target is pulled back so the viewport shows nothing beyond the
+graph's own box, and an axis the graph cannot fill is centred instead. Off by default — a viewer of
+arbitrary graphs may want the space, to compare two distant parts or simply to park the pointer — and on
+for the chat graph, where space beside the picture is only distance to pan back across.
+
+Two things about it that are easy to get wrong and are pinned by tests:
+
+- **It clamps the pan *target*, and re-clamps every frame.** How much of the graph fits depends on the
+  zoom, so a clamp applied only when the pan changes leaves the view outside the graph as soon as anyone
+  zooms out.
+- **It reads the zoom *target*, not the current zoom.** `zoom_to_bbox` sets both at once; clamping against
+  the zoom being left rather than the one being gone to computes the wrong bound.
+
+**What the clamp cannot do is fill a panel with a short chat.** Where the tree is smaller than the
+viewport at 1:1 there is nothing to pan to, and the picture is centred. Whether that or a top alignment
+reads better is open, and wants looking at rather than arguing about.
+
+### Fitting the branch got a button (2026-09-02)
+
+`ChatGraph.spine_bbox` went unused when opening changed to 1:1 on HEAD. It is now the toolbar's
+*Fit the current branch*, after the separator with the other chat-specific controls — a branch being a
+chat idea, where the plain fit beside the zoom controls is the widget's own. The two answer different
+questions: fitting the picture shows how wide the tree is, fitting the branch shows the conversation.
+
 ## 2026-09-02
 
 The four branch-extent rules, plus the subtree inlining above. Two things worth carrying forward:

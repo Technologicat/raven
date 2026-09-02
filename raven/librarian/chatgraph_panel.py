@@ -150,6 +150,12 @@ class DPGChatGraphPanel(gui_animation.Animation):
                                   on_click=self._on_click,
                                   input_blocked=input_blocked,
                                   graph_text_fonts=graph_text_fonts,
+                                  # The graph is the whole of what this panel is for, so space beyond it
+                                  # is only distance to pan back across. Without the clamp, centring a
+                                  # node near the bottom of the tree spends the lower half of the panel
+                                  # on nothing -- and so does returning to a HEAD that has no replies
+                                  # under it, which is the ordinary case.
+                                  clamp_pan_to_graph=True,
                                   dark_mode=dark_mode,
                                   tag=f"chat_graph_widget_{self.gui_uuid}")  # tag
 
@@ -208,6 +214,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
             guiutils.add_toolbar_separator(horizontal=True, toolbar_extent=_TOOLBAR_H,
                                            size=gui_config.toolbar_separator_w, line=False)
 
+            # After the separator because a *branch* is a chat idea, where the plain fit beside the zoom
+            # controls is the widget's own. The two answer different questions: fitting the picture shows
+            # how wide the tree is, and fitting the branch shows the conversation.
+            add_button(fa.ICON_ARROWS_UP_DOWN, self.fit_branch,
+                       "Fit the current branch", f"chat_graph_fit_branch_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_LOCATION_CROSSHAIRS, self.go_to_head,
                        "Back to where you are", f"chat_graph_home_button_{self.gui_uuid}")  # tag
             # The discoverable half of the commit gesture. Its caption names the fluent half, which is
@@ -219,6 +230,19 @@ class DPGChatGraphPanel(gui_animation.Animation):
     def zoom_1_to_1(self) -> None:
         """Set the zoom to 1:1, leaving the pan where it is."""
         self._widget.set_zoom(1.0, animate=True)
+
+    def fit_branch(self) -> None:
+        """Frame the branch on screen — the spine, and nothing beside it.
+
+        A level of this picture can run to thousands of graph units where the branch is one column wide,
+        so fitting the whole thing is width-limited and lands at a zoom where the renderer stops drawing
+        text at all. Fitting the branch is height-limited instead: the labels stay legible and the width
+        is left to overflow into a pan.
+        """
+        with self._lock:
+            chat_graph = self._chat_graph
+        if chat_graph is not None:
+            self._widget.zoom_to_bbox(*chat_graph.spine_bbox, animate=True)
 
     def toggle_dark_mode(self) -> None:
         """Flip the graph between the dark and light palettes, and relabel the button."""

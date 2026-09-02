@@ -19,6 +19,18 @@ from .constants import Point
 from .graph import Graph
 
 
+def _clamp_axis(pan: float, extent: float, half_view: float) -> float:
+    """Return `pan` moved as little as possible so that (pan ± half_view) stays inside (0, extent).
+
+    The graph's own box starts at the origin, so the bounds are 0 and `extent`. When the view is wider
+    than the graph the two bounds cross and there is nothing to satisfy; the midpoint is the answer then,
+    and it is the one that looks deliberate.
+    """
+    if extent <= 2.0 * half_view:
+        return 0.5 * extent
+    return numutils.clamp(pan, half_view, extent - half_view)
+
+
 class Viewport:
     """Manages pan/zoom state and coordinate transforms.
 
@@ -51,9 +63,15 @@ class Viewport:
         self.min_zoom = 0.01
         self.max_zoom = 100.0
 
-        # Graph bounds (for clamping pan)
+        # Graph bounds, for clamping the pan against.
         self._graph_width = 1.0
         self._graph_height = 1.0
+
+        # Whether to do that clamping. Off by default, because a viewer of arbitrary graphs may want to
+        # look at empty space beside one -- to compare two distant subtrees, or simply to have somewhere
+        # to put the mouse. Worth switching on where the graph *is* the content and space beyond it is
+        # only space the reader has to pan back across.
+        self.clamp_pan = False
 
     def set_size(self, width: int, height: int) -> None:
         """Update the widget size."""
@@ -121,13 +139,15 @@ class Viewport:
         new_pan_x = (x1 + x2) / 2
         new_pan_y = (y1 + y2) / 2
 
-        if animate:
-            self.pan_x.target = new_pan_x
-            self.pan_y.target = new_pan_y
-            self.zoom.target = new_zoom
-        else:
-            self.pan_x.set_immediate(new_pan_x)
-            self.pan_y.set_immediate(new_pan_y)
+        # Targets first, then the clamp, then settle: the clamp reads the zoom target, so setting the
+        # zoom last would clamp against the zoom we are leaving rather than the one we are going to.
+        self.pan_x.target = new_pan_x
+        self.pan_y.target = new_pan_y
+        self.zoom.target = new_zoom
+        self.clamp_pan_target()
+        if not animate:
+            self.pan_x.set_immediate(self.pan_x.target)
+            self.pan_y.set_immediate(self.pan_y.target)
             self.zoom.set_immediate(new_zoom)
 
     def pan_to_point(self, gx: float, gy: float, animate: bool = True) -> None:
@@ -136,12 +156,12 @@ class Viewport:
         `gx`, `gy`: Point in graph coordinates.
         `animate`: If True, animate the transition.
         """
-        if animate:
-            self.pan_x.target = gx
-            self.pan_y.target = gy
-        else:
-            self.pan_x.set_immediate(gx)
-            self.pan_y.set_immediate(gy)
+        self.pan_x.target = gx
+        self.pan_y.target = gy
+        self.clamp_pan_target()
+        if not animate:
+            self.pan_x.set_immediate(self.pan_x.target)
+            self.pan_y.set_immediate(self.pan_y.target)
 
     def zoom_by(self, factor: float, center_sx: Optional[float] = None,
                 center_sy: Optional[float] = None) -> None:
@@ -182,11 +202,29 @@ class Viewport:
         self.pan_x.target = self.pan_x.target - dx / z
         self.pan_y.target = self.pan_y.target - dy / z
 
+    def clamp_pan_target(self) -> None:
+        """Pull the pan target back so the view holds no empty space beyond the graph.
+
+        Does nothing unless `clamp_pan` is set. Where the graph is smaller than the viewport on an axis
+        there is no way to fill it, so it is centred on that axis instead — which is also what stops the
+        clamp from fighting a zoom that has just made everything fit.
+
+        Applied to the *target* rather than to where the view currently is, so a pan that would overshoot
+        is corrected before the animation runs rather than by yanking it mid-flight. It has to run again
+        as the zoom settles, since how much of the graph fits is what the bounds depend on.
+        """
+        if not self.clamp_pan:
+            return
+        zoom = max(self.zoom.target, 1e-6)
+        self.pan_x.target = _clamp_axis(self.pan_x.target, self._graph_width, 0.5 * self.width / zoom)
+        self.pan_y.target = _clamp_axis(self.pan_y.target, self._graph_height, 0.5 * self.height / zoom)
+
     def update(self) -> bool:
         """Advance all animations by one frame.
 
         Returns True if any animation is still running.
         """
+        self.clamp_pan_target()
         animating = False
         if self.pan_x.update():
             animating = True

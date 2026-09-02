@@ -233,6 +233,21 @@ class TestFraming:
         assert built._widget._viewport.zoom.target == pytest.approx(1.0), \
             "the view opens at a computed zoom, which is a size no button can return the reader to"
 
+    def test_the_view_holds_no_empty_space_below_the_graph(self, panel):
+        # HEAD is a leaf in this fixture, which is the ordinary case — a conversation is at its own end.
+        # Putting it two-thirds down then asks for a view whose lower third is past the bottom of the
+        # tree, and without the clamp that third is spent on nothing.
+        built, forest, app_state, ids, calls = panel
+        built.go_to_head()
+        viewport = built._widget._viewport
+        graph_bottom = built._chat_graph.graph.height
+        assert graph_bottom > viewport.height, \
+            "the graph is shorter than the panel, so it is centred and there is nothing to clamp"
+        bottom_of_view = viewport.pan_y.target + 0.5 * viewport.height / viewport.zoom.target
+        assert viewport.zoom.target == pytest.approx(1.0)
+        assert bottom_of_view <= graph_bottom + 1e-6, \
+            f"the view reaches {bottom_of_view:.1f} where the graph ends at {graph_bottom:.1f}"
+
     def test_opening_and_the_crosshair_frame_alike(self, panel):
         # One framing, not two. A view the reader arrives at on startup and cannot get back to is a view
         # they lose the moment they touch anything -- and only the crosshair has a button.
