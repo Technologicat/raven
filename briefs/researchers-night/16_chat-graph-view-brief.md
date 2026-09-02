@@ -447,6 +447,60 @@ machinery from `gui_animation.Animation`, and it wants:
 Worth doing after the view has stopped changing shape — an animation between two layouts has to be
 rewritten every time either layout does.
 
+#### The design, settled 2026-09-02 (Juha's, in discussion)
+
+**Correspondence is free, because everything drawn already has a stable name.** Pair the two builds by
+`Node.internal_name` and three sets fall out: in both (tween), in B only (appearing), in A only (leaving).
+
+Two kinds of node are in play and the distinction matters here: *datastore* nodes, which have a UUID each,
+and *visual* nodes, which are what is drawn. The key is the visual one — for a message box that is the
+datastore UUID, for a gap box a name synthesised from what it hides. Within one build the mapping is 1:1,
+guarded in the inlining path, and it should stay that way: **in a WYSIWYG multiverse view nothing should
+ever draw a node twice** (Juha).
+
+**A node that is not drawn has a representative, always.** The picture refuses to draw a node with no
+visible links — the invariant that makes the gaps honest — so everything absent is behind *some* gap, and
+that gap's box is where it belongs on screen. Every gap kind now carries `hidden_node_ids`, so this is a
+dictionary inversion rather than a tree walk.
+
+So the whole animation is:
+
+- **In both** — interpolate position from A to B.
+- **In B only** — start at the position of whichever box in A represents it, and fade in. That is usually
+  the gap it was hiding behind, so a gap box visibly *unfolds* into its contents.
+- **In A only** — end at the position of whichever box in B will represent it, and fade out. The mirror
+  image, and the symmetry is the argument for it.
+
+**What this needs that does not exist yet:**
+
+- **Edges recomputed per frame.** `_edge_between` bakes its polyline *and* its arrowhead polygon at build
+  time, so interpolating node positions leaves every edge stale. Edges have to be derived from the
+  interpolated endpoints each frame. This is the bulk of the new machinery — more than the nodes.
+- **The camera holds still during a morph.** A click currently ends in `pan_to_node`. Content morphing
+  under a moving viewport is two motions that fight: a node stationary in graph space still slides on
+  screen. Hold the camera, or move it markedly slower. *A priori*, hold (Juha).
+- **Z-order for a box emerging from the gap that hid it.** Open, and a two-minute probe once anything
+  moves — the renderer draws in list order, and both boxes are cross-fading, so it may not read
+  differently either way.
+
+**Interruption needs no state machine.** `SmoothValue` is history-free: only current and target matter. So
+a second click mid-flight recomputes the correspondence against wherever the interpolation *is* and sets
+new targets, and it converges. Live retargeting is the property that comes for free (Juha).
+
+**The cost estimate above was wrong, and it was mine.** It said animating means the rebuild happens per
+frame. It does not: A and B are both already built, so the per-frame work is a *transform of two existing
+builds* — no datastore access, no text measurement, no layout pass. The expensive thing that made this
+look like v2 does not exist. What remains is the edge recomputation and the camera question.
+
+**Two prerequisites landed 2026-09-02**, both worth having on their own account:
+
+- Sibling gaps were named by a *serial* over the gaps emitted before them, so a gap hiding the same run
+  could be renumbered by a gap appearing at another level — which would have paired the wrong boxes,
+  precisely when something moved. Named for their first hidden node now, as the other kinds are.
+- `SubtreeGapRef` did not carry `hidden_node_ids`, alone among the three, so its case needed an ancestor
+  walk. It carries them now, at no cost: the caption already walked that subtree twice, once for the
+  count and once for the depth range, and one traversal answers all three.
+
 **Two things on 2026-09-02 argued it is more than polish, and neither was known when this was filed.**
 
 - **Back and forward make the discontinuity frequent and worse.** A history step lands the reader on a
