@@ -12,9 +12,11 @@ The criterion is a parameter rather than a policy. `--require` names a field the
 satisfies all of them. That is what keeps this from being an abstract-specific tool that grows a second
 flag the first time a corpus needs `--require year`.
 
-Everything removed is written to an audit TSV — a record per line with the criterion it failed — because
-a filtered bibliography alone gives no way to tell a good cut from a bad one, and a method section has to
-say what came out.
+The sifted `.bib` is what you came for, and the audit TSV beside it — a record per line with the
+criterion it failed — is what lets you stand behind it: a review has to account for the records it
+removed before screening, and a filtered file alone gives neither a reader nor its own author any way to
+tell a good cut from a bad one. Two outputs, and the bibliography is the one with lasting value; the
+audit is a record of due diligence.
 
 **Deliberately not a relevance filter.** Whether a record is *about* the right subject is a judgement, it
 needs a reader or a model, and it belongs in a different tool. Everything here is deterministic: the same

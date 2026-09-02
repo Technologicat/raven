@@ -1165,8 +1165,9 @@ AUDIT_COLUMNS = ("kept", "removed", "matched_by", "size", "title", "dois", "diff
 class AuditRow:
     """What one merge did, in the form the audit TSV records it.
 
-    A scoping review reports the number of duplicates it removed and has to be able to stand behind it,
-    so this is the tool's real output — enough per merge for a reader to disagree with it.
+    The `.bib` is what the caller came for; this is what lets them stand behind it. A scoping review has
+    to report how many duplicates it removed and answer for the number, so a row carries enough per merge
+    for a reader to disagree with it.
 
     Fields:
 

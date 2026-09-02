@@ -287,12 +287,12 @@ Search Scopus, Web of Science, ProQuest, Springer and arXiv for the same questio
 
 ```bash
 raven-deduplicate scopus.bib wos.bib proquest.bib springer.bib arxiv.bib \
-    -o deduped.bib --audit audit.tsv
+    -o deduped.bib
 ```
 
 Several files are read as one corpus, so there is nothing to concatenate first, and `raven-fixbib`'s repair is applied on the way in — a record the parser would refuse is still counted, so the number you get is honest without your having run the two tools in sequence. Reach for `raven-fixbib` itself when you want the repair in the *files*, which is a different thing from wanting it in the count.
 
-Without `-o` the run reports what it would do and writes nothing; your inputs are never modified either way. `--audit` is the output a scoping review has to stand behind, and the one to keep: a row per merge naming what was kept, what was merged away, which key matched, and every value that differed from the one kept.
+Without `-o` the run reports what it would do and writes nothing; your inputs are never modified either way. The `.bib` is what you came for, and the audit written beside it is what lets you stand behind it: a row per merge naming what was kept, what was merged away, which key matched, and every value that differed from the one kept. The bibliography is the output with lasting value; the audit is a record of due diligence, for the point in a review where you have to say how many duplicates you removed and answer for the number.
 
 The audit is tab-separated, exactly as the `.tsv` says. Worth knowing when you open it in a spreadsheet: LibreOffice defaults to separating on tabs *and* spaces, so every title scatters across a dozen columns and the file looks corrupt. The separators are checkboxes in the import dialog that comes up as the file opens — clear *Space*, keep *Tab* — and they are easy to walk straight past.
 
