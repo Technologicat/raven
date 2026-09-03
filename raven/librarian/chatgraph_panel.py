@@ -460,6 +460,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # has learnt what a box does by clicking it already knows what Enter will do.
         elif key == dpg.mvKey_Return:
             self._activate_cursor()
+        # Backspace folds an opened tool round back up, from anywhere inside it. Its own key because both
+        # of the obvious ones are spoken for: Esc puts the cursor away, and Enter on a drawn tool result
+        # has to commit, that being the capability opening the round exists to restore.
+        elif key == dpg.mvKey_Back:
+            self._collapse_round()
         # Esc puts the cursor away. Nothing is undone by it -- the ring commits nothing on its own, being
         # a place to stand rather than a change -- so this is "I am done pointing at things", and the next
         # arrow starts again from HEAD.
@@ -740,6 +745,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._move_sibling_window(ref)
         elif isinstance(ref, chatgraph.DepthGapRef):
             self._widen_depth_window()
+        elif isinstance(ref, chatgraph.ToolRoundGapRef):
+            self._set_round_expanded(ref.owner_node_id, expanded=True)
         elif isinstance(ref, chatgraph.SubtreeGapRef):
             self._look_inside(ref)
         elif isinstance(ref, chatgraph.RootGapRef):
@@ -809,6 +816,52 @@ class DPGChatGraphPanel(gui_animation.Animation):
         with self._lock:
             self._view_state.focus_node_id = ref.node_id
         self._set_cursor(ref.node_id)
+
+    def _set_round_expanded(self, owner_node_id: str, expanded: bool) -> None:
+        """Draw one tool round's results as boxes of their own, or fold them back behind a gap box.
+
+        `owner_node_id`: The message that asked for the tools.
+
+        Folded, a round's results have no box, so no cursor reaches them and none can be made HEAD — which
+        the chat log allows and this view otherwise would not. Opening the gap is what restores that, and
+        it is the gap's ordinary verb rather than a gesture of its own.
+        """
+        with self._lock:
+            if expanded:
+                self._view_state.expanded_tool_turns.add(owner_node_id)
+            else:
+                self._view_state.expanded_tool_turns.discard(owner_node_id)
+        # The cursor's own box is the one thing this is certain to destroy — the gap when opening it, a
+        # result when folding one away — so the landing policy inside the rebuild is what moves it, onto
+        # whichever box now stands for what the reader was pointing at. Which is the first result on the
+        # way in and the gap itself on the way out, both without being told.
+        self.refresh()
+        self._enable_commit(self._cursor_chat_node_id() is not None)
+
+    def _collapse_round(self) -> None:
+        """Fold the tool round the cursor is inside back into a gap box, if it is inside one."""
+        owner_node_id = self._round_at_cursor()
+        if owner_node_id is None:
+            return
+        self._set_round_expanded(owner_node_id, expanded=False)
+        self._remember_view()
+
+    def _round_at_cursor(self) -> Optional[str]:
+        """Return the owner of the expanded tool round the cursor is inside, or `None` if it is in none.
+
+        Inside means on the message that asked for the tools or on one of the results it got back — the
+        boxes a reader would point at to say *this round*. A round the picture draws open because it is
+        too small to be worth folding is not one of these: closing it would hide nothing.
+        """
+        with self._lock:
+            chat_graph = self._chat_graph
+        node_id = self._cursor_chat_node_id()
+        if node_id is None or chat_graph is None:
+            return None
+        for owner_node_id, results in chat_graph.expanded_rounds.items():
+            if node_id == owner_node_id or node_id in results:
+                return owner_node_id
+        return None
 
     # ------------------------------------------------------------------
     # Committing

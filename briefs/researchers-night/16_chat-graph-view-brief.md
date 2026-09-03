@@ -1190,19 +1190,20 @@ list is a judgement about how the picture reads, and those are decided in front 
    need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
    thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render
    thread where `split_frame` deadlocks.
-   - **Nothing can expand a tool round** (found 2026-09-03), so its results have no box, no cursor and no
-     way to become HEAD. **Designed and settled the same day — see *A folded tool round becomes a gap box*
-     above.** It turns out not to need `ImageShape` at all: the round is drawn as a gap box rather than as
-     a mark on the message, so it needs no glyph and no new gesture. Which unblocks it from this item, and
-     leaves this one to the role glyphs and the thumbnails.
-   - **It now has a third consumer, and that is the one to design against: a mark saying a tool round got
-     its results back** (Juha, 2026-09-03). The box already says `Aria [tool call]` and names the call, and
-     counts the calls on a second line when there is more than one — but nothing says whether the round
-     completed, and the result nodes it swallowed are listed in `ChatNodeRef.hidden_node_ids` with nobody
-     reading them. Four docstrings promised a badge for years of session-time and none of them drew one;
-     this is where it lands.
+   - ~~**Nothing can expand a tool round.**~~ Found, designed and built 2026-09-03 — see *A folded tool
+     round becomes a gap box* above. It needed no `ImageShape`: the round is drawn as a gap box rather
+     than as a mark on the message, so it wanted no glyph and no new gesture. This item is left to the
+     role glyphs and the thumbnails.
+   - **It had a third consumer — a mark saying a tool round got its results back** (Juha, 2026-09-03) —
+     **and the gap box built the same day answers most of it.** The premise was that a round's results
+     were swallowed with nobody reading them: the box said `Aria [tool call]` and named the call, and
+     nothing said whether the round completed. Now every result is on screen, as its own box below three
+     and as a `…N more` above, so *what came back* is visible without a badge, and an interrupted round
+     reads as a call with nothing under it.
+     What a badge could still add is the *count* comparison — three calls asked for, two answered — which
+     the labels do not put side by side. Worth deciding whether that is wanted before it is built.
    - Next up as of 2026-09-03, and it starts clean: nothing else in the remaining list depends on the
-     cursor work or on today's tool-call labelling.
+     cursor work or on the tool-round gap.
 5. **Attachment thumbnails**, to the design above: straddling the right edge, stacked and capped, bordered
    in the graph's line pen, prepared on a background task with a placeholder meanwhile.
 6. **The avatar pause gate, and the auto-switch that goes with it.** Never built — so the two symptoms
@@ -1309,7 +1310,7 @@ belongs to; a shared row was never carrying that. With the arrows drawn, the dep
 Worth keeping as a worked example of the shape: a layout complaint whose cause was a missing *link*, where
 changing the layout would have hidden the symptom and left the actual fault in place.
 
-### A folded tool round becomes a gap box — designed 2026-09-03, and to build next
+### A folded tool round becomes a gap box — designed and built 2026-09-03
 
 **Deferred and then un-deferred the same afternoon** (Juha), which is worth recording because the
 measurement did not change and the reading of it did. The numbers say the machinery buys ten boxes today.
@@ -1358,7 +1359,8 @@ mind as the escape hatch, since it also solves the reachability complaint outrig
 
 ---
 
-**The design, settled 2026-09-03 (Juha's call), for when the measurement turns:**
+**The design, settled 2026-09-03 (Juha's call), and built the same day — the outcome, with the two things
+this did not name, is in *How it came out* at the end of the section:**
 
 **The problem.** A tool round's result nodes are folded into the message that asked for them, and there is
 no way to unfold one — so they have no box, no cursor can reach them, and none can be made HEAD, which the
@@ -1413,6 +1415,40 @@ Open, to settle while building:
   of this design.
 - What an expanded round costs vertically on a branch with several of them, which is the objection the
   collapsing exists to answer. Worth a look before committing to it.
+
+#### How it came out, 2026-09-03
+
+Built as designed. The layout was the easy part after all: a spine node's row is shifted onto its anchor,
+so **every spine node is already at x = 0** and the gap box wants the same column — `needs_band` and
+`band_y` then do the whole of the vertical work, and the ref, the activation and `Backspace` are small.
+
+**The threshold is `_MIN_HIDDEN_FOR_GAP` itself, not a second constant.** Its own comment already argued
+that one number has to serve every kind, the reader seeing only that one box inlined its leftovers and
+another did not; a third kind does not weaken that. So the answer to the first open question is that a
+single result is drawn, and so are two — which changes the common case visibly, since until today *every*
+round folded regardless of size. That is the change to look at first in front of the picture, and it is
+also the second open question, which stays open because it is a judgement about height: **what a
+tool-heavy branch now costs vertically.** If it reads badly, the threshold is the dial.
+
+**Two things the design did not name, decided while building:**
+
+- **The gap wears a second line reading "tool results".** A depth gap and a tool-round gap are both dashed
+  boxes in a band in the spine's column, both saying `…N more`, so without it the two kinds are
+  indistinguishable at the one place they can meet. The subtree gap's sub-label already sets the shape.
+- **When a band holds both, the depth gap keeps the column and the round steps aside by its own width.**
+  That takes an elision beginning at the very message that asked for the tools — rare, and cheaper than
+  giving a row two bands. Where the depth window elided the owner outright there is no box at all, the
+  results then being behind the depth gap, which `representative_of` reaches by walking up.
+
+**`ChatNodeRef.hidden_node_ids` is gone**, which is the `owner_of_swallowed` cleanup the design asked for.
+A message box now stands for itself and nothing else; the results are behind the gap, which is what makes
+them reachable, and `representative_of` lands a cursor there rather than on the message that asked.
+
+The tests: `test_chatgraph.py` gains the fold, the threshold both ways, the geometry, and the round in
+`_forest_with_every_gap_kind` so the uniformity tests cover the fifth kind; `test_chatgraph_panel.py`
+gains opening, committing a result, and `Backspace` with two controls. All five behaviours were checked by
+patching them back out — including one control that did not discriminate as written, a `Backspace` aimed
+at a round nobody had opened, where "nothing folded" was true whatever the key did.
 
 ### Fitting the branch got a button (2026-09-02)
 

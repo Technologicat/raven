@@ -10,9 +10,10 @@
   tree, with the conversation you are in running down the middle of it. Toggle it with the *Chat graph*
   checkbox below the avatar.
   - <!-- TODO: fill this in when the view settles. Still to come: attachment thumbnails and role glyphs,
-      a navigation history, search, bookmarks, and the avatar hand-off. Details worth a reader's time:
-      preview-then-commit clicking, the gap boxes and what clicking each one does, the three marks
-      (hover, HEAD, previewed), and the toolbar. See briefs/researchers-night/16_chat-graph-view-brief.md
+      search, bookmarks, and the avatar hand-off. Details worth a reader's time: preview-then-commit
+      clicking, the gap boxes and what clicking each one does (the tool round included, with Backspace to
+      close it again), the three marks (hover, HEAD, previewed), the keyboard, the navigation history, and
+      the toolbar. See briefs/researchers-night/16_chat-graph-view-brief.md
       -->
 
 - **a *Thinking* toggle**, for asking a reasoning model to just answer. On by default. Switch it off and the same model skips the reasoning step: replies arrive sooner and shorter, at the cost of the thinking that was making them good on a hard question. It applies from the next reply onward, and to every round of a tool-using turn.

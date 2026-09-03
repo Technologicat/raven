@@ -485,6 +485,144 @@ class TestGaps:
 
 
 # ---------------------------------------------------------------------------
+# Tool rounds
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def rounds(dpg_context):
+    """A panel over a chat with one foldable tool round and one too small to fold.
+
+        system -> user -> asking(3 calls) -> 3 results -> small(1 call) -> 1 result -> reply   <- HEAD
+    """
+    themes_and_fonts = dpg_context
+    forest = Forest()
+    ids = {}
+    ids["system"] = forest.create_node(payload("system", "the card"), parent_id=None)
+    ids["user"] = forest.create_node(payload("user", "what is the time"), parent_id=ids["system"])
+    ids["asking"] = forest.create_node(payload("assistant", "let me look"), parent_id=ids["user"])
+    parent = ids["asking"]
+    ids["results"] = []
+    for k in range(3):
+        parent = forest.create_node(payload("tool", f"result {k}"), parent_id=parent)
+        ids["results"].append(parent)
+    ids["small"] = forest.create_node(payload("assistant", "one more thing"), parent_id=parent)
+    ids["small_result"] = forest.create_node(payload("tool", "and its answer"), parent_id=ids["small"])
+    ids["reply"] = forest.create_node(payload("assistant", "it is noon"), parent_id=ids["small_result"])
+
+    app_state = {"HEAD": ids["reply"], "new_chat_HEAD": ids["user"]}
+    calls = Calls(app_state)
+    with dpg.window() as holder:
+        built = chatgraph_panel.DPGChatGraphPanel(
+            gui_parent=holder, datastore=forest, app_state=app_state,
+            themes_and_fonts=themes_and_fonts, width=400, height=300, show=True,
+            on_preview=calls.previewed.append, on_commit=calls.commit)
+    built.refresh()
+
+    yield built, forest, app_state, ids, calls
+
+    built.destroy()
+    dpg.delete_item(holder)
+
+
+def the_round_gap(panel_obj) -> str:
+    """Return the name of the one tool-round gap box in the current picture."""
+    gaps = [ref for ref in panel_obj._chat_graph.refs.values()
+            if isinstance(ref, chatgraph.ToolRoundGapRef)]
+    assert len(gaps) == 1, f"expected one tool-round gap in the picture, got {len(gaps)}"
+    return gaps[0].name
+
+
+class TestToolRounds:
+    """Opening a folded round and folding it up again — the pair of gestures that make a round's results
+    reachable at all.
+
+    Reachable is the word that matters. Folded, a result has no box, so no cursor lands on it and no
+    branch switch can reach it, which the chat log allows and this view did not.
+    """
+
+    def test_the_results_are_behind_a_gap_to_begin_with(self, rounds):
+        built, forest, app_state, ids, calls = rounds
+        assert all(node_id not in built._chat_graph.refs for node_id in ids["results"]), \
+            "the round is drawn open, so every test below starts from the wrong state"
+        assert ids["small_result"] in built._chat_graph.refs, \
+            "the one-call round folded, so the threshold is not being applied"
+
+    def test_opening_the_gap_draws_the_results(self, rounds):
+        built, forest, app_state, ids, calls = rounds
+        click(built, the_round_gap(built))
+        assert all(node_id in built._chat_graph.refs for node_id in ids["results"])
+
+    def test_opening_the_gap_lands_the_cursor_inside_the_round(self, rounds):
+        # The gap the cursor was on is exactly what opening it destroys, so the landing policy is what
+        # keeps the keyboard usable across the gesture: it follows the first node the gap stood for.
+        built, forest, app_state, ids, calls = rounds
+        gap_name = the_round_gap(built)
+        built._set_cursor(gap_name)
+        built.handle_key(dpg.mvKey_Return)
+        assert built._cursor_name == ids["results"][0]
+
+    def test_an_opened_result_can_become_head(self, rounds):
+        # The capability the whole item exists to restore. Two acts on the box, as anywhere else: the
+        # first previews it, the second commits.
+        built, forest, app_state, ids, calls = rounds
+        click(built, the_round_gap(built))
+        click(built, ids["results"][1])
+        click(built, ids["results"][1])
+        assert calls.committed == [ids["results"][1]]
+
+    def test_opening_a_round_does_not_move_head(self, rounds):
+        # Browsing changes nothing, the same as every other gap: opening one is a question about the
+        # picture, not about where the reader is.
+        built, forest, app_state, ids, calls = rounds
+        head_before = app_state["HEAD"]
+        click(built, the_round_gap(built))
+        assert calls.committed == []
+        assert app_state["HEAD"] == head_before
+
+    def test_backspace_folds_the_round_again(self, rounds):
+        built, forest, app_state, ids, calls = rounds
+        click(built, the_round_gap(built))
+        built._set_cursor(ids["results"][1])
+        assert built.handle_key(dpg.mvKey_Back) is True
+        assert all(node_id not in built._chat_graph.refs for node_id in ids["results"]), \
+            "the results are still drawn, so nothing folded"
+        assert built._cursor_name == the_round_gap(built), \
+            "the cursor did not follow what it was standing on to the box that now stands for it"
+
+    def test_backspace_works_from_the_message_that_asked(self, rounds):
+        # The other half of "anywhere inside the round". A reader who opened it from the call and read no
+        # further is standing on the call, and that is where they will press the key.
+        built, forest, app_state, ids, calls = rounds
+        click(built, the_round_gap(built))
+        built._set_cursor(ids["asking"])
+        built.handle_key(dpg.mvKey_Back)
+        assert all(node_id not in built._chat_graph.refs for node_id in ids["results"])
+
+    def test_backspace_outside_a_round_folds_nothing(self, rounds):
+        # The negative control, and it needs an *opened* round in the picture: with everything already
+        # folded, "nothing folded" is true however wrong the key is.
+        built, forest, app_state, ids, calls = rounds
+        click(built, the_round_gap(built))
+        built._set_cursor(ids["user"])
+        built.handle_key(dpg.mvKey_Back)
+        assert all(node_id in built._chat_graph.refs for node_id in ids["results"]), \
+            "a round the cursor was nowhere near folded up"
+
+    def test_backspace_on_a_round_too_small_to_fold_folds_nothing(self, rounds):
+        # The near miss the control above cannot catch: the cursor is on a tool result, which is what
+        # `Backspace` acts on — but one belonging to a round nobody opened, because it was never folded.
+        # A check that asked "is this a tool node?" rather than "which opened round is it in?" would fold
+        # the other round from here.
+        built, forest, app_state, ids, calls = rounds
+        click(built, the_round_gap(built))
+        built._set_cursor(ids["small_result"])
+        built.handle_key(dpg.mvKey_Back)
+        assert all(node_id in built._chat_graph.refs for node_id in ids["results"]), \
+            "a round the cursor was not inside folded up"
+        assert built._cursor_name == ids["small_result"], "the cursor moved off a box that is still there"
+
+
+# ---------------------------------------------------------------------------
 # The keyboard
 # ---------------------------------------------------------------------------
 

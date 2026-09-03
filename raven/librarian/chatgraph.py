@@ -26,6 +26,7 @@ __all__ = ["LINE_COLOR",
            "ChatNodeRef",
            "SiblingGapRef",
            "DepthGapRef",
+           "ToolRoundGapRef",
            "SubtreeGapRef",
            "RootGapRef",
 
@@ -181,8 +182,15 @@ _ROUNDED_CORNER_SEGMENTS = 4  # per corner; four is already indistinguishable fr
 # names neither. Below the threshold the omitted nodes are drawn instead, which overruns the window by up
 # to two and is the cheaper of the two wrongs.
 #
-# One threshold for sibling gaps and depth gaps both. Two would disagree in front of the reader, who sees
-# only that one row inlined its leftovers and another did not.
+# One threshold for all three kinds that have a choice -- sibling gaps, depth gaps, and the tool rounds
+# below. Separate numbers would disagree in front of the reader, who sees only that one box inlined its
+# leftovers and another did not.
+#
+# For a tool round the same arithmetic reads differently and comes out the same: a round folding one
+# result trades a message box for a gap box, and 85% of rounds fold exactly one -- measured on the live
+# datastore against Qwen 3.6, in `investigations/tool-round-shape/`. Re-run that when the model family
+# changes, since what the number describes is the model's habits, and expect this threshold rather than
+# the mechanism to be what moves.
 _MIN_HIDDEN_FOR_GAP = 3
 
 # How far the depth window reaches either side of the focus before the budget gets a say. Both are floors
@@ -282,23 +290,20 @@ class ChatNodeRef(Ref):
     `pills`: The pointer labels resting on it, e.g. `("SYS", "NEW")`. A tuple rather than one value because
              more than one pointer can land on the same node: with the AI greeting turned off, a new chat
              starts at the system prompt node, so SYS and NEW coincide there.
-    `hidden_node_ids`: The tool-result nodes of a collapsed round, which this box swallowed. Empty for
-                       every other message. A message box is the one non-gap box that
-                       stands for nodes besides itself, and it has to say so: *everything* not drawn is
-                       behind something, and a lookup that knew about gaps alone would answer "nowhere"
-                       for a tool node and be believed.
+
+    Its `hidden_node_ids` is always empty. A message box stands for itself and for nothing else — the
+    results of a round folded under it are behind the `ToolRoundGapRef` drawn below it, which is what
+    makes them reachable.
     """
 
     def __init__(self, name: str, node_id: str, role: str, on_current_branch: bool,
-                 tool_call_count: int, pills: Tuple[str, ...],
-                 hidden_node_ids: Tuple[str, ...] = ()):
+                 tool_call_count: int, pills: Tuple[str, ...]):
         super().__init__(name)
         self.node_id = node_id
         self.role = role
         self.on_current_branch = on_current_branch
         self.tool_call_count = tool_call_count
         self.pills = pills
-        self.hidden_node_ids = hidden_node_ids
 
 
 class SiblingGapRef(Ref):
@@ -341,6 +346,35 @@ class DepthGapRef(Ref):
 
     hidden_count = property(fget=_get_hidden_count,
                             doc="How many ancestors this gap stands for.")
+
+
+class ToolRoundGapRef(Ref):
+    """The results of one tool round, folded away between the message that asked for them and its answer.
+
+    A round is a run of `role="tool"` nodes chained under the assistant message that requested them. Folded,
+    they are drawn as this one box, hanging in the band below their owner; the answer below hangs off the
+    box rather than off the owner, so the lineage on screen is the lineage in the datastore.
+
+    A gap rather than a mark on the owner's box, which is what makes the results reachable without teaching
+    a gesture: acting on a gap opens it, and that is already the rule for the four other kinds. `Enter` on
+    a message has to stay *commit*, so a mark on the owner would have needed a key and a modifier-click of
+    its own.
+
+    `owner_node_id`: The assistant message that made the calls, and the box this one hangs below.
+    `hidden_node_ids`: Its result nodes, in call order.
+    """
+
+    def __init__(self, name: str, owner_node_id: str, hidden_node_ids: Tuple[str, ...]):
+        super().__init__(name)
+        self.owner_node_id = owner_node_id
+        self.hidden_node_ids = hidden_node_ids
+
+    def _get_hidden_count(self) -> int:
+        """Return how many results this gap stands for."""
+        return len(self.hidden_node_ids)
+
+    hidden_count = property(fget=_get_hidden_count,
+                            doc="How many results this gap stands for.")
 
 
 class SubtreeGapRef(Ref):
@@ -505,14 +539,21 @@ class ChatGraph:
                   fit and still be legible (a windowed level runs to thousands of units against a panel
                   of hundreds), while the branch is a narrow column, so fitting *this* is fitting the
                   answer to "where am I" at a zoom that leaves the words readable.
+    `expanded_rounds`: Owner node ID -> its result node IDs, for the tool rounds this picture draws open
+                       *and could fold again*. A round below the folding threshold is drawn open too and
+                       is not here, there being nothing to fold it into. So this is the table a caller
+                       needs to answer "can what the cursor is on be closed, and which round is it in?"
+                       without walking the forest.
     """
 
     def __init__(self, graph: xdotgraph.Graph, refs: Dict[str, Ref], spine: Tuple[str, ...],
-                 spine_bbox: Tuple[float, float, float, float]):
+                 spine_bbox: Tuple[float, float, float, float],
+                 expanded_rounds: Optional[Dict[str, Tuple[str, ...]]] = None):
         self.graph = graph
         self.refs = refs
         self.spine = spine
         self.spine_bbox = spine_bbox
+        self.expanded_rounds = expanded_rounds or {}
 
     def ref_for(self, name: str) -> Optional[Ref]:
         """Return what the graph node called `name` stands for, or `None` if there is no such node."""
@@ -525,10 +566,9 @@ class ChatGraph:
         `datastore`: The forest, to walk ancestors with when nothing claims `node_id` directly. Optional;
                      without it the answer is only as good as what the boxes say about themselves.
 
-        Its own box if it is drawn; otherwise whichever box stands for it — a gap that hides it, or the
-        assistant box that swallowed it as part of a collapsed tool round. Failing that, and given a
-        `datastore`, the nearest drawn ancestor, which is the closest thing to *where it would be* that
-        the picture can offer. `None` when even that finds nothing.
+        Its own box if it is drawn; otherwise the gap that hides it, of whichever of the five kinds.
+        Failing that, and given a `datastore`, the nearest drawn ancestor, which is the closest thing to
+        *where it would be* that the picture can offer. `None` when even that finds nothing.
 
         Nearly everything absent has a representative, by construction: the picture refuses to draw a node
         with no visible link to the rest, so what is not drawn is behind some gap. `hidden_node_ids`
@@ -732,36 +772,68 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
     return speaker, ["[empty]"], None
 
 
+class _ToolRound:
+    """One assistant message's tool results, and whether the picture folds them away.
+
+    `owner`: The assistant node that made the calls.
+    `results`: Its result nodes, in call order.
+    `expanded`: The owners the reader has asked to see inside, which is one of the two things deciding
+                `folded` — the other being whether the round is big enough to be worth a box.
+    `folded`: Whether the results are hidden behind a gap box instead of drawn as boxes of their own.
+    """
+
+    def __init__(self, owner: str, results: Tuple[str, ...], expanded: Set[str]):
+        self.owner = owner
+        self.results = results
+        self.folded = self.is_collapsible and owner not in expanded
+
+    def _get_is_collapsible(self) -> bool:
+        """Return whether folding this round is worth a box at all."""
+        return len(self.results) >= _MIN_HIDDEN_FOR_GAP
+
+    is_collapsible = property(fget=_get_is_collapsible,
+                              doc="Whether folding this round is worth a box at all.")
+
+
 def _collapse_tool_rounds(datastore: chattree.Forest,
                           lineage: Sequence[str],
-                          expanded: Set[str]) -> Tuple[List[str], Dict[str, Tuple[str, ...]]]:
-    """Drop the tool-result nodes of collapsed rounds from a lineage.
+                          expanded: Set[str]) -> Tuple[List[str], List[_ToolRound]]:
+    """Drop the tool-result nodes of folded rounds from a lineage.
 
     The agent loop chains one `role="tool"` node per call under the assistant message that requested them,
     so with documents and tools switched on a single conversational turn is three to six nodes, and a
-    visitor looking for "the things it could have said instead" would mostly be shown plumbing. A round is
-    what gets a node here; the calls within it are a count on that node.
+    visitor looking for "the things it could have said instead" would mostly be shown plumbing.
 
-    Returns `(the lineage to draw, assistant node ID -> the tool nodes dropped from under it)`. The second
-    is what keeps the picture honest about itself: an assistant box that swallowed a round *represents*
-    those nodes, exactly as a gap box represents what it hides, and something asking where an undrawn node
-    would be has to get an answer for these too.
+    A round is folded when it is big enough to be worth a box — the same threshold the sibling and depth
+    gaps use, for the same reason — and when the reader has not asked to see inside it. Below the
+    threshold the results are simply drawn, which is one row per round and no vocabulary at all: a gap
+    spent to hide a single message costs a box to save a box, and the reader must then gesture to see what
+    it took away.
+
+    Returns `(the lineage to draw, one `_ToolRound` per round found, in branch order)`.
     """
     kept: List[str] = []
-    swallowed: Dict[str, List[str]] = {}
-    owner: Optional[str] = None  # the assistant node whose round we are inside, if any
-    for node_id in lineage:
-        role = _role_of(datastore, node_id)
-        if role == "tool":
-            if owner is not None and owner not in expanded:
-                swallowed.setdefault(owner, []).append(node_id)
-                continue
-        elif role == "assistant":
-            owner = node_id
-        else:
-            owner = None
+    rounds: List[_ToolRound] = []
+    index = 0
+    while index < len(lineage):
+        node_id = lineage[index]
         kept.append(node_id)
-    return kept, {owner: tuple(nodes) for owner, nodes in swallowed.items()}
+        index += 1
+        if _role_of(datastore, node_id) != "assistant":
+            continue
+        # The run of results chained under it, if it asked for any. Read from the lineage rather than from
+        # the forest: what is being decided is what this *branch* draws, and a sibling round hanging off
+        # the same message is another branch's business.
+        end = index
+        while end < len(lineage) and _role_of(datastore, lineage[end]) == "tool":
+            end += 1
+        if end == index:
+            continue
+        round_ = _ToolRound(node_id, tuple(lineage[index:end]), expanded)
+        rounds.append(round_)
+        if round_.folded:
+            index = end
+    return kept, rounds
 
 
 def _pills_for(node_id: str, state: ViewState, is_root: bool) -> Tuple[str, ...]:
@@ -1119,7 +1191,7 @@ def _extra_subtree(datastore: chattree.Forest, owner: str, x: float, owner_row: 
 def _more_label(count: int) -> str:
     """Return the caption every gap box wears: a leading ellipsis, how many it hides, and "more".
 
-    One phrasing for all four kinds, counting one thing: the boxes that are not drawn. The leading
+    One phrasing for all five kinds, counting one thing: the boxes that are not drawn. The leading
     ellipsis is what marks a box as standing for content rather than holding any, and a reader who has
     seen one has seen them all.
     """
@@ -1215,8 +1287,10 @@ def build(datastore: chattree.Forest,
             logger.warning(f"build: cannot order the children of {focus_node_id}; drawing the branch as far as the focus")
             branch_tip = focus_node_id
         full_spine = datastore.linearize_up(branch_tip)
-        visible_spine, swallowed_tool_nodes = _collapse_tool_rounds(datastore, full_spine,
-                                                                    state.expanded_tool_turns)
+        visible_spine, tool_rounds = _collapse_tool_rounds(datastore, full_spine,
+                                                           state.expanded_tool_turns)
+        expanded_rounds = {round_.owner: round_.results for round_ in tool_rounds
+                           if round_.is_collapsible and not round_.folded}
 
         # Two different questions, and conflating them is what would make a preview look like a move.
         # `drawn_spine` is the branch on screen and decides the layout; `current_branch` is where HEAD
@@ -1231,6 +1305,17 @@ def build(datastore: chattree.Forest,
             visible_spine, state.new_chat_node_id, focus_node_id, state.head_node_id,
             config.max_visible_depth)
         depth_gap_rows = {gap.after_index: gap for gap in depth_gaps}
+
+        # Where each folded round's gap box hangs, now that the depth window has settled which spine
+        # nodes are drawn at all. Keyed by row, as the depth gaps are, because both live in that row's
+        # band and the row below has to be able to ask which of them it hangs from.
+        #
+        # A round whose owner the depth window elided gets no box: the box hangs *below its owner*, and
+        # there is nothing there to hang below. Its results are then behind the depth gap that took the
+        # owner, which `representative_of` reaches by walking up.
+        spine_index_of = {node_id: index for index, node_id in enumerate(visible_spine)}
+        tool_gap_rows = {spine_index_of[round_.owner]: round_ for round_ in tool_rounds
+                         if round_.folded and round_.owner in spine_index_of}
 
         drawn_spine = set(visible_spine)
         rows = _rows_for(datastore, state, config, visible_spine, branch_tip, state.head_node_id)
@@ -1321,10 +1406,10 @@ def build(datastore: chattree.Forest,
 
         # ------------------------------------------------------------------
         # Vertical placement. A row gets a whole empty row's worth of space below it when something has to
-        # be drawn there that the next level had no room for, and for a depth gap, which belongs to no
-        # level at all.
+        # be drawn there that the next level had no room for, and for a depth gap or a folded tool round,
+        # neither of which belongs to a level at all.
 
-        needs_band = [index in depth_gap_rows for index in range(len(rows))]
+        needs_band = [index in depth_gap_rows or index in tool_gap_rows for index in range(len(rows))]
         for extra in extras:
             if extra.band_row is not None:
                 needs_band[extra.band_row] = True
@@ -1360,8 +1445,7 @@ def build(datastore: chattree.Forest,
                               role=_role_of(datastore, node_id),
                               on_current_branch=(node_id in current_branch),
                               tool_call_count=_tool_call_count(datastore, node_id),
-                              pills=_pills_for(node_id, state, is_root=is_root),
-                              hidden_node_ids=swallowed_tool_nodes.get(node_id, ()))
+                              pills=_pills_for(node_id, state, is_root=is_root))
             speaker, label_lines, sub_label = _speaker_and_label_of(
                 datastore, node_id, config._get_effective_label_chars(), config.label_lines)
             shapes = _box_shapes(x, y, config.node_w, config, label_lines,
@@ -1458,6 +1542,31 @@ def build(datastore: chattree.Forest,
                 label=_more_label(len(gap.hidden)),
                 hides_head=state.head_node_id in gap.hidden)
 
+        # The folded tool rounds, in the same bands. Each hangs below the message that asked for the
+        # tools, in the spine's own column -- every spine node sits at x = 0, its row having been shifted
+        # onto its anchor -- and the row below hangs off it in turn, so the lineage on screen is call ->
+        # results -> answer, which is what the datastore says.
+        tool_gap_nodes: Dict[int, xdotgraph.Node] = {}
+        for row_index, round_ in tool_gap_rows.items():
+            name = f"gap:tool:{round_.results[0]}"
+            # Beside the depth gap where the band already holds one, rather than on top of it. Both are
+            # spine boxes and both want the column; the depth gap keeps it, being the branch's own
+            # continuation, and this one steps aside by its own width. Rare -- it takes an elision
+            # starting at the very message that asked for the tools -- and cheaper than a second band.
+            x = 0.0 if row_index not in depth_gap_rows else config.gap_node_w + config.horizontal_spacing
+            tool_gap_nodes[row_index] = add_box(
+                name, ToolRoundGapRef(name, owner_node_id=round_.owner,
+                                      hidden_node_ids=round_.results),
+                x=x, y=band_y[row_index],
+                label=_more_label(len(round_.results)),
+                # Which kind of gap this is, at the one place two kinds can share a band and a column. A
+                # depth gap says only "...N more", so the second line is what tells them apart -- and it
+                # is honest either way: these are results, and the depth gap's are not.
+                sub_label="tool results",
+                hides_head=state.head_node_id in round_.results)
+            graph_edges.append(_edge_between(nodes_by_name[round_.owner], tool_gap_nodes[row_index],
+                                             config))
+
         # The inlined children and the subtree gaps, at whichever level was decided for each above. An
         # off-spine sibling with children of its own would otherwise look like a chat that stopped after
         # one message; and one that is an ancestor of HEAD means HEAD is down there, which is what
@@ -1489,21 +1598,28 @@ def build(datastore: chattree.Forest,
                                            and extra.owner != state.head_node_id))
             graph_edges.append(_edge_between(owner_node, node, config))
 
-        # Which assistant box swallowed each tool-result node, for the rows that hang off one.
-        owner_of_swallowed = {tool_node_id: owner
-                              for owner, tool_node_ids in swallowed_tool_nodes.items()
-                              for tool_node_id in tool_node_ids}
+        # Which folded round each tool-result node belongs to, for the rows that hang off one.
+        round_of_folded = {result: round_ for round_ in tool_rounds if round_.folded
+                           for result in round_.results}
 
         for row_index in range(1, len(drawn)):
             parent_id = rows[row_index].parent_node_id
             parent_node = nodes_by_name.get(parent_id) if parent_id is not None else None
-            if parent_node is None and parent_id in owner_of_swallowed:
-                # The parent is a tool result folded into the message that asked for it. A row hangs from
-                # the *datastore* parent, which is right for keying a sibling window and wrong for drawing
-                # an edge -- so the edge goes to the box that stands for it. Without this the row loses
-                # every edge it has, siblings and all, and the branch appears to stop at the tool call
-                # while its answer floats unattached below.
-                parent_node = nodes_by_name.get(owner_of_swallowed[parent_id])
+            if parent_node is None and parent_id in round_of_folded:
+                # The parent is a tool result inside a folded round. A row hangs from the *datastore*
+                # parent, which is right for keying a sibling window and wrong for drawing an edge -- so
+                # the edge goes to the box standing for it, which is the round's own gap. Through the gap
+                # rather than past it to the owner: nodes really do sit between the call and its answer,
+                # and an edge that jumped them would say otherwise. Without this the row loses every edge
+                # it has, siblings and all, and the branch appears to stop at the tool call while its
+                # answer floats unattached below.
+                #
+                # There is no gap box when the depth window elided the owner, the box having nothing to
+                # hang below. The row then falls through to the depth gap, exactly as it would have if its
+                # parent had been an ordinary message.
+                owner_row = spine_index_of.get(round_of_folded[parent_id].owner)
+                if owner_row is not None:
+                    parent_node = tool_gap_nodes[owner_row]
             if parent_node is None:
                 # The parent fell outside the depth window. The gap directly above this row stands in for
                 # the whole elided chain, so it is what the row hangs from -- every slot of it, since they
@@ -1537,7 +1653,8 @@ def build(datastore: chattree.Forest,
     else:  # nothing of the branch survived; framing the whole picture is the only answer left
         spine_bbox = (0.0, 0.0, graph.width, graph.height)
 
-    return ChatGraph(graph=graph, refs=refs, spine=tuple(full_spine), spine_bbox=spine_bbox)
+    return ChatGraph(graph=graph, refs=refs, spine=tuple(full_spine), spine_bbox=spine_bbox,
+                     expanded_rounds=expanded_rounds)
 
 
 def _content_bbox(nodes: Sequence[xdotgraph.Node]) -> Tuple[float, float, float, float]:

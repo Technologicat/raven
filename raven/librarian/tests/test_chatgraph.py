@@ -89,6 +89,17 @@ def refs_of_type(chat_graph: chatgraph.ChatGraph, ref_type) -> list:
     return [ref for ref in chat_graph.refs.values() if isinstance(ref, ref_type)]
 
 
+def only_ref_of_type(chat_graph: chatgraph.ChatGraph, ref_type):
+    """Return the one ref of the given kind, failing if there is not exactly one.
+
+    Fails rather than returning the first, because a fixture that grew a second gap of the same kind would
+    otherwise go on passing while testing whichever one the dictionary happened to yield first.
+    """
+    found = refs_of_type(chat_graph, ref_type)
+    assert len(found) == 1, f"expected one {ref_type.__name__}, got {len(found)}"
+    return found[0]
+
+
 def only_depth_gap(chat_graph: chatgraph.ChatGraph):
     """Return the graph node of the one depth gap, failing if there is not exactly one.
 
@@ -378,23 +389,26 @@ class TestAMessageWithNoText:
         assert "[empty]" not in drawn
 
     def test_the_answer_after_a_tool_round_is_still_attached(self):
-        # The row after a collapsed round hangs, in the datastore, from a `tool` node the picture does not
+        # The row after a folded round hangs, in the datastore, from a `tool` node the picture does not
         # draw — so the edge had nowhere to start and the whole row lost every edge it had, siblings
         # included. The branch then appeared to stop at the tool call with its answer floating unattached
         # below it. (Juha, 2026-09-03, from the live picture: "the graph breaks there on both sides".)
         forest = Forest()
         root = forest.create_node(payload("system", "the card"), parent_id=None)
         asked = forest.create_node(payload("user", "what is sqrt(10)?"), parent_id=root)
-        calls = [{"id": "c1", "function": {"name": "calculate", "arguments": '{"expression": "sqrt(10)"}'}}]
+        calls = [{"id": f"c{k}", "function": {"name": f"tool{k}", "arguments": "{}"}} for k in range(3)]
         asking, last_result = self._round(forest, asked, calls)
         answer = forest.create_node(payload("assistant", "about 3.1623"), parent_id=last_result)
 
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=answer))
-        assert last_result not in built.refs, "the round is drawn expanded, so nothing was collapsed"
+        assert last_result not in built.refs, "the round is drawn expanded, so nothing was folded"
+        gap = only_ref_of_type(built, chatgraph.ToolRoundGapRef)
 
         attached = {(edge.src.internal_name, edge.dst.internal_name) for edge in built.graph.edges}
-        assert (asking, answer) in attached, \
+        assert (asking, gap.name) in attached and (gap.name, answer) in attached, \
             "the answer hangs off nothing; the branch is drawn in two disconnected pieces"
+        assert (asking, answer) not in attached, \
+            "the call is joined straight to its answer, which says no node sits between them"
 
     def test_a_wide_round_keeps_its_siblings_attached_too(self):
         # The half that made this visible on screen: it is not one edge that goes missing but the row's,
@@ -409,11 +423,12 @@ class TestAMessageWithNoText:
                    for k in range(3)]
 
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=answers[1]))
+        gap = only_ref_of_type(built, chatgraph.ToolRoundGapRef)
         attached = {(edge.src.internal_name, edge.dst.internal_name) for edge in built.graph.edges}
         drawn_answers = [node_id for node_id in answers if node_id in built.refs]
         assert len(drawn_answers) == 3, "the fixture did not draw the siblings, so it checks one edge"
         for node_id in drawn_answers:
-            assert (asking, node_id) in attached, f"sibling {node_id} was left unattached"
+            assert (gap.name, node_id) in attached, f"sibling {node_id} was left unattached"
 
     def test_a_message_with_nothing_at_all_still_says_empty(self):
         # The one case `[empty]` is the honest answer for, and the control for the two above: a box that
@@ -698,24 +713,72 @@ class TestSiblingWindow:
 # ---------------------------------------------------------------------------
 
 class TestToolRounds:
-    def _turn_with_tools(self):
-        """user -> assistant(2 calls) -> tool -> tool -> assistant(reply)."""
+    """A round's results are folded away when there are enough of them to be worth a box, and are then
+    reachable through that box.
+
+    The threshold is the sibling and depth gaps' own, and it is what keeps the commonest round — one call,
+    one result — free of the whole mechanism: a gap there spends a box to hide a box, and charges the
+    reader a gesture to get the message back.
+    """
+
+    def _turn_with_tools(self, call_count: int = 3):
+        """user -> assistant(N calls) -> N chained tool nodes -> assistant(reply)."""
         forest = Forest()
         system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
         user = forest.create_node(payload("user", "what is the time"), parent_id=system)
         asking = forest.create_node(payload("assistant", "let me look",
-                                            tool_calls=[{"id": "1"}, {"id": "2"}]), parent_id=user)
-        first = forest.create_node(payload("tool", "12:00"), parent_id=asking)
-        second = forest.create_node(payload("tool", "Tuesday"), parent_id=first)
-        reply = forest.create_node(payload("assistant", "it is noon on Tuesday"), parent_id=second)
-        return forest, asking, (first, second), reply
+                                            tool_calls=[{"id": str(k)} for k in range(call_count)]),
+                                    parent_id=user)
+        results = []
+        parent = asking
+        for k in range(call_count):
+            parent = forest.create_node(payload("tool", f"result {k}"), parent_id=parent)
+            results.append(parent)
+        reply = forest.create_node(payload("assistant", "it is noon on Tuesday"), parent_id=parent)
+        return forest, asking, tuple(results), reply
 
-    def test_tool_results_collapse_onto_the_round_that_asked_for_them(self):
+    def test_tool_results_fold_into_a_gap_below_the_round_that_asked_for_them(self):
         forest, asking, tool_nodes, reply = self._turn_with_tools()
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
         assert all(node_id not in built.refs for node_id in tool_nodes)
-        assert built.refs[asking].tool_call_count == 2
-        assert asking in built.refs and reply in built.refs, "both rounds keep their own node"
+        assert built.refs[asking].tool_call_count == 3
+        assert asking in built.refs and reply in built.refs, "both messages keep their own node"
+        gap = only_ref_of_type(built, chatgraph.ToolRoundGapRef)
+        assert gap.owner_node_id == asking
+        assert gap.hidden_node_ids == tool_nodes, "the gap does not stand for what it folded away"
+
+    def test_a_round_too_small_to_fold_draws_its_results(self):
+        # The commonest round by a distance, and the case the threshold exists for. Two results are below
+        # it, so they are drawn as ordinary boxes: reachable, committable, and costing no gesture.
+        forest, asking, tool_nodes, reply = self._turn_with_tools(call_count=2)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert all(node_id in built.refs for node_id in tool_nodes), \
+            "a round of two folded, so the threshold is not being applied"
+        assert not refs_of_type(built, chatgraph.ToolRoundGapRef), \
+            "a gap box was drawn for a round that hides nothing"
+
+    def test_the_gap_sits_between_the_call_and_its_answer(self):
+        # Which is the whole of what the box says. A round drawn anywhere else — beside the call, or below
+        # the answer — would put the results somewhere the datastore does not have them.
+        forest, asking, _tool_nodes, reply = self._turn_with_tools()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        gap = only_ref_of_type(built, chatgraph.ToolRoundGapRef)
+        boxes = boxes_of(built)
+        assert boxes[asking][3] <= boxes[gap.name][1], "the gap overlaps the message that asked"
+        assert boxes[gap.name][3] <= boxes[reply][1], "the gap overlaps the answer"
+
+    def test_the_gap_stands_in_the_spine_s_own_column(self):
+        # The branch is a straight vertical line, and a box belonging to it has to be on that line: a gap
+        # off to one side would read as a subtree hanging off the conversation rather than as part of it.
+        forest, asking, _tool_nodes, reply = self._turn_with_tools()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        gap = only_ref_of_type(built, chatgraph.ToolRoundGapRef)
+        boxes = boxes_of(built)
+
+        def centre_x(name):
+            return 0.5 * (boxes[name][0] + boxes[name][2])
+
+        assert centre_x(gap.name) == pytest.approx(centre_x(asking))
 
     def test_expanding_a_round_shows_its_results(self):
         forest, asking, tool_nodes, reply = self._turn_with_tools()
@@ -723,6 +786,26 @@ class TestToolRounds:
                                 chatgraph.ViewState(head_node_id=reply,
                                                     expanded_tool_turns={asking}))
         assert all(node_id in built.refs for node_id in tool_nodes)
+        assert not refs_of_type(built, chatgraph.ToolRoundGapRef), \
+            "the gap is still there beside the results it was hiding"
+
+    def test_an_opened_round_says_it_can_be_closed_again(self):
+        # What `Backspace` reads. Without this table a caller has to walk the forest to find out which
+        # round the box under the cursor belongs to, and the picture already knows.
+        forest, asking, tool_nodes, reply = self._turn_with_tools()
+        built = chatgraph.build(forest,
+                                chatgraph.ViewState(head_node_id=reply,
+                                                    expanded_tool_turns={asking}))
+        assert built.expanded_rounds == {asking: tool_nodes}
+
+    def test_a_round_too_small_to_fold_cannot_be_closed(self):
+        # The negative control for the table above, and not a quibble: a round of one is drawn open
+        # whatever the reader asks, so offering to close it would be a key that appears to do nothing.
+        forest, asking, _tool_nodes, reply = self._turn_with_tools(call_count=1)
+        built = chatgraph.build(forest,
+                                chatgraph.ViewState(head_node_id=reply,
+                                                    expanded_tool_turns={asking}))
+        assert built.expanded_rounds == {}
 
     def test_the_badge_counts_calls_rather_than_results(self):
         # A turn stopped mid-round has fewer results than calls, and the badge should say what was asked
@@ -1534,18 +1617,13 @@ class TestGapIdentity:
     def test_every_gap_says_what_it_stands_for(self):
         # Uniform across the kinds, because whatever looks a node up has to do it the same way for all of
         # them. `SubtreeGapRef` was the odd one out.
-        forest = Forest()
-        root = forest.create_node(payload("system", "the card"), parent_id=None)
-        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
-        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
-        head = chain(forest, length=15, parent_id=chats[3])[-1]
-        for k in range(2):
-            forest.create_node(payload("assistant", f"reroll {k}"), parent_id=chats[7])
+        forest, ids = _forest_with_every_gap_kind()
         config = chatgraph.LayoutConfig(max_visible_depth=8)
-        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head,
-                                                            new_chat_node_id=greeting), config)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids["head"],
+                                                            new_chat_node_id=ids["greeting"]), config)
 
-        kinds = (chatgraph.SiblingGapRef, chatgraph.DepthGapRef, chatgraph.SubtreeGapRef)
+        kinds = (chatgraph.SiblingGapRef, chatgraph.DepthGapRef, chatgraph.SubtreeGapRef,
+                 chatgraph.ToolRoundGapRef)
         for kind in kinds:
             found = refs_of_type(built, kind)
             assert found, f"no {kind.__name__} here, so it is not being checked"
@@ -1578,7 +1656,8 @@ class TestGapIdentity:
 
     @pytest.mark.parametrize("kind", [chatgraph.SiblingGapRef,
                                       chatgraph.DepthGapRef,
-                                      chatgraph.SubtreeGapRef])
+                                      chatgraph.SubtreeGapRef,
+                                      chatgraph.ToolRoundGapRef])
     def test_a_node_behind_a_gap_is_represented_by_that_gap(self, kind):
         # One picture, asked about a node behind each kind of gap in turn. Uniformity is the whole point:
         # a caller that has lost the box it was standing on asks one question, whatever swallowed it.
@@ -1594,41 +1673,42 @@ class TestGapIdentity:
             "the fixture draws the node this gap claims to hide, so the lookup cannot be tested on it"
         assert built.representative_of(hidden) == gap.name
 
-    def test_a_collapsed_tool_node_is_represented_by_the_message_that_swallowed_it(self):
-        # The one non-gap box that stands for nodes besides itself. A round's tool results are dropped
-        # from the drawn spine and counted on a badge, so a lookup that knew only about gaps would answer
-        # "nowhere" for a tool node — and be believed, the answer being indistinguishable from the honest
-        # one. (Raised by Juha, 2026-09-03, from the case where a Back step lands the cursor on one.)
+    def _folding_round(self):
+        """A forest whose one tool round is big enough to fold. Returns `(forest, asking, results, reply)`."""
         forest = Forest()
         system = forest.create_node(payload("system", "the card"), parent_id=None)
         asked = forest.create_node(payload("user", "what is the time"), parent_id=system)
-        calls = [{"id": "c1", "function": {"name": "get_current_time", "arguments": "{}"}}]
+        calls = [{"id": f"c{k}", "function": {"name": f"tool{k}", "arguments": "{}"}} for k in range(3)]
         answering = forest.create_node(payload("assistant", "let me look", tool_calls=calls),
                                        parent_id=asked)
-        result = forest.create_node(payload("tool", "12:00"), parent_id=answering)
-        reply = forest.create_node(payload("assistant", "it is noon"), parent_id=result)
+        parent = answering
+        results = []
+        for k in range(3):
+            parent = forest.create_node(payload("tool", f"result {k}"), parent_id=parent)
+            results.append(parent)
+        reply = forest.create_node(payload("assistant", "it is noon"), parent_id=parent)
+        return forest, answering, tuple(results), reply
 
+    def test_a_folded_tool_node_is_represented_by_its_round_s_gap(self):
+        # A round's results leave the drawn spine, so a lookup that knew only about the other gap kinds
+        # would answer "nowhere" for a tool node — and be believed, the answer being indistinguishable
+        # from the honest one. (Raised by Juha, 2026-09-03, from the case where a Back step lands the
+        # cursor on one.)
+        forest, answering, results, reply = self._folding_round()
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
-        assert result not in built.refs, "the round is drawn expanded, so nothing was swallowed"
-        assert built.representative_of(result) == answering
+        assert results[1] not in built.refs, "the round is drawn open, so nothing was folded"
+        gap = only_ref_of_type(built, chatgraph.ToolRoundGapRef)
+        assert built.representative_of(results[1]) == gap.name
 
-    def test_an_expanded_tool_node_represents_itself(self):
-        # The negative control: the same fixture with the round expanded draws the tool node, so the
-        # answer must come from its own box rather than from the one that would otherwise hide it. A
-        # `representative_of` that always named the parent would pass the test above and fail this.
-        forest = Forest()
-        system = forest.create_node(payload("system", "the card"), parent_id=None)
-        asked = forest.create_node(payload("user", "what is the time"), parent_id=system)
-        calls = [{"id": "c1", "function": {"name": "get_current_time", "arguments": "{}"}}]
-        answering = forest.create_node(payload("assistant", "let me look", tool_calls=calls),
-                                       parent_id=asked)
-        result = forest.create_node(payload("tool", "12:00"), parent_id=answering)
-        reply = forest.create_node(payload("assistant", "it is noon"), parent_id=result)
-
+    def test_an_opened_tool_node_represents_itself(self):
+        # The negative control: the same fixture with the round opened draws the tool node, so the answer
+        # must come from its own box rather than from the one that would otherwise hide it. A
+        # `representative_of` that always named a container would pass the test above and fail this.
+        forest, answering, results, reply = self._folding_round()
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply,
                                                             expanded_tool_turns={answering}))
-        assert result in built.refs, "the round did not expand, so this is the other case again"
-        assert built.representative_of(result) == result
+        assert results[1] in built.refs, "the round did not open, so this is the other case again"
+        assert built.representative_of(results[1]) == results[1]
 
     def test_a_node_the_boxes_do_not_name_is_found_by_walking_up(self):
         # Where the "everything absent is behind some gap" construction stops short: the roots gap stands
@@ -1657,19 +1737,27 @@ class TestGapIdentity:
 
 
 def _forest_with_every_gap_kind():
-    """A forest whose picture gaps in all three ways at once. Returns `(forest, ids)`.
+    """A forest whose picture gaps in all four ways at once. Returns `(forest, ids)`.
 
     A wide level of chats (sibling gaps), a long branch below one of them (a depth gap once the window is
-    narrowed), and a fan under an off-spine chat (a subtree gap).
+    narrowed), a fan under an off-spine chat (a subtree gap), and a three-call tool round at the end of
+    the branch (a tool-round gap).
     """
     forest = Forest()
     root = forest.create_node(payload("system", "the card"), parent_id=None)
     greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
     chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
-    head = chain(forest, length=15, parent_id=chats[3])[-1]
+    tip = chain(forest, length=15, parent_id=chats[3])[-1]
     for k in range(2):
         forest.create_node(payload("assistant", f"reroll {k}"), parent_id=chats[2])
-    return forest, {"root": root, "greeting": greeting, "chats": chats, "head": head}
+
+    calls = [{"id": f"c{k}", "function": {"name": f"tool{k}", "arguments": "{}"}} for k in range(3)]
+    asking = forest.create_node(payload("assistant", "let me look", tool_calls=calls), parent_id=tip)
+    parent = asking
+    for k in range(3):
+        parent = forest.create_node(payload("tool", f"result {k}"), parent_id=parent)
+    head = forest.create_node(payload("assistant", "here you are"), parent_id=parent)
+    return forest, {"root": root, "greeting": greeting, "chats": chats, "asking": asking, "head": head}
 
 
 class TestCursorMovement:
