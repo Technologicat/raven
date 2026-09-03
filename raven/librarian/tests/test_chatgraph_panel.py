@@ -347,29 +347,29 @@ class TestGaps:
             built.destroy()
             dpg.delete_item(holder)
 
-    def test_moving_the_window_lands_the_cursor_without_arming_it(self, dpg_context):
-        # A window move is navigation, not a choice of node, so it must not leave a box armed for commit.
-        # It must still leave the cursor *somewhere*: this is the gesture that carries a reader across a
-        # level too wide to walk, and a keyboard that came out of it with nothing to step from would be
-        # back where it started.
+    def test_moving_the_window_lands_the_cursor_on_what_it_moved_to(self, dpg_context):
+        # The cursor has to come out of this gesture somewhere, because it is the one that carries a
+        # reader across a level too wide to walk: a keyboard left with nothing to step from would be back
+        # where it started. It lands on the node the window recentred on, which is also where the view
+        # goes, so the picture and the keyboard agree about where the reader now is.
         built, forest, chats, holder = self._wide(dpg_context)
         try:
             gaps = [ref for ref in built._chat_graph.refs.values()
                     if isinstance(ref, chatgraph.SiblingGapRef)]
             gap = gaps[0]
+            assert gap.recenter_on not in built._chat_graph.refs, \
+                "the gap's target is already drawn, so landing on it would prove nothing"
             click(built, gap.name)
             assert built._cursor_name == gap.recenter_on, "the cursor did not follow the window"
-            assert not built._cursor_armed, "a click on that box would now switch branch"
-            assert built._cursor_chat_node_id() is None, "there is a node to commit to, so the button is live"
             assert built._widget.get_highlighted_nodes() == set()
         finally:
             built.destroy()
             dpg.delete_item(holder)
 
-    def test_a_landed_cursor_takes_two_clicks_to_commit_like_any_other(self, dpg_context):
-        # The negative control for the test above, and the thing that makes "unarmed" mean something: the
-        # first click on a landed box arms it exactly as a first click anywhere does, and only the second
-        # commits. Without this, a panel that ignored clicks on a landed box entirely would also pass.
+    def test_the_box_the_window_landed_on_acts_like_any_other(self, dpg_context):
+        # There is one cursor state, not two: the ring means "an act here acts on this box", wherever the
+        # cursor came from. So the box a window move landed on commits on the next act, exactly as a box
+        # stepped onto does — the reader has no way to see a difference, so there must not be one.
         committed = []
         built, forest, chats, holder = self._wide(dpg_context, on_commit=committed.append)
         try:
@@ -377,13 +377,10 @@ class TestGaps:
                     if isinstance(ref, chatgraph.SiblingGapRef)]
             landed = gaps[0].recenter_on
             click(built, gaps[0].name)
+            assert committed == [], "the window move itself switched branch"
 
             click(built, landed)
-            assert committed == [], "one click on a landed box switched branch"
-            assert built._cursor_armed, "the click did not arm the box it was aimed at"
-
-            click(built, landed)
-            assert committed == [landed], "the second click did not commit"
+            assert committed == [landed], "one act on the landed box did not commit"
         finally:
             built.destroy()
             dpg.delete_item(holder)

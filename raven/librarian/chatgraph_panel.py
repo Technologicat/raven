@@ -131,12 +131,6 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # box as well as on a message — see `chatgraph.ViewState.cursor_name`. Mirrored into the view
         # state, which is what draws the ring; kept here too so the panel can answer without a rebuild.
         self._cursor_name: Optional[str] = None
-        # Whether the reader put the cursor where it is. They did by clicking a box or stepping onto it;
-        # they did not when it was *landed* there — recentred by opening a gap, or followed onto a new box
-        # after a rebuild destroyed the old one. Only an armed cursor can be committed from, which is what
-        # keeps a branch switch a thing the reader asked for twice: a landed ring under a stray click
-        # would move HEAD on a single one.
-        self._cursor_armed = False
         self._is_shown = bool(show)
         # Whether the view has been framed yet. The first build fits the branch; later ones must not, or
         # the picture would re-frame itself under a reader once per turn of the conversation.
@@ -549,7 +543,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             if chat_graph is None:  # the node the picture was drawn around is gone -- fall back to HEAD
                 logger.info("DPGChatGraphPanel.refresh: the focused node is gone; falling back to HEAD")
                 self._view_state.focus_node_id = None
-                self._set_cursor_fields(None, armed=False)
+                self._set_cursor_fields(None)
                 chat_graph = self._try_build()
             if chat_graph is None:
                 logger.warning("DPGChatGraphPanel.refresh: HEAD is gone too; leaving the picture as it is")
@@ -718,7 +712,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
     def _click_chat_node(self, ref: chatgraph.ChatNodeRef) -> None:
         """Preview a chat node — or commit to it, if the cursor was already on it."""
         with self._lock:
-            already_previewed = (ref.node_id == self._cursor_name and self._cursor_armed)
+            already_previewed = (ref.node_id == self._cursor_name)
             chat_graph = self._chat_graph
         if already_previewed:
             self._commit(ref.node_id)
@@ -753,9 +747,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # The cursor lands on the node the window recentred on, which is also the one the view pans to.
         # Clearing it instead — which this did while the ring was placed only by clicking — leaves a
         # keyboard reader with nothing to move from, at the one gesture whose whole purpose is to carry
-        # them across a level too wide to walk. Unarmed, because a window move is navigation rather than a
-        # choice of node: the box the view lands on must not switch branch on the reader's next click.
-        self._set_cursor(ref.recenter_on, armed=False)
+        # them across a level too wide to walk. It lands where any other cursor move lands it — one act on
+        # it commits — because the alternative needs a second, weaker cursor state that nothing on screen
+        # distinguishes, and a ring that sometimes acts and sometimes only arms is a ring that says less.
+        self._set_cursor(ref.recenter_on)
         self._widget.pan_to_node(ref.recenter_on, animate=True)
 
     def _widen_depth_window(self) -> None:
@@ -810,15 +805,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
             else:
                 dpg.disable_item(self._commit_button_tag)
 
-    def _set_cursor(self, name: Optional[str], armed: bool = True) -> None:
+    def _set_cursor(self, name: Optional[str]) -> None:
         """Move the cursor to a box, or clear it, and redraw so the ring moves with it.
 
         `name`: A graph node name, as `chatgraph.ViewState.cursor_name` takes — so a gap box is as
                 addressable as a message.
-        `armed`: Whether the reader chose this box. `True` for a click or a step onto it, which is what
-                 makes the next act on it a commit; `False` when the cursor is merely *landed* here, as
-                 opening a gap and a rebuild both do. A landed cursor can be moved and acted on like any
-                 other; what it cannot do is switch branch on one click.
 
         The mark lives in the picture rather than in the widget's highlight state. That state is shared
         with hover and has one pair of colours, so a cursor drawn through it is indistinguishable from a
@@ -832,18 +823,17 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # something else as well — a level's window, the focused branch — and one that happened to leave
         # the cursor where it was would silently lose its own change. A rebuild costs about a millisecond
         # and none of these paths is hot.
-        self._set_cursor_fields(name, armed=armed)
+        self._set_cursor_fields(name)
         # The rebuild first, then the button: whether there is anything to commit to is a question about
-        # the picture that comes *out* of it. A cursor moved to a box the rebuild then drops leaves
-        # nothing armed, and asking before the rebuild would have said otherwise.
+        # the picture that comes *out* of it. A cursor moved to a box the rebuild then drops has nothing
+        # to commit to, and asking before the rebuild would have said otherwise.
         self.refresh()
         self._enable_commit(self._cursor_chat_node_id() is not None)
 
-    def _set_cursor_fields(self, name: Optional[str], armed: bool) -> None:
+    def _set_cursor_fields(self, name: Optional[str]) -> None:
         """Put the cursor at `name` without redrawing. For callers that are inside a rebuild already."""
         with self._lock:
             self._cursor_name = name
-            self._cursor_armed = bool(armed) and name is not None
             self._view_state.cursor_name = name
 
     def _reland_cursor(self, chat_graph: chatgraph.ChatGraph) -> None:
@@ -880,22 +870,15 @@ class DPGChatGraphPanel(gui_animation.Animation):
         landed = chat_graph.representative_of(stood_for) if stood_for is not None else None
         if landed is None and self._view_state.head_node_id in chat_graph.refs:
             landed = self._view_state.head_node_id
-        # Unarmed: the reader did not move here, the picture moved under them. What they had chosen was
-        # the box that is gone, and following it to its representative is a courtesy, not a new choice.
-        self._set_cursor_fields(landed, armed=False)
+        self._set_cursor_fields(landed)
 
-    def _cursor_chat_node_id(self, require_armed: bool = True) -> Optional[str]:
+    def _cursor_chat_node_id(self) -> Optional[str]:
         """Return the chat node the cursor is on — `None` if it is on a gap box, or nowhere.
 
         What separates the two is whether there is anywhere to commit to. A gap stands for messages
         without being one, so acting on it opens it, where acting on a message switches branch.
-
-        `require_armed`: Answer `None` for a cursor the reader did not choose. The default, since every
-                         caller so far is asking in order to commit — see `_set_cursor`.
         """
         with self._lock:
-            if require_armed and not self._cursor_armed:
-                return None
             name = self._cursor_name
             chat_graph = self._chat_graph
         if name is None or chat_graph is None:
