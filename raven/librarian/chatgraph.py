@@ -223,13 +223,16 @@ class ChatNodeRef(Ref):
                          Not the same as being on the drawn spine: previewing another branch draws that
                          one, and the shared prefix stays coloured while the divergence does not, which is
                          the picture of *where you would be going against where you are*.
-    `tool_call_count`: How many tool calls this message made, for the badge. Zero for everything that made
-                       none, which is nearly every node.
+    `tool_call_count`: How many tool calls this message made. Zero for everything that made none, which is
+                       nearly every node. Offered to callers; the box itself does not read it, its label
+                       naming the calls outright and counting them only when there is more than one to
+                       name. A mark of its own waits on the role glyphs, which want an `ImageShape` the
+                       widget does not have.
     `pills`: The pointer labels resting on it, e.g. `("SYS", "NEW")`. A tuple rather than one value because
              more than one pointer can land on the same node: with the AI greeting turned off, a new chat
              starts at the system prompt node, so SYS and NEW coincide there.
-    `hidden_node_ids`: The tool-result nodes of a collapsed round, which this box swallowed and the badge
-                       counts. Empty for every other message. A message box is the one non-gap box that
+    `hidden_node_ids`: The tool-result nodes of a collapsed round, which this box swallowed. Empty for
+                       every other message. A message box is the one non-gap box that
                        stands for nodes besides itself, and it has to say so: *everything* not drawn is
                        behind something, and a lookup that knew about gaps alone would answer "nowhere"
                        for a tool node and be believed.
@@ -356,8 +359,8 @@ class ViewState:
                         than derived, because *what* it points at is changing: it is the AI's greeting
                         today, and the root itself for a chat started with the greeting turned off. One
                         datastore will hold both shapes.
-    `expanded_tool_turns`: Assistant node IDs whose tool-result nodes are shown individually instead of
-                           being counted onto a badge.
+    `expanded_tool_turns`: Assistant node IDs whose tool-result nodes are drawn as boxes of their own
+                           instead of being folded into the message that asked for them.
     `sibling_focus`: Parent node ID -> which of its children the sibling window is centred on. An override:
                      a level not listed here centres on whichever child the spine goes through, which is
                      what the user sees before touching anything.
@@ -614,7 +617,8 @@ def _tool_call_count(datastore: chattree.Forest, node_id: str) -> int:
     """Return how many tool calls the message in `node_id` requested.
 
     Read from the assistant message's own `tool_calls` rather than by counting the result nodes below it: a
-    turn that was interrupted has fewer results than calls, and the badge should say what was asked for.
+    turn that was interrupted has fewer results than calls, and what a reader wants to know is what was
+    asked for.
     """
     message = _payload_of(datastore, node_id).get("message") or {}
     return len(message.get("tool_calls") or ())
@@ -627,18 +631,44 @@ _ROLE_CAPTIONS = {"system": "SYSTEM", "tool": "TOOL", "user": "USER", "assistant
 
 
 def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
-                          width: int, max_lines: int) -> Tuple[str, List[str]]:
-    """Return `(who said it, the lines of what they said)` for `node_id`, ready to draw.
+                          width: int, max_lines: int) -> Tuple[str, List[str], Optional[str]]:
+    """Return `(who said it, the lines of what they said, a quieter second line or `None`)` for `node_id`.
 
     The speaker is the message's stored persona where it has one, and the role otherwise — the same
     preference the chat log shows, so the two views name the same participants the same way.
+
+    A message with no text is not necessarily an empty one, and the three ways it happens are worth
+    telling apart. A turn that asked for a tool carries its request and no prose; a thinking model that
+    was interrupted carries a reasoning trace and no answer; and a turn stopped before either carries
+    nothing at all. Drawn as one `(empty)` box, as they were until 2026-09-03, the commonest of the three
+    reads as a tree full of replies that never happened.
     """
     try:
         role, persona, text = chatutil.get_node_message_text_without_persona(datastore, node_id)
     except (KeyError, TypeError):
-        return "?", ["(missing)"]
+        return "?", ["(missing)"], None
     speaker = persona or _ROLE_CAPTIONS.get(role, (role or "?").upper())
-    return speaker, (_wrap(text, width, max_lines) or ["(empty)"])
+    lines = _wrap(text, width, max_lines)
+    if lines:
+        return speaker, lines, None
+
+    message = _payload_of(datastore, node_id).get("message") or {}
+    tool_calls = message.get("tool_calls") or ()
+    if tool_calls:
+        # The chat log's own spelling of the call, so that a box and the message it stands for do not
+        # describe the same request two ways. A second line counts them where the first cannot show them
+        # all -- the signatures are wrapped and truncated like any other label, so with several calls what
+        # is on screen is the beginning of a longer string rather than the whole of a short one.
+        # The count line costs a label line rather than being added below them. A message box carries a
+        # speaker line the gap boxes it was written for do not, and measuring the walk `_box_shapes` makes
+        # puts a full-height label plus a sub-label at 82 units inside an 84-unit box -- inside by its
+        # baseline, and outside by every descender.
+        sub_label = f"{len(tool_calls)} tool calls" if len(tool_calls) > 1 else None
+        lines_for_calls = max_lines - 1 if sub_label is not None else max_lines
+        return speaker, _wrap(chatutil.format_tool_calls(tool_calls), width, lines_for_calls), sub_label
+    if (message.get("reasoning_content") or "").strip():
+        return speaker, ["(thinking only)"], None
+    return speaker, ["(empty)"], None
 
 
 def _collapse_tool_rounds(datastore: chattree.Forest,
@@ -1271,11 +1301,12 @@ def build(datastore: chattree.Forest,
                               tool_call_count=_tool_call_count(datastore, node_id),
                               pills=_pills_for(node_id, state, is_root=is_root),
                               hidden_node_ids=swallowed_tool_nodes.get(node_id, ()))
-            speaker, label_lines = _speaker_and_label_of(
+            speaker, label_lines, sub_label = _speaker_and_label_of(
                 datastore, node_id, config._get_effective_label_chars(), config.label_lines)
             shapes = _box_shapes(x, y, config.node_w, config, label_lines,
                                  fill=_fill_for(ref.role, node_id in current_branch),
                                  dashed=False, pills=ref.pills, speaker=speaker,
+                                 sub_label=sub_label,
                                  measure_text=measure_text,
                                  emphasized=(node_id == state.head_node_id),
                                  previewed=(node_id == state.cursor_name))

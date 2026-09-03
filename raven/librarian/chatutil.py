@@ -11,6 +11,7 @@ __all__ = [# The parts a message is made of, and reading them back
            "format_message_number",
            "format_persona",
            "format_message_heading",
+           "format_tool_call", "format_tool_calls",
            "format_date_now", "format_loaded_model", "format_time_now",
            "format_chatlog_datetime_now",
            "format_message_text_for_export",
@@ -47,7 +48,7 @@ import datetime
 import json
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import yaml
 
@@ -238,6 +239,45 @@ def format_message_heading(message_number: Optional[int],
         return f"{markedup_number} {markedup_persona}: "
     else:
         return f"{markedup_persona}: "
+
+
+def format_tool_call(name: str, arguments: Optional[str]) -> str:
+    """Format one tool-call invocation the way a reader is shown it: `name(key='value', ...)`.
+
+    `name`: The function name.
+    `arguments`: The call arguments as a JSON string, which is the OpenAI convention for them. Arguments
+                 that do not parse as a JSON object are shown raw rather than dropped — an invocation the
+                 model malformed is exactly the one worth being able to read.
+
+    Here rather than in whichever view happens to draw it, because more than one does: the chat log
+    renders a tool-calling turn as this signature beside a cogs icon, and the chat graph has only this to
+    label the box with, a turn that asked for a tool usually carrying no text at all. Two spellings of one
+    call would read as two different calls.
+    """
+    try:
+        parsed = json.loads(arguments) if arguments else {}
+    except (json.JSONDecodeError, ValueError):
+        parsed = None
+    if isinstance(parsed, dict):
+        signature = ", ".join(f"{key}={value!r}" for key, value in parsed.items())
+    else:  # non-dict or unparseable: show the raw arguments rather than nothing
+        signature = (arguments or "").strip()
+    return f"{name}({signature})"
+
+
+def format_tool_calls(tool_calls: Sequence[Dict[str, Any]]) -> str:
+    """Format a message's whole `tool_calls` list as one line: the signatures, comma-separated.
+
+    An entry missing its `function` block contributes nothing rather than raising — this is display code,
+    and a malformed call should cost its own signature, not the box or the message it appears in.
+    """
+    formatted = []
+    for call in tool_calls or ():
+        function = (call or {}).get("function") or {}
+        name = function.get("name")
+        if name:
+            formatted.append(format_tool_call(name, function.get("arguments")))
+    return ", ".join(formatted)
 
 
 # --------------------------------------------------------------------------------

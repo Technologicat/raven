@@ -22,7 +22,6 @@ import collections
 import concurrent.futures
 import dataclasses
 import io
-import json
 import pathlib
 import os
 import threading
@@ -1111,14 +1110,9 @@ class DPGChatMessage:
                         pre-migration data.
         """
         tool_color = role_to_colors["tool"]["front"]
-        try:
-            parsed_args = json.loads(arguments) if arguments else {}
-        except (json.JSONDecodeError, ValueError):
-            parsed_args = None
-        if isinstance(parsed_args, dict):
-            signature = ", ".join(f"{key}={value!r}" for key, value in parsed_args.items())
-        else:  # non-dict / unparseable: show the raw arguments rather than nothing
-            signature = (arguments or "").strip()
+        # `chatutil`'s, because the chat graph labels a tool-calling box with the same string, and a turn
+        # that asked for a tool usually carries no text for either view to show instead.
+        signature = chatutil.format_tool_call(name, arguments)
 
         with self.paragraphs_lock:
             row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
@@ -1135,7 +1129,7 @@ class DPGChatMessage:
             icon_tag = f"chat_message_toolcall_icon_{index}_{self.gui_uuid}"  # tag
             dpg.add_text(fa.ICON_GEARS, color=tool_color, tag=icon_tag, parent=row)  # tag
             dpg.bind_item_font(icon_tag, self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.add_text(f"{name}({signature})",
+            dpg.add_text(signature,
                          color=tool_color,
                          # Leave room for the leading icon, and for the jump button when there is one.
                          wrap=max(0, self.get_chat_text_width() - 40 - (gui_config.toolbutton_w if tool_call_id is not None else 0)),

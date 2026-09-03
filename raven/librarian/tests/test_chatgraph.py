@@ -15,6 +15,7 @@ import pytest
 from raven.common.gui.xdotwidget import graph as xdotgraph
 
 from raven.librarian import chatgraph
+from raven.librarian import chatutil
 from raven.librarian.chattree import Forest
 
 
@@ -264,6 +265,91 @@ class TestPreview:
 # ---------------------------------------------------------------------------
 # Who said it
 # ---------------------------------------------------------------------------
+
+class TestAMessageWithNoText:
+    """Three ways a message ends up with no prose, and they are three different things.
+
+    Drawn as one `(empty)` box they read as a tree full of replies that never happened — and the commonest
+    of them, a turn that asked for a tool, is the ordinary shape of an agent doing its job. Counted over a
+    real datastore on 2026-09-03: of 217 assistant messages, 45 carried no text, and 33 of those were tool
+    calls, 7 were an interrupted thinking model, 5 were genuinely nothing.
+    """
+
+    def _texts(self, built, node_id):
+        node = built.graph.get_node_by_name(node_id)
+        return [s.t for s in node.shapes if isinstance(s, xdotgraph.TextShape)]
+
+    def _forest(self, message_extras):
+        forest = Forest()
+        system = forest.create_node(payload("system", "the card"), parent_id=None)
+        asked = forest.create_node(payload("user", "go on then"), parent_id=system)
+        silent = forest.create_node(payload("assistant", ""), parent_id=asked)
+        forest.get_payload(silent)["message"].update(message_extras)
+        return forest, silent
+
+    def test_a_tool_call_says_what_it_called(self):
+        calls = [{"id": "c1", "function": {"name": "websearch",
+                                           "arguments": '{"query": "cosmology news 2026"}'}}]
+        forest, silent = self._forest({"tool_calls": calls})
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=silent))
+        drawn = " ".join(self._texts(built, silent))
+        assert "websearch" in drawn
+        assert "(empty)" not in drawn
+
+    def test_it_says_it_the_way_the_chat_log_does(self):
+        # One spelling for one call. Two would read as two different calls to a reader moving between the
+        # views, which is exactly what the graph is for.
+        calls = [{"id": "c1", "function": {"name": "websearch",
+                                           "arguments": '{"query": "cosmology news 2026"}'}}]
+        forest, silent = self._forest({"tool_calls": calls})
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=silent))
+        expected = chatutil.format_tool_call("websearch", '{"query": "cosmology news 2026"}')
+        drawn = " ".join(self._texts(built, silent))
+        # Wrapped and possibly truncated into the box, so the head of it is what can be asserted.
+        assert drawn.startswith(expected[:20]) or expected[:20] in drawn
+
+    def test_several_calls_are_counted(self):
+        calls = [{"id": f"c{k}", "function": {"name": f"tool{k}", "arguments": "{}"}} for k in range(3)]
+        forest, silent = self._forest({"tool_calls": calls})
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=silent))
+        assert "3 tool calls" in self._texts(built, silent)
+
+    def test_one_call_is_not_counted(self):
+        # The control: a count on every tool-calling box would satisfy the test above and spend a line
+        # saying "1 tool calls" on the overwhelmingly common case.
+        calls = [{"id": "c1", "function": {"name": "websearch", "arguments": "{}"}}]
+        forest, silent = self._forest({"tool_calls": calls})
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=silent))
+        assert not any("tool calls" in text for text in self._texts(built, silent))
+
+    def test_a_counted_box_keeps_its_text_inside_it(self):
+        # The count costs a label line rather than being added below them: a message box carries a speaker
+        # line that the gap boxes `sub_label` was written for do not, and the full-height version puts the
+        # last baseline two units inside an 84-unit box -- inside by the baseline, outside by the
+        # descenders.
+        calls = [{"id": f"c{k}", "function": {"name": f"tool{k}", "arguments": "{}"}} for k in range(3)]
+        forest, silent = self._forest({"tool_calls": calls})
+        config = chatgraph.LayoutConfig()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=silent), config)
+        node = built.graph.get_node_by_name(silent)
+        lowest = max(s.y for s in node.shapes if isinstance(s, xdotgraph.TextShape))
+        assert lowest <= node.y2 - config.role_font_size / 2, \
+            "the last line's descenders fall outside the box"
+
+    def test_an_interrupted_thinking_model_says_so(self):
+        forest, silent = self._forest({"reasoning_content": "let me work through this..."})
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=silent))
+        drawn = self._texts(built, silent)
+        assert "(thinking only)" in drawn
+        assert "(empty)" not in drawn
+
+    def test_a_message_with_nothing_at_all_still_says_empty(self):
+        # The one case `(empty)` is the honest answer for, and the control for the two above: a box that
+        # never said it would be indistinguishable from a tool call that went unlabelled.
+        forest, silent = self._forest({})
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=silent))
+        assert "(empty)" in self._texts(built, silent)
+
 
 class TestSpeaker:
     """Role was the one thing a node carried no channel for: colour is branch membership, and the label is
