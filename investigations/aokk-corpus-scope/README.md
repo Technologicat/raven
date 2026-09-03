@@ -538,10 +538,19 @@ inapplicable.
 `_filtered.bib` beside the judge's output, so the corpus of record is unchanged until somebody says
 otherwise.
 
-**The vocabulary is the thing to revise first.** `not_applicable` is carrying two meanings — *not about
-education* and *about education, but not at a level this asks about* — and every questionable record in
-B2 sits on that seam. A `professional_training` or `informal` value would separate them, and it costs one
-re-extraction rather than any new machinery.
+**The vocabulary is the thing to revise first, and that is the next step** (agreed with Juha,
+2026-09-03). `not_applicable` is carrying two meanings — *not about education* and *about education, but
+not at a level this asks about* — and every questionable record in B2 sits on that seam. Splitting it
+with a `professional_training` and an `informal` value costs one re-extraction and no new machinery: the
+selection, the batching and the filter all stand, and `LEVELS` plus the paragraph explaining it are the
+whole edit.
+
+Two things to hold onto when redoing it. The **`not_stated` instruction is the load-bearing one** and
+must survive the rewrite intact — it is what keeps the 581 unstated levels from being guessed at, and a
+new value is exactly the kind of addition that tempts a model to place a record rather than admit it
+cannot. And the **evidence rule is the check on the whole field**: 430 of 430 positive calls quoted their
+text, so a re-extraction that comes back with unquoted positives has regressed, whatever its
+distribution looks like.
 
 ## Where this is headed: a `raven.papers` corpus filter
 
