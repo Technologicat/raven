@@ -163,7 +163,7 @@ class TestPreview:
         # the builder's own tests, and what this one pins is that the panel asks for it.
         built, forest, app_state, ids, calls = panel
         click(built, ids["taken"])
-        assert built._view_state.previewed_node_id == ids["taken"]
+        assert built._view_state.cursor_name == ids["taken"]
 
     def test_previewing_does_not_touch_the_hover_highlight(self, panel):
         # That channel is shared with hover and has one pair of colours, so a preview drawn through it is
@@ -197,12 +197,12 @@ class TestCommit:
     def test_the_toolbar_button_commits_the_previewed_node(self, panel):
         built, forest, app_state, ids, calls = panel
         click(built, ids["not_taken"])
-        built._commit_previewed()
+        built._commit_cursor()
         assert calls.committed == [ids["not_taken"]]
 
     def test_the_toolbar_button_does_nothing_with_nothing_previewed(self, panel):
         built, forest, app_state, ids, calls = panel
-        built._commit_previewed()
+        built._commit_cursor()
         assert calls.committed == []
 
     def test_committing_clears_the_preview(self, panel):
@@ -217,12 +217,12 @@ class TestCommit:
     def test_going_home_abandons_the_preview(self, panel):
         built, forest, app_state, ids, calls = panel
         click(built, ids["not_taken"])
-        assert built._view_state.previewed_node_id, "nothing was previewed, so clearing it proves nothing"
+        assert built._view_state.cursor_name, "nothing was previewed, so clearing it proves nothing"
 
         built.go_to_head()
         assert built._chat_graph.spine == tuple(forest.linearize_up(app_state["HEAD"]))
-        assert built._previewed_node_id is None, "the preview survived, so a click would commit it"
-        assert built._view_state.previewed_node_id is None, "the ring is still drawn"
+        assert built._cursor_name is None, "the preview survived, so a click would commit it"
+        assert built._view_state.cursor_name is None, "the ring is still drawn"
 
     def test_going_home_flashes_where_it_landed(self, panel):
         # The view slides and the zoom changes together, and HEAD is parked off-centre on purpose, so
@@ -315,7 +315,7 @@ class TestFraming:
 # ---------------------------------------------------------------------------
 
 class TestGaps:
-    def _wide(self, dpg_context, width=30):
+    def _wide(self, dpg_context, width=30, on_commit=None):
         themes_and_fonts = dpg_context
         forest = Forest()
         root = forest.create_node(payload("system", "the card"), parent_id=None)
@@ -326,7 +326,8 @@ class TestGaps:
         with dpg.window() as holder:
             built = chatgraph_panel.DPGChatGraphPanel(
                 gui_parent=holder, datastore=forest, app_state=app_state,
-                themes_and_fonts=themes_and_fonts, width=400, height=300, show=True)
+                themes_and_fonts=themes_and_fonts, width=400, height=300, show=True,
+                on_commit=on_commit)
         built.refresh()
         return built, forest, chats, holder
 
@@ -346,15 +347,43 @@ class TestGaps:
             built.destroy()
             dpg.delete_item(holder)
 
-    def test_moving_the_window_is_not_a_preview(self, dpg_context):
+    def test_moving_the_window_lands_the_cursor_without_arming_it(self, dpg_context):
         # A window move is navigation, not a choice of node, so it must not leave a box armed for commit.
+        # It must still leave the cursor *somewhere*: this is the gesture that carries a reader across a
+        # level too wide to walk, and a keyboard that came out of it with nothing to step from would be
+        # back where it started.
         built, forest, chats, holder = self._wide(dpg_context)
         try:
             gaps = [ref for ref in built._chat_graph.refs.values()
                     if isinstance(ref, chatgraph.SiblingGapRef)]
-            click(built, gaps[0].name)
-            assert built._previewed_node_id is None
+            gap = gaps[0]
+            click(built, gap.name)
+            assert built._cursor_name == gap.recenter_on, "the cursor did not follow the window"
+            assert not built._cursor_armed, "a click on that box would now switch branch"
+            assert built._cursor_chat_node_id() is None, "there is a node to commit to, so the button is live"
             assert built._widget.get_highlighted_nodes() == set()
+        finally:
+            built.destroy()
+            dpg.delete_item(holder)
+
+    def test_a_landed_cursor_takes_two_clicks_to_commit_like_any_other(self, dpg_context):
+        # The negative control for the test above, and the thing that makes "unarmed" mean something: the
+        # first click on a landed box arms it exactly as a first click anywhere does, and only the second
+        # commits. Without this, a panel that ignored clicks on a landed box entirely would also pass.
+        committed = []
+        built, forest, chats, holder = self._wide(dpg_context, on_commit=committed.append)
+        try:
+            gaps = [ref for ref in built._chat_graph.refs.values()
+                    if isinstance(ref, chatgraph.SiblingGapRef)]
+            landed = gaps[0].recenter_on
+            click(built, gaps[0].name)
+
+            click(built, landed)
+            assert committed == [], "one click on a landed box switched branch"
+            assert built._cursor_armed, "the click did not arm the box it was aimed at"
+
+            click(built, landed)
+            assert committed == [landed], "the second click did not commit"
         finally:
             built.destroy()
             dpg.delete_item(holder)
@@ -442,7 +471,7 @@ class TestKeyboard:
         # alone it could only act on whatever the mouse last touched. It waits for the node cursor.
         built, forest, app_state, ids, calls = panel
         click(built, ids["taken"])  # a preview exists, so this is not passing for want of one
-        assert built._previewed_node_id is not None
+        assert built._cursor_name is not None
         assert built.handle_key(dpg.mvKey_Return) is False
         assert calls.committed == [], "Enter committed a branch the keyboard could not have chosen"
 
@@ -545,7 +574,7 @@ class TestHistory:
         built, forest, app_state, ids, calls = panel
         depth = len(built._history)
         click(built, ids["taken"])
-        assert built._previewed_node_id == ids["taken"], \
+        assert built._cursor_name == ids["taken"], \
             "the click did nothing at all, so this fixture cannot tell a no-op commit from a no-op click"
         assert built._view_state.focus_node_id is None, "the view moved, so there is a step to record"
         assert len(built._history) == depth, "a click that moved no view filled the history"

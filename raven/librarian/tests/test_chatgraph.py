@@ -357,7 +357,7 @@ class TestEmphasis:
     def test_a_previewed_box_gets_a_ring_of_its_own(self, conversation):
         forest, system, greeting, user, reply = conversation
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply,
-                                                            previewed_node_id=user))
+                                                            cursor_name=user))
         assert len(self._rings(built, user)) == 1
         assert self._rings(built, reply) == [], "the ring is on every box, so it marks nothing"
 
@@ -367,7 +367,7 @@ class TestEmphasis:
         # selection is tentative until a second click.
         forest, system, greeting, user, reply = conversation
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply,
-                                                            previewed_node_id=user))
+                                                            cursor_name=user))
         node = built.graph.get_node_by_name(user)
         ring = self._rings(built, user)[0]
         assert ring.pen.dash, "the ring is solid, so nothing says the selection is provisional"
@@ -386,7 +386,7 @@ class TestEmphasis:
         # The two marks are independent, and a reader who clicks the box they are already on should get
         # both rather than either winning.
         forest, system, greeting, user, reply = conversation
-        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply, previewed_node_id=reply))
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply, cursor_name=reply))
         config = chatgraph.LayoutConfig()
         assert len(self._rings(built, reply)) == 1
         assert max(self._outline_widths(built, reply)) == pytest.approx(config.head_line_width)
@@ -1410,6 +1410,59 @@ class TestGapIdentity:
         assert buried[-1] in gap.hidden_node_ids, \
             "a node four levels down is behind this gap and the gap does not know it"
         assert not_taken not in gap.hidden_node_ids, "the owner is drawn; it is not behind its own gap"
+
+    def test_a_drawn_node_represents_itself(self):
+        forest, ids = _forest_with_every_gap_kind()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids["head"],
+                                                            new_chat_node_id=ids["greeting"]),
+                                chatgraph.LayoutConfig(max_visible_depth=8))
+        assert built.representative_of(ids["head"]) == ids["head"]
+
+    @pytest.mark.parametrize("kind", [chatgraph.SiblingGapRef,
+                                      chatgraph.DepthGapRef,
+                                      chatgraph.SubtreeGapRef])
+    def test_a_node_behind_a_gap_is_represented_by_that_gap(self, kind):
+        # One picture, asked about a node behind each kind of gap in turn. Uniformity is the whole point:
+        # a caller that has lost the box it was standing on asks one question, whatever swallowed it.
+        forest, ids = _forest_with_every_gap_kind()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids["head"],
+                                                            new_chat_node_id=ids["greeting"]),
+                                chatgraph.LayoutConfig(max_visible_depth=8))
+        gaps = refs_of_type(built, kind)
+        assert gaps, f"no {kind.__name__} in this picture, so this parameter checks nothing"
+        gap = gaps[0]
+        hidden = gap.hidden_node_ids[0]
+        assert hidden not in built.refs, \
+            "the fixture draws the node this gap claims to hide, so the lookup cannot be tested on it"
+        assert built.representative_of(hidden) == gap.name
+
+    def test_a_node_the_picture_does_not_reach_has_no_representative(self):
+        # The honest answer where there is none, and the one place the "everything absent is behind some
+        # gap" invariant stops short: the roots gap stands for other *roots*, so a message written under
+        # one of them is named by nothing in this picture. Its own root is represented; it is not.
+        forest, ids = _forest_with_every_gap_kind()
+        other_card = forest.create_node(payload("system", "another card"), parent_id=None)
+        stranger = forest.create_node(payload("user", "a chat under it"), parent_id=other_card)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids["head"],
+                                                            new_chat_node_id=ids["greeting"]),
+                                chatgraph.LayoutConfig(max_visible_depth=8))
+        assert built.representative_of(stranger) is None
+
+
+def _forest_with_every_gap_kind():
+    """A forest whose picture gaps in all three ways at once. Returns `(forest, ids)`.
+
+    A wide level of chats (sibling gaps), a long branch below one of them (a depth gap once the window is
+    narrowed), and a fan under an off-spine chat (a subtree gap).
+    """
+    forest = Forest()
+    root = forest.create_node(payload("system", "the card"), parent_id=None)
+    greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+    chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
+    head = chain(forest, length=15, parent_id=chats[3])[-1]
+    for k in range(2):
+        forest.create_node(payload("assistant", f"reroll {k}"), parent_id=chats[2])
+    return forest, {"root": root, "greeting": greeting, "chats": chats, "head": head}
 
 
 class TestTolerance:

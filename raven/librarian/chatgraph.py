@@ -199,10 +199,16 @@ class Ref:
     The widget hands a click back as the node's `internal_name` and nothing else, so every name a `Graph`
     built here carries has an entry in `ChatGraph.refs`. A caller dispatches on the subclass rather than
     parsing the name, which is why the naming scheme is private to this module.
+
+    `hidden_node_ids`: The chat nodes this box stands in for and does not itself show. Empty for a box
+                       that shows a message; every gap kind fills it. Declared here so that asking *what
+                       is behind this box* needs no isinstance ladder — see
+                       `ChatGraph.representative_of`, which inverts it.
     """
 
     def __init__(self, name: str):
         self.name = name
+        self.hidden_node_ids: Tuple[str, ...] = ()
 
 
 class ChatNodeRef(Ref):
@@ -324,10 +330,15 @@ class ViewState:
 
     `head_node_id`: The tip of the current branch — `app_state["HEAD"]`. Where the user actually is, which
                     is what the fill colour and the HEAD pill report.
-    `previewed_node_id`: The node a click has selected, drawn with a ring of its own. Part of the picture
-                         rather than of the widget's highlight state, so that it cannot be confused with a
-                         hover — they would otherwise share one pair of colours — and so that it survives
-                         a rebuild without anyone re-applying it.
+    `cursor_name`: The box a click or `Enter` would act on, drawn with a ring of its own. Part of the
+                   picture rather than of the widget's highlight state, so that it cannot be confused with
+                   a hover — they would otherwise share one pair of colours — and so that it survives a
+                   rebuild without anyone re-applying it.
+
+                   A *graph* node name (`xdotgraph.Node.internal_name`), not a chat node ID. For a message
+                   the two coincide; a gap box has a synthesised name, and can hold the cursor like any
+                   other box. It has to: the boxes a keyboard most needs to reach are the gaps, a run of
+                   hidden siblings being reachable through nothing else.
     `focus_node_id`: The node the picture is drawn around, defaulting to `head_node_id`. These come apart
                      while previewing: clicking a node on another branch re-lays the graph out around it
                      and refreshes the siblings near it, without moving HEAD. Browsing the multiverse
@@ -345,7 +356,7 @@ class ViewState:
 
     head_node_id: str
     focus_node_id: Optional[str] = None
-    previewed_node_id: Optional[str] = None
+    cursor_name: Optional[str] = None
     new_chat_node_id: Optional[str] = None
     expanded_tool_turns: Set[str] = dataclasses.field(default_factory=set)
     sibling_focus: Dict[str, str] = dataclasses.field(default_factory=dict)
@@ -443,6 +454,29 @@ class ChatGraph:
     def ref_for(self, name: str) -> Optional[Ref]:
         """Return what the graph node called `name` stands for, or `None` if there is no such node."""
         return self.refs.get(name)
+
+    def representative_of(self, node_id: str) -> Optional[str]:
+        """Return the name of the box standing for chat node `node_id` in this picture.
+
+        Its own box if it is drawn; otherwise the gap box it is hiding behind. `None` only if the node is
+        not in this picture at all, which for a node still in the datastore means the branch on screen
+        does not pass anywhere near it.
+
+        Everything absent has a representative, by construction: the picture refuses to draw a node with
+        no visible link to the rest, so whatever is not drawn is behind some gap, and that gap's box is
+        where it belongs on screen. The three gap kinds each carry `hidden_node_ids`, which makes this a
+        dictionary inversion rather than a walk of the forest.
+
+        Two callers want the same answer for different reasons — a cursor whose box a rebuild has just
+        destroyed has to land somewhere, and an animation between two builds has to know where a box
+        arriving in the second one should come *from*.
+        """
+        if node_id in self.refs:
+            return node_id
+        for name, ref in self.refs.items():
+            if node_id in ref.hidden_node_ids:
+                return name
+        return None
 
 
 # --------------------------------------------------------------------------------
@@ -765,8 +799,9 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                  this says how deep they go.
     `emphasized`: Draw the outline heavy. This is HEAD, and where the reader actually is deserves to be
                   the loudest thing in the picture.
-    `previewed`: Draw a dotted ring outside the box. This is what a click has selected, and what a second
-                 click would commit to — dotted because that selection is tentative until the second one.
+    `previewed`: Draw a dotted ring outside the box. This is the cursor — the box a click or `Enter` acts
+                 on — and on a message it is also the branch a second click would commit to, dotted
+                 because that selection is tentative until the second one.
     """
     x1, y1 = x - 0.5 * width, y - 0.5 * config.node_h
     x2, y2 = x + 0.5 * width, y + 0.5 * config.node_h
@@ -1197,7 +1232,7 @@ def build(datastore: chattree.Forest,
                                  dashed=False, pills=ref.pills, speaker=speaker,
                                  measure_text=measure_text,
                                  emphasized=(node_id == state.head_node_id),
-                                 previewed=(node_id == state.previewed_node_id))
+                                 previewed=(node_id == state.cursor_name))
             return ref, shapes
 
         for row_index, row in enumerate(rows):
@@ -1228,7 +1263,8 @@ def build(datastore: chattree.Forest,
                     # is behind this gap either way.
                     gap_pills = ("HEAD",) if (set(slot.hidden) & current_branch) else ()
                     shapes = _box_shapes(x, y, width, config, [label], fill=None, dashed=True,
-                                         pills=gap_pills, measure_text=measure_text)
+                                         pills=gap_pills, measure_text=measure_text,
+                                         previewed=(name == state.cursor_name))
                 else:
                     name = slot.node_id
                     ref, shapes = chat_box(slot.node_id, x, y, is_root=(row_index == 0))
@@ -1262,7 +1298,8 @@ def build(datastore: chattree.Forest,
                                                      fill=None, dashed=True,
                                                      pills=("HEAD",) if hides_head else (),
                                                      sub_label=sub_label,
-                                                     measure_text=measure_text),
+                                                     measure_text=measure_text,
+                                                     previewed=(name == state.cursor_name)),
                                   internal_name=name)
             refs[name] = ref
             nodes_by_name[name] = node
