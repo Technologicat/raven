@@ -316,6 +316,89 @@ about absence needs a body of text for the absence to be measured in.** So `not_
 ordered steps — *can you name the subject at all?* first, and *is that subject outside education?* only
 if the first is yes. A test that skips the precondition is answered from the model's imagination.
 
+## Reviewing the drops, and checking the reviewer before believing it
+
+The full run dropped 1219 of 4314 records, which is far past what anyone will re-read. `review_drops.py`
+is the second reader over that list, and it is asked the *opposite* question — *make the strongest case
+that this record belongs* — because re-asking "was this right?" buys a rubber stamp. It is told nothing
+about provenance: not that the records were judged, not what the verdict was, not that a model produced
+it. Its output is a one-line case, which a person can check against the abstract in seconds; "I confirm
+the drop" is not checkable at all.
+
+**A reviewer asked whether a case exists can manufacture one for anything**, so kept records are mixed in
+unlabelled and shuffled among the rest. If both groups come back at the same rate the instrument is
+measuring nothing, and that has to be read before any of its findings are.
+
+Two slices, 600 of the 1219 dropped records, covering all three cells the drop list has:
+
+| the judge said | n | case found | rate |
+|---|---:|---:|---:|
+| `drop` / high / title | 225 | 10 | 4.4% |
+| `drop` / medium / abstract | 175 | 7 | 4.0% |
+| `drop` / high / abstract | 200 | 1 | 0.5% |
+| `keep` / high — uniform control | 31 | 24 | 77.4% |
+| `keep` / medium — uniform control | 8 | 4 | 50.0% |
+| `keep` / high — stratified control | 20 | 13 | 65.0% |
+| `keep` / medium — stratified control | 20 | 7 | 35.0% |
+
+Separations of 65.8 and 49.5 points against a 20-point floor. The instrument discriminates.
+
+**A drop is clean when it is high-confidence *and* was reached from the abstract, and neither half
+predicts that alone.** Missing either one costs the same — 4.4% contested when pass 2 never ran, 4.0%
+when it ran and hedged — while having both drops it eight-fold to 0.5%, and the single record behind
+that 0.5% is the reviewer reaching (a ChatGPT-on-a-medical-exam benchmark defended as "assessing its
+potential for higher education testing"). So the cell is effectively clean.
+
+**This was measured in two slices and the first one, read alone, said the opposite.** With only
+`high/title` and `medium/abstract` in hand the two rates match, and the reading written here was that the
+judge's confidence predicts nothing about whether a drop survives — a generalization to "the drop side"
+made from two of its three cells, in a paragraph that noted the third was unmeasured. It is the
+conjunction that carries the signal, and no amount of staring at the first slice would have shown that.
+Recorded because the same shape is available to anyone reading a partial table: the cell that is missing
+is the one that was hardest to reach, which is exactly why it is the one most likely to differ.
+
+**The uniform control was easier than what it was compared against, and the stratified draw confirms
+it.** A uniform draw from the kept pool came out 31 high / 8 medium / 1 low, where the dropped records
+under review are 44% medium — so the two groups differed in difficulty as well as in verdict. Redrawing
+20 high / 20 medium took the control from 70.0% to 50.0%, so the effect was real and worth roughly twenty
+points. It changed no conclusion: the separation is 49.5 points, and the arithmetic said in advance that
+even rejecting *every* hedged keep would leave 34.5. Worth having as a flag (`--control-strata`), not
+worth a run of its own — which is why it rode along with the slice that covered the missing cell.
+
+Note the reviewer scores the *hedged* keeps well below the confident ones (35–50% against 65–77%). That
+is the instrument agreeing with the judge's hedge rather than failing, and a pooled control rate cannot
+tell the two apart — which is what `score_review.py` splits out.
+
+**Two error shapes among the 18 contested drops, and a rate alone cannot tell them apart.** This is a
+reading of 18 records rather than a measurement:
+
+- **In the title-only cell, real misses of a predictable kind**: the title names a *domain* and the
+  abstract names a *university setting*. Agricultural planning that turns out to be taught to university
+  agriculture students; a literary translation platform trialled on translation students; a voice
+  framework deployed in a Master's thesis seminar. Roughly eight of the ten hits in that cell.
+- **In the abstract cells, the reviewer reaching** — an HCI review that "covers educational applications",
+  a computational-social-science paper that "simplifies learning", an anchoring-bias study whose only tie
+  is a college-admissions *dataset*. The prompt says a case must rest on what the record says and that
+  reaching means there is none; these are where it reached anyway.
+
+Which is why the two ~4% cells are not the same 4%: the title-only one is mostly the judge's error, the
+hedged-abstract one mostly the reviewer's. A single contested-rate hides that, and the repair for each is
+different — pass 2 on more records against a stricter reviewer prompt.
+
+Not one of the 18 was dropped for `no_ai`. That test produced zero contested drops across 600 records,
+where `not_education` produced nearly all of them — consistent with it being the test that needed three
+rewrites to stop reasoning from absence.
+
+**What the whole drop list probably holds.** Applying each cell's measured rate to its full size — 749
+title-only, 175 hedged-abstract, 295 confident-abstract — puts roughly 42 contested records in the 1219,
+of which 18 are now identified. That is a list a person can read, which was the point of reviewing at all.
+
+**The sort needs no change, and the reason is not the one it was built on.** `least_defended` ranks by
+confidence first and source second, which orders the cells medium/abstract, high/title, high/abstract.
+Contestedness actually runs high/title, medium/abstract, high/abstract — so the primary key is the weaker
+of the two, and the gap it gets wrong (4.4% against 4.0%, on 10 and 7 records) is noise. Both orderings
+put the clean cell last, which is the only distinction the data supports.
+
 ## Where this is headed: a `raven.papers` corpus filter
 
 Decided 2026-09-02, and deliberately **not** acted on yet — the AOKK framing is what the calibration is
@@ -366,6 +449,8 @@ run against the unsifted corpus.
 | File | What it is |
 |---|---|
 | `judge_scope.py` | The classifier. `--pilot N` and `--thin` are the two calibration runs; a plain run does both passes and writes the outputs. Re-running resumes |
+| `review_drops.py` | The second reader over `dropped.tsv`, asked whether a case can be made *for* each record, with kept records mixed in unlabelled as the control. `--skip`/`--limit` take a slice, `--control-strata` draws the control per confidence level |
+| `score_review.py` | Scores a review against the judge's own cells — which drops are contested, and whether the control was easier than what it was compared against. The table in *Reviewing the drops* above is its output |
 
 Generated at runtime and **not committed** — they list the contents of a corpus that lives under
 `00_stuff/`, which is gitignored research data, and this repository is public:
@@ -377,6 +462,7 @@ Generated at runtime and **not committed** — they list the contents of a corpu
 | `judged.jsonl` | the full run's resumable state |
 | `<corpus>_in_scope.bib` | the corpus with the strays taken out, importable into Visualizer |
 | `dropped.tsv` | every dropped record with a one-line reason — the reviewable half |
+| `drop-review-<from>-<to>.tsv` | one slice of that list re-read by `review_drops.py`, with the control mixed in and labelled only here |
 
 ## Reproducing
 
@@ -386,6 +472,18 @@ B=00_stuff/rawdata/AOKK/multisource/tekoalyagentti_tutkimus_deduped.bib
 python investigations/aokk-corpus-scope/judge_scope.py --bib $B --thin        # the thin-title calibration
 python investigations/aokk-corpus-scope/judge_scope.py --bib $B --pilot 200   # the random calibration
 python investigations/aokk-corpus-scope/judge_scope.py --bib $B              # the full run
+```
+
+A plain re-run of the last line replays from `judged.jsonl`, makes no model calls, and rewrites the
+outputs — which is how to pick up a change to the filtering or the sort without paying for the run again.
+
+Then the second reader over what it dropped, one slice at a time:
+
+```bash
+D=investigations/aokk-corpus-scope
+python $D/review_drops.py --bib $B --dropped $D/dropped.tsv \
+    --kept $D/<corpus>_in_scope.bib \
+    --skip 0 --limit 400 --control-strata high=20,medium=20
 ```
 
 Needs an LLM backend; `--backend-url` and `--model` point it elsewhere. The calibration runs above were

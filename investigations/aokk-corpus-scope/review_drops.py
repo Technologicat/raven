@@ -25,10 +25,18 @@ for anything, and a reviewer that says yes to everything is not discriminating �
 So `--control N` mixes in records that were *kept*, unlabelled and shuffled among the rest. If the case
 rate is the same for both groups, this instrument is measuring nothing, and that has to be visible before
 any of its findings are worth reading.
+
+**The control has to sit at the difficulty of what it is compared against**, which a uniform draw does
+not. Two thirds of the kept pool is high-confidence, while the dropped records worth reviewing are the
+hedged ones — so a uniform control is the easier group, and part of any separation it shows is that gap
+rather than the reviewer. `--control-strata high=20,medium=20` draws per stratum instead. The failure it
+prevents is a flattering number: a reviewer that can only tell obvious-in from judged-out would pass a
+uniform control and still be useless on the boundary, which is the only place the answer is in doubt.
 """
 
 import argparse
 import csv
+import json
 import logging
 import pathlib
 import random
@@ -45,6 +53,8 @@ from raven.librarian import agent, config as librarian_config, llmclient
 SCOPE_QUESTION = "studies on different aspects of the use of AI agents in higher education"
 
 ABSTRACT_CHARS = 4000
+
+CONFIDENCE_LEVELS = ("high", "medium", "low")
 
 INSTRUCTIONS = """\
 You are helping assemble a literature review on: {question}.
@@ -80,6 +90,58 @@ def read_keys(tsv_path: pathlib.Path) -> list[str]:
     """The citekeys listed in a TSV, in file order, skipping the `#` header lines a run writes."""
     lines = [line for line in tsv_path.read_text(encoding="utf-8").splitlines() if not line.startswith("#")]
     return [row["key"] for row in csv.DictReader(lines, delimiter="\t") if row.get("key")]
+
+
+def read_confidences(jsonl_path: pathlib.Path) -> dict[str, str]:
+    """The judge's confidence per citekey, from its state file. A later line supersedes an earlier one."""
+    confidences = {}
+    for line in jsonl_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            answer = json.loads(line)
+            confidences[answer["key"]] = answer["confidence"]
+    return confidences
+
+
+def parse_strata(spec: str) -> dict[str, int]:
+    """Build a `{confidence: count}` control plan from a `high=20,medium=20` command-line argument.
+
+    Raises `ValueError` on anything else, so a mistyped plan is a bad argument rather than a control
+    group quietly smaller or differently composed than the one that was asked for.
+    """
+    plan = {}
+    for part in spec.split(","):
+        name, separator, number = part.partition("=")
+        name = name.strip()
+        if not separator or name not in CONFIDENCE_LEVELS:
+            raise ValueError(f"expected one of {'/'.join(CONFIDENCE_LEVELS)}=N, got {part!r}")
+        try:
+            plan[name] = int(number)
+        except ValueError:
+            raise ValueError(f"expected {name}=N with N a whole number, got {part!r}") from None
+        if plan[name] < 0:
+            raise ValueError(f"a count cannot be negative: {part!r}")
+    return plan
+
+
+def draw_control(kept_keys: list[str], plan: dict[str, int] | None, total: int,
+                 confidences: dict[str, str], rng: random.Random) -> list[str]:
+    """The control group: kept records, drawn either uniformly or per confidence stratum.
+
+    Uniform is the simpler instrument and the wrong one here. The control exists to show that this
+    reviewer discriminates, and it can only show that at the difficulty the dropped records actually
+    sit at — so a control drawn from the whole kept pool, which is two thirds high-confidence, is
+    easier than what it is being compared against, and a wide separation would partly be measuring
+    that difference rather than the reviewer.
+    """
+    if not plan:
+        return rng.sample(kept_keys, min(total, len(kept_keys)))
+    drawn = []
+    for level, count in plan.items():
+        pool = [key for key in kept_keys if confidences.get(key) == level]
+        if len(pool) < count:
+            print(f"  stratum {level}: asked for {count}, only {len(pool)} available")
+        drawn += rng.sample(pool, min(count, len(pool)))
+    return drawn
 
 
 def format_record(index: int, record: env) -> str:
@@ -120,12 +182,24 @@ def main() -> int:
     parser.add_argument("--kept", default=None,
                         help="the run's in-scope .bib, to draw the control group from")
     parser.add_argument("--limit", type=int, default=300, metavar="N",
-                        help="review the first N dropped records. The list is sorted least-defended "
-                             "first, so the head is where a case is most likely to exist")
+                        help="review N dropped records, starting where --skip says. The list is sorted "
+                             "least-defended first, so the head is where a case is most likely to exist")
+    parser.add_argument("--skip", type=int, default=0, metavar="N",
+                        help="start N records into the dropped list, so a later run can take the next "
+                             "slice rather than re-asking about the one already reviewed")
     parser.add_argument("--control", type=int, default=40, metavar="N",
                         help="how many KEPT records to mix in, unlabelled. If the case rate is the same "
                              "for both groups this reviewer is not discriminating, and nothing it says "
                              "about the dropped ones means anything")
+    parser.add_argument("--control-strata", default=None, metavar="SPEC",
+                        help="draw the control per confidence stratum instead of uniformly, as "
+                             "`high=20,medium=20`. Overrides --control. Worth it because the dropped "
+                             "records under review are far more hedged than the kept pool is, so a "
+                             "uniform control is the easier group and part of any separation it shows "
+                             "is that difference rather than the reviewer")
+    parser.add_argument("--judged", default=None, metavar="PATH",
+                        help="the judge's state JSONL, which is where the per-record confidence that "
+                             "--control-strata needs lives (default: judged.jsonl beside this script)")
     parser.add_argument("--batch", type=int, default=10, help="records per model call")
     parser.add_argument("--seed", type=int, default=42, help="which control records, and the shuffle")
     parser.add_argument("--backend-url", default=None,
@@ -138,15 +212,25 @@ def main() -> int:
     here = pathlib.Path(__file__).resolve().parent
     records = load_records(pathlib.Path(opts.bib).expanduser().resolve())
 
-    dropped_keys = read_keys(pathlib.Path(opts.dropped).expanduser().resolve())[:opts.limit]
+    all_dropped = read_keys(pathlib.Path(opts.dropped).expanduser().resolve())
+    dropped_keys = all_dropped[opts.skip:opts.skip + opts.limit]
     reviewed = [(key, "dropped") for key in dropped_keys if key in records]
 
+    strata = parse_strata(opts.control_strata) if opts.control_strata else None
+
     # The control, drawn from what the same run kept. Unlabelled and shuffled in among the rest, so the
-    # reviewer cannot tell the groups apart and neither can its answers until they are scored.
-    if opts.control and opts.kept:
+    # reviewer cannot tell the groups apart and neither can its answers until they are scored. Every
+    # dropped record is excluded, not only the slice under review, so a control can never be a record
+    # this same run is asking about from the other side.
+    if opts.kept and (strata or opts.control):
         kept_keys = [key for key in read_keys_from_bib(pathlib.Path(opts.kept).expanduser().resolve())
-                     if key in records and key not in set(dropped_keys)]
-        control = random.Random(opts.seed).sample(kept_keys, min(opts.control, len(kept_keys)))
+                     if key in records and key not in set(all_dropped)]
+        confidences = {}
+        if strata:
+            judged = (pathlib.Path(opts.judged).expanduser().resolve() if opts.judged
+                      else here / "judged.jsonl")
+            confidences = read_confidences(judged)
+        control = draw_control(kept_keys, strata, opts.control, confidences, random.Random(opts.seed))
         reviewed += [(key, "kept") for key in control]
     random.Random(opts.seed).shuffle(reviewed)
 
@@ -178,7 +262,10 @@ def main() -> int:
         print(f"  batch {n}/{len(batches)}: {len(answers)}/{len(batch)} answered in {tim.dt:.1f}s",
               flush=True)
 
-    out_path = pathlib.Path(opts.out) if opts.out else here / "drop-review.tsv"
+    # Named for the slice it reviewed, so a second run over the next slice cannot silently overwrite the
+    # first one's answers — which are expensive and not reproducible, the model being free to differ.
+    default_name = f"drop-review-{opts.skip}-{opts.skip + opts.limit}.tsv"
+    out_path = pathlib.Path(opts.out) if opts.out else here / default_name
     with out_path.open("w", encoding="utf-8") as f:
         f.write("group\tbelongs\tkey\tcase\ttitle\n")
         for row in sorted(rows, key=lambda r: (r["belongs"] != "yes", r["group"], r["key"])):
