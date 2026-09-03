@@ -503,13 +503,24 @@ python $D/review_drops.py --bib $B --dropped $D/dropped.tsv \
 ```
 
 `--skip` takes the next slice rather than re-asking about one already reviewed, and each run writes a file
-named for its slice. Give a fresh `--seed` per slice: the control draw is seeded, so repeating the seed
-re-asks about the same forty kept records instead of drawing forty more.
+named for its slice. The four that cover this corpus, in order, with the seeds they were run under — the
+control draw is seeded, so these are needed to reproduce it and not only the dropped side:
+
+| slice | records | control | seed |
+|---|---|---|---|
+| `--skip 0 --limit 400` | the hedged-abstract cell, and part of title-only | uniform, `--control 40` | 42 |
+| `--skip 400 --limit 524` | the rest of title-only | `high=20,medium=20` | 43 |
+| `--skip 924 --limit 200` | most of confident-abstract | `high=20,medium=20` | 42 |
+| `--skip 1124 --limit 95` | the rest of it | `high=20,medium=20` | 44 |
+
+The first ran before `--control-strata` existed, which is why its control is uniform, and why it is the
+slice whose separation is flattered — see *Reviewing the drops*. Give a fresh `--seed` per slice:
+repeating one re-asks about the same forty kept records instead of drawing forty more.
 
 Then score them together, and get the list a person actually reads:
 
 ```bash
-python $D/score_review.py $D/drop-review-*.tsv --contested
+python $D/score_review.py $D/drop-review-*.tsv --dropped --contested
 ```
 
 Cells first — a drop reached from the title alone and one reached from the abstract are contested for
