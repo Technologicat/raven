@@ -1465,6 +1465,108 @@ def _forest_with_every_gap_kind():
     return forest, {"root": root, "greeting": greeting, "chats": chats, "head": head}
 
 
+class TestCursorMovement:
+    """Where the arrow keys take the cursor, which is a question about the drawn picture.
+
+    Two rules, deliberately different, because the picture answers "what continues from this" and "what is
+    beside this" in two different ways: vertically there are edges to walk, and sideways there are none —
+    the boxes on one level are siblings, which is a fact about their parent.
+    """
+
+    def test_down_follows_the_branch(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert chatgraph.neighbor_of(built.graph, system, "down") == greeting
+        assert chatgraph.neighbor_of(built.graph, greeting, "down") == user
+
+    def test_up_follows_it_back(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert chatgraph.neighbor_of(built.graph, user, "up") == greeting
+
+    def test_the_ends_of_the_branch_go_nowhere(self, conversation):
+        # The clamp. Wrapping around a tree would put the reader at the far end of the conversation for
+        # one keypress too many, with nothing having said they had reached an end.
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert chatgraph.neighbor_of(built.graph, system, "up") is None
+        assert chatgraph.neighbor_of(built.graph, reply, "down") is None
+
+    def test_sideways_steps_along_the_level(self):
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(5)]
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=chats[2]))
+
+        drawn = [ref.node_id for ref in refs_of_type(built, chatgraph.ChatNodeRef)
+                 if ref.node_id in chats]
+        drawn.sort(key=lambda node_id: built.graph.get_node_by_name(node_id).x)
+        assert len(drawn) >= 3, "this level is too narrow to step along"
+
+        for left, right in zip(drawn, drawn[1:]):
+            assert chatgraph.neighbor_of(built.graph, left, "right") == right
+            assert chatgraph.neighbor_of(built.graph, right, "left") == left
+        assert chatgraph.neighbor_of(built.graph, drawn[-1], "right") is None
+
+    def test_sideways_never_leaves_the_level(self):
+        # The negative control for the rule above, and it has to be stated over a whole picture rather
+        # than over one pair. A three-box fixture cannot tell the two rules apart: a child sits at its
+        # parent's own x, so "the nearest box in this direction" excludes it for being neither left nor
+        # right, and a rule with no notion of a level passes anyway. What discriminates is a picture with
+        # gaps in it, whose rows are spaced differently because a gap box is narrower than a message.
+        forest, ids = _forest_with_every_gap_kind()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids["head"],
+                                                            new_chat_node_id=ids["greeting"]),
+                                chatgraph.LayoutConfig(max_visible_depth=8))
+
+        checked = 0
+        for node in built.graph.nodes:
+            for direction in ("left", "right"):
+                stepped = chatgraph.neighbor_of(built.graph, node.internal_name, direction)
+                if stepped is None:
+                    continue
+                checked += 1
+                other = built.graph.get_node_by_name(stepped)
+                assert abs(other.y - node.y) <= 0.5 * (node.y2 - node.y1), \
+                    f"stepping {direction} from '{node.internal_name}' left the level it was on"
+        assert checked > 4, "almost nothing was stepped; this picture is too thin to be a control"
+
+    def test_the_cursor_can_reach_a_gap(self):
+        # The whole reason gaps are destinations: a keyboard that stepped over them could not reach what
+        # they hide, and on a wide level that is nearly everything.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=chats[15]))
+
+        gaps = refs_of_type(built, chatgraph.SiblingGapRef)
+        assert gaps, "no sibling gap in this picture, so there is nothing to step onto"
+        reached = set()
+        for direction in ("left", "right"):
+            at = chats[15]
+            while at is not None:
+                at = chatgraph.neighbor_of(built.graph, at, direction)
+                if at is not None:
+                    reached.add(at)
+        assert {gap.name for gap in gaps} <= reached, \
+            "stepping along the level from HEAD never lands on a gap box"
+
+    def test_an_unknown_direction_is_an_error(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        with pytest.raises(ValueError):
+            chatgraph.neighbor_of(built.graph, reply, "sideways")
+
+    def test_a_box_that_is_not_in_the_picture_goes_nowhere(self, conversation):
+        # A cursor whose box a rebuild has just destroyed asks this, and the answer has to be an answer
+        # rather than a crash — the panel's landing policy is what decides where it goes instead.
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert chatgraph.neighbor_of(built.graph, "no-such-box", "down") is None
+
+
 class TestTolerance:
     def test_a_node_with_no_payload_still_gets_a_box(self):
         # The builder runs against a live forest, so a node can lose its payload between the lineage walk

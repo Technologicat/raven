@@ -33,7 +33,9 @@ __all__ = ["LINE_COLOR",
            "LayoutConfig",
            "ChatGraph",
 
-           "build"]
+           "build",
+
+           "neighbor_of"]
 
 import colorsys
 import dataclasses
@@ -1606,6 +1608,69 @@ def _translate(nodes: Sequence[xdotgraph.Node], edges: Sequence[xdotgraph.Edge],
     for edge in edges:
         edge.points = [(x + dx, y + dy) for x, y in edge.points]
         _translate_shapes(edge.shapes, dx, dy)
+
+
+def neighbor_of(graph: xdotgraph.Graph, name: str, direction: str) -> Optional[str]:
+    """Return the name of the box one step `direction` from the box called `name`, or `None` at the edge.
+
+    `direction`: `"up"`, `"down"`, `"left"` or `"right"`.
+
+    Every kind of box is a destination — messages and all four kinds of gap alike. A keyboard that stepped
+    over the gaps could not reach what they hide, and what they hide is most of the forest.
+
+    Pure, and over the built picture rather than over the forest: what the reader is moving through is what
+    is drawn, so what the arrows move through must be too.
+    """
+    node = graph.get_node_by_name(name)
+    if node is None:
+        return None
+
+    if direction in ("up", "down"):
+        # Vertically along the edges rather than by position, because a box's parent is often nowhere near
+        # it horizontally: a depth gap sits at the left margin with a whole row hanging off it, and a
+        # subtree gap hangs off an owner a column or two away. The edges say what continues from what,
+        # which is what "down" is asking.
+        below = (direction == "down")
+        reachable = [other for other in _linked_to(graph, node)
+                     if (other.y > node.y) is below and other.y != node.y]
+        if not reachable:
+            return None
+        # The nearer level first, then the nearer column — so a spine running straight down is followed
+        # straight down, and a fan below is entered at the box nearest overhead.
+        return min(reachable,
+                   key=lambda other: (abs(other.y - node.y), abs(other.x - node.x))).internal_name
+
+    if direction in ("left", "right"):
+        # Sideways by position, because the boxes on one level are not linked to each other: being
+        # siblings is a fact about their parent, and there is no edge to walk. Position is also what the
+        # reader is going by.
+        #
+        # Half a box's height as the tolerance for "same level". Boxes on one row share a y exactly, and
+        # the nearest thing off the row is a whole row step away, so this separates them with room to
+        # spare while needing nothing from the layout config.
+        tolerance = 0.5 * (node.y2 - node.y1)
+        right = (direction == "right")
+        reachable = [other for other in graph.nodes
+                     if other is not node
+                     and abs(other.y - node.y) <= tolerance
+                     and (other.x > node.x) is right and other.x != node.x]
+        if not reachable:
+            return None
+        return min(reachable, key=lambda other: abs(other.x - node.x)).internal_name
+
+    raise ValueError(f"neighbor_of: unknown direction '{direction}'; "
+                     "expected one of 'up', 'down', 'left', 'right'")
+
+
+def _linked_to(graph: xdotgraph.Graph, node: xdotgraph.Node) -> List[xdotgraph.Node]:
+    """Return the nodes joined to `node` by an edge, in either direction."""
+    linked = []
+    for edge in graph.edges:
+        if edge.src is node:
+            linked.append(edge.dst)
+        elif edge.dst is node:
+            linked.append(edge.src)
+    return linked
 
 
 def _translate_shapes(shapes: Sequence[xdotgraph.Shape], dx: float, dy: float) -> None:
