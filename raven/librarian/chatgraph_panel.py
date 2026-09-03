@@ -587,7 +587,20 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 logger.warning("DPGChatGraphPanel.refresh: HEAD is gone too; leaving the picture as it is")
                 return
 
+            cursor_before = self._view_state.cursor_name
             self._reland_cursor(chat_graph)
+            if self._view_state.cursor_name != cursor_before:
+                # The ring is part of the picture, so the build above put it on the box the cursor has
+                # this instant left — a box that build no longer contains, which is to say nowhere. The
+                # cursor is then invisible while still answering the arrow keys, and the reader is moving
+                # a mark they cannot see.
+                #
+                # Build once more, now that it has landed. Only when it moved, which is only when its box
+                # was destroyed: an ordinary rebuild pays nothing, and the paths that move the cursor
+                # themselves set it before refreshing, so they pay nothing either.
+                rebuilt = self._try_build()
+                if rebuilt is not None:
+                    chat_graph = rebuilt
             self._chat_graph = chat_graph
             self._seen_generation = generation
             self._seen_head = self._view_state.head_node_id

@@ -17,6 +17,7 @@ dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed
 
 from raven.common.gui import animation as gui_animation  # noqa: E402 -- after importorskip by design
 from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
+from raven.common.gui.xdotwidget import graph as xdotgraph  # noqa: E402 -- after importorskip by design
 
 from raven.librarian import chatgraph  # noqa: E402 -- after importorskip by design
 from raven.librarian import chatgraph_panel  # noqa: E402 -- after importorskip by design
@@ -122,6 +123,18 @@ def click(panel_obj, node_name: str) -> None:
     node = panel_obj._chat_graph.graph.get_node_by_name(node_name)
     assert node is not None, f"no box named '{node_name}' in the current picture"
     panel_obj._on_click(node, dpg.mvMouseButton_Left)
+
+
+def rings_on(panel_obj, node_name: str) -> list:
+    """Return the cursor rings drawn on the named box in the picture currently on screen.
+
+    The ring lives in the shapes rather than in the widget's highlight state, so this is the only place
+    that can answer whether the reader can actually see where the cursor is.
+    """
+    node = panel_obj._chat_graph.graph.get_node_by_name(node_name)
+    assert node is not None, f"no box named '{node_name}' in the current picture"
+    return [shape for shape in node.shapes
+            if isinstance(shape, xdotgraph.PolygonShape) and shape.pen.color == chatgraph.PREVIEW_COLOR]
 
 
 # ---------------------------------------------------------------------------
@@ -561,6 +574,26 @@ class TestToolRounds:
         built.handle_key(dpg.mvKey_Return)
         assert built._cursor_name == ids["results"][0]
 
+    def test_the_cursor_is_visible_after_opening_a_round(self, rounds):
+        # Opening a gap destroys the box the cursor is on, which is what makes this the gesture the
+        # missing ring showed up on: the reader presses Enter, the mark disappears, and the arrows go on
+        # working from a place nothing marks.
+        built, forest, app_state, ids, calls = rounds
+        gap_name = the_round_gap(built)
+        built._set_cursor(gap_name)
+        built.handle_key(dpg.mvKey_Return)
+        assert built._cursor_name != gap_name, "the cursor did not move, so no ring could have been lost"
+        assert len(rings_on(built, built._cursor_name)) == 1
+
+    def test_the_cursor_is_visible_after_folding_a_round(self, rounds):
+        # The same gesture in reverse, and it lands the cursor on a box that did not exist a moment ago.
+        built, forest, app_state, ids, calls = rounds
+        click(built, the_round_gap(built))
+        built._set_cursor(ids["results"][1])
+        built.handle_key(dpg.mvKey_Back)
+        assert built._cursor_name == the_round_gap(built), "the cursor is not on the gap; this checks nothing"
+        assert len(rings_on(built, built._cursor_name)) == 1
+
     def test_an_opened_result_can_become_head(self, rounds):
         # The capability the whole item exists to restore. Two acts on the box, as anywhere else: the
         # first previews it, the second commits.
@@ -692,6 +725,19 @@ class TestKeyboard:
         built.refresh()
         assert built._cursor_name == ids["user"], \
             "the cursor did not land on the box the deleted message hung from"
+
+    def test_a_relanded_cursor_is_drawn_where_it_landed(self, panel):
+        # The ring is part of the picture rather than widget state, so a cursor moved *after* the build
+        # that will carry it is a cursor with no ring: the box it was drawn on is not in that build. It
+        # then answers the arrow keys while showing nothing, and the reader is moving a mark they cannot
+        # see. (Juha, 2026-09-03, from the live view, on opening a tool round.)
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["not_taken"])
+        forest.delete_subtree(ids["not_taken"])
+        built.refresh()
+        assert built._cursor_name == ids["user"], "the cursor did not reland, so no ring could be missing"
+        assert len(rings_on(built, ids["user"])) == 1, "the cursor is somewhere with no ring on it"
+        assert rings_on(built, app_state["HEAD"]) == [], "every box wears a ring, so it marks nothing"
 
     def test_a_deleted_box_falls_back_to_head_when_nothing_was_above(self, panel):
         # The control for the rule above, and for the last resort still being reachable: with the whole
