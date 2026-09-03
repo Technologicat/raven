@@ -287,6 +287,40 @@ class TestAMessageWithNoText:
         forest.get_payload(silent)["message"].update(message_extras)
         return forest, silent
 
+    def _round(self, forest, parent, calls):
+        """Build one agent round: the assistant message that asked, then a `tool` node per call.
+
+        The loop chains the results rather than fanning them, so three calls are three nodes deep. Built
+        by hand because no model we have will emit several calls in one message, and the shape is legal
+        OpenAI — so the only way this case gets exercised is if the fixture makes it.
+        """
+        asking = forest.create_node(payload("assistant", "", tool_calls=calls), parent_id=parent)
+        node = asking
+        for call in calls:
+            node = forest.create_node(payload("tool", f"result of {call['function']['name']}"),
+                                      parent_id=node)
+        return asking, node
+
+    def test_the_speaker_line_says_it_is_a_tool_call(self):
+        # Without it the box reads as the character saying "calculate(...)" to the user, which is not what
+        # happened. (Juha, 2026-09-03, from the live picture.)
+        calls = [{"id": "c1", "function": {"name": "calculate", "arguments": '{"expression": "sqrt(10)"}'}}]
+        forest, silent = self._forest({"tool_calls": calls})
+        forest.get_payload(silent)["general_metadata"]["persona"] = "Aria"
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=silent))
+        assert "Aria [tool call]" in self._texts(built, silent)
+
+    def test_an_ordinary_reply_says_only_who_spoke(self):
+        # The control: tagging every box would satisfy the test above and be wrong on all the others.
+        forest = Forest()
+        system = forest.create_node(payload("system", "the card"), parent_id=None)
+        spoke = forest.create_node(payload("assistant", "hello!"), parent_id=system)
+        forest.get_payload(spoke)["general_metadata"]["persona"] = "Aria"
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=spoke))
+        texts = self._texts(built, spoke)
+        assert "Aria" in texts
+        assert not any("tool call" in text for text in texts)
+
     def test_a_tool_call_says_what_it_called(self):
         calls = [{"id": "c1", "function": {"name": "websearch",
                                            "arguments": '{"query": "cosmology news 2026"}'}}]
@@ -342,6 +376,44 @@ class TestAMessageWithNoText:
         drawn = self._texts(built, silent)
         assert "[thinking only]" in drawn
         assert "[empty]" not in drawn
+
+    def test_the_answer_after_a_tool_round_is_still_attached(self):
+        # The row after a collapsed round hangs, in the datastore, from a `tool` node the picture does not
+        # draw — so the edge had nowhere to start and the whole row lost every edge it had, siblings
+        # included. The branch then appeared to stop at the tool call with its answer floating unattached
+        # below it. (Juha, 2026-09-03, from the live picture: "the graph breaks there on both sides".)
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        asked = forest.create_node(payload("user", "what is sqrt(10)?"), parent_id=root)
+        calls = [{"id": "c1", "function": {"name": "calculate", "arguments": '{"expression": "sqrt(10)"}'}}]
+        asking, last_result = self._round(forest, asked, calls)
+        answer = forest.create_node(payload("assistant", "about 3.1623"), parent_id=last_result)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=answer))
+        assert last_result not in built.refs, "the round is drawn expanded, so nothing was collapsed"
+
+        attached = {(edge.src.internal_name, edge.dst.internal_name) for edge in built.graph.edges}
+        assert (asking, answer) in attached, \
+            "the answer hangs off nothing; the branch is drawn in two disconnected pieces"
+
+    def test_a_wide_round_keeps_its_siblings_attached_too(self):
+        # The half that made this visible on screen: it is not one edge that goes missing but the row's,
+        # so a sibling of the answer is orphaned as well. Needs a fixture with siblings on that row, which
+        # the single-branch case above does not have.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        asked = forest.create_node(payload("user", "what is sqrt(10)?"), parent_id=root)
+        calls = [{"id": f"c{k}", "function": {"name": f"tool{k}", "arguments": "{}"}} for k in range(3)]
+        asking, last_result = self._round(forest, asked, calls)
+        answers = [forest.create_node(payload("assistant", f"answer {k}"), parent_id=last_result)
+                   for k in range(3)]
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=answers[1]))
+        attached = {(edge.src.internal_name, edge.dst.internal_name) for edge in built.graph.edges}
+        drawn_answers = [node_id for node_id in answers if node_id in built.refs]
+        assert len(drawn_answers) == 3, "the fixture did not draw the siblings, so it checks one edge"
+        for node_id in drawn_answers:
+            assert (asking, node_id) in attached, f"sibling {node_id} was left unattached"
 
     def test_a_message_with_nothing_at_all_still_says_empty(self):
         # The one case `[empty]` is the honest answer for, and the control for the two above: a box that

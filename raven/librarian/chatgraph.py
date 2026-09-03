@@ -663,9 +663,15 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
         # speaker line the gap boxes it was written for do not, and measuring the walk `_box_shapes` makes
         # puts a full-height label plus a sub-label at 82 units inside an 84-unit box -- inside by its
         # baseline, and outside by every descender.
+        # The speaker line says what kind of thing this is, because the label alone does not: a box
+        # reading "Aria / calculate(expression='sqrt(10)')" looks like Aria saying that to the user, when
+        # what happened is that she reached for a tool. Square brackets, as everywhere the picture speaks
+        # in its own voice rather than the message's.
         sub_label = f"{len(tool_calls)} tool calls" if len(tool_calls) > 1 else None
         lines_for_calls = max_lines - 1 if sub_label is not None else max_lines
-        return speaker, _wrap(chatutil.format_tool_calls(tool_calls), width, lines_for_calls), sub_label
+        return (f"{speaker} [tool call]",
+                _wrap(chatutil.format_tool_calls(tool_calls), width, lines_for_calls),
+                sub_label)
     # Square brackets, which is how the constellation says something in its own voice rather than the
     # message's -- `[Video is off]`, `[no extractable text]`, `[Interrupted — the reply was stopped here]`.
     # A box carrying one of these is not quoting a message that says "empty"; it is remarking that there
@@ -1431,9 +1437,21 @@ def build(datastore: chattree.Forest,
                                            and extra.owner != state.head_node_id))
             graph_edges.append(_edge_between(owner_node, node, config))
 
+        # Which assistant box swallowed each tool-result node, for the rows that hang off one.
+        owner_of_swallowed = {tool_node_id: owner
+                              for owner, tool_node_ids in swallowed_tool_nodes.items()
+                              for tool_node_id in tool_node_ids}
+
         for row_index in range(1, len(drawn)):
             parent_id = rows[row_index].parent_node_id
             parent_node = nodes_by_name.get(parent_id) if parent_id is not None else None
+            if parent_node is None and parent_id in owner_of_swallowed:
+                # The parent is a tool result folded into the message that asked for it. A row hangs from
+                # the *datastore* parent, which is right for keying a sibling window and wrong for drawing
+                # an edge -- so the edge goes to the box that stands for it. Without this the row loses
+                # every edge it has, siblings and all, and the branch appears to stop at the tool call
+                # while its answer floats unattached below.
+                parent_node = nodes_by_name.get(owner_of_swallowed[parent_id])
             if parent_node is None:
                 # The parent fell outside the depth window. The gap directly above this row stands in for
                 # the whole elided chain, so it is what the row hangs from -- every slot of it, since they
