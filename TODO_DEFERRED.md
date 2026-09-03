@@ -15,7 +15,7 @@ backlog. The recurring moment to ask is the triage step in the release procedure
 
 ## Tell a wedged reply from a hard one, instead of capping both
 
-*Cluster: agent-scripting · Cost: M · Gate: none, but check the failure still reproduces before building — see the last paragraph · Filed: 2026-09-03*
+*Cluster: agent-scripting · Cost: M · Gate: none, but see the last paragraph — this may retire itself, and watching the field is how that gets noticed · Filed: 2026-09-03*
 
 `agent.ask` caps a reply at `DEFAULT_MAX_REPLY_TOKENS`, which exists because an unattended batch run met a
 model that fell into a repetition loop and generated until it filled the context — half an hour to produce
@@ -29,8 +29,12 @@ originally floated by Seth Herd on LessWrong; raised here by Juha (2026-09-03) a
 
 **Check before building that the failure still happens.** Executive function has improved markedly in
 recent model releases and looks likely to keep improving, so this may retire itself — which is also why it
-is not on the critical path. The cheap test is to lift the cap on a long batch run and see whether anything
-runs away.
+is not on the critical path.
+
+**Watching the field is enough evidence to retire this**, and is the trigger that will actually fire.
+Reproducing it on purpose means a multi-hour batch run with the cap lifted, which may well not reproduce —
+a test that expensive and that unreliable is one nobody performs, so an item gated on it would sit here
+forever regardless of whether the problem still exists.
 
 ## An option to hold the avatar's video off until the answer is complete
 
