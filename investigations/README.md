@@ -43,6 +43,8 @@ that stops the link decaying again, and it is worth keeping up even when the con
 | `chatgraph-rebuild-cost/` | What one rebuild of the chat graph view costs, and what it scales with — the number of boxes drawn rather than the size of the forest, so the sibling window is bounded by legibility rather than by time. Also the reason the depth window can hide the very level the sibling window exists for |
 | `aokk-corpus-scope/` | Flagging the records a boolean literature search pulled in that are not about its topic, so they can be reviewed out. Chiefly a lesson about which way to ask: every record has already passed the search, so a model asked to re-confirm it reads every silence as a rejection — *"AI focus, but educational level unstated"* dropping real studies at medium confidence. Asked instead for evidence of being *off* topic, the same records come back kept. Also the counter-example to `agent-batch-classification/`: on this corpus the model is honest about thin input rather than confident about it |
 
+| `tool-round-shape/` | How many result nodes a tool round actually folds, which decides whether the chat graph's folding of them buys anything. On Qwen 3.6, 85% fold exactly one — a box to hide a box — so a designed way to unfold them was measured and deferred rather than built. Written as a script because the answer is a property of the *model's* habits, and "models are becoming more agentic" is a prediction where this is a measurement: re-run it when the model changes |
+
 ## Shared instruments are pointed at, not copied
 
 Some probes serve several investigations, or belong to a brief rather than to a study. Those stay where they

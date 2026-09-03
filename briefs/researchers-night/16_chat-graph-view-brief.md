@@ -1309,7 +1309,35 @@ belongs to; a shared row was never carrying that. With the arrows drawn, the dep
 Worth keeping as a worked example of the shape: a layout complaint whose cause was a missing *link*, where
 changing the layout would have hidden the symptom and left the actual fault in place.
 
-### A folded tool round becomes a gap box, settled 2026-09-03 (Juha's call)
+### A folded tool round becomes a gap box — designed 2026-09-03, and deferred the same day
+
+**Measured before building, and the measurement deferred it**: `investigations/tool-round-shape/`. On the
+live datastore, with Qwen 3.6, **85% of tool rounds fold exactly one result node** — a box to hide a box.
+With the threshold that never gaps a single node the mechanism is invisible in those 85%, and what it buys
+in the rest is **ten boxes**.
+
+So the design below is correct and unbuilt. What decided it, in order:
+
+- **Unconditional folding is worse than none**, and the threshold makes the common case cost nothing —
+  which also means it *saves* nothing there.
+- **The remaining cost is conceptual rather than per-round**: another gesture in the vocabulary, and a rule
+  to teach — *results are usually drawn, but folded at three or more, and then you open the gap and press
+  Backspace to close it*. Hard to explain, for ten boxes.
+- **Deferring is not free, and the reason it is affordable is this write-up.** The cost of deferring falls
+  on a human re-loading a design months later (Juha's point, and the correction to an AI's arithmetic that
+  counted the work as identical whenever done). That cost is what the section below pays.
+- **Multi-call is not hypothetical even now** — 8 rounds of 54 asked for two or three tools — and newer
+  models are built for agentic work, so the balance is expected to shift. That is a prediction; the script
+  is how we will notice rather than guess. **Re-run it when the model family changes.**
+
+The immediate consequence: **tool results stay folded and stay unreachable** — no box, no cursor, and no
+way to make one HEAD, which the chat log allows. That is a known gap, accepted for now, and the cheapest
+fix if it starts to hurt before the machinery is worth it is to stop folding altogether and simply draw
+them, which costs one row per round and no vocabulary at all.
+
+---
+
+**The design, settled 2026-09-03 (Juha's call), for when the measurement turns:**
 
 **The problem.** A tool round's result nodes are folded into the message that asked for them, and there is
 no way to unfold one — so they have no box, no cursor can reach them, and none can be made HEAD, which the
