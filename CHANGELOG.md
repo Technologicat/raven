@@ -397,6 +397,8 @@
 
 - dismissing an error dialog no longer also acts on the graph behind it. The dialog floats over the canvas, so clicking its button re-centered the view on whichever node happened to sit under the pointer. 0.2.8 fixed the keyboard half of this; the mouse half was still open, because the graph's handlers are global — they fire wherever the cursor is — and decided "is the mouse over the graph?" geometrically, which cannot tell that a dialog is covering it.
 
+- button flashes and error reports in the file dialog no longer fade in steps. The idle throttle, which drops the app to ~12 fps when nothing is happening, asked only the graph whether anything was animating — so a flash lasting a second, or a report standing for three, ran at the idle rate once the half second bought by your click had passed.
+
 *Constellation-wide*
 
 - **`&amp;` and `&nbsp;` no longer survive into text taken from a bibliography.** A database that exports HTML into a BibTeX field leaves them there, and Raven decoded the neighbouring entities (`&lt;`, `&le;`, `&auml;`) while passing these two through — so a title reading `Q&A` displayed as `Q&amp;A`, in the Visualizer's word cloud and info panel and in Librarian's citations alike. An escaped entity is still decoded only once, so a source that wrote `&amp;lt;` to mean a literal `&lt;` keeps saying that.

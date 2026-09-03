@@ -528,8 +528,12 @@ def _is_busy() -> bool:
     """True when the render loop should run at full frame rate."""
     if (time.monotonic_ns() - _last_input_ns) < config.INPUT_ACTIVE_S * 1e9:
         return True
-    widget = _app_state["widget"]
-    return bool(widget is not None and widget.is_animating())
+    # The animator's own count, as every other app in the constellation asks it. This used to ask the
+    # widget directly, which answered for the graph and for nothing else — so the file dialog's button
+    # flashes and its error reports, which last a second and three seconds against the half second an
+    # input buys, faded at the throttled rate. The widget is counted here now that it reports whether it
+    # is animating rather than that it exists.
+    return gui_animation.animator.transient_count > 0
 
 
 def _on_key(sender, app_data) -> None:
