@@ -13,6 +13,25 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Tell a wedged reply from a hard one, instead of capping both
+
+*Cluster: agent-scripting · Cost: M · Gate: none, but check the failure still reproduces before building — see the last paragraph · Filed: 2026-09-03*
+
+`agent.ask` caps a reply at `DEFAULT_MAX_REPLY_TOKENS`, which exists because an unattended batch run met a
+model that fell into a repetition loop and generated until it filled the context — half an hour to produce
+a reply that could not parse. The cap converts that into a failed batch quickly, and it is the right blunt
+instrument, but it is blunt: it cannot tell a model thinking hard from a model looping, so it is set by
+what a legitimate reply was *measured* to need and anything above that dies whatever it was doing.
+
+The sharper version is to read the reasoning trace and ask whether it was still making progress near the
+end — a judgement the trace supports and a token count does not. That is system-2 prompting, an idea
+originally floated by Seth Herd on LessWrong; raised here by Juha (2026-09-03) as the v2 of the cap.
+
+**Check before building that the failure still happens.** Executive function has improved markedly in
+recent model releases and looks likely to keep improving, so this may retire itself — which is also why it
+is not on the critical path. The cheap test is to lift the cap on a long batch run and see whether anything
+runs away.
+
 ## An option to hold the avatar's video off until the answer is complete
 
 *Cluster: avatar-during-generation · Cost: S · Gate: none, but the condition has to be manufactured to see it at all · Filed: 2026-09-02 · See also: "Start synthesizing speech while the reply is still streaming"*
