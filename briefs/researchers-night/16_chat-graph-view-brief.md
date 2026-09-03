@@ -1190,18 +1190,11 @@ list is a judgement about how the picture reads, and those are decided in front 
    need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
    thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render
    thread where `split_frame` deadlocks.
-   - **Nothing can expand a tool round, and the mechanism for it has been there all along** (found
-     2026-09-03). `ViewState.expanded_tool_turns` is read by `build`, honoured by `_collapse_tool_rounds`,
-     and carried through the history's snapshot and restore — and *nothing ever adds to it*. No click, no
-     key, no button. So every round is folded permanently, its result nodes have no box, and with no box
-     there is no cursor and no way to make one HEAD, which the chat log allows. A capability that is
-     modelled, persisted and unreachable.
-     - **It wants deciding with the badge below, not separately.** A folded round is conceptually a gap —
-       content that exists and is not drawn — and this picture's rule for a gap is that acting on it opens
-       it. So the mark saying "results are folded here" and the way to unfold them should be one thing.
-     - **The gesture cannot be a click on the mark.** Hit detection is per `Node`: the widget hands back
-       whole elements and never sub-shapes, so nothing inside a box is separately clickable. It has to be
-       a key while the cursor is on the box, or a modifier-click on the box.
+   - **Nothing can expand a tool round** (found 2026-09-03), so its results have no box, no cursor and no
+     way to become HEAD. **Designed and settled the same day — see *A folded tool round becomes a gap box*
+     above.** It turns out not to need `ImageShape` at all: the round is drawn as a gap box rather than as
+     a mark on the message, so it needs no glyph and no new gesture. Which unblocks it from this item, and
+     leaves this one to the role glyphs and the thumbnails.
    - **It now has a third consumer, and that is the one to design against: a mark saying a tool round got
      its results back** (Juha, 2026-09-03). The box already says `Aria [tool call]` and names the call, and
      counts the calls on a second line when there is more than one — but nothing says whether the round
@@ -1315,6 +1308,62 @@ belongs to; a shared row was never carrying that. With the arrows drawn, the dep
 
 Worth keeping as a worked example of the shape: a layout complaint whose cause was a missing *link*, where
 changing the layout would have hidden the symptom and left the actual fault in place.
+
+### A folded tool round becomes a gap box, settled 2026-09-03 (Juha's call)
+
+**The problem.** A tool round's result nodes are folded into the message that asked for them, and there is
+no way to unfold one — so they have no box, no cursor can reach them, and none can be made HEAD, which the
+chat log allows. The mechanism has been there all along and is simply unreachable: `expanded_tool_turns`
+is read by `build`, honoured by `_collapse_tool_rounds` and carried through the view history, and *nothing
+has ever written to it*. This design is the writer.
+
+**Two candidates were weighed, and the losing one is worth recording.** A mark on the box (a pill at the
+bottom-right corner) plus a new key costs no layout, and was rejected because it needs a gesture no other
+node type has, in both channels — a key for the keyboard and a modifier-click for the mouse.
+
+**What it is instead: the round is drawn as a gap box**, below the message that asked for the tools, in
+the family of the four that exist. Three things fall out of that, and the third was not the reason for it:
+
+- **No new gesture at all.** Acting on a gap opens it; that is already the rule, already what `Enter` and
+  a click do, and the arrows already reach a gap box because `neighbor_of` walks every drawn node.
+- **`Enter` stays uniform**, which is what ruled the alternative out. On a message box `Enter` commits, so
+  it cannot also mean *expand* there — but the box being acted on is not the message, it is the gap.
+- **It stops the picture lying.** Since the edge fix of 2026-09-03 a round draws as call → answer with a
+  direct edge, because the edge is redirected past the folded parent. Nodes really do sit between them.
+  With a gap box the lineage is call → gap → answer, which is what the datastore says. **The
+  `owner_of_swallowed` redirection in `build` therefore wants revisiting rather than leaving** — it exists
+  to paper over precisely the hole this fills.
+
+**Not the attachments' vocabulary**, though the resemblance is real and was considered. An attachment is a
+sidecar of one message: no identity in the tree, cannot be HEAD, cannot be navigated to. A tool result is
+a node. Giving them one mark would say they are the same kind of thing, and the difference is the entire
+complaint.
+
+**Collapsing back is `Backspace`**, from the cursor anywhere inside an expanded round. It needs its own
+key because both obvious ones are spoken for: `Esc` puts the cursor away, and `Enter` on a drawn tool
+result must *commit* — that being the capability this whole item exists to restore.
+
+**What the build has to solve, and it is the only hard part:** a folded round sits *between two spine
+nodes*, so its box needs a row or a band of its own. `_DepthGap` is the precedent — `band_y`,
+`depth_gap_nodes`, and the row-parent fallback in the edge loop all exist for a gap in the same position.
+Expect the layout, not the ref or the activation, to be where the work is.
+
+Known and already in place:
+
+- `_collapse_tool_rounds` returns `swallowed_tool_nodes`: owner → the tool nodes dropped under it. That is
+  the input.
+- The new ref carries `hidden_node_ids` like every other gap kind, so `ChatGraph.representative_of` keeps
+  working and a cursor whose box vanishes on expanding lands correctly.
+- The label is `…N more`, one phrasing for all the kinds.
+
+Open, to settle while building:
+
+- **Whether a single result is inlined rather than gapped.** Rule 1's family inlines at one and gaps at
+  three, on the grounds that a box spent to hide one box is a box wasted. A one-call round is by far the
+  commonest, so this decides whether the common case gains a row or not — and that row is the whole cost
+  of this design.
+- What an expanded round costs vertically on a branch with several of them, which is the objection the
+  collapsing exists to answer. Worth a look before committing to it.
 
 ### Fitting the branch got a button (2026-09-02)
 
