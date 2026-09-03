@@ -18,22 +18,30 @@ import pytest
 from raven.common import quitsignal
 
 
+# Delivering a signal to ourselves is POSIX-only: `os.kill` on Windows cannot deliver `SIGTERM`, it calls
+# `TerminateProcess`, so a test that tried would end the run rather than fail it.
+posix_only = pytest.mark.skipif(os.name != "posix", reason="needs real signal delivery to self")
+
+# And asking what handlers a *C library* installed needs the kernel's own view, which is Linux's `/proc`.
+# `signal.getsignal` cannot answer it — it reports what Python installed, and the whole question here is
+# what SDL did behind Python's back.
+_PROC_STATUS = pathlib.Path(f"/proc/{os.getpid()}/status")
+needs_proc = pytest.mark.skipif(not _PROC_STATUS.exists(),
+                                reason="reads the kernel's signal mask from /proc (Linux)")
+
+
 @pytest.fixture
 def restore_signal_handlers():
     """Put back whatever handlers were installed, so a test cannot leak one into the rest of the run."""
-    saved = {signum: signal.getsignal(signum) for signum in (signal.SIGTERM, signal.SIGHUP)}
+    saved = {signum: signal.getsignal(signum) for signum in quitsignal.DEFAULT_SIGNALS}
     yield
     for signum, handler in saved.items():
         signal.signal(signum, handler)
 
 
 def caught_signals() -> set:
-    """Return the signals this process has handlers installed for, read from the kernel's own view.
-
-    `signal.getsignal` cannot answer this: it reports what *Python* installed, and the whole question here
-    is what a C library installed behind Python's back.
-    """
-    for line in pathlib.Path(f"/proc/{os.getpid()}/status").read_text().splitlines():
+    """Return the signals this process has handlers installed for, read from the kernel's own view."""
+    for line in _PROC_STATUS.read_text().splitlines():
         if line.startswith("SigCgt:"):
             mask = int(line.split()[1], 16)
             return {s for s in signal.Signals if mask & (1 << (s.value - 1))}
@@ -41,12 +49,14 @@ def caught_signals() -> set:
 
 
 class TestItAsksTheAppToStop:
+    @posix_only
     def test_the_signal_reaches_the_callback(self, restore_signal_handlers):
         asked = []
         quitsignal.install(lambda: asked.append(True))
         os.kill(os.getpid(), signal.SIGTERM)
         assert asked == [True], "SIGTERM did not reach the callback"
 
+    @needs_proc
     def test_the_default_would_have_killed_us(self, restore_signal_handlers):
         # The negative control, and the reason this module exists: without the handler the same signal
         # terminates the process outright, so nothing that runs at exit runs. Asserted on the disposition
@@ -73,10 +83,19 @@ class TestItAsksTheAppToStop:
         thread.join()
         assert failed and "main thread" in failed[0]
 
+    @needs_proc
     def test_a_signal_the_platform_lacks_is_survivable(self, restore_signal_handlers):
         # An app that cannot catch a signal should still start. Nothing here is more important than that.
         quitsignal.install(lambda: None, signals=(signal.SIGTERM, signal.SIGKILL))  # SIGKILL cannot be caught
         assert signal.SIGTERM in caught_signals(), "the survivable one was skipped along with the fatal one"
+
+    def test_the_default_list_holds_only_signals_this_platform_has(self):
+        # The Windows lesson, pinned: naming `SIGHUP` in a default argument is enough to fail the module's
+        # *import* there, which takes the app down rather than one signal. Portable on purpose — this is
+        # the test that has to run on the platform it is about.
+        assert quitsignal.DEFAULT_SIGNALS, "no signals at all; a termination would go unhandled everywhere"
+        for signum in quitsignal.DEFAULT_SIGNALS:
+            assert getattr(signal, signum.name, None) is signum
 
 
 _RENDER_LOOP_UNDER_SIGTERM = r'''
@@ -107,6 +126,7 @@ print(f"STOPPED-AFTER {frames}")
 '''
 
 
+@posix_only  # the subprocess signals itself, which on Windows would terminate it instead of asking
 @pytest.mark.gui  # it maps a window for a fraction of a second, which takes focus like any other
 def test_sigterm_leaves_the_render_loop_and_runs_the_teardown():
     """The whole point, end to end: a `kill` has to come out where the close button comes out.
@@ -133,6 +153,7 @@ def test_sigterm_leaves_the_render_loop_and_runs_the_teardown():
 class TestWhatSDLDoesToOurSignals:
     """Characterizing pygame/SDL, because the fix in `player` is shaped entirely by it."""
 
+    @needs_proc
     def test_the_sdl_hint_keeps_our_signals_ours(self, restore_signal_handlers):
         # `player` sets `SDL_NO_SIGNAL_HANDLERS` before importing pygame; importing it here therefore
         # exercises the shipped configuration rather than a hypothetical one.
@@ -150,6 +171,7 @@ class TestWhatSDLDoesToOurSignals:
         finally:
             pygame.mixer.quit()
 
+    @posix_only
     def test_ctrl_c_still_works(self, restore_signal_handlers):
         # SIGINT is deliberately left to CPython, whose handler raises `KeyboardInterrupt` — which the
         # render loops already catch. This pins that SDL does not displace it, since if it did, the apps

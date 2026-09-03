@@ -21,7 +21,8 @@ SDL reinstalls its handlers every time it does.
 displace it (checked), and the render loops already catch it.
 """
 
-__all__ = ["install"]
+__all__ = ["DEFAULT_SIGNALS",
+           "install"]
 
 import logging
 import signal
@@ -30,16 +31,23 @@ from typing import Callable, Sequence
 
 logger = logging.getLogger(__name__)
 
+# What a session manager, a supervisor, a logout and a plain `kill` send — of those this platform has.
+# Built by lookup rather than written out, because `SIGHUP` does not exist on Windows and naming it in a
+# default argument is enough to fail the *import*, which would take the whole app down on that platform
+# rather than one signal. (It did, on CI, 2026-09-03.)
+DEFAULT_SIGNALS = tuple(found for found in (getattr(signal, name, None)
+                                            for name in ("SIGTERM", "SIGHUP"))
+                        if found is not None)
+
 
 def install(on_quit: Callable[[], None],
-            signals: Sequence[signal.Signals] = (signal.SIGTERM, signal.SIGHUP)) -> None:
+            signals: Sequence[signal.Signals] = DEFAULT_SIGNALS) -> None:
     """Ask `on_quit` to be called when the process is asked to terminate.
 
     `on_quit`: What to do about it. **Called from a signal handler**, so it must be cheap and must not
                wait for anything: set a flag, or ask the render loop to stop. A GUI app passes
                `dpg.stop_dearpygui`, which lets its ordinary teardown run on the way out of the loop.
-    `signals`: Which signals to treat as "please stop". The default pair is what a session manager, a
-               supervisor, a logout and a plain `kill` send.
+    `signals`: Which signals to treat as "please stop". Defaults to `DEFAULT_SIGNALS`, which see.
 
     Must be called from the main thread — `signal.signal` accepts no other — and after anything that
     initializes SDL, or SDL's handlers replace these. In practice: at app start, before the render loop.
