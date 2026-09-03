@@ -1176,6 +1176,14 @@ list is a judgement about how the picture reads, and those are decided in front 
    need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
    thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render
    thread where `split_frame` deadlocks.
+   - **It now has a third consumer, and that is the one to design against: a mark saying a tool round got
+     its results back** (Juha, 2026-09-03). The box already says `Aria [tool call]` and names the call, and
+     counts the calls on a second line when there is more than one — but nothing says whether the round
+     completed, and the result nodes it swallowed are listed in `ChatNodeRef.hidden_node_ids` with nobody
+     reading them. Four docstrings promised a badge for years of session-time and none of them drew one;
+     this is where it lands.
+   - Next up as of 2026-09-03, and it starts clean: nothing else in the remaining list depends on the
+     cursor work or on today's tool-call labelling.
 5. **Attachment thumbnails**, to the design above: straddling the right edge, stacked and capped, bordered
    in the graph's line pen, prepared on a background task with a placeholder meanwhile.
 6. **The avatar pause gate, and the auto-switch that goes with it.** Never built — so the two symptoms
@@ -1264,6 +1272,25 @@ Two things about it that are easy to get wrong and are pinned by tests:
 **What the clamp cannot do is fill a panel with a short chat.** Where the tree is smaller than the
 viewport at 1:1 there is nothing to pan to, and the picture is centred. Whether that or a top alignment
 reads better is open, and wants looking at rather than arguing about.
+
+### Open: subtree gaps sit at different depths across one level (2026-09-03)
+
+Noticed live by Juha — the `…N more` boxes left and right of the branch land on different rows, and the
+picture reads as ragged. Not a bug: `_extra_subtree` puts a subtree gap on the row *below its owner* when
+that column is free there, and in a band between rows when something already occupies it. Same rule,
+different neighbours, so a level's gaps scatter according to what happens to be under each of them.
+
+**It is a trade against the dead-space fix of 2026-09-02, which is why it wants deciding rather than
+patching.** The band used to be unconditional, and it cost a whole row of height for the *entire* level
+whenever one gap far off to one side needed it — measured then at 128 units of nothing.
+
+- **Leave it.** Compact, ragged.
+- **Uniform per level**: if any subtree gap on a level needs a band, they all use it. One line for the eye
+  to read, at the price of a row of height back on exactly the levels that look uneven now. A few lines —
+  compute each gap's fit for the level, then take the conjunction.
+
+Claude's lean is the second (raggedness costs a reader on every look; the height costs only where it
+happens), but it partly reverses yesterday's fix, so it is Juha's.
 
 ### Fitting the branch got a button (2026-09-02)
 
