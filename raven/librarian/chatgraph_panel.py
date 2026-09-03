@@ -141,6 +141,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._seen_head: Optional[str] = None
 
         self._commit_button_tag = f"chat_graph_commit_button_{self.gui_uuid}"  # tag
+        self._fold_button_tag = f"chat_graph_fold_button_{self.gui_uuid}"  # tag
         self._dark_mode_button_tag = f"chat_graph_dark_mode_button_{self.gui_uuid}"  # tag
         self._back_button_tag = f"chat_graph_back_button_{self.gui_uuid}"  # tag
         self._forward_button_tag = f"chat_graph_forward_button_{self.gui_uuid}"  # tag
@@ -269,6 +270,12 @@ class DPGChatGraphPanel(gui_animation.Animation):
             add_button(fa.ICON_CODE_BRANCH, self._commit_cursor,
                        "Switch to the previewed branch\n(or click its box a second time)",
                        self._commit_button_tag, enabled=False)
+            # The pointer's only route to folding a round back up, `Backspace` being the sole key for it
+            # and right-click being spoken for in the widget, where it opens a node's URL. Enabled only
+            # inside an opened round, so a reader who has never met one never wonders what it does.
+            add_button(fa.ICON_COMPRESS, self._collapse_round,
+                       "Fold this tool round back up [Backspace]",
+                       self._fold_button_tag, enabled=False)
 
     # ------------------------------------------------------------------
     # Where the reader has been
@@ -849,7 +856,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # whichever box now stands for what the reader was pointing at. Which is the first result on the
         # way in and the gap itself on the way out, both without being told.
         self.refresh()
-        self._enable_commit(self._cursor_chat_node_id() is not None)
+        self._update_cursor_buttons()
 
     def _collapse_round(self) -> None:
         """Fold the tool round the cursor is inside back into a gap box, if it is inside one."""
@@ -906,13 +913,18 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._view_state.head_node_id = self.app_state["HEAD"]
         self.refresh()
 
-    def _enable_commit(self, enabled: bool) -> None:
-        """Enable or disable the toolbar's commit button."""
-        with guiutils.nonexistent_ok():
-            if enabled:
-                dpg.enable_item(self._commit_button_tag)
-            else:
-                dpg.disable_item(self._commit_button_tag)
+    def _update_cursor_buttons(self) -> None:
+        """Enable each button that acts on the cursor exactly when the cursor gives it something to do.
+
+        The convention Visualizer set — a button is live when pressing it would do something — and the
+        answers are questions about the picture the last rebuild produced, so call this after it rather
+        than before. A cursor moved onto a box that rebuild then dropped can commit to nothing, and asking
+        first would have said otherwise.
+        """
+        for tag, enabled in ((self._commit_button_tag, self._cursor_chat_node_id() is not None),
+                             (self._fold_button_tag, self._round_at_cursor() is not None)):
+            with guiutils.nonexistent_ok():
+                (dpg.enable_item if enabled else dpg.disable_item)(tag)
 
     def _set_cursor(self, name: Optional[str]) -> None:
         """Move the cursor to a box, or clear it, and redraw so the ring moves with it.
@@ -937,7 +949,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # the picture that comes *out* of it. A cursor moved to a box the rebuild then drops has nothing
         # to commit to, and asking before the rebuild would have said otherwise.
         self.refresh()
-        self._enable_commit(self._cursor_chat_node_id() is not None)
+        self._update_cursor_buttons()
 
     def _move_cursor(self, direction: str) -> None:
         """Step the cursor one box `direction`, planting it first if it is nowhere.

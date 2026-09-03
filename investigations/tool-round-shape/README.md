@@ -57,11 +57,37 @@ one `role="tool"` node per call itself, so a model asking for five tools at once
 nodes exactly as five sequential asks would. Only the frequency of long chains can move — which is why the
 design in brief 16 stays correct for that future and only its cost/benefit changes.
 
+## What it cost, once built (2026-09-03, same corpus)
+
+The design was built the same day, and the threshold went in as `_MIN_HIDDEN_FOR_GAP` — the number the
+sibling and depth gaps already use. So a round of one or two results is now **drawn** where previously
+*every* round folded. That is a visible change to the common case, and `measure_round_cost.py` is what
+priced it against real branches rather than against a synthetic one.
+
+**A branch pays in one of two currencies, and never both**, which is the finding worth carrying:
+
+- **A branch that fits the depth window pays in height.** Every round costs one row where it used to cost
+  none — a drawn result is a row, and a folded round's band is also a row. The tallest gain on this corpus
+  was **+49%**, on a branch of five single-result rounds.
+- **A branch that overruns the window pays in conversation instead.** The height is capped whatever
+  happens, so the drawn results spend the depth budget: `max_visible_depth` counts boxes down the branch,
+  and a result is now one of them. Four branches here lost messages behind the depth gap, the worst going
+  from 14 conversational messages on screen to 10.
+
+**They land on different branches, and that is a trap for whoever reads this next.** A branch that grows
+tallest is one with room to grow, so it is not the one being squeezed — sorting the table by height puts
+the squeezed branches nowhere near the top, and reading only that table says the squeeze never happens.
+It was read that way once, and reported that way, before the separate scan was added. The script now
+prints both, and says so explicitly when nothing was squeezed.
+
+Neither cost was judged unacceptable; the threshold is the dial if it ever is, and it is one constant.
+
 ## Scripts
 
 | Script | What it answers |
 |---|---|
 | `measure_rounds.py` | The distribution above: how many `role="tool"` nodes chain under each assistant message that requested tools. Takes an optional path to a `chat.json`; defaults to the configured datastore. Reads the JSON directly, so it needs no Raven imports and can be pointed at a backup or an export. |
+| `measure_round_cost.py` | What drawing a round's results costs a real branch — height, and conversational messages inside the depth window, each against the pre-2026-09-03 behaviour. Builds the picture with the real `chatgraph.build` rather than counting rows, layout being the kind of thing that is wrong when reasoned about; the old behaviour is simulated by substituting `_collapse_tool_rounds`. Same optional path argument. Needs Raven's imports, unlike its sibling. |
 
 No data is committed: the datastore is a private chat history, and the script reads whichever one it is
 pointed at.

@@ -1186,6 +1186,10 @@ list is a judgement about how the picture reads, and those are decided in front 
    the six with no keys at all. Giving the graph a button row is a second surface onto the vocabulary this
    item just fixed, which is why it goes after rather than with it (Juha, 2026-09-03, overruling this
    brief's claim that the two had to be answered together).
+   - **One button went in ahead of the row**, the same day: folding a tool round. It is the pointer's only
+     route to a verb the tool-round work had just created — right-click being taken by the widget's
+     open-URL — so it belonged with that work rather than with this row. Scheduled for the next day
+     (Juha, end of the office day).
 4. **`ImageShape` in the widget.** Unblocks two things at once and they are not the same size: role glyphs
    need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
    thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render
@@ -1443,6 +1447,26 @@ tool-heavy branch now costs vertically.** If it reads badly, the threshold is th
 **`ChatNodeRef.hidden_node_ids` is gone**, which is the `owner_of_swallowed` cleanup the design asked for.
 A message box now stands for itself and nothing else; the results are behind the gap, which is what makes
 them reachable, and `representative_of` lands a cursor there rather than on the message that asked.
+
+**The pointer got the fold too, the same day** (Juha's call, after asking whether there was a mouse route).
+There was one already — the toolbar's Back button, expanding being a recorded view step — but only
+indirectly, since Back undoes whatever the last view change was. Right-click is *not* free: `XDotWidget`
+already spends it on opening a node's URL. So the fold is a toolbar button, live only while the cursor is
+inside an opened round, and `_update_cursor_buttons` replaced `_enable_commit` so that both cursor-driven
+buttons answer "what can this cursor do?" in one place.
+
+**A button row for the rest of the verbs is tomorrow** (2026-09-03) — `first / prev-10 / prev-1 / next-1 /
+next-10 / last`, which the chat log has as buttons and this view has only as keys. This one button went in
+ahead of that row rather than waiting for it, being conceptually part of the tool-round work.
+
+#### What it cost, measured against the real corpus
+
+`investigations/tool-round-shape/measure_round_cost.py`, added for this. **A branch pays in one of two
+currencies and never both**, which is the part worth carrying: one that fits the depth window pays in
+height, and one that overruns it pays in conversation instead, the drawn results spending a budget that
+counts boxes. They therefore land on *different* branches — a branch with room to grow is not the one
+being squeezed — so a table sorted by height says the squeeze never happens. It was read that way once,
+and reported that way, before a separate scan was added. Neither cost was judged unacceptable.
 
 The tests: `test_chatgraph.py` gains the fold, the threshold both ways, the geometry, and the round in
 `_forest_with_every_gap_kind` so the uniformity tests cover the fifth kind; `test_chatgraph_panel.py`

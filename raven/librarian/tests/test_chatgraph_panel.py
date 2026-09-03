@@ -125,6 +125,20 @@ def click(panel_obj, node_name: str) -> None:
     panel_obj._on_click(node, dpg.mvMouseButton_Left)
 
 
+def press(tag: str) -> None:
+    """Press a toolbar button the way DPG does: through the callback the button is actually bound to.
+
+    Calling the method the button *should* be bound to tests the method and not the button, so a button
+    wired to the wrong callback — or to none — passes. Refuses a disabled button, which DPG would not
+    deliver the press to either.
+    """
+    assert dpg.does_item_exist(tag), f"no button '{tag}'"  # tag
+    assert dpg.is_item_enabled(tag), f"button '{tag}' is disabled, so a real press would do nothing"  # tag
+    callback = dpg.get_item_callback(tag)  # tag
+    assert callback is not None, f"button '{tag}' has no callback bound to it"
+    callback()
+
+
 def rings_on(panel_obj, node_name: str) -> list:
     """Return the cursor rings drawn on the named box in the picture currently on screen.
 
@@ -593,6 +607,52 @@ class TestToolRounds:
         built.handle_key(dpg.mvKey_Back)
         assert built._cursor_name == the_round_gap(built), "the cursor is not on the gap; this checks nothing"
         assert len(rings_on(built, built._cursor_name)) == 1
+
+    def test_back_folds_an_opened_round_again(self, rounds):
+        # Which is what makes the toolbar's Back button a pointer route to folding, `Backspace` being a
+        # key with no mouse counterpart. Indirect — Back undoes the last view change, whatever it was —
+        # but it is the reason a mouse-only reader is not stuck with a round they opened.
+        built, forest, app_state, ids, calls = rounds
+        assert not built._history.can_go_back, "the view already has history; this proves nothing"
+        click(built, the_round_gap(built))
+        assert built._history.can_go_back, "opening a round left no step, so Back cannot undo it"
+        built.go_back()
+        assert all(node_id not in built._chat_graph.refs for node_id in ids["results"]), \
+            "Back did not fold the round again"
+
+    def test_the_fold_button_is_dead_until_the_cursor_is_inside_an_opened_round(self, rounds):
+        # The pointer's only route to folding, so its enabled state *is* the affordance: live in the wrong
+        # places it invites a press that does nothing, and dead in the right one it is not there at all.
+        built, forest, app_state, ids, calls = rounds
+        assert not dpg.is_item_enabled(built._fold_button_tag), \
+            "the button is live with every round folded, so there is nothing for it to fold"
+        click(built, the_round_gap(built))
+        built._set_cursor(ids["results"][1])
+        assert dpg.is_item_enabled(built._fold_button_tag), \
+            "the cursor is inside an opened round and the button will not fold it"
+        built._set_cursor(ids["user"])
+        assert not dpg.is_item_enabled(built._fold_button_tag), \
+            "the button stayed live with the cursor outside the round"
+
+    def test_the_fold_button_folds_the_round(self, rounds):
+        # Pressed through its own callback rather than by calling the method it ought to be bound to,
+        # which is the only version that can fail when the button is wired to nothing. It was: an earlier
+        # draft of this test called `_collapse_round` directly and passed against a button bound to a
+        # no-op.
+        built, forest, app_state, ids, calls = rounds
+        click(built, the_round_gap(built))
+        built._set_cursor(ids["results"][1])
+        press(built._fold_button_tag)
+        assert all(node_id not in built._chat_graph.refs for node_id in ids["results"])
+
+    def test_folding_by_button_leaves_the_button_dead(self, rounds):
+        # The state it lands in is the state it started in, there being nothing left to fold. A button that
+        # stayed live after doing its job would offer the gesture to a reader who has just used it up.
+        built, forest, app_state, ids, calls = rounds
+        click(built, the_round_gap(built))
+        built._set_cursor(ids["results"][1])
+        press(built._fold_button_tag)
+        assert not dpg.is_item_enabled(built._fold_button_tag)
 
     def test_an_opened_result_can_become_head(self, rounds):
         # The capability the whole item exists to restore. Two acts on the box, as anywhere else: the
