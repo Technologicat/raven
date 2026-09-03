@@ -1273,24 +1273,22 @@ Two things about it that are easy to get wrong and are pinned by tests:
 viewport at 1:1 there is nothing to pan to, and the picture is centred. Whether that or a top alignment
 reads better is open, and wants looking at rather than arguing about.
 
-### Open: subtree gaps sit at different depths across one level (2026-09-03)
+### Settled by finding the real cause: subtree gaps at different depths are fine (2026-09-03)
 
-Noticed live by Juha — the `…N more` boxes left and right of the branch land on different rows, and the
-picture reads as ragged. Not a bug: `_extra_subtree` puts a subtree gap on the row *below its owner* when
-that column is free there, and in a band between rows when something already occupies it. Same rule,
-different neighbours, so a level's gaps scatter according to what happens to be under each of them.
+Noticed live — the `…N more` boxes left and right of the branch land on different rows, and the picture
+read as ragged. `_extra_subtree` puts a subtree gap on the row *below its owner* where that column is free
+and in a band between rows where it is not, so a level's gaps scatter according to what happens to sit
+under each of them. It looked like a trade against the dead-space fix of the day before, which had made
+the band conditional precisely because an unconditional one cost a whole row of height for the *entire*
+level — measured then at 128 units of nothing.
 
-**It is a trade against the dead-space fix of 2026-09-02, which is why it wants deciding rather than
-patching.** The band used to be unconditional, and it cost a whole row of height for the *entire* level
-whenever one gap far off to one side needed it — measured then at 128 units of nothing.
+**No change, because the raggedness was not what made it unreadable.** The screenshot it was noticed in
+was missing the edges after a tool round (the bug fixed the same day), and without them the long reply in
+one column read as hanging under the `…6 more` beside it, which it does not. An edge says what a box
+belongs to; a shared row was never carrying that. With the arrows drawn, the depths can differ (Juha).
 
-- **Leave it.** Compact, ragged.
-- **Uniform per level**: if any subtree gap on a level needs a band, they all use it. One line for the eye
-  to read, at the price of a row of height back on exactly the levels that look uneven now. A few lines —
-  compute each gap's fit for the level, then take the conjunction.
-
-Claude's lean is the second (raggedness costs a reader on every look; the height costs only where it
-happens), but it partly reverses yesterday's fix, so it is Juha's.
+Worth keeping as a worked example of the shape: a layout complaint whose cause was a missing *link*, where
+changing the layout would have hidden the symptom and left the actual fault in place.
 
 ### Fitting the branch got a button (2026-09-02)
 
