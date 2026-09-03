@@ -289,7 +289,7 @@
   does, and everything that runs on the way out — saving the chat, releasing the avatar on the server —
   runs. Ctrl+C was never affected.
 
-- **the mic's VU meter no longer shows a spurious peak when a recording starts.** The first moments of a capture carry a spike more than 25 dB above the room, gone by 220 ms — and it was the first thing the new *Measure the room* button measured. Levels are now disbelieved for the first 0.3 s of a capture; the audio itself is kept from the first frame, since it is only the *level* that is wrong.
+- **the mic's VU meter no longer shows a spurious peak when a recording starts.** The first moments of a capture carry a spike more than 25 dB above the room, gone by 220 ms — and it was the first thing the new *Measure the room* button measured. Levels are now disbelieved for the first 0.3 s of a capture. The audio itself is kept from the first frame.
 
 - **the send key now works when the composer does not have the cursor.** Ctrl+Enter (or Enter, depending on
   your `send_message_key` setting) only sent while you were actually typing in the message field — so after
