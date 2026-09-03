@@ -61,16 +61,21 @@ Two loose ends from the chat-graph run, neither of them a brief. They are here r
 `TODO_DEFERRED.md` because that file has passed 150 items and anything short goes missing in it — and
 the dehydration pass that would drain it is itself a post-sprint job.
 
-**The chat graph's palette is settled** (2026-09-03), and the aesthetic it settled into is worth naming
-because it is not a palette: **informatively colourful** (Juha). Every colour on screen is carrying a
-fact, and none is there for decoration — hue carries the *role*, saturation the *branch*, lightness the
-*speaker*, so the branch a reader is on is coloured and everything else greys out, and the user/AI pair
-stripes it the way ruled paper stripes a page. Green, blue and orange are what that came out as; they
-*happen* to go well together, which is luck rather than the design.
+**The chat graph's palette is settled** (2026-09-03), and what settled is better described as
+**informatively colourful** than as a palette (Juha): hue carries the *role*, saturation the *branch*,
+lightness the *speaker*, so the branch a reader is on is coloured and everything else greys out, and the
+user/AI pair stripes it the way ruled paper stripes a page.
 
-The practical consequence is for what comes next rather than for what is there. A fourth thing wanting a
-colour — bookmarks are already promised "a colour of their own" — earns one by having something to say,
-not by fitting a fixed scheme. And a colour that stops carrying anything should go, however good it looks.
+Two things about that, and the second is the one not to overstate:
+
+- **Blue, green and orange are the fleet's unofficial palette**, used before this and chosen again here,
+  so their going together is familiarity rather than accident. What is particular to this view is that
+  they are *also* doing work.
+- **Colour carrying information is not a rule, it is a fit.** Colour may have a role or may simply look
+  good, and the two are not in opposition — there is nothing to read into a colour that means nothing.
+  Raven is a constellation of information tools, which is what makes colour-coding pay here specifically.
+  So a fourth thing wanting one — bookmarks are already promised "a colour of their own" — is worth
+  asking the question about, not holding to a test.
 
 What it came out as: SYSTEM keeps the chat log's green and TOOL its orange; the conversation itself is
 **blue**, hue 210, green and orange being spoken for and amber having come out brown five degrees from
