@@ -479,6 +479,20 @@ So the whole animation is:
 - **The camera holds still during a morph.** A click currently ends in `pan_to_node`. Content morphing
   under a moving viewport is two motions that fight: a node stationary in graph space still slides on
   screen. Hold the camera, or move it markedly slower. *A priori*, hold (Juha).
+  - **The keyboard found the same question from the other side** (2026-09-03). Pressing Up from a `…N more`
+    box on a wide level lands somewhere that does not read as its parent — and it *is* its parent: rows
+    align on the spine's anchor, so every box on that level shares one, and the step travels **1854 units
+    sideways** (measured; from the leftmost box it is 2088). Nothing is wrong with the target, and the
+    fault is not gap-specific — Up from any box on a wide fan does this. What is missing is any way to see
+    that you arrived where you did.
+    - Juha's call: **this is the transition animation's problem, not a separate one.** Which puts a
+      requirement on that work rather than leaving it implied — a *cursor move between two drawn boxes
+      changes no topology at all*, so an animation that only morphs the graph would not touch this case.
+      Whatever the camera does on a long jump has to be decided for the no-morph case too.
+    - The patch considered and not taken was flashing the destination, as `go_to_head` already does for
+      exactly this reason ("the view slides and the zoom changes at the same time, so the box you were
+      brought back to is not obvious from the motion alone"). Kept here in case the animation work leaves
+      a gap that wants filling cheaply.
 - **Z-order for a box emerging from the gap that hid it.** Open, and a two-minute probe once anything
   moves — the renderer draws in list order, and both boxes are cross-fading, so it may not read
   differently either way.
