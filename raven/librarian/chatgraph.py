@@ -228,16 +228,23 @@ class ChatNodeRef(Ref):
     `pills`: The pointer labels resting on it, e.g. `("SYS", "NEW")`. A tuple rather than one value because
              more than one pointer can land on the same node: with the AI greeting turned off, a new chat
              starts at the system prompt node, so SYS and NEW coincide there.
+    `hidden_node_ids`: The tool-result nodes of a collapsed round, which this box swallowed and the badge
+                       counts. Empty for every other message. A message box is the one non-gap box that
+                       stands for nodes besides itself, and it has to say so: *everything* not drawn is
+                       behind something, and a lookup that knew about gaps alone would answer "nowhere"
+                       for a tool node and be believed.
     """
 
     def __init__(self, name: str, node_id: str, role: str, on_current_branch: bool,
-                 tool_call_count: int, pills: Tuple[str, ...]):
+                 tool_call_count: int, pills: Tuple[str, ...],
+                 hidden_node_ids: Tuple[str, ...] = ()):
         super().__init__(name)
         self.node_id = node_id
         self.role = role
         self.on_current_branch = on_current_branch
         self.tool_call_count = tool_call_count
         self.pills = pills
+        self.hidden_node_ids = hidden_node_ids
 
 
 class SiblingGapRef(Ref):
@@ -457,22 +464,50 @@ class ChatGraph:
         """Return what the graph node called `name` stands for, or `None` if there is no such node."""
         return self.refs.get(name)
 
-    def representative_of(self, node_id: str) -> Optional[str]:
+    def representative_of(self, node_id: str,
+                          datastore: Optional["chattree.Forest"] = None) -> Optional[str]:
         """Return the name of the box standing for chat node `node_id` in this picture.
 
-        Its own box if it is drawn; otherwise the gap box it is hiding behind. `None` only if the node is
-        not in this picture at all, which for a node still in the datastore means the branch on screen
-        does not pass anywhere near it.
+        `datastore`: The forest, to walk ancestors with when nothing claims `node_id` directly. Optional;
+                     without it the answer is only as good as what the boxes say about themselves.
 
-        Everything absent has a representative, by construction: the picture refuses to draw a node with
-        no visible link to the rest, so whatever is not drawn is behind some gap, and that gap's box is
-        where it belongs on screen. The three gap kinds each carry `hidden_node_ids`, which makes this a
-        dictionary inversion rather than a walk of the forest.
+        Its own box if it is drawn; otherwise whichever box stands for it — a gap that hides it, or the
+        assistant box that swallowed it as part of a collapsed tool round. Failing that, and given a
+        `datastore`, the nearest drawn ancestor, which is the closest thing to *where it would be* that
+        the picture can offer. `None` when even that finds nothing.
+
+        Nearly everything absent has a representative, by construction: the picture refuses to draw a node
+        with no visible link to the rest, so what is not drawn is behind some gap. `hidden_node_ids`
+        carries that on every kind of box, which makes the first pass a dictionary inversion rather than a
+        walk of the forest.
+
+        The ancestor walk is for the case that construction does not cover. The roots gap stands for other
+        *roots*, so a message written under one of them is named by nothing — and its own root is drawn,
+        so walking up reaches it.
 
         Two callers want the same answer for different reasons — a cursor whose box a rebuild has just
         destroyed has to land somewhere, and an animation between two builds has to know where a box
         arriving in the second one should come *from*.
         """
+        named = self._named_by(node_id)
+        if named is not None or datastore is None:
+            return named
+        # Up the lineage, nearest first. A node's ancestors are where it came from, so the nearest box
+        # standing for one of them is what a reader would point at to say "somewhere under there" -- and
+        # it is what the picture would grow this node out of, were it expanded.
+        with datastore.lock:
+            try:
+                lineage = datastore.linearize_up(node_id)
+            except KeyError:  # gone from the forest entirely; there is nothing to be near
+                return None
+        for ancestor in reversed(lineage[:-1]):  # `linearize_up` ends with the node itself
+            named = self._named_by(ancestor)
+            if named is not None:
+                return named
+        return None
+
+    def _named_by(self, node_id: str) -> Optional[str]:
+        """Return the box that is drawn for `node_id` or that says it stands for it, without any walking."""
         if node_id in self.refs:
             return node_id
         for name, ref in self.refs.items():
@@ -608,27 +643,34 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
 
 def _collapse_tool_rounds(datastore: chattree.Forest,
                           lineage: Sequence[str],
-                          expanded: Set[str]) -> List[str]:
+                          expanded: Set[str]) -> Tuple[List[str], Dict[str, Tuple[str, ...]]]:
     """Drop the tool-result nodes of collapsed rounds from a lineage.
 
     The agent loop chains one `role="tool"` node per call under the assistant message that requested them,
     so with documents and tools switched on a single conversational turn is three to six nodes, and a
     visitor looking for "the things it could have said instead" would mostly be shown plumbing. A round is
     what gets a node here; the calls within it are a count on that node.
+
+    Returns `(the lineage to draw, assistant node ID -> the tool nodes dropped from under it)`. The second
+    is what keeps the picture honest about itself: an assistant box that swallowed a round *represents*
+    those nodes, exactly as a gap box represents what it hides, and something asking where an undrawn node
+    would be has to get an answer for these too.
     """
     kept: List[str] = []
+    swallowed: Dict[str, List[str]] = {}
     owner: Optional[str] = None  # the assistant node whose round we are inside, if any
     for node_id in lineage:
         role = _role_of(datastore, node_id)
         if role == "tool":
             if owner is not None and owner not in expanded:
+                swallowed.setdefault(owner, []).append(node_id)
                 continue
         elif role == "assistant":
             owner = node_id
         else:
             owner = None
         kept.append(node_id)
-    return kept
+    return kept, {owner: tuple(nodes) for owner, nodes in swallowed.items()}
 
 
 def _pills_for(node_id: str, state: ViewState, is_root: bool) -> Tuple[str, ...]:
@@ -1082,7 +1124,8 @@ def build(datastore: chattree.Forest,
             logger.warning(f"build: cannot order the children of {focus_node_id}; drawing the branch as far as the focus")
             branch_tip = focus_node_id
         full_spine = datastore.linearize_up(branch_tip)
-        visible_spine = _collapse_tool_rounds(datastore, full_spine, state.expanded_tool_turns)
+        visible_spine, swallowed_tool_nodes = _collapse_tool_rounds(datastore, full_spine,
+                                                                    state.expanded_tool_turns)
 
         # Two different questions, and conflating them is what would make a preview look like a move.
         # `drawn_spine` is the branch on screen and decides the layout; `current_branch` is where HEAD
@@ -1226,7 +1269,8 @@ def build(datastore: chattree.Forest,
                               role=_role_of(datastore, node_id),
                               on_current_branch=(node_id in current_branch),
                               tool_call_count=_tool_call_count(datastore, node_id),
-                              pills=_pills_for(node_id, state, is_root=is_root))
+                              pills=_pills_for(node_id, state, is_root=is_root),
+                              hidden_node_ids=swallowed_tool_nodes.get(node_id, ()))
             speaker, label_lines = _speaker_and_label_of(
                 datastore, node_id, config._get_effective_label_chars(), config.label_lines)
             shapes = _box_shapes(x, y, config.node_w, config, label_lines,

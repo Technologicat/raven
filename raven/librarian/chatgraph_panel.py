@@ -573,7 +573,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
             if chat_graph is None:  # the node the picture was drawn around is gone -- fall back to HEAD
                 logger.info("DPGChatGraphPanel.refresh: the focused node is gone; falling back to HEAD")
                 self._view_state.focus_node_id = None
-                self._set_cursor_fields(None)
+                # The cursor is deliberately *not* cleared here. Its box is very likely gone too — the
+                # focus is usually the node the cursor is on, a click having set both — but that is what
+                # the landing policy below is for, and clearing it first would throw away the one thing
+                # that says where the reader was.
                 chat_graph = self._try_build()
             if chat_graph is None:
                 logger.warning("DPGChatGraphPanel.refresh: HEAD is gone too; leaving the picture as it is")
@@ -1011,8 +1014,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
         expects to still be standing afterwards.
 
         So: keep the node the cursor stood for, and follow it to whatever box represents it now — its own
-        if it is drawn, else the gap it has gone behind. HEAD is the last resort, for a node that has left
-        the datastore entirely.
+        if it is drawn, else whatever stands for it, else the nearest drawn ancestor. HEAD is the last
+        resort, for a node that has left the datastore entirely: jumping there is a jump to who knows
+        where, possibly off the picture, and an ancestor of where the reader was is nearer to where they
+        were than the tip of a branch they may not even be looking at (Juha, 2026-09-03).
 
         The caller holds the lock, and this must not redraw: it runs inside the rebuild whose result it is
         landing on.
@@ -1032,10 +1037,39 @@ class DPGChatGraphPanel(gui_animation.Animation):
         else:
             stood_for = None
 
-        landed = chat_graph.representative_of(stood_for) if stood_for is not None else None
+        landed = (chat_graph.representative_of(stood_for, datastore=self.datastore)
+                  if stood_for is not None else None)
+        if landed is None:
+            landed = self._what_was_above(name, chat_graph)
         if landed is None and self._view_state.head_node_id in chat_graph.refs:
             landed = self._view_state.head_node_id
         self._set_cursor_fields(landed)
+
+    def _what_was_above(self, name: str, chat_graph: chatgraph.ChatGraph) -> Optional[str]:
+        """Return the box that stood above `name` in the *previous* picture, if it is still in this one.
+
+        For the one case the forest cannot answer: the node the cursor was on has been deleted, so there
+        is no lineage left to walk up. The old picture still knows — its edges are the parent links, and
+        the box above is where that message hung from.
+
+        The caller holds the lock.
+        """
+        previous = self._chat_graph
+        if previous is None:
+            return None
+        above = chatgraph.neighbor_of(previous.graph, name, "up")
+        if above is None:
+            return None
+        if above in chat_graph.refs:  # still drawn, and under the same name
+            return above
+        # It is not, so ask what stands for it -- a deletion can take a whole run of messages with it, and
+        # what was above may itself have gone behind a gap. Only a message can be asked that, `refs` being
+        # keyed by *graph* name while `representative_of` takes a chat node; for a message the two are the
+        # same string, and for a gap that did not survive there is nothing to look up anyway.
+        was_above = previous.ref_for(above)
+        if not isinstance(was_above, chatgraph.ChatNodeRef):
+            return None
+        return chat_graph.representative_of(was_above.node_id, datastore=self.datastore)
 
     def _cursor_chat_node_id(self) -> Optional[str]:
         """Return the chat node the cursor is on — `None` if it is on a gap box, or nowhere.

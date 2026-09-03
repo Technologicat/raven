@@ -1436,17 +1436,66 @@ class TestGapIdentity:
             "the fixture draws the node this gap claims to hide, so the lookup cannot be tested on it"
         assert built.representative_of(hidden) == gap.name
 
-    def test_a_node_the_picture_does_not_reach_has_no_representative(self):
-        # The honest answer where there is none, and the one place the "everything absent is behind some
-        # gap" invariant stops short: the roots gap stands for other *roots*, so a message written under
-        # one of them is named by nothing in this picture. Its own root is represented; it is not.
+    def test_a_collapsed_tool_node_is_represented_by_the_message_that_swallowed_it(self):
+        # The one non-gap box that stands for nodes besides itself. A round's tool results are dropped
+        # from the drawn spine and counted on a badge, so a lookup that knew only about gaps would answer
+        # "nowhere" for a tool node — and be believed, the answer being indistinguishable from the honest
+        # one. (Raised by Juha, 2026-09-03, from the case where a Back step lands the cursor on one.)
+        forest = Forest()
+        system = forest.create_node(payload("system", "the card"), parent_id=None)
+        asked = forest.create_node(payload("user", "what is the time"), parent_id=system)
+        calls = [{"id": "c1", "function": {"name": "get_current_time", "arguments": "{}"}}]
+        answering = forest.create_node(payload("assistant", "let me look", tool_calls=calls),
+                                       parent_id=asked)
+        result = forest.create_node(payload("tool", "12:00"), parent_id=answering)
+        reply = forest.create_node(payload("assistant", "it is noon"), parent_id=result)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert result not in built.refs, "the round is drawn expanded, so nothing was swallowed"
+        assert built.representative_of(result) == answering
+
+    def test_an_expanded_tool_node_represents_itself(self):
+        # The negative control: the same fixture with the round expanded draws the tool node, so the
+        # answer must come from its own box rather than from the one that would otherwise hide it. A
+        # `representative_of` that always named the parent would pass the test above and fail this.
+        forest = Forest()
+        system = forest.create_node(payload("system", "the card"), parent_id=None)
+        asked = forest.create_node(payload("user", "what is the time"), parent_id=system)
+        calls = [{"id": "c1", "function": {"name": "get_current_time", "arguments": "{}"}}]
+        answering = forest.create_node(payload("assistant", "let me look", tool_calls=calls),
+                                       parent_id=asked)
+        result = forest.create_node(payload("tool", "12:00"), parent_id=answering)
+        reply = forest.create_node(payload("assistant", "it is noon"), parent_id=result)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply,
+                                                            expanded_tool_turns={answering}))
+        assert result in built.refs, "the round did not expand, so this is the other case again"
+        assert built.representative_of(result) == result
+
+    def test_a_node_the_boxes_do_not_name_is_found_by_walking_up(self):
+        # Where the "everything absent is behind some gap" construction stops short: the roots gap stands
+        # for other *roots*, so a message written under one of them is named by no box at all. Its own
+        # root is drawn, though, so the ancestor walk reaches it — and the nearest drawn ancestor is the
+        # closest thing to "where it would be" the picture can offer.
         forest, ids = _forest_with_every_gap_kind()
         other_card = forest.create_node(payload("system", "another card"), parent_id=None)
         stranger = forest.create_node(payload("user", "a chat under it"), parent_id=other_card)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids["head"],
                                                             new_chat_node_id=ids["greeting"]),
                                 chatgraph.LayoutConfig(max_visible_depth=8))
-        assert built.representative_of(stranger) is None
+        assert built.representative_of(stranger) is None, \
+            "some box claims it, so the walk is not what is being tested"
+        assert built.representative_of(stranger, datastore=forest) == "gap:roots", \
+            "walking up did not reach the box standing for the card this chat is under"
+
+    def test_a_node_that_has_left_the_forest_has_no_representative(self):
+        # The honest answer where there genuinely is none, and the reason the caller still needs a last
+        # resort of its own.
+        forest, ids = _forest_with_every_gap_kind()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids["head"],
+                                                            new_chat_node_id=ids["greeting"]),
+                                chatgraph.LayoutConfig(max_visible_depth=8))
+        assert built.representative_of("no-such-node", datastore=forest) is None
 
 
 def _forest_with_every_gap_kind():

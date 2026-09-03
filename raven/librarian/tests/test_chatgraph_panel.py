@@ -537,6 +537,35 @@ class TestKeyboard:
         assert built._cursor_name == forest.get_parent(planted), \
             "up went somewhere other than the message before this one"
 
+    def test_a_deleted_box_lands_the_cursor_on_what_was_above_it(self, panel):
+        # The forest is written by others, and a cleanup pass can remove the very node the cursor is
+        # resting on. Falling back to HEAD would be a jump to who knows where — possibly off the visible
+        # picture — where the box that message hung from is a step away and is still on screen.
+        #
+        # The forest cannot answer this one: the node is gone, so there is no lineage left to walk. What
+        # answers is the *previous* picture, whose edges are the parent links.
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["not_taken"])
+        assert built._cursor_name == ids["not_taken"]
+        assert ids["user"] != app_state["HEAD"], \
+            "the parent is HEAD in this fixture, so landing there proves nothing"
+
+        forest.delete_subtree(ids["not_taken"])
+        built.refresh()
+        assert built._cursor_name == ids["user"], \
+            "the cursor did not land on the box the deleted message hung from"
+
+    def test_a_deleted_box_falls_back_to_head_when_nothing_was_above(self, panel):
+        # The control for the rule above, and for the last resort still being reachable: with the whole
+        # branch gone there is no previous box to inherit, and HEAD is then the only answer left.
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["not_taken"])
+        forest.delete_subtree(ids["system"])
+        new_root = forest.create_node(payload("system", "a fresh card"), parent_id=None)
+        app_state["HEAD"] = new_root
+        built.refresh()
+        assert built._cursor_name == new_root
+
     def test_escape_puts_the_cursor_away(self, panel):
         # Nothing is undone by it — the ring commits nothing on its own — so this only stops pointing.
         built, forest, app_state, ids, calls = panel
