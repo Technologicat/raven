@@ -1309,7 +1309,24 @@ belongs to; a shared row was never carrying that. With the arrows drawn, the dep
 Worth keeping as a worked example of the shape: a layout complaint whose cause was a missing *link*, where
 changing the layout would have hidden the symptom and left the actual fault in place.
 
-### A folded tool round becomes a gap box — designed 2026-09-03, and deferred the same day
+### A folded tool round becomes a gap box — designed 2026-09-03, and to build next
+
+**Deferred and then un-deferred the same afternoon** (Juha), which is worth recording because the
+measurement did not change and the reading of it did. The numbers say the machinery buys ten boxes today.
+What tipped it back is that multi-call is *already* 15% of rounds, that newer models are built for agentic
+work so the direction is "when" rather than "if", and that the cost of revisiting falls on a human
+re-loading a design months later rather than on the write-up that describes it.
+
+The risk of building early is smaller than it looks: the one thing that genuinely wants calibrating
+against real multi-call data is the threshold — gap at two, or at three — and that is a single constant in
+the shape of `_MIN_HIDDEN_FOR_GAP`, retuned in a word when the data arrives.
+
+**Sized at roughly an afternoon**, revised down from a first estimate that assumed new layout machinery.
+The depth gap already solves the hard part — a box belonging *between* two rows — with `needs_band` /
+`band_y`, and its row-parent fallback (`depth_gap_nodes.get(row_index - 1)`) is the shape this needs, since
+every slot on the row below a collapsed round really does hang off it. What is left: a `Ref` kind, marking
+the band, placing the box at the owner's x, re-pointing the `owner_of_swallowed` edge through the gap
+instead of past it, the activation, `Backspace`, and tests.
 
 **Measured before building, and the measurement deferred it**: `investigations/tool-round-shape/`. On the
 live datastore, with Qwen 3.6, **85% of tool rounds fold exactly one result node** — a box to hide a box.
@@ -1323,17 +1340,21 @@ So the design below is correct and unbuilt. What decided it, in order:
 - **The remaining cost is conceptual rather than per-round**: another gesture in the vocabulary, and a rule
   to teach — *results are usually drawn, but folded at three or more, and then you open the gap and press
   Backspace to close it*. Hard to explain, for ten boxes.
-- **Deferring is not free, and the reason it is affordable is this write-up.** The cost of deferring falls
-  on a human re-loading a design months later (Juha's point, and the correction to an AI's arithmetic that
-  counted the work as identical whenever done). That cost is what the section below pays.
+- **Deferring is not free**, and the cost falls on a human re-loading a design months later — Juha's point,
+  and the correction to an AI's arithmetic that counted the work as identical whenever done and therefore
+  free to postpone. A write-up pays some of that and not all of it.
 - **Multi-call is not hypothetical even now** — 8 rounds of 54 asked for two or three tools — and newer
-  models are built for agentic work, so the balance is expected to shift. That is a prediction; the script
-  is how we will notice rather than guess. **Re-run it when the model family changes.**
+  models are built for agentic work, so it is "when" rather than "if". The script is how we will notice
+  the balance turning rather than guess at it; **re-run it when the model family changes**, and expect the
+  threshold rather than the design to be what moves.
 
-The immediate consequence: **tool results stay folded and stay unreachable** — no box, no cursor, and no
-way to make one HEAD, which the chat log allows. That is a known gap, accepted for now, and the cheapest
-fix if it starts to hurt before the machinery is worth it is to stop folding altogether and simply draw
-them, which costs one row per round and no vocabulary at all.
+**Which is why this is built rather than waited on.** The measurement stands — ten boxes today — and it is
+not the whole argument: the same ten boxes will be a hundred on a model that calls three tools a turn, and
+the revisit is the expensive part, not the code.
+
+The alternative if it ever looks like more trouble than it is worth: **stop folding altogether and simply
+draw the result nodes**, which costs one row per round, no gesture, and no vocabulary. Worth keeping in
+mind as the escape hatch, since it also solves the reachability complaint outright.
 
 ---
 
