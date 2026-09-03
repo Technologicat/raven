@@ -156,6 +156,10 @@ Colour says where you are rather than what you are looking at: the branch **HEAD
 
 Clicking a **…N more** navigates instead of selecting. A gap between siblings jumps the window to the middle of what it hides, so a wide fan is crossed in a few clicks rather than one at a time; a gap standing for skipped ancestors shows more of the branch; a gap under an off-branch message opens what continues below it.
 
+The graph can be driven without a pointer. **Tab** moves the keyboard between the message composer, the chat log and the graph, and the pane holding it wears a blue mark. In the graph, the **arrow keys** move a dotted ring from box to box — down and up follow the conversation, left and right step along the siblings at that level — and **Enter** does to the box under the ring exactly what clicking it does: a message switches the chat to it, a **…N more** opens it. **Esc** puts the ring away. Nothing the ring does changes the conversation; only Enter on a message, or a second click, moves you.
+
+The ring is the same mark whether you put it there with the mouse or the keys, so the two can be mixed freely: click a box, step off it with the arrows, press Enter.
+
 
 ### Notes
 

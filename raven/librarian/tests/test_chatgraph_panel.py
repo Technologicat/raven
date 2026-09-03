@@ -451,11 +451,32 @@ class TestKeyboard:
         assert built.handle_key(dpg.mvKey_F, ctrl=True) is False
         assert built.handle_key(dpg.mvKey_Home, shift=True) is False
 
-    def test_the_arrows_pan(self, panel):
+    def test_the_first_arrow_plants_the_cursor_without_moving_it(self, panel):
+        # HEAD is already the loudest box in the picture, so the ring appearing there says what the ring
+        # means on a box the reader can find. Stepping away from a resting place they never saw would
+        # show them the mark somewhere it had not visibly been.
         built, forest, app_state, ids, calls = panel
-        before = built._widget._viewport.pan_y.target
+        assert built._cursor_name is None, "something already placed the cursor; this proves nothing"
         assert built.handle_key(dpg.mvKey_Up) is True
-        assert built._widget._viewport.pan_y.target != before
+        assert built._cursor_name == app_state["HEAD"]
+
+    def test_the_arrows_move_the_cursor(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built.handle_key(dpg.mvKey_Up)  # plant it
+        planted = built._cursor_name
+        assert built.handle_key(dpg.mvKey_Up) is True
+        assert built._cursor_name != planted, "the second press did not step"
+        assert built._cursor_name == forest.get_parent(planted), \
+            "up went somewhere other than the message before this one"
+
+    def test_escape_puts_the_cursor_away(self, panel):
+        # Nothing is undone by it — the ring commits nothing on its own — so this only stops pointing.
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["taken"])
+        assert built._cursor_name is not None, "nothing was pointed at, so clearing it proves nothing"
+        assert built.handle_key(dpg.mvKey_Escape) is True
+        assert built._cursor_name is None
+        assert calls.committed == [], "Escape moved HEAD"
 
     def test_shift_arrows_pan(self, panel):
         built, forest, app_state, ids, calls = panel
@@ -463,14 +484,20 @@ class TestKeyboard:
         assert built.handle_key(dpg.mvKey_Right, shift=True) is True
         assert built._widget._viewport.pan_x.target != before
 
-    def test_enter_is_not_claimed(self, panel):
-        # It would commit the previewed node, and no key can move the preview — so from the keyboard
-        # alone it could only act on whatever the mouse last touched. It waits for the node cursor.
+    def test_enter_acts_on_the_box_under_the_cursor(self, panel):
         built, forest, app_state, ids, calls = panel
-        click(built, ids["taken"])  # a preview exists, so this is not passing for want of one
-        assert built._cursor_name is not None
-        assert built.handle_key(dpg.mvKey_Return) is False
-        assert calls.committed == [], "Enter committed a branch the keyboard could not have chosen"
+        click(built, ids["not_taken"])
+        assert built._cursor_name == ids["not_taken"]
+        assert built.handle_key(dpg.mvKey_Return) is True
+        assert calls.committed == [ids["not_taken"]]
+
+    def test_enter_with_no_cursor_does_nothing(self, panel):
+        # The control for the above: an Enter that committed something regardless of where the cursor is
+        # would pass it while moving HEAD on a keypress the reader had not aimed anywhere.
+        built, forest, app_state, ids, calls = panel
+        assert built._cursor_name is None
+        built.handle_key(dpg.mvKey_Return)
+        assert calls.committed == []
 
     def test_alt_arrows_walk_the_history(self, panel):
         built, forest, app_state, ids, calls = panel
@@ -482,12 +509,19 @@ class TestKeyboard:
         assert built._chat_graph.spine == moved_to, "Alt+Right did not return"
 
     def test_a_bare_arrow_is_not_a_history_step(self, panel):
-        # The control for the above: an Alt that was ignored would make the two indistinguishable.
+        # The control for the above: an Alt that was ignored would make the two indistinguishable. The
+        # spine cannot say so any more — a bare arrow moves the cursor, a cursor off the drawn branch
+        # redraws the picture around it, and stepping sideways from one sibling onto the other restores
+        # exactly the spine a Back step would have. What still separates them is the cursor: a step
+        # leaves it standing on a box, where going back abandons it, arriving somewhere with nobody
+        # else's question posed.
         built, forest, app_state, ids, calls = panel
         click(built, ids["not_taken"])
-        showing = built._chat_graph.spine
         built.handle_key(dpg.mvKey_Left)
-        assert built._chat_graph.spine == showing, "a bare arrow walked the history instead of panning"
+        assert built._cursor_name is not None, "a bare arrow walked the history instead of stepping"
+
+        built.handle_key(dpg.mvKey_Left, alt=True)
+        assert built._cursor_name is None, "Alt+Left did not go back, so the two are not being told apart"
 
 
 # ---------------------------------------------------------------------------

@@ -390,8 +390,12 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
         The view controls are `raven-xdot-viewer`'s, key for key, for the reason the toolbar's glyphs are:
         the two show the same widget, so a reader who has learnt one should not have to learn the other.
-        What is added here is what this panel has and that viewer does not — a history, a branch to frame,
-        and a HEAD to come back to.
+        What is added here is what this panel has and that viewer does not — a cursor to move over the
+        boxes, a history, a branch to frame, and a HEAD to come back to.
+
+        The arrows move the cursor and `Enter` acts on it, which is the pair that makes this view usable
+        without a pointer at all. Panning falls to Shift+arrows: it is the secondary gesture here, the
+        mouse having a drag and the wheel a zoom, while stepping between boxes has no other spelling.
 
         Returns `False` for anything it does not claim, so the caller can go on looking.
         """
@@ -406,9 +410,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 return True
             return False
         # Shift+arrows pan. Panning is the secondary gesture here -- the mouse drags, the wheel zooms, and
-        # what the *keyboard* wants from a graph it can commit from is to move between boxes. So the bare
-        # arrows are reserved for that cursor, and pan meanwhile: one binding whose meaning changes once,
-        # rather than a set that has to be relearnt when the cursor lands.
+        # what the *keyboard* wants from a graph it can commit from is to move between boxes, which is
+        # what the bare arrows do.
         if shift:
             if key == dpg.mvKey_Up:
                 self._widget.pan_by(dx=0, dy=+_PAN_AMOUNT)
@@ -425,13 +428,23 @@ class DPGChatGraphPanel(gui_animation.Animation):
             return False
 
         if key == dpg.mvKey_Up:
-            self._widget.pan_by(dx=0, dy=+_PAN_AMOUNT)
+            self._move_cursor("up")
         elif key == dpg.mvKey_Down:
-            self._widget.pan_by(dx=0, dy=-_PAN_AMOUNT)
+            self._move_cursor("down")
         elif key == dpg.mvKey_Left:
-            self._widget.pan_by(dx=+_PAN_AMOUNT, dy=0)
+            self._move_cursor("left")
         elif key == dpg.mvKey_Right:
-            self._widget.pan_by(dx=-_PAN_AMOUNT, dy=0)
+            self._move_cursor("right")
+        # Enter does to the box under the cursor what a click on it does, which is the whole of what it
+        # means: on a message, switch to that branch; on a gap, open it. One verb, so that a reader who
+        # has learnt what a box does by clicking it already knows what Enter will do.
+        elif key == dpg.mvKey_Return:
+            self._activate_cursor()
+        # Esc puts the cursor away. Nothing is undone by it -- the ring commits nothing on its own, being
+        # a place to stand rather than a change -- so this is "I am done pointing at things", and the next
+        # arrow starts again from HEAD.
+        elif key == dpg.mvKey_Escape:
+            self._set_cursor(None)
         # Numpad only, and the main row deliberately left out. `mvKey_Plus` is a pre-2.0 constant (61)
         # against a key that arrives as 602 -- measured, in `briefs/reference/dpg-keycodes.md` -- so a
         # branch on it never runs, and the main-row pair is separately known to misbehave on a Nordic
@@ -454,9 +467,6 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self.fit_branch()
         elif key == dpg.mvKey_Home:
             self.go_to_head()
-        # No Enter yet, deliberately. It would commit *the previewed node*, and nothing on the keyboard
-        # can move the preview -- so from the keyboard alone it could only act on whatever the mouse last
-        # touched, which is a gesture with half its input missing. It belongs with the node cursor.
         else:
             return False
         return True
@@ -685,10 +695,20 @@ class DPGChatGraphPanel(gui_animation.Animation):
             chat_graph = self._chat_graph
         if chat_graph is None:
             return
-        ref = chat_graph.ref_for(element.internal_name)
+        self._activate(element.internal_name)
+
+    def _activate(self, name: str) -> None:
+        """Do to the box called `name` whatever acting on it means.
+
+        The one place that answers it, because a click and `Enter` must not be able to disagree: the
+        keyboard's whole claim on this view is that it reaches the same things the pointer does, and two
+        dispatches would drift the first time a gap kind gained a verb.
+        """
+        with self._lock:
+            chat_graph = self._chat_graph
+        ref = chat_graph.ref_for(name) if chat_graph is not None else None
         if ref is None:
-            logger.warning("DPGChatGraphPanel._on_click: no ref for graph node "
-                           f"'{element.internal_name}'; ignoring")
+            logger.warning(f"DPGChatGraphPanel._activate: no ref for graph node '{name}'; ignoring")
             return
 
         if isinstance(ref, chatgraph.ChatNodeRef):
@@ -702,7 +722,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         elif isinstance(ref, chatgraph.RootGapRef):
             # Inert in v1, deliberately: switching to a chat written under an older character card would
             # leave the configured avatar and voice running against a different system prompt.
-            logger.info(f"DPGChatGraphPanel._on_click: {ref.hidden_count} chat(s) under other cards; "
+            logger.info(f"DPGChatGraphPanel._activate: {ref.hidden_count} chat(s) under other cards; "
                         "reaching them is not implemented")
 
         # Once, here, rather than in each of the four branches above. A commit that changes nothing is a
@@ -829,6 +849,68 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # to commit to, and asking before the rebuild would have said otherwise.
         self.refresh()
         self._enable_commit(self._cursor_chat_node_id() is not None)
+
+    def _move_cursor(self, direction: str) -> None:
+        """Step the cursor one box `direction`, planting it first if it is nowhere.
+
+        `direction`: As `chatgraph.neighbor_of` takes it.
+
+        The first press after the graph takes the keyboard plants the cursor without moving it. HEAD is
+        already the loudest thing in the picture, so the ring appearing on it teaches what the ring means
+        on a box the reader can already find — where stepping away from an unseen resting place would
+        show them a mark somewhere they never saw it leave.
+        """
+        with self._lock:
+            chat_graph = self._chat_graph
+            at = self._cursor_name
+        if chat_graph is None:
+            return
+        if at is None:
+            self._set_cursor(self._cursor_home(chat_graph))
+            return
+        stepped = chatgraph.neighbor_of(chat_graph.graph, at, direction)
+        if stepped is None:  # the edge of the picture; staying put is the answer
+            return
+        self._activate_or_move(stepped)
+
+    def _activate_cursor(self) -> None:
+        """Act on the box the cursor is on, if it is on one."""
+        with self._lock:
+            name = self._cursor_name
+        if name is not None:
+            self._activate(name)
+
+    def _activate_or_move(self, name: str) -> None:
+        """Put the cursor on `name`, taking the route a click takes so the two cannot behave differently.
+
+        A message goes through the click path — which scrolls the chat log to it, or redraws the picture
+        around its branch — because arriving at a box by stepping and by clicking should show the same
+        thing. A gap is only stepped onto; acting on it is `Enter`'s business, not the arrow's.
+        """
+        with self._lock:
+            chat_graph = self._chat_graph
+        ref = chat_graph.ref_for(name) if chat_graph is not None else None
+        if isinstance(ref, chatgraph.ChatNodeRef):
+            self._click_chat_node(ref)
+        else:
+            self._set_cursor(name)
+            self._widget.pan_to_node(name, animate=True)
+
+    def _cursor_home(self, chat_graph: chatgraph.ChatGraph) -> Optional[str]:
+        """Return where a cursor that is nowhere should appear.
+
+        HEAD, which is where the reader is. Failing that — a Back step can restore a branch HEAD is not
+        on — whatever the picture is drawn around, and failing that the branch's own top, so that the
+        answer is never "nowhere" while there is a picture to stand in.
+        """
+        with self._lock:
+            for candidate in (self._view_state.head_node_id, self._view_state.focus_node_id):
+                if candidate is not None and candidate in chat_graph.refs:
+                    return candidate
+        for node_id in chat_graph.spine:
+            if node_id in chat_graph.refs:
+                return node_id
+        return None
 
     def _set_cursor_fields(self, name: Optional[str]) -> None:
         """Put the cursor at `name` without redrawing. For callers that are inside a rebuild already."""
