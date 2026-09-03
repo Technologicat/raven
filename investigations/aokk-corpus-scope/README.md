@@ -329,32 +329,45 @@ the drop" is not checkable at all.
 unlabelled and shuffled among the rest. If both groups come back at the same rate the instrument is
 measuring nothing, and that has to be read before any of its findings are.
 
-Two slices, 600 of the 1219 dropped records, covering all three cells the drop list has:
+Four slices, **all 1219 dropped records**, each reviewed exactly once (`score_review.py --dropped` checks
+that rather than trusting the offsets):
 
 | the judge said | n | case found | rate |
 |---|---:|---:|---:|
-| `drop` / high / title | 225 | 10 | 4.4% |
+| `drop` / high / title | 749 | 29 | 3.9% |
 | `drop` / medium / abstract | 175 | 7 | 4.0% |
-| `drop` / high / abstract | 200 | 1 | 0.5% |
-| `keep` / high — uniform control | 31 | 24 | 77.4% |
-| `keep` / medium — uniform control | 8 | 4 | 50.0% |
-| `keep` / high — stratified control | 20 | 13 | 65.0% |
-| `keep` / medium — stratified control | 20 | 7 | 35.0% |
+| `drop` / high / abstract | 295 | 1 | 0.3% |
+| **contested overall** | **1219** | **37** | **3.0%** |
 
-Separations of 65.8 and 49.5 points against a 20-point floor. The instrument discriminates.
+Four independent controls, one per slice: 70.0%, 57.5%, 50.0%, 65.0%, for separations of 65.8, 53.9, 49.5
+and 65.0 points against a 20-point floor. The instrument discriminates, and the spread across the four is
+what a forty-record control costs in precision.
 
-**A drop is clean when it is high-confidence *and* was reached from the abstract, and neither half
-predicts that alone.** Missing either one costs the same — 4.4% contested when pass 2 never ran, 4.0%
-when it ran and hedged — while having both drops it eight-fold to 0.5%, and the single record behind
-that 0.5% is the reviewer reaching (a ChatGPT-on-a-medical-exam benchmark defended as "assessing its
-potential for higher education testing"). So the cell is effectively clean.
+**A drop is clean when it is high-confidence *and* was reached from the abstract. Neither half does it
+alone.** The three cells make the conjunction plain:
 
-**This was measured in two slices and the first one, read alone, said the opposite.** With only
-`high/title` and `medium/abstract` in hand the two rates match, and the reading written here was that the
-judge's confidence predicts nothing about whether a drop survives — a generalization to "the drop side"
-made from two of its three cells, in a paragraph that noted the third was unmeasured. It is the
-conjunction that carries the signal, and no amount of staring at the first slice would have shown that.
-Recorded because the same shape is available to anyone reading a partial table: the cell that is missing
+- read the abstract, and hedged → **4.0%**
+- never read the abstract, but confident → **3.9%**
+- read the abstract, and confident → **0.3%**
+
+So confidence buys nothing on a title-only verdict, and reading the abstract buys nothing where the model
+still hedges; together they drop the contested rate more than tenfold. The single record behind that 0.3%
+is the reviewer reaching, not a real miss — a ChatGPT-on-a-medical-exam benchmark defended as "assessing
+its potential for higher education testing" — so that cell is effectively clean.
+
+**Which says pass 2 should run on everything, not only on the unsure.** Escalation today is triggered by
+doubt, so a record dropped *confidently* from its title never gets a second look — and those are the ones
+being contested, thirteen times as often as the ones that did. Confidence measured against a title is not
+just uninformative here, it is anti-correlated with correctness relative to having read the abstract. The
+fix is the cheap resource: reading the abstract for the other 749 costs about two thirds again on top of
+the pass 2 already run, against a corpus where the rate it buys is 0.3%.
+
+**This was measured in four slices, and the first one alone said something different — twice.** With only
+`high/title` and `medium/abstract` in hand their rates matched, and what was written here was that the
+judge's confidence predicts nothing on the drop side: a generalization to the whole from two of its three
+cells, in a paragraph that noted the third was unmeasured. The same partial reading also said `no_ai` had
+produced zero contested drops, which the full pass turned into three. Recorded because the shape is
+available to anyone reading a partial table, and it is not random which cell is missing: the one left out
 is the one that was hardest to reach, which is exactly why it is the one most likely to differ.
 
 **The uniform control was easier than what it was compared against, and the stratified draw confirms
@@ -369,8 +382,8 @@ Note the reviewer scores the *hedged* keeps well below the confident ones (35–
 is the instrument agreeing with the judge's hedge rather than failing, and a pooled control rate cannot
 tell the two apart — which is what `score_review.py` splits out.
 
-**Two error shapes among the 18 contested drops, and a rate alone cannot tell them apart.** This is a
-reading of 18 records rather than a measurement:
+**Two error shapes among the 37 contested drops, and a rate alone cannot tell them apart.** This is a
+reading of all 37 rather than a measurement:
 
 - **In the title-only cell, real misses of a predictable kind**: the title names a *domain* and the
   abstract names a *university setting*. Agricultural planning that turns out to be taught to university
@@ -382,22 +395,24 @@ reading of 18 records rather than a measurement:
   reaching means there is none; these are where it reached anyway.
 
 Which is why the two ~4% cells are not the same 4%: the title-only one is mostly the judge's error, the
-hedged-abstract one mostly the reviewer's. A single contested-rate hides that, and the repair for each is
-different — pass 2 on more records against a stricter reviewer prompt.
+hedged-abstract one mostly the reviewer's. A single contested rate hides that, and the repair differs —
+pass 2 on the title-only records; a stricter reviewer prompt for the rest.
 
-Not one of the 18 was dropped for `no_ai`. That test produced zero contested drops across 600 records,
-where `not_education` produced nearly all of them — consistent with it being the test that needed three
-rewrites to stop reasoning from absence.
+**Which test fired barely matters; whether an abstract was read matters a great deal.** `not_education`
+accounts for 31 of the 37 and `no_ai` for 3, but that tracks how often each test fires rather than how
+reliable it is: those 3 come from 88 title-only `no_ai` drops, a rate of 3.4% against the 3.9% baseline
+for title-only drops of any kind. So `no_ai` asserting absence from a title — the failure the rubric was
+rewritten three times to stop — is no more common than every other title-only mistake. The guard in that
+test works about as well as a guard can; the residue is the cost of judging a title.
 
-**What the whole drop list probably holds.** Applying each cell's measured rate to its full size — 749
-title-only, 175 hedged-abstract, 295 confident-abstract — puts roughly 42 contested records in the 1219,
-of which 18 are now identified. That is a list a person can read, which was the point of reviewing at all.
+**What the drop list holds, now counted rather than estimated.** 37 contested records in 1219, listed in
+`contested.tsv` worst cell first. The two-slice extrapolation had predicted about 42, most of the excess
+coming from the first slice's `high/title` rate (4.4%) sitting above the full cell's (3.9%).
 
-**The sort needs no change, and the reason is not the one it was built on.** `least_defended` ranks by
-confidence first and source second, which orders the cells medium/abstract, high/title, high/abstract.
-Contestedness actually runs high/title, medium/abstract, high/abstract — so the primary key is the weaker
-of the two, and the gap it gets wrong (4.4% against 4.0%, on 10 and 7 records) is noise. Both orderings
-put the clean cell last, which is the only distinction the data supports.
+**The sort's ordering matches contestedness, which the partial data had denied.** `least_defended` ranks
+by confidence then source, ordering the cells medium/abstract, high/title, high/abstract — and measured
+contestedness runs 4.0%, 3.9%, 0.3%, the same order. The gap between the first two is noise either way;
+what the sort gets right, and all that the data supports, is putting the clean cell last.
 
 ## Where this is headed: a `raven.papers` corpus filter
 
@@ -450,7 +465,7 @@ run against the unsifted corpus.
 |---|---|
 | `judge_scope.py` | The classifier. `--pilot N` and `--thin` are the two calibration runs; a plain run does both passes and writes the outputs. Re-running resumes |
 | `review_drops.py` | The second reader over `dropped.tsv`, asked whether a case can be made *for* each record, with kept records mixed in unlabelled as the control. `--skip`/`--limit` take a slice, `--control-strata` draws the control per confidence level |
-| `score_review.py` | Scores a review against the judge's own cells — which drops are contested, and whether the control was easier than what it was compared against. The table in *Reviewing the drops* above is its output |
+| `score_review.py` | Scores a review against the judge's own cells — which drops are contested, and whether the control was easier than what it was compared against. The table in *Reviewing the drops* above is its output. `--contested` also writes the hand-check list |
 
 Generated at runtime and **not committed** — they list the contents of a corpus that lives under
 `00_stuff/`, which is gitignored research data, and this repository is public:
@@ -463,6 +478,7 @@ Generated at runtime and **not committed** — they list the contents of a corpu
 | `<corpus>_in_scope.bib` | the corpus with the strays taken out, importable into Visualizer |
 | `dropped.tsv` | every dropped record with a one-line reason — the reviewable half |
 | `drop-review-<from>-<to>.tsv` | one slice of that list re-read by `review_drops.py`, with the control mixed in and labelled only here |
+| `contested.tsv` | the hand-check list across every slice: each dropped record a case was made for, worst cell first, the judge's reason beside the reviewer's case, and an empty column to mark in |
 
 ## Reproducing
 
@@ -485,6 +501,20 @@ python $D/review_drops.py --bib $B --dropped $D/dropped.tsv \
     --kept $D/<corpus>_in_scope.bib \
     --skip 0 --limit 400 --control-strata high=20,medium=20
 ```
+
+`--skip` takes the next slice rather than re-asking about one already reviewed, and each run writes a file
+named for its slice. Give a fresh `--seed` per slice: the control draw is seeded, so repeating the seed
+re-asks about the same forty kept records instead of drawing forty more.
+
+Then score them together, and get the list a person actually reads:
+
+```bash
+python $D/score_review.py $D/drop-review-*.tsv --contested
+```
+
+Cells first — a drop reached from the title alone and one reached from the abstract are contested for
+different reasons, so their rates are reported apart and `contested.tsv` is ordered by which cell a record
+came from. Read the control comparison before any of it.
 
 Needs an LLM backend; `--backend-url` and `--model` point it elsewhere. The calibration runs above were
 made against `qwen3.6-35b-a3b`, which is the model the numbers in this file describe.

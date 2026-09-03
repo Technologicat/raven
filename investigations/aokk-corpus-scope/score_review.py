@@ -96,12 +96,72 @@ def separation(rows: list[dict], answers: dict[str, dict]) -> None:
               "  above before any finding — a control made mostly of hedged keeps looks like this too.")
 
 
+# Which cell a contested record came from decides how likely it is to be a real miss, and the two are far
+# apart. A drop reached from the title alone is contested mostly because the title named a subject and the
+# abstract named a university setting — the judge never saw the setting. A drop reached from the abstract
+# is contested mostly because the reviewer reached for a tenuous educational angle. So the title-only cell
+# is read first: it is where the corpus actually loses studies.
+CELL_PRIORITY = {"drop/high/title": 0, "drop/medium/abstract": 1, "drop/high/abstract": 2}
+
+
+def report_coverage(slices: list[tuple[pathlib.Path, list[dict]]], dropped_path: pathlib.Path) -> None:
+    """How much of the drop list these slices actually cover, and whether they overlap.
+
+    Slices are cut by `--skip`/`--limit`, so a mistyped offset leaves a gap or reviews something twice, and
+    both are invisible afterwards: the rates still look fine, the contested list is still sorted, and the
+    only symptom is a coverage claim that is quietly wrong. Cheap to check, so it is checked rather than
+    computed by hand.
+    """
+    lines = [line for line in dropped_path.read_text(encoding="utf-8").splitlines()
+             if not line.startswith("#")]
+    all_keys = [row["key"] for row in csv.DictReader(lines, delimiter="\t") if row.get("key")]
+    seen = collections.Counter(row["key"] for _, rows in slices for row in rows
+                               if row["group"] == "dropped")
+    covered = sum(1 for key in all_keys if key in seen)
+    print(f"\ncoverage of {dropped_path.name}: {covered} of {len(all_keys)} dropped records "
+          f"({100 * covered / len(all_keys):.1f}%)")
+    twice = [key for key, n in seen.items() if n > 1]
+    stray = [key for key in seen if key not in set(all_keys)]
+    if twice:
+        print(f"  {len(twice)} reviewed more than once — the slices overlap: {', '.join(twice[:5])}")
+    if stray:
+        print(f"  {len(stray)} reviewed but not in this drop list — a stale file somewhere")
+    if not (twice or stray):
+        print("  no overlaps, no strays: each reviewed record appears exactly once")
+
+
+def write_contested(rows: list[dict], answers: dict[str, dict], path: pathlib.Path) -> int:
+    """The hand-check list: every dropped record the reviewer made a case for, worst cell first.
+
+    An empty first column to mark in, matching the judge's own review table. The judge's reason and the
+    reviewer's case sit side by side because that pairing is the whole check — one of them is wrong, and
+    which one is usually obvious from the title alone.
+    """
+    contested = [row for row in rows if row["group"] == "dropped" and row["belongs"] == "yes"]
+    contested.sort(key=lambda row: (CELL_PRIORITY.get(cell_of(row, answers), 9), row["key"]))
+    with path.open("w", encoding="utf-8") as f:
+        f.write("mark\tcell\ttest\tkey\ttitle\tjudge_said\treviewer_said\n")
+        for row in contested:
+            answer = answers.get(row["key"], {})
+            tests = ",".join(name for name in ("no_ai", "not_education", "wrong_level")
+                             if answer.get(name) is True)
+            f.write(f"\t{cell_of(row, answers)}\t{tests}\t{row['key']}\t{row['title']}\t"
+                    f"{answer.get('why', '')}\t{row['case']}\n")
+    return len(contested)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("reviews", nargs="+", help="one or more drop-review TSVs")
     parser.add_argument("--judged", default=None, metavar="PATH",
                         help="the judge's state JSONL (default: judged.jsonl beside this script)")
+    parser.add_argument("--dropped", nargs="?", const="dropped.tsv", default=None, metavar="PATH",
+                        help="the full drop list, to report how much of it these slices cover and whether "
+                             "they overlap. A mistyped --skip is invisible in the rates")
+    parser.add_argument("--contested", nargs="?", const="contested.tsv", default=None, metavar="PATH",
+                        help="also write the hand-check list: every dropped record a case was made for, "
+                             "across all slices given, worst cell first, with an empty column to mark in")
     opts = parser.parse_args()
 
     here = pathlib.Path(__file__).resolve().parent
@@ -121,6 +181,18 @@ def main() -> int:
         rate_table(pooled, answers)
         print("\n  Controls are not pooled: the slices drew them by different designs, so a combined\n"
               "  control rate would describe neither. Read each slice's own separation above.")
+
+    if opts.dropped:
+        dropped = pathlib.Path(opts.dropped)
+        report_coverage(slices, dropped if dropped.is_absolute() or dropped.parent != pathlib.Path(".")
+                        else here / dropped)
+
+    if opts.contested:
+        path = pathlib.Path(opts.contested)
+        if not path.is_absolute() and path.parent == pathlib.Path("."):
+            path = here / path
+        n = write_contested([row for _, rows in slices for row in rows], answers, path)
+        print(f"\nwrote {path}  ({n} records to hand-check)")
     return 0
 
 
