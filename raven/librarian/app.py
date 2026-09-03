@@ -1935,14 +1935,13 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start new chat", notes=""),
                helpcard.hotkey_new_column,
+               # One row for a keyboard that has a dozen keys, because this card has no room for the dozen
+               # and no scrollbar to find them behind — an overflowing column is silently cut off, so the
+               # cost of listing them here is losing whatever sits at the bottom of this one. Tab is the
+               # row that pays: it is the way *in*, and from inside the graph the arrows, Enter and Esc
+               # are what a reader tries first. The rest are in the Chat graph section of the README, and
+               # belong on this card once it is redesigned (`TODO_DEFERRED.md`).
                env(key_indent=0, key="Tab", action_indent=0, action="Move the keyboard between panes", notes="Composer, chat log, chat graph"),
-               env(key_indent=1, key="Arrows", action_indent=1, action="Move between boxes in the graph", notes="Shift+arrows pan instead"),
-               env(key_indent=1, key="Ctrl+Left / Right", action_indent=1, action="Step along that level's siblings", notes="Ctrl+Shift jumps 10; Ctrl+Home/End to the ends"),
-               env(key_indent=1, key="Enter", action_indent=1, action="Open the box the ring is on", notes="A message switches the chat to it"),
-               env(key_indent=1, key="Esc", action_indent=1, action="Put the ring away", notes=""),
-               env(key_indent=1, key="Alt+Left / Right", action_indent=1, action="Back / forward", notes="Where you have been looking"),
-               env(key_indent=1, key="F / B / 1 / Home", action_indent=1, action="Fit / fit branch / actual size / HEAD", notes=""),
-               helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Page Up", action_indent=0, action="Scroll chat up one page", notes="Also while typing"),
                env(key_indent=0, key="Page Down", action_indent=0, action="Scroll chat down one page", notes="Also while typing"),
                env(key_indent=1, key="Up", action_indent=1, action="Same, but five lines", notes="Not while typing"),

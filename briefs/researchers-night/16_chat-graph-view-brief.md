@@ -1087,7 +1087,9 @@ list is a judgement about how the picture reads, and those are decided in front 
    Visualizer's selection undo and now shared by both — see the section above for what it turned out to
    be a history *of*, which is not quite what was expected. FileDialog's copy is the third consumer and
    is now mostly wiring.
-3. **Keyboard access to the graph.** *Mostly built 2026-09-02 — what is left is the node cursor.*
+~~3. **Keyboard access to the graph.**~~ Done 2026-09-03 — the cursor landed, and the two questions this
+   item left open were both answered by *not* building what it proposed. See the section below. The
+   history of it, kept because the reasoning is what generalizes:
    - **Tab and Shift+Tab cycle three panes at one level**: the composer, the chat log, and the graph while
      it is on screen. Tab typed nothing into a multiline composer and did nothing anywhere else, so it was
      free. The current home is *derived* rather than stored — the composer can also be entered by clicking
@@ -1119,6 +1121,57 @@ list is a judgement about how the picture reads, and those are decided in front 
      row-and-column problem `keyboardmark` and `tablecursor` already solve; and how moving between boxes
      maps onto arrow keys when a level is windowed and the thing to the left may be a gap rather than a
      sibling. Both are questions about the picture, so decide them in front of it.
+
+   ### How it came out, 2026-09-03
+
+   **There is no fourth mark, because the cursor is the preview ring.** The ring already meant *the box a
+   second click acts on*; widening that to *the box a click or `Enter` acts on* is the same sentence, and
+   it closes the half-gesture rather than adding a state. Two consequences, both larger than they look:
+
+   - **`ViewState.cursor_name` is a graph node name, not a chat node ID**, so the ring can rest on a gap
+     box. That is not a detail: a keyboard that could not put the cursor on a `…40 more` could not reach
+     sibling 40 at all, and most of the forest is behind a gap. It is also the key the animation design
+     settles on, so the two agree by construction.
+   - **A cursor needs a landing policy and a ring never did.** The ring was placed by a click and cleared
+     by code; a cursor is a place the reader expects to still be standing after a reply arrives, HEAD
+     moves, or a gap they opened replaces itself with its contents. `ChatGraph.representative_of` answers
+     it by inverting `hidden_node_ids` — the node's own box if drawn, else the gap it has gone behind,
+     else HEAD. The animation wants that same lookup in the other direction.
+
+   **One cursor state, not two.** The landing was briefly kept *unarmed*, so that acting on the box a
+   window move stopped at would preview rather than commit. Dropped, and the argument is worth keeping
+   because the obvious one is wrong: the mouse looks like a precedent for two states, since a gap click
+   used to leave nothing armed — but the pointer is itself a second persistent position, so a mouse
+   reader always has somewhere to click next, where the keyboard has only the ring (Juha). A ring that
+   sometimes acts and sometimes only arms also has no way to say which it is doing.
+
+   **The arrows: edges vertically, position sideways.** `chatgraph.neighbor_of`, pure and over the built
+   picture. Down and up walk the edges, because a box's parent is often nowhere near it horizontally — a
+   depth gap sits at the left margin with a whole row hanging off it. Left and right go by position,
+   because the boxes on one level are not linked to each other at all; being siblings is a fact about
+   their parent. That answers the item's second question — the thing to the left may be a gap, and it is
+   simply a destination like any other.
+
+   **Ctrl+arrows are the chat log's**, one sibling, ten with Shift, `Ctrl+Home`/`Ctrl+End` to the ends —
+   the same verbs on the same tree, so they are not learnt twice. In the log they move HEAD; here they
+   move only the cursor, which is the difference between the two views rather than an inconsistency. They
+   also close a hole: while the graph held the keyboard these fell through to the log's own Ctrl+arrows,
+   so a browsing gesture aimed at the graph switched branch, silently, from a pane that was not showing
+   the message it acted on.
+
+   **`Esc` puts the cursor away**, undoing nothing, the ring being a place to stand rather than a change.
+   The first arrow after that plants the cursor on HEAD without moving — HEAD is already the loudest box
+   in the picture, so the ring appearing there teaches what it means on a box the reader can find.
+
+   **Only one row of it reached the help card**, `Tab`, which is the way in. That card is a fixed height
+   with no scrollbar and was one line under its ceiling; the rest of the keys are in
+   `raven/librarian/README.md` and wait on the redesign in `TODO_DEFERRED.md`.
+
+   **Left undone on purpose: buttons for the same verbs.** `first / prev-10 / prev-1 / next-1 / next-10 /
+   last` already exist as buttons in the chat log (`chat_controller._build_navigation_buttons`), two of
+   the six with no keys at all. Giving the graph a button row is a second surface onto the vocabulary this
+   item just fixed, which is why it goes after rather than with it (Juha, 2026-09-03, overruling this
+   brief's claim that the two had to be answered together).
 4. **`ImageShape` in the widget.** Unblocks two things at once and they are not the same size: role glyphs
    need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
    thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render

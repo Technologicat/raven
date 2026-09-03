@@ -2542,6 +2542,13 @@ The update above had to buy each new sentence by cutting another, and it now sit
 ceiling: every remaining line was measured, and the widest is within ~50 px of the right edge. So the next
 addition of any size needs the shape decision first.
 
+**That last line has since been spent, and the fit is unmeasured** (2026-09-03). The chat graph gained a
+keyboard — a dozen keys — and one row went in for `Tab`, the way *into* the graph, on the grounds that a
+reader who gets there finds the arrows, `Enter` and `Esc` by trying them. The other eleven are documented
+only in `raven/librarian/README.md`. Nothing was measured after the addition, so **check this card renders
+whole before adding anything at all to it**, and treat the graph's remaining keys as waiting on the shape
+decision below rather than as an omission to fix in passing.
+
 **The real question is not how to fit more into one screen — it is whether one screen is still the right
 format.** The single-glance reference card was chosen deliberately, and it suited a tech demo; the app has
 since grown into a tool with RAG, five tools, attachments, branching history and speech, and it is now too
