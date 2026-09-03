@@ -269,7 +269,7 @@ class TestPreview:
 class TestAMessageWithNoText:
     """Three ways a message ends up with no prose, and they are three different things.
 
-    Drawn as one `(empty)` box they read as a tree full of replies that never happened — and the commonest
+    Drawn as one `[empty]` box they read as a tree full of replies that never happened — and the commonest
     of them, a turn that asked for a tool, is the ordinary shape of an agent doing its job. Counted over a
     real datastore on 2026-09-03: of 217 assistant messages, 45 carried no text, and 33 of those were tool
     calls, 7 were an interrupted thinking model, 5 were genuinely nothing.
@@ -294,7 +294,7 @@ class TestAMessageWithNoText:
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=silent))
         drawn = " ".join(self._texts(built, silent))
         assert "websearch" in drawn
-        assert "(empty)" not in drawn
+        assert "[empty]" not in drawn
 
     def test_it_says_it_the_way_the_chat_log_does(self):
         # One spelling for one call. Two would read as two different calls to a reader moving between the
@@ -340,15 +340,15 @@ class TestAMessageWithNoText:
         forest, silent = self._forest({"reasoning_content": "let me work through this..."})
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=silent))
         drawn = self._texts(built, silent)
-        assert "(thinking only)" in drawn
-        assert "(empty)" not in drawn
+        assert "[thinking only]" in drawn
+        assert "[empty]" not in drawn
 
     def test_a_message_with_nothing_at_all_still_says_empty(self):
-        # The one case `(empty)` is the honest answer for, and the control for the two above: a box that
+        # The one case `[empty]` is the honest answer for, and the control for the two above: a box that
         # never said it would be indistinguishable from a tool call that went unlabelled.
         forest, silent = self._forest({})
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=silent))
-        assert "(empty)" in self._texts(built, silent)
+        assert "[empty]" in self._texts(built, silent)
 
 
 class TestSpeaker:

@@ -640,13 +640,13 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
     A message with no text is not necessarily an empty one, and the three ways it happens are worth
     telling apart. A turn that asked for a tool carries its request and no prose; a thinking model that
     was interrupted carries a reasoning trace and no answer; and a turn stopped before either carries
-    nothing at all. Drawn as one `(empty)` box, as they were until 2026-09-03, the commonest of the three
+    nothing at all. Drawn as one `[empty]` box, as they were until 2026-09-03, the commonest of the three
     reads as a tree full of replies that never happened.
     """
     try:
         role, persona, text = chatutil.get_node_message_text_without_persona(datastore, node_id)
     except (KeyError, TypeError):
-        return "?", ["(missing)"], None
+        return "?", ["[missing]"], None
     speaker = persona or _ROLE_CAPTIONS.get(role, (role or "?").upper())
     lines = _wrap(text, width, max_lines)
     if lines:
@@ -666,9 +666,13 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
         sub_label = f"{len(tool_calls)} tool calls" if len(tool_calls) > 1 else None
         lines_for_calls = max_lines - 1 if sub_label is not None else max_lines
         return speaker, _wrap(chatutil.format_tool_calls(tool_calls), width, lines_for_calls), sub_label
+    # Square brackets, which is how the constellation says something in its own voice rather than the
+    # message's -- `[Video is off]`, `[no extractable text]`, `[Interrupted — the reply was stopped here]`.
+    # A box carrying one of these is not quoting a message that says "empty"; it is remarking that there
+    # is nothing to quote.
     if (message.get("reasoning_content") or "").strip():
-        return speaker, ["(thinking only)"], None
-    return speaker, ["(empty)"], None
+        return speaker, ["[thinking only]"], None
+    return speaker, ["[empty]"], None
 
 
 def _collapse_tool_rounds(datastore: chattree.Forest,
