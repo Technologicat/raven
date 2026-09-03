@@ -116,7 +116,10 @@ class XDotWidget(gui_animation.Animation):
         """
         # The widget is its own animation — it registers itself with the animator below, and the animator
         # reads base-class state on every animation it holds, so this has to run whatever else we do here.
-        super().__init__()
+        #
+        # Ambient to begin with, because a widget with no graph in it yet is not animating anything.
+        # `render_frame` takes the flag over from there, per frame — see the note there.
+        super().__init__(ambient=True)
         self.gui_uuid = str(uuid.uuid4())  # used in GUI widget tags
         self._width = width
         self._height = height
@@ -559,8 +562,21 @@ class XDotWidget(gui_animation.Animation):
         # We don't need the `t` parameter here. Because we never reset it, it just auto-tracks time (in nanoseconds) since this instance was created.
 
         # This actually animates only when needed; otherwise, this is a no-op, so we can afford to run this every DPG frame.
-        # The return value isn't needed here (we don't need to know if anything was actually animated or not), so we discard it.
-        self.update()
+        animating = self.update()
+
+        # Ambient while resting, transient while a pan, zoom or highlight is in flight.
+        #
+        # This registration is permanent -- the widget needs a per-frame hook for as long as it exists --
+        # so a fixed `ambient=False` would tell every app with an idle throttle that its GUI is busy
+        # forever, and the throttle would never engage while a graph was on screen. `ambient=True` would
+        # be the opposite mistake: a pan is exactly when the frames are wanted, and 12 fps is visible in
+        # one. What the flag has to track is not the hook but the work, and `update` has just said whether
+        # there was any.
+        #
+        # `Animator.transient_count` reads this attribute on every call rather than at registration, which
+        # is what makes a per-frame answer possible at all. It also makes `transient_count` agree with
+        # `is_animating`, which is the same question `raven-xdot-viewer` asks the widget by hand.
+        self.ambient = not animating
 
         # Persistent updatable; the animation keeps running as long as this object is alive.
         return gui_animation.action_continue

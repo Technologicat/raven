@@ -158,7 +158,7 @@ class TestTheWidgetIsAnAnimation:
     """
 
     def test_the_base_class_state_is_there(self, widget):
-        assert widget.ambient is False
+        assert widget.ambient is True  # at rest; see `TestItReportsWhetherItIsBusy`
         assert widget.t0 > 0
 
     def test_the_animator_can_stop_it(self, widget):
@@ -171,6 +171,54 @@ class TestTheWidgetIsAnAnimation:
         assert widget in animation.animator._animations
         widget.destroy()
         assert widget not in animation.animator._animations
+
+
+class TestItReportsWhetherItIsBusy:
+    """`ambient` has to track the *work*, not the registration, and the registration is permanent.
+
+    An app with an idle throttle reads `animator.transient_count` to ask "is this GUI doing anything?".
+    This widget needs a per-frame hook for as long as it exists, so a fixed `ambient=False` answers "yes,
+    always" — and an app that has one of these on screen never throttles again. That is not hypothetical:
+    it is what `raven-librarian` did from the day the chat graph landed until 2026-09-03, coasting at full
+    frame rate whenever the panel existed, which is from startup regardless of the toggle.
+
+    Fixing it flat the other way would be the opposite mistake, and it is measured rather than argued: a
+    smooth pan settles in 1.3–1.75 s against the 0.5 s that a keypress or a mouse move buys, so two thirds
+    of every pan would render at the throttled rate.
+    """
+
+    def test_at_rest_it_says_the_gui_is_idle(self, widget):
+        widget.render_frame(0)
+        assert widget.ambient is True
+        assert animation.animator.transient_count == 0, \
+            "a resting graph widget is telling its app to keep rendering at full rate"
+
+    def test_while_panning_it_says_the_gui_is_busy(self, widget):
+        widget.pan_to_node("b", animate=True)
+        widget.render_frame(0)
+        assert widget.is_animating(), "the pan finished within one frame; nothing was measured"
+        assert widget.ambient is False
+        assert animation.animator.transient_count > 0, \
+            "an app throttling on this would render the rest of the pan at a dozen frames a second"
+
+    def test_it_goes_quiet_again_when_the_pan_is_done(self, widget):
+        widget.pan_to_node("b", animate=True)
+        widget.render_frame(0)
+        assert widget.is_animating(), "the pan finished within one frame; there is no 'again' to test"
+
+        # Wound rather than waited. A `SmoothValue` reads the wall clock, so spinning `render_frame` in a
+        # tight loop advances the animation by microseconds per call and it never arrives -- which is what
+        # the first version of this test discovered by hanging on its own bound.
+        for _ in range(60):
+            for smooth in (widget._viewport.pan_x, widget._viewport.pan_y, widget._viewport.zoom):
+                smooth._last_time -= 0.05
+            widget.render_frame(0)
+            if not widget.is_animating():
+                break
+
+        assert not widget.is_animating(), "the pan never settled, so 'goes quiet' is untested"
+        assert widget.ambient is True
+        assert animation.animator.transient_count == 0
 
 
 def test_a_click_hands_over_the_element_rather_than_a_caption(widget, monkeypatch):
