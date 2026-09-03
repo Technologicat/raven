@@ -198,7 +198,11 @@ You are screening a literature-search result for records that are not about the 
 
 {rubric}
 
-The titles of the records below said too little to judge them from, so each is given with its abstract.
+Each record below is given with its abstract as well as its title. They arrive here for two different \
+reasons: some because the title said too little to judge from, others because a first pass wanted to drop \
+them and a drop is re-checked against the fuller text before it stands. So do not assume the title is \
+uninformative - read both, and let whichever says more decide. In particular, an abstract that says LESS \
+than the title does not make the record unjudgeable: judge it from the title.
 Judge each record only on its own text; they are unrelated to one another and their order means nothing.
 
 An abstract marked TRUNCATED is a publisher's preview that breaks off mid-sentence. Judge it only on what \
@@ -523,19 +527,31 @@ def needs_escalation(answer: dict, record: env) -> bool:
       - it said it was unsure;
       - the title has too little in it for the question to have been answerable, measured from the input,
         so a model confidently wrong about a thin title cannot talk its way out of a second look;
-      - it wants to *drop* the record and was less than certain.
+      - it wants to *drop* the record, at any confidence.
 
     The third is the asymmetry rather than a second guess at the confidence. A false keep costs a reader
     one line; a false drop removes a study from the review and leaves nothing behind to notice it by. So
     the two verdicts do not deserve the same standard of proof, and a drop has to clear a higher one.
 
-    Both hand-checked false drops found during calibration were of exactly this shape: a medium-confidence
-    drop of a record whose abstract, once read, put it plainly in scope. Both happened to escalate anyway
-    on the thin-title rule, which is luck — the same answers on a normal-length title would have stood.
+    **A drop escalates however sure the model says it is**, because confidence measured against a title
+    turns out to carry no information about whether the drop is right. Reviewing every dropped record
+    found a case for 3.9% of those dropped confidently from a title alone and 0.3% of those dropped
+    confidently after reading the abstract — so the confident title-only verdicts, the only ones this
+    rule used to exempt, were the least reliable group in the output rather than the most. Both false
+    drops found during calibration were the milder version of the same thing: a medium-confidence drop of
+    a record whose abstract, once read, put it plainly in scope.
+
+    Escalating every drop costs a pass-2 call per dropped record. Pass 2 is given strictly more text than
+    pass 1 — it sees the title too — but that does not make its verdict strictly better: a thin abstract
+    beside an informative title can dilute the evidence rather than add to it, and a record whose title
+    named its subject plainly has been kept on the grounds that the abstract was "unclear". Hence the
+    instruction in `PASS2_INSTRUCTIONS` to judge from whichever of the two says more. The residual cost
+    falls in the safe direction — a keep that a reader spends one line on — which is the same asymmetry
+    that motivates escalating at all.
     """
     return (answer["confidence"] == "low"
             or looks_uninformative(record.title)
-            or (verdict_of(answer) == "drop" and answer["confidence"] != "high"))
+            or verdict_of(answer) == "drop")
 
 
 CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
