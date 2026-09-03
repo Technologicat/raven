@@ -3609,6 +3609,13 @@ Discovered during brief 02 (LM Studio compat) kickoff (2026-06-04).
 
 *Cluster: abnormal-exit · Cost: ? · Gate: 0.2.9 · Filed: 2026-06-04*
 
+**`abnormal-exit` wants writing up as a brief, in the post-sprint cleanup** (agreed 2026-09-03). It has
+five members now — this helper, the `is_dearpygui_running` segfault, the leaked avatar instance and its
+missing signal handlers, the absent autosave, and the datastore-scaling item the autosave cadence is
+coupled to — and they share one root rather than a theme: nothing between "the app decided to exit" and
+"the process is gone" is anybody's responsibility, so each way of dying was found and filed separately.
+A flat list cannot say that, or say which of them has to land first.
+
 The DPG apps each hand-roll their render-loop teardown, and the pattern is fragile — `raven-librarian`
 and `raven-avatar-settings-editor` both got it *wrong* independently, which is the signal it should be a
 shared utility, not copy-pasted boilerplate. The correct shape (already in `raven.cherrypick.app`):
@@ -4012,6 +4019,11 @@ Librarian stores *every* chat — all nodes, all payload revisions, across the w
     from *startup*, taking every message of that session with it. No crash, no core dump, nothing in the log.
     A real crash mid-session costs exactly the same, and today nothing bounds that loss by anything shorter
     than the session. That is the case for a cadence, and it is independent of the rewrite cost above.
+    - **It happened again on 2026-09-03**, the same way and in a session where this very entry was open,
+      which is the interesting part: the loss is not from anyone doubting the rule but from `windowclose`
+      *reading* like the polite close the rule asks for, while calling `XDestroyWindow`. `wmctrl -i -c`
+      is the one that asks, and it was verified the same day to run the shutdown to `save: All done`.
+      A cadence would make the whole question cost a turn instead of a session.
 - **The sidecar dir**: a single flat directory of content-addressed images degrades on some filesystems once it
   holds many thousands of entries (directory-scan and lookup costs); `list_sidecar_files` (used by GC) reads the
   whole directory each time.
@@ -4906,7 +4918,9 @@ Two paths reach it, and the first is by far the common one:
 
 - **A signal kills the process.** Librarian installs no `signal` handlers at all, so `SIGTERM` (plain `kill`,
   a session manager logging out, a supervisor stopping the app) terminates it at the C level with no Python
-  cleanup — `app_shutdown` never runs. This is what produced the seven instances: the test-harness `kill`s
+  cleanup — `app_shutdown` never runs. **Nor does anything else in the constellation** (checked 2026-09-03:
+  no `import signal` and no `signal.signal` anywhere under `raven/`), which says where the fix goes — the
+  shared two-phase shutdown helper this cluster already wants, rather than a handler per app. This is what produced the seven instances: the test-harness `kill`s
   during this session.
 
   **Contradicted 2026-08-04, and unexplained — check this before implementing the fix below.** A plain
@@ -5020,8 +5034,9 @@ Axes to settle, roughly in order of how much they constrain the rest:
   conversation. A wall-clock timer is simpler but saves when nothing has changed and misses the moment
   that matters. Debounced-after-mutation splits the difference.
 - **Cost, which couples this to the datastore-scaling item.** A whole-file rewrite per turn is nothing at
-  today's size and is exactly the thing "Datastore scaling: a single `chat.json` … won't hold years of
-  chats" says gets linearly worse. If that item's incremental/SQLite direction is taken, autosave becomes
+  today's size — **measured 2026-09-03: 42 ms and 50 ms for a 3.3 MB store**, read off two shutdowns'
+  own log lines, against a turn that takes seconds — and is exactly the thing "Datastore scaling: a single
+  `chat.json` … won't hold years of chats" says gets linearly worse. If that item's incremental/SQLite direction is taken, autosave becomes
   nearly free and this design question dissolves; if it is not taken for a long while, a per-turn rewrite
   is the thing that will make it hurt first. **Decide these two together, or at least decide this one
   knowing the other exists.**
