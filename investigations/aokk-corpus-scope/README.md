@@ -414,6 +414,76 @@ by confidence then source, ordering the cells medium/abstract, high/title, high/
 contestedness runs 4.0%, 3.9%, 0.3%, the same order. The gap between the first two is noise either way;
 what the sort gets right, and all that the data supports, is putting the clean cell last.
 
+## Escalating every drop, and what that cost
+
+The review's finding — a drop is trustworthy only when confident *and* made after reading the abstract —
+argues for one change: escalate every dropped record to pass 2 rather than only the ones the model
+doubted. `needs_escalation`'s third trigger dropped its confidence qualifier, and the 749 title-only
+drops went through pass 2.
+
+| | before | after |
+|---|---:|---:|
+| kept | 3095 | 3230 |
+| dropped | 1219 | 1084 |
+| unknown, kept anyway | 73 | 138 |
+| **records needing a person to look** | **37** | **14** |
+
+135 records rescued, and **23 of the 37 hand-check items resolved themselves** — escalation kept them
+with nobody reading a word.
+
+**The two instruments agree, which neither could establish alone.** Of the 29 title-only drops the
+reviewer had made a case for, pass 2 rescued 23 (79.3%); of the 720 it had not, 112 (15.6%). A 63.8-point
+gap between two questions asked in opposite directions — *make a case for this* against the original
+off-topic rubric — neither seeing the other's output. `check_escalation.py` is that comparison, and it
+carries the negative control: rates within 20 points would mean the review's flags said nothing about
+what a second look would find, and would not say which of the two was at fault.
+
+**Escalating changed what pass 2's prompt had to say, and forgetting that was a bug.** Pass 2 opened by
+telling the model that *"the titles of the records below said too little to judge them from"*. True while
+escalation meant doubt; false for every record the new rule sends, which arrives with an informative title
+that was confidently judged. The prompt was instructing the model to discount the evidence that had been
+working. It was caught by one record — a paper whose title named its subject plainly, kept because its
+abstract was "too brief to tell what the work was about" — and after the fix that record came back a
+confident, correctly-reasoned drop.
+
+The general shape is worth more than the instance: **a rule change that alters which inputs reach a
+prompt can falsify the prompt**, and nothing links the two. The rule lives in Python and the claim lives
+in a string several hundred lines away.
+
+**What escalation costs, beyond the compute.** Pass 2 sees strictly more text than pass 1 — it is given
+the title too — but that does not make its verdict strictly better. A thin abstract beside an informative
+title can dilute rather than add, so the prompt now says to judge from whichever says more. And the
+residual failures are *invisible afterwards*: a record wrongly rescued rejoins the kept corpus and appears
+on no hand-check list ever again, where a wrong drop stays in `dropped.tsv` where somebody can find it.
+Reading the 47 rescues the reviewer could make no case for, roughly ten are keeps on a stated inability to
+tell the level — "level unspecified", "unspecified student level" — of which one has *School Level* in its
+own title. That is the same failure the prompt fix addressed, on the axis it did not reach.
+
+## Asking what a record says, once deciding stops working
+
+**The judge's shape is right for discarding and wrong for keeping.** A drop needs a reason, so every drop
+carries one and can be audited — which is what the whole review above is. A keep needs no reason at all: a
+record survives whenever no test can be positively established. So a study plainly set in a university and
+a study whose level is simply never stated are kept by the same rule, and afterwards nothing distinguishes
+them. The corresponding audit cannot be run, because there is nothing recorded to audit.
+
+`extract_fields.py` asks for fields instead of a verdict — who the work studies, what level it is set at,
+whether a *person* is learning, what the AI does, and the words in the text that settle the level. Three
+things follow:
+
+- **Extraction is an easier task than judgement**, needing no confidence to assert a negative. `not_stated`
+  is a first-class answer, which is exactly what `wrong_level` lacks: that test fails on silence, and
+  silence is common.
+- **A removal carries its reason.** `level: school, evidence: "TK-12 educators"` is checkable at a glance.
+- **Re-filtering is free.** The fields are stored, so a cutoff can be changed and argued about without
+  another model call — the opposite of the judge, where every adjustment cost a run.
+
+A 40-record pilot earned the pilot's keep immediately: `level` is reliable and its `evidence` is quoted
+from the text rather than composed, while **`human_learning` is wrong about a third of the time** — a
+knowledge-tracing paper and a study of educator communities of practice both came back `false` where a
+person plainly is learning. So that field does not belong in a removal rule on its own, which is a thing
+worth knowing before building one rather than after.
+
 ## Where this is headed: a `raven.papers` corpus filter
 
 Decided 2026-09-02, and deliberately **not** acted on yet — the AOKK framing is what the calibration is
@@ -466,6 +536,8 @@ run against the unsifted corpus.
 | `judge_scope.py` | The classifier. `--pilot N` and `--thin` are the two calibration runs; a plain run does both passes and writes the outputs. Re-running resumes |
 | `review_drops.py` | The second reader over `dropped.tsv`, asked whether a case can be made *for* each record, with kept records mixed in unlabelled as the control. `--skip`/`--limit` take a slice, `--control-strata` draws the control per confidence level |
 | `score_review.py` | Scores a review against the judge's own cells — which drops are contested, and whether the control was easier than what it was compared against. The table in *Reviewing the drops* above is its output. `--contested` also writes the hand-check list |
+| `check_escalation.py` | Whether escalating the title-only drops rescued the records the review had independently flagged. Its negative control is that a small gap would mean one of the two instruments is not working, without saying which. `--rescues` lists where they disagree |
+| `extract_fields.py` | Asks what a record *says* — population, level, whether a person is learning, what the AI does — rather than whether it belongs, so the keeps can be filtered on stored fields instead of re-judged. `--pilot N` reads a sample first; `--all-keeps` widens the selection beyond the ones kept on a hedge |
 
 Generated at runtime and **not committed** — they list the contents of a corpus that lives under
 `00_stuff/`, which is gitignored research data, and this repository is public:
@@ -479,6 +551,8 @@ Generated at runtime and **not committed** — they list the contents of a corpu
 | `dropped.tsv` | every dropped record with a one-line reason — the reviewable half |
 | `drop-review-<from>-<to>.tsv` | one slice of that list re-read by `review_drops.py`, with the control mixed in and labelled only here |
 | `contested.tsv` | the hand-check list across every slice: each dropped record a case was made for, worst cell first, the judge's reason beside the reviewer's case, and an empty column to mark in |
+| `dropped-before-escalating-titles.tsv` | the drop list as it stood before every drop was escalated to pass 2. Kept because it is what defines which records that run touched, and the review above was measured against it |
+| `extracted.jsonl`, `-traces.jsonl` | the extracted fields per record, and the reasoning traces — one entry per model call, naming the keys that shared it, since a batched call yields one trace for the batch |
 
 ## Reproducing
 
