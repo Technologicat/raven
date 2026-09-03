@@ -73,6 +73,7 @@ with timer() as tim:
     from ..common import bgtask
     from ..common import datastorelock
     from ..common import docextract
+    from ..common import quitsignal
     from ..common import utils as common_utils
 
     from ..common.gui import animation as gui_animation
@@ -2744,6 +2745,14 @@ def _apply_saved_panel_choice(sender, app_data) -> None:
     # focused from the first frame and a focus-driven mark would be lit before anyone had touched it.
     keyboardmark.install_caret_follower(["chat_field"])  # tag
 dpg.set_frame_callback(4, _apply_saved_panel_choice)
+
+# A `SIGTERM` — a plain `kill`, a session manager logging out, a supervisor stopping the app — now leaves
+# the loop the way the window's close button does, so the teardown below runs and the chat is saved. The
+# datastore is written once, at exit, so the alternative is losing the whole session's messages.
+#
+# Installed here, after everything that initializes SDL: see `raven.common.quitsignal` for why that
+# matters and what was swallowing the signal before.
+quitsignal.install(dpg.stop_dearpygui)
 
 logger.info("App render loop starting.")
 

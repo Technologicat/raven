@@ -4923,21 +4923,21 @@ Two paths reach it, and the first is by far the common one:
   shared two-phase shutdown helper this cluster already wants, rather than a handler per app. This is what produced the seven instances: the test-harness `kill`s
   during this session.
 
-  **Contradicted 2026-08-04, and unexplained — check this before implementing the fix below.** A plain
-  `kill <pid>` on a running Librarian did *nothing*: no shutdown, no exit, no further log output, and the
-  process was still alive eight minutes later, ending only when the window was closed with `wmctrl -c`
-  (which ran `app_shutdown` normally and released the avatar instance). That is not what this paragraph
-  describes and not the platform default either — SIGTERM's default disposition is to terminate, and
-  CPython installs no handler for it, so an unhandled SIGTERM should kill the process outright. Something
-  is catching or blocking it; *what* is unknown, and guessing at the culprit is exactly what should not go
-  in this file. Worth knowing before designing around it, because the two behaviours want different fixes:
-  a signal that kills abruptly needs a handler that cleans up first, whereas a signal that is silently
-  swallowed means the handler may never be reached at all. Reproduce with `kill` on a live instance and
-  find out which it is.
+  **Answered and fixed 2026-09-03.** The 2026-08-04 report — a plain `kill` did *nothing*, no shutdown, no
+  exit, no log output, the process alive eight minutes later — was accurate, and the culprit was **SDL**.
+  It installs its own `SIGINT` and `SIGTERM` handlers when it initializes, and `pygame.mixer.init()` alone
+  is enough (measured); SDL's handler pushes a quit event onto the SDL event queue, which Raven never pumps,
+  using SDL for audio only. So the signal was caught and discarded. `raven.common.audio.player` now sets
+  `SDL_NO_SIGNAL_HANDLERS` before importing pygame — the hint rather than installing over SDL afterwards,
+  because `set_frequency` re-initializes the mixer at runtime and SDL reinstalls its handlers each time —
+  and `raven.common.quitsignal` installs a handler that asks the render loop to stop, so the ordinary
+  teardown runs. `SIGINT` needed nothing: CPython's handler survives SDL, and the loops already catch
+  `KeyboardInterrupt`.
 
-  A `signal.signal(SIGTERM, ...)` handler that calls `app_shutdown` and then re-raises
-  fixes the whole class, and is the actual ask: *if the process is still alive enough to make an HTTP call,
-  it should make this one.*
+  **What remains here is the other apps.** Librarian is wired; the other five DPG frontends are not, and
+  `quitsignal.install(dpg.stop_dearpygui)` beside each render loop is the whole of it — one line each,
+  though each loop's teardown wants reading first, which is the audit this cluster's shared-helper item
+  is for.
 - **`sys.exit` from a non-main thread.** `_load_initial_animator_settings` calls `sys.exit(255)` on two error
   paths, and by its own comment it runs on DPG's callback thread. `sys.exit` outside the main thread raises
   `SystemExit` in *that* thread only, so it neither runs `atexit` nor actually exits the process. Both paths
@@ -5020,12 +5020,12 @@ every message since the app started, and orphans the server-side avatar instance
 leaks its server-side avatar instance when it doesn't exit normally", which shares the premise and whose
 SIGTERM behaviour is itself now in question).
 
-Raised by Juha (2026-08-04) as needing thought rather than a patch, and it does — the obvious fix has a
-sharp edge. **Naive autosave makes the failure worse, not better:** `save` serializes and rewrites the
-entire `chat.json` in place, so a process dying *during* a write leaves a truncated file where the whole
-history used to be. Saving more often means more windows in which to lose everything rather than one
-session. Any autosave therefore has to be atomic first — write to a temp file in the same directory,
-`fsync`, then `os.replace` — and that is worth doing on its own merits even before deciding on a cadence.
+Raised by Juha (2026-08-04) as needing thought rather than a patch, and it does — though one edge it used
+to have is gone. **The atomicity prerequisite is already met** (checked 2026-09-03): `save` writes to a
+temp file in the destination's own directory, `flush`es, `os.fsync`s, `os.replace`s, and unlinks the temp
+file on any `BaseException`. So a death mid-write no longer truncates the history, and raising the save
+frequency no longer multiplies a window in which everything can be lost. What is left is the cadence
+itself.
 
 Axes to settle, roughly in order of how much they constrain the rest:
 

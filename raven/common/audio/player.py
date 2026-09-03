@@ -21,6 +21,19 @@ from typing import BinaryIO, List, Optional
 
 from unpythonic import memoize, Singleton
 
+# Before pygame, because SDL reads this when it initializes and never again.
+#
+# SDL otherwise installs its own `SIGINT` and `SIGTERM` handlers, whose job is to push a quit event onto
+# the SDL event queue. That is right for an application with an SDL event loop; Raven uses SDL for audio
+# alone and never pumps that queue, so the effect here is that `SIGTERM` is caught and thrown away — a
+# plain `kill` does nothing at all, and an app that saves its work at exit never gets to. Measured
+# 2026-09-03: `pygame.mixer.init()` on its own is enough to install them.
+#
+# The hint rather than installing our handler after the mixer, because `set_frequency` re-initializes it
+# at runtime and SDL reinstalls its handlers each time. See `raven.common.quitsignal` for the other half.
+import os
+os.environ["SDL_NO_SIGNAL_HANDLERS"] = "1"
+
 import pygame
 import pygame._sdl2.audio as sdl2_audio
 

@@ -282,7 +282,14 @@
 
 *Raven-librarian*
 
-- **the mic's VU meter no longer shows a spurious peak when a recording starts.** A capture device opened cold hands over a few unusable frames before it settles — measured here as two silent ones, then a spike more than 25 dB above the room, gone by 220 ms. The meter showed that spike as the peak, and it was the first thing the new *Measure the room* button measured. Levels are now disbelieved for the first 0.3 s of a capture; the audio itself is kept from the first frame, since it is only the *level* that is wrong.
+- **closing Librarian with `kill`, a logout or a session manager now saves your chat.** It saves once, when
+  it exits cleanly, and a termination signal never reached it: the audio library installs signal handlers
+  of its own that hand the signal to an event queue Raven does not read, so a plain `kill` was discarded
+  and did not even stop the app. Such a signal now ends the render loop the way the window's close button
+  does, and everything that runs on the way out — saving the chat, releasing the avatar on the server —
+  runs. Ctrl+C was never affected.
+
+- **the mic's VU meter no longer shows a spurious peak when a recording starts.** The first moments of a capture carry a spike more than 25 dB above the room, gone by 220 ms — and it was the first thing the new *Measure the room* button measured. Levels are now disbelieved for the first 0.3 s of a capture; the audio itself is kept from the first frame, since it is only the *level* that is wrong.
 
 - **the send key now works when the composer does not have the cursor.** Ctrl+Enter (or Enter, depending on
   your `send_message_key` setting) only sent while you were actually typing in the message field — so after
