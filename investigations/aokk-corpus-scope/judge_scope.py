@@ -615,9 +615,13 @@ def write_outputs(records: list[env], done: dict[str, dict],
         # Two keys, in this order. Confidence, obviously. Then whether the record was judged from its
         # abstract or only from its title — a drop that pass 2 never re-examined rests on less evidence
         # than one that did, whatever the model said about its own certainty.
+        #
+        # `CONFIDENCE_ORDER` runs the other way, grouping the review TSV most-certain first, so it is
+        # negated here. Note only two of its three values can appear at all: a low-confidence answer is
+        # an `unknown` verdict and is kept, so it never reaches this list.
         def least_defended(key):
             answer = done[key]
-            return (CONFIDENCE_ORDER[answer["confidence"]],
+            return (-CONFIDENCE_ORDER[answer["confidence"]],
                     0 if answer["source"] == "title" else 1,
                     key)
 
