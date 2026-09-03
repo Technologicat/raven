@@ -68,9 +68,10 @@ user/AI pair stripes it the way ruled paper stripes a page.
 
 Two things about that, and the second is the one not to overstate:
 
-- **Blue, green and orange are the fleet's unofficial palette**, used before this and chosen again here,
-  so their going together is familiarity rather than accident. What is particular to this view is that
-  they are *also* doing work.
+- **Blue, green and orange are what Juha typically reaches for**, here and before, so their going
+  together is familiarity rather than accident — but they are a habit and not a canon. Other triples work
+  (yellow, magenta and a deep pink, say), and nothing about this view required these three. What is
+  particular to it is that they are *also* doing work.
 - **Colour carrying information is not a rule, it is a fit.** Colour may have a role or may simply look
   good, and the two are not in opposition — there is nothing to read into a colour that means nothing.
   Raven is a constellation of information tools, which is what makes colour-coding pay here specifically.
