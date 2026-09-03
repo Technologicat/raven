@@ -1190,6 +1190,18 @@ list is a judgement about how the picture reads, and those are decided in front 
    need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
    thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render
    thread where `split_frame` deadlocks.
+   - **Nothing can expand a tool round, and the mechanism for it has been there all along** (found
+     2026-09-03). `ViewState.expanded_tool_turns` is read by `build`, honoured by `_collapse_tool_rounds`,
+     and carried through the history's snapshot and restore — and *nothing ever adds to it*. No click, no
+     key, no button. So every round is folded permanently, its result nodes have no box, and with no box
+     there is no cursor and no way to make one HEAD, which the chat log allows. A capability that is
+     modelled, persisted and unreachable.
+     - **It wants deciding with the badge below, not separately.** A folded round is conceptually a gap —
+       content that exists and is not drawn — and this picture's rule for a gap is that acting on it opens
+       it. So the mark saying "results are folded here" and the way to unfold them should be one thing.
+     - **The gesture cannot be a click on the mark.** Hit detection is per `Node`: the widget hands back
+       whole elements and never sub-shapes, so nothing inside a box is separately clickable. It has to be
+       a key while the cursor is on the box, or a modifier-click on the box.
    - **It now has a third consumer, and that is the one to design against: a mark saying a tool round got
      its results back** (Juha, 2026-09-03). The box already says `Aria [tool call]` and names the call, and
      counts the calls on a second line when there is more than one — but nothing says whether the round

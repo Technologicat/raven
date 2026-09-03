@@ -61,28 +61,47 @@ Two loose ends from the chat-graph run, neither of them a brief. They are here r
 `TODO_DEFERRED.md` because that file has passed 150 items and anything short goes missing in it — and
 the dehydration pass that would drain it is itself a post-sprint job.
 
-**The chat graph's palette is unfinished** (2026-09-02). What is settled: hue carries the *role* and
-saturation carries the *branch*, so the branch a reader is on is coloured and everything else greys out;
-SYSTEM keeps the chat log's green and TOOL its orange; assistant and user are one hue at two lightnesses,
-striping the branch the way ruled paper stripes a page. What is not settled is **which hue the
-conversation itself takes**:
+**The chat graph's palette is settled** (2026-09-03), and the aesthetic it settled into is worth naming
+because it is not a palette: **informatively colourful** (Juha). Every colour on screen is carrying a
+fact, and none is there for decoration — hue carries the *role*, saturation the *branch*, lightness the
+*speaker*, so the branch a reader is on is coloured and everything else greys out, and the user/AI pair
+stripes it the way ruled paper stripes a page. Green, blue and orange are what that came out as; they
+*happen* to go well together, which is luck rather than the design.
 
-- Green shipped, and reads oddly — though the retrofuturistic green-monitor implication is worth keeping in
-  mind rather than dismissing.
-- Amber was tried the same day and comes out **brown** at the lightness the design needs. A real amber
-  phosphor glows; this sits. It also lands 5° from the TOOL orange, which would make the two roles
-  indistinguishable.
-- Which leaves **blue** for assistant/user, since green and orange are spoken for by the two roles that
-  keep them (Juha). The objection to blue was that the preview ring and the keyboard mark already use it —
-  but those are bright, dotted or pulsating *outlines*, and a dark low-saturation *fill* is a different
-  channel. The rule that no two marks may be mistaken for one another survives as long as the ring stays
-  clearly the brighter thing.
-- **Constraint on all of them: the fills stay dark.** The chat graph draws light text, and that is not up
-  for renegotiation to win a colour.
+The practical consequence is for what comes next rather than for what is there. A fourth thing wanting a
+colour — bookmarks are already promised "a colour of their own" — earns one by having something to say,
+not by fitting a fixed scheme. And a colour that stops carrying anything should go, however good it looks.
 
-The knob is one constant, `chatgraph._BRANCH_HUE`, so trying a candidate is a word and a restart. Judge it
-on screen; three passes have now shown that reasoning about the authored numbers predicts the result badly,
-because the renderer inverts lightness and the two ends look nothing alike.
+What it came out as: SYSTEM keeps the chat log's green and TOOL its orange; the conversation itself is
+**blue**, hue 210, green and orange being spoken for and amber having come out brown five degrees from
+the TOOL orange. The fills stay dark throughout, since the graph draws light text.
+
+Four things came out of settling it that were not in the plan:
+
+- **`_fill_for` had no system case at all.** SYSTEM was green only because the *branch* hue was green, so
+  the moment that moved, the system prompt moved with it and this note's own claim quietly became false.
+  A role→hue table now, which cannot drift that way again.
+- **A tool *call* is coloured as a tool**, matching the log, where the call renders in the tool colour
+  inside an otherwise ordinary assistant message. Here a box has one fill and its label *is* the call.
+- **Orange needs more lightness and saturation than the others to read as orange** — dark, muted orange is
+  *brown*, the one hue with its own name at that position. Measured: at the others' values it came out
+  `(116, 85, 47)`.
+- **And the washed-out tool box keeps the darker lightness anyway**, which is the one place a role's
+  lightness depends on the branch. Brightening it with the focused box turned a warm grey that reads like
+  some metal off the end of the periodic table into a paler nothing. Juha's call, and the principle with
+  it: what looks good wins over the systematic derivation.
+
+**Matched to the chat log by *vibe*, not by value** (Juha) — the same three families, chosen to read in
+this medium. The log carries its colour on thin glyphs where a lightness step reads hard; this carries it
+on large fills where the same step disappears. Copying the log's numbers reproduced its values and not its
+effect, which is why the user/AI zebra here is wider than the log's own ratio.
+
+The lasting lesson is about *mode* rather than colour. The structural half — which channel carries what —
+behaved like ordinary building work and turned up a real bug. Only the numbers needed the other head, and
+they defeated every attempt to reason about them: green read oddly, amber went brown, the first blue did
+not land. There is no probe that can fail for "is this the right blue", which is exactly what the building
+mode runs on. Worth splitting the look pass (item 10) the same way: settle the channels with the building
+head, and come out with a short list of numbers to judge on screen in one sitting.
 
 **The first Ctrl+Shift+O opens nothing** (2026-09-02, Juha). In `raven-librarian`: the first press flashes
 the toolbar button as though the hotkey landed, and no dialog appears; every press after that works. So the

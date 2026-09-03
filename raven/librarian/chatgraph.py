@@ -73,10 +73,11 @@ def _authored_for_dark(hue_deg: float, saturation: float, lightness: float) -> x
 
 # What a box says, in two channels that do not compete: **hue is the role, saturation is the branch.**
 #
-# Hue follows the chat log — green for the system prompt, orange for a tool result — and the conversation
-# itself takes the green of the tree in the README, so the branch a reader is on is *coloured* and
-# everything else is grey. That is the same thing the old single green said, and it says it while leaving
-# room for the roles.
+# Hue follows the chat log — green for the system prompt, orange for a tool, whether asked for or answered
+# — and the conversation itself takes a blue the log has no counterpart for, so the branch a reader is on
+# is *coloured* and everything else is grey. Matching the log by *vibe* rather than by value (Juha): the
+# same three families, chosen to read in this medium rather than sampled from that one, because the log
+# carries its colour on thin glyphs and this carries it on large fills.
 #
 # Assistant and user are one hue at two lightnesses. The log tells them apart the same way (`#c6c6c6`
 # against `#8e8e8e`), and since they alternate strictly down a branch the pair stripes it — what ruled
@@ -86,20 +87,70 @@ def _authored_for_dark(hue_deg: float, saturation: float, lightness: float) -> x
 # Visualizer's semantic map is saturated dots on dark, the avatar panel is vivid, and the file dialog's
 # folders are yellow. The graph is content. An earlier pass here read the panel background as the whole
 # aesthetic and washed everything to grey, which lost the branch along with the glare.
-_BRANCH_HUE = 120  # green, as the tree diagram in the README
+# Blue for the conversation, because the other two are spoken for: SYSTEM keeps the chat log's green and
+# TOOL its orange, and amber — tried — comes out brown at the lightness these fills need, five degrees from
+# the TOOL orange besides. The ring and the keyboard mark are blue too, and are not confusable with this:
+# they are bright, dotted or pulsating *outlines*, where this is a dark low-saturation fill.
+_BRANCH_HUE = 210
 _TOOL_HUE = 33  # orange, as the log's TOOL
+_SYSTEM_HUE = 122  # green, as the log's SYSTEM
+
+# By role, for the roles that have a colour of their own. Anything not here is the conversation itself and
+# takes `_BRANCH_HUE`. A table rather than a conditional because it used to be one, and the conditional had
+# no system case at all — system was green only while the *branch* hue happened to be green, so the moment
+# that moved, the system prompt moved with it and the design note saying otherwise quietly became false.
+_ROLE_HUES = {"system": _SYSTEM_HUE, "tool": _TOOL_HUE}
+
+# Orange needs more of both than the others to read as orange at all. Dark, muted orange is *brown* — it
+# is the one hue with its own colour name at that position, and at the fills' lightness it took it. So the
+# tool boxes get a lightness and an on-branch saturation of their own; equal numbers across the roles do
+# not mean equal legibility of hue. Measured rather than argued: at L 0.32 / sat 0.42 the fill is
+# `(116, 85, 47)`, which is brown by any name.
+#
+# Shades worth keeping, if these turn out too loud (Juha, 2026-09-03, both "already pretty good"):
+#   - the focused box at L 0.32 / sat 0.42 -> `(116, 85, 47)`
+#   - saturation alone, L 0.32 / sat 0.58 -> `(129, 86, 34)`, which leaves the unfocused box untouched
+#   - the unfocused box at L 0.32       -> `( 86, 82, 78)`, a metal not in the periodic table
+_TOOL_L = 0.38
+_TOOL_SATURATION = 0.58
+
+# And the washed-out tool box keeps the *old*, darker lightness, which is the one place a role's lightness
+# depends on the branch. Chosen by looking: brightening it along with the focused box turned a warm grey
+# that reads like some metal off the end of the periodic table into a paler nothing. It costs a little of
+# the "saturation is the branch" story — lightness now carries a trace of it too, for one role — and the
+# call was that what looks good wins over the systematic derivation (Juha, 2026-09-03).
+_TOOL_UNFOCUSED_L = 0.32
 _ON_BRANCH_SATURATION = 0.42
 _OFF_BRANCH_SATURATION = 0.05  # not zero: a trace of hue keeps a washed box from reading as a gap box
 
 # The zebra, by lightness. The values sit above the panel's own L=0.18 so a box reads as a card on it.
-_ASSISTANT_L, _USER_L, _OTHER_L = 0.32, 0.25, 0.285
+#
+# The user's end came down rather than the AI's going up: the AI boxes read well as they are, and it is
+# the *pair* that was not separating. Further apart than the chat log's own ratio (its user text is 72% of
+# its AI text, which here would be 0.23), because the log makes that difference on thin glyphs where a
+# lightness step reads much harder than it does across a large fill — matching the number would have
+# reproduced the problem rather than the effect.
+_ASSISTANT_L, _USER_L, _OTHER_L = 0.32, 0.22, 0.285
 
 
-def _fill_for(role: str, on_current_branch: bool) -> xdotconstants.Color:
-    """Return the fill for a message box: the role's hue, at full strength only on the current branch."""
-    hue = _TOOL_HUE if role == "tool" else _BRANCH_HUE
-    lightness = {"assistant": _ASSISTANT_L, "user": _USER_L}.get(role, _OTHER_L)
-    saturation = _ON_BRANCH_SATURATION if on_current_branch else _OFF_BRANCH_SATURATION
+def _fill_for(role: str, on_current_branch: bool, asked_for_tools: bool = False) -> xdotconstants.Color:
+    """Return the fill for a message box: the role's hue, at full strength only on the current branch.
+
+    `asked_for_tools`: Whether this message *requested* tools rather than merely being one's result. It
+                       takes the tool colour either way, which is what the chat log does — there the call
+                       is rendered in the tool colour inside an otherwise ordinary assistant message. Here
+                       a box has one fill and its label is the call itself, so the whole box carries it.
+    """
+    # A message that asked for tools is coloured as one, whatever role it was written under.
+    colour_role = "tool" if asked_for_tools else role
+    hue = _ROLE_HUES.get(colour_role, _BRANCH_HUE)
+    lightness = {"assistant": _ASSISTANT_L,
+                 "user": _USER_L,
+                 "tool": _TOOL_L if on_current_branch else _TOOL_UNFOCUSED_L}.get(colour_role, _OTHER_L)
+    # Off-branch is one washed value for every role: what recedes should recede together, or a tool round
+    # would go on shouting from a branch nobody is reading.
+    saturation = ({"tool": _TOOL_SATURATION}.get(colour_role, _ON_BRANCH_SATURATION)
+                  if on_current_branch else _OFF_BRANCH_SATURATION)
     return _authored_for_dark(hue, saturation, lightness)
 
 
@@ -1314,7 +1365,8 @@ def build(datastore: chattree.Forest,
             speaker, label_lines, sub_label = _speaker_and_label_of(
                 datastore, node_id, config._get_effective_label_chars(), config.label_lines)
             shapes = _box_shapes(x, y, config.node_w, config, label_lines,
-                                 fill=_fill_for(ref.role, node_id in current_branch),
+                                 fill=_fill_for(ref.role, node_id in current_branch,
+                                                asked_for_tools=bool(ref.tool_call_count)),
                                  dashed=False, pills=ref.pills, speaker=speaker,
                                  sub_label=sub_label,
                                  measure_text=measure_text,
