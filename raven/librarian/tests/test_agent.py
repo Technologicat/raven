@@ -629,6 +629,33 @@ class TestAsk:
         assert agent.ask(llm_settings, "Question?") == ""
 
 
+class TestAskRecord:
+    """`ask`'s contract, handing back the trace rather than logging it away."""
+
+    def test_it_returns_the_reasoning_trace_ask_throws_away(self, monkeypatch, llm_settings):
+        def fake_invoke(**kw):
+            result = make_invoke_result(content="raven, corvid")
+            result.data["reasoning_content"] = "Corvids first, then the species."
+            return result
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        record = agent.ask_record(llm_settings, "Question?")
+        assert record.reply == "raven, corvid"
+        # Non-vacuous by construction: an empty trace fails this, which is what the fixture would
+        # produce if `reasoning_content` stopped reaching the record.
+        assert record.reasoning == ("Corvids first, then the species.",)
+
+    def test_it_raises_on_a_backend_that_did_not_generate_as_ask_does(self, monkeypatch, llm_settings):
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content=None))
+        # Matched on the message, so this cannot pass on some *other* RuntimeError raised on the way --
+        # `content=None` is a fiddly enough fixture to be worth pinning to the failure it is meant to
+        # provoke. Note the sibling test above: `content=""` is a generation, and returns rather than
+        # raises, so the two together say where the line is.
+        with pytest.raises(RuntimeError, match="no generation"):
+            agent.ask_record(llm_settings, "Question?")
+
+
 class TestParseJsonReply:
     """What a model actually sends back when asked for JSON and nothing else."""
 

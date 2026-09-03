@@ -52,7 +52,7 @@ __all__ = ["DEFAULT_MAX_REPLY_TOKENS",
 
            "TurnRecord", "describe_turn", "turn",
 
-           "ask", "parse_json_reply"]
+           "ask", "ask_record", "parse_json_reply"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -547,13 +547,32 @@ def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REP
     Returns the reply text, with nothing else around it.
 
     Raises `RuntimeError` if the backend did not generate — which `turn` does not do, and is the
-    difference that matters here. Use `turn` instead when the reasoning trace, the tool counts or the
-    node ids are wanted, or when a failed question should be retried rather than raised.
+    difference that matters here.
 
     **The reasoning trace is logged at DEBUG**, being the thing this function otherwise throws away. A
     caller here has asked for the answer text and gets it; the trace is what explains a reply that makes
     no sense, and an unattended run is exactly where nobody saw it happen. So `--log-level DEBUG --log
-    PATH` on any tool built over this keeps it.
+    PATH` on any tool built over this keeps it. `ask_record` returns the trace instead of logging it,
+    for a caller that wants to keep it beside its results rather than in a log file.
+    """
+    return ask_record(llm_settings, prompt, max_tokens).reply or ""
+
+
+def ask_record(llm_settings: env, prompt: str,
+               max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS) -> TurnRecord:
+    """`ask`, but handing back the whole record rather than only the reply text.
+
+    Arguments and failure behaviour are `ask`'s, which see — the cap on the reply and the `RuntimeError`
+    on a backend that did not generate are the two things a batch run needs and `turn` does not provide.
+
+    Use this where the reasoning trace is worth **storing**, which for an unattended batch is whenever a
+    verdict may later have to be explained. A trace at DEBUG is only useful to somebody who set the log
+    level before the run; a trace written beside the answer is there for the question nobody knew to ask,
+    which is the usual way a surprising verdict gets noticed — long afterwards, from the results.
+
+    Note a batched call gives one trace for the whole batch, not one per item: what it explains is the
+    reply, and the reply covers every item in that call. So a caller storing traces should record which
+    records shared a call.
     """
     # `request_data` is what `invoke` deep-copies per call, so the cap has to go through it — and be put
     # back, since the object belongs to the caller and outlives this function. Not safe against two
@@ -584,10 +603,10 @@ def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REP
                 llm_settings.request_data["max_tokens"] = previous
 
     for reasoning in record.reasoning:
-        logger.debug(f"ask: reasoning trace ({len(reasoning)} characters):\n{reasoning}")
+        logger.debug(f"ask_record: reasoning trace ({len(reasoning)} characters):\n{reasoning}")
     if record.generation is None:
         raise RuntimeError("the backend returned no generation")
-    return record.reply or ""
+    return record
 
 
 def parse_json_reply(text: str):

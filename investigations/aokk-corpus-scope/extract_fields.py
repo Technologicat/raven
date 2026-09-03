@@ -1,0 +1,279 @@
+"""Ask what a record *says*, not whether it belongs, and filter on the answers afterwards.
+
+The scope judge decides. That is the right shape for finding records to throw away — a drop needs a
+reason — and the wrong shape for the records it *keeps*, because a keep needs no reason at all. A record
+survives the rubric whenever no test can be positively established, so a study whose level is simply
+never stated is kept by the same rule that keeps a study plainly set in a university, and afterwards the
+two are indistinguishable. Reviewing every dropped record found 3.9% of the confident title-only drops
+contested; the corresponding question about the keeps has no answer, because nothing was recorded.
+
+So this asks for **fields rather than a verdict**:
+
+  - `population`      who the work actually studies
+  - `level`           the educational level, with "not stated" a first-class answer
+  - `human_learning`  whether a PERSON is being taught or learning, as against a model being trained
+  - `ai_role`         what the AI does in the work, in a few words, or "none"
+  - `evidence`        the phrase in the text that settles `level`, quoted
+
+Three things follow, and the third is why this is worth a run of its own.
+
+**Extraction is an easier task than judgement.** Reporting what a text says does not require weighing it
+against a rubric, and does not need the model to be confident enough to assert a negative.
+
+**A removal carries its reason.** `level: school, evidence: "sixth-grade pupils"` is checkable at a
+glance; `wrong_level: true` is not.
+
+**Re-filtering is free.** The fields are stored, so a cutoff can be changed, argued about and changed
+again without another model call. That is the opposite of the judge, where every adjustment cost a run —
+and it is what lets the filter be tuned against the corpus rather than against the examples that
+motivated it.
+
+Resumable on the same terms as `judge_scope`: one JSONL line per record, a later line superseding an
+earlier one, so an interrupted run resumes and a re-run costs nothing.
+
+Reasoning traces go to a sidecar, one entry per model call rather than per record — a batched call
+produces one trace covering every item in it, so the entry names the keys that shared the call.
+"""
+
+import argparse
+import collections
+import json
+import logging
+import pathlib
+import random
+import sys
+
+from unpythonic import timer
+from unpythonic.env import env
+
+from raven.librarian import agent, config as librarian_config, llmclient
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import judge_scope  # noqa: E402 -- the path has to be set up first; this is the sibling apparatus
+
+SCOPE_QUESTION = judge_scope.SCOPE_QUESTION
+
+ABSTRACT_CHARS = 4000
+
+# The vocabularies. Closed sets, because an open-ended answer cannot be filtered on without a second pass
+# to normalize it, and normalizing free text is how a field stops meaning one thing.
+POPULATIONS = ("university_students", "school_pupils", "preservice_teachers", "inservice_teachers",
+               "researchers", "professionals", "general_public", "none", "unclear")
+LEVELS = ("higher_education", "school", "vocational", "mixed", "not_applicable", "not_stated")
+
+INSTRUCTIONS = """\
+You are reading records from a literature search, to record what each one says. You are NOT deciding \
+whether any of them belongs anywhere - do not screen, include or exclude. Report what is there.
+
+For each numbered record, answer:
+  "i"               the record's number, copied exactly
+  "population"      who the work studies, one of: {populations}
+  "level"           the educational level the work is set at, one of: {levels}
+  "human_learning"  true if a PERSON is taught or is learning in this work; false if the only thing being \
+taught or trained is software (a model, an agent, a policy); "unclear" if you cannot tell
+  "ai_role"         what the AI does in this work, at most eight words, or "none" if there is no AI in it
+  "evidence"        the words in the record that settle "level", quoted exactly, or "" if nothing does
+
+Rules that decide most cases:
+
+"not_stated" is a real answer and often the correct one. A great many studies never say what level their \
+participants are at. Answer "not_stated" rather than inferring from the topic, the venue or what would be \
+usual - if the text does not say, you do not know. Guessing here destroys the only thing this task is for.
+
+"not_applicable" is different from "not_stated": it means the work is not set in education at all, so the \
+question does not arise. A study of clinical decision-making has level "not_applicable"; a study of \
+students whose year is never given has level "not_stated".
+
+"human_learning" is the distinction between a person being educated and a model being trained. \
+"Teaching", "training" and "learning" are the machine-learning field's own words for what is done to \
+software. A "teachable agent" corrected by crowdworkers, a system "trained" on a corpus, a paper about \
+"learning" a control policy - in all of those the thing being taught is software, and "human_learning" is \
+false.
+
+"evidence" must be words that actually appear in the record. If you cannot find any, answer "" - do not \
+paraphrase and do not compose a sentence. An empty "evidence" beside a confident "level" is a \
+contradiction, so let the evidence decide.
+
+Answer with a JSON array of objects and nothing else. One object per record, in order, no commentary, no \
+markdown fences.
+
+{items}
+"""
+
+
+def format_record(index: int, record: env) -> str:
+    """One record as the extractor sees it. Same shape pass 2 of the judge uses, minus the verdict."""
+    venue = f"Published in: {record.venue}\n" if record.venue else ""
+    abstract = record.abstract[:ABSTRACT_CHARS] if record.abstract else "(none)"
+    return (f"--- record {index} ---\n"
+            f"Title: {record.title}\n"
+            f"{venue}"
+            f"Abstract: {abstract}\n")
+
+
+def extract_batch(llm_settings: env, batch: list[env]) -> tuple[dict[int, dict], tuple[str, ...]]:
+    """Fields for one batch, plus the reasoning trace covering the whole call.
+
+    Returns `({position: fields}, traces)`. An answer whose number does not resolve is dropped rather
+    than guessed at, exactly as the judge's batched calls do.
+    """
+    items = "\n".join(format_record(i, record) for i, record in enumerate(batch))
+    record = agent.ask_record(llm_settings,
+                              INSTRUCTIONS.format(populations=" / ".join(POPULATIONS),
+                                                  levels=" / ".join(LEVELS),
+                                                  items=items))
+    answers = agent.parse_json_reply(record.reply or "")
+    if not isinstance(answers, list):
+        raise ValueError(f"expected a JSON array, got {type(answers).__name__}")
+    out = {}
+    for answer in answers:
+        if not isinstance(answer, dict) or "i" not in answer:
+            continue
+        try:
+            i = int(answer["i"])
+        except (TypeError, ValueError):
+            continue
+        if 0 <= i < len(batch):
+            out[i] = answer
+    return out, record.reasoning
+
+
+def normalize(answer: dict, key: str) -> dict:
+    """One extraction, with its vocabularies checked.
+
+    An out-of-vocabulary value becomes "unclear"/"not_stated" rather than being stored as given: a field
+    whose set of values is open cannot be filtered on, and the filter is the entire point. The original
+    is kept in `raw` so a systematic mismatch is visible rather than silently flattened.
+    """
+    population = str(answer.get("population", "")).strip().lower()
+    level = str(answer.get("level", "")).strip().lower()
+    learning = answer.get("human_learning")
+    if learning not in (True, False):
+        learning = "unclear"
+    out = {"key": key,
+           "population": population if population in POPULATIONS else "unclear",
+           "level": level if level in LEVELS else "not_stated",
+           "human_learning": learning,
+           "ai_role": " ".join(str(answer.get("ai_role") or "").split())[:80],
+           "evidence": " ".join(str(answer.get("evidence") or "").split())[:200]}
+    if out["population"] != population or out["level"] != level:
+        out["raw"] = {"population": population, "level": level}
+    return out
+
+
+def load_state(path: pathlib.Path) -> dict[str, dict]:
+    """Extractions already recorded, keyed by citekey. A later line supersedes an earlier one."""
+    state = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                answer = json.loads(line)
+                state[answer["key"]] = answer
+    return state
+
+
+def append(path: pathlib.Path, payload: dict) -> None:
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def unsure_keeps(judged: dict[str, dict]) -> set[str]:
+    """The kept records whose keep rests on nothing: hedged, unsure, or a withheld verdict.
+
+    A confident keep was reached by the model positively failing to find any evidence of being off topic,
+    which is the rubric working. These are the ones where it did not look hard enough to say.
+    """
+    out = set()
+    for key, answer in judged.items():
+        verdict = judge_scope.verdict_of(answer)
+        if verdict == "unknown" or (verdict == "keep" and answer["confidence"] != "high"):
+            out.add(key)
+    return out
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--bib", required=True, help="the .bib the records come from")
+    parser.add_argument("--judged", default=None, help="the judge's state JSONL (default: beside this)")
+    parser.add_argument("--all-keeps", action="store_true",
+                        help="extract from every kept record, not only the ones kept on a hedge")
+    parser.add_argument("--pilot", type=int, default=None, metavar="N",
+                        help="extract a random N of the selection and stop, to read before committing "
+                             "to the whole run")
+    parser.add_argument("--seed", type=int, default=23, help="which random sample --pilot takes")
+    parser.add_argument("--batch", type=int, default=10, help="records per model call")
+    parser.add_argument("--backend-url", default=None,
+                        help=f"the LLM backend (default: {librarian_config.llm_backend_url})")
+    parser.add_argument("--model", default=None, help="model id to extract with")
+    parser.add_argument("--out-dir", default=None, help="where the outputs go (default: beside this)")
+    opts = parser.parse_args()
+
+    logging.getLogger("bibtexparser").setLevel(logging.ERROR)
+    here = pathlib.Path(__file__).resolve().parent
+    out_dir = pathlib.Path(opts.out_dir) if opts.out_dir else here
+
+    records = judge_scope.load_records(pathlib.Path(opts.bib).expanduser().resolve())
+    judged = load_state(pathlib.Path(opts.judged) if opts.judged else here / "judged.jsonl")
+
+    if opts.all_keeps:
+        wanted = {key for key, answer in judged.items() if judge_scope.verdict_of(answer) != "drop"}
+        run_name = "extracted-all-keeps"
+    else:
+        wanted = unsure_keeps(judged)
+        run_name = "extracted"
+    selection = [record for record in records if record.key in wanted]
+    if opts.pilot is not None:
+        selection = random.Random(opts.seed).sample(selection, min(opts.pilot, len(selection)))
+        run_name = f"{run_name}-pilot-{opts.seed}-{len(selection)}"
+    print(f"{len(wanted)} records selected; {len(selection)} in this run")
+
+    state_path = out_dir / f"{run_name}.jsonl"
+    traces_path = out_dir / f"{run_name}-traces.jsonl"
+    done = load_state(state_path)
+    todo = [record for record in selection if record.key not in done]
+    print(f"already extracted: {len(done)};  to do now: {len(todo)}")
+    if not todo:
+        print("nothing to do")
+        return 0
+
+    llm_settings = llmclient.setup(backend_url=opts.backend_url or librarian_config.llm_backend_url,
+                                   quiet=True)
+    if opts.model:
+        llm_settings.request_data["model"] = opts.model
+        llm_settings.model_id = opts.model
+    print(f"backend: {llm_settings.model_id}")
+
+    batches = [todo[i:i + opts.batch] for i in range(0, len(todo), opts.batch)]
+    for n, batch in enumerate(batches, start=1):
+        with timer() as tim:
+            try:
+                answers, traces = extract_batch(llm_settings, batch)
+            except Exception as exc:  # noqa: BLE001 -- one bad batch must not end the run
+                print(f"  batch {n}/{len(batches)}: FAILED ({type(exc)}: {exc}); "
+                      f"will retry on a later run", flush=True)
+                continue
+        for i, record in enumerate(batch):
+            if i in answers:
+                append(state_path, normalize(answers[i], record.key))
+        # One trace per call, named with the keys it covers, because that is the granularity there is.
+        append(traces_path, {"batch": n,
+                             "keys": [record.key for record in batch],
+                             "reasoning": list(traces)})
+        print(f"  batch {n}/{len(batches)}: {len(answers)}/{len(batch)} extracted in {tim.dt:.1f}s",
+              flush=True)
+
+    final = load_state(state_path)
+    mine = {key: value for key, value in final.items() if key in {r.key for r in selection}}
+    print(f"\n{len(mine)} extracted")
+    for field in ("level", "population", "human_learning"):
+        counts = collections.Counter(value[field] for value in mine.values())
+        print(f"\n  {field}:")
+        for name, count in counts.most_common():
+            print(f"    {str(name):<22}{count:>5}")
+    print(f"\nwrote {state_path}\nwrote {traces_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

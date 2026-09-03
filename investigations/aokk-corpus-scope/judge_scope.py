@@ -170,6 +170,12 @@ undergraduate who helps teach a course - that second sense has no AI in it and i
 "Conversational agent" and "intelligent agent" appear in fields with nothing to do with education. Judge \
 the work, not the phrase that matched.
 
+"Teaching", "training" and "learning" have the same problem, and it is the one most likely to mislead you \
+here, because those words are ALSO how the machine-learning field describes what is done to a model. A \
+"teachable agent" that crowdworkers correct, a system "trained" on a dataset, a paper about "learning" a \
+policy - the thing being taught is software, and no person is being educated. That is NOT an educational \
+dimension. The words count as education only when a PERSON is the one learning.
+
 Report your confidence honestly. A generic title - "Book Review", "Generative AI", "Machine culture" - \
 gives you no evidence either way: answer false to all three and say "low". Do not guess confidently."""
 
