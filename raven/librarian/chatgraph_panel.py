@@ -409,6 +409,28 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 self.go_forward()
                 return True
             return False
+        # Ctrl+arrows step along the siblings, Ctrl+Shift+arrows by ten, Ctrl+Home and Ctrl+End to the
+        # ends. The chat log's keys for the chat log's verbs, on the same tree.
+        #
+        # Before the Shift branch below, because Ctrl+Shift is a Ctrl gesture here and testing Shift
+        # first would pan on it instead of stepping ten.
+        #
+        # Claiming these also closes a hole. They fell through to the app, whose own Ctrl+arrows step the
+        # siblings of the *marked message in the chat log* -- and those move HEAD. So a browsing gesture
+        # aimed at the graph switched branch, silently, from a pane that was not showing the message it
+        # acted on.
+        if ctrl:
+            if key == dpg.mvKey_Left:
+                self._step_sibling("prev", step=10 if shift else 1)
+            elif key == dpg.mvKey_Right:
+                self._step_sibling("next", step=10 if shift else 1)
+            elif key == dpg.mvKey_Home:
+                self._step_sibling("prev", step=None)
+            elif key == dpg.mvKey_End:
+                self._step_sibling("next", step=None)
+            else:
+                return False
+            return True
         # Shift+arrows pan. Panning is the secondary gesture here -- the mouse drags, the wheel zooms, and
         # what the *keyboard* wants from a graph it can commit from is to move between boxes, which is
         # what the bare arrows do.
@@ -424,8 +446,6 @@ class DPGChatGraphPanel(gui_animation.Animation):
             else:
                 return False
             return True
-        if ctrl:
-            return False
 
         if key == dpg.mvKey_Up:
             self._move_cursor("up")
@@ -872,6 +892,69 @@ class DPGChatGraphPanel(gui_animation.Animation):
         if stepped is None:  # the edge of the picture; staying put is the answer
             return
         self._activate_or_move(stepped)
+
+    def _step_sibling(self, direction: str, step: Optional[int]) -> None:
+        """Move the cursor along the siblings at its own level, sliding that level's window to suit.
+
+        `direction`: `"prev"` or `"next"`.
+        `step`: How many siblings to move, or `None` for as far as they go.
+
+        The verbs and the keys are the chat log's — Ctrl+arrows by one, Ctrl+Shift+arrows by ten,
+        Ctrl+Home and Ctrl+End to the ends — because they are the same verbs, and a reader should not have
+        to learn them twice for the two views of one tree. What differs is what they *do*: in the log they
+        move HEAD, having no other way to show you a sibling, while here they only move the cursor. That
+        is the whole distinction between the two views, not an inconsistency between them.
+
+        This is what the bare arrows cannot do. They step from box to box, and a level's window shows a
+        handful of a fan that can run to hundreds; going further means moving the window, which is the
+        gesture a sibling gap offers to the pointer and this offers to the keyboard.
+        """
+        node_id = self._cursor_sibling_anchor()
+        if node_id is None:
+            return
+        with self.datastore.lock:
+            siblings, index = self.datastore.get_siblings(node_id)
+            parent_node_id = self.datastore.get_parent(node_id)
+        if not siblings or index is None:
+            return
+
+        if step is None:
+            target_index = 0 if direction == "prev" else len(siblings) - 1
+        else:
+            moved = index - step if direction == "prev" else index + step
+            # Clamped rather than wrapped, and clamped rather than refused: a step of ten near an end
+            # should land on the end, which is what a reader asking to move ten in that direction means.
+            target_index = max(0, min(len(siblings) - 1, moved))
+        target = siblings[target_index]
+        if target == node_id:
+            return
+
+        if parent_node_id is not None:
+            # A root has no level to slide — its siblings are the other roots, drawn as the inert roots
+            # gap — so there is nothing to record for it, and the cursor move below is all that happens.
+            with self._lock:
+                self._view_state.sibling_focus[parent_node_id] = target
+        self._set_cursor(target)
+        self._widget.pan_to_node(target, animate=True)
+        self._remember_view()
+
+    def _cursor_sibling_anchor(self) -> Optional[str]:
+        """Return the chat node whose siblings a sibling step should move along, or `None` if there is none.
+
+        The cursor's own node where it is on a message. Where it is on a *sibling* gap, the first node
+        that gap hides — the gap stands for a run of siblings at that very level, so stepping from it
+        continues along the level the reader is looking at rather than refusing because the box under the
+        ring is not a message.
+        """
+        with self._lock:
+            name = self._cursor_name
+            chat_graph = self._chat_graph
+        ref = chat_graph.ref_for(name) if (name is not None and chat_graph is not None) else None
+        if isinstance(ref, chatgraph.ChatNodeRef):
+            return ref.node_id
+        if isinstance(ref, chatgraph.SiblingGapRef) and ref.hidden_node_ids:
+            return ref.hidden_node_ids[0]
+        return None
 
     def _activate_cursor(self) -> None:
         """Act on the box the cursor is on, if it is on one."""

@@ -331,6 +331,74 @@ class TestGaps:
         built.refresh()
         return built, forest, chats, holder
 
+    def test_ctrl_arrows_step_the_cursor_along_the_siblings(self, dpg_context):
+        built, forest, chats, holder = self._wide(dpg_context)
+        try:
+            built.handle_key(dpg.mvKey_Down)  # plant the cursor on HEAD, which is chats[0]
+            assert built._cursor_name == chats[0]
+            assert built.handle_key(dpg.mvKey_Right, ctrl=True) is True
+            assert built._cursor_name == chats[1]
+            assert built.handle_key(dpg.mvKey_Left, ctrl=True) is True
+            assert built._cursor_name == chats[0]
+        finally:
+            built.destroy()
+            dpg.delete_item(holder)
+
+    def test_a_sibling_step_reaches_what_is_not_drawn(self, dpg_context):
+        # The whole point of these keys, and what the bare arrows cannot do: a level's window shows a
+        # handful of a fan that runs to dozens, so going further means sliding the window. Ten at a time,
+        # which is the chat log's stride for the same verb.
+        built, forest, chats, holder = self._wide(dpg_context)
+        try:
+            built.handle_key(dpg.mvKey_Down)
+            assert chats[10] not in built._chat_graph.refs, \
+                "the fixture already draws the target, so sliding the window would prove nothing"
+            assert built.handle_key(dpg.mvKey_Right, ctrl=True, shift=True) is True
+            assert built._cursor_name == chats[10]
+            assert chats[10] in built._chat_graph.refs, "the window did not slide onto it"
+        finally:
+            built.destroy()
+            dpg.delete_item(holder)
+
+    def test_a_sibling_step_stops_at_the_ends(self, dpg_context):
+        # Clamped rather than wrapped: asking to move ten near an end means landing on the end, and
+        # wrapping would put the reader at the far side of a fan with nothing having said they arrived.
+        built, forest, chats, holder = self._wide(dpg_context)
+        try:
+            built.handle_key(dpg.mvKey_Down)
+            built.handle_key(dpg.mvKey_End, ctrl=True)
+            assert built._cursor_name == chats[-1], "Ctrl+End did not reach the last sibling"
+            built.handle_key(dpg.mvKey_Right, ctrl=True, shift=True)
+            assert built._cursor_name == chats[-1], "stepping past the last sibling went somewhere"
+            built.handle_key(dpg.mvKey_Home, ctrl=True)
+            assert built._cursor_name == chats[0], "Ctrl+Home did not reach the first sibling"
+        finally:
+            built.destroy()
+            dpg.delete_item(holder)
+
+    def test_a_sibling_step_does_not_move_head(self, dpg_context):
+        # The one way these differ from the chat log's identical keys, and the reason they are claimed
+        # here at all: in the log they switch branch, and while the graph holds the keyboard they used to
+        # fall through to it. Browsing the multiverse changes nothing.
+        #
+        # The claim is what has to be asserted, not the absence of a commit. Calling `handle_key` runs
+        # nothing downstream of it either way, so "HEAD did not move" is true whether the key was claimed
+        # or dropped — it is the `is True` that says the app never sees it.
+        committed = []
+        built, forest, chats, holder = self._wide(dpg_context, on_commit=committed.append)
+        head_before = built.app_state["HEAD"]
+        try:
+            built.handle_key(dpg.mvKey_Down)
+            for _ in range(3):
+                assert built.handle_key(dpg.mvKey_Right, ctrl=True) is True, \
+                    "the graph let a Ctrl+arrow through to the chat log, which would move HEAD"
+            assert built._cursor_name == chats[3], "the fixture did not step, so nothing was exercised"
+            assert committed == []
+            assert built.app_state["HEAD"] == head_before
+        finally:
+            built.destroy()
+            dpg.delete_item(holder)
+
     def test_a_sibling_gap_moves_the_window_onto_what_it_hid(self, dpg_context):
         built, forest, chats, holder = self._wide(dpg_context)
         try:

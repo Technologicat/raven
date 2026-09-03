@@ -1937,6 +1937,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_new_column,
                env(key_indent=0, key="Tab", action_indent=0, action="Move the keyboard between panes", notes="Composer, chat log, chat graph"),
                env(key_indent=1, key="Arrows", action_indent=1, action="Move between boxes in the graph", notes="Shift+arrows pan instead"),
+               env(key_indent=1, key="Ctrl+Left / Right", action_indent=1, action="Step along that level's siblings", notes="Ctrl+Shift jumps 10; Ctrl+Home/End to the ends"),
                env(key_indent=1, key="Enter", action_indent=1, action="Open the box the ring is on", notes="A message switches the chat to it"),
                env(key_indent=1, key="Esc", action_indent=1, action="Put the ring away", notes=""),
                env(key_indent=1, key="Alt+Left / Right", action_indent=1, action="Back / forward", notes="Where you have been looking"),

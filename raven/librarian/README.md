@@ -158,6 +158,8 @@ Clicking a **…N more** navigates instead of selecting. A gap between siblings 
 
 The graph can be driven without a pointer. **Tab** moves the keyboard between the message composer, the chat log and the graph, and the pane holding it wears a blue mark. In the graph, the **arrow keys** move a dotted ring from box to box — down and up follow the conversation, left and right step along the siblings at that level — and **Enter** does to the box under the ring exactly what clicking it does: a message switches the chat to it, a **…N more** opens it. **Esc** puts the ring away. Nothing the ring does changes the conversation; only Enter on a message, or a second click, moves you.
 
+The arrow keys walk what is drawn, and one level of the graph can hold hundreds of chats with only a handful of them on screen. To go further along a level, **Ctrl+Left** and **Ctrl+Right** step between its siblings whether they are drawn or not, sliding the window to follow; **Ctrl+Shift** with either jumps ten at a time, and **Ctrl+Home** and **Ctrl+End** go to the ends. Those are the same keys the chat log uses on a message's siblings — the difference being that in the chat log they switch the conversation, while here they only move the ring.
+
 The ring is the same mark whether you put it there with the mouse or the keys, so the two can be mixed freely: click a box, step off it with the arrows, press Enter.
 
 
