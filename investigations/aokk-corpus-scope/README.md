@@ -479,10 +479,69 @@ things follow:
   another model call — the opposite of the judge, where every adjustment cost a run.
 
 A 40-record pilot earned the pilot's keep immediately: `level` is reliable and its `evidence` is quoted
-from the text rather than composed, while **`human_learning` is wrong about a third of the time** — a
+from the text rather than composed, while `human_learning` looked wrong about a third of the time — a
 knowledge-tracing paper and a study of educator communities of practice both came back `false` where a
-person plainly is learning. So that field does not belong in a removal rule on its own, which is a thing
+person plainly is learning. So that field did not belong in a removal rule on its own, which is a thing
 worth knowing before building one rather than after.
+
+### What the full extraction says
+
+1234 unsure keeps, no failed batches.
+
+| `level` | n | | `human_learning` | n |
+|---|---:|---|---|---:|
+| not_stated | 581 | | true | 901 |
+| higher_education | 296 | | false | 298 |
+| not_applicable | 223 | | unclear | 35 |
+| school | 96 | | | |
+| mixed | 28 | | | |
+| vocational | 10 | | | |
+
+**The evidence field is what makes `level` trustworthy, and it held perfectly.** All 430 positive level
+calls — `higher_education`, `school`, `vocational`, `mixed` — carry a phrase quoted from the record's own
+text. All 581 `not_stated` carry none. The model never once named a level it could not quote, which is
+exactly the instruction, and it is a structural check rather than a spot check: a claim with no quotation
+beside it would have been visible without reading a single record.
+
+The cross-tabs agree: `school`↔`school_pupils` 80 of 96, `higher_education`↔`university_students` 259 of
+296, `not_applicable`↔`none` 108. And **the pilot's worry about `human_learning` did not survive the full
+run** — it splits 181 false against 35 true under `not_applicable`, and 12 false against 279 true under
+`higher_education`, so the field carries real signal and the pilot's third was small-sample noise. It is
+still the softer of the two, which is why it is used only to corroborate.
+
+### The filter, in three tiers
+
+`filter_keeps.py` applies a rule to the stored fields. Tiers, because a single removal count would hide
+that they are not equally reliable:
+
+| tier | rule | n | |
+|---|---|---:|---|
+| **A** | `level` is `school` or `vocational` | 106 | removed |
+| **B1** | `level` is `not_applicable` **and** `human_learning` false | 181 | removed |
+| **B2** | `level` is `not_applicable`, uncorroborated | 42 | **held** |
+
+A's removals quote their own evidence — *"secondary-school"*, *"sixth-grade students"*, *"secondary
+English classrooms"*. B1's are machine-learning methods papers: explainable-AI dialogue, interactive
+machine learning, thematic analysis performed with an LLM.
+
+**B2 is held back because that is where the extraction's errors concentrate**, and its mistakes would be
+false drops. Reading the 42, they are a coherent category the vocabulary has no word for: *learning
+contexts that are not higher education* — professional coaching, psychotherapist and actor training,
+elderly lifelong learning, cochlear-implant rehabilitation, a teachers' community of practice. So
+`not_applicable` is the wrong label for most of them, since they plainly are education, while the removal
+may still be right for a higher-education scope. That is a judgement about scope rather than an
+extraction failure, and it wants a person. One in the tier is simply wrong — *"Exploring the Potential of
+ChatGPT to improve experiential learning in Education"*, whose level is unstated rather than
+inapplicable.
+
+287 removed of 3230, leaving 2943. **Nothing existing was overwritten**: the filter writes a new
+`_filtered.bib` beside the judge's output, so the corpus of record is unchanged until somebody says
+otherwise.
+
+**The vocabulary is the thing to revise first.** `not_applicable` is carrying two meanings — *not about
+education* and *about education, but not at a level this asks about* — and every questionable record in
+B2 sits on that seam. A `professional_training` or `informal` value would separate them, and it costs one
+re-extraction rather than any new machinery.
 
 ## Where this is headed: a `raven.papers` corpus filter
 
@@ -538,6 +597,7 @@ run against the unsifted corpus.
 | `score_review.py` | Scores a review against the judge's own cells — which drops are contested, and whether the control was easier than what it was compared against. The table in *Reviewing the drops* above is its output. `--contested` also writes the hand-check list |
 | `check_escalation.py` | Whether escalating the title-only drops rescued the records the review had independently flagged. Its negative control is that a small gap would mean one of the two instruments is not working, without saying which. `--rescues` lists where they disagree |
 | `extract_fields.py` | Asks what a record *says* — population, level, whether a person is learning, what the AI does — rather than whether it belongs, so the keeps can be filtered on stored fields instead of re-judged. `--pilot N` reads a sample first; `--all-keeps` widens the selection beyond the ones kept on a hedge |
+| `filter_keeps.py` | Applies a rule to those fields, in three tiers, removing two of them and holding the third for a person. Needs no model, so a cutoff can be changed and re-run for free. `-n` reports what would go; `--keep-uncorroborated` removes the held tier too, which is a decision rather than a flag |
 
 Generated at runtime and **not committed** — they list the contents of a corpus that lives under
 `00_stuff/`, which is gitignored research data, and this repository is public:
@@ -553,6 +613,9 @@ Generated at runtime and **not committed** — they list the contents of a corpu
 | `contested.tsv` | the hand-check list across every slice: each dropped record a case was made for, worst cell first, the judge's reason beside the reviewer's case, and an empty column to mark in |
 | `dropped-before-escalating-titles.tsv` | the drop list as it stood before every drop was escalated to pass 2. Kept because it is what defines which records that run touched, and the review above was measured against it |
 | `extracted.jsonl`, `-traces.jsonl` | the extracted fields per record, and the reasoning traces — one entry per model call, naming the keys that shared it, since a batched call yields one trace for the batch |
+| `<corpus>_in_scope_filtered.bib` | the in-scope corpus with the ruled-out keeps taken out. Written beside the judge's output rather than over it, so the corpus of record does not move until somebody decides it should |
+| `filtered-out.tsv` | every record the filter removed, with the fields and the quoted evidence that removed it |
+| `uncorroborated.tsv` | the tier held back for a person: `not_applicable` with nothing corroborating it, which is where the extraction's errors are |
 
 ## Reproducing
 
