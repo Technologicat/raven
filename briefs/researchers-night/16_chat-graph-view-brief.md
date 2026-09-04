@@ -1186,10 +1186,35 @@ list is a judgement about how the picture reads, and those are decided in front 
    the six with no keys at all. Giving the graph a button row is a second surface onto the vocabulary this
    item just fixed, which is why it goes after rather than with it (Juha, 2026-09-03, overruling this
    brief's claim that the two had to be answered together).
-   - **One button went in ahead of the row**, the same day: folding a tool round. It is the pointer's only
+   - **One button went in ahead of the row**, 2026-09-03: folding a tool round. It is the pointer's only
      route to a verb the tool-round work had just created — right-click being taken by the widget's
-     open-URL — so it belonged with that work rather than with this row. Scheduled for the next day
-     (Juha, end of the office day).
+     open-URL — so it belonged with that work rather than with this row.
+   - **Still the next thing to build, as of the end of 2026-09-04.** Nothing else waits on it, and the
+     vocabulary it is a second surface onto is now settled. `_update_cursor_buttons` is where a new button
+     belongs: it is the single place answering *what can the cursor do now*, and the fold button set that
+     seam. `chat_controller._build_navigation_buttons` has the six verbs in their chat-log spelling.
+
+   ### What 2026-09-04 added around it, none of it planned
+
+   The day went on keyboard ownership rather than on the row, and three things landed that a reader of
+   this item should know before adding buttons to the same toolbar:
+
+   - **Clicking anywhere in the graph gives it the keyboard, and clicking outside gives it up.** Both live
+     on the panel's own global mouse handler, judged against the canvas for taking and against the
+     *container* for releasing — so the panel's own toolbar is not "somewhere else", and pressing a button
+     does not cost the keyboard the button's key needs. A new button inherits that for free; a new widget
+     placed outside the container would not.
+   - **A caption naming a key carries the condition on it**, as a static second line, because the button
+     is clickable whenever it is on screen while its key fires only from the graph. Attached by sniffing
+     the caption for a bracketed key, so a new button gets it by naming its key and nothing else. That is
+     also how the branch-switch button was found to be missing `[Enter]`.
+   - **The hint is static on purpose.** It was first built to appear only while the keys did not work,
+     which meant rewriting nine `Tooltip`s on every change of keyboard state — nine windows parked
+     offscreen and re-shown, for a line of text. Suspected of costing the composer its caret and
+     *acquitted*: `test_rewriting_a_tooltip_does_not_cost_the_caret` isolates it and passes, with a
+     positive control. The live symptom was the frame poll reading Tab's documented activate/deactivate
+     transient (`dpg-notes.md`, "Tab reaches a global handler and still moves ImGui's nav"), and the poll
+     now requires two consecutive frames.
 4. **`ImageShape` in the widget.** Unblocks two things at once and they are not the same size: role glyphs
    need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
    thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render
