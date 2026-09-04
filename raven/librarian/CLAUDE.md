@@ -1,11 +1,11 @@
 # Librarian — CLAUDE.md
 
-~21k lines across 19 modules.
+~27k lines across 22 modules.
 
 **The layering is the part worth copying, and it is the only part.** Each layer imports downward and no
 further, and that has held while the package grew — which is the property that made this the reference for
 the rest of Raven. The module *sizes* are no longer exemplary and should not be read as endorsed: against
-the project's ~700-line guideline, `chat_controller.py` is ~5.0k and `app.py` ~2.5k (and `llmclient.py` was ~2.8k until the tools moved out of it).
+the project's ~700-line guideline, `chat_controller.py` is ~5.2k and `app.py` ~2.8k (and `llmclient.py` was ~2.8k until the tools moved out of it).
 The growth is recent rather than gradual — `chat_controller.py` gained 44% in the three weeks to
 2026-08-24, and the layer map below had been recording sizes 30–45% low for that whole period.
 
@@ -29,22 +29,22 @@ scaffold, so the same word named two different scopes one layer apart.
 `python scripts/check_module_maps.py` checks this table against the package — sizes and, more usefully, whether
 every module is here at all.
 
-Sizes are rounded to two significant figures, measured **2026-08-27**. Rounded because the figure is here
+Sizes are rounded to two significant figures, measured **2026-09-04**. Rounded because the figure is here
 for the *shape* — where the mass sits, which is what makes the refactoring calls legible — and an exact
 number claims a precision that the next commit removes. The previous exact figures were 30–45% low by the
 time anyone noticed. Re-measure before quoting one.
 
 ```
-Layer 5 - Applications:     app.py (~2.7k), minichat.py (~730, minimal reference client),
+Layer 5 - Applications:     app.py (~2.8k), minichat.py (~730, minimal reference client),
                             indexer.py (~170, the `raven-indexer` CLI; also where the frontends get their
                             shared `open_document_store`)
-Layer 4 - Controller/GUI:   chat_controller.py (~5.1k), cleanup_dialog.py (~410), audio_input_panel.py (~700),
+Layer 4 - Controller/GUI:   chat_controller.py (~5.2k), cleanup_dialog.py (~410), audio_input_panel.py (~700),
                             chatgraph_panel.py (~1.3k)
 Layer 4 - Scripting:        agent.py (~630), the headless sibling of the controller
 Layer 3 - Orchestration:    scaffold.py (~1.5k)
 Layer 2 - Backends:         llmclient.py (~2.4k), llmtools.py (~990), hybridir.py (~1.9k)
-Layer 1 - Utilities:        chatutil.py (~1.6k), appstate.py (~510), cleanup.py (~300),
-                            imagestore.py (~270), textfilestore.py (~190), chatgraph.py (~2.0k)
+Layer 1 - Utilities:        chatutil.py (~1.8k), appstate.py (~510), cleanup.py (~300),
+                            imagestore.py (~270), textfilestore.py (~200), chatgraph.py (~2.0k)
 Layer 0 - Foundation:       config.py (~930), chattree.py (~1.4k), sidecarstore.py (~150),
                             gguftokenizer.py (~350)
 ```
