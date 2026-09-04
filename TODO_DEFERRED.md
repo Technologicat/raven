@@ -4687,10 +4687,19 @@ the loop, and therefore the one whose requirements do not follow from the other 
     fix — READING as a floating book, or a sheet of paper carrying the document's filename. What
     generalizes is the test: an indicator here has to be readable by someone who has never seen the app
     and will not be told anything about it.
-    - **Floating rather than held, and that is the mechanism rather than a compromise** (Juha: THA3
-      cannot do it). Visuals are added as cels, which the compositor blends in *frame* space, while THA3
-      moves the character within that frame — so anything meant to look held drifts off the hand the
-      moment she moves, and reads as broken. A hovering document does not have to track anything.
+    - **Floating rather than held, because the character has no hands to pose** (Juha). THA3's entire
+      pose space is eyebrows, eyes, iris morph and rotation, mouth, head rotation, two body-rotation
+      axes and breathing — `vendor/tha3/poser/modes/pose_parameters.py` is the list. No arms, no hands,
+      no shoulders: "now the body too" is the headline over THA1 and THA2 and it amounts to a couple of
+      morphs. The arms are whatever the source image was drawn with, carried along by a slight torso
+      rotation, so there is nothing to put an object *into*.
+      - Compositing one on anyway would fail for a second reason, which is not the reason: cels blend in
+        *frame* space while THA3 moves the character within that frame, so a "held" book drifts off the
+        arm as she moves. Worth knowing only because it closes the obvious workaround.
+      - **And a newer engine does not help**, which is already written up in `raven/avatar/README.md` —
+        THA4's full model is not realtime, and its distiller wants dozens of hours of GPU time *per
+        character*. Not restated here; the point is that "use a better model" has been asked and
+        answered.
     - Worth noting the three arguments agree, which is unusual enough to say: it is immediately legible
       to a stranger, it is what the compositor can actually do, and a holographic document beside the
       character is squarely the aesthetic the project is already in. No trade to negotiate here.
