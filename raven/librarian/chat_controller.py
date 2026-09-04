@@ -181,7 +181,8 @@ def format_chat_message_for_clipboard(message_number: int | None,
                                       role: str,
                                       persona: str | None,
                                       text: str,
-                                      add_heading: bool) -> str:
+                                      add_heading: bool,
+                                      tool_name: str | None = None) -> str:
     """Format a chat message for copying to clipboard, by adding a metadata header as Markdown.
 
     As a preprocessing step, `persona` is stripped from the beginning of each line in `message_text`.
@@ -229,13 +230,18 @@ def format_chat_message_for_clipboard(message_number: int | None,
 
                        Lorem ipsum.
 
+    `tool_name`: Which tool produced a `role="tool"` message, from `chatutil.tool_name_of`, or `None`
+                 where the node does not say or the role is not "tool". Appears in the heading, so a
+                 pasted tool result names the tool that wrote it: `` `<<tool [websearch]>>` ``.
+
     Returns the formatted message.
     """
     if add_heading:
         message_heading = chatutil.format_message_heading(message_number=message_number,
                                                           role=role,
                                                           persona=persona,
-                                                          markup="markdown")
+                                                          markup="markdown",
+                                                          tool_name=tool_name)
     else:
         message_heading = ""
     message_text = chatutil.remove_persona_from_start_of_line(persona=persona,
@@ -257,8 +263,7 @@ def format_message_metadata_line(node_payload: dict, role: str, revision: int) -
     Returns the formatted line.
     """
     line = f"{node_payload['general_metadata']['datetime']} R{revision}"
-    maybe_function_name = ((node_payload.get("generation_metadata") or {}).get("function_name")
-                           if role == "tool" else None)
+    maybe_function_name = chatutil.tool_name_of(node_payload) if role == "tool" else None
     if maybe_function_name:
         line = f"{line} [{maybe_function_name}]"
     return line
@@ -1417,7 +1422,8 @@ class DPGChatMessage:
                                                                   role=role,
                                                                   persona=persona,
                                                                   text=chatutil.format_message_text_for_export(node_payload["message"]),
-                                                                  add_heading=shift_pressed)
+                                                                  add_heading=shift_pressed,
+                                                                  tool_name=chatutil.tool_name_of(node_payload))
 
             # A lifted fragment travels without the document manifest the full-log export carries, so it needs
             # its own - same format, because a one-message manifest and a fifty-message one should not need two
@@ -3391,7 +3397,8 @@ class DPGLinearizedChatView:
                                                                       role=role,
                                                                       persona=persona,
                                                                       text=text,
-                                                                      add_heading=True)  # In the full chatlog, the message numbers and role names are important, so always include them.
+                                                                      add_heading=True,  # In the full chatlog, the message numbers and role names are important, so always include them.
+                                                                      tool_name=chatutil.tool_name_of(node_payload))
                 if include_metadata:
                     payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active payload revision!
                     node_active_revision = self.chat_controller.datastore.get_revision(dpg_chat_message.node_id)

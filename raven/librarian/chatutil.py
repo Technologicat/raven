@@ -12,6 +12,7 @@ __all__ = [# The parts a message is made of, and reading them back
            "format_persona",
            "format_message_heading",
            "format_tool_call", "format_tool_calls",
+           "tool_name_of",
            "format_date_now", "format_loaded_model", "format_time_now",
            "format_chatlog_datetime_now",
            "format_message_text_for_export",
@@ -173,7 +174,8 @@ def format_message_number(message_number: Optional[int],
 
 def format_persona(role: str,
                    persona: Optional[str],
-                   markup: Optional[str]) -> str:
+                   markup: Optional[str],
+                   tool_name: Optional[str] = None) -> str:
     """Format the persona name for `role`.
 
     `role`: One of the roles supported by `raven.librarian.llmclient`.
@@ -198,11 +200,21 @@ def format_persona(role: str,
         "markdown": Markdown markup
         `None` (the special value): no markup.
 
+    `tool_name`: Which tool produced a `role="tool"` message, from `tool_name_of`, or `None` where the
+                 node does not say or the role is not "tool". Named after the role, so `<<tool>>` becomes
+                 `<<tool [websearch]>>`. Ignored when the role has a persona, a named speaker having no
+                 room for it and no need of one.
+
     Returns the formatted persona name.
     """
     _yell_if_unsupported_markup(markup)
     if persona is None:
-        out = f"<<{role}>>"  # currently, this include "<<system>>" and "<<tool>>"
+        # Which tool answered, where the caller knows. The cogs badge and the bare `<<tool>>` both say
+        # only that the machinery ran, so a turn that called three tools reads as three identical
+        # speakers; the name is what separates them. Bracketed after the role, as the chat graph captions
+        # a result box and the chat log its metadata line, so one call is named one way everywhere.
+        label = f"{role} [{tool_name}]" if tool_name else role
+        out = f"<<{label}>>"  # currently, this include "<<system>>" and "<<tool>>"
         if markup == "ansi":
             out = colorizer.colorize(out, colorizer.Style.DIM)
         elif markup == "markdown":
@@ -219,10 +231,12 @@ def format_persona(role: str,
 def format_message_heading(message_number: Optional[int],
                            role: str,
                            persona: Optional[str],
-                           markup: Optional[str]) -> str:
+                           markup: Optional[str],
+                           tool_name: Optional[str] = None) -> str:
     """Format a chat message heading.
 
-    Calls `format_message_number` and `format_persona`, which see.
+    Calls `format_message_number` and `format_persona`, which see — `tool_name` is passed through to the
+    latter, and names which tool a `role="tool"` message came from.
 
     Returns the formatted message heading.
 
@@ -234,7 +248,7 @@ def format_message_heading(message_number: Optional[int],
     """
     _yell_if_unsupported_markup(markup)
     markedup_number = format_message_number(message_number, markup)
-    markedup_persona = format_persona(role, persona, markup)
+    markedup_persona = format_persona(role, persona, markup, tool_name=tool_name)
     if message_number is not None:
         return f"{markedup_number} {markedup_persona}: "
     else:
@@ -278,6 +292,26 @@ def format_tool_calls(tool_calls: Sequence[Dict[str, Any]]) -> str:
         if name:
             formatted.append(format_tool_call(name, function.get("arguments")))
     return ", ".join(formatted)
+
+
+def tool_name_of(node_payload: Dict[str, Any]) -> Optional[str]:
+    """Return which tool a `role="tool"` node's result came from, or `None` if the node does not say.
+
+    `node_payload`: The chat node payload, at the revision being shown.
+
+    `scaffold` records it in `generation_metadata` whenever a call got far enough to name a function, so
+    `None` means one of two things and neither is an error: the call failed before there was a name, or
+    the node was written before the field existed.
+
+    Here rather than in whichever view draws it, because four of them ask: the chat graph captions a
+    result box with it, the chat log's metadata line carries it, and `minichat` and the clipboard export
+    put it in the message heading. Four spellings of one lookup would drift, and the drift would show as
+    one view naming a tool that another calls anonymous.
+
+    Says nothing about the role — a caller that wants the name only for tool messages checks that itself,
+    which is what every current caller does. A non-tool node simply has no such field.
+    """
+    return (node_payload.get("generation_metadata") or {}).get("function_name")
 
 
 # --------------------------------------------------------------------------------

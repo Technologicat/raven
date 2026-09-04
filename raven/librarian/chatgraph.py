@@ -746,7 +746,7 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
         #
         # Absent on a call that failed before it had a function to name, and on anything written before
         # the field existed. The bare caption is then the honest answer.
-        function_name = (_payload_of(datastore, node_id).get("generation_metadata") or {}).get("function_name")
+        function_name = chatutil.tool_name_of(_payload_of(datastore, node_id))
         if function_name:
             speaker = f"{speaker} [{function_name}]"
     lines = _wrap(text, width, max_lines)

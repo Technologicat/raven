@@ -101,6 +101,29 @@ class TestFormatPersona:
         with pytest.raises(ValueError):
             chatutil.format_persona("user", "User", "xml")
 
+    def test_a_tool_result_names_its_tool(self):
+        # `<<tool>>` says the machinery ran; a turn calling three tools is then three identical speakers.
+        # Bracketed after the role, as the chat graph captions a result box and the chat log its metadata
+        # line, so one call is named one way in every view.
+        assert chatutil.format_persona("tool", None, None, tool_name="websearch") == "<<tool [websearch]>>"
+
+    def test_an_unnamed_tool_reads_as_before(self):
+        # The control: a call that failed before it had a function to name records none, and so does
+        # anything written before the field existed. `<<tool [None]>>` would be worse than the bare form.
+        assert chatutil.format_persona("tool", None, None) == "<<tool>>"
+        assert chatutil.format_persona("tool", None, None, tool_name=None) == "<<tool>>"
+
+    def test_the_tool_name_is_marked_up_with_the_role(self):
+        # One token, so the markup wraps the whole of it. A name outside the backticks would render as
+        # prose in a Markdown export and as undimmed text in a terminal.
+        assert chatutil.format_persona("tool", None, "markdown",
+                                       tool_name="websearch") == "`<<tool [websearch]>>`"
+
+    def test_a_named_speaker_has_no_room_for_a_tool_name(self):
+        # The other control. A persona is a name already, and appending a tool to it would invent a
+        # speaker called "Aria [websearch]" — which is why the branch is on the persona being absent.
+        assert chatutil.format_persona("assistant", "Aria", None, tool_name="websearch") == "Aria"
+
 
 # ---------------------------------------------------------------------------
 # Display formatting: format_message_heading
@@ -123,6 +146,41 @@ class TestFormatMessageHeading:
         result = chatutil.format_message_heading(1, "assistant", "Aria", "markdown")
         assert "**Aria**" in result
         assert "*[#1]*" in result
+
+    def test_a_tool_name_reaches_the_heading(self):
+        # The heading is what `minichat` prints and what a clipboard export carries, and it is the only
+        # route either has to `format_persona` — so a name that stopped here would reach neither.
+        result = chatutil.format_message_heading(1, "tool", None, None, tool_name="websearch")
+        assert result == "[#1] <<tool [websearch]>>: "
+
+
+# ---------------------------------------------------------------------------
+# Which tool answered
+# ---------------------------------------------------------------------------
+
+class TestToolNameOf:
+    """One lookup, because four views ask it: the graph's box caption, the chat log's metadata line,
+    `minichat`'s heading and the clipboard export's. Four spellings would drift, and the drift would show
+    as one view naming a tool that another calls anonymous.
+    """
+
+    def test_a_recorded_tool_is_found(self):
+        assert chatutil.tool_name_of({"generation_metadata": {"function_name": "websearch"}}) == "websearch"
+
+    def test_a_node_that_does_not_say_answers_none(self):
+        assert chatutil.tool_name_of({"generation_metadata": {"status": "error"}}) is None
+
+    def test_a_node_with_no_generation_metadata_answers_none(self):
+        # What a user message looks like, and what anything written before the field existed looks like.
+        # A `KeyError` here would take out the message heading rather than the tool name.
+        assert chatutil.tool_name_of({"general_metadata": {}}) is None
+        assert chatutil.tool_name_of({}) is None
+
+    def test_a_null_generation_metadata_answers_none(self):
+        # `or {}` rather than `.get(..., {})`, because a stored `None` is a real shape here: a payload can
+        # carry the key with nothing under it, and the two-argument `get` would hand back that `None` and
+        # raise on the next lookup.
+        assert chatutil.tool_name_of({"generation_metadata": None}) is None
 
 
 # ---------------------------------------------------------------------------

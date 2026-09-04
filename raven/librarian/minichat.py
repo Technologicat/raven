@@ -391,11 +391,13 @@ def minimal_chat_client(backend_url) -> None:
                 print(f"        {model_name}")
             print()
 
-        def chat_print_message(message_number: Optional[int], role: str, persona: Optional[str], text: str) -> None:
+        def chat_print_message(message_number: Optional[int], role: str, persona: Optional[str], text: str,
+                               tool_name: Optional[str] = None) -> None:
             print(chatutil.format_message_heading(message_number=message_number,
                                                   role=role,
                                                   persona=persona,
-                                                  markup="ansi"),
+                                                  markup="ansi",
+                                                  tool_name=tool_name),
                   end="")
             message_text = chatutil.remove_persona_from_start_of_line(persona=persona, text=text)
             # Colorize thought blocks
@@ -417,7 +419,8 @@ def minimal_chat_client(backend_url) -> None:
                     chat_print_message(message_number=k,
                                        role=role,
                                        persona=persona,
-                                       text=text)
+                                       text=text,
+                                       tool_name=chatutil.tool_name_of(node_payload))
                     print()
             else:
                 for node_id in node_id_history:
@@ -429,7 +432,8 @@ def minimal_chat_client(backend_url) -> None:
                     chat_print_message(message_number=None,
                                        role=role,
                                        persona=persona,
-                                       text=text)
+                                       text=text,
+                                       tool_name=chatutil.tool_name_of(node_payload))
                     print()
 
         action_proceed = sym("proceed")  # proceed with the current exchange as usual
@@ -665,7 +669,8 @@ def minimal_chat_client(backend_url) -> None:
                 chat_print_message(message_number=ai_message_number,
                                    role="tool",
                                    persona=llm_settings.personas.get("tool", None),
-                                   text=chatutil.content_to_text(tool_message_node_payload["message"]["content"]))
+                                   text=chatutil.content_to_text(tool_message_node_payload["message"]["content"]),
+                                   tool_name=chatutil.tool_name_of(tool_message_node_payload))
                 print()
 
                 ai_message_number += 1
