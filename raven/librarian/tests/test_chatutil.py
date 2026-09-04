@@ -194,10 +194,11 @@ class TestShortModelName:
         payload = {"generation_metadata": {"model": "Qwen3.5-4B-Instruct-Q4_K_M.gguf"}}
         assert chatutil.short_model_name(payload) == "Qwen3.5-4B-Instruct-Q4_K_M"
 
-    def test_a_publisher_prefix_is_not_part_of_the_model_s_name(self):
-        # `google/gemma-4-26b-a4b` says who packaged the file and then which model it is; on a box, the
-        # first half is a quarter of the room spent saying nothing about the model. Taken from a real
-        # datastore rather than invented: this is one of the identities actually recorded there.
+    def test_lm_studios_namespaced_id_keeps_only_the_model_half(self):
+        # LM Studio's ids mirror the repository path a model came from, so the first half names the
+        # publisher and only the second says which model it is; on a box that half is a quarter of the
+        # room, spent saying nothing about the model. Taken from a real datastore rather than invented:
+        # this is one of the identities actually recorded there.
         payload = {"generation_metadata": {"model": "google/gemma-4-26b-a4b"}}
         assert chatutil.short_model_name(payload) == "gemma-4-26b-a4b"
 

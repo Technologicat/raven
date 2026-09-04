@@ -326,9 +326,11 @@ def short_model_name(node_payload: Dict[str, Any]) -> Optional[str]:
 
     Two things are then stripped, both learned from what real identities look like rather than assumed:
 
-    - **A publisher prefix**, the part before a `/`. `google/gemma-4-26b-a4b` names who packaged the file
-      and then the model; only the second half says which model it is, and on a long identity the prefix
-      is a quarter of the room spent saying nothing about it.
+    - **LM Studio's namespace**, the part before a `/`. Its model ids mirror the repository path a model
+      was downloaded from — `google/gemma-4-26b-a4b`, `unsloth/Qwen3.6-35B-A3B` — so the first half names
+      the publisher and only the second says which model it is. On a long identity that half is a quarter
+      of the room, spent saying nothing about the model. Nothing else reports an id in this shape:
+      oobabooga's is a bare filename, which has no `/` to find.
     - **A trailing `.gguf`**, for the backends that report a filename rather than an id, and a trailing
       `-GGUF`, which is the repository-naming convention for a converted model (`Qwen3.8-27B-GGUF`).
       Both say the file is a GGUF, which is true of everything a llama.cpp-family backend can load.
