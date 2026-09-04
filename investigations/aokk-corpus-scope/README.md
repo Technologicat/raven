@@ -486,16 +486,22 @@ worth knowing before building one rather than after.
 
 ### What the full extraction says
 
-1234 unsure keeps, no failed batches.
+1234 unsure keeps. The `level` column is given for both vocabularies, since the second is what the split
+was for and the pair is the measurement:
 
-| `level` | n | | `human_learning` | n |
-|---|---:|---|---|---:|
-| not_stated | 581 | | true | 901 |
-| higher_education | 296 | | false | 298 |
-| not_applicable | 223 | | unclear | 35 |
-| school | 96 | | | |
-| mixed | 28 | | | |
-| vocational | 10 | | | |
+| `level` | first run | after the split |
+|---|---:|---:|
+| not_stated | 581 | 545 |
+| higher_education | 296 | 320 |
+| not_applicable | 223 | **152** |
+| school | 96 | 101 |
+| mixed | 28 | 28 |
+| vocational | 10 | 9 |
+| professional_training | — | **51** |
+| informal | — | **18** |
+
+`not_applicable` fell by 71 and the two new values took 69, which is the split doing exactly and only
+what it was added for.
 
 **The evidence field is what makes `level` trustworthy, and it held perfectly.** All 430 positive level
 calls — `higher_education`, `school`, `vocational`, `mixed` — carry a phrase quoted from the record's own
@@ -511,20 +517,38 @@ still the softer of the two, which is why it is used only to corroborate.
 
 ### The filter, in tiers
 
-**The counts in this section are from the first vocabulary**, before `not_applicable` was split. They are
-kept because the tiering, and the reasons for it, are what the numbers illustrate; the re-extraction
-replaces the figures and not the argument.
-
-
 `filter_keeps.py` applies a rule to the stored fields. Tiers, because a single removal count would hide
 that they are not equally reliable:
 
-| tier | rule | n | |
-|---|---|---:|---|
-| **A** | `level` is `school` or `vocational` | 106 | removed |
-| **B1** | `level` is `not_applicable` **and** `human_learning` false | 181 | removed |
-| **B2** | `level` is `not_applicable`, uncorroborated | 42 | **held** |
-| **C** | `level` is `professional_training` or `informal` | — | **held** |
+| tier | rule | first run | after the split | |
+|---|---|---:|---:|---|
+| **A** | `level` is `school` or `vocational` | 106 | 111 | removed |
+| **B1** | `level` is `not_applicable` **and** `human_learning` false | 181 | 153 | removed |
+| **B2** | `level` is `not_applicable`, uncorroborated | 42 | **2** | **held** |
+| **C** | `level` is `professional_training` or `informal` | — | **70** | **held** |
+| | **removed in total** | **287** | **264** | |
+
+**B2 going from 42 to 2 is the result.** That was the tier whose errors were false drops, and it existed
+only because one value was doing two jobs. Its records did not turn out to be genuinely borderline: they
+were mislabelled, and given somewhere correct to go they went there. The two survivors are a
+theology-of-education paper with no AI in it at all — which the `no_ai` test catches on other grounds —
+and a philosophical piece on the nature of generative AI.
+
+**The net change understates it by an order of magnitude.** 23 fewer records are removed, and **159 of
+the 1234 changed fate**. The cell that matters is 58 records the first vocabulary removed and the second
+keeps: every one of them had been `not_applicable`, and they are now `not_stated` (53) or
+`higher_education` with quoted evidence (5). That is the failure named above, caught — *a level that is
+merely unstated being read as inapplicable*, in the one tier where being wrong loses a study. The model
+now says it cannot tell, instead of saying the work is not about education, and by the asymmetry this
+whole investigation runs on that is the answer that should win.
+
+Movement in full, since a table of two totals hides all of it:
+
+| | → removed | → held | → kept |
+|---|---:|---:|---:|
+| **removed →** | 223 | 6 | **58** |
+| **held →** | 2 | 26 | 14 |
+| **kept →** | 39 | 40 | 826 |
 
 **Tier C exists because the split would otherwise have hidden what it revealed.** Giving workplace
 training and informal learning their own values takes them out of `not_applicable`, so without a tier of
@@ -548,23 +572,33 @@ extraction failure, and it wants a person. One in the tier is simply wrong — *
 ChatGPT to improve experiential learning in Education"*, whose level is unstated rather than
 inapplicable.
 
-287 removed of 3230, leaving 2943. **Nothing existing was overwritten**: the filter writes a new
+264 removed of 3230, leaving 2966. **Nothing existing was overwritten**: the filter writes a new
 `_filtered.bib` beside the judge's output, so the corpus of record is unchanged until somebody says
 otherwise.
 
-**The vocabulary is the thing to revise first, and that is the next step** (agreed with Juha,
-2026-09-03). `not_applicable` is carrying two meanings — *not about education* and *about education, but
-not at a level this asks about* — and every questionable record in B2 sits on that seam. Splitting it
-with a `professional_training` and an `informal` value costs one re-extraction and no new machinery: the
-selection, the batching and the filter all stand, and `LEVELS` plus the paragraph explaining it are the
-whole edit.
+### What the split cost, and the two things that had to survive it
 
-Two things to hold onto when redoing it. The **`not_stated` instruction is the load-bearing one** and
-must survive the rewrite intact — it is what keeps the 581 unstated levels from being guessed at, and a
-new value is exactly the kind of addition that tempts a model to place a record rather than admit it
-cannot. And the **evidence rule is the check on the whole field**: 430 of 430 positive calls quoted their
-text, so a re-extraction that comes back with unquoted positives has regressed, whatever its
-distribution looks like.
+The re-extraction was one edit to `LEVELS` and the paragraph explaining it. Two properties were named in
+advance as the ones a rewrite could quietly lose, and both were checked rather than assumed:
+
+- **`not_stated` must stay a real answer.** A new value is exactly the kind of addition that tempts a
+  model to place a record rather than admit it cannot, and **the first pilot showed precisely that** —
+  `not_stated` fell from 17 of 40 to 11. Half of that was legitimate placement into the new values; the
+  rest was reviews being mislabelled, one of them into a removal tier. A rule saying a survey has no
+  setting of its own recovered them, and the count settled at 14.
+- **The evidence rule is the check on the whole field.** A positive level call must quote the text that
+  settles it, so a run returning unquoted positives has regressed whatever its distribution looks like.
+  It held: 21 of 21 in the final pilot, 0 of 14 `not_stated` carrying a quotation they should not have.
+
+**Three pilots over the same forty records, not one**, and the middle one is why the pilot was worth
+running: it looked like an improvement, and its `not_stated` collapse was the failure the write-up had
+predicted the day before. A single run would have shipped it.
+
+One batch of ten failed on `"human_learning": unclear` — a bareword where JSON wants a string. The schema
+invites it, that field's other two values being `true` and `false`, and ten records die on one malformed
+one. Repaired in the parser rather than the prompt, deliberately: the prompt is the instrument, and
+changing it mid-run would have discarded forty-five batches to buy what a five-line repair already buys.
+The proper fix — three quoted strings, or a nullable boolean — waits for a change worth a new instrument.
 
 ## Where this is headed: a `raven.papers` corpus filter
 
