@@ -179,6 +179,51 @@ class TestModelOf:
         assert chatutil.model_of({"generation_metadata": None}) is None
 
 
+class TestShortModelName:
+    """The recorded identity cut down to the part that names the model, for places with no room for it."""
+
+    def test_the_composed_identity_gives_up_its_first_field(self):
+        # How `llmclient._format_lmstudio_model_label` builds it: id, quantization, context window.
+        payload = {"generation_metadata": {"model": "qwen3.5-4b, Q4_K_XL, 128 Ki context"}}
+        assert chatutil.short_model_name(payload) == "qwen3.5-4b"
+
+    def test_an_identity_that_is_not_composed_keeps_all_of_its_one_field(self):
+        # oobabooga reports a bare filename, which has no fields to take the first of. Splitting it anyway
+        # would be right by accident; it is right because there is no separator to find. Only the
+        # extension goes.
+        payload = {"generation_metadata": {"model": "Qwen3.5-4B-Instruct-Q4_K_M.gguf"}}
+        assert chatutil.short_model_name(payload) == "Qwen3.5-4B-Instruct-Q4_K_M"
+
+    def test_a_publisher_prefix_is_not_part_of_the_model_s_name(self):
+        # `google/gemma-4-26b-a4b` says who packaged the file and then which model it is; on a box, the
+        # first half is a quarter of the room spent saying nothing about the model. Taken from a real
+        # datastore rather than invented: this is one of the identities actually recorded there.
+        payload = {"generation_metadata": {"model": "google/gemma-4-26b-a4b"}}
+        assert chatutil.short_model_name(payload) == "gemma-4-26b-a4b"
+
+    def test_a_converted_repository_name_loses_its_format_marker(self):
+        # `Qwen3.8-27B-GGUF` is the naming convention for a repository of converted weights, and it is on
+        # this machine rather than imagined. The marker says the file is a GGUF, which is true of anything
+        # a llama.cpp-family backend can load, so it distinguishes nothing and costs five characters.
+        payload = {"generation_metadata": {"model": "unsloth/Qwen3.8-27B-GGUF"}}
+        assert chatutil.short_model_name(payload) == "Qwen3.8-27B"
+
+    def test_both_are_stripped_from_one_identity(self):
+        payload = {"generation_metadata": {"model": "mradermacher/Llama-3.1-70B-Instruct-i1.GGUF, Q4_K_M"}}
+        assert chatutil.short_model_name(payload) == "Llama-3.1-70B-Instruct-i1"
+
+    def test_a_name_with_nothing_to_strip_survives_intact(self):
+        # The control for the pair. Both strips are unconditional-looking and neither may fire here: a
+        # model whose name merely *contains* the letters is not a filename, and one with no publisher has
+        # no prefix to lose.
+        payload = {"generation_metadata": {"model": "qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context"}}
+        assert chatutil.short_model_name(payload) == "qwen3.6-35b-a3b"
+
+    def test_a_reply_that_recorded_no_model_answers_none(self):
+        assert chatutil.short_model_name({}) is None
+        assert chatutil.short_model_name({"generation_metadata": {"model": ""}}) is None
+
+
 class TestToolNameOf:
     """One lookup, because four views ask it: the graph's box caption, the chat log's metadata line,
     `minichat`'s heading and the clipboard export's. Four spellings would drift, and the drift would show

@@ -482,6 +482,67 @@ class TestSpeaker:
             texts = self._texts(built, gap.name)
             assert len(texts) == 1, f"a gap box drew {len(texts)} texts; it should draw only its count"
 
+    def _reply(self, model):
+        """A drawn AI reply with a persona, and `model` as its recorded identity."""
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        reply = forest.create_node(payload("assistant", "hello there"), parent_id=root)
+        forest.get_payload(reply)["general_metadata"]["persona"] = "Aria"
+        if model is not None:
+            forest.get_payload(reply)["generation_metadata"] = {"model": model}
+        return forest, reply
+
+    def test_a_reply_says_which_model_wrote_it(self):
+        # The short name, not the whole recorded identity: the chat log's metadata line has room for
+        # "qwen3.5-4b, Q4_K_XL, 128 Ki context" and a box does not.
+        forest, reply = self._reply("qwen3.5-4b, Q4_K_XL, 128 Ki context")
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert "Aria [qwen3.5-4b]" in self._texts(built, reply)
+
+    def test_a_reply_with_no_recorded_model_says_only_the_speaker(self):
+        # The control. Every reply reaches this branch, and one written before the field existed — or
+        # interrupted before there was anything to record — must not gain an empty bracket.
+        forest, reply = self._reply(None)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        texts = self._texts(built, reply)
+        assert "Aria" in texts
+        assert not any(text.startswith("Aria [") for text in texts), \
+            "something was bracketed onto the speaker with no model to put there"
+
+    def test_a_model_too_long_for_the_box_is_cut_rather_than_drawn_past_the_edge(self):
+        # Nothing downstream would cut it: the renderer draws a `TextShape` whole, using its width only to
+        # offset justification, and its compaction callback fires only once the text is too small to read.
+        # So an over-long speaker line spills out of the box and across whatever sits beside it.
+        config = chatgraph.LayoutConfig()
+        forest, reply = self._reply("a-very-long-model-identifier-that-goes-on-and-on-forever")
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply), config)
+        speaker = next(text for text in self._texts(built, reply) if text.startswith("Aria"))
+        assert len(speaker) <= config._get_effective_speaker_chars()
+        assert speaker.endswith("…]"), "the line was cut without saying that it was"
+
+    def test_a_speaker_with_no_room_left_keeps_its_name_and_drops_the_model(self):
+        # Which of the two gives, when they cannot both fit. A box whose author's name was eaten to make
+        # room for a model number has lost the more important of the two.
+        #
+        # The width is chosen against the threshold rather than guessed at: a box narrow enough to cut the
+        # model to fewer than `_MIN_BRACKETED_CHARS` is where the bracket is abandoned, and a wider one
+        # would merely truncate — which is the *other* behaviour, and would pass this assertion trivially.
+        narrow = chatgraph.LayoutConfig(node_w=90.0)
+        assert narrow._get_effective_speaker_chars() - len("Aria") - len(" []") < chatgraph._MIN_BRACKETED_CHARS, \
+            "this box is wide enough to truncate into, so the drop is not what is being tested"
+        forest, reply = self._reply("qwen3.5-4b, Q4_K_XL, 128 Ki context")
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply), narrow)
+        assert "Aria" in self._texts(built, reply), "the speaker's own name did not survive"
+
+    def test_a_tool_result_with_a_long_name_is_cut_the_same_way(self):
+        # The tool branch shares the fitter, so it inherits the cut. Asserted because it did *not* before:
+        # the tool name was concatenated straight on, and a long one would have overflowed unremarked.
+        config = chatgraph.LayoutConfig()
+        forest, result, reply = self._tool_result("a_tool_with_an_unreasonably_long_function_name_indeed")
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        speaker = next(text for text in self._texts(built, result) if text.startswith("TOOL"))
+        assert len(speaker) <= config._get_effective_speaker_chars()
+
     def _tool_result(self, function_name):
         """A drawn tool result, named or not. Returns `(forest, the result node, HEAD)`.
 

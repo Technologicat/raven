@@ -12,7 +12,7 @@ __all__ = [# The parts a message is made of, and reading them back
            "format_persona",
            "format_message_heading",
            "format_tool_call", "format_tool_calls",
-           "model_of", "tool_name_of",
+           "model_of", "short_model_name", "tool_name_of",
            "format_date_now", "format_loaded_model", "format_time_now",
            "format_chatlog_datetime_now",
            "format_message_text_for_export",
@@ -309,6 +309,41 @@ def model_of(node_payload: Dict[str, Any]) -> Optional[str]:
     ask.
     """
     return (node_payload.get("generation_metadata") or {}).get("model")
+
+
+def short_model_name(node_payload: Dict[str, Any]) -> Optional[str]:
+    """Return just the model's name from a reply's recorded identity, or `None` if it records none.
+
+    `node_payload`: The chat node payload, at the revision being shown.
+
+    `model_of` answers with the whole recorded identity, which on LM Studio is a composed line —
+    `"qwen3.5-4b, Q4_K_XL, 128 Ki context"`. That is right where there is room for it and too long where
+    there is not, so this is the same fact cut down to the part that identifies the model.
+
+    **The first comma-separated field, because that is how the line is built**, not a guess at its shape:
+    `llmclient._format_lmstudio_model_label` joins the model id, the quantization and the context window
+    in that order, so field one is the id.
+
+    Two things are then stripped, both learned from what real identities look like rather than assumed:
+
+    - **A publisher prefix**, the part before a `/`. `google/gemma-4-26b-a4b` names who packaged the file
+      and then the model; only the second half says which model it is, and on a long identity the prefix
+      is a quarter of the room spent saying nothing about it.
+    - **A trailing `.gguf`**, for the backends that report a filename rather than an id, and a trailing
+      `-GGUF`, which is the repository-naming convention for a converted model (`Qwen3.8-27B-GGUF`).
+      Both say the file is a GGUF, which is true of everything a llama.cpp-family backend can load.
+
+    A name that survives both — oobabooga's bare filename, minus its extension — comes back whole, which
+    is the right answer where there was nothing to strip.
+    """
+    model = model_of(node_payload)
+    if not model:
+        return None
+    name = model.split(", ")[0].rsplit("/", 1)[-1]
+    for suffix in (".gguf", "-gguf"):
+        if name.lower().endswith(suffix):
+            return name[:-len(suffix)]
+    return name
 
 
 def tool_name_of(node_payload: Dict[str, Any]) -> Optional[str]:

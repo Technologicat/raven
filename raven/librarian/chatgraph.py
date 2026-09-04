@@ -202,6 +202,11 @@ _MIN_HIDDEN_FOR_GAP = 3
 # Above, because the node directly above the focus is the step-up handle. Hide it in a gap and moving one
 # level towards the root stops being a click and becomes a bisection of the hidden run; one node is the
 # whole of what that costs to fix, which is why the two floors are not the same number.
+# The shortest a bracketed detail on the speaker line may be cut to before it is dropped instead. Four
+# characters plus the ellipsis: "qwen…" identifies a family where "q…" identifies nothing, and a box
+# saying nothing in a space that could have said the speaker's name is a worse trade than saying less.
+_MIN_BRACKETED_CHARS = 5
+
 _MIN_BELOW_FOCUS = 3
 _MIN_ABOVE_FOCUS = 1
 
@@ -510,6 +515,17 @@ class LayoutConfig:
     label_chars: Optional[int] = None
     label_lines: int = 2
 
+    def _get_effective_speaker_chars(self) -> int:
+        """Return how many characters fit across a node on the speaker line, at the role font size.
+
+        The label's budget, computed for the smaller font the speaker line uses. Needed because that line
+        can now carry a model name, and nothing downstream would cut it: the renderer draws a `TextShape`
+        in full, `w` serving only to offset justification, and its compaction callback fires only when the
+        text is already too small to read. So an over-long speaker line does not clip -- it spills out of
+        the box and across whatever is beside it.
+        """
+        return max(1, int((self.node_w - 2 * _LABEL_INSET) / (self.role_font_size * _LABEL_ADVANCE_PER_CHAR)))
+
     def _get_effective_label_chars(self) -> int:
         """Return `label_chars`, or how many characters fit across a node when it was left unset."""
         if self.label_chars is not None:
@@ -721,8 +737,24 @@ def _tool_call_count(datastore: chattree.Forest, node_id: str) -> int:
 _ROLE_CAPTIONS = {"system": "SYSTEM", "tool": "TOOL", "user": "USER", "assistant": "AI"}
 
 
+def _fit_bracketed(speaker: str, detail: str, budget: int) -> str:
+    """Return `"speaker [detail]"`, shortened to `budget` characters, or the bare speaker if it cannot fit.
+
+    The detail is what gives, never the speaker: a box whose author's name has been eaten to make room for
+    a model number has lost the more important of the two. Dropped entirely rather than cut to a stub,
+    below the point where what survives would identify nothing.
+    """
+    room = budget - len(speaker) - len(" []")
+    if room >= len(detail):
+        return f"{speaker} [{detail}]"
+    if room >= _MIN_BRACKETED_CHARS:
+        return f"{speaker} [{detail[:room - 1]}…]"
+    return speaker
+
+
 def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
-                          width: int, max_lines: int) -> Tuple[str, List[str], Optional[str]]:
+                          width: int, max_lines: int,
+                          speaker_width: int) -> Tuple[str, List[str], Optional[str]]:
     """Return `(who said it, the lines of what they said, a quieter second line or `None`)` for `node_id`.
 
     The speaker is the message's stored persona where it has one, and the role otherwise — the same
@@ -739,6 +771,14 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
     except (KeyError, TypeError):
         return "?", ["[missing]"], None
     speaker = persona or _ROLE_CAPTIONS.get(role, (role or "?").upper())
+    if role == "assistant":
+        # Which model wrote it, in the bracket a tool result uses for the tool that answered -- one
+        # question, "what produced this", asked of the two roles that can answer it. The *short* name,
+        # where the chat log's metadata line has room for the whole recorded identity: a box is 41
+        # characters wide at this font, and "Aria [qwen3.5-4b, Q4_K_XL, 128 Ki context]" is 42.
+        maybe_model = chatutil.short_model_name(_payload_of(datastore, node_id))
+        if maybe_model:
+            speaker = _fit_bracketed(speaker, maybe_model, speaker_width)
     if role == "tool":
         # Which tool answered, in the bracketed aside the calling message uses for its own request. A run
         # of boxes all reading TOOL says only that the machinery ran; naming them makes the round legible
@@ -748,7 +788,7 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
         # the field existed. The bare caption is then the honest answer.
         function_name = chatutil.tool_name_of(_payload_of(datastore, node_id))
         if function_name:
-            speaker = f"{speaker} [{function_name}]"
+            speaker = _fit_bracketed(speaker, function_name, speaker_width)
     lines = _wrap(text, width, max_lines)
     if lines:
         return speaker, lines, None
@@ -1457,7 +1497,8 @@ def build(datastore: chattree.Forest,
                               tool_call_count=_tool_call_count(datastore, node_id),
                               pills=_pills_for(node_id, state, is_root=is_root))
             speaker, label_lines, sub_label = _speaker_and_label_of(
-                datastore, node_id, config._get_effective_label_chars(), config.label_lines)
+                datastore, node_id, config._get_effective_label_chars(), config.label_lines,
+                config._get_effective_speaker_chars())
             shapes = _box_shapes(x, y, config.node_w, config, label_lines,
                                  fill=_fill_for(ref.role, node_id in current_branch,
                                                 asked_for_tools=bool(ref.tool_call_count)),
