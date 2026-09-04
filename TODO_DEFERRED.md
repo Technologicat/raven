@@ -4653,14 +4653,25 @@ the loop, and therefore the one whose requirements do not follow from the other 
     bearing. Cancel has to be invokable from across the room, precisely when the AI has visibly wedged;
     an answer that requires standing up and walking to the console defeats the mode that this item is
     about. So the speech path has to work, and cannot be routed around.
-  - Candidates, unmeasured and in rough order of promise: **acoustic echo cancellation**, which is the
-    principled one and unusually tractable here because Raven synthesised the audio and so holds the
-    reference signal — on Linux there may be a system-level route worth trying before writing any DSP.
-    **Listening in the gaps**, since the controller already splits speech into sentences and plays them
-    as separate segments, so silences exist by construction and cost at most a sentence of latency.
-    And **text-level echo rejection** — discarding transcriptions that match what was just spoken — which
-    is cheap and solves only half the problem: it stops the AI triggering itself, and does nothing to
-    help the microphone hear a human over it.
+  - **Acoustic echo cancellation** is the principled answer, and the reference signal it needs is *the
+    AI's own speech* — what the speakers are emitting — which Raven synthesised and therefore holds
+    exactly, before it is played. The user's voice is what is being recovered, not the reference. Worth
+    stating that way round: the compressed version of this sentence reads as though the *user* were
+    synthesised, which is a misreading it invites.
+    - **Cheapest route first, and it may be configuration rather than code**: PipeWire ships a WebRTC
+      canceller and `libpipewire-module-echo-cancel.so` is installed on the development machine (PipeWire
+      1.0.5, module not loaded). If loading it and taking the microphone from the cancelled source is
+      enough, Raven needs no DSP at all. Unverified — installed is not the same as adequate, and the
+      alignment between playback and capture is where these usually disappoint.
+    - **A neural canceller is the fallback and has a real argument** (Juha): classical AEC assumes a
+      roughly linear echo path, and a cheap speaker at event volume clips and distorts, which is exactly
+      the case the learned models handle better.
+  - **Listening in the gaps** is the cheap structural alternative: the controller already splits speech
+    into sentences and plays them as separate segments, so silences exist by construction, at a cost of
+    at most one sentence of latency.
+  - **Text-level echo rejection** — discarding transcriptions that match what was just spoken — is
+    cheapest and solves only half the problem. It stops the AI triggering itself and does nothing to help
+    the microphone hear a human over it.
 - **The chat log must stay toggleable**, so whoever is at the console can bring the ordinary GUI up
   mid-event without restarting into another mode.
 - **With no chat log, the AI needs to show what it is doing** (Juha, 2026-09-04) — and this is not
