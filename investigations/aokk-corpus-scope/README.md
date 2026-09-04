@@ -627,6 +627,49 @@ The two corpus-measured constants want deriving from the corpus at run time rath
 across, for the same reason — a corpus whose titles run short would need a different informative bound,
 and inheriting 5 would silently escalate everything or nothing.
 
+### What the two days after that changed about the shape
+
+The paragraphs above describe generalizing *the judge*, because on 2026-09-02 the judge was the whole
+apparatus. It is not: what emerged is **four instruments asking four different questions**, and the
+generalization is the set rather than any one of them.
+
+| instrument | question | what it is for |
+|---|---|---|
+| `raven-siftbib` | is this record *screenable*? | mechanical, deterministic, no model |
+| `judge_scope.py` | is there evidence this is *off topic*? | removes, with a reason per removal |
+| `review_drops.py` | can a case be made that it *belongs*? | audits the removals, from the opposite side |
+| `extract_fields.py` | what does this record *say*? | makes the keeps filterable at all |
+
+**The judge's shape is right for discarding and wrong for keeping**, which is the finding that produced
+the fourth. A drop needs a reason, so every drop carries one and can be audited. A keep needs none — a
+record survives whenever no test is positively established — so the keeps are unauditable by
+construction, and no amount of improving the judge fixes that. Extraction is the answer, and it is a
+different instrument rather than a better rubric.
+
+Five things learned here that a generalized tool should be born with, none of them AOKK-specific:
+
+- **Stamp the instrument into the answers, and name the file after it.** A prompt is what decides what an
+  answer means, so answers from before and after a prompt edit are not the same measurement. Without the
+  stamp, editing a vocabulary and re-running reports every record as already done and keeps the old
+  answers; without the filename, every consumer has to remember to filter, and one of ours did not.
+- **A filter's tiers should separate "this is wrong" from "this is out of scope."** Those ask different
+  questions of the person reading them, and only the second is theirs to answer. Collapsing them into one
+  removal count hides which is which.
+- **Escalate every drop, not only the doubtful ones.** Measured here: confidence asserted against a title
+  carries no information about whether the drop is right, and the confident title-only verdicts were the
+  least reliable group in the output.
+- **A closed vocabulary needs an explicit "not stated" value, and a rule that a positive answer quotes
+  the text that settles it.** The quotation is a structural check — a positive call with no quotation is
+  visible without reading a single record — and it is what makes the field trustworthy rather than
+  merely consistent.
+- **Do not mix JSON literals with strings in one field.** `true` / `false` / `"unclear"` invites a model
+  to drop the quotes on the third, and one malformed field loses a whole batch.
+
+**The reviewer is the piece most worth lifting**, and the least obvious. It is what makes an unattended
+classification checkable at all: it asks the opposite question, never sees the verdict it is auditing,
+and carries a negative control that says when its own answer means nothing. Everything else here is
+machinery; that one is method.
+
 ## The run plan, and why sifting comes second rather than first
 
 Decided 2026-09-02. `raven-siftbib --require abstract` would remove 853 of the 5167 records and take
