@@ -300,6 +300,25 @@ reflex is the safe one:
 
 A test that needs none of the three takes no marker, which is the overwhelmingly common case.
 
+**Neither opt-in group is a coverage lever, and one of them is not one at all.** Measured 2026-09-04
+across the whole suite:
+
+| run | coverage |
+|---|---|
+| CI's shape (`-m "not ml"`, no GUI) | 51% in CI, 54% locally |
+| plus `ml` | 57% |
+| plus `gui` | 57% |
+
+- **`--run-gui` buys no coverage whatsoever** — fourteen more tests and no measurable change, because the
+  group asserts behaviour *under a mapped window* on code the headless tests already execute. It is a
+  correctness instrument. Reaching for it to move a coverage number spends the user's keyboard for nothing.
+- **`ml` is worth about three points**, and the CI-to-local gap is three more and *separate*: locally the
+  optional dependencies let modules import and run at all, where in CI they count as zero. So a local
+  number is not comparable to CI's, and neither is wrong.
+
+Where the rest of the gap sits, and which parts of it are structural rather than neglected, is in
+`TODO_DEFERRED.md` under *"Modules worth testing that are not app entry points"*.
+
 ### A test that fakes a home directory must set `USERPROFILE` as well as `HOME`
 
 `expanduser` reads `HOME` through `posixpath` and `USERPROFILE` through `ntpath`, and **never consults
