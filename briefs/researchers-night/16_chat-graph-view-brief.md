@@ -1259,6 +1259,27 @@ list is a judgement about how the picture reads, and those are decided in front 
    - **The flag is for measuring when bootup is done**, which makes it the latched kind: false from
      `start()` until the first frame arrives, true thereafter until the next start. That cannot close the
      loop, because covering the avatar does not un-arrive its first frame.
+   - **Speech is available but not automatic while the graph is up** (settled 2026-09-04, Juha's call).
+     A reply does not autostart the TTS when the graph holds the panel; `Ctrl+S` and the per-message speak
+     button still send one to the TTS and the subtitler, so nothing is lost, it simply does not begin on
+     its own.
+     - **The reason is the subtitles, not the audio.** "The avatar doing something" is three channels and
+       the graph covers two: lipsync draws on the face, subtitles are a text widget positioned in the
+       avatar's rect, and only the audio comes out somewhere the graph does not own. So the pause gate
+       covers lipsync for free — a paused animator moves no mouth — and the audio would be perfectly
+       usable on its own. What is not usable is a reply spoken with its captions underneath the graph.
+     - **Subtitles are for public events**, where the audience cannot be assumed to read English (Juha).
+       That is exactly the setting this view is being built for, so a demo of the graph is precisely when
+       speech-without-captions would land in front of the people it fails.
+     - **The known gap, chosen rather than missed**: pressing `Ctrl+S` with the graph up still speaks with
+       the captions covered. The alternative that closes it is **overlaying subtitles on the graph**, not
+       taken for now — the graph's lower strip is usually the emptiest part of the picture and the widget
+       already repositions itself dynamically, so it is a real option rather than a hard one, and this is
+       where to start if the gap ever bites.
+     - Worth checking before building: TTS is delegated through `avatar_controller`, so whether speech
+       functions at all with no avatar constructed decides whether "speech without a face" is an existing
+       shape or a new one. Road mode needs that answer too — there the graph is permanently up and there is
+       no avatar, so *not autostarting* is that mode's ordinary state.
    - *A caution for whoever implements it, not a reading of the above:* the obvious generalization —
      a **live** "frames are arriving right now" — must stay out of the auto-switch's condition. Covering
      the avatar pauses it, which stops the frames, which would read as unavailable, which keeps the graph
