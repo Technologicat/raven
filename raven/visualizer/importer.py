@@ -289,7 +289,10 @@ def _parse_input_files(*filenames):
 
                     # abstract is optional
                     if "abstract" in fields and fields["abstract"].value:
-                        abstract = fields["abstract"].value
+                        # First, for the reason `_field_or_placeholder` gives: this is third-party text
+                        # bound for an embedder and possibly a prompt, and the dehyphenator and the
+                        # markup pass below both read it as text a person would see.
+                        abstract = textutil.normalize(fields["abstract"].value)
                         if visualizer_config.dehyphenate:
                             if dehyphenator is None:  # delayed init - load only if needed, on first use
                                 dehyphenator = mayberemote.Dehyphenator(allow_local=True,
@@ -658,7 +661,15 @@ def _field_or_placeholder(fields, name: str, placeholder: str, entry_key: str, t
     """
     if name in fields and fields[name].value:
         value = fields[name].value
-        return transform(value) if transform is not None else value
+        result = transform(value) if transform is not None else value
+        # A bibliography is somebody else's text — a publisher's export, a database's — and it ends up
+        # embedded, keyworded and, where the config asks for it, in a prompt. So it gets the defensive
+        # normalization the web paths get, at the point it enters rather than at each place that reads it.
+        #
+        # After the transform rather than before, because a field's raw value is not always a string:
+        # `author` arrives as a list of parsed name parts, and normalizing that is not a thing one can do.
+        # Every transform returns display text, so this catches all of them at one point.
+        return textutil.normalize(result)
     logger.warning(f"_parse_input_files: entry '{entry_key}' has no {name}; "
                    f"importing it as {placeholder}")
     return placeholder

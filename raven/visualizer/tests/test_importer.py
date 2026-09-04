@@ -140,6 +140,34 @@ def test_an_incomplete_record_is_imported_with_each_missing_field_named(missing_
         assert any(key in message and "has no" in message for message in messages)
 
 
+def test_invisible_characters_in_a_record_do_not_reach_the_analysis(tmp_path, monkeypatch):
+    # A `.bib` is somebody else's text — a publisher's export, a database's — and its fields go on to be
+    # embedded, keyworded and, where the config asks, put in a prompt. That is the same threat the web
+    # paths normalize against, so the bibliography gets it too.
+    zwsp = chr(0x200B)   # ZERO WIDTH SPACE -- built rather than pasted: a literal one is invisible in
+    smuggled = chr(0xE0041)  # this file too, and a reformat would take it out without changing how the
+    #                          test reads. U+E0041 is the ASCII-smuggler block's "A".
+    source = (f"@article{{sneaky2024,\n"
+              f"  author = {{Alpha, Ann}},\n"
+              f"  year = {{2024}},\n"
+              f"  title = {{A perfectly{zwsp} ordinary title{smuggled}}},\n"
+              f"  abstract = {{An abstract with{zwsp} nothing visibly wrong with it.}}\n"
+              f"}}\n")
+    path = tmp_path / "sneaky.bib"
+    path.write_text(source, encoding="utf-8")
+
+    # The control: if the fixture lost its invisible characters on the way to disk, everything below
+    # passes against text that never carried anything to strip.
+    assert zwsp in path.read_text(encoding="utf-8"), "the fixture reached disk without its zero-width space"
+
+    monkeypatch.setattr(visualizer_config, "dehyphenate", False)
+    entries = parsed_entries(importer._parse_input_files(str(path)))
+
+    assert len(entries) == 1
+    assert entries[0].title == "A perfectly ordinary title"
+    assert entries[0].abstract == "An abstract with nothing visibly wrong with it."
+
+
 def test_a_record_with_neither_a_title_nor_an_abstract_is_skipped(missing_fields_bib, monkeypatch, caplog):
     # The one thing a record cannot do without is something to read. The title placeholder is the same
     # string on every such record, so importing them would cluster them on Raven's own boilerplate.
