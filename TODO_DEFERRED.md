@@ -4633,10 +4633,18 @@ the loop, and therefore the one whose requirements do not follow from the other 
     character something STT mishears is not a real constraint, since nobody does (Juha). Names that are
     also ordinary words — Iris, Echo, Sage — are the mild residue, largely defused by the wake word
     sitting at the start of an utterance rather than being listened for continuously.
-  - **A cheaper variant if per-card configuration ever grates**: one wake word, with commands as a small
-    closed vocabulary of *whole* utterances. "Raven, new chat" exactly is a command; "Raven, new chat
-    about foxes" is not, and goes to the AI. It fails in the harmless direction — anything ambiguous
-    reaches the AI, which can ask, rather than a misheard sentence silently wiping the conversation.
+  - **And commands are a canned list of whole utterances, which composes with the above rather than
+    replacing it** (Juha, 2026-09-04). *"Raven, …"* tries that list first and **falls through to the AI**
+    when nothing matches, so "Raven, new chat" is a command while "Raven, new chat about foxes" is a
+    message. Which is what lets someone begin a sentence that is genuinely *about* ravens without it
+    being eaten (Juha) — the app's wake word doubles as an AI address, muddy conceptually and safe in the
+    only direction that matters: an unmatched utterance reaches the AI, which can ask, rather than a
+    misheard one silently wiping the conversation.
+    - **So the list wants natural synonyms**, since whole-utterance matching means "Raven, start a new
+      chat" misses unless it is listed too. Cheap for a small set, and the alternative — matching a
+      prefix — is exactly what brings the corvid problem back.
+    - **And it is user-facing vocabulary**, which at an event makes it *signage* rather than a help card.
+      Nobody at a kiosk presses F1 to find out what they may say.
 - **The genuinely hard part is barge-in on cancel.** Cancel has to work *while the AI is talking*, so the
   microphone is live with the AI's own voice coming through the venue's speakers. That is echo
   cancellation or push-to-talk, and it is the one command for which "say it again, louder" cannot be the
