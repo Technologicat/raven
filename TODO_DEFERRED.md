@@ -2569,6 +2569,15 @@ The update above had to buy each new sentence by cutting another, and it now sit
 ceiling: every remaining line was measured, and the widest is within ~50 px of the right edge. So the next
 addition of any size needs the shape decision first.
 
+**The card is now visibly over its height, and that is a decision rather than a discovery** (2026-09-04).
+Two rows went in for the chat log's `Ctrl+Home` / `Ctrl+End`, which completed a block that was already
+there and missing exactly those two. The card was opened and looked at afterwards: the **hotkey table is
+intact** — `Ctrl+N` still closes the first column and `F1` the second — and what the two rows cost is two
+more lines of the closing prose, which was already running past the bottom edge. Juha's call: fix it as
+end-of-sprint polish or after the sprint, and let the chat graph's own keys go on during that redesign
+rather than before it. So the shape decision below is now blocking something concrete rather than
+anticipated.
+
 **That last line has since been spent, and the fit is unmeasured** (2026-09-03). The chat graph gained a
 keyboard — a dozen keys — and one row went in for `Tab`, the way *into* the graph, on the grounds that a
 reader who gets there finds the arrows, `Enter` and `Esc` by trying them. The other eleven are documented
@@ -5664,6 +5673,45 @@ that are not:
 
 Worth settling before more effects are built on `mark_discontinuity`, since both candidates change what an
 effect *is*, and the second one would want the filters audited for whether they have an honest `strength`.
+
+## Bookmarks in the chat graph
+
+*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-04 · See also: briefs/researchers-night/16_chat-graph-view-brief.md*
+
+Mark chat nodes worth coming back to, drawn with the pill mechanism the graph already has for pointers, in
+a colour of their own. Design first — what a bookmark *is* (a per-node flag in the datastore, or view
+state that dies with the session) is the part that decides everything else.
+
+It wants answering together with **auxiliary buttons drawn near a node**, which is still open in brief 16:
+both are about giving this view verbs, and the answer to "where do a node's own controls live" should not
+be given twice.
+
+Moved out of brief 16 on 2026-09-04 (Juha): nice to have in the mid-term, not needed for Researchers'
+Night, and the brief should list only what the demo requires.
+
+## `raven-xdot-viewer` has no actual-size button, where the chat graph does
+
+*Cluster: chat-graph · Cost: S · Gate: a decision, not work · Filed: 2026-09-04*
+
+The two show the same widget, and their toolbars were deliberately kept glyph-for-glyph identical so that a
+reader who has learnt one knows the other. The chat graph then gained *Actual size (1:1)*, which the viewer
+does not have — so the consistency now runs the other way, and the question is whether the viewer should
+gain it or whether 1:1 is a chat-graph idea (its node font is sized for exactly that zoom, which the viewer
+has no equivalent of).
+
+Moved out of brief 16 on 2026-09-04, where it sat as an unnumbered open question. Small either way; it is
+listed because deciding it is what makes the two toolbars a rule rather than a coincidence.
+
+## Whether a short chat graph should sit at the top of the panel rather than centred
+
+*Cluster: chat-graph · Cost: S · Gate: none · Filed: 2026-09-04*
+
+Where the tree is shorter than the panel at 1:1, the pan clamp centres it vertically, there being nothing
+to pan to. Looked at 2026-09-02 and left alone — Juha: *"I think it looks good now. Let's revisit later if
+needed."* So top-alignment is **not rejected**, merely not needed yet, and this exists so that "we looked
+and chose centring" is recoverable rather than being rediscovered as an oversight.
+
+Moved out of brief 16 on 2026-09-04, where it sat as an unnumbered settled-by-looking note.
 
 ## Declined
 

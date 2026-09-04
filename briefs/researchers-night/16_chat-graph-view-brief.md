@@ -1082,17 +1082,28 @@ Two things landed outside the graph, both consequences of the row rather than de
   is unaffected, which is deliberate rather than incidental — it views arbitrary graphs, where space beside
   the graph is something a reader may want.
 
-**Monday picks up at item 4**, `ImageShape` in the widget, which is the next thing in the order worth doing
-and the one that unblocks the most: role glyphs need no texture upload, attachment thumbnails (item 5) do,
-and that upload cannot happen during a rebuild. Items 4 and 5 are one piece of work in practice, and item
-10's once-over is explicitly waiting on both. Nothing on the list waits on anything that landed today.
+**What Researchers' Night actually needs, settled 2026-09-04**: items **4, 5, 6 and 8**, with **10** as a
+final look afterwards. Item 9 left the brief for `TODO_DEFERRED.md`, and item 10 shrank from a once-over to
+a check, most of what it was for having been done along the way. Nothing else on the list is demo work.
+
+**Monday picks up at item 4**, `ImageShape` in the widget, which is next in that order and unblocks the
+most: role glyphs need no texture upload, attachment thumbnails (item 5) do, and that upload cannot happen
+during a rebuild. Items 4 and 5 are one piece of work in practice. Nothing on the list waits on anything
+that landed today.
+
+**Item 6 is the alternative Monday, and the choice is a real one.** It is the largest of the four and the
+only one whose design is finished — it also has two *reported symptoms* rather than an absence, the avatar
+rendering behind the graph and *"[Video is off]"* sitting where the graph should be. Item 4 is first
+because 5 and 10 wait on it; 6 waits on nothing and clears something visible.
 
 **Two are known-broken and deliberately left**, so neither is a surprise to walk into:
 
 - **The help card overflows its window.** It is a fixed height with no scrollbar, its closing prose already
   runs past the bottom edge, and the two chat-log keys added today cost two more lines of that prose. The
   hotkey table itself is intact. Juha's call, 2026-09-04: fix it as end-of-sprint polish or after the
-  sprint, and the graph's own keys go on the card as part of that redesign rather than before it.
+  sprint, and the graph's own keys go on the card as part of that redesign rather than before it. Recorded
+  in `TODO_DEFERRED.md`, *"Librarian's help card has no room to describe attachments"*, which is the shape
+  decision this is a symptom of.
 - **A keyboard cursor may belong in `XDotWidget`** rather than in each caller that wants one. Marked with a
   `TODO` on both sides of the `anchor_padding` seam, deliberately as comments rather than a filed item.
   Note `anchor_padding` survives that move either way: a caller may decorate a node for reasons of its own,
@@ -1437,24 +1448,29 @@ list is a judgement about how the picture reads, and those are decided in front 
    in-branch search in the chat log — one piece of work with two halves rather than two items, since
    shipping the first without the second is a worse state than having neither. See the search section
    above.
-9. **Bookmarks**, reusing the pill mechanism in a colour of their own. Design first; see the section
-   above, and note it wants answering together with the "buttons near a node" question, both being about
-   giving this view verbs.
-10. **A once-over for the look** (Juha, 2026-09-02): final colours, final font sizes, that sort of thing.
-    Last on purpose — every item above it adds something to look at, and a palette settled before the
-    thumbnails and the role glyphs land is a palette settled without them. What it should collect: the
-    colours currently declared at the top of `chatgraph.py`, the three font sizes, the pill and gap
-    metrics, and whatever the dark-mode inversion does to all of them.
+~~9. **Bookmarks.**~~ **Moved out of this brief on 2026-09-04** (Juha): nice to have in the mid-term, not
+   needed for Researchers' Night. Now `TODO_DEFERRED.md`, *"Bookmarks in the chat graph"*, which keeps the
+   note that it wants answering together with the still-open "auxiliary buttons drawn near a node".
+10. **A final check of the look**, and it is now a *check* rather than the once-over first written here
+    (Juha, 2026-09-04). Most of what this item was for has been done as we went — the colours, the zoom
+    behaviour, the toolbar's icons and their ordering — so what remains is looking at the finished thing
+    once, with the thumbnails and role glyphs in place, rather than settling a palette from scratch.
+    - Still last, and for the original reason: items 4 and 5 add the two things nobody has seen against
+      this palette yet. What the check should still take in: the colours declared at the top of
+      `chatgraph.py`, the three font sizes, the pill and gap metrics, and what the dark-mode inversion
+      does to all of them.
     - `TODO_DEFERRED.md` already carries a **sweep the GUI styling constants into one module** item,
       gated on the FileDialog keyboard brief. This view's constants are more of the same, and the two
       should probably be one pass rather than two.
 
-**Open, needing a decision rather than work:** whether `raven-xdot-viewer` gets the actual-size button
-too, for the consistency that now runs the other way.
+**So the demo needs 4, 5, 6 and 8** (Juha, 2026-09-04), with 10 as the final look afterwards. Nothing else
+on this list is Researchers' Night work.
 
-**Settled by looking and left alone (2026-09-02):** where the tree is shorter than the panel at 1:1 the
-clamp centres it, since there is nothing to pan to. Juha: *"I think it looks good now. Let's revisit later
-if needed."* So top-alignment is not rejected, merely not needed yet.
+**The loose ends that used to sit here are in `TODO_DEFERRED.md` now** (2026-09-04, Juha's call), so that
+this brief lists what the demo requires and nothing else: *"`raven-xdot-viewer` has no actual-size button,
+where the chat graph does"* and *"Whether a short chat graph should sit at the top of the panel rather than
+centred"*. The second is a settled-by-looking note rather than a defect — it is filed so the decision to
+centre stays recoverable.
 
 ### Dead space, and where the clamp for it belongs (2026-09-02)
 
