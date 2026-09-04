@@ -37,6 +37,7 @@ produces one trace covering every item in it, so the entry names the keys that s
 
 import argparse
 import collections
+import hashlib
 import json
 import logging
 import pathlib
@@ -59,7 +60,9 @@ ABSTRACT_CHARS = 4000
 # to normalize it, and normalizing free text is how a field stops meaning one thing.
 POPULATIONS = ("university_students", "school_pupils", "preservice_teachers", "inservice_teachers",
                "researchers", "professionals", "general_public", "none", "unclear")
-LEVELS = ("higher_education", "school", "vocational", "mixed", "not_applicable", "not_stated")
+LEVELS = ("higher_education", "school", "vocational", "professional_training", "informal",
+          "mixed", "not_applicable", "not_stated")
+
 
 INSTRUCTIONS = """\
 You are reading records from a literature search, to record what each one says. You are NOT deciding \
@@ -82,7 +85,29 @@ usual - if the text does not say, you do not know. Guessing here destroys the on
 
 "not_applicable" is different from "not_stated": it means the work is not set in education at all, so the \
 question does not arise. A study of clinical decision-making has level "not_applicable"; a study of \
-students whose year is never given has level "not_stated".
+students whose year is never given has level "not_stated". Reserve "not_applicable" for work with no \
+teaching or learning in it whatsoever - a methods paper, a recommender, a clinical tool. If somebody is \
+learning something, the work IS set in education and one of the other values applies.
+
+Four values name the places learning happens, and the distinction between them is the SETTING, not the \
+subject matter or the age of the learner:
+  "higher_education"      a university, college, polytechnic or their students and faculty - degree study
+  "school"                primary or secondary schooling, K-12, pupils
+  "vocational"            formal vocational or trade education leading to a qualification
+  "professional_training" workplace and professional development: practitioners already qualified, being \
+coached, upskilled or trained on the job. Psychotherapist training, teacher CPD, staff onboarding
+  "informal"              learning outside any institution - self-directed learners, the general public, \
+lifelong learning, patient or rehabilitation training, museum and hobby settings
+
+Two of those are new and easy to over-apply, so note what they are NOT. A course taught to university \
+students is "higher_education" however professional its subject; medicine, law and teacher preparation \
+are degree study. And "informal" is about the absence of an institution, not the absence of a stated \
+year - a study of undergraduates whose year is never given is "not_stated", not "informal".
+
+A review, survey or meta-analysis has no setting of its own: it reports on other people's studies, so \
+nobody is being taught inside it. That does NOT make it "not_applicable". A review of AI in education is \
+about education. Give it the level its own scope names - "school" for a review of classroom chatbots - \
+and "not_stated" when it names none, which is the common case.
 
 "human_learning" is the distinction between a person being educated and a model being trained. \
 "Teaching", "training" and "learning" are the machine-learning field's own words for what is done to \
@@ -99,6 +124,20 @@ markdown fences.
 
 {items}
 """
+
+
+def instrument_fingerprint() -> str:
+    """A short hash of everything that decides what an answer means: the vocabularies and the prompt.
+
+    The prompt is in here because the vocabularies alone are not the instrument. A value set can stay
+    fixed while the paragraph explaining it changes what the model does with it — telling it what to do
+    with a systematic review moved records out of one value and into another without touching either
+    list — so answers from before and after that edit are not the same measurement and must not be
+    pooled. Hashing both means any change to either starts a fresh run, and the safe direction is the
+    cheap one: at worst a typo fix costs a partial re-run.
+    """
+    material = "|".join(POPULATIONS) + "//" + "|".join(LEVELS) + "//" + INSTRUCTIONS
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:8]
 
 
 def format_record(index: int, record: env) -> str:
@@ -151,6 +190,7 @@ def normalize(answer: dict, key: str) -> dict:
     if learning not in (True, False):
         learning = "unclear"
     out = {"key": key,
+           "v": instrument_fingerprint(),
            "population": population if population in POPULATIONS else "unclear",
            "level": level if level in LEVELS else "not_stated",
            "human_learning": learning,
@@ -161,13 +201,28 @@ def normalize(answer: dict, key: str) -> dict:
     return out
 
 
-def load_state(path: pathlib.Path) -> dict[str, dict]:
-    """Extractions already recorded, keyed by citekey. A later line supersedes an earlier one."""
+def load_state(path: pathlib.Path, vocabulary: str | None = None) -> dict[str, dict]:
+    """Extractions already recorded, keyed by citekey. A later line supersedes an earlier one.
+
+    `vocabulary`: when given, an answer stamped with a different fingerprint does not count as recorded,
+                  so it is re-asked rather than resumed.
+
+    Resuming is what makes an interrupted run cheap, and it is also how a vocabulary change gets silently
+    ignored: edit `LEVELS`, re-run, and every record reads as already done, so the file keeps answers
+    drawn from a set of values that no longer exists while the run reports success. The fingerprint makes
+    that structurally impossible rather than something to remember — a changed vocabulary simply has no
+    answers yet. Old lines stay in the file underneath, superseded, so the two runs can be compared.
+
+    Pass nothing when reading a state file this script did not write; the judge's has no fingerprint, and
+    filtering on one would discard all of it.
+    """
     state = {}
     if path.exists():
         for line in path.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 answer = json.loads(line)
+                if vocabulary is not None and answer.get("v") != vocabulary:
+                    continue
                 state[answer["key"]] = answer
     return state
 
@@ -230,9 +285,10 @@ def main() -> int:
 
     state_path = out_dir / f"{run_name}.jsonl"
     traces_path = out_dir / f"{run_name}-traces.jsonl"
-    done = load_state(state_path)
+    vocabulary = instrument_fingerprint()
+    done = load_state(state_path, vocabulary)
     todo = [record for record in selection if record.key not in done]
-    print(f"already extracted: {len(done)};  to do now: {len(todo)}")
+    print(f"vocabulary {vocabulary};  already extracted under it: {len(done)};  to do now: {len(todo)}")
     if not todo:
         print("nothing to do")
         return 0
@@ -263,7 +319,7 @@ def main() -> int:
         print(f"  batch {n}/{len(batches)}: {len(answers)}/{len(batch)} extracted in {tim.dt:.1f}s",
               flush=True)
 
-    final = load_state(state_path)
+    final = load_state(state_path, vocabulary)
     mine = {key: value for key, value in final.items() if key in {r.key for r in selection}}
     print(f"\n{len(mine)} extracted")
     for field in ("level", "population", "human_learning"):
