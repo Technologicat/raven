@@ -51,7 +51,7 @@ filelock==3.32.3  # common.datastorelock; keeps two frontends off one chat datas
 # so they need the pair — and that is the point of having them: it turns a construction verified by hand
 # against one backend into one the suite checks on every push.
 gguf==0.19.0
-tokenizers==0.22.2
+tokenizers==0.23.1
 odfpy==1.4.1
 Pillow==12.3.0
 # Imported at module level by the adopted `file_dialog`, so `raven/vendor/file_dialog/tests/` needs it to
