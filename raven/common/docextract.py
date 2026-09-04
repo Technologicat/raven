@@ -59,6 +59,8 @@ import pptx
 import pptx.enum.shapes
 import pypdf
 
+from . import text as common_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -397,7 +399,17 @@ def _extract(source: BinaryIO, name: str, label: str) -> str | None:
     repaired = repair_surrogates(text)
     if repaired != text:
         logger.warning(f"extract_text: '{label}' extracted with UTF-16 surrogates in the text; repaired.")
-    return repaired or None
+    # The same argument one step further. An extracted document is somebody else's text, and it goes on to
+    # be embedded, indexed and put in front of a model — so a zero-width space or a directional override in
+    # it is a property of the document, and every consumer downstream assumes what it gets is what a person
+    # would see. The web paths already normalize for exactly this reason; a PDF somebody dropped into a
+    # corpus is the same kind of input as a page somebody fetched.
+    #
+    # After the surrogate repair, so it works on text that is already well-formed.
+    normalized = common_text.normalize(repaired)
+    if normalized != repaired:
+        logger.info(f"extract_text: '{label}' carried invisible or control characters; normalized.")
+    return normalized or None
 
 
 def extract_text(path: str | pathlib.Path) -> str | None:
