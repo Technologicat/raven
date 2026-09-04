@@ -164,6 +164,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # that box on screen holds the ring with it. The ring is drawn outside the box and in graph space,
         # so it grows with the zoom and the widget -- which knows the box and nothing about what has been
         # drawn around it -- cannot work this out for itself.
+        #
+        # TODO: the ring itself may belong in `XDotWidget`, a keyboard cursor over a graph being a general
+        # TODO: want rather than this panel's; drawing it there would give it one appearance everywhere.
+        # TODO: This declaration would survive that move, since a caller may decorate a node for its own
+        # TODO: reasons and what it has drawn is not the widget's business.
         self._ring_padding = self._layout.preview_ring_offset + 0.5 * self._layout.preview_line_width
         # The cursor: which box a click or `Enter` acts on. A *graph* node name, so it can rest on a gap
         # box as well as on a message — see `chatgraph.ViewState.cursor_name`. Mirrored into the view
@@ -336,19 +341,26 @@ class DPGChatGraphPanel(gui_animation.Animation):
             # how wide the tree is, and fitting the branch shows the conversation.
             add_button(fa.ICON_ARROWS_UP_DOWN, self.fit_branch,
                        "Fit the current branch [B]", f"chat_graph_fit_branch_button_{self.gui_uuid}")  # tag
-            add_button(fa.ICON_LOCATION_CROSSHAIRS, self.go_to_head,
+            add_button(fa.ICON_LOCATION_PIN, self.go_to_head,
                        "Back to where you are [Home]", f"chat_graph_home_button_{self.gui_uuid}")  # tag
-            # The discoverable half of the commit gesture. Its caption names the fluent half, which is
-            # otherwise unfindable: a second click on a box already clicked once.
-            add_button(fa.ICON_CODE_BRANCH, self._commit_cursor,
-                       "Switch to the previewed branch [Enter]\n(or click its box a second time)",
-                       self._commit_button_tag, enabled=False)
             # The pointer's only route to folding a round back up, `Backspace` being the sole key for it
             # and right-click being spoken for in the widget, where it opens a node's URL. Enabled only
             # inside an opened round, so a reader who has never met one never wonders what it does.
+            #
+            # Before the commit button rather than after it: folding changes what is drawn and commits
+            # nothing, which puts it with the three before it, and leaves the one button here that changes
+            # the conversation at the end of the run.
             add_button(fa.ICON_COMPRESS, self._collapse_round,
                        "Fold this tool round back up [Backspace]",
                        self._fold_button_tag, enabled=False)
+            # The discoverable half of the commit gesture. Its caption names the fluent half, which is
+            # otherwise unfindable: a second click on a box already clicked once.
+            #
+            # The return arrow, for the key the caption names. Not the arrow-into-bracket that FontAwesome
+            # offers as "enter": this app already spends that one on sending a URL to the chat input.
+            add_button(fa.ICON_REPLY, self._commit_cursor,
+                       "Switch to the previewed branch [Enter]\n(or click its box a second time)",
+                       self._commit_button_tag, enabled=False)
 
             guiutils.add_toolbar_separator(horizontal=True, toolbar_extent=_TOOLBAR_H,
                                            size=gui_config.toolbar_separator_w, line=False)

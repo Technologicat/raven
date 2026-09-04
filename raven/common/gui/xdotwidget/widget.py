@@ -325,6 +325,10 @@ class XDotWidget(gui_animation.Animation):
                           node's box and nothing about what a caller has drawn around it, and a decoration
                           in graph units grows with the zoom, so a screen-space margin cannot stand in.
         """
+        # TODO: a keyboard cursor may belong in this widget rather than in each caller that wants one --
+        # TODO: it is a general want, and drawing it here would give it one appearance everywhere. The
+        # TODO: parameter would stay either way: a caller may decorate a node for reasons of its own, and
+        # TODO: what it has drawn is genuinely not this widget's business.
         self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(factor, sx, sy),
                               anchor_padding=anchor_padding)
 
