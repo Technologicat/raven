@@ -3,6 +3,10 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+**A triage pass is due after Researchers' Night 2026** (2026-09-26; noted 2026-09-04). Several gates here
+name releases that were guesses when written, and the file is long enough that its length is itself the
+obstacle to reading it. Expect a meaningful fraction to be already done or already stale.
+
 **Finished items are deleted, not archived** — git is the history. `## Declined` at the bottom is for
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
@@ -4583,11 +4587,13 @@ reason to have a version number rather than just a migration marker.
 
 ## A no-avatar mode, with the chat tree in the panel the avatar vacates
 
-*Cluster: panel occupancy · Cost: L · Gate: after Researchers' Night (2026-09-26) · Filed: 2026-07-29 · See also: `briefs/researchers-night/16_chat-graph-view-brief.md`*
+*Cluster: panel occupancy · Cost: L · Gate: the post-RN2026 triage · Filed: 2026-07-29 · See also: `briefs/researchers-night/16_chat-graph-view-brief.md`*
 
 **Timing, stated so this is not read as near-term work** (Juha, 2026-09-04): everything here is post-
 Researchers' Night, and the realistic slot is autumn 2026 or spring 2027 — an academic year has no
-working season between the two.
+working season between the two. The gate names the triage rather than a release, because which release
+this lands in is exactly what that pass decides, and a version number here would be a guess wearing a
+label.
 
 Raised 2026-07-29 (Juha), and the opposite end of the same axis as the avatar-first mode sketched in
 `briefs/design/lab-assistant-hci-sketch.md`. On the road, on a laptop, with no power outlet in sight, the avatar is
@@ -4617,10 +4623,25 @@ the loop, and therefore the one whose requirements do not follow from the other 
 - **Spoken triggers are needed for anything the GUI would have offered.** Starting a new chat and
   cancelling a generation are the two named so far, and there will be more — every control that matters
   needs a spoken form, or it does not exist in this mode.
-- **The hard part is telling a command from content**, not the wiring. Everything said to a speech-driven
-  kiosk is either an instruction to Raven or a message for the AI, and nothing in the current path
-  separates them; STT hands over text either way. Whatever answers that — a wake word, a push-to-talk
-  distinction, a parse — is the design, and the triggers are downstream of it.
+- **Telling a command from content is the first question**, not the wiring. Everything said to a
+  speech-driven kiosk is either an instruction to Raven or a message for the AI, and nothing in the
+  current path separates them; STT hands over text either way.
+  - **Two wake words answers it, and matches what the user already sees** (Juha, 2026-09-04): *"Raven,
+    …"* addresses the app and the character's own name addresses the AI. The app and the character are
+    separate things in the interface already, so the split needs no teaching. The AI's wake word comes
+    from the card's persona, which is a line of code — and the worry that a card might name the
+    character something STT mishears is not a real constraint, since nobody does (Juha). Names that are
+    also ordinary words — Iris, Echo, Sage — are the mild residue, largely defused by the wake word
+    sitting at the start of an utterance rather than being listened for continuously.
+  - **A cheaper variant if per-card configuration ever grates**: one wake word, with commands as a small
+    closed vocabulary of *whole* utterances. "Raven, new chat" exactly is a command; "Raven, new chat
+    about foxes" is not, and goes to the AI. It fails in the harmless direction — anything ambiguous
+    reaches the AI, which can ask, rather than a misheard sentence silently wiping the conversation.
+- **The genuinely hard part is barge-in on cancel.** Cancel has to work *while the AI is talking*, so the
+  microphone is live with the AI's own voice coming through the venue's speakers. That is echo
+  cancellation or push-to-talk, and it is the one command for which "say it again, louder" cannot be the
+  answer, since the thing being cancelled is what is drowning the speaker out. Worth settling before the
+  naming scheme, because it may decide that cancel is the one control which stays physical.
 - **The chat log must stay toggleable**, so whoever is at the console can bring the ordinary GUI up
   mid-event without restarting into another mode.
 - **Which means this mode varies the *left* panel as well**, and the framing above does not yet cover
