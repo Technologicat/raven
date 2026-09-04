@@ -4687,6 +4687,13 @@ the loop, and therefore the one whose requirements do not follow from the other 
     fix — READING as a floating book, or a sheet of paper carrying the document's filename. What
     generalizes is the test: an indicator here has to be readable by someone who has never seen the app
     and will not be told anything about it.
+    - **Floating rather than held, and that is the mechanism rather than a compromise** (Juha: THA3
+      cannot do it). Visuals are added as cels, which the compositor blends in *frame* space, while THA3
+      moves the character within that frame — so anything meant to look held drifts off the hand the
+      moment she moves, and reads as broken. A hovering document does not have to track anything.
+    - Worth noting the three arguments agree, which is unusual enough to say: it is immediately legible
+      to a stranger, it is what the compositor can actually do, and a holographic document beside the
+      character is squarely the aesthetic the project is already in. No trade to negotiate here.
   - **The signals are already there too**, so this is a rendering question rather than a plumbing one:
     `scaffold` emits `on_docs_start`/`done`, `on_prompt_ready`, `on_llm_start`/`progress`/`done` and
     `on_tools_start`/`done`, which is most of what a viewer would want to see.
