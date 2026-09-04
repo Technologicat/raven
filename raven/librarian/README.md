@@ -603,17 +603,17 @@ Hover the dot and it says so.
   - Permanently destroy the subtree starting at this message (this message and all messages below it, in any branch).
   - Requires two clicks to prevent accidental deletion.
 - Navigate chat tree
-  - Switch to first sibling
+  - Switch to first sibling (Ctrl+Home)
     - Switch to the oldest sibling node at this position (numbered "1")
-  - Switch 10 siblings left
-  - Switch to previous sibling
-  - Show chat continuation (last message of linearized view only)
+  - Switch 10 siblings left (Ctrl+Shift+Left)
+  - Switch to previous sibling (Ctrl+Left)
+  - Show chat continuation (Ctrl+Down) (last message of linearized view only)
     - If any messages exist below this one in the chat datastore, descend into the tree.
     - At each level, pick the most recently modified child node. Repeat automatically until a leaf node is reached. Select that leaf node as the current **HEAD**.
     - In a sense, this is opposite of the *branch* action. While *branch* selects a node further up the tree as **HEAD**, this selects a node at the leaf level as **HEAD**.
-  - Switch to next sibling
-  - Switch 10 siblings right
-  - Switch to last sibling
+  - Switch to next sibling (Ctrl+Right)
+  - Switch 10 siblings right (Ctrl+Shift+Right)
+  - Switch to last sibling (Ctrl+End)
     - Switch to the most recently created sibling node at this position.
 
 For the chat message actions, the **hotkeys affect the most recent message** in the chat.

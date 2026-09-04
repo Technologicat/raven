@@ -2381,6 +2381,13 @@ def librarian_hotkeys_callback(sender, app_data):
             fire_event_if_exists("show_chat_continuation")
         elif key == dpg.mvKey_Right:
             fire_event_if_exists("next1")
+        # The ends of the run. Bare Home and End scroll the log, so these are free -- and the graph, which
+        # claims the same two chords for the same verb, is offered the key first and only when it holds
+        # the keyboard.
+        elif key == dpg.mvKey_Home:
+            fire_event_if_exists("prevend")
+        elif key == dpg.mvKey_End:
+            fire_event_if_exists("nextend")
         elif key == dpg.mvKey_N:
             start_new_chat_callback()
         elif key == dpg.mvKey_S:

@@ -1995,7 +1995,7 @@ class DPGChatMessage:
             dpg.bind_item_font(f"message_prevend_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
             dpg.bind_item_theme(f"message_prevend_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             prevend_branch_tooltip = dpg.add_tooltip(f"message_prevend_branch_button_{self.gui_uuid}")  # tag
-            dpg.add_text("Switch to first sibling", parent=prevend_branch_tooltip)
+            dpg.add_text("Switch to first sibling [Ctrl+Home]", parent=prevend_branch_tooltip)
 
             dpg.add_button(label=fa.ICON_BACKWARD,
                            callback=navigate_to_prev10_callback,
@@ -2061,7 +2061,7 @@ class DPGChatMessage:
             dpg.bind_item_font(f"message_nextend_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
             dpg.bind_item_theme(f"message_nextend_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             nextend_branch_tooltip = dpg.add_tooltip(f"message_nextend_branch_button_{self.gui_uuid}")  # tag
-            dpg.add_text("Switch to last sibling", parent=nextend_branch_tooltip)
+            dpg.add_text("Switch to last sibling [Ctrl+End]", parent=nextend_branch_tooltip)
 
             if siblings is not None:
                 dpg.add_text(f"{this_node_index + 1} / {len(siblings)}", parent=g)
