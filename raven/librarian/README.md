@@ -318,6 +318,13 @@ A result from the **document database** is shown differently, and never becomes 
 
 Attachments are stored beside the chat, **content-addressed** — identical bytes are stored once, however many messages refer to them, and a page fetched twice is one file when it has not changed and two when it has, so a message keeps the version it actually saw. They are sized against the context window along with everything else: several large attachments in one conversation share the room that is left, rather than one of them silently pushing the others out. Anything no longer referenced by any message can be reviewed and cleaned up from the GUI, with the option to rescue a copy first.
 
+**Copying gives you different things depending on what you asked for**, and the difference is exactly this excerpt:
+
+- **Copy one message** (the copy button on it) and you get that message's content in full. Where the log shows the opening of a fetched page, the clipboard gets the whole page — you asked for that message, so you get its data as it stands.
+- **Copy the whole log** (F8) and each such message keeps its excerpt, followed by a line naming the attachment and how long the full text is. A conversation with several fetched pages would otherwise be unreadable, and a log is the thing people pass on: a shared document reproducing complete copies of pages that were only quoted is a different proposition from quoting them.
+
+Either way nothing is lost silently — the full text stays in the attachment, and the log says where it went.
+
 ## Tools
 
 *Tool use* (a.k.a. *tool-calling* or *function-calling*) is a feature of many LLMs published since early 2025. The idea is to give the LLM partial control over engineering its own context. When the LLM notices that in order to respond to the user's request, it needs to use an external tool, the LLM can tell its surrounding scaffold app (such as *Librarian*) to invoke that tool. A tool can be anything that produces text, for example: websearch, calculators, weather services, database access, file access, shell access, or a programming environment. As the last few examples suggest, tools may also trigger actions in the external world, just like any computer software. For example, a tool call could cause a document to be sent to a printer, or a meeting to be scheduled for the user. Effectively, tool use allows the LLM to control a (predefined set of services on a) computer.
@@ -548,7 +555,7 @@ The toolbar at the bottom contains **global actions**:
   - Starting a new chat does not make any changes to the chat datastore - it only sets the **HEAD** pointer.
   - Changes occur only when you then send a message to the AI; that message is saved under the AI's greeting, and the chat continues.
 - Chat tree view *(placeholder button; feature to be added later)*
-- Copy linearized chatlog to clipboard (F8)
+- Copy linearized chatlog to clipboard (F8) — long fetched pages stay as excerpts; see [Message attachments](#message-attachments)
 - Stop the AI's text generation, if in progress (Ctrl+G)
 - Stop the AI avatar's speaking (Ctrl+S)
 - Toggle fullscreen (F11)
@@ -574,7 +581,7 @@ keyboard's position everywhere else in Raven, breathing at the same rate.
 
 Hover the dot and it says so.
 
-- Copy chat message to clipboard
+- Copy chat message to clipboard — in full, the whole of any fetched page included; see [Message attachments](#message-attachments)
 - Reroll (AI messages only) (Ctrl+R)
 - Continue generating (Ctrl+U)
   - Last message of linearized view only; and only if it is an AI message.
