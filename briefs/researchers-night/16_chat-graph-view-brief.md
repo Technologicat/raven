@@ -1268,6 +1268,25 @@ list is a judgement about how the picture reads, and those are decided in front 
        avatar's rect, and only the audio comes out somewhere the graph does not own. So the pause gate
        covers lipsync for free — a paused animator moves no mouth — and the audio would be perfectly
        usable on its own. What is not usable is a reply spoken with its captions underneath the graph.
+     - **Three channels only when subtitles are on; two when they are not** (Juha, 2026-09-04) — and that
+       makes the rule as first written too broad. With the Subtitles toggle off the only covered channel is
+       lipsync, which is pointless regardless and already paused, so nothing argues against autostarting
+       and the listen-while-browsing case is simply available. **The condition is therefore the graph being
+       up *and* subtitles being enabled**, which is what to build.
+       - The cost of that precision, worth knowing before choosing it: it gives the Subtitles checkbox a
+         second job, since toggling captions then also decides whether replies speak themselves. Defensible
+         once said out loud — captions have nowhere to go, so speech waits — and still a coupling a reader
+         would not predict from the label.
+       - **The translator setup does not enter into it.** With `translator_target_lang` set to `None` the
+         subtitler emits closed captions in the source language instead of translating
+         (`avatar_controller.py`, "Subtitles but no translation -> English closed captions"), so the
+         channel is visual and lands in the covered rect either way. Only its content differs.
+     - **What to do about `Ctrl+S` under the graph is open, and one candidate needs no new machinery:**
+       let the avatar take the panel back while speech is playing with subtitles on. "Speech started" is a
+       cause independent of what the panel currently shows, so it does not touch the deadlock this item
+       warns about — and at an event, seeing the speaker while it speaks is arguably the wanted behaviour
+       rather than a workaround. Against it: the panel moves under a reader mid-browse, which may be worse
+       than the gap it closes. Not settled (Juha: what to do here is nontrivial).
      - **Subtitles are for public events**, where the audience cannot be assumed to read English (Juha).
        That is exactly the setting this view is being built for, so a demo of the graph is precisely when
        speech-without-captions would land in front of the people it fails.
