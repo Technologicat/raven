@@ -1281,6 +1281,14 @@ list is a judgement about how the picture reads, and those are decided in front 
          subtitler emits closed captions in the source language instead of translating
          (`avatar_controller.py`, "Subtitles but no translation -> English closed captions"), so the
          channel is visual and lands in the covered rect either way. Only its content differs.
+     - **The rule keys on the panel's current occupant, not on the mode, and that is what makes it
+       general** (Juha, 2026-09-04). `TODO_DEFERRED.md`'s road-mode item already frames the three modes as
+       one mechanism with a swappable panel rather than three layouts, and this falls straight out of that:
+       **avatar-first** never covers the captions, so speech always autostarts; road mode always covers
+       them, so it never does; the standard mode covers them exactly while the graph holds the panel. One
+       condition, no per-mode branch.
+       - Use **avatar-first** for the third mode, which is what that item calls it. "Avatar-only" is the
+         same thing said differently, and two names for one mode is how a vocabulary forks.
      - **What to do about `Ctrl+S` under the graph is open, and one candidate needs no new machinery:**
        let the avatar take the panel back while speech is playing with subtitles on. "Speech started" is a
        cause independent of what the panel currently shows, so it does not touch the deadlock this item
