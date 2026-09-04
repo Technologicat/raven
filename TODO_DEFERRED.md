@@ -2773,43 +2773,66 @@ The server animator is not going away — it remains indefinitely useful, especi
 
 No action until the user decides whether to pursue the clean-room path. Discovered during speech-extract-to-common discussion (2026-04-17).
 
-## Untested but test-worthy modules in `raven.common`
+## Modules worth testing that are not app entry points
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-04-17*
+*Cluster: test coverage · Cost: L · Gate: none · Filed: 2026-04-17, rescoped from measurement 2026-09-04*
 
-Cross-referencing `raven/common/**/*.py` against existing `tests/` dirs, the following have non-trivial algorithmic content but no tests:
+**Measured 2026-09-04**, over the whole local suite — the `ml` and `gui` groups included, which CI cannot
+run:
 
-- `raven/common/bgtask.py` — background task queue / lifecycle primitives. Pure orchestration; testable with fake tasks.
-- `raven/common/gui/layout_math.py` — coordinate / packing math for DPG layouts. Pure functions despite living under `gui/`; testable the same way `viewport_math` and the xdotwidget math modules are.
-- `raven/common/hfutil.py` — HuggingFace model installer. Side-effectful but the path-computation / repo-name-parsing parts are testable with tmpdir + monkeypatched `snapshot_download`.
-- `raven/common/deviceinfo.py` — GPU detection, dual-GPU ordering. Small surface area; the logic that matters (device counting, visibility filtering, user-facing string formatting) can be tested with a monkeypatched `torch.cuda`.
+| run | coverage |
+|---|---|
+| CI's shape (`-m "not ml"`, no GUI) | 51% in CI, 54% locally |
+| plus the `ml` group | 57% |
+| plus the `gui` group | 57% |
 
-The following are untested, and were long assumed untestable (the "test the algorithm layer, not GUI code"
-principle):
+Two things fall out of that and are worth keeping whatever happens to this item:
 
-- `raven/common/audio/{player,recorder}.py` — audio hardware I/O. Genuinely hardware-bound; leave.
-- `raven/common/gui/{fontsetup,helpcard,messagebox,utils,vumeter,widgetfinder}.py` — DPG glue.
-- `raven/common/gui/xdotwidget/{widget,renderer,highlight,constants}.py` — rendering / DPG-bound.
+- **The `gui` group buys no coverage at all** — fourteen more tests, no measurable change. It asserts
+  behaviour under a mapped window on code the headless tests already execute. So `--run-gui` is a
+  correctness instrument, never a coverage lever.
+- **The `ml` group is worth three points**, and the CI↔local gap is three more and separate: optional
+  dependencies let locally-importable modules run at all rather than counting as zero.
 
-**That blanket exclusion is now known to be too broad** (2026-07-30). DPG runs headlessly enough to test:
-`create_context()` + `create_viewport()` + `setup_dearpygui()`, *without* `show_viewport()`, gives real
-widgets, real themes and a steppable animator with no window mapped and no focus taken — so a test can drive
-actual DPG state rather than mocks. `raven/common/gui/tests/test_animation.py` is the first case
-(`WidgetFlash`'s restore contract and its ghost/reified de-duplication), guarded by
-`importorskip("dearpygui")` so it runs locally and skips in CI, which installs no GUI toolkit. Technique
-recorded in `dpg-notes.md`.
+12,931 statements are missed, and **two thirds sit in fourteen files**. The app entry points among them —
+`avatar/settings_editor/app.py`, `cherrypick/app.py`, `avatar/pose_editor/app.py`, `server/app.py`,
+`xdot_viewer/app.py`, `conference_timer/app.py`, all at 0% — **are deliberately out of scope** (Juha,
+2026-09-04): an `app.py` parses its command line at module scope and cannot be imported under pytest, which
+is right for an entry point and fatal for a test.
 
-So the list above is a list of *candidates*, not exclusions. What to select for is behavior a human cannot
-reliably eyeball: state machines, restore-what-you-borrowed contracts, teardown ordering, anything with a
-lock. What still does not pay is appearance — whether a layout looks right is a screenshot's job, not an
-assertion's.
+What is left is worth covering where reasonable, largest first:
 
-Worth a pass in that spirit over `messagebox` (modal state and the `split_frame` dance), `widgetfinder`, and
-`vumeter`'s level math.
+| file | missed | covered |
+|---|---|---|
+| `librarian/chat_controller.py` | 1544 | 12% |
+| `cherrypick/imageview.py` | 590 | 10% |
+| `visualizer/info_panel.py` | 514 | 32% |
+| `papers/pdf2bib.py` | 440 | 0% |
+| `client/avatar_renderer.py` | 372 | 9% |
+| `client/avatar_controller.py` | 303 | 21% |
+| `librarian/hybridir.py` | 208 | 69% |
+| `vendor/DearPyGui_Markdown/text_entities.py` | 206 | 33% |
 
-Priority if picking one up: `bgtask` (most likely to harbour concurrency bugs; test-time cost is low), then `layout_math` (easy win), then `hfutil`/`deviceinfo` (requires monkeypatching but small).
+**`pdf2bib` is the odd one out and the obvious first pick**: a headless CLI tool at 0%, with nothing
+structural in the way — unlike the rest, it needs no DPG context and no widget.
 
-Discovered during speech-extract-to-common discussion (2026-04-17).
+**`chat_controller` is the largest by a distance** and is not an entry point, so its 12% is a real gap
+rather than a structural one. It is also where the extract-then-test move keeps paying: every recent
+addition there — `format_message_metadata_line`, `format_excerpt_notice`, `_clipboard_text`, `_export_text`
+— was pulled out of a widget builder precisely so it could be asserted, and each is covered.
+
+Still uncovered from this item's original 2026-04-17 list, which has otherwise been worked off (`bgtask`,
+`layout_math`, `deviceinfo`, `messagebox`, `utils`, `fontsetup`, `helpcard`, `vumeter` all have tests now):
+
+- `raven/common/hfutil.py` — HuggingFace model installer. The path computation and repo-name parsing are
+  testable with a tmpdir and a monkeypatched `snapshot_download`.
+- `raven/common/gui/widgetfinder.py`.
+- `raven/common/audio/{player,recorder}.py` stay excluded: genuinely hardware-bound.
+
+**What to select for**, which is the durable half of this item: behaviour a human cannot reliably eyeball —
+state machines, restore-what-you-borrowed contracts, teardown ordering, anything with a lock. What does not
+pay is appearance; whether a layout looks right is a screenshot's job, not an assertion's. That DPG runs
+headlessly enough to test is no longer news and is recorded in `dpg-notes.md`.
 
 ## MPS (Apple Silicon) device synchronization
 
