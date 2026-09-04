@@ -1330,6 +1330,19 @@ list is a judgement about how the picture reads, and those are decided in front 
        `test_a_ring_at_the_edge_of_the_graph_is_still_kept_whole` zooms in repeatedly on the last sibling
        of a level, applying the graph clamp between presses, and stops asking once the box is too big for
        the view to hold whole.
+   - **Node labels are stripped of Markdown** (Juha, 2026-09-04, spotting `**` drawn as two asterisks in a
+     box). Wiring rather than work: the subtitler already strips the same text with `strip_markdown`, for
+     the same reason — both draw plain glyphs and render no formatting — so the graph became its second
+     consumer. Two things came with it: `strip-markdown` had to join `requirements-ci.txt`, since
+     `chatgraph.py` imports it at module scope and `test_chatgraph.py` could not otherwise be collected;
+     and a message that is *only* syntax now comes out empty, which falls through to the existing
+     empty-message handling rather than drawing three asterisks.
+     - **`_wrap` already collapses whitespace**, so the leading newline `strip_markdown` puts in front of
+       a bullet list needs no separate trim. Checked rather than assumed — it would have opened a
+       two-line label with a blank line.
+     - The link test needed a *short* URL. A long one wraps across two lines, so the host name never
+       appears contiguously in the drawn text whether it was stripped or not — the assertion passed
+       against unstripped code, for a reason it was not about.
      - `XDotWidget` grew the `anchor_node` half of a pair it half-had: `pan_to_point` and `pan_to_node`
        existed, `zoom_in`/`zoom_out`/`set_zoom` took no anchor at all. The viewport's `zoom_to` is the
        absolute counterpart of `zoom_by`, and `zoom_by` is now written in terms of it.

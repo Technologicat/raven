@@ -47,6 +47,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
+import strip_markdown
+
 from ..common.gui.xdotwidget import constants as xdotconstants
 from ..common.gui.xdotwidget import graph as xdotgraph
 from ..common.gui.xdotwidget import renderer as xdotrenderer
@@ -685,6 +687,20 @@ def _arrowhead_points(tip: xdotconstants.Point, tail: xdotconstants.Point,
             (base[0] + halfwidth * uy, base[1] - halfwidth * ux)]
 
 
+def _plain(text: str) -> str:
+    """Return `text` with its Markdown syntax removed, for a label that renders none of it.
+
+    A box draws its text as plain glyphs, so `**bold**` arrives as four asterisks and a word — the marks
+    cost characters in a label already cut to about forty of them, and say nothing to a reader who cannot
+    see what they were meant to do.
+
+    Empty where the message was nothing but syntax. That is the honest answer and it is handled downstream
+    the way any other empty message is, so a box whose whole content was a horizontal rule reads as empty
+    rather than as three asterisks.
+    """
+    return strip_markdown.strip_markdown(text) or ""
+
+
 def _wrap(text: str, width: int, max_lines: int) -> List[str]:
     """Fold `text` into at most `max_lines` lines of about `width` characters, marking anything cut.
 
@@ -772,7 +788,7 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
         return "?", ["[missing]"], None
     speaker = persona or _ROLE_CAPTIONS.get(role, (role or "?").upper())
     payload = _payload_of(datastore, node_id)
-    lines = _wrap(text, width, max_lines)
+    lines = _wrap(_plain(text), width, max_lines)
     tool_calls = (payload.get("message") or {}).get("tool_calls") or ()
 
     # A turn that asked for tools ends this line with `[tool call]`, and the room for it is reserved

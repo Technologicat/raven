@@ -277,6 +277,58 @@ class TestPreview:
 # Who said it
 # ---------------------------------------------------------------------------
 
+class TestMarkdownInLabels:
+    """A box draws plain glyphs, so Markdown syntax arrives as the characters it is written with.
+
+    The chat log renders it and the subtitler strips it; this view is the third consumer of the same text
+    and belongs with the second. The marks are not merely ugly here — a label is cut to about forty
+    characters, so every asterisk is spent instead of a letter.
+    """
+
+    def _label_of(self, text: str) -> str:
+        forest = Forest()
+        system = forest.create_node(payload("system", "the card"), parent_id=None)
+        reply = forest.create_node(payload("assistant", text), parent_id=system)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        node = built.graph.get_node_by_name(reply)
+        drawn = [s.t for s in node.shapes if isinstance(s, xdotgraph.TextShape)]
+        return " ".join(drawn)
+
+    def test_emphasis_marks_do_not_reach_the_label(self):
+        drawn = self._label_of("**Bold** open and *emphasis* after")
+        assert "Bold open" in drawn
+        assert "*" not in drawn
+
+    def test_a_heading_keeps_its_words_and_loses_its_hashes(self):
+        drawn = self._label_of("## Findings\n\nThe run completed.")
+        assert "Findings" in drawn
+        assert "#" not in drawn
+
+    def test_a_link_keeps_its_text_and_loses_its_target(self):
+        # The URL is the part a label can least afford, and the part a reader of a box can do nothing
+        # with -- the widget opens a node's URL on right-click, which is a different thing.
+        #
+        # A *short* URL on purpose. A long one is wrapped across two lines, and then the host name never
+        # appears contiguously in the drawn text whether it was stripped or not -- which is a test that
+        # passes for a reason it is not about.
+        drawn = self._label_of("See [the paper](http://x.io) now")
+        assert "the paper" in drawn
+        assert "http" not in drawn
+        assert "[" not in drawn
+
+    def test_plain_text_is_left_exactly_alone(self):
+        # The control: a stripper that returned something else entirely would satisfy every assertion
+        # above, all of which are about what is *absent*.
+        drawn = self._label_of("No markup here at all")
+        assert "No markup here at all" in drawn
+
+    def test_a_message_that_is_only_syntax_reads_as_empty(self):
+        # Falls through to the same treatment as any other message with no prose, rather than drawing
+        # three asterisks. `_plain` returning empty is what makes that happen, and it is the honest answer.
+        drawn = self._label_of("***")
+        assert "*" not in drawn
+
+
 class TestAMessageWithNoText:
     """Three ways a message ends up with no prose, and they are three different things.
 

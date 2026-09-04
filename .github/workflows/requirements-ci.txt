@@ -43,6 +43,9 @@ mistletoe==1.6.0
 # overlay's QR matrix, and `test_qroverlay.py` exercises that without a window.
 segno==1.6.6
 simpleeval==1.0.7  # librarian.llmtools, the `calculate` tool; `test_llmtools.py` exercises it
+# `librarian.chatgraph` strips Markdown out of a node's label, a box drawing plain glyphs and no formatting.
+# Imported at module scope there, so `test_chatgraph.py` cannot even be collected without it.
+strip-markdown==1.3
 filelock==3.32.3  # common.datastorelock; keeps two frontends off one chat datastore
 # `librarian.gguftokenizer` builds a tokenizer out of a GGUF. Its tests write a small one and read it back,
 # so they need the pair — and that is the point of having them: it turns a construction verified by hand
