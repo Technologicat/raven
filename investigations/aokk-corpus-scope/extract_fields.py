@@ -42,6 +42,7 @@ import json
 import logging
 import pathlib
 import random
+import re
 import sys
 
 from unpythonic import timer
@@ -140,6 +141,27 @@ def instrument_fingerprint() -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:8]
 
 
+def quote_bare_vocabulary(reply: str) -> str:
+    """Put quotes back on a vocabulary word the model emitted as a bareword.
+
+    `"human_learning": unclear` is not JSON, and the whole batch fails to parse over it — ten records
+    lost because one field in one of them came back unquoted. The schema invites it: that field's three
+    values are `true`, `false` and `"unclear"`, so two of them are JSON literals and the third is a
+    string, and generalising from the two to the third is the obvious thing to do.
+
+    Repairing it here is safe in a way a general bareword repair would not be, because every value this
+    touches comes from a closed set: a bare `unclear` or `school` in this reply can only be the token,
+    since nothing else in the schema is unquoted except `true`, `false` and the numbers.
+
+    The better fix is to stop mixing the two kinds — three quoted strings, or a nullable boolean — but
+    that is a change to the prompt, and so to the instrument, which would discard a run in progress to
+    buy nothing this does not already buy.
+    """
+    tokens = sorted(set(POPULATIONS) | set(LEVELS) | {"unclear"}, key=len, reverse=True)
+    pattern = r':\s*(' + "|".join(re.escape(t) for t in tokens) + r')\s*(?=[,}])'
+    return re.sub(pattern, lambda m: f': "{m.group(1)}"', reply)
+
+
 def format_record(index: int, record: env) -> str:
     """One record as the extractor sees it. Same shape pass 2 of the judge uses, minus the verdict."""
     venue = f"Published in: {record.venue}\n" if record.venue else ""
@@ -161,7 +183,7 @@ def extract_batch(llm_settings: env, batch: list[env]) -> tuple[dict[int, dict],
                               INSTRUCTIONS.format(populations=" / ".join(POPULATIONS),
                                                   levels=" / ".join(LEVELS),
                                                   items=items))
-    answers = agent.parse_json_reply(record.reply or "")
+    answers = agent.parse_json_reply(quote_bare_vocabulary(record.reply or ""))
     if not isinstance(answers, list):
         raise ValueError(f"expected a JSON array, got {type(answers).__name__}")
     out = {}
