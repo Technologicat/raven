@@ -715,6 +715,93 @@ class TestToolRounds:
         assert built._cursor_name == ids["small_result"], "the cursor moved off a box that is still there"
 
 
+class TestKeyHints:
+    """The toolbar promises keys the button itself does not need: a button is clickable whenever it is on
+    screen, and its key fires only while this panel holds the keyboard. So a caption naming one carries
+    the way in, exactly while there is a way in to describe.
+    """
+
+    # Asserted through `_key_hint_text` rather than by reading the tooltips back. `Tooltip.text` is
+    # applied by a sweeper over the following frames, and this module renders none — so a read here
+    # answers with what was on screen before the assignment, and a test built on it would pass or fail
+    # for reasons having nothing to do with the hint.
+
+    def test_a_caption_naming_a_key_says_how_to_make_it_work(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built.has_keyboard = False
+        assert built._key_hint_tooltips, "no toolbar caption names a key, so this checks nothing"
+        assert "press Tab" in built._key_hint_text("Zoom to fit [F]")
+
+    def test_the_way_in_goes_away_once_you_are_in(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built.has_keyboard = True
+        assert built._key_hint_text("Zoom to fit [F]") == "Zoom to fit [F]", \
+            "the panel holds the keyboard and is still explaining how to give it"
+
+    def test_the_caption_survives_the_hint_going_on_and_off(self, panel):
+        # The caption is held separately from the tooltip precisely so that repeated passes cannot eat it.
+        # Reading it back off `Tooltip.text` — which lags by frames — is what would.
+        built, forest, app_state, ids, calls = panel
+        captions = [caption for _tip, caption in built._key_hint_tooltips]
+        for _ in range(3):
+            built.has_keyboard = True
+            built.has_keyboard = False
+        assert [caption for _tip, caption in built._key_hint_tooltips] == captions
+
+    def test_only_a_caption_naming_a_key_carries_the_hint(self, panel):
+        # The control. Two buttons promise nothing about the keyboard — the dark-mode toggle and the
+        # branch switch, whose caption names a *click* — and telling their reader about Tab would answer a
+        # question they did not ask. The registry is built by sniffing the caption for a bracket, so this
+        # is really asking whether that sniff is right.
+        built, forest, app_state, ids, calls = panel
+        assert all("[" in caption for _tip, caption in built._key_hint_tooltips), \
+            "a caption with no key in it was given the hint"
+        assert len(built._key_hint_tooltips) < len(dpg.get_item_children(built._toolbar_group, 1)), \
+            "every button got the hint, so the sniff is not excluding anything"
+
+
+class TestClickToFocus:
+    """Clicking a pane is how a reader moves the keyboard to it everywhere else in the app."""
+
+    def test_a_click_in_the_panel_asks_for_the_keyboard(self, panel, monkeypatch):
+        built, forest, app_state, ids, calls = panel
+        asked = []
+        built._on_focus_requested = lambda: asked.append(True)
+        monkeypatch.setattr(guiutils, "is_mouse_inside_widget", lambda widget: True)
+        built._on_click_anywhere(None, None)
+        assert len(asked) == 1
+
+    def test_a_click_elsewhere_is_not_ours(self, panel, monkeypatch):
+        # Mouse handlers are global, so this fires for every left click in the app. Without the test it
+        # would take the keyboard on a click into the composer, which is the exact opposite of the point.
+        built, forest, app_state, ids, calls = panel
+        asked = []
+        built._on_focus_requested = lambda: asked.append(True)
+        monkeypatch.setattr(guiutils, "is_mouse_inside_widget", lambda widget: False)
+        built._on_click_anywhere(None, None)
+        assert asked == []
+
+    def test_a_click_through_a_modal_is_not_ours_either(self, panel, monkeypatch):
+        # The click that dismisses a dialog must not also land on what the dialog was covering — the same
+        # reason the widget is given this predicate.
+        built, forest, app_state, ids, calls = panel
+        asked = []
+        built._on_focus_requested = lambda: asked.append(True)
+        built._input_blocked = lambda: True
+        monkeypatch.setattr(guiutils, "is_mouse_inside_widget", lambda widget: True)
+        built._on_click_anywhere(None, None)
+        assert asked == []
+
+    def test_a_hidden_panel_does_not_ask(self, panel, monkeypatch):
+        built, forest, app_state, ids, calls = panel
+        asked = []
+        built._on_focus_requested = lambda: asked.append(True)
+        built.hide()
+        monkeypatch.setattr(guiutils, "is_mouse_inside_widget", lambda widget: True)
+        built._on_click_anywhere(None, None)
+        assert asked == []
+
+
 # ---------------------------------------------------------------------------
 # The keyboard
 # ---------------------------------------------------------------------------

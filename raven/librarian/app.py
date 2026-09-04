@@ -1518,6 +1518,9 @@ with timer() as tim:
                     on_preview=lambda node_id: chat_controller.view.jump_to_node(node_id),
                     on_commit=lambda node_id: switch_to_chat_node(node_id),
                     input_blocked=lambda: is_any_modal_window_visible(),
+                    # Through a lambda, as `input_blocked` above is and for the same reason: both are
+                    # defined further down this module than the panel is built.
+                    on_focus_requested=lambda: _give_keyboard_to_graph(),
                     show=False)
 
                 with dpg.child_window(tag="mode_toggle_controls",
@@ -1908,6 +1911,15 @@ def update_animations():
     # finishes on a background task, which raises nothing this module hooks. The call is a comparison
     # unless the answer actually changed.
     _refresh_send_gate()
+    # Who holds the keyboard is derived everywhere except one bit -- whether the graph has it -- which DPG
+    # cannot answer and so is stored. That bit goes stale the moment the composer is entered by a route
+    # that does not pass through `_cycle_keyboard_home`: a click on the field, or Ctrl+Space. Polled for
+    # the reason its neighbours are, neither route raising anything this module hooks.
+    #
+    # Stale, it showed as two panes wearing the blue at once, which is not a state the design has: the
+    # composer owns the caret, and the graph's bit is meaningful only while it does not.
+    if chat_graph_panel.has_keyboard and dpg.is_item_active("chat_field"):  # tag
+        chat_graph_panel.has_keyboard = False
 
 # --------------------------------------------------------------------------------
 # Built-in help window
@@ -2158,6 +2170,21 @@ def is_any_modal_window_visible() -> bool:
             messagebox.is_visible())
 
 combobox_choice_map = None   # DPG tag or ID -> (choice_strings, callback)
+def _give_keyboard_to_graph() -> None:
+    """Send the keyboard to the chat graph. What a click anywhere in it asks for, and where Tab lands.
+
+    Two halves, and doing one without the other is the bug this exists to avoid: the graph is told it has
+    the keys, *and* the composer is made to give up the caret. Leaving the composer active would light two
+    panes blue at once and leave the typist's keys going to a pane they are not looking at.
+
+    Parking on a button is what deactivates an ImGui text field from outside, and a focused button is safe
+    -- DPG leaves ImGui's keyboard-navigation activation off, so it ignores Space and Enter rather than
+    pressing itself.
+    """
+    dpg.focus_item("chat_send_button")  # tag
+    chat_graph_panel.has_keyboard = True
+
+
 def _cycle_keyboard_home(backwards: bool = False) -> None:
     """Move the keyboard to the next pane, or the previous one. What Tab and Shift+Tab do.
 
@@ -2195,9 +2222,12 @@ def _cycle_keyboard_home(backwards: bool = False) -> None:
     # navigation activation off, so a focused button ignores Space and Enter rather than pressing itself.
     if target == "composer":
         dpg.focus_item("chat_field")  # tag
+        chat_graph_panel.has_keyboard = False
+    elif target == "graph":
+        _give_keyboard_to_graph()
     else:
         dpg.focus_item("chat_send_button")  # tag  # deactivate the composer's ImGui edit buffer
-    chat_graph_panel.has_keyboard = (target == "graph")
+        chat_graph_panel.has_keyboard = False
 
 
 def librarian_hotkeys_callback(sender, app_data):
@@ -2276,7 +2306,12 @@ def librarian_hotkeys_callback(sender, app_data):
     # modal — the reader can be typing in the composer with the graph on screen — so "is it open?" is the
     # wrong question and "does it hold the keyboard?" is the right one. Which makes it a branch here, in
     # the chain that already answers that question for every other pane.
-    elif (chat_graph_panel.has_keyboard
+    # The composer's own guard is far below, and would be reached too late: the graph claims `Enter`, the
+    # bare arrows and several letters, so a stale bit -- see `update_animations` -- meant a typist's Enter
+    # switching branch instead of sending. Tested here rather than relied upon to have been cleared,
+    # because a click and a keypress can land in one frame and the poll runs between frames.
+    elif (not dpg.is_item_active("chat_field")  # tag
+          and chat_graph_panel.has_keyboard
           and chat_graph_panel.handle_key(key, ctrl=ctrl_pressed, shift=shift_pressed, alt=alt_pressed)):
         pass
 

@@ -33,6 +33,7 @@ from unpythonic import env, sym
 from ..common import navhistory
 from ..common.gui import animation as gui_animation
 from ..common.gui import keyboardmark
+from ..common.gui import tooltip as guitooltip
 from ..common.gui import utils as guiutils
 from ..common.gui.xdotwidget import graph as xdotgraph
 from ..common.gui.xdotwidget.widget import XDotWidget
@@ -55,6 +56,13 @@ _DEPTH_EXPANSION_FACTOR = 2
 _PAN_AMOUNT = 10
 
 _TOOLBAR_H = 34  # pixels, the row of view controls above the graph
+
+# What a tooltip adds when its key would not fire yet, and the separator that lets the caption be recovered
+# from the composed text -- so the hint can go on and come off repeatedly without the caption drifting.
+# A blank line between, because the two are addressed to different questions: what the button does, and
+# what is stopping the key.
+_KEY_HINT_SEPARATOR = "\n\n"
+_KEY_HINT = "The keys work while the graph has the keyboard.\nClick the graph, or press Tab, to send it here."
 
 # Font atlas sizes for graph labels. The renderer picks whichever is closest to the size it is drawing at,
 # so this is a ladder rather than a choice: a label is legible at one zoom and unreadable at the next, and
@@ -85,6 +93,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                  on_preview: Optional[Callable[[str], None]] = None,
                  on_commit: Optional[Callable[[str], None]] = None,
                  input_blocked: Optional[Callable[[], bool]] = None,
+                 on_focus_requested: Optional[Callable[[], None]] = None,
                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
                  dark_mode: bool = True,
                  show: bool = False):
@@ -105,7 +114,13 @@ class DPGChatGraphPanel(gui_animation.Animation):
                      does the moving; the panel sees the result the way it sees any other change.
         `input_blocked`: Predicate answering "is something on top of me?", passed to the widget. Its mouse
                          handlers are global, so without this the click that dismisses a dialog also lands
-                         on the graph behind it.
+                         on the graph behind it. This panel's own click handler honours it too, for the
+                         same reason.
+        `on_focus_requested`: Called when a click lands anywhere in the panel, asking the caller to send
+                              the keyboard here. The panel cannot do it alone: taking the keys means also
+                              taking the caret *away* from the composer, and where to park it is the app's
+                              knowledge rather than this widget's. `None` leaves clicks changing nothing,
+                              which is what a caller with no keyboard cycle wants.
         `graph_text_fonts`: `(size, font_id)` pairs for graph labels; the renderer picks the closest to the
                             size it is drawing at. `None` (the default) loads a ladder of sizes into
                             `themes_and_fonts` and uses that, since every caller wants the same one.
@@ -121,6 +136,16 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self.themes_and_fonts = themes_and_fonts
         self._on_preview = on_preview
         self._on_commit = on_commit
+        self._on_focus_requested = on_focus_requested
+        self._input_blocked = input_blocked
+        # `(tooltip, caption)` for each toolbar button whose caption names a key, so the hint about
+        # reaching the keyboard can be put on and taken off them together. Populated by `_build_toolbar`.
+        #
+        # The caption is kept here rather than read back off the tooltip, because `Tooltip.text` is
+        # asynchronous: the setter queues, a sweeper applies it over the next frames, and the getter
+        # answers with what is *on screen*. Recovering the caption from that read would compose the next
+        # text onto a value that may still be the previous one.
+        self._key_hint_tooltips = []
 
         self._lock = threading.RLock()
         self._chat_graph: Optional[chatgraph.ChatGraph] = None
@@ -180,6 +205,15 @@ class DPGChatGraphPanel(gui_animation.Animation):
                                                 kind=keyboardmark.MarkKind.PANEL,
                                                 padding=(0, 0))
 
+        # A click anywhere in the panel asks for the keyboard, which is what clicking a pane means
+        # everywhere else. The widget's own `on_click` cannot serve: it fires only when the click *hits*
+        # something, so the empty background -- the one place to click when you want the pane and not a
+        # box -- would be the one place that did not work.
+        self._handler_registry = dpg.add_handler_registry()
+        dpg.add_mouse_click_handler(button=dpg.mvMouseButton_Left,
+                                    callback=self._on_click_anywhere,
+                                    parent=self._handler_registry)
+
         self._widget = XDotWidget(parent=self._canvas,
                                   width=self._graph_w(width),
                                   height=self._graph_h(height),
@@ -229,11 +263,21 @@ class DPGChatGraphPanel(gui_animation.Animation):
                     else self.themes_and_fonts.icon_font_regular)
             dpg.bind_item_font(tag, font)  # tag
             dpg.bind_item_theme(tag, self.themes_and_fonts.disablable_widget_theme)  # tag
-            # A caption that never changes, so a plain DPG tooltip rather than the self-sizing one.
-            with dpg.tooltip(tag):  # tag
-                dpg.add_text(caption)
+            # A caption naming a key makes a promise the button itself does not keep: the button is
+            # clickable whenever it is on screen, and the key fires only while this panel holds the
+            # keyboard. So those captions gain a second line saying how to make the promise true, and lose
+            # it again once it is -- which is `Tooltip`'s business rather than `dpg.add_tooltip`'s, the
+            # *number of lines* being exactly what moves an autosize window's edges.
+            #
+            # Square brackets are how this toolbar names a key, so the caption is its own record of
+            # whether it makes the promise. A flag beside it would be the same fact written twice.
+            if "[" in caption:
+                self._key_hint_tooltips.append((guitooltip.Tooltip(tag, caption), caption))
+            else:
+                with dpg.tooltip(tag):  # tag
+                    dpg.add_text(caption)
 
-        with dpg.group(horizontal=True, parent=self._container):
+        with dpg.group(horizontal=True, parent=self._container) as self._toolbar_group:
             add_button(fa.ICON_SQUARE, lambda: self._widget.zoom_to_fit(),
                        "Zoom to fit [F]", f"chat_graph_fit_button_{self.gui_uuid}",  # tag
                        solid=False)
@@ -384,6 +428,29 @@ class DPGChatGraphPanel(gui_animation.Animation):
         """
         self._has_keyboard = bool(value) and self._is_shown
         self._keyboard_mark.lit = self._has_keyboard
+        self._update_key_hints()
+
+    def _key_hint_text(self, caption: str) -> str:
+        """Return what a key-naming tooltip should say as things stand.
+
+        `caption`: The button's own caption, as written in the toolbar.
+
+        The caption alone once the keys work, and the caption plus the way in until they do.
+        """
+        if self._has_keyboard:
+            return caption
+        return f"{caption}{_KEY_HINT_SEPARATOR}{_KEY_HINT}"
+
+    def _update_key_hints(self) -> None:
+        """Add the way-in line to every tooltip that names a key, or take it away once the keys work.
+
+        The blue border already says where the keyboard is; this says what to do about it, and only while
+        there is something to do. A caption reading "Zoom to fit [F]" is a promise the button does not keep
+        on its own -- clickable always, and the key live only from here -- so it carries the condition
+        exactly when the condition is unmet.
+        """
+        for tip, caption in self._key_hint_tooltips:
+            tip.text = self._key_hint_text(caption)
 
     has_keyboard = property(fget=_get_has_keyboard, fset=_set_has_keyboard,
                             doc="Whether the keys are going to this panel. Set by the app, which owns the "
@@ -702,6 +769,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._keyboard_mark.detach()
         self._widget.destroy()
         with guiutils.nonexistent_ok():
+            dpg.delete_item(self._handler_registry)
+        with guiutils.nonexistent_ok():
             dpg.delete_item(self._container)
 
     # ------------------------------------------------------------------
@@ -727,6 +796,21 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
     # ------------------------------------------------------------------
     # Clicks
+
+    def _on_click_anywhere(self, sender, app_data) -> None:
+        """Ask for the keyboard when a click lands in this panel, wherever in it.
+
+        Mouse handlers are global in DPG, so this fires for every left click in the app and has to decide
+        for itself whether the click was ours: inside the canvas, with the panel shown and nothing on top
+        of it. The `input_blocked` predicate is the same one the widget is given, and for the same reason
+        -- the click that dismisses a modal must not also land on what the modal was covering.
+        """
+        if not self._is_shown or self._on_focus_requested is None:
+            return
+        if self._input_blocked is not None and self._input_blocked():
+            return
+        if guiutils.is_mouse_inside_widget(self._canvas):
+            self._on_focus_requested()
 
     def _on_click(self, element, button: int) -> None:
         """Handle a click on the graph.
