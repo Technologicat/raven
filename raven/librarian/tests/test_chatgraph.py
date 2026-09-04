@@ -482,6 +482,42 @@ class TestSpeaker:
             texts = self._texts(built, gap.name)
             assert len(texts) == 1, f"a gap box drew {len(texts)} texts; it should draw only its count"
 
+    def _tool_result(self, function_name):
+        """A drawn tool result, named or not. Returns `(forest, the result node, HEAD)`.
+
+        One call, so the round is below the folding threshold and its result is drawn — a folded one has
+        no box and therefore no speaker line to check.
+        """
+        forest = Forest()
+        system = forest.create_node(payload("system", "the card"), parent_id=None)
+        asked = forest.create_node(payload("user", "what is the time"), parent_id=system)
+        calls = [{"id": "c1", "function": {"name": "get_current_time", "arguments": "{}"}}]
+        asking = forest.create_node(payload("assistant", "let me look", tool_calls=calls), parent_id=asked)
+        result = forest.create_node(payload("tool", "12:00"), parent_id=asking)
+        if function_name is not None:
+            forest.get_payload(result)["generation_metadata"] = {"function_name": function_name}
+        reply = forest.create_node(payload("assistant", "it is noon"), parent_id=result)
+        return forest, result, reply
+
+    def test_a_tool_result_says_which_tool_answered(self):
+        # The cogs say one ran; the name says which. A turn that called three tools is otherwise three
+        # boxes captioned identically, and telling them apart is the whole reason to draw them.
+        forest, result, reply = self._tool_result("websearch")
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert result in built.refs, "the round folded, so there is no result box to caption"
+        assert "TOOL [websearch]" in self._texts(built, result)
+
+    def test_a_tool_result_with_no_recorded_tool_says_only_TOOL(self):
+        # The control, and a real case rather than a hypothetical: a call that failed before it had a
+        # function to name records none, and so does anything written before the field existed. A caption
+        # reading "TOOL [None]" would be worse than the bare one.
+        forest, result, reply = self._tool_result(None)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        texts = self._texts(built, result)
+        assert "TOOL" in texts
+        assert not any(text.startswith("TOOL [") for text in texts), \
+            "something was bracketed onto the caption with no tool name to put there"
+
     def test_the_label_cut_follows_the_node_width_and_the_font(self):
         # Three numbers that have to agree. Derived rather than written down, so that changing any one of
         # them cannot leave a label that overflows its box or stops short of it.

@@ -7,6 +7,7 @@ that controls chatting with the AI.
 # TODO: check if we need to shuffle the abstraction levels around - e.g. if there are many references to `self.parent_view.chat_controller.something`, does `something` really belong to the controller level?
 
 __all__ = ["format_chat_message_for_clipboard",
+           "format_message_metadata_line",
            "format_generation_stats",
            "DPGChatMessage",
            "DPGCompleteChatMessage",
@@ -240,6 +241,28 @@ def format_chat_message_for_clipboard(message_number: int | None,
     message_text = chatutil.remove_persona_from_start_of_line(persona=persona,
                                                               text=text)
     return f"{message_heading}{message_text}"
+
+def format_message_metadata_line(node_payload: dict, role: str, revision: int) -> str:
+    """Format the small grey line above a message: when it was written, which revision, and for a tool
+    result, which tool answered.
+
+    `node_payload`: The chat node payload, at the revision on screen.
+    `role`: The message's role. Only `"tool"` has a tool name to add; every other role has none.
+    `revision`: Which stored revision of the payload is being shown.
+
+    The tool name is spelled as the chat graph spells it in a box's speaker line, brackets included, so
+    the two views name one call one way. It is absent on a call that failed before it had a function to
+    name, and on anything written before the field existed; the line then carries what it always did.
+
+    Returns the formatted line.
+    """
+    line = f"{node_payload['general_metadata']['datetime']} R{revision}"
+    maybe_function_name = ((node_payload.get("generation_metadata") or {}).get("function_name")
+                           if role == "tool" else None)
+    if maybe_function_name:
+        line = f"{line} [{maybe_function_name}]"
+    return line
+
 
 @memoize
 def format_generation_stats(*, n_tokens: int, dt: float, exact: bool = True, label: str | None = None) -> str:
@@ -637,11 +660,15 @@ class DPGChatMessage:
         # Render timestamp the revision number of the payload currently shown  TODO: later (chat editing): this needs to be switchable without regenerating the whole view
         if node_id is not None:
             node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
-            payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active payload revision!
             node_active_revision = self.parent_view.chat_controller.datastore.get_revision(node_id)
+            # The cogs icon on a tool result says one ran and not which, so a turn that called three tools
+            # is a column of identical badges; naming them is the whole of what tells them apart. Composed
+            # in a function of its own so that what the line says can be tested without building a widget.
+            #
             # Tagged so a navigation jump can flash it: it is the one widget every stored message has, at a
             # fixed place at its top, which makes it the natural "here is the message you asked for" marker.
-            dpg.add_text(f"{payload_datetime} R{node_active_revision}", color=(120, 120, 120),
+            dpg.add_text(format_message_metadata_line(node_payload, role, node_active_revision),
+                         color=(120, 120, 120),
                          tag=f"chat_message_timestamp_{self.gui_uuid}",  # tag
                          parent=text_vertical_layout_group)
 

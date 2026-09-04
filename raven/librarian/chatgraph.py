@@ -739,6 +739,16 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
     except (KeyError, TypeError):
         return "?", ["[missing]"], None
     speaker = persona or _ROLE_CAPTIONS.get(role, (role or "?").upper())
+    if role == "tool":
+        # Which tool answered, in the bracketed aside the calling message uses for its own request. A run
+        # of boxes all reading TOOL says only that the machinery ran; naming them makes the round legible
+        # without opening anything, which is most of what a reader wants from a round they did not run.
+        #
+        # Absent on a call that failed before it had a function to name, and on anything written before
+        # the field existed. The bare caption is then the honest answer.
+        function_name = (_payload_of(datastore, node_id).get("generation_metadata") or {}).get("function_name")
+        if function_name:
+            speaker = f"{speaker} [{function_name}]"
     lines = _wrap(text, width, max_lines)
     if lines:
         return speaker, lines, None

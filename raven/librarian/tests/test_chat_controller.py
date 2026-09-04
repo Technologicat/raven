@@ -93,6 +93,44 @@ class TestFormatGenerationStats:
         assert out.startswith("[Thought for 759t,")
 
 
+class TestFormatMessageMetadataLine:
+    """The small grey line above a message, and the one thing it says that the icons cannot.
+
+    A tool result's cogs badge reports that *a* tool ran. A turn calling three of them is then three
+    messages with identical badges, and the name is the whole of what separates them — so it is on the
+    line, spelled as the chat graph spells it in a box's speaker line.
+    """
+
+    def _payload(self, generation_metadata=None):
+        payload = {"general_metadata": {"datetime": "2026-09-04 07:52:48"}}
+        if generation_metadata is not None:
+            payload["generation_metadata"] = generation_metadata
+        return payload
+
+    def test_an_ordinary_message_says_when_and_which_revision(self):
+        line = chat_controller.format_message_metadata_line(self._payload(), "assistant", 1)
+        assert line == "2026-09-04 07:52:48 R1"
+
+    def test_a_tool_result_names_the_tool(self):
+        line = chat_controller.format_message_metadata_line(
+            self._payload({"function_name": "websearch"}), "tool", 1)
+        assert line == "2026-09-04 07:52:48 R1 [websearch]"
+
+    def test_a_tool_result_that_recorded_no_tool_says_only_when(self):
+        # A call that failed before it had a function to name records none, and so does anything written
+        # before the field existed. "[None]" would be worse than the bare line.
+        line = chat_controller.format_message_metadata_line(self._payload(), "tool", 1)
+        assert line == "2026-09-04 07:52:48 R1"
+
+    def test_only_a_tool_result_is_named(self):
+        # The control, and it needs a payload that *has* the field: every other role reaches this with no
+        # `function_name` to find, so a check that forgot to test the role would pass on them anyway. An
+        # assistant message carries `generation_metadata` of its own, which is where one could come from.
+        line = chat_controller.format_message_metadata_line(
+            self._payload({"function_name": "websearch"}), "assistant", 1)
+        assert line == "2026-09-04 07:52:48 R1", "a non-tool message was captioned with a tool name"
+
+
 class TestDemolishLeavesNoWidgetReference:
     """`demolish` must clear every widget reference `build` made, because the instance may be rebuilt.
 
