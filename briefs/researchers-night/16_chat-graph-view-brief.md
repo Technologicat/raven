@@ -559,10 +559,15 @@ implementation contract; where a decision reverses something above, the section 
    between.** Clicking a gap re-centres the window on the middle sibling of that gap — so the gap
    primitive *is* the jump-by-several control and no extra widgets are needed. Up to nine items at a
    level.
-   - **No ±10 buttons here**, unlike the chat log's sibling row. A gap click bisects the remaining run,
-     which beats a fixed stride on a fan of unknown width. Whether that in turn makes the chat log's ±10
-     buttons redundant is a real question and an open one — it wants empirics from this view first, and
-     nothing here should change them pre-emptively.
+   - ~~**No ±10 buttons here**, unlike the chat log's sibling row. A gap click bisects the remaining run,
+     which beats a fixed stride on a fan of unknown width.~~ **Overtaken, 2026-09-04** (Juha: "the ±10 way
+     is intended"). The keyboard took the fixed stride first — Ctrl+Shift+arrows, so that the two views of
+     one tree would not spell one verb two ways — and the button row built the same day is a second
+     surface onto those keys rather than a replacement for the gap. Both are there, and they answer
+     different questions: a gap click asks *show me the middle of what is hidden*, a stride asks *move me
+     ten*, and the bisection is still the better instrument on a fan whose width you do not know.
+   - Whether the *chat log's* ±10 buttons are redundant remains open, and is untouched by the above — it
+     wants empirics from this view first, and nothing here should change them pre-emptively.
 5. **One ordering rule everywhere: left to right is creation order.** "Recent" is expressed by where the
    *window* sits — the newest end, by default, at the session level — rather than by reversing that one
    level, which would otherwise read backwards from every other level in the same picture.
@@ -1189,10 +1194,28 @@ list is a judgement about how the picture reads, and those are decided in front 
    - **One button went in ahead of the row**, 2026-09-03: folding a tool round. It is the pointer's only
      route to a verb the tool-round work had just created — right-click being taken by the widget's
      open-URL — so it belonged with that work rather than with this row.
-   - **Still the next thing to build, as of the end of 2026-09-04.** Nothing else waits on it, and the
-     vocabulary it is a second surface onto is now settled. `_update_cursor_buttons` is where a new button
-     belongs: it is the single place answering *what can the cursor do now*, and the fold button set that
-     seam. `chat_controller._build_navigation_buttons` has the six verbs in their chat-log spelling.
+   - **Built 2026-09-04**, as a third group at the right end of the toolbar. Its own group rather than
+     mixed in, because the buttons before it act on wherever the cursor already is and these move it —
+     and appending disturbed nothing that a hand had already learnt the position of. The glyphs and their
+     order are the chat log's, the two rows being the same six verbs on the same tree; the captions say
+     *move the cursor*, which is the one thing that differs. The three left buttons live or die together,
+     and so do the three right ones: what makes any of them useful is the single fact of whether there is
+     a sibling on that side.
+     - **A counter beside them**, `3 / 12`, which the picture cannot supply. A level draws nine of a fan
+       that runs to hundreds, most of it behind gap boxes that need not be on screen together, so reading
+       a position off the picture means panning and counting (Juha, 2026-09-04). Blank while the cursor is
+       away, the steppers being disabled then — a position shown beside dead buttons would name a run
+       nothing on the toolbar acts on.
+     - **The row is disabled until the cursor is planted**, which is exactly what the keys do: Ctrl+arrows
+       with no cursor step nothing, `_step_sibling` having no anchor to start from. So the greyed row
+       states a precondition the keyboard already had and never showed.
+     - **`_update_cursor_buttons` moved into `refresh`**, from the two call sites that used to invoke it
+       after one. Most rebuilds are nobody's doing — the poll notices a reply arriving, which gives the
+       cursor's message a new sibling and so a new run to step along — and a "refresh, then update"
+       convention covers only the paths that remember it. Verified the way a negative claim has to be:
+       with the old shape restored, the poll test fails with `1 / 30 != 1 / 31` and the other nine pass.
+       It costs one datastore-lock acquisition per *rebuild* (not per frame — `refresh` runs only when
+       `_is_stale`), on a thread already taking that lock through `chatgraph.build`.
 
    ### What 2026-09-04 added around it, none of it planned
 
@@ -1530,7 +1553,9 @@ buttons answer "what can this cursor do?" in one place.
 
 **A button row for the rest of the verbs is tomorrow** (2026-09-03) — `first / prev-10 / prev-1 / next-1 /
 next-10 / last`, which the chat log has as buttons and this view has only as keys. This one button went in
-ahead of that row rather than waiting for it, being conceptually part of the tool-round work.
+ahead of that row rather than waiting for it, being conceptually part of the tool-round work. The row
+followed on 2026-09-04, as its own group at the right end of the toolbar; see *Left undone on purpose:
+buttons for the same verbs* above, which is where that work is recorded.
 
 #### What it cost, measured against the real corpus
 

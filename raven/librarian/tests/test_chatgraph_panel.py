@@ -512,6 +512,154 @@ class TestGaps:
 
 
 # ---------------------------------------------------------------------------
+# The sibling row
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def wide(dpg_context):
+    """A panel over one level of thirty siblings, plus the handles to drive its toolbar.
+
+        card -> greeting -> chat 0 ... chat 29        <- HEAD is on chat 0
+
+    Thirty because the level's window draws nine of them: a fixture narrow enough to draw whole would let
+    a stepper that only moved within the drawn part pass, and sliding the window is most of the job.
+    """
+    themes_and_fonts = dpg_context
+    forest = Forest()
+    root = forest.create_node(payload("system", "the card"), parent_id=None)
+    greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+    chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
+
+    app_state = {"HEAD": chats[0], "new_chat_HEAD": greeting}
+    calls = Calls(app_state)
+    with dpg.window() as holder:
+        built = chatgraph_panel.DPGChatGraphPanel(
+            gui_parent=holder, datastore=forest, app_state=app_state,
+            themes_and_fonts=themes_and_fonts, width=400, height=300, show=True,
+            on_commit=calls.commit)
+    built.refresh()
+
+    yield built, forest, greeting, chats, calls
+
+    built.destroy()
+    dpg.delete_item(holder)
+
+
+class TestSiblingButtons:
+    """The toolbar's second surface onto the sibling verbs: the six the chat log has as buttons, which
+    this view had only as keys.
+
+    They move the *cursor* where the chat log's move HEAD — the one difference between the two views of
+    one tree — so what is pinned here is that pressing them browses and commits nothing.
+    """
+
+    def test_the_steppers_are_dead_with_the_cursor_away(self, wide):
+        built, forest, greeting, chats, calls = wide
+        assert built._cursor_name is None, "the fixture starts with a cursor, so this proves nothing"
+        for tag in built._prev_sibling_button_tags + built._next_sibling_button_tags:
+            assert not dpg.is_item_enabled(tag), \
+                f"'{tag}' offers a step from a cursor that is nowhere"
+
+    def test_planting_the_cursor_wakes_the_steppers_that_have_somewhere_to_go(self, wide):
+        # The cursor lands on HEAD, which is the *first* of the thirty — so the two halves of the row
+        # should disagree, which is also what makes this fixture able to tell them apart.
+        built, forest, greeting, chats, calls = wide
+        built.handle_key(dpg.mvKey_Down)
+        assert built._cursor_name == chats[0]
+        assert all(not dpg.is_item_enabled(tag) for tag in built._prev_sibling_button_tags), \
+            "there is nothing to the left of the first sibling"
+        assert all(dpg.is_item_enabled(tag) for tag in built._next_sibling_button_tags), \
+            "there are twenty-nine siblings to the right and no way to reach them"
+
+    def test_the_steppers_die_again_at_the_far_end(self, wide):
+        built, forest, greeting, chats, calls = wide
+        built.handle_key(dpg.mvKey_Down)
+        press(built._next_sibling_button_tags[2])  # to the last sibling
+        assert built._cursor_name == chats[-1]
+        assert all(dpg.is_item_enabled(tag) for tag in built._prev_sibling_button_tags)
+        assert all(not dpg.is_item_enabled(tag) for tag in built._next_sibling_button_tags)
+
+    def test_the_steppers_move_the_cursor_by_their_own_stride(self, wide):
+        built, forest, greeting, chats, calls = wide
+        built.handle_key(dpg.mvKey_Down)
+        press(built._next_sibling_button_tags[0])
+        assert built._cursor_name == chats[1], "the one-step button moved by something else"
+        press(built._next_sibling_button_tags[1])
+        assert built._cursor_name == chats[11], "the ten-step button moved by something else"
+        press(built._prev_sibling_button_tags[1])
+        assert built._cursor_name == chats[1]
+        press(built._prev_sibling_button_tags[0])
+        assert built._cursor_name == chats[0]
+
+    def test_the_end_buttons_reach_the_ends(self, wide):
+        built, forest, greeting, chats, calls = wide
+        built.handle_key(dpg.mvKey_Down)
+        press(built._next_sibling_button_tags[2])
+        assert built._cursor_name == chats[-1]
+        press(built._prev_sibling_button_tags[0])
+        assert built._cursor_name == chats[0]
+
+    def test_a_stepper_reaches_what_is_not_drawn(self, wide):
+        # Same claim the keys are held to: a level's window shows nine of thirty, so a step of ten has to
+        # slide it rather than refuse.
+        built, forest, greeting, chats, calls = wide
+        built.handle_key(dpg.mvKey_Down)
+        assert chats[10] not in built._chat_graph.refs, \
+            "the fixture already draws the target, so sliding the window would prove nothing"
+        press(built._next_sibling_button_tags[1])
+        assert chats[10] in built._chat_graph.refs, "the window did not slide onto it"
+
+    def test_stepping_by_button_does_not_move_head(self, wide):
+        built, forest, greeting, chats, calls = wide
+        head_before = built.app_state["HEAD"]
+        built.handle_key(dpg.mvKey_Down)
+        press(built._next_sibling_button_tags[1])
+        press(built._next_sibling_button_tags[2])
+        assert built._cursor_name == chats[-1], "the cursor did not move, so nothing was browsed"
+        assert built.app_state["HEAD"] == head_before
+        assert calls.committed == []
+
+    def test_the_counter_says_where_in_the_run_the_cursor_is(self, wide):
+        built, forest, greeting, chats, calls = wide
+        built.handle_key(dpg.mvKey_Down)
+        assert dpg.get_value(built._sibling_counter_tag) == "1 / 30"
+        press(built._next_sibling_button_tags[1])
+        assert dpg.get_value(built._sibling_counter_tag) == "11 / 30"
+
+    def test_the_counter_is_blank_while_the_cursor_is_away(self, wide):
+        # It has to *become* blank, which is the half worth asserting: a counter that never showed
+        # anything would pass an "is it empty" check on its own.
+        built, forest, greeting, chats, calls = wide
+        built.handle_key(dpg.mvKey_Down)
+        assert dpg.get_value(built._sibling_counter_tag) != ""
+        built.handle_key(dpg.mvKey_Escape)
+        assert built._cursor_name is None
+        assert dpg.get_value(built._sibling_counter_tag) == ""
+
+    def test_a_sibling_arriving_updates_the_row_with_nobody_touching_it(self, wide):
+        """A reply arriving gives the cursor's message a new sibling, and the row has to notice.
+
+        The rebuild that draws it is the animator's, not a cursor path's, so this is the case a
+        "refresh, then update the buttons" convention at each call site would have missed.
+        """
+        built, forest, greeting, chats, calls = wide
+        built.handle_key(dpg.mvKey_Down)  # plants the cursor on HEAD, the first of the thirty
+        assert built._cursor_name == chats[0]
+        assert dpg.get_value(built._sibling_counter_tag) == "1 / 30"
+        assert all(not dpg.is_item_enabled(tag) for tag in built._prev_sibling_button_tags), \
+            "the fixture starts with the left half live, so a stale row would look correct"
+
+        forest.create_node(payload("user", "chat 30"), parent_id=greeting)
+        built.render_frame(0)  # the animator's hook, which is what notices the tree changed
+
+        assert built._cursor_name == chats[0], "nobody navigated, so the cursor should not have moved"
+        assert dpg.get_value(built._sibling_counter_tag) == "1 / 31", \
+            "the row is still describing the tree as it was before the reply arrived"
+        assert all(not dpg.is_item_enabled(tag) for tag in built._prev_sibling_button_tags), \
+            "a sibling arriving to the right woke the buttons that step left"
+
+
+# ---------------------------------------------------------------------------
 # Tool rounds
 # ---------------------------------------------------------------------------
 

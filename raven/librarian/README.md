@@ -162,6 +162,8 @@ The graph can be driven without a pointer. **Tab** moves the keyboard between th
 
 The arrow keys walk what is drawn, and one level of the graph can hold hundreds of chats with only a handful of them on screen. To go further along a level, **Ctrl+Left** and **Ctrl+Right** step between its siblings whether they are drawn or not, sliding the window to follow; **Ctrl+Shift** with either jumps ten at a time, and **Ctrl+Home** and **Ctrl+End** go to the ends. Those are the same keys the chat log uses on a message's siblings — the difference being that in the chat log they switch the conversation, while here they only move the ring.
 
+The last group in the graph's toolbar offers the same six steps to the pointer — to the first sibling, ten left, one left, one right, ten right, to the last — and the counter beside them says which sibling the ring is on, of how many at that level. That count is the one thing the picture cannot show you: most of a wide level is behind **…N more** boxes, and no two of them need be on screen together. The buttons act on the ring, so they wake when it is on a box and go quiet again when **Esc** puts it away.
+
 The ring is the same mark whether you put it there with the mouse or the keys, so the two can be mixed freely: click a box, step off it with the arrows, press Enter.
 
 

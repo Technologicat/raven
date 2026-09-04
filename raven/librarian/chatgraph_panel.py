@@ -178,6 +178,16 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._dark_mode_button_tag = f"chat_graph_dark_mode_button_{self.gui_uuid}"  # tag
         self._back_button_tag = f"chat_graph_back_button_{self.gui_uuid}"  # tag
         self._forward_button_tag = f"chat_graph_forward_button_{self.gui_uuid}"  # tag
+        # The sibling steppers, split by which end of the run they need. Three each, because what makes
+        # any of them useful is the same fact -- whether there is a sibling on that side -- so they go
+        # enabled and disabled together, exactly as the chat log's row does.
+        self._prev_sibling_button_tags = [f"chat_graph_first_sibling_button_{self.gui_uuid}",  # tag
+                                          f"chat_graph_prev10_sibling_button_{self.gui_uuid}",  # tag
+                                          f"chat_graph_prev1_sibling_button_{self.gui_uuid}"]  # tag
+        self._next_sibling_button_tags = [f"chat_graph_next1_sibling_button_{self.gui_uuid}",  # tag
+                                          f"chat_graph_next10_sibling_button_{self.gui_uuid}",  # tag
+                                          f"chat_graph_last_sibling_button_{self.gui_uuid}"]  # tag
+        self._sibling_counter_tag = f"chat_graph_sibling_counter_{self.gui_uuid}"  # tag
 
         # Where the reader has been. Panel-local: two panels would be two readers, and a shared history
         # would hand each of them the other's places.
@@ -334,6 +344,47 @@ class DPGChatGraphPanel(gui_animation.Animation):
             add_button(fa.ICON_COMPRESS, self._collapse_round,
                        "Fold this tool round back up [Backspace]",
                        self._fold_button_tag, enabled=False)
+
+            guiutils.add_toolbar_separator(horizontal=True, toolbar_extent=_TOOLBAR_H,
+                                           size=gui_config.toolbar_separator_w, line=False)
+
+            # Stepping the cursor along a level. The glyphs and their order are the chat log's sibling
+            # row, because these are the same six verbs on the same tree, and a reader should not have to
+            # recognise them twice. What differs is what they move: HEAD there, the cursor here.
+            #
+            # A group of their own rather than mixed in above, since these move the cursor where the
+            # buttons before them act on wherever it already is.
+            for icon, direction, step, caption, tag in (
+                    (fa.ICON_BACKWARD_FAST, "prev", None,
+                     "Move the cursor to the first sibling [Ctrl+Home]", self._prev_sibling_button_tags[0]),
+                    (fa.ICON_BACKWARD, "prev", 10,
+                     "Move the cursor 10 siblings left [Ctrl+Shift+Left]", self._prev_sibling_button_tags[1]),
+                    (fa.ICON_CARET_LEFT, "prev", 1,
+                     "Move the cursor to the previous sibling [Ctrl+Left]", self._prev_sibling_button_tags[2]),
+                    (fa.ICON_CARET_RIGHT, "next", 1,
+                     "Move the cursor to the next sibling [Ctrl+Right]", self._next_sibling_button_tags[0]),
+                    (fa.ICON_FORWARD, "next", 10,
+                     "Move the cursor 10 siblings right [Ctrl+Shift+Right]", self._next_sibling_button_tags[1]),
+                    (fa.ICON_FORWARD_FAST, "next", None,
+                     "Move the cursor to the last sibling [Ctrl+End]", self._next_sibling_button_tags[2])):
+                add_button(icon, self._make_step_sibling(direction, step), caption, tag, enabled=False)
+
+            # Where the cursor sits in the run it is stepping along. The picture cannot answer this on its
+            # own: a level shows a handful of a fan that can run to hundreds, most of it behind gap boxes
+            # that are not on screen together, so reading a position off it means panning and counting.
+            dpg.add_text("", tag=self._sibling_counter_tag)
+            counter_tooltip = dpg.add_tooltip(self._sibling_counter_tag)  # tag
+            dpg.add_text("Which sibling the cursor is on, of how many at that level",
+                         parent=counter_tooltip)
+
+    def _make_step_sibling(self, direction: str, step: Optional[int]) -> Callable:
+        """Return a callback stepping the cursor along the siblings, for a toolbar button.
+
+        `direction`, `step`: As `_step_sibling` takes them.
+        """
+        def step_sibling_callback():
+            self._step_sibling(direction, step=step)
+        return step_sibling_callback
 
     # ------------------------------------------------------------------
     # Where the reader has been
@@ -694,6 +745,15 @@ class DPGChatGraphPanel(gui_animation.Animation):
         else:
             self._widget.zoom_to_fit(animate=True)
 
+        # Last, and here rather than at each caller, so that the buttons cannot be left answering a
+        # picture that no longer exists. Most rebuilds are nobody's doing -- the poll notices a reply
+        # arriving, which gives the cursor's message a new sibling and so a new run to step along -- and a
+        # convention of "refresh, then update" would have covered only the paths that remembered it.
+        #
+        # It reads the datastore on the render thread, which the rebuild above already does (through
+        # `chatgraph.build`), so this takes no lock that thread was not taking anyway.
+        self._update_cursor_buttons()
+
     def _try_build(self) -> Optional[chatgraph.ChatGraph]:
         """Build the picture, or return `None` if the node it would be drawn around is gone."""
         try:
@@ -949,7 +1009,6 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # whichever box now stands for what the reader was pointing at. Which is the first result on the
         # way in and the gap itself on the way out, both without being told.
         self.refresh()
-        self._update_cursor_buttons()
 
     def _collapse_round(self) -> None:
         """Fold the tool round the cursor is inside back into a gap box, if it is inside one."""
@@ -1007,16 +1066,43 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self.refresh()
 
     def _update_cursor_buttons(self) -> None:
-        """Enable each button that acts on the cursor exactly when the cursor gives it something to do.
+        """Enable each button that acts on the cursor exactly when the cursor gives it something to do,
+        and say where in its run of siblings the cursor is standing.
 
-        Call it *after* the rebuild rather than before: what each button asks is a question about the
-        picture that rebuild produced, and a cursor moved onto a box the rebuild then dropped can commit
-        to nothing, where asking first would have said otherwise.
+        Called at the end of every rebuild rather than before one: what each button asks is a question
+        about the picture that rebuild produced, and a cursor moved onto a box the rebuild then dropped
+        can commit to nothing, where asking first would have said otherwise.
         """
-        for tag, enabled in ((self._commit_button_tag, self._cursor_chat_node_id() is not None),
-                             (self._fold_button_tag, self._round_at_cursor() is not None)):
+        maybe_position = self._sibling_position()
+        prev_enabled = maybe_position is not None and maybe_position[0] > 0
+        next_enabled = maybe_position is not None and maybe_position[0] < maybe_position[1] - 1
+        for tag, enabled in ([(self._commit_button_tag, self._cursor_chat_node_id() is not None),
+                              (self._fold_button_tag, self._round_at_cursor() is not None)]
+                             + [(tag, prev_enabled) for tag in self._prev_sibling_button_tags]
+                             + [(tag, next_enabled) for tag in self._next_sibling_button_tags]):
             with guiutils.nonexistent_ok():
                 (dpg.enable_item if enabled else dpg.disable_item)(tag)
+        # Blank while the cursor is away, which is the honest reading: the steppers are disabled then, so
+        # a position shown beside them would name a run nothing on this toolbar acts on.
+        index, count = maybe_position if maybe_position is not None else (None, None)
+        with guiutils.nonexistent_ok():
+            dpg.set_value(self._sibling_counter_tag,  # tag
+                          f"{index + 1} / {count}" if maybe_position is not None else "")
+
+    def _sibling_position(self) -> Optional[Tuple[int, int]]:
+        """Return `(index, count)` for the run of siblings the cursor is stepping along, or `None`.
+
+        `None` where a sibling step would do nothing — no cursor, or one on a box that stands for no
+        chat node — so a caller can ask this one question instead of the several it is made of.
+        """
+        node_id = self._cursor_sibling_anchor()
+        if node_id is None:
+            return None
+        with self.datastore.lock:
+            siblings, index = self.datastore.get_siblings(node_id)
+        if not siblings or index is None:
+            return None
+        return index, len(siblings)
 
     def _set_cursor(self, name: Optional[str]) -> None:
         """Move the cursor to a box, or clear it, and redraw so the ring moves with it.
@@ -1037,11 +1123,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # the cursor where it was would silently lose its own change. A rebuild costs about a millisecond
         # and none of these paths is hot.
         self._set_cursor_fields(name)
-        # The rebuild first, then the button: whether there is anything to commit to is a question about
-        # the picture that comes *out* of it. A cursor moved to a box the rebuild then drops has nothing
-        # to commit to, and asking before the rebuild would have said otherwise.
+        # The rebuild answers the buttons on its way out, so setting the fields first is what makes them
+        # describe where the cursor has just been put rather than where it was.
         self.refresh()
-        self._update_cursor_buttons()
 
     def _move_cursor(self, direction: str) -> None:
         """Step the cursor one box `direction`, planting it first if it is nowhere.
