@@ -534,6 +534,26 @@ class TestSpeaker:
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply), narrow)
         assert "Aria" in self._texts(built, reply), "the speaker's own name did not survive"
 
+    def test_a_calling_turn_leaves_room_for_its_own_marker(self):
+        # The bracket that slipped: a turn that asked for tools ends its speaker line with `[tool call]`,
+        # and the model name was fitted against the whole line before that was appended. 52 characters
+        # against a budget of 40, drawn straight out of the box. (Spotted in a screenshot of the live
+        # app, where the model happened to be short enough to fit anyway.)
+        config = chatgraph.LayoutConfig()
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        calls = [{"id": "c1", "function": {"name": "calculate", "arguments": "{}"}}]
+        asking = forest.create_node(payload("assistant", "", tool_calls=calls), parent_id=root)
+        forest.get_payload(asking)["general_metadata"]["persona"] = "Aria"
+        forest.get_payload(asking)["generation_metadata"] = {
+            "model": "unsloth/Qwen3-30B-A3B-Instruct-2507-abliterated-v2, Q4_K_M"}
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=asking))
+        speaker = next(text for text in self._texts(built, asking) if text.startswith("Aria"))
+        assert speaker.endswith("[tool call]"), "the fixture drew no marker, so it reserves nothing"
+        assert len(speaker) <= config._get_effective_speaker_chars(), \
+            f"the marker was appended past the end of the line: {speaker!r}"
+
     def test_a_tool_result_with_a_long_name_is_cut_the_same_way(self):
         # The tool branch shares the fitter, so it inherits the cut. Asserted because it did *not* before:
         # the tool name was concatenated straight on, and a long one would have overflowed unremarked.

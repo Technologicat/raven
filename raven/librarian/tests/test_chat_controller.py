@@ -112,8 +112,9 @@ class TestFormatMessageMetadataLine:
 
     A tool result's cogs badge reports that *a* tool ran, so a turn calling three of them is three
     messages with identical badges. A reply's icon says the AI wrote it and not which model — recorded per
-    message, and until now readable only by hovering the generation-stats line, though in a branching chat
-    two siblings can come from different models.
+    message, and until now readable only by hovering the generation-stats line, though it varies across a
+    tree and along one branch alike: two rerolls from different models, or the loaded model swapped
+    mid-conversation.
 
     One bracket for both, spelled as the chat graph spells it in a box's speaker line.
     """
@@ -148,9 +149,9 @@ class TestFormatMessageMetadataLine:
         assert line == "2026-09-04 07:52:48 R1", "a non-tool message was captioned with a tool name"
 
     def test_a_reply_names_the_model_that_wrote_it(self):
-        # Recorded per message and, until now, readable only by hovering the generation-stats line. In a
-        # branching chat two siblings can come from different models, which is exactly when a reader wants
-        # to know and exactly what a per-app readout cannot say.
+        # Recorded per message and, until now, readable only by hovering the generation-stats line. It
+        # varies across a tree and along a branch alike — two rerolls from different models, or the loaded
+        # model swapped mid-conversation — which is exactly what a per-app readout cannot say.
         line = chat_controller.format_message_metadata_line(
             self._payload({"model": "qwen3.5-4b, Q4_K_XL, 128 Ki context"}), "assistant", 1)
         assert line == "2026-09-04 07:52:48 R1 [qwen3.5-4b, Q4_K_XL, 128 Ki context]"

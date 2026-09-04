@@ -771,30 +771,40 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
     except (KeyError, TypeError):
         return "?", ["[missing]"], None
     speaker = persona or _ROLE_CAPTIONS.get(role, (role or "?").upper())
+    payload = _payload_of(datastore, node_id)
+    lines = _wrap(text, width, max_lines)
+    tool_calls = (payload.get("message") or {}).get("tool_calls") or ()
+
+    # A turn that asked for tools ends this line with `[tool call]`, and the room for it is reserved
+    # *before* anything else is fitted. Otherwise the model name is fitted against the whole line, the
+    # marker is appended past its end, and the result runs out of the box -- 52 characters against a
+    # budget of 40, for a long identity on a message that called a tool.
+    marker = " [tool call]" if (tool_calls and not lines) else ""
+    room = speaker_width - len(marker)
+
     if role == "assistant":
         # Which model wrote it, in the bracket a tool result uses for the tool that answered -- one
         # question, "what produced this", asked of the two roles that can answer it. The *short* name,
         # where the chat log's metadata line has room for the whole recorded identity: a box is 41
         # characters wide at this font, and "Aria [qwen3.5-4b, Q4_K_XL, 128 Ki context]" is 42.
-        maybe_model = chatutil.short_model_name(_payload_of(datastore, node_id))
+        maybe_model = chatutil.short_model_name(payload)
         if maybe_model:
-            speaker = _fit_bracketed(speaker, maybe_model, speaker_width)
-    if role == "tool":
+            speaker = _fit_bracketed(speaker, maybe_model, room)
+    elif role == "tool":
         # Which tool answered, in the bracketed aside the calling message uses for its own request. A run
         # of boxes all reading TOOL says only that the machinery ran; naming them makes the round legible
         # without opening anything, which is most of what a reader wants from a round they did not run.
         #
         # Absent on a call that failed before it had a function to name, and on anything written before
         # the field existed. The bare caption is then the honest answer.
-        function_name = chatutil.tool_name_of(_payload_of(datastore, node_id))
+        function_name = chatutil.tool_name_of(payload)
         if function_name:
-            speaker = _fit_bracketed(speaker, function_name, speaker_width)
-    lines = _wrap(text, width, max_lines)
+            speaker = _fit_bracketed(speaker, function_name, room)
+
     if lines:
         return speaker, lines, None
 
-    message = _payload_of(datastore, node_id).get("message") or {}
-    tool_calls = message.get("tool_calls") or ()
+    message = payload.get("message") or {}
     if tool_calls:
         # The chat log's own spelling of the call, so that a box and the message it stands for do not
         # describe the same request two ways. A second line counts them where the first cannot show them
@@ -810,7 +820,7 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
         # in its own voice rather than the message's.
         sub_label = f"{len(tool_calls)} tool calls" if len(tool_calls) > 1 else None
         lines_for_calls = max_lines - 1 if sub_label is not None else max_lines
-        return (f"{speaker} [tool call]",
+        return (f"{speaker}{marker}",
                 _wrap(chatutil.format_tool_calls(tool_calls), width, lines_for_calls),
                 sub_label)
     # Square brackets, which is how the constellation says something in its own voice rather than the

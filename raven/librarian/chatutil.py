@@ -299,10 +299,12 @@ def model_of(node_payload: Dict[str, Any]) -> Optional[str]:
 
     `node_payload`: The chat node payload, at the revision being shown.
 
-    Recorded per message rather than per app, and that is what makes it worth reading back: in a branching
-    chat the siblings of one node can come from different models, and a chat reloaded from disk predates
-    whatever happens to be loaded now. `None` for a reply written before the field existed, and for one
-    whose generation was interrupted before there was anything to record.
+    Recorded per message rather than per app, and that is what makes it worth reading back: it varies both
+    *across* a tree and *along* a branch. Two siblings can be rerolls from different models, and a
+    conversation carries straight on after the loaded model is swapped, so one branch can change model
+    halfway down. A chat reloaded from disk predates whatever happens to be loaded now besides. `None` for
+    a reply written before the field existed, and for one whose generation was interrupted before there
+    was anything to record.
 
     The sibling of `tool_name_of`: between them they answer *what produced this message* for the two roles
     that have an answer, which is the question the chat log's metadata line and the export manifest both
