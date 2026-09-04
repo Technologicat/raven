@@ -47,6 +47,8 @@ from collections.abc import Callable
 import bibtexparser
 from bibtexparser.model import Entry
 
+from ..common import utils as common_utils
+
 from .. import __version__
 
 from . import bibtex
@@ -134,11 +136,23 @@ AUDIT_COLUMNS = ("key", "reason", "title", "venue")
 _VENUE_FIELDS = ("journal", "booktitle", "series", "publisher")
 
 
+def _readable(text: str) -> str:
+    """A field value as a person should see it in the audit: markup resolved, whitespace collapsed.
+
+    Stripping the case-preservation braces by hand gets the common case right and the interesting cases
+    wrong. `{\\o}nly` becomes `\\only` rather than `ønly`, because the braces are what terminate the
+    LaTeX command, and an accent written `Tr{\\c e}bicki` loses the grouping that says where its argument
+    ends. `unicodize_basic_markup` runs the ligature and accent passes before it strips, which is the
+    whole reason it is longer than a pair of `replace` calls.
+    """
+    return common_utils.normalize_whitespace(common_utils.unicodize_basic_markup(text))
+
+
 def _venue(entry: Entry) -> str:
     for field in _VENUE_FIELDS:
         text = _field_text(entry, field)
         if text:
-            return " ".join(text.replace("{", "").replace("}", "").split())
+            return _readable(text)
     return ""
 
 
@@ -166,8 +180,7 @@ def sift(library: bibtexparser.Library,
         else:
             dropped.append(DroppedRecord(key=block.key,
                                          reason=failed.reason,
-                                         title=" ".join(_field_text(block, "title")
-                                                        .replace("{", "").replace("}", "").split()),
+                                         title=_readable(_field_text(block, "title")),
                                          venue=_venue(block)))
     return kept, dropped
 

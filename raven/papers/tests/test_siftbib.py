@@ -126,6 +126,37 @@ class TestWriteAudit:
         assert lines[5].split("\t")[:2] == ["bare_2024", "no abstract"]
 
 
+LATEX_TITLE = r"""@article{latex_2024,
+  title = {{\o}nly {Tr{\c e}bicki} and the {AutoPBL} caf\'e},
+  author = {Zoe, Zed},
+  year = {2024},
+  journal = {Journal of {\"O}stberg Studies}
+}"""
+
+
+class TestTheAuditIsReadable:
+    """What a person sees in the audit, which is the only thing the title and venue columns are for."""
+
+    def test_latex_in_a_title_is_resolved_rather_than_stripped(self):
+        _kept, dropped = siftbib.sift(library(LATEX_TITLE), [siftbib.require_field("abstract")])
+        title = dropped[0].title
+
+        # The negative control, and the reason this test exists: stripping the braces by hand — which is
+        # what stood here — gets the ordinary case right and these wrong, because the braces are what
+        # terminate a LaTeX command. A fixture carrying no ligature or accent cannot tell the two
+        # treatments apart, and would pass against either.
+        raw = siftbib._field_text(library(LATEX_TITLE).entries[0], "title")
+        naive = " ".join(raw.replace("{", "").replace("}", "").split())
+        assert naive != title, "this fixture carries no markup that the naive strip mangles"
+
+        assert title == "ønly Trȩbicki and the AutoPBL café"
+        assert "\\" not in title, f"a LaTeX command survived into the audit: {title!r}"
+
+    def test_the_venue_is_resolved_too(self):
+        _kept, dropped = siftbib.sift(library(LATEX_TITLE), [siftbib.require_field("abstract")])
+        assert dropped[0].venue == "Journal of Östberg Studies"
+
+
 class TestTheFileSurvivesTheSifting:
     def test_what_is_kept_is_written_back_as_readable_bibtex(self):
         kept, _dropped = siftbib.sift(library(FULL, NO_ABSTRACT), [siftbib.require_field("abstract")])
