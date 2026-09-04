@@ -4606,6 +4606,23 @@ mode is the degenerate case where one of them is never constructed at all. Which
 gets a slice of this item's benefit for free, if the avatar is *paused* while covered rather than left
 rendering frames nobody can see.
 
+**Avatar-first is a control model, not just a layout** (Juha, 2026-09-04). It has no chat log at all, and
+the system is **driven by speech alone** — which makes it the one mode with no keyboard and no pointer in
+the loop, and therefore the one whose requirements do not follow from the other two:
+
+- **Spoken triggers are needed for anything the GUI would have offered.** Starting a new chat and
+  cancelling a generation are the two named so far, and there will be more — every control that matters
+  needs a spoken form, or it does not exist in this mode.
+- **The hard part is telling a command from content**, not the wiring. Everything said to a speech-driven
+  kiosk is either an instruction to Raven or a message for the AI, and nothing in the current path
+  separates them; STT hands over text either way. Whatever answers that — a wake word, a push-to-talk
+  distinction, a parse — is the design, and the triggers are downstream of it.
+- **The chat log must stay toggleable**, so whoever is at the console can bring the ordinary GUI up
+  mid-event without restarting into another mode.
+- **Which means this mode varies the *left* panel as well**, and the framing above does not yet cover
+  that: "one mechanism with a swappable panel" is about the right-hand rect. The chat log's presence is a
+  second axis, and avatar-first is the mode that moves both at once.
+
 **The view itself is not tracked here** — it is `TODO.md`'s "Nonlinear chat view / chat graph editor", which
 already carries the mechanism (generate the layout ourselves, no GraphViz) and the constraints (limit visible
 depth; the full tree will not render at interactive FPS). This item is only about the *mode*, and about the
