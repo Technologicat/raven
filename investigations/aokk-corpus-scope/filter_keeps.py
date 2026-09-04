@@ -39,6 +39,7 @@ import sys
 import bibtexparser
 from bibtexparser.model import Entry
 
+from raven.common import utils as common_utils
 from raven.papers import bibtex
 
 TIER_A = "wrong level, quoted"
@@ -164,15 +165,18 @@ def main() -> int:
     out_path = out_dir / f"{bib_path.stem}_filtered.bib"
     out_path.write_text(bibtex.write_string(kept), encoding="utf-8")
 
-    titles = {entry.key: (entry.fields_dict["title"].value if "title" in entry.fields_dict else "")
-              for entry in library.entries}
+    # Resolved rather than brace-stripped: these columns exist to be read, and `{\o}nly` collapses to
+    # `\only` if the braces go first, the braces being what terminates the command.
+    titles = {entry.key: common_utils.normalize_whitespace(
+                  common_utils.unicodize_basic_markup(entry.fields_dict["title"].value))
+              for entry in library.entries if "title" in entry.fields_dict}
 
     def write_table(path: pathlib.Path, keys, header: str) -> None:
         with path.open("w", encoding="utf-8") as f:
             f.write(header)
             for key in sorted(keys, key=lambda k: (tiers[k], k)):
                 fields = extracted[key]
-                title = " ".join(titles.get(key, "").split())
+                title = titles.get(key, "")
                 f.write(f"\t{tiers[key]}\t{key}\t{fields['level']}\t{fields['population']}\t"
                         f"{fields['human_learning']}\t{fields['evidence']}\t{fields['ai_role']}\t"
                         f"{title}\n")
