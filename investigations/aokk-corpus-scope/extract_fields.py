@@ -201,17 +201,17 @@ def normalize(answer: dict, key: str) -> dict:
     return out
 
 
-def load_state(path: pathlib.Path, vocabulary: str | None = None) -> dict[str, dict]:
+def load_state(path: pathlib.Path, fingerprint: str | None = None) -> dict[str, dict]:
     """Extractions already recorded, keyed by citekey. A later line supersedes an earlier one.
 
-    `vocabulary`: when given, an answer stamped with a different fingerprint does not count as recorded,
-                  so it is re-asked rather than resumed.
+    `fingerprint`: when given, an answer stamped differently does not count as recorded, so it is
+                   re-asked rather than resumed.
 
-    Resuming is what makes an interrupted run cheap, and it is also how a vocabulary change gets silently
-    ignored: edit `LEVELS`, re-run, and every record reads as already done, so the file keeps answers
-    drawn from a set of values that no longer exists while the run reports success. The fingerprint makes
-    that structurally impossible rather than something to remember — a changed vocabulary simply has no
-    answers yet. Old lines stay in the file underneath, superseded, so the two runs can be compared.
+    Each run writes its own file, named for the instrument that produced it, so a file normally holds one
+    instrument's answers and this check finds nothing to drop. What it catches is a file that has been
+    renamed or had another appended to it, where the name no longer says what is inside — the resume
+    would otherwise treat those records as done and the run would report success over answers drawn from
+    a set of values that no longer exists.
 
     Pass nothing when reading a state file this script did not write; the judge's has no fingerprint, and
     filtering on one would discard all of it.
@@ -221,7 +221,7 @@ def load_state(path: pathlib.Path, vocabulary: str | None = None) -> dict[str, d
         for line in path.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 answer = json.loads(line)
-                if vocabulary is not None and answer.get("v") != vocabulary:
+                if fingerprint is not None and answer.get("v") != fingerprint:
                     continue
                 state[answer["key"]] = answer
     return state
@@ -283,12 +283,18 @@ def main() -> int:
         run_name = f"{run_name}-pilot-{opts.seed}-{len(selection)}"
     print(f"{len(wanted)} records selected; {len(selection)} in this run")
 
-    state_path = out_dir / f"{run_name}.jsonl"
-    traces_path = out_dir / f"{run_name}-traces.jsonl"
-    vocabulary = instrument_fingerprint()
-    done = load_state(state_path, vocabulary)
+    # The instrument is in the filename, so a changed vocabulary or prompt writes a new file rather than
+    # appending to one whose earlier answers mean something subtly different. That makes the mixing
+    # impossible instead of guarded against: reading one run's results is opening one file, `wc -l` means
+    # what it looks like, and no consumer has to remember to filter. The stamp inside each record stays,
+    # which is what lets a file that has been renamed or concatenated still say what produced it.
+    fingerprint = instrument_fingerprint()
+    state_path = out_dir / f"{run_name}-{fingerprint}.jsonl"
+    traces_path = out_dir / f"{run_name}-{fingerprint}-traces.jsonl"
+    done = load_state(state_path, fingerprint)
     todo = [record for record in selection if record.key not in done]
-    print(f"vocabulary {vocabulary};  already extracted under it: {len(done)};  to do now: {len(todo)}")
+    print(f"instrument {fingerprint} -> {state_path.name}")
+    print(f"already extracted: {len(done)};  to do now: {len(todo)}")
     if not todo:
         print("nothing to do")
         return 0
@@ -319,7 +325,7 @@ def main() -> int:
         print(f"  batch {n}/{len(batches)}: {len(answers)}/{len(batch)} extracted in {tim.dt:.1f}s",
               flush=True)
 
-    final = load_state(state_path, vocabulary)
+    final = load_state(state_path, fingerprint)
     mine = {key: value for key, value in final.items() if key in {r.key for r in selection}}
     print(f"\n{len(mine)} extracted")
     for field in ("level", "population", "human_learning"):
