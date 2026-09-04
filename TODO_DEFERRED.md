@@ -731,7 +731,7 @@ neither, now.
 
 ## Sweep `## Declined` for decisions whose follow-through was never filed
 
-*Cluster: hygiene-sweep · Cost: S · Gate: next · Filed: 2026-08-14*
+*Cluster: hygiene-sweep · Cost: S · Gate: post-0.2.9 · Filed: 2026-08-14*
 
 `## Declined` was originally built — by claude.ai, at the start of the project — as a section for
 *completed or already-decided* items, and only later corrected to its stated meaning of *considered and
@@ -1032,7 +1032,7 @@ which is a real cost, and also stops the escape route depending on a package tha
 
 ## Batch tools: LLM reconnect mid-run
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-12 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-08-12 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
 
 The model-loaded work made `raven-pdf2bib` and `raven-importer` stop at *start time* on both failure states
 — unreachable, and reachable-with-no-model. The second was the one that most needed it: the backend answers,
@@ -1133,7 +1133,7 @@ scan is over every node, so the index is small and the saving grows with the dat
 
 ## Librarian: open a chat datastore other than the configured default
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-11*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-08-11*
 
 Librarian loads one datastore, fixed at `librarian_config.llm_datastore_file`. There is no way to open
 another from inside the app.
@@ -1246,7 +1246,7 @@ first time.
 
 ## Agent skills for Librarian (natural-language workflows over the document database)
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-11*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-08-11*
 
 Design work deliberately postponed; this records the idea and what is already established about it.
 
@@ -1424,7 +1424,7 @@ than a flash.
 
 ## The ingest pool's concurrency is nominal: pypdf is pure Python
 
-*Cluster: ? · Cost: M · Gate: next · Filed: 2026-08-12 (measured 2026-08-06)*
+*Cluster: ? · Cost: M · Gate: post-0.2.9 · Filed: 2026-08-12 (measured 2026-08-06)*
 
 Split out 2026-08-12 from "Indexing a large corpus is silent for minutes", whose titular half shipped. This
 half did not, and it is the larger one.
@@ -1453,7 +1453,7 @@ Raised by Juha (2026-08-06), asking why the indexer was still on its first docum
 
 ## System prompt templating: the user should choose where the per-turn facts go
 
-*Cluster: ? · Cost: M · Gate: next · Filed: 2026-08-12 · See also: "Make the canned AI greeting optional", "Modernize the Librarian system prompt / character card"*
+*Cluster: ? · Cost: M · Gate: post-0.2.9 · Filed: 2026-08-12 · See also: "Make the canned AI greeting optional", "Modernize the Librarian system prompt / character card"*
 
 Filed 2026-08-12 to make good on a condition set when the multi-root work landed: today's advice — **do not
 use `{model}` or `{context_length}` in a card** — is documented at the `# TODO:` block in
@@ -1756,7 +1756,7 @@ Discovered by Juha (2026-07-30), during the chat-view scrolling live tests.
 
 ## Revisit `recenter_window`'s degrade-instead-of-raise policy
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-30*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-30*
 
 `guiutils.recenter_window` passes `required=False` for its offscreen-measure wait, so calling it from the
 render loop thread warns and centers using whatever size the window reports pre-autosize. Provisional, kept
@@ -1964,7 +1964,7 @@ Raised by Juha (2026-07-30), while reviewing the `WidgetFlash` theme-restore fix
 
 ## Web status panel: check on a long job without being at the machine
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-30*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-30*
 
 The motivating case is concrete: a ~12k-abstract hydrogen indexing run, and no way to see how it is doing
 except the Librarian window and the terminal that launched it. From a phone, from another room, there is
@@ -2083,7 +2083,7 @@ Raised by Juha (2026-07-30), from wanting to check the hydrogen indexing run fro
 
 ## Browse *all* attachments in the datastore, not just the orphaned ones
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-29*
 
 The cleanup dialog (`raven/librarian/cleanup_dialog.py`) turned out to be a decent attachment browser that
 happens to be filtered to orphans. Point the same machinery at `list_sidecar_files()` instead of
@@ -2235,7 +2235,7 @@ Discovered while closing brief 10 and finding a stale item next to an accurate o
 
 ## Make the canned AI greeting optional
 
-*Cluster: system-prompt-and-greeting · Cost: M · Gate: next — and a `chatutil` cleanup now waits on it too (2026-08-25) · Filed: 2026-07-28 · See also: "System prompt templating: the user should choose where the per-turn facts go", "Modernize the Librarian system prompt / character card"*
+*Cluster: system-prompt-and-greeting · Cost: M · Gate: post-0.2.9 — and a `chatutil` cleanup now waits on it too (2026-08-25) · Filed: 2026-07-28 · See also: "System prompt templating: the user should choose where the per-turn facts go", "Modernize the Librarian system prompt / character card"*
 
 A new chat opens with a canned greeting from the AI (`raven.librarian.config`, "Names, AI's greeting"). That is a
 2024-ism: as of mid-2026 the first message after the system prompt can just as well be the user's, and an opening
@@ -2294,7 +2294,7 @@ Raised by Juha (2026-07-28).
 
 ## TTS reads arXiv IDs digit by digit
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-28*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-28*
 
 Qwen likes to cite arXiv papers by their full identifier, and the TTS then says
 "twenty twenty six dot zero five ... v three" — long, and the least informative part of the sentence gets the most
@@ -2611,7 +2611,7 @@ decision goes, since wrapping is needed under every shape.
 
 ## Modernize the Librarian system prompt / character card
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
 
 The default system prompt (`raven.librarian.config`) reads as dated for current instruction-tuned models —
 "take a deep breath and think step by step", "believe in your abilities and strive for excellence", "you are
@@ -2713,7 +2713,7 @@ Raised while scoping RAG reranking (2026-07-28, Juha).
 
 ## Remaining server modules without a MaybeRemote
 
-*Cluster: ? · Cost: ? · Gate: next, scoped down · Filed: 2026-04-22*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9, scoped down · Filed: 2026-04-22*
 
 With `Classifier`, `Translator`, `Postprocessor`, `Upscaler` landed (2026-04-22), the following server modules still don't participate in the MaybeRemote pattern:
 
@@ -2724,7 +2724,7 @@ These are both intentional omissions, not TODO gaps. Kept as a navigational note
 
 ## Client-local avatar animator (licensing-bounded)
 
-*Cluster: ? · Cost: ? · Gate: next, deprioritized · Filed: 2026-04-17*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9, deprioritized · Filed: 2026-04-17*
 
 The avatar animator currently lives only in `raven.server.modules.avatar` under AGPL. THA3 upstream (the underlying ML model, vendored in `raven/vendor/tha3/`) is MIT — so the AGPL does not come from the model. It comes from the *detour*: the animator reached Raven through SillyTavern-Extras, which is AGPL, and `raven/avatar/README.md` says the licence exists to comply with that. Raven-side extensions are the one thing that is *not* the source of it.
 
@@ -2936,7 +2936,7 @@ Discovered during raven-cherrypick development.
 
 ## Faster PNG decoder
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-03-18*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-03-18*
 
 PIL's PNG decode via libpng is slow (~59 ms for a 1 MP image). Unlike JPEG (where turbojpeg provides scaled decode), libpng has no equivalent fast path. Options to investigate:
 - `cv2.imread` — uses libpng but OpenCV's memory handling may be faster
@@ -2966,7 +2966,7 @@ Discovered during raven-cherrypick preload performance session.
 
 ## raven-cherrypick: export image sequence (QOI→PNG batch conversion)
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-03-19*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-03-19*
 
 raven-cherrypick is effectively an image viewer with QOI support, which is rare. This makes it ideal for previewing avatar recordings frame-by-frame. Integrate `raven-qoi2png` CLI functionality so that raven-cherrypick can export avatar recordings for external consumption (e.g. as a PNG image sequence for OpenShot or other video editors).
 
@@ -3076,7 +3076,7 @@ Discovered during raven-cherrypick compare mode planning (2026-03-30).
 
 ## Extract `raven.common` into an upstream library ("corvid")
 
-*Cluster: ? · Cost: ? · Gate: next (or —); nothing is waiting on it · Filed: 2026-04-03 · See also: "Rename the distribution to `raven-lab`" (same decision, applied to Raven; do the two together)*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 (or —); nothing is waiting on it · Filed: 2026-04-03 · See also: "Rename the distribution to `raven-lab`" (same decision, applied to Raven; do the two together)*
 
 Raven's `common/` package has grown into a general-purpose DPG toolkit: GUI widgets (file dialog, markdown, helpcard, xdot widget, animation framework, VU meter), video/audio processing, networking utils, bgtask infrastructure. This creates a gravitational well — new apps land in Raven because the batteries are there, even when they have nothing to do with NLP/ML.
 
@@ -3100,7 +3100,7 @@ Discovered during tooltip feature session (2026-04-03).
 
 ## Avatar settings editor: custom postprocessor chain ordering
 
-*Cluster: ? · Cost: L · Gate: next · Filed: 2026-04-09*
+*Cluster: ? · Cost: L · Gate: post-0.2.9 · Filed: 2026-04-09*
 
 **This is a GUI limitation only** — the band-scheme comment above the first filter definition in
 `raven/common/video/postprocessor.py` establishes that the backend has always
@@ -3615,7 +3615,7 @@ Discovered while wrapping up brief 01 webfetch (2026-06-03).
 
 ## Context-window budgeting and conversation compaction (Librarian)
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-06-04*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-06-04*
 
 Librarian does not yet budget the prompt against the model's context window, nor compact long
 conversations. After brief 02 (LM Studio compat), the loaded context-window figure captured per
@@ -3938,7 +3938,7 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 ## Fleet audit: every hotkey discoverable in a tooltip + help card
 
-*Cluster: discoverability · Cost: ? · Gate: next · Filed: 2026-06-07 · See also: "Librarian's help card has no room to describe attachments"*
+*Cluster: discoverability · Cost: ? · Gate: post-0.2.9 · Filed: 2026-06-07 · See also: "Librarian's help card has no room to describe attachments"*
 
 Policy (now in `raven-style-guide.md`, "Hotkey discoverability"): every hotkey must be surfaced both in the `F1` help card *and* in the tooltip of the GUI control it triggers (bracketed, e.g. `"Open folder [Ctrl+O]"`). Most apps in the wild miss the tooltip half; Raven apps shouldn't.
 
@@ -4029,7 +4029,7 @@ Discovered during brief-03 Half-2 composer rework (2026-07-17, flagged by Juha).
 
 ## Datastore scaling: a single `chat.json` (+ flat sidecar dir) won't hold years of chats
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-17 · See also: "Version the chat datastore file …", "`chattree.get_all_root_nodes` is an O(n) scan"*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-17 · See also: "Version the chat datastore file …", "`chattree.get_all_root_nodes` is an O(n) scan"*
 
 Librarian stores *every* chat — all nodes, all payload revisions, across the whole forest — in one
 `chat.json` (`chattree.PersistentForest`), and every attachment as a file in one flat
@@ -4099,7 +4099,7 @@ Discovered during brief-03 Half-2 checkpoint C (2026-07-17, flagged by Juha whil
 
 ## Expose the docs-DB source files behind a reply's RAG citations
 
-*Cluster: ? · Cost: ? · Gate: next, wanted this year · Filed: 2026-07-18*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9, wanted this year · Filed: 2026-07-18*
 
 When the AI composes a reply using the document database, it sees a set of retrieved snippets, and that
 provenance is already tracked per turn (the payload's `retrieval` field records the query and the snippets the
@@ -4157,7 +4157,7 @@ Discovered during the plain-text/PDF interlude (2026-07-18, raised by Juha).
 
 ## Same file formats in the docs DB and in chat attachments
 
-*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster · Filed: 2026-07-29*
 
 The docs database and chat attachments should accept the *same* set of formats. A user who can attach a file
 to a message reasonably expects to be able to drop it in the documents folder, and vice versa; a split between
@@ -4188,7 +4188,7 @@ Raised during the 0.2.8 release scoping (2026-07-29, Juha).
 
 ## Spreadsheets in the docs DB and attachments (`.xlsx`, `.ods`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster · Filed: 2026-07-29 · See also: `briefs/spreadsheet-ingestion-brief.md`*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster · Filed: 2026-07-29 · See also: `briefs/spreadsheet-ingestion-brief.md`*
 
 Left out of the office-formats work deliberately: a spreadsheet is a different problem class wearing the same
 file picker. Its content is tabular, so "the text of this file" is not well defined — reading a sheet row-major
@@ -4203,7 +4203,7 @@ Raised while scoping office-format support (2026-07-29, Juha).
 
 ## Text out of images, so figures work without a vision model (OCR, and SVG `<text>`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster · Filed: 2026-07-30*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster · Filed: 2026-07-30*
 
 The image → text cell of the 2×2 in the SVG item below: given an image, produce its plain text. Wanted for
 three distinct reasons, which is what makes it worth building rather than a nice-to-have:
@@ -4289,7 +4289,7 @@ Raised by Juha (2026-07-30), from the `imageextract` question.
 
 ## Vector figures in the docs DB and attachments (`.svg`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster · Filed: 2026-07-30*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster · Filed: 2026-07-30*
 
 Hand-authored figures — problem setups, schematics, diagrams — are commonly SVG, because that is what you get
 when you draw them yourself for a manuscript rather than exporting them from a plotting library. So this is not
@@ -4380,7 +4380,7 @@ Raised by Juha (2026-07-30).
 
 ## Read documents as page images, for figure- and math-heavy sources
 
-*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster — and the one that bites hardest · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster — and the one that bites hardest · Filed: 2026-07-29*
 
 Current extraction is **text-layer only**, for PDFs and (as of 0.2.8) office formats alike. That loses exactly
 what matters in the sources this project exists to read: equations, plots, diagrams, tables-as-figures. A paper
@@ -4659,7 +4659,7 @@ about, since a mode that merely hides the avatar panel saves nothing that matter
 
 ## Cherrypick: crown the winner without leaving the compare cycle
 
-*Cluster: cherrypick · Cost: S · Gate: next · Filed: 2026-08-14*
+*Cluster: cherrypick · Cost: S · Gate: post-0.2.9 · Filed: 2026-08-14*
 
 `Ctrl+Shift+C` is `_mark_winner`: cherry the current image, lemon the rest of the selection. Its docstring
 says it is "designed for committing a compare-mode choice", and the sequence it was built for is *press the
@@ -4681,7 +4681,7 @@ as a safeguard or as a nuisance.
 
 ## The thumbnail grid's textures are dynamic, and probably need not be
 
-*Cluster: performance · Cost: S · Gate: next · Filed: 2026-08-14*
+*Cluster: performance · Cost: S · Gate: post-0.2.9 · Filed: 2026-08-14*
 
 `ThumbnailGrid.set_thumbnail` creates a **dynamic** DPG texture per thumbnail, so a Cherrypick folder of a
 few hundred images registers a few hundred of them. `raven.cherrypick.preload`'s own docstring records the
@@ -4706,7 +4706,7 @@ texture memory, or with both.
 
 ## Raven's global theme sets three of ImGui's seven rounding vars
 
-*Cluster: polish · Cost: S · Gate: next · Filed: 2026-08-14*
+*Cluster: polish · Cost: S · Gate: post-0.2.9 · Filed: 2026-08-14*
 
 `raven.common.gui.utils.setup_themes` sets `FrameRounding` 6, `WindowRounding` 8, `ChildRounding` 8, and
 **`PopupRounding` 6 as of 2026-08-14** — added because a combo's dropdown list is a popup, so it took none
@@ -4726,7 +4726,7 @@ kind.
 
 ## Visualizer's importer should read the document database, not just `.bib` files
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-29*
 
 Visualizer ingests BibTeX databases. That is where it started — scientific abstracts, one entry per paper — and
 it is now the wrong boundary. What the importer actually wants as its source is **the same document database
@@ -4816,7 +4816,7 @@ drawn, giving the pass a scaffold rather than a blank page.
 
 ## Let the AI drive the constellation's own views (tools, and then voice)
 
-*Cluster: ? · Cost: ? · Gate: next, this year if possible · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9, this year if possible · Filed: 2026-07-29*
 
 Falls out of the item above, and is easy to miss because it looks like prose: *"show me the map"*, *"search my
 documents"*, *"show me what cleanup is about to delete"* are not descriptions of features, they are things a
@@ -4882,7 +4882,7 @@ Raised while implementing brief 03 D (2026-07-29, Juha's idea, and Juha's placem
 
 ## HTML pages whose content is produced by running them
 
-*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster · Filed: 2026-07-29*
 
 `raven.common.docextract` reads HTML through `trafilatura`'s readability extraction, which looks at markup. A
 page that has no text in its markup — because a script writes it at load — therefore extracts as empty, and the
@@ -5301,7 +5301,7 @@ Raised by Juha (2026-08-04), asking whether the fetched-page chip should open on
 
 ## A crash during ingest loses the whole run, however long it was
 
-*Cluster: ? · Cost: ? · Gate: next, with the per-document LLM pass · Filed: 2026-08-06 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
+*Cluster: ? · Cost: ? · Gate: post-0.2.9, with the per-document LLM pass · Filed: 2026-08-06 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
 
 The delayed-commit coalescer defers a commit for one second after each finished document read, so on a
 large corpus it never fires until the reads stop arriving. Measured on the 1268-PDF fulltext corpus
