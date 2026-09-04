@@ -416,6 +416,38 @@ class TestPanClamping:
         assert approx(after[0], before[0])
         assert approx(after[1], before[1])
 
+    # --- Keeping a box on screen ---
+
+    def test_a_box_already_on_screen_is_left_alone(self):
+        vp = self._over_a_tall_graph()
+        vp.pan_to_point(300.0, 1000.0, animate=False)
+        vp.keep_box_visible(280.0, 980.0, 320.0, 1020.0, animate=False)
+        assert approx(vp.pan_x.current, 300.0)
+        assert approx(vp.pan_y.current, 1000.0)
+
+    def test_a_box_over_an_edge_is_brought_back_and_no_further(self):
+        # 400 wide at 1:1, so the view spans 100..500 about a pan of 300, and a box reaching to 560 hangs
+        # 60 over the right edge. The pan moves by exactly that, not to the box's own centre.
+        vp = self._over_a_tall_graph()
+        vp.pan_to_point(300.0, 1000.0, animate=False)
+        vp.keep_box_visible(460.0, 980.0, 560.0, 1020.0, animate=False)
+        assert approx(vp.pan_x.current, 360.0)
+        assert approx(vp.pan_y.current, 1000.0), "the vertical axis needed nothing and was moved anyway"
+
+    def test_the_margin_is_kept_clear(self):
+        vp = self._over_a_tall_graph()
+        vp.pan_to_point(300.0, 1000.0, animate=False)
+        vp.keep_box_visible(460.0, 980.0, 560.0, 1020.0, margin=10.0, animate=False)
+        assert approx(vp.pan_x.current, 370.0)
+
+    def test_a_box_too_big_for_the_view_is_centred(self):
+        # Nothing can show it whole, so the two bounds cross. Its own middle is the most of it there is
+        # room for, and it is the answer that does not depend on which edge it went over first.
+        vp = self._over_a_tall_graph()
+        vp.pan_to_point(300.0, 1000.0, animate=False)
+        vp.keep_box_visible(0.0, 980.0, 600.0, 1020.0, animate=False)
+        assert approx(vp.pan_x.current, 300.0)
+
     def test_zoom_to_without_a_point_turns_about_the_middle(self):
         # The control: the pan is what a fixed point moves, so an implementation that ignored the
         # argument would pass the test above and this one would not tell them apart without it.

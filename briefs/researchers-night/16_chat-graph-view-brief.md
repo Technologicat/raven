@@ -1251,6 +1251,22 @@ list is a judgement about how the picture reads, and those are decided in front 
      screen instead of working from wherever the last pan left the middle of the view. Off-screen rings do
      not anchor: the arithmetic answers that case by walking the view away from the node, and from the
      graph with it. The mouse wheel is unchanged, its own anchor being the pointer.
+     - **Holding the centre was the wrong promise, and it took a second pass to see it** (Juha, driving,
+       2026-09-04). Turning about a node's centre keeps a *point*, and a node is a box: with the ring near
+       an edge, zooming in grows the far half of the box out of the view, and the press that puts the
+       centre itself outside is the one after which the node stops being a usable anchor and the next
+       press quietly reverts to the middle of the view. What is promised now is that the box stays whole;
+       the centre holds only while holding it clips nothing.
+     - `Viewport.keep_box_visible` does it, over a `_contain_axis` that is `_clamp_axis` with the interval
+       the other way round — the graph clamp keeps the view inside the graph, this keeps a box inside the
+       view, and both answer the impossible case by centring. Applied after every anchored zoom, in both
+       directions: zooming out cannot clip a whole node, but applying it uniformly makes the invariant one
+       sentence and recovers a node left hanging over an edge by something else.
+     - **The pan clamp runs afterwards and does not undo it**, which is argued (it only pulls the view
+       toward the graph, and the node is inside the graph) and therefore pinned:
+       `test_a_ring_at_the_edge_of_the_graph_is_still_kept_whole` zooms in repeatedly on the last sibling
+       of a level, applying the graph clamp between presses, and stops asking once the box is too big for
+       the view to hold whole.
      - `XDotWidget` grew the `anchor_node` half of a pair it half-had: `pan_to_point` and `pan_to_node`
        existed, `zoom_in`/`zoom_out`/`set_zoom` took no anchor at all. The viewport's `zoom_to` is the
        absolute counterpart of `zoom_by`, and `zoom_by` is now written in terms of it.

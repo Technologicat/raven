@@ -31,6 +31,19 @@ def _clamp_axis(pan: float, extent: float, half_view: float) -> float:
     return numutils.clamp(pan, half_view, extent - half_view)
 
 
+def _contain_axis(pan: float, lo: float, hi: float, half_view: float) -> float:
+    """Return `pan` moved as little as possible so that (lo, hi) stays inside (pan ± half_view).
+
+    The mirror of `_clamp_axis`, which keeps the view inside the graph where this keeps a box inside the
+    view — the same construction with the interval the other way round, down to the degenerate case: when
+    the box is bigger than the view the two bounds cross and nothing satisfies both, and the box's own
+    midpoint is the answer, showing as much of it as there is room for.
+    """
+    if hi - lo >= 2.0 * half_view:
+        return 0.5 * (lo + hi)
+    return numutils.clamp(pan, hi - half_view, lo + half_view)
+
+
 class Viewport:
     """Manages pan/zoom state and coordinate transforms.
 
@@ -149,6 +162,29 @@ class Viewport:
             self.pan_x.set_immediate(self.pan_x.target)
             self.pan_y.set_immediate(self.pan_y.target)
             self.zoom.set_immediate(new_zoom)
+
+    def keep_box_visible(self, x1: float, y1: float, x2: float, y2: float,
+                         margin: float = 0.0, animate: bool = True) -> None:
+        """Nudge the pan as little as possible to bring a box in graph coordinates wholly on screen.
+
+        `x1`, `y1`, `x2`, `y2`: The box, in graph coordinates.
+        `margin`: Screen pixels to leave between the box and the edge of the view.
+        `animate`: If True, animate the transition. If False, jump immediately.
+
+        Does nothing when the box is already inside the view, which is the ordinary case — so this is
+        cheap to call after anything that might have moved it out.
+
+        Read off the zoom *target*, since the caller is typically a zoom that has just been asked for: the
+        question is whether the box will be on screen when the view arrives, not whether it is now.
+        """
+        zoom = max(self.zoom.target, 1e-6)
+        half_w = 0.5 * self.width / zoom - margin / zoom
+        half_h = 0.5 * self.height / zoom - margin / zoom
+        self.pan_x.target = _contain_axis(self.pan_x.target, x1, x2, half_w)
+        self.pan_y.target = _contain_axis(self.pan_y.target, y1, y2, half_h)
+        if not animate:
+            self.pan_x.set_immediate(self.pan_x.target)
+            self.pan_y.set_immediate(self.pan_y.target)
 
     def pan_to_point(self, gx: float, gy: float, animate: bool = True) -> None:
         """Center the viewport on a specific graph point.

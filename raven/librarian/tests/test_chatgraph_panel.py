@@ -704,12 +704,60 @@ class TestSiblingButtons:
             "a sibling arriving to the right woke the buttons that step left"
 
 
+@pytest.fixture
+def roomy(dpg_context):
+    """`wide`'s forest in a panel wide enough that a node's box is nowhere near an edge.
+
+    The default panel is 400x300, against boxes 300 graph units wide, so almost any zoom clips the box
+    under the ring — which is the case worth testing and a poor one for testing everything *else*.
+
+    **Wider, but not taller.** The graph is about 400 units tall, so a panel with more height than that
+    would leave the pan clamp centring the vertical axis every frame — nothing can hold a position on an
+    axis with nothing to hold on to, and a test of what holds a position would be reading that instead.
+    """
+    themes_and_fonts = dpg_context
+    forest = Forest()
+    root = forest.create_node(payload("system", "the card"), parent_id=None)
+    greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+    chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
+
+    app_state = {"HEAD": chats[0], "new_chat_HEAD": greeting}
+    calls = Calls(app_state)
+    with dpg.window() as holder:
+        built = chatgraph_panel.DPGChatGraphPanel(
+            gui_parent=holder, datastore=forest, app_state=app_state,
+            themes_and_fonts=themes_and_fonts, width=1200, height=400, show=True,
+            on_commit=calls.commit)
+    built.refresh()
+    viewport = built._widget._viewport
+    assert built._chat_graph.graph.height > viewport.height, \
+        "the graph is shorter than this panel, so the pan clamp centres the vertical axis"
+
+    yield built, forest, greeting, chats, calls
+
+    built.destroy()
+    dpg.delete_item(holder)
+
+
 class TestZoomAnchor:
     """Zoom turns about the box under the ring, and about the middle of the view when there is none.
 
     The ring says what the reader is working with, so it is the thing that should stay put while the scale
     changes around it — where the middle of the view is only where the last pan happened to leave things.
+
+    Staying put is the *first* of two promises, and the weaker one. A node is a box, so turning about its
+    centre lets its far half cross the edge of the view; the box stays whole, and the centre holds only
+    while holding it does not clip anything.
     """
+
+    @staticmethod
+    def _screen_bbox(built, node_name):
+        """Where a node's bounding box is on screen, as `(x1, y1, x2, y2)`."""
+        node = built._chat_graph.graph.get_node_by_name(node_name)
+        viewport = built._widget._viewport
+        x1, y1 = viewport.graph_to_screen(node.x1, node.y1)
+        x2, y2 = viewport.graph_to_screen(node.x2, node.y2)
+        return x1, y1, x2, y2
 
     @staticmethod
     def _settle(built):
@@ -724,18 +772,24 @@ class TestZoomAnchor:
         for smooth in (viewport.pan_x, viewport.pan_y, viewport.zoom):
             smooth.set_immediate(smooth.target)
 
-    def _off_centre_cursor(self, built, chats):
-        """Put the cursor on a box and then pan away from it, so centring and anchoring differ."""
+    def _off_centre_cursor(self, built, chats, dx: int = 60, dy: int = 40):
+        """Put the cursor on a box and then pan away from it, so centring and anchoring differ.
+
+        `dx`, `dy`: Screen pixels to pan by — which decides *which* edge the box ends up near, and so
+                    whether holding its centre would clip it.
+        """
         built.handle_key(dpg.mvKey_Down)
         built._set_cursor(chats[3])
-        built._widget.pan_by(60, 40)
+        built._widget.pan_by(dx, dy)
         self._settle(built)
         node = built._chat_graph.graph.get_node_by_name(chats[3])
         return built._widget._viewport.graph_to_screen(node.x, node.y)
 
-    def test_zooming_in_holds_the_ring_where_it_is(self, wide):
-        built, forest, greeting, chats, calls = wide
-        before = self._off_centre_cursor(built, chats)
+    def test_zooming_in_holds_the_ring_where_it_is(self, roomy):
+        # A panel with room to spare, so the ring's box is nowhere near an edge and holding its centre
+        # clips nothing. That is the case where the anchor is the whole of the behaviour.
+        built, forest, greeting, chats, calls = roomy
+        before = self._off_centre_cursor(built, chats, dx=60, dy=-30)  # up and right, away from an edge
         viewport = built._widget._viewport
         assert abs(before[0] - viewport.width / 2) > 1.0 or abs(before[1] - viewport.height / 2) > 1.0, \
             "the ring is already at the centre of the view, so anchoring and centring cannot be told apart"
@@ -747,6 +801,73 @@ class TestZoomAnchor:
 
         assert after[0] == pytest.approx(before[0], abs=1.0)
         assert after[1] == pytest.approx(before[1], abs=1.0)
+
+    def test_zooming_in_keeps_the_ring_whole_rather_than_holding_its_centre(self, wide):
+        """The second promise, and the one that overrides the first.
+
+        Turning about a centre near the edge grows the far half of the box out of the view — and once the
+        centre itself is outside, the node stops being a usable anchor and the next press quietly reverts
+        to the middle of the view. So the box wins and the centre gives way.
+        """
+        built, forest, greeting, chats, calls = wide
+        viewport = built._widget._viewport
+        before = self._off_centre_cursor(built, chats)
+
+        built.zoom_in()
+        self._settle(built)
+
+        after = viewport.graph_to_screen(*[getattr(built._chat_graph.graph.get_node_by_name(chats[3]), a)
+                                           for a in ("x", "y")])
+        assert abs(after[0] - before[0]) > 1.0 or abs(after[1] - before[1]) > 1.0, \
+            ("the ring's box fits with room to spare here, so nothing had to give way and this fixture "
+             "cannot tell the two promises apart")
+        x1, y1, x2, y2 = self._screen_bbox(built, chats[3])
+        assert x1 >= 0.0 and x2 <= viewport.width, f"the box spans x {x1:.1f}..{x2:.1f} of {viewport.width}"
+        assert y1 >= 0.0 and y2 <= viewport.height, f"the box spans y {y1:.1f}..{y2:.1f} of {viewport.height}"
+
+    def test_zooming_out_keeps_the_ring_whole_too(self, wide):
+        # Zooming out cannot clip a node that was whole, so what this pins is the recovery: a box left
+        # hanging over the edge is brought back, which is what makes the invariant one sentence rather
+        # than two.
+        built, forest, greeting, chats, calls = wide
+        viewport = built._widget._viewport
+        self._off_centre_cursor(built, chats)
+        x1, _, x2, _ = self._screen_bbox(built, chats[3])
+        assert x1 < 0.0 or x2 > viewport.width, \
+            "the box is already whole, so there is nothing here for zooming out to recover"
+
+        built.zoom_out()
+        self._settle(built)
+
+        x1, y1, x2, y2 = self._screen_bbox(built, chats[3])
+        assert x1 >= 0.0 and x2 <= viewport.width, f"the box spans x {x1:.1f}..{x2:.1f} of {viewport.width}"
+        assert y1 >= 0.0 and y2 <= viewport.height, f"the box spans y {y1:.1f}..{y2:.1f} of {viewport.height}"
+
+    def test_a_ring_at_the_edge_of_the_graph_is_still_kept_whole(self, wide):
+        """The graph clamp runs after this and could in principle undo it.
+
+        It only ever pulls the view *towards* the graph, and the node is inside the graph, so it should
+        not be able to push one back out — but the two clamps are pulling on the same pan, and the node
+        at the very end of a level is where they are closest to disagreeing.
+        """
+        built, forest, greeting, chats, calls = wide
+        viewport = built._widget._viewport
+        built.handle_key(dpg.mvKey_Down)
+        built._set_cursor(chats[-1])  # the last sibling: hard against the right edge of the graph
+        self._settle(built)
+
+        for _ in range(4):
+            built.zoom_in()
+            self._settle(built)
+            viewport.clamp_pan_target()  # the graph clamp, which the render loop applies every frame
+            self._settle(built)
+            x1, y1, x2, y2 = self._screen_bbox(built, chats[-1])
+            if x2 - x1 > viewport.width or y2 - y1 > viewport.height:
+                break  # zoomed in past the point where the box can fit at all; nothing left to promise
+            assert x1 >= 0.0 and x2 <= viewport.width, \
+                f"the graph clamp pushed the box out: x {x1:.1f}..{x2:.1f} of {viewport.width}"
+            assert y1 >= 0.0 and y2 <= viewport.height, \
+                f"the graph clamp pushed the box out: y {y1:.1f}..{y2:.1f} of {viewport.height}"
 
     def test_with_the_ring_away_the_view_centre_holds_instead(self, wide):
         # The control. Without it, a `zoom_in` that ignored the anchor entirely would pass the test above

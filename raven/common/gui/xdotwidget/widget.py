@@ -32,6 +32,10 @@ from .renderer import render_graph, color_to_dpg, set_dark_mode
 from .search import SearchState
 from .viewport import Viewport
 
+# How much room to leave between a zoom's anchor node and the edge of the view, in screen pixels. Enough
+# that a node held on screen reads as being on screen rather than as having got stuck against the side.
+_ANCHOR_MARGIN = 8
+
 
 class XDotWidget(gui_animation.Animation):
     """Interactive graph viewer widget for DearPyGUI.
@@ -311,23 +315,50 @@ class XDotWidget(gui_animation.Animation):
         """Zoom in by a factor.
 
         `anchor_node`: Internal name of a node to zoom about, which then keeps its place on screen while
-                       everything else grows away from it. `None` zooms about the middle of the view.
-                       So is a node that is not in the graph or not currently on screen — see
-                       `_anchor_screen_point`.
+                       everything else grows away from it, and stays whole in the view. `None` zooms about
+                       the middle of the view, and so does a node that is not in the graph or is not
+                       currently on screen — see `_usable_anchor`.
         """
-        self._viewport.zoom_by(factor, *self._anchor_screen_point(anchor_node))
-        self._needs_render = True
+        self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(factor, sx, sy))
 
     def zoom_out(self, factor: float = 1.2, anchor_node: Optional[str] = None) -> None:
         """Zoom out by a factor. `anchor_node` is as for `zoom_in`."""
-        self._viewport.zoom_by(1.0 / factor, *self._anchor_screen_point(anchor_node))
+        self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(1.0 / factor, sx, sy))
+
+    def _zoom_about_node(self, anchor_node: Optional[str],
+                         zoom: Callable[[Optional[float], Optional[float]], None],
+                         animate: bool = True) -> None:
+        """Run a zoom about `anchor_node`, and leave that node whole on screen.
+
+        `anchor_node`: As for `zoom_in`.
+        `zoom`: Called with the screen point to turn about, or `(None, None)` for the middle of the view.
+        `animate`: Whether `zoom` was asked to animate, so the correction below can match it.
+
+        **Turning about a node's centre keeps a point, and a node is a box.** Zoomed in far enough about a
+        centre near the edge of the view, the far half of the box leaves it — and the zoom that lands the
+        centre itself outside is the one after which the node stops being a usable anchor at all, so the
+        next press silently reverts to the middle of the view. Following the zoom with the smallest pan
+        that puts the whole box back inside the view is what keeps the promise the anchor is making.
+
+        Applied in both directions rather than only when zooming in. Zooming out cannot clip a node that
+        was whole, so the correction is free there; what it buys is the simpler invariant — an anchored
+        node is whole after a zoom, whichever way the zoom went — and the recovery of a node left clipped
+        by something else.
+        """
+        node = self._usable_anchor(anchor_node)
+        if node is None:
+            zoom(None, None)
+        else:
+            zoom(*self._viewport.graph_to_screen(node.x, node.y))
+            self._viewport.keep_box_visible(*node.get_bounding_box(),
+                                            margin=_ANCHOR_MARGIN, animate=animate)
         self._needs_render = True
 
-    def _anchor_screen_point(self, anchor_node: Optional[str]) -> Tuple[Optional[float], Optional[float]]:
-        """Return where on screen a zoom about `anchor_node` should turn, as the pair `zoom_by` takes.
+    def _usable_anchor(self, anchor_node: Optional[str]) -> Optional[Node]:
+        """Return the node a zoom should turn about, or `None` to turn about the middle of the view.
 
-        `(None, None)` — meaning the middle of the view — for no node, a name the graph does not have,
-        and a node that is currently off screen.
+        `None` for no node, for a name the graph does not have, and for a node that is currently off
+        screen.
 
         **That last one is the case worth having.** The transform is defined about any point and answers
         an off-screen one uselessly: a node out of sight pulls the view further away from itself with
@@ -335,14 +366,14 @@ class XDotWidget(gui_animation.Animation):
         somewhere the reader can see it, and the middle of the view stands in when it is not.
         """
         if anchor_node is None or self._graph is None:
-            return None, None
+            return None
         node = self._graph.get_node_by_name(anchor_node)
         if node is None:
-            return None, None
+            return None
         sx, sy = self._viewport.graph_to_screen(node.x, node.y)
         if not (0.0 <= sx <= self._viewport.width and 0.0 <= sy <= self._viewport.height):
-            return None, None
-        return sx, sy
+            return None
+        return node
 
     def pan_by(self, dx, dy):
         """Pan the view by (dx, dy) pixels."""
@@ -549,8 +580,9 @@ class XDotWidget(gui_animation.Animation):
         Obeyed as given, where `zoom_in` and `zoom_out` decline to leave the graph behind. A caller naming
         a scale means that scale; the incremental pair is the one being steered by how it looks.
         """
-        self._viewport.zoom_to(zoom, *self._anchor_screen_point(anchor_node), animate=animate)
-        self._needs_render = True
+        self._zoom_about_node(anchor_node,
+                              lambda sx, sy: self._viewport.zoom_to(zoom, sx, sy, animate=animate),
+                              animate=animate)
 
     def get_visible_bounds(self) -> Tuple[float, float, float, float]:
         """Return the visible area in graph coordinates as ``(x1, y1, x2, y2)``."""
