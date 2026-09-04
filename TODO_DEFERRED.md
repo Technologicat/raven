@@ -4645,11 +4645,22 @@ the loop, and therefore the one whose requirements do not follow from the other 
       prefix — is exactly what brings the corvid problem back.
     - **And it is user-facing vocabulary**, which at an event makes it *signage* rather than a help card.
       Nobody at a kiosk presses F1 to find out what they may say.
-- **The genuinely hard part is barge-in on cancel.** Cancel has to work *while the AI is talking*, so the
-  microphone is live with the AI's own voice coming through the venue's speakers. That is echo
-  cancellation or push-to-talk, and it is the one command for which "say it again, louder" cannot be the
-  answer, since the thing being cancelled is what is drowning the speaker out. Worth settling before the
-  naming scheme, because it may decide that cancel is the one control which stays physical.
+- **The genuinely hard part is barge-in on cancel, and it is a requirement rather than a preference.**
+  Cancel has to work *while the AI is talking*, so the microphone is live with the AI's own voice coming
+  through the venue's speakers — and "say it again, louder" cannot be the answer, because the thing being
+  cancelled is what is drowning the speaker out.
+  - **A physical fallback is not available here** (Juha, 2026-09-04), which is what makes this load-
+    bearing. Cancel has to be invokable from across the room, precisely when the AI has visibly wedged;
+    an answer that requires standing up and walking to the console defeats the mode that this item is
+    about. So the speech path has to work, and cannot be routed around.
+  - Candidates, unmeasured and in rough order of promise: **acoustic echo cancellation**, which is the
+    principled one and unusually tractable here because Raven synthesised the audio and so holds the
+    reference signal — on Linux there may be a system-level route worth trying before writing any DSP.
+    **Listening in the gaps**, since the controller already splits speech into sentences and plays them
+    as separate segments, so silences exist by construction and cost at most a sentence of latency.
+    And **text-level echo rejection** — discarding transcriptions that match what was just spoken — which
+    is cheap and solves only half the problem: it stops the AI triggering itself, and does nothing to
+    help the microphone hear a human over it.
 - **The chat log must stay toggleable**, so whoever is at the console can bring the ordinary GUI up
   mid-event without restarting into another mode.
 - **Which means this mode varies the *left* panel as well**, and the framing above does not yet cover
