@@ -4583,7 +4583,11 @@ reason to have a version number rather than just a migration marker.
 
 ## A no-avatar mode, with the chat tree in the panel the avatar vacates
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-29 · See also: `briefs/researchers-night/16_chat-graph-view-brief.md`*
+*Cluster: panel occupancy · Cost: L · Gate: after Researchers' Night (2026-09-26) · Filed: 2026-07-29 · See also: `briefs/researchers-night/16_chat-graph-view-brief.md`*
+
+**Timing, stated so this is not read as near-term work** (Juha, 2026-09-04): everything here is post-
+Researchers' Night, and the realistic slot is autumn 2026 or spring 2027 — an academic year has no
+working season between the two.
 
 Raised 2026-07-29 (Juha), and the opposite end of the same axis as the avatar-first mode sketched in
 `briefs/design/lab-assistant-hci-sketch.md`. On the road, on a laptop, with no power outlet in sight, the avatar is
