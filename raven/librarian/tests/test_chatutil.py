@@ -253,12 +253,14 @@ class TestFormatDatetime:
 # Disclosure manifest (EU AI Act Article 50(2) origin marking)
 # ---------------------------------------------------------------------------
 
-def _payload(role, *, model=None, datetime_str="2026-07-29 14:22:58"):
+def _payload(role, *, model=None, function_name=None, datetime_str="2026-07-29 14:22:58"):
     """A chat node payload carrying just the keys the manifest reads."""
     payload = {"message": {"role": role, "content": [{"type": "text", "text": "..."}]},
                "general_metadata": {"datetime": datetime_str, "persona": None}}
     if model is not None:
         payload["generation_metadata"] = {"model": model, "n_tokens": 10, "dt": 1.0}
+    if function_name is not None:
+        payload.setdefault("generation_metadata", {})["function_name"] = function_name
     return payload
 
 def _parse_front_matter(text):
@@ -334,6 +336,30 @@ class TestFormatDisclosureManifest:
                                                                             _payload("tool")]))
         assert manifest["ai_generated"] is False
         assert manifest["messages"][1]["origin"] == "tool"
+
+    def test_a_tool_result_names_the_tool_that_produced_it(self):
+        # `origin: tool` says the content was retrieved rather than written; this says by what. The
+        # manifest is where it has to live: it is the one part both export routes emit identically, and a
+        # single copied message carries no heading at all unless Shift is held, so the role name — which
+        # also spells the tool — is not there to be read.
+        manifest = _parse_front_matter(
+            chatutil.format_disclosure_manifest([_payload("tool", function_name="websearch")]))
+        assert manifest["messages"][0]["tool"] == "websearch"
+
+    def test_a_tool_result_that_recorded_no_tool_omits_the_key(self):
+        # The manifest's standing rule: an optional key is left out rather than emitted as null, so a
+        # reader can take its presence as a claim and its absence as "not recorded", with no third state.
+        manifest = _parse_front_matter(chatutil.format_disclosure_manifest([_payload("tool")]))
+        assert "tool" not in manifest["messages"][0]
+
+    def test_only_a_tool_result_is_named(self):
+        # The control. Every role reaches the same branch, and an assistant message carries
+        # `generation_metadata` of its own — so a check that forgot the role would label the model's own
+        # prose with whatever happened to be recorded there.
+        manifest = _parse_front_matter(
+            chatutil.format_disclosure_manifest([_payload("assistant", model="Test-Model-7B",
+                                                          function_name="websearch")]))
+        assert "tool" not in manifest["messages"][0], "a message the model wrote was credited to a tool"
 
     def test_origins_and_models_line_up_with_the_payloads(self):
         payloads = [_payload("system"),

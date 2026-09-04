@@ -689,8 +689,14 @@ messages:
   origin: assistant
   model: Qwen3-VL-30B-A3B
   generated_at: '2026-07-29 14:22:58'
+- n: 2
+  origin: tool
+  tool: websearch
+  generated_at: '2026-07-29 14:23:04'
 ---
 ```
+
+`origin: tool` says the content was retrieved rather than written; `tool` says by what. It is recorded here rather than only in the message's own heading because the heading is optional on a single-message copy, while the manifest is always emitted — so this is the one place both export routes name the tool the same way.
 
 Both export routes emit it — the whole-chatlog copy (F8), and the per-message copy button, which emits a one-message manifest because a lifted fragment travels without the document's. Copying one of *your own* messages emits nothing: there is no AI generation to disclose, and a header would only be something to delete before pasting the question back into the chat field.
 

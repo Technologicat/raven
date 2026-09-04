@@ -436,8 +436,9 @@ def format_disclosure_manifest(payloads: List[Dict[str, Any]],
     `payloads`: Chat node payloads, in the order they appear in the exported text. One manifest
                 entry is emitted per payload, numbered by position. Each is read for
                 `message["role"]`, `general_metadata["datetime"]`, and
-                `generation_metadata["model"]`; all but the role are optional, so a payload
-                whose generation was interrupted (no `generation_metadata`) is fine.
+                `generation_metadata["model"]` — plus `generation_metadata["function_name"]` on a
+                tool result, which becomes the entry's `tool`. All but the role are optional, so a
+                payload whose generation was interrupted (no `generation_metadata`) is fine.
 
     `exported_at`: Timestamp for the export itself, as an ISO 8601 string. If `None`, stamp now,
                    with the local UTC offset. (The per-message `generated_at` values carry no
@@ -458,6 +459,13 @@ def format_disclosure_manifest(payloads: List[Dict[str, Any]],
           model: Qwen3-VL-30B-A3B
           generated_at: '2026-07-29 14:22:58'
         ---
+
+    A tool result names the tool that produced it::
+
+        - n: 2
+          origin: tool
+          tool: websearch
+          generated_at: '2026-07-29 14:23:04'
     """
     if exported_at is None:
         exported_at = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
@@ -469,6 +477,12 @@ def format_disclosure_manifest(payloads: List[Dict[str, Any]],
                  "origin": role}
         # Optional keys are omitted rather than emitted as null: a reader should be able to take the
         # presence of `model` as a claim, and its absence as "not recorded", without a third state.
+        # Which tool, for a tool result. `origin: tool` says the content was retrieved rather than
+        # written; this says by what. The manifest is where it belongs because it is the one part both
+        # export routes emit identically -- the role name carries the tool too, but only inside a heading,
+        # and a single copied message has no heading unless Shift is held.
+        if role == "tool" and (tool_name := tool_name_of(payload)) is not None:
+            entry["tool"] = tool_name
         if (model := payload.get("generation_metadata", {}).get("model", None)) is not None:
             entry["model"] = model
         if (generated_at := payload.get("general_metadata", {}).get("datetime", None)) is not None:
