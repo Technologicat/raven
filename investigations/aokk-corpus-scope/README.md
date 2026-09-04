@@ -509,7 +509,12 @@ run** — it splits 181 false against 35 true under `not_applicable`, and 12 fal
 `higher_education`, so the field carries real signal and the pilot's third was small-sample noise. It is
 still the softer of the two, which is why it is used only to corroborate.
 
-### The filter, in three tiers
+### The filter, in tiers
+
+**The counts in this section are from the first vocabulary**, before `not_applicable` was split. They are
+kept because the tiering, and the reasons for it, are what the numbers illustrate; the re-extraction
+replaces the figures and not the argument.
+
 
 `filter_keeps.py` applies a rule to the stored fields. Tiers, because a single removal count would hide
 that they are not equally reliable:
@@ -519,6 +524,15 @@ that they are not equally reliable:
 | **A** | `level` is `school` or `vocational` | 106 | removed |
 | **B1** | `level` is `not_applicable` **and** `human_learning` false | 181 | removed |
 | **B2** | `level` is `not_applicable`, uncorroborated | 42 | **held** |
+| **C** | `level` is `professional_training` or `informal` | — | **held** |
+
+**Tier C exists because the split would otherwise have hidden what it revealed.** Giving workplace
+training and informal learning their own values takes them out of `not_applicable`, so without a tier of
+their own they fall through the filter and are kept in silence — the same invisibility the split was
+meant to end, arrived at from the other side. It is held rather than removed, and for a different reason
+than B2: **those two ask different questions of the person reading them.** B2 asks *is this label right?*,
+which is about the extraction. C asks *is this in scope?*, which is about the review, and nothing in the
+apparatus can answer it. `--remove-outside-institutions` is where that answer goes once it exists.
 
 A's removals quote their own evidence — *"secondary-school"*, *"sixth-grade students"*, *"secondary
 English classrooms"*. B1's are machine-learning methods papers: explainable-AI dialogue, interactive
@@ -621,10 +635,11 @@ Generated at runtime and **not committed** — they list the contents of a corpu
 | `drop-review-<from>-<to>.tsv` | one slice of that list re-read by `review_drops.py`, with the control mixed in and labelled only here |
 | `contested.tsv` | the hand-check list across every slice: each dropped record a case was made for, worst cell first, the judge's reason beside the reviewer's case, and an empty column to mark in |
 | `dropped-before-escalating-titles.tsv` | the drop list as it stood before every drop was escalated to pass 2. Kept because it is what defines which records that run touched, and the review above was measured against it |
-| `extracted.jsonl`, `-traces.jsonl` | the extracted fields per record, and the reasoning traces — one entry per model call, naming the keys that shared it, since a batched call yields one trace for the batch |
+| `extracted-<instrument>.jsonl`, `-traces.jsonl` | the extracted fields per record, and the reasoning traces — one entry per model call, naming the keys that shared it, since a batched call yields one trace for the batch. The name is a hash of the vocabularies and the prompt together, so a run under a changed extractor writes its own file and reading one run's results is opening one file |
+| `extracted.jsonl` | the first extraction, from before that naming. Left as it is rather than renamed: it holds answers from two instruments, which is the state the naming exists to prevent, and `filter_keeps.py` says so if pointed at it |
 | `<corpus>_in_scope_filtered.bib` | the in-scope corpus with the ruled-out keeps taken out. Written beside the judge's output rather than over it, so the corpus of record does not move until somebody decides it should |
 | `filtered-out.tsv` | every record the filter removed, with the fields and the quoted evidence that removed it |
-| `uncorroborated.tsv` | the tier held back for a person: `not_applicable` with nothing corroborating it, which is where the extraction's errors are |
+| `held-for-review.tsv` | the tiers held back for a person, sorted by tier: `not_applicable` with nothing corroborating it, where the extraction's errors are, and the learning that happens outside an institution, where the scope question is |
 
 ## Reproducing
 
