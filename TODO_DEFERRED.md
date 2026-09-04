@@ -4677,9 +4677,16 @@ the loop, and therefore the one whose requirements do not follow from the other 
 - **With no chat log, the AI needs to show what it is doing** (Juha, 2026-09-04) — and this is not
   decoration, it is what makes the spoken cancel usable at all. *Is it working or has it wedged* is the
   judgement the cancel rests on, and in this mode there is no streaming text to read it from.
-  - **Mostly the indicators that already exist**, and the existing one is the right shape: the "data
-    eyes" effect marks LLM tool access as an effect *on the character* rather than as a widget, which is
-    exactly the channel available when the character fills the screen.
+  - **Mostly the indicators that already exist**, and there are two channels, which divide by what the
+    character can express. The "data eyes" effect marks LLM tool access *on the character*. The floating
+    INDEXING / DOCS / READING / SYSTEM / WEB stack carries everything the character cannot readily show
+    (Juha) — and it needs no moving, since it is already anchored inside the avatar panel at (16, 16).
+  - **But in this mode the indicators have an audience, not an operator**, and that changes what they
+    should be. "READING" is developer vocabulary: legible to whoever built the app, opaque to a passer-by
+    at a science event, and nobody is going to explain it to them. Juha's suggestion is the shape of the
+    fix — READING as a floating book, or a sheet of paper carrying the document's filename. What
+    generalizes is the test: an indicator here has to be readable by someone who has never seen the app
+    and will not be told anything about it.
   - **The signals are already there too**, so this is a rendering question rather than a plumbing one:
     `scaffold` emits `on_docs_start`/`done`, `on_prompt_ready`, `on_llm_start`/`progress`/`done` and
     `on_tools_start`/`done`, which is most of what a viewer would want to see.
