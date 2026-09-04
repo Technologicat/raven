@@ -286,6 +286,9 @@
 - **copying a long tool result now copies the whole document, not the part the chat log had room for.** A
   fetched page too long to show inline is kept as an attachment and previewed as an excerpt; the copy
   button was taking the preview.
+  - **Copying the whole chat log keeps the excerpt**, and now says so, naming the attachment and its
+    length. A log with several fetched pages inlined would be unreadable, and it is the log rather than a
+    single message that tends to get shared onward.
 
 - **closing Librarian with `kill`, a logout or a session manager now saves your chat.** It saves once, when
   it exits cleanly, and a termination signal never reached it: the audio library installs signal handlers

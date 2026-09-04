@@ -7,6 +7,7 @@ that controls chatting with the AI.
 # TODO: check if we need to shuffle the abstraction levels around - e.g. if there are many references to `self.parent_view.chat_controller.something`, does `something` really belong to the controller level?
 
 __all__ = ["format_chat_message_for_clipboard",
+           "format_excerpt_notice",
            "format_message_metadata_line",
            "format_generation_stats",
            "DPGChatMessage",
@@ -247,6 +248,30 @@ def format_chat_message_for_clipboard(message_number: int | None,
     message_text = chatutil.remove_persona_from_start_of_line(persona=persona,
                                                               text=text)
     return f"{message_heading}{message_text}"
+
+def format_excerpt_notice(node_payload: dict, full_length: int) -> str:
+    """Format the line marking a tool result whose text in the log is only an excerpt of its document.
+
+    `node_payload`: The chat node payload, at the revision being shown.
+    `full_length`: How many characters the whole document runs to.
+
+    Names the document where the message says what it is called, so a reader can match the note against
+    the attachment rather than merely learning that something is missing. Falls back to the indefinite
+    article for a message that names nothing, which is honest and still says the useful half.
+
+    Italic, and bracketed as the constellation's own voice: this is the log remarking on the message, not
+    the message speaking.
+
+    Returns the formatted line.
+    """
+    name = None
+    for part in node_payload.get("message", {}).get("content") or []:
+        if part.get("type") == "text_file":
+            name = (part.get("text_file") or {}).get("name")
+            break
+    what = f'"{name}"' if name else "the attached document"
+    return f"*[Excerpt. The full text of {what} — {full_length:,} characters — is attached to this message.]*"
+
 
 def format_message_metadata_line(node_payload: dict, role: str, revision: int) -> str:
     """Format the small grey line above a message: when it was written, which revision, and for a tool
@@ -1445,23 +1470,56 @@ class DPGChatMessage:
         return None
 
     def _clipboard_text(self, node_payload: dict[str, Any]) -> str:
-        """The text a copy of this message should carry.
+        """The text a copy of *this message* should carry: what it holds, in full.
 
         `node_payload`: The chat node payload, at the revision on screen.
 
-        The stored text, except for a tool result whose document was moved to a sidecar: there the stored
-        text is an 800-character excerpt, and copying it hands back a truncation with nothing saying it
-        was one. Lossy in a way an ordinary attachment is not — a user message keeps its own words and
-        gains a chip, where this message's content was *replaced* — and someone copying a fetched page
-        wants the page. (Juha, 2026-09-04, from the live app: a webfetch result too long for the log
-        copied as far as the log had shown it.)
+        The stored text, except for a tool result whose document was moved to a sidecar. There the stored
+        text is an 800-character excerpt, so returning it hands back a truncation with nothing saying it
+        was one — lossy in a way an ordinary attachment is not, since a user message keeps its own words
+        and *gains* a chip, where this message's content was replaced.
+
+        The sibling of `_export_text`, which answers the same question for a whole log and answers it
+        differently. The gestures differ, not the mechanism: asking for one message is asking for its data
+        as it stands, where a log is a document to be read and passed on.
 
         Returns the text.
         """
+        # Juha, 2026-09-04, from the live app: a webfetch result too long for the chat log copied as far
+        # as the log had shown it, while the attached file was intact.
         document_body = self._document_body(node_payload)
         if document_body is not None:
             return document_body
         return chatutil.format_message_text_for_export(node_payload["message"])
+
+    def _export_text(self, node_payload: dict[str, Any]) -> str:
+        """The text of this message as a whole-log export should carry it.
+
+        `node_payload`: The chat node payload, at the revision on screen.
+
+        The stored text, with a line naming the attachment wherever that text is only an excerpt of one —
+        so a reader of the log can tell that something was elided and what it was. The sibling of
+        `_clipboard_text`, which answers the same question for a single message and answers it with the
+        whole document, that gesture being a request for one message's data as it stands.
+
+        Returns the text.
+        """
+        # Two reasons the log keeps the excerpt where a single copied message takes the document, both
+        # Juha's (2026-09-04), and the second is the one that does not occur to you:
+        #
+        #   - Several fetched pages inlined at full length make the log unreadable, which is most of what
+        #     a log is copied *for*. One message is a lift of that message; a log is a document.
+        #   - A log is the artifact that gets *shared*, where a single copied message is typically pasted
+        #     somewhere the person is working. So a log carrying complete copies of pages that were only
+        #     ever quoted invites a complaint that an excerpt would not — the same content is unremarkable
+        #     as a quotation and awkward as a redistribution, and only the log is likely to travel.
+        #
+        # So the elision stays and stops being silent, which was the whole of the original defect.
+        document_body = self._document_body(node_payload)
+        stored_text = chatutil.format_message_text_for_export(node_payload["message"])
+        if document_body is None:
+            return stored_text
+        return f"{stored_text}\n\n{format_excerpt_notice(node_payload, len(document_body))}"
 
     def _build_copy_button(self, g) -> None:
         """Build the button that copies this message to the clipboard.
@@ -3420,7 +3478,7 @@ class DPGLinearizedChatView:
                 message = node_payload["message"]
                 role = message["role"]
                 persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
-                text = chatutil.format_message_text_for_export(message)
+                text = dpg_chat_message._export_text(node_payload)
                 formatted_message = format_chat_message_for_clipboard(message_number=message_number,
                                                                       role=role,
                                                                       persona=persona,

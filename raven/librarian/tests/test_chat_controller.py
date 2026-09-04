@@ -229,6 +229,81 @@ class TestClipboardText:
         assert got == "what is the square root of 10?"
 
 
+class TestExportText:
+    """What a *whole-log* copy carries, which is deliberately not what a single-message copy carries.
+
+    One message copied is a request for that message's data as it stands, so it takes the document. A log
+    is a document itself, read and passed on: several fetched pages inlined at full length make it
+    unreadable, and a shared log carrying complete copies of pages that were only quoted invites a
+    complaint an excerpt would not. So the log keeps the excerpt — and says that it is one.
+    """
+
+    def _attachmentified(self, forest, body, name="a page.md"):
+        from raven.librarian import chatutil, textfilestore
+        stored = textfilestore.store_file_as_sidecar(datastore=forest,
+                                                     file_source=body.encode("utf-8"),
+                                                     name=name,
+                                                     provenance_url="https://example.invalid/page",
+                                                     provenance_source="tool_result",
+                                                     content_type="text/markdown")
+        return {"message": {"role": "tool",
+                            "content": [chatutil.text_content_part("the opening of it…"), stored.part]}}
+
+    def test_the_log_keeps_the_excerpt(self, in_memory_forest):
+        body = "\n".join(f"line {k} of the fetched page" for k in range(500))
+        payload = self._attachmentified(in_memory_forest, body)
+        got = message_over(in_memory_forest)._export_text(payload)
+        assert got.startswith("the opening of it…")
+        assert "line 400 of the fetched page" not in got, "the whole document was inlined into the log"
+
+    def test_the_log_says_the_excerpt_is_one(self, in_memory_forest):
+        # The half that makes keeping the excerpt honest rather than merely smaller. Without it the log is
+        # exactly the silent truncation the single-message copy was fixed for.
+        body = "\n".join(f"line {k} of the fetched page" for k in range(500))
+        payload = self._attachmentified(in_memory_forest, body, name="Example Page.md")
+        got = message_over(in_memory_forest)._export_text(payload)
+        assert "Excerpt." in got
+        assert "Example Page.md" in got, "the note does not say which attachment it is about"
+        assert f"{len(body):,}" in got, "the note does not say how much was left out"
+
+    def test_a_message_with_no_document_is_untouched(self, in_memory_forest):
+        # The control. Every ordinary message goes through this too, and a note appended to a question the
+        # user typed would be a claim about an attachment that does not exist.
+        from raven.librarian import chatutil
+        payload = {"message": {"role": "user",
+                               "content": [chatutil.text_content_part("what is the square root of 10?")]}}
+        got = message_over(in_memory_forest)._export_text(payload)
+        assert got == "what is the square root of 10?"
+
+    def test_the_two_destinations_disagree_on_purpose(self, in_memory_forest):
+        # Stated as one assertion because it is one decision. If these ever come out equal, either the log
+        # has started inlining documents or the message copy has stopped.
+        body = "\n".join(f"line {k} of the fetched page" for k in range(500))
+        payload = self._attachmentified(in_memory_forest, body)
+        message = message_over(in_memory_forest)
+        assert message._clipboard_text(payload) == body
+        assert message._export_text(payload) != body
+
+
+class TestFormatExcerptNotice:
+    def test_it_names_the_document(self):
+        notice = chat_controller.format_excerpt_notice(
+            {"message": {"content": [{"type": "text_file",
+                                      "text_file": {"url": "sidecar:x.md", "name": "Example Page.md"}}]}},
+            full_length=45678)
+        assert '"Example Page.md"' in notice
+        assert "45,678 characters" in notice
+
+    def test_an_unnamed_attachment_still_gets_a_notice(self):
+        # A message can carry a `text_file` part with no name. Saying "the attached document" is worth more
+        # than saying nothing, the useful half being that something was left out at all.
+        notice = chat_controller.format_excerpt_notice(
+            {"message": {"content": [{"type": "text_file", "text_file": {"url": "sidecar:x.md"}}]}},
+            full_length=100)
+        assert "the attached document" in notice
+        assert "None" not in notice, "the missing name was formatted into the notice"
+
+
 class TestDemolishLeavesNoWidgetReference:
     """`demolish` must clear every widget reference `build` made, because the instance may be rebuilt.
 
