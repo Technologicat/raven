@@ -283,6 +283,10 @@
 
 *Raven-librarian*
 
+- **copying a long tool result now copies the whole document, not the part the chat log had room for.** A
+  fetched page too long to show inline is kept as an attachment and previewed as an excerpt; the copy
+  button was taking the preview.
+
 - **closing Librarian with `kill`, a logout or a session manager now saves your chat.** It saves once, when
   it exits cleanly, and a termination signal never reached it: the audio library installs signal handlers
   of its own that hand the signal to an event queue Raven does not read, so a plain `kill` was discarded

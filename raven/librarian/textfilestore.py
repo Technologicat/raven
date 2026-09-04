@@ -25,7 +25,8 @@ The shared sidecar mechanics (URL scheme, provenance skeleton, byte ingestion, G
     images and attached documents are seen by the mark phase.
 """
 
-__all__ = ["remember_extracted_text",
+__all__ = ["NO_EXTRACTABLE_TEXT",
+           "remember_extracted_text",
            "store_file_as_sidecar",
            "sidecar_to_text",
            "sidecar_text_if_extracted",
@@ -44,6 +45,18 @@ from ..common import docextract
 from . import chatutil
 from . import chattree
 from . import sidecarstore
+
+
+# What `sidecar_to_text` returns in place of a document it could not read, or one that holds no text at
+# all (a scanned PDF, say). Square brackets, as everywhere the constellation speaks in its own voice
+# rather than the document's.
+#
+# Named because two sides have to agree on it. `sidecar_to_text` never raises -- an unreadable attachment
+# must not break a wire-build, and the model is better told that a document was unreadable than handed
+# nothing -- so a caller wanting to distinguish "the text" from "we could not get the text" has this
+# string as its only signal, and a second literal spelling of it somewhere else would silently stop
+# matching the day this one is reworded.
+NO_EXTRACTABLE_TEXT = "[no extractable text]"
 
 
 # Extracted-text cache, keyed by the content-addressed sidecar filename (`<sha256>.<ext>`). A sidecar is
@@ -161,7 +174,7 @@ def sidecar_to_text(datastore: chattree.PersistentForest, url: str) -> str:
         logger.warning(f"sidecar_to_text: could not extract text from sidecar '{filename}': {type(exc)}: {exc}")
         text = None
     if not text:
-        text = "[no extractable text]"
+        text = NO_EXTRACTABLE_TEXT
     _extracted_text_cache[filename] = text
     return text
 

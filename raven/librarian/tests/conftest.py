@@ -20,6 +20,16 @@ def chat_payload():
 
 
 @pytest.fixture
+def in_memory_forest():
+    """A bare `Forest`, for tests about attachments rather than about tree shape.
+
+    An in-memory forest carries sidecars like a persistent one — the policy is `Forest`'s and only the
+    bytes' home differs — so a document can be stored and read back with no temporary directory.
+    """
+    return chattree.Forest()
+
+
+@pytest.fixture
 def two_card_forest():
     """Two system prompts, each with its own greeting, and one message under the first.
 

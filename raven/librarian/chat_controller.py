@@ -1396,6 +1396,73 @@ class DPGChatMessage:
         self._build_tool_approval_button(g)
         self._build_navigation_buttons(g)
 
+    def _document_body(self, node_payload: dict[str, Any]) -> str | None:
+        """The full text of the document this message reports, or `None` if it does not report one.
+
+        "Document" is the category the chat log gives a handle to, and membership is *declared*, never guessed
+        from length. Two ways in, matching the two ways a document reaches a message:
+
+          - a `text_file` part, whose sidecar holds the text (a page `webfetch` stored, or a file the user
+            attached) — the stored text part is only an excerpt, so the body comes from the sidecar; and
+          - a `fetch_document` result, whose text *is* the body, sitting inline because a knowledge-base
+            document has no sidecar and should not get one (the file is already the user's).
+
+        Everything else answers `None` and renders unchanged — notably `websearch`, whose result can be long
+        but is a list of links the user wants to see and click, not a document to put behind a toggle.
+
+        **Tool messages only**, which is load-bearing rather than a narrowing for tidiness. A user message
+        carrying an attached document has a `text_file` part too, and its text part is the user's own words;
+        treating that as a document result would replace what they wrote with an excerpt of what they
+        attached. An attached document is not inlined into the chat log at all, by design — the chip is its
+        handle — and that stays true.
+
+        An unreadable sidecar also answers `None`, which degrades to rendering the stored excerpt as ordinary
+        text: less than we wanted, but never a message that shows nothing. That arrives as a *value* rather
+        than an exception — `textfilestore.sidecar_to_text` answers `NO_EXTRACTABLE_TEXT` instead of raising,
+        so that one bad attachment can never break a wire-build — which is why it is compared for.
+        """
+        message = node_payload["message"]
+        if message.get("role") != "tool":
+            return None
+        datastore = self.parent_view.chat_controller.datastore
+        for part in message.get("content") or []:
+            if part.get("type") == "text_file":
+                url = (part.get("text_file") or {}).get("url", "")
+                if url.startswith(sidecarstore.SIDECAR_SCHEME):
+                    try:
+                        body = textfilestore.sidecar_to_text(datastore, url)
+                    except Exception as exc:  # noqa: BLE001 -- rendering must not fail on one unreadable sidecar
+                        logger.warning(f"DPGChatMessage._document_body: could not read '{url}': {type(exc)}: {exc}")
+                        return None
+                    # `sidecar_to_text` answers a placeholder rather than raising, so the `except` above
+                    # catches nothing this case can throw and the failure arrives as a *value*. Treated as
+                    # no body at all, which falls back to the stored excerpt: 800 real characters of the
+                    # page beat a notice saying we could not read it, and the excerpt is right there in
+                    # the message. The notice would otherwise reach the clipboard as the message's text.
+                    return None if body == textfilestore.NO_EXTRACTABLE_TEXT else body
+        if (node_payload.get("generation_metadata") or {}).get("function_name") == "fetch_document":
+            return chatutil.content_to_text(message.get("content"))
+        return None
+
+    def _clipboard_text(self, node_payload: dict[str, Any]) -> str:
+        """The text a copy of this message should carry.
+
+        `node_payload`: The chat node payload, at the revision on screen.
+
+        The stored text, except for a tool result whose document was moved to a sidecar: there the stored
+        text is an 800-character excerpt, and copying it hands back a truncation with nothing saying it
+        was one. Lossy in a way an ordinary attachment is not — a user message keeps its own words and
+        gains a chip, where this message's content was *replaced* — and someone copying a fetched page
+        wants the page. (Juha, 2026-09-04, from the live app: a webfetch result too long for the log
+        copied as far as the log had shown it.)
+
+        Returns the text.
+        """
+        document_body = self._document_body(node_payload)
+        if document_body is not None:
+            return document_body
+        return chatutil.format_message_text_for_export(node_payload["message"])
+
     def _build_copy_button(self, g) -> None:
         """Build the button that copies this message to the clipboard.
 
@@ -1418,10 +1485,11 @@ class DPGChatMessage:
             # say the same thing about the same message. `self.text` is the *rendered* form: it joins the
             # widget's paragraphs and drops their `is_thought` flag, so a thinking model's trace came out
             # welded to its answer with nothing between them, and a reader could not tell where one ended.
+            #
             formatted_message = format_chat_message_for_clipboard(message_number=None,  # a single message copied to clipboard does not need a sequential number
                                                                   role=role,
                                                                   persona=persona,
-                                                                  text=chatutil.format_message_text_for_export(node_payload["message"]),
+                                                                  text=self._clipboard_text(node_payload),
                                                                   add_heading=shift_pressed,
                                                                   tool_name=chatutil.tool_name_of(node_payload))
 
@@ -2063,46 +2131,6 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                           name=function.get("name", "?"),
                                           arguments=function.get("arguments", ""),
                                           tool_call_id=tool_call.get("id"))
-
-    def _document_body(self, node_payload: dict[str, Any]) -> str | None:
-        """The full text of the document this message reports, or `None` if it does not report one.
-
-        "Document" is the category the chat log gives a handle to, and membership is *declared*, never guessed
-        from length. Two ways in, matching the two ways a document reaches a message:
-
-          - a `text_file` part, whose sidecar holds the text (a page `webfetch` stored, or a file the user
-            attached) — the stored text part is only an excerpt, so the body comes from the sidecar; and
-          - a `fetch_document` result, whose text *is* the body, sitting inline because a knowledge-base
-            document has no sidecar and should not get one (the file is already the user's).
-
-        Everything else answers `None` and renders unchanged — notably `websearch`, whose result can be long
-        but is a list of links the user wants to see and click, not a document to put behind a toggle.
-
-        **Tool messages only**, which is load-bearing rather than a narrowing for tidiness. A user message
-        carrying an attached document has a `text_file` part too, and its text part is the user's own words;
-        treating that as a document result would replace what they wrote with an excerpt of what they
-        attached. An attached document is not inlined into the chat log at all, by design — the chip is its
-        handle — and that stays true.
-
-        An unreadable sidecar also answers `None`, which degrades to rendering the stored excerpt as ordinary
-        text: less than we wanted, but never a message that shows nothing.
-        """
-        message = node_payload["message"]
-        if message.get("role") != "tool":
-            return None
-        datastore = self.parent_view.chat_controller.datastore
-        for part in message.get("content") or []:
-            if part.get("type") == "text_file":
-                url = (part.get("text_file") or {}).get("url", "")
-                if url.startswith(sidecarstore.SIDECAR_SCHEME):
-                    try:
-                        return textfilestore.sidecar_to_text(datastore, url)
-                    except Exception as exc:  # noqa: BLE001 -- rendering must not fail on one unreadable sidecar
-                        logger.warning(f"DPGCompleteChatMessage._document_body: could not read '{url}': {type(exc)}: {exc}")
-                        return None
-        if (node_payload.get("generation_metadata") or {}).get("function_name") == "fetch_document":
-            return chatutil.content_to_text(message.get("content"))
-        return None
 
     def _render_gutter_and_body(self, *,
                                 texts: list[str],

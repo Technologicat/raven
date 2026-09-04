@@ -23,6 +23,20 @@ pytest.importorskip("raven.librarian.chat_controller")  # noqa: E402 -- still re
 from raven.librarian import chat_controller  # noqa: E402
 
 
+def message_over(forest):
+    """A real `DPGChatMessage` with no widgets, for the methods that only read the datastore.
+
+    Built with `__new__` rather than a stand-in object so the methods under test find each other through
+    the real class — `_clipboard_text` calls `_document_body`, and a duck-typed namespace would have to
+    supply the second by hand, which is the collaboration worth checking. `__init__` is skipped because it
+    builds DPG widgets; the only attribute these paths reach for is the datastore, through `parent_view`.
+    """
+    message = chat_controller.DPGChatMessage.__new__(chat_controller.DPGChatMessage)
+    message.parent_view = types.SimpleNamespace(
+        chat_controller=types.SimpleNamespace(datastore=forest))
+    return message
+
+
 class TestGreetingNodeIds:
     def test_every_greeting_under_every_card_is_listed(self, two_card_forest):
         f, _card1, _card2, greeting1, greeting2, message = two_card_forest
@@ -129,6 +143,90 @@ class TestFormatMessageMetadataLine:
         line = chat_controller.format_message_metadata_line(
             self._payload({"function_name": "websearch"}), "assistant", 1)
         assert line == "2026-09-04 07:52:48 R1", "a non-tool message was captioned with a tool name"
+
+
+class TestDocumentBody:
+    """What a tool result *actually* says, as against the excerpt of it the log has room for.
+
+    A fetched page over `tool_result_attachment_threshold` is moved to a sidecar and the stored message
+    content is replaced by an 800-character excerpt plus a chip. So the payload is lossy, and anything
+    handing the reader "this message" — the expand toggle, the clipboard — has to go to the sidecar for
+    the rest of it. On the base class rather than on `DPGCompleteChatMessage` because the copy button is,
+    and a streaming message would otherwise raise on its own copy callback.
+
+    Driven through a duck-typed `self`: the method reaches for nothing but the datastore, which is what
+    makes it checkable with no DPG context and no widget.
+    """
+
+    def _payload_with_document(self, forest, role, body):
+        from raven.librarian import chatutil, textfilestore
+        stored = textfilestore.store_file_as_sidecar(datastore=forest,
+                                                     file_source=body.encode("utf-8"),
+                                                     name="a page.md",
+                                                     provenance_url="https://example.invalid/page",
+                                                     provenance_source="tool_result",
+                                                     content_type="text/markdown")
+        return {"message": {"role": role,
+                            "content": [chatutil.text_content_part("the opening of it…"), stored.part]}}
+
+    def test_a_tool_result_reports_the_whole_document(self, in_memory_forest):
+        body = "\n".join(f"line {k} of the fetched page" for k in range(500))
+        payload = self._payload_with_document(in_memory_forest, "tool", body)
+        got = message_over(in_memory_forest)._document_body(payload)
+        assert got == body
+        assert got != "the opening of it…", "the excerpt came back, so the sidecar was not consulted"
+
+    def test_a_user_attachment_is_not_the_message(self, in_memory_forest):
+        # Load-bearing, not tidiness: a user message with an attached document has a `text_file` part too,
+        # and its text part is what the person wrote. Reporting the attachment as the body would replace
+        # their words with an excerpt of the file — and, through the copy button, put the file on the
+        # clipboard instead of the question.
+        payload = self._payload_with_document(in_memory_forest, "user", "a paper they attached")
+        assert message_over(in_memory_forest)._document_body(payload) is None
+
+    def test_a_message_with_no_document_reports_none(self):
+        from raven.librarian import chatutil
+        payload = {"message": {"role": "tool", "content": [chatutil.text_content_part("12:00")]}}
+        assert message_over(None)._document_body(payload) is None
+
+    def test_an_unreadable_sidecar_degrades_rather_than_raising(self, in_memory_forest):
+        # The stored excerpt is then what renders, and the copy carries it. Less than we wanted; never a
+        # message that shows nothing, and never an exception out of a button callback.
+        payload = {"message": {"role": "tool",
+                               "content": [{"type": "text_file",
+                                            "text_file": {"url": "sidecar:nothing-is-here.md",
+                                                          "name": "gone.md"}}]}}
+        assert message_over(in_memory_forest)._document_body(payload) is None
+
+
+class TestClipboardText:
+    """What the copy button puts on the clipboard, which is not always what the log has room to show."""
+
+    def test_a_truncated_tool_result_copies_whole(self, in_memory_forest):
+        # The reported bug: the log shows an excerpt of a fetched page, and copying handed back exactly
+        # that excerpt. The document is right there in the sidecar, and it is what the reader asked for.
+        from raven.librarian import chatutil, textfilestore
+        body = "\n".join(f"line {k} of the fetched page" for k in range(500))
+        stored = textfilestore.store_file_as_sidecar(datastore=in_memory_forest,
+                                                     file_source=body.encode("utf-8"),
+                                                     name="a page.md",
+                                                     provenance_url="https://example.invalid/page",
+                                                     provenance_source="tool_result",
+                                                     content_type="text/markdown")
+        payload = {"message": {"role": "tool",
+                               "content": [chatutil.text_content_part("the opening of it…"), stored.part]}}
+        got = message_over(in_memory_forest)._clipboard_text(payload)
+        assert got == body
+        assert "the opening of it…" not in got, "the excerpt came along, so the message was not replaced"
+
+    def test_an_ordinary_message_copies_what_is_stored(self, in_memory_forest):
+        # The control. Only the attachmentified case reads a sidecar; everything else must keep taking the
+        # route it always took, or a copy of a question would start returning something else entirely.
+        from raven.librarian import chatutil
+        payload = {"message": {"role": "user",
+                               "content": [chatutil.text_content_part("what is the square root of 10?")]}}
+        got = message_over(in_memory_forest)._clipboard_text(payload)
+        assert got == "what is the square root of 10?"
 
 
 class TestDemolishLeavesNoWidgetReference:
