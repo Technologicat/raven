@@ -308,9 +308,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
                        solid=False)
             add_button(fa.ICON_MAGNIFYING_GLASS, self.zoom_1_to_1,
                        "Actual size (1:1) [1 / numpad 1]", f"chat_graph_actual_size_button_{self.gui_uuid}")  # tag
-            add_button(fa.ICON_MAGNIFYING_GLASS_PLUS, lambda: self._widget.zoom_in(),
+            add_button(fa.ICON_MAGNIFYING_GLASS_PLUS, self.zoom_in,
                        "Zoom in [numpad +]", f"chat_graph_zoom_in_button_{self.gui_uuid}")  # tag
-            add_button(fa.ICON_MAGNIFYING_GLASS_MINUS, lambda: self._widget.zoom_out(),
+            add_button(fa.ICON_MAGNIFYING_GLASS_MINUS, self.zoom_out,
                        "Zoom out [numpad -]", f"chat_graph_zoom_out_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_SUN if dark_mode else fa.ICON_MOON, self.toggle_dark_mode,
                        "Switch to light mode" if dark_mode else "Switch to dark mode",
@@ -593,9 +593,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # fourth broken instance of a filed bug rather than a working key; the wheel and the toolbar cover
         # zoom meanwhile.
         elif key == dpg.mvKey_Add:
-            self._widget.zoom_in()
+            self.zoom_in()
         elif key == dpg.mvKey_Subtract:
-            self._widget.zoom_out()
+            self.zoom_out()
         elif key == dpg.mvKey_F:
             self._widget.zoom_to_fit()
         # "1" for 1:1, on the main row and the numpad both. The main row is where the key is on a US,
@@ -612,9 +612,29 @@ class DPGChatGraphPanel(gui_animation.Animation):
             return False
         return True
 
+    def zoom_in(self) -> None:
+        """Zoom in a step, about the box under the cursor if there is one."""
+        self._widget.zoom_in(anchor_node=self._zoom_anchor())
+
+    def zoom_out(self) -> None:
+        """Zoom out a step, about the box under the cursor if there is one."""
+        self._widget.zoom_out(anchor_node=self._zoom_anchor())
+
     def zoom_1_to_1(self) -> None:
-        """Set the zoom to 1:1, leaving the pan where it is."""
-        self._widget.set_zoom(1.0, animate=True)
+        """Set the zoom to 1:1, about the box under the cursor if there is one."""
+        self._widget.set_zoom(1.0, animate=True, anchor_node=self._zoom_anchor())
+
+    def _zoom_anchor(self) -> Optional[str]:
+        """Return the box a zoom should turn about, or `None` to turn about the middle of the view.
+
+        The cursor's box, when it has one. The ring says what the reader is working with, so it is the
+        thing that should stay put while the scale changes around it — where the middle of the view is
+        merely where the last pan happened to leave things.
+
+        Any box will do, a gap included: this asks where to zoom, not what the box stands for.
+        """
+        with self._lock:
+            return self._cursor_name
 
     def fit_branch(self) -> None:
         """Frame the branch on screen — the spine, and nothing beside it.

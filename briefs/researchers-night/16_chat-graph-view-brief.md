@@ -1238,6 +1238,33 @@ list is a judgement about how the picture reads, and those are decided in front 
      positive control. The live symptom was the frame poll reading Tab's documented activate/deactivate
      transient (`dpg-notes.md`, "Tab reaches a global handler and still moves ImGui's nav"), and the poll
      now requires two consecutive frames.
+
+   ### What driving the finished row turned up (Juha, 2026-09-04)
+
+   Three things, in the order they were noticed, and none of them about the buttons themselves.
+
+   - **A gap box counted as its first hidden sibling**, so the ring on a box standing for 7–59 read
+     `7 / 60` — a position the reader is not at. It reads `7 … 59 / 60` now. Enablement still asks about
+     the first of the span, that being the node a step acts on; on a gap the two ends agree anyway, since
+     a level draws its first and last sibling as anchors and a gap's run is therefore strictly interior.
+   - **Zoom now turns about the ring** — in, out and 1:1 alike — leaving the box under it where it is on
+     screen instead of working from wherever the last pan left the middle of the view. Off-screen rings do
+     not anchor: the arithmetic answers that case by walking the view away from the node, and from the
+     graph with it. The mouse wheel is unchanged, its own anchor being the pointer.
+     - `XDotWidget` grew the `anchor_node` half of a pair it half-had: `pan_to_point` and `pan_to_node`
+       existed, `zoom_in`/`zoom_out`/`set_zoom` took no anchor at all. The viewport's `zoom_to` is the
+       absolute counterpart of `zoom_by`, and `zoom_by` is now written in terms of it.
+   - **Zooming out is capped**, where it ran to `min_zoom = 0.01` and left the graph a speck. The floor is
+     the zoom at which the whole graph fits, and it is tied to `clamp_pan` rather than applied to every
+     viewer — the same promise, on the other half of the transform: below that zoom the graph is smaller
+     than the view on both axes, so the pan clamp has nothing left to hold on to.
+     - **The floor is `min` of the two ratios, not `max`.** `max` is the zoom at which the graph *fills*
+       the view, which reads like the stricter reading of the same promise and is the wrong number: a
+       graph whose proportions are not the view's cannot both fill it and be seen whole, and a chat graph
+       is tall and narrow, so a floor there would make the whole tree impossible to look at. Written the
+       wrong way round first; the test that named its own expectation caught it.
+     - `raven-xdot-viewer` is untouched by both — it passes `clamp_pan_to_graph=False` and names no
+       anchor, which are the two switches involved.
 4. **`ImageShape` in the widget.** Unblocks two things at once and they are not the same size: role glyphs
    need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
    thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render

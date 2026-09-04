@@ -163,16 +163,20 @@ class Viewport:
             self.pan_x.set_immediate(self.pan_x.target)
             self.pan_y.set_immediate(self.pan_y.target)
 
-    def zoom_by(self, factor: float, center_sx: Optional[float] = None,
-                center_sy: Optional[float] = None) -> None:
-        """Zoom by a multiplicative factor.
+    def zoom_to(self, new_zoom: float, center_sx: Optional[float] = None,
+                center_sy: Optional[float] = None, animate: bool = True) -> None:
+        """Set the zoom, optionally about a point that is to stay where it is on screen.
 
-        `factor`: Zoom multiplier (>1 = zoom in, <1 = zoom out).
-        `center_sx`, `center_sy`: Screen coordinates to zoom toward.
-                                   If None, zoom toward viewport center.
+        `new_zoom`: The zoom to go to. Clamped to `min_zoom` / `max_zoom`.
+        `center_sx`, `center_sy`: Screen coordinates to zoom about, i.e. the fixed point of the
+                                  transform. If either is None, the viewport centre is the fixed point,
+                                  which is what leaving the pan alone amounts to.
+        `animate`: If True, animate the transition. If False, jump immediately.
+
+        An *absolute* zoom, obeyed as given — `zoom_by` is the incremental one, and the one that declines
+        to go below what fills the view.
         """
         old_zoom = self.zoom.current
-        new_zoom = old_zoom * factor  # NOTE: multiplicative drift possible but bounded by clamp
         new_zoom = numutils.clamp(new_zoom, self.min_zoom, self.max_zoom)
 
         if center_sx is not None and center_sy is not None:
@@ -187,6 +191,54 @@ class Viewport:
             self.pan_y.target = new_pan_y
 
         self.zoom.target = new_zoom
+        self.clamp_pan_target()
+        if not animate:
+            self.pan_x.set_immediate(self.pan_x.target)
+            self.pan_y.set_immediate(self.pan_y.target)
+            self.zoom.set_immediate(new_zoom)
+
+    def zoom_by(self, factor: float, center_sx: Optional[float] = None,
+                center_sy: Optional[float] = None) -> None:
+        """Zoom by a multiplicative factor.
+
+        `factor`: Zoom multiplier (>1 = zoom in, <1 = zoom out).
+        `center_sx`, `center_sy`: Screen coordinates to zoom toward.
+                                   If None, zoom toward viewport center.
+
+        Where `clamp_pan` is set, this will not zoom out past the point where the whole graph fits the
+        view — see `_fit_zoom`.
+        """
+        old_zoom = self.zoom.current
+        new_zoom = old_zoom * factor  # NOTE: multiplicative drift possible but bounded by clamp
+        new_zoom = numutils.clamp(new_zoom, self.min_zoom, self.max_zoom)
+        if self.clamp_pan:
+            # Never *raise* the zoom to meet the floor: a view already below it -- put there by an
+            # absolute zoom, which is obeyed as given -- would answer a zoom-out press by jumping
+            # inwards. Holding still is the right refusal.
+            new_zoom = max(new_zoom, min(self._fit_zoom(), old_zoom))
+
+        self.zoom_to(new_zoom, center_sx, center_sy)
+
+    def _fit_zoom(self) -> float:
+        """Return the zoom at which the whole graph just fits the viewport.
+
+        The floor for zooming out under `clamp_pan`, and the point at which that clamp runs out of
+        purchase: below this the graph is smaller than the view on *both* axes, so `_clamp_axis` centres
+        both and there is nothing left for it to hold on to. Everything further out only makes the graph
+        smaller in the middle of a growing nothing.
+
+        **The zoom that makes the graph *fill* the view is a different and larger number** — the `max` of
+        these two ratios rather than the `min` — and it is the wrong floor. A graph whose proportions are
+        not the view's cannot both fill it and be seen whole, so a floor there would leave a tall narrow
+        graph impossible to zoom out and look at, which is the ordinary thing to want to do with one.
+
+        A graph already smaller than the viewport sits *above* this zoom at 1:1, which is why the caller
+        compares against where the view is now: there is no empty space to avoid in that case, only empty
+        space to add.
+        """
+        if self._graph_width <= 0.0 or self._graph_height <= 0.0:
+            return self.min_zoom
+        return min(self.width / self._graph_width, self.height / self._graph_height)
 
     def pan_by(self, dx: float, dy: float) -> None:
         """Pan by a screen offset.

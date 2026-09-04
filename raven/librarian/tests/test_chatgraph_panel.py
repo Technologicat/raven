@@ -704,6 +704,88 @@ class TestSiblingButtons:
             "a sibling arriving to the right woke the buttons that step left"
 
 
+class TestZoomAnchor:
+    """Zoom turns about the box under the ring, and about the middle of the view when there is none.
+
+    The ring says what the reader is working with, so it is the thing that should stay put while the scale
+    changes around it — where the middle of the view is only where the last pan happened to leave things.
+    """
+
+    @staticmethod
+    def _settle(built):
+        """Run the view to where it is going, through the pan clamp rather than around it.
+
+        Setting the smooth values straight from their targets would leave a pan the clamp has not seen —
+        an illegal state that the next zoom corrects, which then looks exactly like a zoom that moved the
+        view for a reason.
+        """
+        viewport = built._widget._viewport
+        viewport.clamp_pan_target()
+        for smooth in (viewport.pan_x, viewport.pan_y, viewport.zoom):
+            smooth.set_immediate(smooth.target)
+
+    def _off_centre_cursor(self, built, chats):
+        """Put the cursor on a box and then pan away from it, so centring and anchoring differ."""
+        built.handle_key(dpg.mvKey_Down)
+        built._set_cursor(chats[3])
+        built._widget.pan_by(60, 40)
+        self._settle(built)
+        node = built._chat_graph.graph.get_node_by_name(chats[3])
+        return built._widget._viewport.graph_to_screen(node.x, node.y)
+
+    def test_zooming_in_holds_the_ring_where_it_is(self, wide):
+        built, forest, greeting, chats, calls = wide
+        before = self._off_centre_cursor(built, chats)
+        viewport = built._widget._viewport
+        assert abs(before[0] - viewport.width / 2) > 1.0 or abs(before[1] - viewport.height / 2) > 1.0, \
+            "the ring is already at the centre of the view, so anchoring and centring cannot be told apart"
+
+        built.zoom_in()
+        self._settle(built)
+        node = built._chat_graph.graph.get_node_by_name(chats[3])
+        after = viewport.graph_to_screen(node.x, node.y)
+
+        assert after[0] == pytest.approx(before[0], abs=1.0)
+        assert after[1] == pytest.approx(before[1], abs=1.0)
+
+    def test_with_the_ring_away_the_view_centre_holds_instead(self, wide):
+        # The control. Without it, a `zoom_in` that ignored the anchor entirely would pass the test above
+        # whenever the ring happened to sit near the middle.
+        built, forest, greeting, chats, calls = wide
+        viewport = built._widget._viewport
+        built.handle_key(dpg.mvKey_Down)
+        built._widget.pan_by(60, 40)
+        self._settle(built)
+        built.handle_key(dpg.mvKey_Escape)
+        self._settle(built)
+        assert built._cursor_name is None
+        centre_before = (viewport.pan_x.current, viewport.pan_y.current)
+
+        built.zoom_in()
+
+        assert viewport.pan_x.target == pytest.approx(centre_before[0])
+        assert viewport.pan_y.target == pytest.approx(centre_before[1])
+
+    def test_a_ring_that_has_been_panned_off_screen_does_not_anchor(self, wide):
+        # Zooming about something off screen walks the view away from it, and from the graph with it.
+        built, forest, greeting, chats, calls = wide
+        viewport = built._widget._viewport
+        built.handle_key(dpg.mvKey_Down)
+        built._set_cursor(chats[3])
+        built._widget.pan_by(-4000, -4000)  # legal or not, the clamp decides; what matters is it goes far
+        self._settle(built)
+        node = built._chat_graph.graph.get_node_by_name(chats[3])
+        sx, sy = viewport.graph_to_screen(node.x, node.y)
+        assert not (0.0 <= sx <= viewport.width and 0.0 <= sy <= viewport.height), \
+            "the pan did not take the ring off screen, so this fixture poses no question"
+        centre_before = (viewport.pan_x.current, viewport.pan_y.current)
+
+        built.zoom_in()
+
+        assert viewport.pan_x.target == pytest.approx(centre_before[0])
+        assert viewport.pan_y.target == pytest.approx(centre_before[1])
+
+
 # ---------------------------------------------------------------------------
 # Tool rounds
 # ---------------------------------------------------------------------------

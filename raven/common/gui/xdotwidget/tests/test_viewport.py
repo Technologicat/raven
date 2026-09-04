@@ -347,3 +347,85 @@ class TestPanClamping:
         vp.zoom_to_bbox(0.0, 1900.0, 600.0, 2000.0, margin=0, animate=False)
         half_view = 0.5 * vp.height / vp.zoom.current
         assert approx(vp.pan_y.current, 2000.0 - half_view)
+
+    # --- Zooming out only as far as the graph goes ---
+    #
+    # The other half of the same promise. `clamp_pan` says the view holds no empty space beyond the graph,
+    # and below the fill zoom the space appears whatever the pan does.
+
+    def test_zooming_out_stops_where_the_whole_graph_fits(self):
+        # 400x300 over 600x2000: the height is the binding dimension, so the graph is whole at 300/2000
+        # and no smaller. Note this is the *smaller* of the two ratios — the larger one, 400/600, is
+        # where the graph stops filling the view, and a floor there would make this graph impossible to
+        # look at whole.
+        vp = self._over_a_tall_graph()
+        floor = 300.0 / 2000.0
+        assert floor < 400.0 / 600.0, "this graph's proportions match the view's, so the two floors agree"
+        vp.zoom.set_immediate(floor * 1.05)  # just above it, so one step must overshoot
+        vp.zoom_by(0.5)
+        assert approx(vp.zoom.target, floor)
+
+    def test_zooming_out_is_not_capped_without_the_clamp(self):
+        # The control, and the reason the cap is tied to `clamp_pan` rather than applied to every viewer:
+        # without it the assertion above would hold for a viewport that simply refused to zoom.
+        vp = self._over_a_tall_graph(clamp=False)
+        vp.zoom.set_immediate(1.0)
+        vp.zoom_by(0.5)
+        assert approx(vp.zoom.target, 0.5)
+
+    def test_zooming_in_is_not_capped(self):
+        vp = self._over_a_tall_graph()
+        vp.zoom.set_immediate(1.0)
+        vp.zoom_by(2.0)
+        assert approx(vp.zoom.target, 2.0)
+
+    def test_a_view_already_below_the_floor_holds_rather_than_jumping_in(self):
+        # An absolute zoom is obeyed as given, so the view can legitimately sit below the floor. Raising
+        # it to meet one would answer a zoom-*out* press by zooming in, which is worse than not moving.
+        vp = self._over_a_tall_graph()
+        vp.zoom_to(0.1, animate=False)
+        assert approx(vp.zoom.current, 0.1), "the absolute zoom was capped, so there is no case here"
+        vp.zoom_by(0.5)
+        assert approx(vp.zoom.target, 0.1)
+
+    def test_a_graph_smaller_than_the_view_cannot_be_zoomed_further_out(self):
+        # The floor is above 1:1 here — there is no zoom at which this graph fills the view, so every
+        # step out only adds more of what the clamp exists to prevent. Holding still is the answer.
+        vp = Viewport(width=400, height=300)
+        vp.set_graph_bounds(100.0, 100.0)
+        vp.clamp_pan = True
+        vp.zoom.set_immediate(1.0)
+        assert vp._fit_zoom() > 1.0, "this graph is bigger than the view, so it poses a different question"
+        vp.zoom_by(0.5)
+        assert approx(vp.zoom.target, 1.0)
+
+    # --- Zooming about a point ---
+
+    def test_zoom_to_keeps_the_named_point_where_it_is(self):
+        vp = Viewport(width=400, height=300)
+        vp.set_graph_bounds(600.0, 2000.0)
+        vp.pan_x.set_immediate(300.0)
+        vp.pan_y.set_immediate(1000.0)
+        vp.zoom.set_immediate(1.0)
+        anchor = (120.0, 60.0)  # a corner of the view, so centring instead would be obvious
+        before = vp.screen_to_graph(*anchor)
+
+        vp.zoom_to(2.0, anchor[0], anchor[1], animate=False)
+
+        after = vp.screen_to_graph(*anchor)
+        assert approx(after[0], before[0])
+        assert approx(after[1], before[1])
+
+    def test_zoom_to_without_a_point_turns_about_the_middle(self):
+        # The control: the pan is what a fixed point moves, so an implementation that ignored the
+        # argument would pass the test above and this one would not tell them apart without it.
+        vp = Viewport(width=400, height=300)
+        vp.set_graph_bounds(600.0, 2000.0)
+        vp.pan_x.set_immediate(300.0)
+        vp.pan_y.set_immediate(1000.0)
+        vp.zoom.set_immediate(1.0)
+
+        vp.zoom_to(2.0, animate=False)
+
+        assert approx(vp.pan_x.current, 300.0)
+        assert approx(vp.pan_y.current, 1000.0)

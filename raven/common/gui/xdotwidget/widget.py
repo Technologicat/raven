@@ -307,15 +307,42 @@ class XDotWidget(gui_animation.Animation):
             self._viewport.pan_to_point(node.x, node.y, animate=animate)
             self._needs_render = True
 
-    def zoom_in(self, factor: float = 1.2) -> None:
-        """Zoom in by a factor."""
-        self._viewport.zoom_by(factor)
+    def zoom_in(self, factor: float = 1.2, anchor_node: Optional[str] = None) -> None:
+        """Zoom in by a factor.
+
+        `anchor_node`: Internal name of a node to zoom about, which then keeps its place on screen while
+                       everything else grows away from it. `None` zooms about the middle of the view.
+                       So is a node that is not in the graph or not currently on screen — see
+                       `_anchor_screen_point`.
+        """
+        self._viewport.zoom_by(factor, *self._anchor_screen_point(anchor_node))
         self._needs_render = True
 
-    def zoom_out(self, factor: float = 1.2) -> None:
-        """Zoom out by a factor."""
-        self._viewport.zoom_by(1.0 / factor)
+    def zoom_out(self, factor: float = 1.2, anchor_node: Optional[str] = None) -> None:
+        """Zoom out by a factor. `anchor_node` is as for `zoom_in`."""
+        self._viewport.zoom_by(1.0 / factor, *self._anchor_screen_point(anchor_node))
         self._needs_render = True
+
+    def _anchor_screen_point(self, anchor_node: Optional[str]) -> Tuple[Optional[float], Optional[float]]:
+        """Return where on screen a zoom about `anchor_node` should turn, as the pair `zoom_by` takes.
+
+        `(None, None)` — meaning the middle of the view — for no node, a name the graph does not have,
+        and a node that is currently off screen.
+
+        **That last one is the case worth having.** The transform is defined about any point and answers
+        an off-screen one uselessly: a node out of sight pulls the view further away from itself with
+        every press, and away from the graph with it. So a node anchors the zoom only while it is
+        somewhere the reader can see it, and the middle of the view stands in when it is not.
+        """
+        if anchor_node is None or self._graph is None:
+            return None, None
+        node = self._graph.get_node_by_name(anchor_node)
+        if node is None:
+            return None, None
+        sx, sy = self._viewport.graph_to_screen(node.x, node.y)
+        if not (0.0 <= sx <= self._viewport.width and 0.0 <= sy <= self._viewport.height):
+            return None, None
+        return sx, sy
 
     def pan_by(self, dx, dy):
         """Pan the view by (dx, dy) pixels."""
@@ -512,16 +539,17 @@ class XDotWidget(gui_animation.Animation):
         """Return the current zoom level."""
         return self._viewport.zoom.current
 
-    def set_zoom(self, zoom: float, animate: bool = True) -> None:
+    def set_zoom(self, zoom: float, animate: bool = True, anchor_node: Optional[str] = None) -> None:
         """Set the zoom level.
 
         `zoom`: Target zoom level.
         `animate`: If True, animate the transition.
+        `anchor_node`: As for `zoom_in` — the node to keep in place while the scale changes around it.
+
+        Obeyed as given, where `zoom_in` and `zoom_out` decline to leave the graph behind. A caller naming
+        a scale means that scale; the incremental pair is the one being steered by how it looks.
         """
-        if animate:
-            self._viewport.zoom.target = zoom
-        else:
-            self._viewport.zoom.set_immediate(zoom)
+        self._viewport.zoom_to(zoom, *self._anchor_screen_point(anchor_node), animate=animate)
         self._needs_render = True
 
     def get_visible_bounds(self) -> Tuple[float, float, float, float]:
