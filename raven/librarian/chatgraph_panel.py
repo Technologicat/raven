@@ -1074,8 +1074,14 @@ class DPGChatGraphPanel(gui_animation.Animation):
         can commit to nothing, where asking first would have said otherwise.
         """
         maybe_position = self._sibling_position()
-        prev_enabled = maybe_position is not None and maybe_position[0] > 0
-        next_enabled = maybe_position is not None and maybe_position[0] < maybe_position[1] - 1
+        # Both halves ask about the *first* of the span, because that is the node a step acts on -- so the
+        # buttons answer for the step they would perform rather than for the whole run the box stands for.
+        #
+        # On a gap the two ends agree anyway: a level always draws its first and last sibling as anchors,
+        # so a gap's hidden run is strictly interior and has siblings on both sides of it by construction.
+        first = maybe_position[0] if maybe_position is not None else None
+        prev_enabled = maybe_position is not None and first > 0
+        next_enabled = maybe_position is not None and first < maybe_position[2] - 1
         for tag, enabled in ([(self._commit_button_tag, self._cursor_chat_node_id() is not None),
                               (self._fold_button_tag, self._round_at_cursor() is not None)]
                              + [(tag, prev_enabled) for tag in self._prev_sibling_button_tags]
@@ -1084,25 +1090,46 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 (dpg.enable_item if enabled else dpg.disable_item)(tag)
         # Blank while the cursor is away, which is the honest reading: the steppers are disabled then, so
         # a position shown beside them would name a run nothing on this toolbar acts on.
-        index, count = maybe_position if maybe_position is not None else (None, None)
         with guiutils.nonexistent_ok():
             dpg.set_value(self._sibling_counter_tag,  # tag
-                          f"{index + 1} / {count}" if maybe_position is not None else "")
+                          self._format_sibling_position(maybe_position))
 
-    def _sibling_position(self) -> Optional[Tuple[int, int]]:
-        """Return `(index, count)` for the run of siblings the cursor is stepping along, or `None`.
+    @staticmethod
+    def _format_sibling_position(maybe_position: Optional[Tuple[int, int, int]]) -> str:
+        """Render `_sibling_position`'s answer for the counter beside the sibling steppers.
 
-        `None` where a sibling step would do nothing — no cursor, or one on a box that stands for no
-        chat node — so a caller can ask this one question instead of the several it is made of.
+        `maybe_position`: `(first, last, count)`, or `None` for a cursor that is on no run at all.
+
+        A gap box gets a range, `7 … 59 / 60`, because that is what the box stands for — a run of hidden
+        siblings — and naming one end of it as though it were a position would be a position the reader is
+        not at. The ellipsis is the one the gap box itself wears.
         """
-        node_id = self._cursor_sibling_anchor()
-        if node_id is None:
+        if maybe_position is None:
+            return ""
+        first, last, count = maybe_position
+        if first == last:
+            return f"{first + 1} / {count}"
+        return f"{first + 1} … {last + 1} / {count}"
+
+    def _sibling_position(self) -> Optional[Tuple[int, int, int]]:
+        """Return `(first, last, count)` for the run of siblings under the cursor, or `None` for none.
+
+        `first` and `last` are equal on a message, which stands for itself, and span the hidden run on a
+        sibling gap, which stands for several. Both are indices into the whole run of `count` siblings,
+        counting from zero.
+
+        `None` where a sibling step would do nothing — no cursor, or one on a box that stands for no chat
+        node — so a caller can ask this one question instead of the several it is made of.
+        """
+        span = self._cursor_sibling_span()
+        if span is None:
             return None
         with self.datastore.lock:
-            siblings, index = self.datastore.get_siblings(node_id)
-        if not siblings or index is None:
+            siblings, first = self.datastore.get_siblings(span[0])
+            last = self.datastore.get_siblings(span[1])[1] if span[1] != span[0] else first
+        if not siblings or first is None:
             return None
-        return index, len(siblings)
+        return first, (first if last is None else last), len(siblings)
 
     def _set_cursor(self, name: Optional[str]) -> None:
         """Move the cursor to a box, or clear it, and redraw so the ring moves with it.
@@ -1195,23 +1222,32 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._widget.pan_to_node(target, animate=True)
         self._remember_view()
 
-    def _cursor_sibling_anchor(self) -> Optional[str]:
-        """Return the chat node whose siblings a sibling step should move along, or `None` if there is none.
+    def _cursor_sibling_span(self) -> Optional[Tuple[str, str]]:
+        """Return the first and last chat node the box under the cursor stands for, or `None` for none.
 
-        The cursor's own node where it is on a message. Where it is on a *sibling* gap, the first node
-        that gap hides — the gap stands for a run of siblings at that very level, so stepping from it
-        continues along the level the reader is looking at rather than refusing because the box under the
-        ring is not a message.
+        The cursor's own node, twice over, where it is on a message: a message stands for itself. Where it
+        is on a *sibling* gap, the ends of the run that gap hides — the gap stands for a stretch of the
+        very level the reader is looking at, which is what lets a step continue along it rather than
+        refusing because the box under the ring is not a message.
         """
         with self._lock:
             name = self._cursor_name
             chat_graph = self._chat_graph
         ref = chat_graph.ref_for(name) if (name is not None and chat_graph is not None) else None
         if isinstance(ref, chatgraph.ChatNodeRef):
-            return ref.node_id
+            return ref.node_id, ref.node_id
         if isinstance(ref, chatgraph.SiblingGapRef) and ref.hidden_node_ids:
-            return ref.hidden_node_ids[0]
+            return ref.hidden_node_ids[0], ref.hidden_node_ids[-1]
         return None
+
+    def _cursor_sibling_anchor(self) -> Optional[str]:
+        """Return the chat node whose siblings a sibling step should move along, or `None` if there is none.
+
+        The first of `_cursor_sibling_span`: stepping from a gap continues from the earliest sibling it
+        hides, so a step right lands one inside the run rather than beyond it.
+        """
+        span = self._cursor_sibling_span()
+        return span[0] if span is not None else None
 
     def _activate_cursor(self) -> None:
         """Act on the box the cursor is on, if it is on one."""

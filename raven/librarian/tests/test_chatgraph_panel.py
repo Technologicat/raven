@@ -626,6 +626,51 @@ class TestSiblingButtons:
         press(built._next_sibling_button_tags[1])
         assert dpg.get_value(built._sibling_counter_tag) == "11 / 30"
 
+    def test_a_gap_box_counts_as_the_run_it_hides(self, wide):
+        # A gap stands for a stretch of the level rather than for a place in it, so naming one end of it
+        # as a position would put the reader somewhere they are not.
+        built, forest, greeting, chats, calls = wide
+        built.handle_key(dpg.mvKey_Down)
+        gaps = [ref for ref in built._chat_graph.refs.values()
+                if isinstance(ref, chatgraph.SiblingGapRef) and len(ref.hidden_node_ids) > 1]
+        assert gaps, "this level draws no multi-sibling gap, so there is no range to report"
+        gap = gaps[0]
+        built._set_cursor(gap.name)
+
+        first = chats.index(gap.hidden_node_ids[0]) + 1
+        last = chats.index(gap.hidden_node_ids[-1]) + 1
+        assert first != last, "the gap hides one sibling, so a range would read the same as a position"
+        assert dpg.get_value(built._sibling_counter_tag) == f"{first} … {last} / 30"
+
+    def test_a_message_counts_as_one_place(self, wide):
+        # The control for the above: the same counter, on a box that stands for itself, must not grow a
+        # range — a fixture where every box reported one would pass the test above for the wrong reason.
+        built, forest, greeting, chats, calls = wide
+        built.handle_key(dpg.mvKey_Down)
+        assert "…" not in dpg.get_value(built._sibling_counter_tag)
+        assert dpg.get_value(built._sibling_counter_tag) == "1 / 30"
+
+    def test_a_gap_never_reaches_either_end_of_the_run(self, wide):
+        """A level draws its first and last sibling as anchors, so a gap's hidden run is strictly interior.
+
+        Which is what lets the steppers ask about one end of a span and be right about both — so if this
+        ever stops holding, the counter and the enablement both need looking at again, and the reader
+        of `_update_cursor_buttons` is told to expect it.
+        """
+        built, forest, greeting, chats, calls = wide
+        built.handle_key(dpg.mvKey_Down)
+        gaps = [ref for ref in built._chat_graph.refs.values()
+                if isinstance(ref, chatgraph.SiblingGapRef)]
+        assert gaps, "this level draws no gap, so the invariant is not being exercised"
+        for gap in gaps:
+            hidden = [chats.index(node_id) for node_id in gap.hidden_node_ids]
+            assert min(hidden) > 0, "a gap hides the first sibling"
+            assert max(hidden) < len(chats) - 1, "a gap hides the last sibling"
+            built._set_cursor(gap.name)
+            assert all(dpg.is_item_enabled(tag) for tag in
+                       built._prev_sibling_button_tags + built._next_sibling_button_tags), \
+                "an interior gap has siblings on both sides, so no stepper is a dead end from it"
+
     def test_the_counter_is_blank_while_the_cursor_is_away(self, wide):
         # It has to *become* blank, which is the half worth asserting: a counter that never showed
         # anything would pass an "is it empty" check on its own.
