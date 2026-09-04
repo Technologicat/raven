@@ -251,8 +251,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                                            size=gui_config.toolbar_separator_w, line=False)
 
             # Back and forward through the views this panel has shown. Disabled until there is somewhere
-            # to go, which is the convention Visualizer set: a button is enabled exactly when pressing it
-            # would do something.
+            # to go: a button is enabled exactly when pressing it would do something.
             add_button(fa.ICON_ARROW_LEFT, self.go_back,
                        "Back to the previous view [Alt+Left]", self._back_button_tag, enabled=False)
             add_button(fa.ICON_ARROW_RIGHT, self.go_forward,
@@ -916,10 +915,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
     def _update_cursor_buttons(self) -> None:
         """Enable each button that acts on the cursor exactly when the cursor gives it something to do.
 
-        The convention Visualizer set — a button is live when pressing it would do something — and the
-        answers are questions about the picture the last rebuild produced, so call this after it rather
-        than before. A cursor moved onto a box that rebuild then dropped can commit to nothing, and asking
-        first would have said otherwise.
+        Call it *after* the rebuild rather than before: what each button asks is a question about the
+        picture that rebuild produced, and a cursor moved onto a box the rebuild then dropped can commit
+        to nothing, where asking first would have said otherwise.
         """
         for tag, enabled in ((self._commit_button_tag, self._cursor_chat_node_id() is not None),
                              (self._fold_button_tag, self._round_at_cursor() is not None)):

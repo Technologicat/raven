@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 """What does drawing a tool round's results cost the picture?
 
-Until 2026-09-03 the chat graph folded every tool round into the message that asked for it, drawing
-nothing between the call and its answer. Now a round is folded only from `_MIN_HIDDEN_FOR_GAP` results up,
-and a smaller one has its results drawn as ordinary boxes — which is what makes them reachable, and what
-this measures the price of.
+The chat graph folds a tool round only from `_MIN_HIDDEN_FOR_GAP` results up; a smaller one has its
+results drawn as ordinary boxes, which is what makes them reachable. This prices that against the
+alternative the threshold is chosen over — folding every round away invisibly, drawing nothing at all
+between a call and its answer, which is what the reachability complaint was about.
 
 Two prices, and which one a branch pays turns on whether it fits the depth window:
 
-- **Height**, for a branch that fits. A drawn result is a row; a folded round's gap box is a band, which
-  is also a row. So every round now costs one row where it used to cost none, and the picture grows.
+- **Height**, for a branch that fits. A drawn result is a row, and a folded round's gap box is a band,
+  which is also a row — so a round costs one row against the baseline's none, and the picture grows.
 - **Conversation on screen**, for a branch that does not. There the height is capped by the window
   whatever happens, and the drawn results spend its budget instead — `max_visible_depth` counts boxes
-  down the branch and a result is now one of them, so the messages at the far end go behind the depth gap.
+  down the branch and a result is one of them, so the messages at the far end go behind the depth gap.
 
 **The two land on different branches, which is what makes reading one column misleading.** A branch that
 grows tallest is one with room to grow, so it is by definition not the one being squeezed — sort by height
@@ -41,11 +41,13 @@ from raven.librarian import chattree  # noqa: E402 -- after the path insert, by 
 
 
 def collapse_everything(datastore, lineage, expanded):
-    """`_collapse_tool_rounds` as it behaved before 2026-09-03: every round folded, and no box for it.
+    """A `_collapse_tool_rounds` that folds every round away and draws no box for any of it.
 
-    Returns no rounds at all, which is what suppresses the gap boxes — `build` draws one per folded round,
-    and the old code had none to draw. `expanded` is ignored because nothing ever wrote to it, so the
-    shipped behaviour was to fold unconditionally.
+    The baseline: the cheapest possible picture of a tool round, and an unreachable one. Substituted for
+    the real thing to measure what the threshold costs against it.
+
+    Returns no rounds at all, which is what suppresses the gap boxes — `build` draws one per folded round.
+    `expanded` is ignored, this baseline having no way to open anything.
     """
     kept = []
     owner = None
@@ -59,17 +61,17 @@ def collapse_everything(datastore, lineage, expanded):
     return kept, []
 
 
-def measure(datastore, head, config, old: bool):
+def measure(datastore, head, config, baseline: bool):
     """Build the picture around `head` and return `(height, conversational messages on screen)`.
 
-    `old`: measure the pre-2026-09-03 behaviour instead of what the code does now.
+    `baseline`: measure the fold-everything alternative instead of what the code does.
 
     The second figure deliberately excludes the tool results themselves. What the depth budget is *for* is
-    showing the conversation, and a result now spends one of its boxes — so counting every drawn box would
-    report the cost as a gain, the tool nodes making the total go up while the conversation shrinks.
+    showing the conversation, and a drawn result spends one of its boxes — so counting every drawn box
+    would report the cost as a gain, the tool nodes making the total go up while the conversation shrinks.
     """
     real = chatgraph._collapse_tool_rounds
-    if old:
+    if baseline:
         chatgraph._collapse_tool_rounds = collapse_everything
     try:
         built = chatgraph.build(datastore, chatgraph.ViewState(head_node_id=head), config)
@@ -127,17 +129,18 @@ def main() -> int:
 
     measured = []
     for leaf, runs in rows:
-        new_h, new_spine = measure(datastore, leaf, config, old=False)
-        old_h, old_spine = measure(datastore, leaf, config, old=True)
+        new_h, new_spine = measure(datastore, leaf, config, baseline=False)
+        old_h, old_spine = measure(datastore, leaf, config, baseline=True)
         measured.append((new_h - old_h, old_h, new_h, old_spine, new_spine, runs))
 
     measured.sort(reverse=True)
-    print(f"  {'height':>16}   {'conversation on screen':>24}")
-    print(f"  {'was':>7} {'now':>8}   {'was':>11} {'now':>12}   rounds (results each)")
-    for delta, old_h, new_h, old_spine, new_spine, runs in measured[:12]:
+    print(f"  {'height':>19}   {'conversation on screen':>26}")
+    print(f"  {'all folded':>10} {'as built':>8}   {'all folded':>13} {'as built':>12}   "
+          "rounds (results each)")
+    for delta, base_h, built_h, base_conv, built_conv, runs in measured[:12]:
         shape = "+".join(str(n) for n in runs)
-        print(f"  {old_h:7.0f} {new_h:8.0f}   {old_spine:11} {new_spine:12}   "
-              f"{len(runs):>2} ({shape}){'   <- worst' if delta == measured[0][0] else ''}")
+        print(f"  {base_h:10.0f} {built_h:8.0f}   {base_conv:13} {built_conv:12}   "
+              f"{len(runs):>2} ({shape}){'   <- tallest' if delta == measured[0][0] else ''}")
 
     worst = measured[0]
     print(f"\n  tallest gain: {worst[1]:.0f} -> {worst[2]:.0f} graph units "
@@ -150,7 +153,7 @@ def main() -> int:
     if squeezed:
         lost = sum(row[3] - row[4] for row in squeezed)
         print(f"  {len(squeezed)} branch(es) lost conversation to the depth window, {lost} message(s) in all")
-        for delta, old_h, new_h, old_conv, new_conv, runs in squeezed[:5]:
+        for delta, base_h, built_h, old_conv, new_conv, runs in squeezed[:5]:
             print(f"    {old_conv} -> {new_conv} messages, {len(runs)} rounds")
     else:
         print("  no branch lost a conversational message: every one fits the depth window, so the")
