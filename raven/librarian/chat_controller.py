@@ -1485,8 +1485,8 @@ class DPGChatMessage:
 
         Returns the text.
         """
-        # Juha, 2026-09-04, from the live app: a webfetch result too long for the chat log copied as far
-        # as the log had shown it, while the attached file was intact.
+        # The defect this fixes, seen in the live app: a webfetch result too long for the chat log copied
+        # as far as the log had shown it, while the attached file was intact.
         document_body = self._document_body(node_payload)
         if document_body is not None:
             return document_body
@@ -1504,8 +1504,8 @@ class DPGChatMessage:
 
         Returns the text.
         """
-        # Two reasons the log keeps the excerpt where a single copied message takes the document, both
-        # Juha's (2026-09-04), and the second is the one that does not occur to you:
+        # Two reasons the log keeps the excerpt where a single copied message takes the document. The
+        # second is not about the code at all, which is why it is written down:
         #
         #   - Several fetched pages inlined at full length make the log unreadable, which is most of what
         #     a log is copied *for*. One message is a lift of that message; a log is a document.
