@@ -4663,6 +4663,19 @@ the loop, and therefore the one whose requirements do not follow from the other 
     help the microphone hear a human over it.
 - **The chat log must stay toggleable**, so whoever is at the console can bring the ordinary GUI up
   mid-event without restarting into another mode.
+- **With no chat log, the AI needs to show what it is doing** (Juha, 2026-09-04) — and this is not
+  decoration, it is what makes the spoken cancel usable at all. *Is it working or has it wedged* is the
+  judgement the cancel rests on, and in this mode there is no streaming text to read it from.
+  - **Mostly the indicators that already exist**, and the existing one is the right shape: the "data
+    eyes" effect marks LLM tool access as an effect *on the character* rather than as a widget, which is
+    exactly the channel available when the character fills the screen.
+  - **The signals are already there too**, so this is a rendering question rather than a plumbing one:
+    `scaffold` emits `on_docs_start`/`done`, `on_prompt_ready`, `on_llm_start`/`progress`/`done` and
+    `on_tools_start`/`done`, which is most of what a viewer would want to see.
+  - **What is genuinely new is the two that only speech needs**: *I am listening* and *I heard you*. A
+    GUI never needed either, because typed text appears as you type it — with speech there is no echo, so
+    "not heard" and "heard and ignored" look identical from across the room, and the second is the one
+    that makes a person repeat themselves into a system that is already working.
 - **Which means this mode varies the *left* panel as well**, and the framing above does not yet cover
   that: "one mechanism with a swappable panel" is about the right-hand rect. The chat log's presence is a
   second axis, and avatar-first is the mode that moves both at once.
