@@ -279,14 +279,15 @@ class DPGChatGraphPanel(gui_animation.Animation):
             # whether it makes the promise. A flag beside it would be the same fact written twice.
             #
             # **Stated once rather than shown only while it applies**, which is what this was first built
-            # to do. Showing it conditionally means rewriting a `Tooltip`, which parks its window
-            # offscreen and shows it again in order to resize without a glitch; done to nine windows on
-            # every change of keyboard state, that cost the composer its caret. Observed live: the field
-            # activated on a click and went inactive 25 ms later, with nothing else in the app touching
-            # focus in between, and the symptom went away with the rewriting.
+            # to do. Showing it conditionally means rewriting a `Tooltip` on every change of keyboard
+            # state, which parks its window offscreen and shows it again in order to resize without a
+            # glitch -- nine windows, three operations each, for a line of text.
             #
-            # Which is evidence against the rewriting and not yet a demonstration of the mechanism -- that
-            # would want isolating on its own, since `Tooltip` is shared and other callers assign to it.
+            # It was also suspected of costing the composer its caret, and it does not:
+            # `test_rewriting_a_tooltip_does_not_cost_the_caret` isolates that and passes, with a positive
+            # control confirming it would fail if a rewrite did steal focus. The live symptom had another
+            # cause and was fixed by the frame poll it shared a commit with. Recorded because the
+            # suspicion is the obvious one to have again.
             self._toolbar_captions[tag] = caption
             with dpg.tooltip(tag):  # tag
                 dpg.add_text(_toolbar_tooltip_text(caption))
@@ -791,17 +792,35 @@ class DPGChatGraphPanel(gui_animation.Animation):
     def _on_click_anywhere(self, sender, app_data) -> None:
         """Ask for the keyboard when a click lands in this panel, wherever in it.
 
+        Three outcomes, by where the click landed. Inside the picture, ask for the keyboard. Outside the
+        panel altogether, give it up -- see below. On the panel's own toolbar, neither: a button of ours is
+        not somewhere else.
+
         Mouse handlers are global in DPG, so this fires for every left click in the app and has to decide
-        for itself whether the click was ours: inside the canvas, with the panel shown and nothing on top
-        of it. The `input_blocked` predicate is the same one the widget is given, and for the same reason
-        -- the click that dismisses a modal must not also land on what the modal was covering.
+        for itself which of the three it was. The `input_blocked` predicate is the same one the widget is
+        given, and for the same reason -- the click that dismisses a modal must not also land on what the
+        modal was covering.
         """
-        if not self._is_shown or self._on_focus_requested is None:
+        if not self._is_shown:
             return
         if self._input_blocked is not None and self._input_blocked():
             return
         if guiutils.is_mouse_inside_widget(self._canvas):
-            self._on_focus_requested()
+            if self._on_focus_requested is not None:
+                self._on_focus_requested()
+        elif not guiutils.is_mouse_inside_widget(self._container):
+            # Clicked somewhere else entirely, so the keys are no longer ours. Answered here because
+            # nothing else can: the composer gives its caret up to ImGui on its own and the chat log has no
+            # widget to hold one, so a click on the log left this panel the only pane still claiming the
+            # keyboard -- lit, and taking keys aimed at a chat the reader had just clicked into.
+            #
+            # Releasing without saying where the keys went is deliberate. Whoever asks next derives the
+            # answer: with this bit down and the composer inactive, the home is the log, which is where a
+            # click on the log should land.
+            #
+            # The *container* rather than the canvas, so the panel's own toolbar is not "somewhere else".
+            # Clicking Zoom-to-fit is not a reason to hand the keyboard away from the thing it zoomed.
+            self.has_keyboard = False
 
     def _on_click(self, element, button: int) -> None:
         """Handle a click on the graph.

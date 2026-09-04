@@ -46,6 +46,9 @@ from unpythonic.env import env
 
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed (GUI toolkit absent in CI)")
 
+from raven.common.gui import animation as gui_animation  # noqa: E402 -- after importorskip by design
+from raven.common.gui import tooltip  # noqa: E402 -- after importorskip by design
+
 pytestmark = pytest.mark.gui
 
 # Focus changes land on the frame *after* the request, and ImGui's own auto-focus needs a few frames to
@@ -216,3 +219,56 @@ def test_a_focused_button_ignores_the_keys_that_would_press_it(widgets, keysym):
 
     assert pressed == [], (f"a focused button acted on {keysym}: ImGui keyboard navigation appears to be "
                            f"enabled, and parking focus on a button is no longer safe")
+
+
+def render_with_animations(n_frames: int = _SETTLE_FRAMES) -> None:
+    """Render frames the way an app does: ticking the animator before each one.
+
+    `Tooltip` resizes itself from a sweeper registered with the animator, so a bare `render` leaves its
+    queued text un-applied and a test built on that would exercise nothing.
+    """
+    for _ in range(n_frames):
+        gui_animation.animator.render_frame()
+        dpg.render_dearpygui_frame()
+
+
+def test_the_caret_survives_a_stretch_of_frames_on_its_own(widgets):
+    """The control for the test below, and the reason its silence can be read as an answer.
+
+    A test asserting that the caret *survived* something proves nothing if the caret would have been lost
+    over those frames anyway. So: the same field, the same number of frames, nothing touched.
+    """
+    dpg.focus_item(widgets.field)
+    render_with_animations()
+    assert dpg.is_item_active(widgets.field) is True, "the fixture never gave the field the caret"
+
+    render_with_animations()
+    assert dpg.is_item_active(widgets.field) is True
+
+
+def test_rewriting_a_tooltip_does_not_cost_the_caret(widgets):
+    """Assigning to `Tooltip.text` must not disturb whatever holds the keyboard.
+
+    It resizes by parking its window offscreen, setting the text and showing it there — three window
+    operations per assignment, and an app that keeps a caption in step with some state performs them
+    whenever that state moves. Librarian's chat graph did, on nine tooltips at once, and its composer was
+    observed activating on a click and going inactive 25 ms later with nothing else touching focus. The
+    hint was made static instead, which removed the symptom without establishing the cause; this is the
+    test that decides whether the cause was here.
+
+    A failure is not a defect in the caller: it says a shared component cannot be driven from state while
+    a text field is in use, which is worth knowing at `flash_button` and the audio panel too.
+    """
+    tip = tooltip.Tooltip(widgets.button, "before")
+    render_with_animations()
+
+    dpg.focus_item(widgets.field)
+    render_with_animations()
+    assert dpg.is_item_active(widgets.field) is True, "the fixture never gave the field the caret"
+
+    # Longer than what it replaces, so the window really has to resize rather than reusing its extents.
+    tip.text = "after, and appreciably wider than the text that was there before"
+    render_with_animations()
+
+    assert dpg.is_item_active(widgets.field) is True, \
+        "rewriting a tooltip took the caret out of a text field that had it"

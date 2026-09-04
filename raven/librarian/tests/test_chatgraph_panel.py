@@ -787,6 +787,26 @@ class TestClickToFocus:
         built._on_click_anywhere(None, None)
         assert asked == []
 
+    def test_a_click_outside_the_panel_gives_the_keyboard_up(self, panel, monkeypatch):
+        # The chat log has no widget to hold a caret, so nothing else can notice that the reader went
+        # there: clicking it left this panel lit and still taking keys aimed at the chat.
+        built, forest, app_state, ids, calls = panel
+        built.has_keyboard = True
+        monkeypatch.setattr(guiutils, "is_mouse_inside_widget", lambda widget: False)
+        built._on_click_anywhere(None, None)
+        assert built.has_keyboard is False
+
+    def test_a_click_on_the_panels_own_toolbar_keeps_it(self, panel, monkeypatch):
+        # The control, and the reason the release tests the *container* rather than the canvas: a button
+        # of ours is not somewhere else, and zooming should not hand the keyboard away from the thing it
+        # zoomed.
+        built, forest, app_state, ids, calls = panel
+        built.has_keyboard = True
+        monkeypatch.setattr(guiutils, "is_mouse_inside_widget",
+                            lambda widget: widget == built._container)
+        built._on_click_anywhere(None, None)
+        assert built.has_keyboard is True
+
     def test_a_hidden_panel_does_not_ask(self, panel, monkeypatch):
         built, forest, app_state, ids, calls = panel
         asked = []
