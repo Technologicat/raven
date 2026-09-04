@@ -12,7 +12,7 @@ __all__ = [# The parts a message is made of, and reading them back
            "format_persona",
            "format_message_heading",
            "format_tool_call", "format_tool_calls",
-           "tool_name_of",
+           "model_of", "tool_name_of",
            "format_date_now", "format_loaded_model", "format_time_now",
            "format_chatlog_datetime_now",
            "format_message_text_for_export",
@@ -294,6 +294,23 @@ def format_tool_calls(tool_calls: Sequence[Dict[str, Any]]) -> str:
     return ", ".join(formatted)
 
 
+def model_of(node_payload: Dict[str, Any]) -> Optional[str]:
+    """Return which model wrote an `role="assistant"` message, or `None` if the node does not say.
+
+    `node_payload`: The chat node payload, at the revision being shown.
+
+    Recorded per message rather than per app, and that is what makes it worth reading back: in a branching
+    chat the siblings of one node can come from different models, and a chat reloaded from disk predates
+    whatever happens to be loaded now. `None` for a reply written before the field existed, and for one
+    whose generation was interrupted before there was anything to record.
+
+    The sibling of `tool_name_of`: between them they answer *what produced this message* for the two roles
+    that have an answer, which is the question the chat log's metadata line and the export manifest both
+    ask.
+    """
+    return (node_payload.get("generation_metadata") or {}).get("model")
+
+
 def tool_name_of(node_payload: Dict[str, Any]) -> Optional[str]:
     """Return which tool a `role="tool"` node's result came from, or `None` if the node does not say.
 
@@ -483,7 +500,7 @@ def format_disclosure_manifest(payloads: List[Dict[str, Any]],
         # and a single copied message has no heading unless Shift is held.
         if role == "tool" and (tool_name := tool_name_of(payload)) is not None:
             entry["tool"] = tool_name
-        if (model := payload.get("generation_metadata", {}).get("model", None)) is not None:
+        if (model := model_of(payload)) is not None:
             entry["model"] = model
         if (generated_at := payload.get("general_metadata", {}).get("datetime", None)) is not None:
             entry["generated_at"] = generated_at

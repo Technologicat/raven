@@ -158,6 +158,27 @@ class TestFormatMessageHeading:
 # Which tool answered
 # ---------------------------------------------------------------------------
 
+class TestModelOf:
+    """The sibling of `tool_name_of`: between them, *what produced this message* for the two roles that
+    have an answer.
+    """
+
+    def test_a_recorded_model_is_found(self):
+        assert chatutil.model_of({"generation_metadata": {"model": "qwen3.5-4b"}}) == "qwen3.5-4b"
+
+    def test_a_reply_that_recorded_none_answers_none(self):
+        # A generation interrupted before there was anything to record, and anything written before the
+        # field existed.
+        assert chatutil.model_of({"generation_metadata": {"status": "error"}}) is None
+        assert chatutil.model_of({}) is None
+
+    def test_a_null_generation_metadata_answers_none(self):
+        # As for `tool_name_of`, and for the same reason: a payload can carry the key with nothing under
+        # it, and the two-argument `get` would hand that `None` back and raise on the next lookup. Pinned
+        # separately because the two functions could drift on it, and only one of them would be caught.
+        assert chatutil.model_of({"generation_metadata": None}) is None
+
+
 class TestToolNameOf:
     """One lookup, because four views ask it: the graph's box caption, the chat log's metadata line,
     `minichat`'s heading and the clipboard export's. Four spellings would drift, and the drift would show

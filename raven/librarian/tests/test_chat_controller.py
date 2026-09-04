@@ -108,11 +108,14 @@ class TestFormatGenerationStats:
 
 
 class TestFormatMessageMetadataLine:
-    """The small grey line above a message, and the one thing it says that the icons cannot.
+    """The small grey line above a message, and the thing it says that the icons cannot: what produced it.
 
-    A tool result's cogs badge reports that *a* tool ran. A turn calling three of them is then three
-    messages with identical badges, and the name is the whole of what separates them — so it is on the
-    line, spelled as the chat graph spells it in a box's speaker line.
+    A tool result's cogs badge reports that *a* tool ran, so a turn calling three of them is three
+    messages with identical badges. A reply's icon says the AI wrote it and not which model — recorded per
+    message, and until now readable only by hovering the generation-stats line, though in a branching chat
+    two siblings can come from different models.
+
+    One bracket for both, spelled as the chat graph spells it in a box's speaker line.
     """
 
     def _payload(self, generation_metadata=None):
@@ -143,6 +146,25 @@ class TestFormatMessageMetadataLine:
         line = chat_controller.format_message_metadata_line(
             self._payload({"function_name": "websearch"}), "assistant", 1)
         assert line == "2026-09-04 07:52:48 R1", "a non-tool message was captioned with a tool name"
+
+    def test_a_reply_names_the_model_that_wrote_it(self):
+        # Recorded per message and, until now, readable only by hovering the generation-stats line. In a
+        # branching chat two siblings can come from different models, which is exactly when a reader wants
+        # to know and exactly what a per-app readout cannot say.
+        line = chat_controller.format_message_metadata_line(
+            self._payload({"model": "qwen3.5-4b, Q4_K_XL, 128 Ki context"}), "assistant", 1)
+        assert line == "2026-09-04 07:52:48 R1 [qwen3.5-4b, Q4_K_XL, 128 Ki context]"
+
+    def test_a_reply_that_recorded_no_model_says_only_when(self):
+        line = chat_controller.format_message_metadata_line(self._payload(), "assistant", 1)
+        assert line == "2026-09-04 07:52:48 R1"
+
+    def test_a_users_own_message_is_not_credited_to_anything(self):
+        # The control for the pair. Both branches are gated on the role, and a payload carrying both
+        # fields is what would expose a gate that had stopped checking it.
+        line = chat_controller.format_message_metadata_line(
+            self._payload({"model": "qwen3.5-4b", "function_name": "websearch"}), "user", 1)
+        assert line == "2026-09-04 07:52:48 R1", "a message the user typed was credited to a producer"
 
 
 class TestDocumentBody:

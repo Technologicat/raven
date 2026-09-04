@@ -274,23 +274,33 @@ def format_excerpt_notice(node_payload: dict, full_length: int) -> str:
 
 
 def format_message_metadata_line(node_payload: dict, role: str, revision: int) -> str:
-    """Format the small grey line above a message: when it was written, which revision, and for a tool
-    result, which tool answered.
+    """Format the small grey line above a message: when it was written, which revision, and what produced
+    it — the tool, for a result; the model, for a reply.
 
     `node_payload`: The chat node payload, at the revision on screen.
-    `role`: The message's role. Only `"tool"` has a tool name to add; every other role has none.
+    `role`: The message's role. `"tool"` contributes the tool that answered and `"assistant"` the model
+            that wrote the reply; every other role has nothing to add.
     `revision`: Which stored revision of the payload is being shown.
 
-    The tool name is spelled as the chat graph spells it in a box's speaker line, brackets included, so
-    the two views name one call one way. It is absent on a call that failed before it had a function to
-    name, and on anything written before the field existed; the line then carries what it always did.
+    The bracketed part is spelled as the chat graph spells it in a box's speaker line, so the two views
+    name one thing one way. It is absent wherever the node does not record it — a call that failed before
+    it had a function to name, a reply interrupted before its model was written down, anything stored
+    before either field existed — and the line then carries what it always did.
 
     Returns the formatted line.
     """
     line = f"{node_payload['general_metadata']['datetime']} R{revision}"
-    maybe_function_name = chatutil.tool_name_of(node_payload) if role == "tool" else None
-    if maybe_function_name:
-        line = f"{line} [{maybe_function_name}]"
+    # What produced this message, for the two roles that have an answer: the tool for a result, the model
+    # for a reply. One bracket serves both, because a reader asking where a message came from is asking
+    # one question and does not care which kind of answer comes back.
+    if role == "tool":
+        maybe_producer = chatutil.tool_name_of(node_payload)
+    elif role == "assistant":
+        maybe_producer = chatutil.model_of(node_payload)
+    else:
+        maybe_producer = None
+    if maybe_producer:
+        line = f"{line} [{maybe_producer}]"
     return line
 
 
