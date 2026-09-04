@@ -33,7 +33,6 @@ from unpythonic import env, sym
 from ..common import navhistory
 from ..common.gui import animation as gui_animation
 from ..common.gui import keyboardmark
-from ..common.gui import tooltip as guitooltip
 from ..common.gui import utils as guiutils
 from ..common.gui.xdotwidget import graph as xdotgraph
 from ..common.gui.xdotwidget.widget import XDotWidget
@@ -63,6 +62,20 @@ _TOOLBAR_H = 34  # pixels, the row of view controls above the graph
 # what is stopping the key.
 _KEY_HINT_SEPARATOR = "\n\n"
 _KEY_HINT = "The keys work while the graph has the keyboard.\nClick the graph, or press Tab, to send it here."
+
+
+def _toolbar_tooltip_text(caption: str) -> str:
+    """Return what a toolbar button's tooltip should say, given the caption it was written with.
+
+    `caption`: The caption, as `_build_toolbar` writes it.
+
+    A caption naming a key gains the condition on that key; one that names none is returned unchanged.
+    Square brackets are how this toolbar names a key, so the caption is its own record of whether it makes
+    the promise — a flag beside it would be the same fact written twice, and could disagree with it.
+    """
+    if "[" not in caption:
+        return caption
+    return f"{caption}{_KEY_HINT_SEPARATOR}{_KEY_HINT}"
 
 # Font atlas sizes for graph labels. The renderer picks whichever is closest to the size it is drawing at,
 # so this is a ladder rather than a choice: a label is legible at one zoom and unreadable at the next, and
@@ -138,14 +151,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._on_commit = on_commit
         self._on_focus_requested = on_focus_requested
         self._input_blocked = input_blocked
-        # `(tooltip, caption)` for each toolbar button whose caption names a key, so the hint about
-        # reaching the keyboard can be put on and taken off them together. Populated by `_build_toolbar`.
-        #
-        # The caption is kept here rather than read back off the tooltip, because `Tooltip.text` is
-        # asynchronous: the setter queues, a sweeper applies it over the next frames, and the getter
-        # answers with what is *on screen*. Recovering the caption from that read would compose the next
-        # text onto a value that may still be the previous one.
-        self._key_hint_tooltips = []
+        # Button tag -> the caption it promises, filled by `_build_toolbar`. DPG offers no route from a
+        # widget to its tooltip, so this is the only way to ask afterwards what the toolbar says.
+        self._toolbar_captions = {}
 
         self._lock = threading.RLock()
         self._chat_graph: Optional[chatgraph.ChatGraph] = None
@@ -265,17 +273,23 @@ class DPGChatGraphPanel(gui_animation.Animation):
             dpg.bind_item_theme(tag, self.themes_and_fonts.disablable_widget_theme)  # tag
             # A caption naming a key makes a promise the button itself does not keep: the button is
             # clickable whenever it is on screen, and the key fires only while this panel holds the
-            # keyboard. So those captions gain a second line saying how to make the promise true, and lose
-            # it again once it is -- which is `Tooltip`'s business rather than `dpg.add_tooltip`'s, the
-            # *number of lines* being exactly what moves an autosize window's edges.
+            # keyboard. So those captions carry the condition, as a quieter second line.
             #
             # Square brackets are how this toolbar names a key, so the caption is its own record of
             # whether it makes the promise. A flag beside it would be the same fact written twice.
-            if "[" in caption:
-                self._key_hint_tooltips.append((guitooltip.Tooltip(tag, caption), caption))
-            else:
-                with dpg.tooltip(tag):  # tag
-                    dpg.add_text(caption)
+            #
+            # **Stated once rather than shown only while it applies**, which is what this was first built
+            # to do. Showing it conditionally means rewriting a `Tooltip`, which parks its window
+            # offscreen and shows it again in order to resize without a glitch; done to nine windows on
+            # every change of keyboard state, that cost the composer its caret. Observed live: the field
+            # activated on a click and went inactive 25 ms later, with nothing else in the app touching
+            # focus in between, and the symptom went away with the rewriting.
+            #
+            # Which is evidence against the rewriting and not yet a demonstration of the mechanism -- that
+            # would want isolating on its own, since `Tooltip` is shared and other callers assign to it.
+            self._toolbar_captions[tag] = caption
+            with dpg.tooltip(tag):  # tag
+                dpg.add_text(_toolbar_tooltip_text(caption))
 
         with dpg.group(horizontal=True, parent=self._container) as self._toolbar_group:
             add_button(fa.ICON_SQUARE, lambda: self._widget.zoom_to_fit(),
@@ -311,7 +325,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             # The discoverable half of the commit gesture. Its caption names the fluent half, which is
             # otherwise unfindable: a second click on a box already clicked once.
             add_button(fa.ICON_CODE_BRANCH, self._commit_cursor,
-                       "Switch to the previewed branch\n(or click its box a second time)",
+                       "Switch to the previewed branch [Enter]\n(or click its box a second time)",
                        self._commit_button_tag, enabled=False)
             # The pointer's only route to folding a round back up, `Backspace` being the sole key for it
             # and right-click being spoken for in the widget, where it opens a node's URL. Enabled only
@@ -428,29 +442,6 @@ class DPGChatGraphPanel(gui_animation.Animation):
         """
         self._has_keyboard = bool(value) and self._is_shown
         self._keyboard_mark.lit = self._has_keyboard
-        self._update_key_hints()
-
-    def _key_hint_text(self, caption: str) -> str:
-        """Return what a key-naming tooltip should say as things stand.
-
-        `caption`: The button's own caption, as written in the toolbar.
-
-        The caption alone once the keys work, and the caption plus the way in until they do.
-        """
-        if self._has_keyboard:
-            return caption
-        return f"{caption}{_KEY_HINT_SEPARATOR}{_KEY_HINT}"
-
-    def _update_key_hints(self) -> None:
-        """Add the way-in line to every tooltip that names a key, or take it away once the keys work.
-
-        The blue border already says where the keyboard is; this says what to do about it, and only while
-        there is something to do. A caption reading "Zoom to fit [F]" is a promise the button does not keep
-        on its own -- clickable always, and the key live only from here -- so it carries the condition
-        exactly when the condition is unmet.
-        """
-        for tip, caption in self._key_hint_tooltips:
-            tip.text = self._key_hint_text(caption)
 
     has_keyboard = property(fget=_get_has_keyboard, fset=_set_has_keyboard,
                             doc="Whether the keys are going to this panel. Set by the app, which owns the "

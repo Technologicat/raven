@@ -718,46 +718,41 @@ class TestToolRounds:
 class TestKeyHints:
     """The toolbar promises keys the button itself does not need: a button is clickable whenever it is on
     screen, and its key fires only while this panel holds the keyboard. So a caption naming one carries
-    the way in, exactly while there is a way in to describe.
+    the condition, as a second line.
+
+    Written once at build time rather than swapped in and out with the keyboard state. The dynamic version
+    was built first and withdrawn: rewriting a `Tooltip` parks its window offscreen and shows it again, and
+    doing that to nine windows knocked the caret out of the composer 25 ms after a click put it there.
     """
 
-    # Asserted through `_key_hint_text` rather than by reading the tooltips back. `Tooltip.text` is
-    # applied by a sweeper over the following frames, and this module renders none — so a read here
-    # answers with what was on screen before the assignment, and a test built on it would pass or fail
-    # for reasons having nothing to do with the hint.
+    def test_a_caption_naming_a_key_says_what_the_key_needs(self):
+        composed = chatgraph_panel._toolbar_tooltip_text("Fit the current branch [B]")
+        assert composed.startswith("Fit the current branch [B]")
+        assert "press Tab" in composed
 
-    def test_a_caption_naming_a_key_says_how_to_make_it_work(self, panel):
-        built, forest, app_state, ids, calls = panel
-        built.has_keyboard = False
-        assert built._key_hint_tooltips, "no toolbar caption names a key, so this checks nothing"
-        assert "press Tab" in built._key_hint_text("Zoom to fit [F]")
+    def test_a_caption_naming_no_key_carries_no_condition(self):
+        # The control. The dark-mode toggle promises nothing about the keyboard, and telling its reader
+        # about Tab would answer a question they did not ask.
+        assert chatgraph_panel._toolbar_tooltip_text("Switch to light mode") == "Switch to light mode"
 
-    def test_the_way_in_goes_away_once_you_are_in(self, panel):
+    def test_the_branch_button_names_its_key(self, panel):
+        # It did not, until now: the button was reachable by `Enter` and no caption said so, which also
+        # meant the sniff that attaches the condition passed it over. One fix served both, the caption
+        # being the single record of whether a button makes the promise.
         built, forest, app_state, ids, calls = panel
-        built.has_keyboard = True
-        assert built._key_hint_text("Zoom to fit [F]") == "Zoom to fit [F]", \
-            "the panel holds the keyboard and is still explaining how to give it"
+        caption = built._toolbar_captions[built._commit_button_tag]
+        assert "[Enter]" in caption
+        assert "press Tab" in chatgraph_panel._toolbar_tooltip_text(caption)
 
-    def test_the_caption_survives_the_hint_going_on_and_off(self, panel):
-        # The caption is held separately from the tooltip precisely so that repeated passes cannot eat it.
-        # Reading it back off `Tooltip.text` — which lags by frames — is what would.
+    def test_every_toolbar_caption_that_names_a_key_gets_the_condition(self, panel):
+        # Over the real captions rather than invented ones, so a caption added later without a key — or
+        # with one spelled some other way — shows up here rather than in a tooltip nobody re-reads.
         built, forest, app_state, ids, calls = panel
-        captions = [caption for _tip, caption in built._key_hint_tooltips]
-        for _ in range(3):
-            built.has_keyboard = True
-            built.has_keyboard = False
-        assert [caption for _tip, caption in built._key_hint_tooltips] == captions
-
-    def test_only_a_caption_naming_a_key_carries_the_hint(self, panel):
-        # The control. Two buttons promise nothing about the keyboard — the dark-mode toggle and the
-        # branch switch, whose caption names a *click* — and telling their reader about Tab would answer a
-        # question they did not ask. The registry is built by sniffing the caption for a bracket, so this
-        # is really asking whether that sniff is right.
-        built, forest, app_state, ids, calls = panel
-        assert all("[" in caption for _tip, caption in built._key_hint_tooltips), \
-            "a caption with no key in it was given the hint"
-        assert len(built._key_hint_tooltips) < len(dpg.get_item_children(built._toolbar_group, 1)), \
-            "every button got the hint, so the sniff is not excluding anything"
+        with_keys = [c for c in built._toolbar_captions.values() if "[" in c]
+        without = [c for c in built._toolbar_captions.values() if "[" not in c]
+        assert with_keys and without, "the toolbar is all one kind, so this compares nothing"
+        assert all("press Tab" in chatgraph_panel._toolbar_tooltip_text(c) for c in with_keys)
+        assert all("press Tab" not in chatgraph_panel._toolbar_tooltip_text(c) for c in without)
 
 
 class TestClickToFocus:

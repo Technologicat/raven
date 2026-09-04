@@ -1892,6 +1892,8 @@ with timer() as tim:
 # --------------------------------------------------------------------------------
 # Animations, live updates
 
+# Whether the composer held the caret on the previous frame; see `update_animations`.
+_composer_was_active = False
 def update_animations():
     gui_animation.animator.render_frame()
     # Mirror the retriever's progress-text channels (indexing + search) into their DPG widgets.
@@ -1918,8 +1920,18 @@ def update_animations():
     #
     # Stale, it showed as two panes wearing the blue at once, which is not a state the design has: the
     # composer owns the caret, and the graph's bit is meaningful only while it does not.
-    if chat_graph_panel.has_keyboard and dpg.is_item_active("chat_field"):  # tag
+    # Two frames, not one, and the second is what makes this correct rather than merely cautious. Tab
+    # reaches our handler *and* still moves ImGui's nav, and the item it lands on reports itself activated
+    # and then deactivated a frame later -- see `dpg-notes.md`, "Tab reaches a global handler and still
+    # moves ImGui's nav". Read on a single frame, that phantom says the composer holds the caret when the
+    # reader has just Tabbed *away* from it, and the graph's bit is revoked 16 ms after Tab granted it.
+    # A genuine click or Ctrl+Space leaves the field active until something takes it away, so requiring
+    # the answer twice running costs a frame nobody can see and rejects the transient outright.
+    global _composer_was_active
+    composer_active = dpg.is_item_active("chat_field")  # tag
+    if chat_graph_panel.has_keyboard and composer_active and _composer_was_active:
         chat_graph_panel.has_keyboard = False
+    _composer_was_active = composer_active
 
 # --------------------------------------------------------------------------------
 # Built-in help window
