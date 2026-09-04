@@ -1058,6 +1058,51 @@ Three directions, none chosen:
 The first two are compatible and could both apply. The third is the one that makes the *avatar* panel
 growable, which the other two deliberately avoid needing.
 
+## Where this stands, end of 2026-09-04
+
+Everything below is committed, pushed, and green on all four CI jobs plus lint. Read this section first;
+the 2026-09-01 one below it is the fuller picture and is still accurate about everything it describes.
+
+**The day went on the toolbar**, and item 3's last loose end is closed: the six sibling verbs the chat log
+has had as buttons are now a group of their own at the right end of the graph's toolbar, with a counter
+saying where in the run the cursor stands. What that turned into, in the order it happened, is recorded in
+*What driving the finished row turned up* above — a gap box counting as the run it stands for rather than
+as one end of it, zoom turning about the ring, zoom-out capped at the whole graph, and the anchored node
+(and its ring) kept whole rather than merely centred.
+
+Two things landed outside the graph, both consequences of the row rather than detours from it:
+
+- **`Ctrl+Home` and `Ctrl+End` in the chat log**, which were the two of its six sibling buttons with no key
+  at all. The graph's own row made the gap visible, and `raven/librarian/README.md` had already been
+  promising the symmetry in the graph's section.
+- **`raven/common/gui/xdotwidget/` grew the anchored-zoom half of a pair it half-had.** `pan_to_point` and
+  `pan_to_node` existed; the three zoom entry points took no anchor. They now take `anchor_node` and
+  `anchor_padding`, and `Viewport` has `zoom_to` (absolute, the counterpart of `zoom_by`),
+  `keep_box_visible`, and a zoom-out floor tied to `clamp_pan`. `raven-xdot-viewer` passes none of it and
+  is unaffected, which is deliberate rather than incidental — it views arbitrary graphs, where space beside
+  the graph is something a reader may want.
+
+**Monday picks up at item 4**, `ImageShape` in the widget, which is the next thing in the order worth doing
+and the one that unblocks the most: role glyphs need no texture upload, attachment thumbnails (item 5) do,
+and that upload cannot happen during a rebuild. Items 4 and 5 are one piece of work in practice, and item
+10's once-over is explicitly waiting on both. Nothing on the list waits on anything that landed today.
+
+**Two are known-broken and deliberately left**, so neither is a surprise to walk into:
+
+- **The help card overflows its window.** It is a fixed height with no scrollbar, its closing prose already
+  runs past the bottom edge, and the two chat-log keys added today cost two more lines of that prose. The
+  hotkey table itself is intact. Juha's call, 2026-09-04: fix it as end-of-sprint polish or after the
+  sprint, and the graph's own keys go on the card as part of that redesign rather than before it.
+- **A keyboard cursor may belong in `XDotWidget`** rather than in each caller that wants one. Marked with a
+  `TODO` on both sides of the `anchor_padding` seam, deliberately as comments rather than a filed item.
+  Note `anchor_padding` survives that move either way: a caller may decorate a node for reasons of its own,
+  and what it has drawn is not the widget's business.
+
+**Start Monday by relaunching**, as the section below says and for the same reason — every remaining item is
+a judgement about how the picture reads, and those are decided in front of it. Wait for
+`App render loop starting.` in the log rather than sleeping a guessed number of seconds; six launches on
+2026-09-04 took 6.8–7.1 s.
+
 ## Where this stands, end of 2026-09-01
 
 The view is built, wired into Librarian, and was driven live a dozen times over the day, each round
@@ -1186,11 +1231,12 @@ list is a judgement about how the picture reads, and those are decided in front 
    with no scrollbar and was one line under its ceiling; the rest of the keys are in
    `raven/librarian/README.md` and wait on the redesign in `TODO_DEFERRED.md`.
 
-   **Left undone on purpose: buttons for the same verbs.** `first / prev-10 / prev-1 / next-1 / next-10 /
-   last` already exist as buttons in the chat log (`chat_controller._build_navigation_buttons`), two of
-   the six with no keys at all. Giving the graph a button row is a second surface onto the vocabulary this
-   item just fixed, which is why it goes after rather than with it (Juha, 2026-09-03, overruling this
-   brief's claim that the two had to be answered together).
+   **Buttons for the same verbs: deferred out of this item on 2026-09-03, built 2026-09-04.**
+   `first / prev-10 / prev-1 / next-1 / next-10 / last` already existed as buttons in the chat log
+   (`chat_controller._build_navigation_buttons`), two of the six with no keys at all. Giving the graph a
+   button row is a second surface onto the vocabulary this item fixed, which is why it went after rather
+   than with it (Juha, 2026-09-03, overruling this brief's claim that the two had to be answered
+   together).
    - **One button went in ahead of the row**, 2026-09-03: folding a tool round. It is the pointer's only
      route to a verb the tool-round work had just created — right-click being taken by the widget's
      open-URL — so it belonged with that work rather than with this row.
