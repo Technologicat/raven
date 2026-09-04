@@ -160,6 +160,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._view_state = chatgraph.ViewState(head_node_id=app_state["HEAD"],
                                                new_chat_node_id=app_state.get("new_chat_HEAD"))
         self._layout = chatgraph.LayoutConfig()
+        # How far the cursor ring reaches beyond the box it marks, in graph units, so that a zoom holding
+        # that box on screen holds the ring with it. The ring is drawn outside the box and in graph space,
+        # so it grows with the zoom and the widget -- which knows the box and nothing about what has been
+        # drawn around it -- cannot work this out for itself.
+        self._ring_padding = self._layout.preview_ring_offset + 0.5 * self._layout.preview_line_width
         # The cursor: which box a click or `Enter` acts on. A *graph* node name, so it can rest on a gap
         # box as well as on a message — see `chatgraph.ViewState.cursor_name`. Mirrored into the view
         # state, which is what draws the ring; kept here too so the panel can answer without a rebuild.
@@ -614,15 +619,16 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
     def zoom_in(self) -> None:
         """Zoom in a step, about the box under the cursor if there is one."""
-        self._widget.zoom_in(anchor_node=self._zoom_anchor())
+        self._widget.zoom_in(anchor_node=self._zoom_anchor(), anchor_padding=self._ring_padding)
 
     def zoom_out(self) -> None:
         """Zoom out a step, about the box under the cursor if there is one."""
-        self._widget.zoom_out(anchor_node=self._zoom_anchor())
+        self._widget.zoom_out(anchor_node=self._zoom_anchor(), anchor_padding=self._ring_padding)
 
     def zoom_1_to_1(self) -> None:
         """Set the zoom to 1:1, about the box under the cursor if there is one."""
-        self._widget.set_zoom(1.0, animate=True, anchor_node=self._zoom_anchor())
+        self._widget.set_zoom(1.0, animate=True,
+                              anchor_node=self._zoom_anchor(), anchor_padding=self._ring_padding)
 
     def _zoom_anchor(self) -> Optional[str]:
         """Return the box a zoom should turn about, or `None` to turn about the middle of the view.

@@ -825,6 +825,38 @@ class TestZoomAnchor:
         assert x1 >= 0.0 and x2 <= viewport.width, f"the box spans x {x1:.1f}..{x2:.1f} of {viewport.width}"
         assert y1 >= 0.0 and y2 <= viewport.height, f"the box spans y {y1:.1f}..{y2:.1f} of {viewport.height}"
 
+    def test_what_is_kept_whole_is_the_ring_and_not_only_the_box(self, roomy):
+        """The ring is drawn outside the box, in graph units, so it grows with the zoom.
+
+        A screen-space margin cannot stand in for that: one wide enough at 1:1 is too narrow by the time
+        the reader has zoomed in a few times, and the ring goes over the edge while the box it marks
+        stays comfortably inside.
+
+        In the roomy panel, because this needs a zoom deep enough for the ring to be worth more than the
+        widget's own margin *and* a view still wide enough to hold the box — which the default panel,
+        barely wider than one box, cannot offer at the same time.
+        """
+        built, forest, greeting, chats, calls = roomy
+        viewport = built._widget._viewport
+        self._off_centre_cursor(built, chats, dx=-450, dy=0)  # hard over towards the left edge
+        for _ in range(6):  # far enough in that the ring's graph-space width is worth several pixels
+            built.zoom_in()
+            self._settle(built)
+
+        node = built._chat_graph.graph.get_node_by_name(chats[3])
+        pad = built._ring_padding
+        zoom = viewport.zoom.current
+        assert pad * zoom > 8.0, \
+            "the ring is still inside the widget's own screen margin, so this proves nothing about it"
+        assert (node.x2 - node.x1 + 2 * pad) * zoom < viewport.width, \
+            "the ring does not fit the view at this zoom, so it is being centred rather than held"
+        ring_x1, ring_y1 = viewport.graph_to_screen(node.x1 - pad, node.y1 - pad)
+        ring_x2, ring_y2 = viewport.graph_to_screen(node.x2 + pad, node.y2 + pad)
+        assert ring_x1 >= 0.0 and ring_x2 <= viewport.width, \
+            f"the ring spans x {ring_x1:.1f}..{ring_x2:.1f} of {viewport.width}"
+        assert ring_y1 >= 0.0 and ring_y2 <= viewport.height, \
+            f"the ring spans y {ring_y1:.1f}..{ring_y2:.1f} of {viewport.height}"
+
     def test_zooming_out_keeps_the_ring_whole_too(self, wide):
         # Zooming out cannot clip a node that was whole, so what this pins is the recovery: a box left
         # hanging over the edge is brought back, which is what makes the invariant one sentence rather

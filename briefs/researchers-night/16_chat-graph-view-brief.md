@@ -1262,6 +1262,12 @@ list is a judgement about how the picture reads, and those are decided in front 
        view, and both answer the impossible case by centring. Applied after every anchored zoom, in both
        directions: zooming out cannot clip a whole node, but applying it uniformly makes the invariant one
        sentence and recovers a node left hanging over an edge by something else.
+     - **What has to stay whole is the ring, not the box it marks** (Juha, 2026-09-04, on the second
+       driving pass: the ring was clipping while the node was not). The ring is drawn `preview_ring_offset`
+       *graph* units outside the box, so it grows with the zoom and a screen-pixel margin cannot stand in
+       — 8 px covers it at 1:1 and stops covering it around 1.4×. The widget knows a node's box and nothing
+       about what a caller has drawn around it, so the padding is the *panel's* to declare:
+       `anchor_padding`, in graph units, added to the box before the correction runs.
      - **The pan clamp runs afterwards and does not undo it**, which is argued (it only pulls the view
        toward the graph, and the node is inside the graph) and therefore pinned:
        `test_a_ring_at_the_edge_of_the_graph_is_still_kept_whole` zooms in repeatedly on the last sibling

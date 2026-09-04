@@ -311,26 +311,35 @@ class XDotWidget(gui_animation.Animation):
             self._viewport.pan_to_point(node.x, node.y, animate=animate)
             self._needs_render = True
 
-    def zoom_in(self, factor: float = 1.2, anchor_node: Optional[str] = None) -> None:
+    def zoom_in(self, factor: float = 1.2, anchor_node: Optional[str] = None,
+                anchor_padding: float = 0.0) -> None:
         """Zoom in by a factor.
 
         `anchor_node`: Internal name of a node to zoom about, which then keeps its place on screen while
                        everything else grows away from it, and stays whole in the view. `None` zooms about
                        the middle of the view, and so does a node that is not in the graph or is not
                        currently on screen — see `_usable_anchor`.
+        `anchor_padding`: How far the caller's own decoration of that node reaches beyond it, in graph
+                          units, so that whatever is drawn around the node is kept on screen along with
+                          it. A selection ring drawn outside a node is the case: the widget knows the
+                          node's box and nothing about what a caller has drawn around it, and a decoration
+                          in graph units grows with the zoom, so a screen-space margin cannot stand in.
         """
-        self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(factor, sx, sy))
+        self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(factor, sx, sy),
+                              anchor_padding=anchor_padding)
 
-    def zoom_out(self, factor: float = 1.2, anchor_node: Optional[str] = None) -> None:
-        """Zoom out by a factor. `anchor_node` is as for `zoom_in`."""
-        self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(1.0 / factor, sx, sy))
+    def zoom_out(self, factor: float = 1.2, anchor_node: Optional[str] = None,
+                 anchor_padding: float = 0.0) -> None:
+        """Zoom out by a factor. `anchor_node` and `anchor_padding` are as for `zoom_in`."""
+        self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(1.0 / factor, sx, sy),
+                              anchor_padding=anchor_padding)
 
     def _zoom_about_node(self, anchor_node: Optional[str],
                          zoom: Callable[[Optional[float], Optional[float]], None],
-                         animate: bool = True) -> None:
+                         animate: bool = True, anchor_padding: float = 0.0) -> None:
         """Run a zoom about `anchor_node`, and leave that node whole on screen.
 
-        `anchor_node`: As for `zoom_in`.
+        `anchor_node`, `anchor_padding`: As for `zoom_in`.
         `zoom`: Called with the screen point to turn about, or `(None, None)` for the middle of the view.
         `animate`: Whether `zoom` was asked to animate, so the correction below can match it.
 
@@ -350,7 +359,9 @@ class XDotWidget(gui_animation.Animation):
             zoom(None, None)
         else:
             zoom(*self._viewport.graph_to_screen(node.x, node.y))
-            self._viewport.keep_box_visible(*node.get_bounding_box(),
+            x1, y1, x2, y2 = node.get_bounding_box()
+            self._viewport.keep_box_visible(x1 - anchor_padding, y1 - anchor_padding,
+                                            x2 + anchor_padding, y2 + anchor_padding,
                                             margin=_ANCHOR_MARGIN, animate=animate)
         self._needs_render = True
 
@@ -570,19 +581,21 @@ class XDotWidget(gui_animation.Animation):
         """Return the current zoom level."""
         return self._viewport.zoom.current
 
-    def set_zoom(self, zoom: float, animate: bool = True, anchor_node: Optional[str] = None) -> None:
+    def set_zoom(self, zoom: float, animate: bool = True, anchor_node: Optional[str] = None,
+                 anchor_padding: float = 0.0) -> None:
         """Set the zoom level.
 
         `zoom`: Target zoom level.
         `animate`: If True, animate the transition.
-        `anchor_node`: As for `zoom_in` — the node to keep in place while the scale changes around it.
+        `anchor_node`, `anchor_padding`: As for `zoom_in` — the node to keep in place while the scale
+                                         changes around it, and how far its decoration reaches beyond it.
 
         Obeyed as given, where `zoom_in` and `zoom_out` decline to leave the graph behind. A caller naming
         a scale means that scale; the incremental pair is the one being steered by how it looks.
         """
         self._zoom_about_node(anchor_node,
                               lambda sx, sy: self._viewport.zoom_to(zoom, sx, sy, animate=animate),
-                              animate=animate)
+                              animate=animate, anchor_padding=anchor_padding)
 
     def get_visible_bounds(self) -> Tuple[float, float, float, float]:
         """Return the visible area in graph coordinates as ``(x1, y1, x2, y2)``."""
