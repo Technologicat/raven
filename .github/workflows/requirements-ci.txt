@@ -67,7 +67,7 @@ qoi==0.7.2
 requests==2.34.2
 # `visualizer.plotter` imports it at module level for its KDTree, so without it `test_plotter.py`
 # `importorskip`s away — 38 tests reporting a skip that reads as a pass.
-scipy==1.17.1
+scipy==1.18.1
 sseclient-py==1.9.0  # llmclient's SSE transport; needed since test_llmclient/test_scaffold started running here
 tqdm==4.70.0
 trafilatura==2.2.0
