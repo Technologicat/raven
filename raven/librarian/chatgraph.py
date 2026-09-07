@@ -572,14 +572,9 @@ class LayoutConfig:
     # beside the message rather than a deck belonging to it, and it spends the gap between rows on a
     # decoration -- where the horizontal direction has a gap of its own that widens to fit.
     attachment_fan_drop: float = 8.0
-    # Where each card sits is *derived* rather than configured -- see `_pile_columns`, which lays a pile
-    # out as a maximin Latin square over these two steps::
-    #
-    #     2:  X        3:  X        4:    X
-    #          X            X            X
-    #                      X               X
-    #                                    X
-    #
+    # Where each card sits is *derived* rather than configured: `_pile_columns` lays a deck out as a
+    # maximin Latin square over these two steps, which is what makes it read as a pile rather than as a
+    # staircase. The shapes are drawn out in its docstring.
     # Where the deck sits down the box, as a fraction of node height: 0 is the top edge, 1 the bottom.
     # Bottom-weighted rather than centred, because a decoration hanging off the lower corner reads as
     # *attached to* the message where one across its middle reads as part of it.
@@ -861,20 +856,31 @@ def _pile_columns(n_cards: int, step_x: float, step_y: float) -> Tuple[int, ...]
     """Return which column each card of a pile of `n_cards` sits in — one card per row, one per column.
 
     A **maximin Latin hypercube**: of all the permutations, the one whose closest pair of cards is as far
-    apart as it can be, ties broken by the next-closest pair and so on down.
+    apart as it can be, ties broken by the next-closest pair and so on down. Row is card, column is where
+    it sits, and rows go down the screen — so card 0 is the top of the pile as well as the front of it::
+
+        2 cards        3 cards        4 cards
+        (0, 1)         (0, 2, 1)      (1, 3, 0, 2)
+
+        X .            X . .          . X . .
+        . X            . . X          . . . X
+                       . X .          X . . .
+                                      . . X .
+
+    **The identity — card `i` in column `i` — is a legal Latin square and is exactly the shape to avoid.**
+    It is the staircase, and a monotone stagger of same-sized squares reads as a machine-stacked deck
+    however far apart the cards are. What rules it out is the maximin criterion, not the Latin square
+    property, which is why both halves are needed.
 
     Both halves of that do a job. The Latin square — one per row, one per column — is what makes a pile a
     pile rather than a stagger: no card sits exactly behind another, and the silhouette comes out ragged
-    on both axes by construction. The maximin criterion is what picks *which* Latin square, and it rules
-    out the identity, which is the plain staircase and reads as a machine-stacked deck however far apart
-    the cards are.
+    on both axes by construction. The maximin criterion is what picks *which* Latin square.
 
     See McKay, Beckman and Conover (1979) for the sampling design this is the two-dimensional case of:
     https://en.wikipedia.org/wiki/Latin_hypercube_sampling
 
     The distances are measured in graph units rather than in grid cells, so the answer follows the two
     step sizes: a deck fanned wide and dropped little wants a different permutation from a square one.
-    Rows go down the screen, so card 0 is the top of the pile as well as the front of it.
 
     **Ties are broken lexicographically**, which is not arbitrary detail: several permutations are optimal
     at most counts, and taking the first is what yields `(0, 1)` and `(0, 2, 1)` — the shapes drawn by

@@ -10,6 +10,7 @@ The module needs no DearPyGui: the xdot package imports its widget lazily, and e
 
 import itertools
 import math
+import re
 
 import pytest
 
@@ -1188,6 +1189,38 @@ class TestAttachmentThumbnails:
             assert chosen == pytest.approx(best)
             assert closest_pair(tuple(range(count))) <= chosen, \
                 "the staircase is as spread out as the chosen pile, so this fixture proves nothing"
+
+    def test_the_diagram_in_the_docstring_matches_the_code(self):
+        """`_pile_columns` draws its answer out as a grid, which is the form a human reads it in — and the
+        one that had already drifted once, having been written before the layout was derived.
+
+        Parsed rather than eyeballed, so the picture cannot go stale while looking authoritative. The
+        grids sit side by side and a short one leaves blank space on later lines, so each row is found by
+        looking for runs of cells rather than by splitting the line into columns — column-splitting
+        misaligns exactly on the lines where a grid has run out, and the first version of this test passed
+        against a deliberately corrupted diagram for that reason.
+
+        Runs are keyed by their width, which is why the identity is described in prose rather than drawn:
+        a fourth grid four cells wide would be indistinguishable from the four-card one.
+        """
+        config = chatgraph.LayoutConfig()
+        grids = {}
+        for line in chatgraph._pile_columns.__doc__.splitlines():
+            if not line.strip() or set(line) - set("X. "):  # prose; a full stop is a cell otherwise
+                continue
+            for run in re.findall(r"[X.](?: [X.])+", line):  # two cells or more; one is not a grid
+                cells = run.split(" ")
+                grids.setdefault(len(cells), []).append(cells)
+        assert grids, "the docstring has no diagram, so this asserts nothing"
+
+        for width, rows in sorted(grids.items()):
+            assert len(rows) == width, f"the {width}-card grid has {len(rows)} rows"
+            assert all(row.count("X") == 1 for row in rows), \
+                f"the {width}-card grid is not a permutation as drawn"
+            drawn = tuple(row.index("X") for row in rows)
+            assert drawn == chatgraph._pile_columns(width, config.attachment_fan_offset,
+                                                    config.attachment_fan_drop), \
+                f"the diagram for {width} cards says {drawn}, which is not what the code produces"
 
     def test_the_hand_laid_shapes_are_what_comes_out(self):
         """The two- and three-card piles were drawn by eye before any of this was derived. They are what
