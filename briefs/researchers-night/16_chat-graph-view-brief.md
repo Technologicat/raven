@@ -1058,6 +1058,95 @@ Three directions, none chosen:
 The first two are compatible and could both apply. The third is the one that makes the *avatar* panel
 growable, which the other two deliberately avoid needing.
 
+## Where this stands, 2026-09-07
+
+**Item 6 is done** — the pause gate, the auto-switch, and the speech rule that goes with them. What shipped
+and what it cost is in *How item 6 came out* below. **The demo now needs 4, 5 and 8**, with 10 as the final
+look afterwards.
+
+**Monday's choice resolved itself the other way**: 6 was taken first, on the argument the 09-04 section
+already made for it — it waited on nothing and cleared two visible symptoms. **Items 4 and 5 are next**, and
+they remain one piece of work in practice.
+
+### How item 6 came out, 2026-09-07
+
+**The design survived contact, with one correction that matters and one simplification that removes a whole
+subsystem.**
+
+- **The correction is the second deadlock**, which the brief named only in one direction. It warned that the
+  auto-switch must not read a signal its own effect can flip — hence `first_frame_received` and the idle
+  detector's own flag rather than `animator_running`. What it did not say is that the *pause* has the same
+  shape: suppressing a stream that has not yet delivered a frame stops the frames, and the first of those
+  frames is the thing that would end the warmup. Applied naively at startup, the graph would have covered
+  the avatar for the rest of the session. So the suppression is deliberately narrower than the panel swap:
+  the panel goes to the graph whenever the avatar has nothing to show, but the video is only switched off
+  when there is something to switch off. Both halves of that are in the code as comments.
+- **The simplification: speech without subtitles needed no mechanism at all.** The brief and the first
+  design here both assumed a per-batch subtitle override threaded through `send_text_to_tts`, because
+  `subtitles_enabled` is a controller attribute read per sentence inside the preprocess task. Juha's
+  observation killed it: the subtitle widget is parented *inside* the avatar's child window, and the graph
+  is a sibling shown in its place — so covering the panel hides the caption along with it, and uncovering
+  brings back whatever caption is current. Generate as usual and let it be invisible. That also covers
+  toggling the graph mid-speech in both directions, which the override design did not.
+- **So `Ctrl+S` needed no rule.** The two halves came out asymmetric and it reads as the right asymmetry:
+  automatic speech is suppressed (nobody asked for it, and the captions cannot be read), an explicit
+  gesture is simply honoured (it was asked for, and the reader can see why the captions are missing). The
+  panel-handback candidate the brief floated was not built and is not needed.
+
+**What is in the client layer** — `set_video_suppressed` and `video_available` on `DPGAvatarController`,
+plus a `first_frame_received` reset in `DPGAvatarRenderer.start` so a restarted stream counts as warming up
+again. Nine tests, including a negative control that pins the anti-deadlock property: the control asserts
+the renderer really was paused, so a `video_available` written as `animator_running` fails rather than
+passing vacuously. Checked against that wrong implementation, which it rejects.
+
+**What is in Librarian** — one writer, `_apply_panel_occupancy`, under its own lock, driven by the checkbox
+and by a 5 Hz background watch. A poll rather than a callback: both transitions it waits for happen inside
+the client layer and announce themselves to nobody, and a new callback contract there would exist for one
+consumer. The graph consequently also fills the seconds a freshly started avatar takes to appear, which the
+brief asked for.
+
+**Driven live, all four transitions**: preference on pauses the video; unchecking resumes it and gives the
+panel back with no *"[Video is off]"* flash; fifteen seconds of quiet hands it to the graph unattended;
+re-checking restores. Clean shutdown, no exceptions from the watch.
+
+**Three paths are built but unexercised**, each needing an LLM turn or audio. **Juha is driving that test**
+(2026-09-07); this is the list to work through:
+
+- **The autostart suppression itself** — a reply arriving with the graph up and *Subtitles* on. Read in the
+  code, not watched.
+- **`Ctrl+S` under the graph.** The open question here is answered rather than pending: **`speak_lipsynced`
+  does not care about the pause state** (Juha, 2026-09-07) — it overrides morphs in real time, and pausing
+  means the server stops *using* those values, not that setting them fails. So audio plays, the morphs go
+  nowhere visible, and there is nothing to fix. What is left is watching it.
+- **The subtitle re-measure on hand-back.** `reposition_subtitle` is called when the avatar takes the panel
+  back, because a hidden item is not laid out and keeps whatever width it last had. Predicted, then
+  confirmed against `dpg-notes.md`, which already records the mechanism — and records that
+  `reposition_subtitle` parks the subtitle offscreen rather than hiding it for exactly this reason. Not yet
+  seen in a running app with a caption on screen. Note the cost if it is wrong is a caption lost for its
+  sentence, ten seconds or so, rather than something the next sentence repairs.
+
+**Two things landed alongside**, both from questions Juha asked while reading the diff:
+
+- **The seven mode toggles have hotkeys** (`Alt+T`, `Alt+Shift+T`, `Alt+I`, `Alt+D`, `Alt+G`, `Alt+S`,
+  `Alt+C`), on a new `guiutils.toggle_checkbox` that flips a checkbox and runs its own callback. It exists
+  because DPG is inconsistent there and Raven is not: a click runs the callback and `set_value` does not.
+  A sweep for other places to use it found the constellation mostly uses a different shape — cherrypick and
+  the file dialog give the state a setter and treat the checkbox as a view of it, so their keyboard routes
+  negate the model and need no callback fired. The applicable set was Librarian's own two.
+- **`reposition_subtitle` uses `park_offscreen`**, which it predates, and the two constructor parameters
+  that existed only for its open-coded version are gone — they were the *configured* window size, never
+  updated on a resize, and the settings editor had to pass `0, 0` to satisfy them.
+
+**One knock-on to decide, not a defect**: a lost avatar-server connection now reads as "no video", so the
+graph covers the renderer's own *"[Connection lost]"* text. The graph is more useful than a dead panel, but
+that indication is genuinely gone. Left as it is.
+
+**One doc/code disagreement found in passing, not touched**: `register_avatar_instance` documents
+`idle_timeout` as "how long of no activity until `on_idle` triggers", and `on_tts_idle` points at "`on_idle`
+in `register_avatar_instance`" for a per-instance idle event. There is no such parameter and no such
+callback. Either the docstrings are stale or the callback was planned and never built — it would have been
+the push half of what the poll above does. Juha's call.
+
 ## Where this stands, end of 2026-09-04
 
 Everything below is committed, pushed, and green on all four CI jobs plus lint. Read this section first;
@@ -1377,7 +1466,11 @@ list is a judgement about how the picture reads, and those are decided in front 
      cursor work or on the tool-round gap.
 5. **Attachment thumbnails**, to the design above: straddling the right edge, stacked and capped, bordered
    in the graph's line pen, prepared on a background task with a placeholder meanwhile.
-6. **The avatar pause gate, and the auto-switch that goes with it.** Never built — so the two symptoms
+~~6. **The avatar pause gate, and the auto-switch that goes with it.**~~ **Built 2026-09-07** — see *How
+   item 6 came out* below for what shipped, what it cost, and the three paths still unexercised. The rest
+   of this item is the design it was built from, kept because most of it is still the explanation.
+
+   Never built — so the two symptoms
    reported on 2026-09-01 are the feature's absence rather than defects in it: the avatar's video keeps
    rendering behind the graph, and switching itself off leaves *"[Video is off]"* on screen instead of
    handing the panel to the graph.
