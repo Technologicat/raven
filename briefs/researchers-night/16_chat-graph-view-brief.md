@@ -320,9 +320,10 @@ alternatives both cost real work and neither is needed:
 - **A different fixed size** wants a new *asset*, generated offline from the originals, rather than a runtime
   Lanczos pass. That is how the 64 px files were produced in the first place, and an asset is cheaper and
   more inspectable than a startup GPU step.
-- **Lanczos at render time** needs the full apparatus: `mipchain`
-  (`raven/common/image/lanczos.py`) plus the selection rule in `mip_scale_for_zoom`
-  (`raven/cherrypick/preload.py`). Note the trap if quality turns out to want it — `mipchain`'s `min_size`
+- **Lanczos at render time** needs the full apparatus: `mipchain` plus the selection rule in
+  `mip_scale_for_zoom` — both in `raven/common/image/lanczos.py`, the second having moved there from
+  `raven/cherrypick/preload.py` on 2026-09-07, being arithmetic about a mip chain and a zoom rather than
+  anything to do with preloading. Note the trap if quality turns out to want it — `mipchain`'s `min_size`
   defaults to 64, tuned for Cherrypick's photographs, so a 64 px icon produces a chain of length one and the
   aliasing survives the machinery.
 
