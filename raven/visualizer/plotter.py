@@ -180,6 +180,10 @@ def compute_highlight_alpha(x, n_data, n_many):
 # --------------------------------------------------------------------------------
 # The select-radius brush indicator
 
+# The 65th point is the 1st again, and that is load-bearing rather than a fencepost slip: `draw_polygon`
+# strokes an *open* path, leaving the edge from the last vertex back to the first undrawn, so a list that
+# does not close itself comes out with a gap in it. `endpoint=False` would be the tidy-looking change that
+# opens one. (Measured 2026-09-08; `investigations/dpg-polygon-closing/`.)
 _UNIT_CIRCLE = np.array([(np.cos(t), np.sin(t)) for t in np.linspace(0, 2 * np.pi, 65)])  # discrete approximation of the unit apeirogon :P
 
 
