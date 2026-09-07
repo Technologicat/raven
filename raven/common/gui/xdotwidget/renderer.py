@@ -294,18 +294,26 @@ def _render_polygon_shape(drawlist: Union[int, str],
     else:
         stroke_color = color_to_dpg(pen.color)
         thickness = max(1, pen.linewidth * zoom)
-        # DPG's draw_polygon doesn't close automatically for stroke,
-        # so we need to use draw_polyline with the first point appended
-        closed_points = points + [points[0]]
+        # `draw_polygon` strokes an *open* path -- measured, and it leaves the edge back to the first
+        # vertex undrawn -- so the outline is a polyline either way.
         if pen.dash:
             # Same treatment a `LineShape` gets. Polygons went without it for as long as this renderer has
             # existed, so a dashed outline asked for by a caller -- or by GraphViz's `style=dashed` -- came
             # out solid, silently and with nothing to notice but the picture.
+            #
+            # The walk needs the closing edge spelled out, and `closed` would not help it: what comes back
+            # is a list of open dashes, each of which is meant to have caps.
             scaled_dash = tuple(d * zoom for d in pen.dash)
-            for seg in _dashify_polyline(closed_points, scaled_dash):
+            for seg in _dashify_polyline(points + [points[0]], scaled_dash):
                 dpg.draw_polyline(seg, color=stroke_color, thickness=thickness, parent=drawlist)
         else:
-            dpg.draw_polyline(closed_points, color=stroke_color,
+            # `closed`, rather than appending the first point again. The two close the same outline and
+            # differ at the seam: repeating the vertex ends one stroke and starts another, so two butt
+            # caps meet there instead of a join, and the outer corner is left unfilled. The width of that
+            # notch is the line width, which scales with the zoom -- invisible at 1:1 and a bite out of
+            # the corner once a reader has zoomed in. It lands on the first vertex, which for a box built
+            # by `chatgraph` is the top left.
+            dpg.draw_polyline(points, closed=True, color=stroke_color,
                               thickness=thickness, parent=drawlist)
 
 

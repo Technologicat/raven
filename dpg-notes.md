@@ -429,6 +429,31 @@ isolated zoom levels and is gone as soon as the wheel moves.
 Snapping the dash phase to whole pixels in screen space would fix it at every zoom, and would distort
 diagonals and curves. A last resort, not needed so far.
 
+## Closing a stroked outline: `draw_polyline(closed=True)`, never a repeated first vertex
+
+Two ways to draw the outline of a polygon, and both obvious ones are wrong. Measured 2026-09-08 against
+dearpygui 2.x by rendering the same rectangle three ways at thickness 24 and reading the frame buffer.
+
+- **`dpg.draw_polygon(points, color=..., thickness=...)` strokes an *open* path.** The edge from the last
+  vertex back to the first is simply not drawn, so a four-point rectangle comes out as three sides. It
+  fills correctly (`fill=...`); it is only the stroke that does not close.
+- **`dpg.draw_polyline(points + [points[0]], ...)` closes the outline but not the *join* at the seam.**
+  Repeating the vertex ends one stroke and starts another, so what meets there is two butt caps rather
+  than a mitre, and the outer corner is left unfilled — a notch whose size is the line width.
+- **`dpg.draw_polyline(points, closed=True, ...)` is the one that joins.** Same outline, mitred seam.
+
+**The reason this hides is that the notch scales with the stroke and the stroke scales with the zoom.** A
+renderer that multiplies line width by zoom draws a hairline notch at 1:1 and a bite out of the corner
+once a reader has zoomed in — so it surfaces as "something is wrong with that corner" long after the code
+was written, and only in the view nobody tests in. Live case 2026-09-08: Raven's chat graph, on a message
+box's top-left corner and on a pointer pill's leftmost point. Those are not two bugs; they are each
+outline's **first vertex**, which is where its seam is.
+
+**Dashes are the exception.** A dash pattern is drawn as one open polyline per mark, and each mark is
+*meant* to have caps, so `closed` has nothing to do there — but the closing edge still has to be walked,
+or the outline is dashed on three sides and bare on the fourth. Spell it as `points + [points[0]]` for
+the dash walk alone.
+
 ## Diagnosing background-task races
 
 Raven's DPG apps push decode/mip/texture work onto background threads, guarded by a monotonic generation counter (bumped on each image switch) and cooperative cancellation (`bgtask.TaskManager` sequential mode cancels the prior task when a new one is submitted). Two failure modes recur, and both are **silent** by default:

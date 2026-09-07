@@ -573,3 +573,62 @@ class TestDecorationsInTheMarginSurviveCulling:
         widget._render()
         assert self.drawn_image(widget) is None, \
             "nothing is culled at all, so the assertions above say nothing about culling"
+
+
+class TestAStrokedOutlineIsClosedAtItsSeam:
+    """How a polygon's outline is closed, which is invisible until the line is thick.
+
+    The stroke's width scales with the zoom, so a closing that leaves the seam unjoined is a hairline at
+    1:1 and a bite out of the corner once a reader has zoomed in — reported live on a chat graph box and
+    on a pointer pill, at the top left and the leftmost point respectively, each being that outline's
+    first vertex.
+    """
+
+    @staticmethod
+    def graph_with(shape) -> Graph:
+        return Graph(width=100.0, height=100.0,
+                     nodes=[Node(x=50.0, y=50.0, w=100.0, h=100.0,
+                                 shapes=[shape], internal_name="only")])
+
+    @staticmethod
+    def polylines(instance: XDotWidget):
+        return [dpg.get_item_configuration(item)
+                for item in dpg.get_item_children(instance.drawlist, DRAWLIST_SLOT) or []
+                if dpg.get_item_type(item) == "mvAppItemType::mvDrawPolyline"]
+
+    @staticmethod
+    def square():
+        return [(20.0, 20.0), (80.0, 20.0), (80.0, 80.0), (20.0, 80.0)]
+
+    def test_a_solid_outline_asks_the_toolkit_to_close_it(self, widget):
+        """Rather than repeating the first vertex, which ends one stroke and starts another — so two butt
+        caps meet at the seam instead of a join, and the outer corner is left unfilled."""
+        pen = Pen()
+        pen.linewidth = 4.0
+        widget.set_graph(self.graph_with(PolygonShape(pen, self.square(), filled=False)))
+        widget.set_zoom(1.0, animate=False)
+        widget._render()
+        drawn = self.polylines(widget)
+        assert len(drawn) == 1, f"expected one polyline for one outline, got {len(drawn)}"
+        assert drawn[0]["closed"] is True
+        assert len(drawn[0]["points"]) == 4, \
+            "the first vertex was repeated, which is the spelling that leaves the seam unjoined"
+
+    def test_a_dashed_outline_still_walks_the_closing_edge(self, widget):
+        """The dashes are open paths and are meant to have caps, so `closed` is not the answer there —
+        but the edge back to the first vertex still has to be walked, or the outline has a gap."""
+        pen = Pen()
+        pen.linewidth = 4.0
+        pen.dash = (6.0,)
+        widget.set_graph(self.graph_with(PolygonShape(pen, self.square(), filled=False)))
+        widget.set_zoom(1.0, animate=False)
+        widget._render()
+        drawn = self.polylines(widget)
+        assert len(drawn) > 1, "the dash pattern produced a single stroke, so nothing was dashed"
+        assert not any(d["closed"] for d in drawn)
+        # The left edge is the closing one, from the last vertex back to the first. Dropping it leaves the
+        # other three sides dashed, which every assertion above is still happy with.
+        xs = [p[0] for d in drawn for p in d["points"]]
+        left_edge_dashes = [d for d in drawn
+                            if all(p[0] == pytest.approx(min(xs)) for p in d["points"])]
+        assert left_edge_dashes, "nothing was drawn along the closing edge"
