@@ -27,6 +27,7 @@ import http.server
 import json
 import pathlib
 import time
+import urllib.error
 import urllib.request
 
 CONTROL_FILE = pathlib.Path("/tmp/faultproxy.mode")
@@ -80,10 +81,20 @@ class Proxy(http.server.BaseHTTPRequestHandler):
         self.close_connection = True
 
     def _forward(self, body: bytes) -> None:
+        # The caller's own Content-Type, not a declared `application/json`: an upstream may take multipart
+        # uploads — Raven-server's avatar load does — and the boundary lives in that header, so replacing it
+        # turns the request into a 400 that looks like the app's fault.
         request = urllib.request.Request(f"{self.upstream}{self.path}", data=body,
                                          method=self.command,
-                                         headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(request) as response:  # noqa: S310 -- the upstream is ours, from the command line
+                                         headers={"Content-Type": self.headers.get("Content-Type", "application/json")})
+        try:
+            response = urllib.request.urlopen(request)  # noqa: S310 -- the upstream is ours, from the command line
+        except urllib.error.HTTPError as exc:
+            # An upstream that answers with an error is still answering, so relay it. Letting it raise kills
+            # the handler thread instead, and the app then sees a dropped connection where the server had
+            # sent it a status.
+            response = exc
+        with response:
             self.send_response(response.status)
             self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
             self.send_header("Transfer-Encoding", "chunked")
