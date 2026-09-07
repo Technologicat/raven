@@ -630,8 +630,21 @@ class XDotAttrParser:
                 points = self.read_polygon()
                 self.shapes.append(PolygonShape(self.pen, points, filled=False))
             elif op == "I":
-                # Image shapes - skip for now (DPG doesn't have direct image support in drawlists)
-                # TODO: Implement image loading for DPG
+                # What is missing is the image *file*, not the drawing of one: DPG draws into a drawlist
+                # perfectly well (`dpg.draw_image`), and `ImageShape` is the shape for it. An `I` operation
+                # names a path, so honouring one means reading the file, resampling it, registering a
+                # texture and owning its lifetime -- none of which this parser has any machinery for, and
+                # all of which a caller building `Graph` objects by hand does for itself.
+                #
+                # The resampling is the part not to skip. DPG samples nearest-neighbour, so a texture
+                # uploaded at the file's own size and drawn at any other one aliases visibly, and a graph
+                # zooms continuously -- there is no size to prepare it at once and be done. Raven's answer
+                # is a Lanczos mip chain on the GPU: `raven.common.image.lanczos.mipchain` builds the
+                # levels and `raven.cherrypick.preload.mip_scale_for_zoom` picks the one to draw at a given
+                # zoom, which is what Cherrypick's image viewer and the file dialog's thumbnail grid both
+                # go through.
+                # TODO: load the named image, resample it through the Lanczos mip chain, and hand
+                # TODO: `ImageShape` a texture for the level that suits the current zoom
                 logger.warning("XDotAttrParser.parse: image shapes are currently not supported; skipping.")
                 # x0, y0 = self.read_point()
                 # w = self.read_number()

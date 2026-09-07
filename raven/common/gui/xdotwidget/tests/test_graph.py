@@ -1,10 +1,10 @@
-"""Tests for graph data model: tessellate_bezier and get_linked_elements."""
+"""Tests for graph data model: tessellate_bezier, get_linked_elements, and ImageShape."""
 
 import pytest
 
 from raven.common.tests import approx
 
-from ..graph import (Graph, Node, Edge, TextShape, Pen,
+from ..graph import (Graph, Node, Edge, TextShape, Pen, ImageShape,
                      tessellate_bezier)
 
 
@@ -160,3 +160,37 @@ class TestGetLinkedElements:
         graph, a, b, c, d, e_ab, e_ac, e_bd, e_cd = diamond_graph
         linked = graph.get_linked_elements(a, "incoming")
         assert len(linked) == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: ImageShape
+# ---------------------------------------------------------------------------
+
+class TestImageShape:
+    """The bounding box, which is what culling and `CompoundShape` ask an image for.
+
+    The drawing itself needs DPG and is covered in `test_widget.py`.
+    """
+
+    def test_bounding_box_is_the_rectangle(self):
+        shape = ImageShape("some_texture", 10.0, 20.0, 50.0, 70.0)
+        assert shape.get_bounding_box() == (10.0, 20.0, 50.0, 70.0)
+
+    def test_the_corners_may_arrive_in_either_order(self):
+        """A caller computing a rectangle from a centre and a size can hand over either diagonal.
+
+        Culling compares the box against the view, so a box with a negative extent is never visible and
+        the image silently never draws.
+        """
+        shape = ImageShape("some_texture", 50.0, 70.0, 10.0, 20.0)
+        assert shape.get_bounding_box() == (10.0, 20.0, 50.0, 70.0)
+
+    def test_a_shape_with_no_texture_still_has_its_rectangle(self):
+        """A placeholder holds the space its image will take, so what stands in for it is the right size."""
+        shape = ImageShape(None, 10.0, 20.0, 50.0, 70.0)
+        assert shape.texture is None
+        assert shape.get_bounding_box() == (10.0, 20.0, 50.0, 70.0)
+
+    def test_it_carries_no_pen(self):
+        """An image has no ink, which is what keeps the dark-mode lightness inversion off the picture."""
+        assert ImageShape("some_texture", 0.0, 0.0, 1.0, 1.0).pen is None

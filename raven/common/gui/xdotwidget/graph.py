@@ -2,7 +2,7 @@
 
 This module defines the data structures for representing xdot graphs:
 - Pen: Drawing state (colors, line width, font)
-- Shape classes: TextShape, EllipseShape, PolygonShape, LineShape, BezierShape
+- Shape classes: TextShape, EllipseShape, PolygonShape, LineShape, BezierShape, ImageShape
 - Element classes: Node, Edge (graph components)
 - Graph: Container for nodes, edges, and background shapes
 
@@ -25,6 +25,7 @@ __all__ = ["mix_colors",
            "PolygonShape",
            "LineShape",
            "BezierShape",
+           "ImageShape",
            "CompoundShape",
            "Element",
            "Node",
@@ -32,7 +33,7 @@ __all__ = ["mix_colors",
            "Graph"]
 
 from itertools import chain
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from ... import utils as common_utils
 
@@ -317,6 +318,52 @@ class BezierShape(Shape):
         xs = [p[0] for p in self.points]
         ys = [p[1] for p in self.points]
         return (min(xs), min(ys), max(xs), max(ys))
+
+
+class ImageShape(Shape):
+    """A bitmap, drawn from a texture the caller has already registered with DPG.
+
+    Attributes:
+        texture: DPG texture tag or ID, or `None` to draw nothing.
+        x1, y1, x2, y2: The rectangle to draw into, in graph coordinates.
+        max_screen_size: Longest side the image may be drawn at, in screen pixels, or `None` for no cap.
+
+    The rectangle is in graph coordinates like every other shape here, so the image pans and zooms with
+    the drawing. `max_screen_size` then puts a ceiling on how large it is allowed to get. Shrinking to
+    obey it is uniform and about the rectangle's centre, so the picture keeps both its proportions and
+    its place.
+
+    **The texture has to hold the pixels the display wants, because DPG samples nearest-neighbour.**
+    Anything drawn at a size the texture was not prepared for aliases, and a graph zooms continuously, so
+    there is no one size to prepare it at. Two answers, and which one applies depends on the asset:
+
+      - An icon shipped at its display size — the chat log's role glyphs are 64x64 — needs nothing but a
+        `max_screen_size` that stops it being drawn larger than it is. Downsampling from there is the
+        path the chat log itself already takes.
+      - Anything else wants a Lanczos mip chain on the GPU: `raven.common.image.lanczos.mipchain` builds
+        the levels and `raven.cherrypick.preload.mip_scale_for_zoom` picks one for a given zoom. That is
+        what Cherrypick's image viewer and the file dialog's thumbnail grid do, and a caller drawing
+        photographs here should do the same rather than upload one texture and let DPG scale it.
+
+    A `None` texture is an ordinary state rather than a fault: it is what a caller draws while an image is
+    still being prepared on a background thread, and it lets the shape carry the rectangle the image will
+    occupy so that whatever the caller draws in the meantime is the right size.
+    """
+
+    def __init__(self, texture: Optional[Union[int, str]],
+                 x1: float, y1: float, x2: float, y2: float,
+                 max_screen_size: Optional[float] = None):
+        super().__init__()
+        self.texture = texture
+        self.x1 = x1
+        self.y1 = y1
+        self.x2 = x2
+        self.y2 = y2
+        self.max_screen_size = max_screen_size
+
+    def get_bounding_box(self) -> Tuple[float, float, float, float]:
+        return (min(self.x1, self.x2), min(self.y1, self.y2),
+                max(self.x1, self.x2), max(self.y1, self.y2))
 
 
 class CompoundShape(Shape):

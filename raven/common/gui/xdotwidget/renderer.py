@@ -14,7 +14,7 @@ import dearpygui.dearpygui as dpg
 
 from .graph import (
     Graph, Element, Shape, Pen,
-    TextShape, EllipseShape, PolygonShape, LineShape, BezierShape,
+    TextShape, EllipseShape, PolygonShape, LineShape, BezierShape, ImageShape,
     CompoundShape, tessellate_bezier
 )
 from .constants import Color, DPGColor, Point
@@ -385,6 +385,36 @@ def _render_bezier_shape(drawlist: Union[int, str],
                 p0 = p1
 
 
+def _render_image_shape(drawlist: Union[int, str],
+                        shape: ImageShape,
+                        viewport: Viewport) -> None:
+    """Render an image shape.
+
+    No pen is involved, so nothing here goes through `color_to_dpg` and dark mode does not touch the
+    picture — which is the wanted behaviour: the lightness inversion is for ink drawn on the background,
+    and inverting a photograph or an icon would make it wrong rather than dark-friendly. A caller that
+    wants the image to sit in the drawing outlines it, and *that* line is a pen and does invert.
+    """
+    if shape.texture is None:  # still being prepared; the caller draws whatever stands in for it
+        return
+
+    x1, y1 = viewport.graph_to_screen(min(shape.x1, shape.x2), min(shape.y1, shape.y2))
+    x2, y2 = viewport.graph_to_screen(max(shape.x1, shape.x2), max(shape.y1, shape.y2))
+    w, h = x2 - x1, y2 - y1
+    if w <= 0 or h <= 0:
+        return
+
+    if shape.max_screen_size is not None and max(w, h) > shape.max_screen_size:
+        # Shrink about the centre, uniformly, so the image keeps its proportions and its place.
+        t = shape.max_screen_size / max(w, h)
+        cx, cy = 0.5 * (x1 + x2), 0.5 * (y1 + y2)
+        x1, x2 = cx - 0.5 * t * w, cx + 0.5 * t * w
+        y1, y2 = cy - 0.5 * t * h, cy + 0.5 * t * h
+
+    dpg.draw_image(shape.texture, (x1, y1), (x2, y2),
+                   uv_min=(0.0, 0.0), uv_max=(1.0, 1.0), parent=drawlist)
+
+
 def _get_element_fillcolor(element: Optional[Element]) -> Optional[Color]:
     """Extract the fill color from an element's filled shapes, if any.
 
@@ -423,6 +453,8 @@ def _render_shape(drawlist: Union[int, str],
         _render_line_shape(drawlist, shape, viewport, pen)
     elif isinstance(shape, BezierShape):
         _render_bezier_shape(drawlist, shape, viewport, pen)
+    elif isinstance(shape, ImageShape):
+        _render_image_shape(drawlist, shape, viewport)
     elif isinstance(shape, CompoundShape):
         for child in shape.shapes:
             _render_shape(drawlist, child, viewport, element,

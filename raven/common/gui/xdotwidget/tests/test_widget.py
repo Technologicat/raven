@@ -17,7 +17,7 @@ import pytest
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
 from raven.common.gui import animation  # noqa: E402 -- after importorskip by design
-from raven.common.gui.xdotwidget.graph import (Graph, Node, Edge, Pen,  # noqa: E402 -- after importorskip by design
+from raven.common.gui.xdotwidget.graph import (Graph, Node, Edge, Pen, ImageShape,  # noqa: E402 -- after importorskip by design
                                                TextShape, EllipseShape, LineShape, PolygonShape)
 from raven.common.gui.xdotwidget.widget import XDotWidget  # noqa: E402 -- after importorskip by design
 
@@ -337,3 +337,104 @@ def test_a_dashed_polygon_outline_is_actually_dashed(widget):
     # happens to produce at this zoom -- only that the pen was read at all.
     assert dashed_items > solid_items, \
         f"a dashed outline drew {dashed_items} items and a solid one {solid_items}; the dash was ignored"
+
+
+@pytest.fixture(scope="module")
+def texture(dpg_context):
+    """A 2x2 white texture. What it looks like does not matter; that it exists does."""
+    with dpg.texture_registry():
+        yield dpg.add_static_texture(2, 2, [1.0] * 16)
+
+
+class TestImageShapesAreDrawn:
+    """`ImageShape` — the shape Librarian's chat graph draws role glyphs and attachment thumbnails with.
+
+    The widget could not draw a bitmap at all until this landed, on a recorded premise that DPG drawlists
+    have no image support. They do; `dpg.draw_image` is what the chat log's own role icons go through.
+    """
+
+    @staticmethod
+    def graph_with(shape) -> Graph:
+        """A one-node graph whose node carries `shape` and nothing else, filling a 100x100 drawing."""
+        return Graph(width=100.0, height=100.0,
+                     nodes=[Node(x=50.0, y=50.0, w=100.0, h=100.0,
+                                 shapes=[shape], internal_name="only")])
+
+    @staticmethod
+    def drawn_image(instance: XDotWidget):
+        """Return the configuration of the one image item the last render emitted, or `None`."""
+        for item in dpg.get_item_children(instance.drawlist, DRAWLIST_SLOT) or []:
+            if dpg.get_item_type(item) == "mvAppItemType::mvDrawImage":
+                return dpg.get_item_configuration(item)
+        return None
+
+    def test_an_image_shape_reaches_the_drawlist(self, widget, texture):
+        widget.set_graph(self.graph_with(ImageShape(texture, 20.0, 20.0, 80.0, 80.0)))
+        widget.zoom_to_fit(animate=False)
+        widget._render()
+        assert self.drawn_image(widget) is not None
+
+    def test_a_shape_with_no_texture_draws_nothing(self, widget, texture):
+        """A placeholder holds its space in the layout without putting anything on screen."""
+        widget.set_graph(self.graph_with(ImageShape(None, 20.0, 20.0, 80.0, 80.0)))
+        widget.zoom_to_fit(animate=False)
+        widget._render()
+        assert self.drawn_image(widget) is None
+
+    def test_the_rectangle_follows_the_zoom(self, widget, texture):
+        """It is a shape in graph space, so it grows and shrinks with everything else."""
+        widget.set_graph(self.graph_with(ImageShape(texture, 20.0, 20.0, 80.0, 80.0)))
+        widget.set_zoom(1.0, animate=False)
+        widget._render()
+        at_1to1 = self.drawn_image(widget)
+        widget.set_zoom(2.0, animate=False)
+        widget._render()
+        at_2to1 = self.drawn_image(widget)
+
+        def width(config):
+            return config["pmax"][0] - config["pmin"][0]
+        assert width(at_1to1) == pytest.approx(60.0)
+        assert width(at_2to1) == pytest.approx(120.0)
+
+    def test_the_screen_size_cap_stops_it_growing(self, widget, texture):
+        """An asset prepared at its display size upsamples badly, and DPG samples nearest-neighbour.
+
+        The negative control is the assertion at 1:1: below the cap the shape is untouched, so a renderer
+        that clamped unconditionally — or one that ignored the cap entirely — fails one of the two.
+        """
+        widget.set_graph(self.graph_with(ImageShape(texture, 20.0, 20.0, 80.0, 80.0,
+                                                    max_screen_size=90.0)))
+        widget.set_zoom(1.0, animate=False)
+        widget._render()
+        below_cap = self.drawn_image(widget)
+        widget.set_zoom(4.0, animate=False)
+        widget._render()
+        above_cap = self.drawn_image(widget)
+
+        def size(config):
+            return (config["pmax"][0] - config["pmin"][0],
+                    config["pmax"][1] - config["pmin"][1])
+        assert size(below_cap) == pytest.approx((60.0, 60.0)), \
+            "60 units at 1:1 is already over the cap, so this fixture cannot tell a cap from a constant"
+        assert size(above_cap) == pytest.approx((90.0, 90.0))
+
+    def test_the_cap_shrinks_it_about_its_centre(self, widget, texture):
+        """So a capped image keeps the place the layout gave it instead of sliding towards a corner."""
+        widget.set_graph(self.graph_with(ImageShape(texture, 20.0, 20.0, 80.0, 80.0,
+                                                    max_screen_size=30.0)))
+        widget.set_zoom(1.0, animate=False)
+        widget._render()
+        capped = self.drawn_image(widget)
+        widget.set_graph(self.graph_with(ImageShape(texture, 20.0, 20.0, 80.0, 80.0)))
+        widget._render()
+        uncapped = self.drawn_image(widget)
+
+        def centre(config):
+            return (0.5 * (config["pmin"][0] + config["pmax"][0]),
+                    0.5 * (config["pmin"][1] + config["pmax"][1]))
+
+        def width(config):
+            return config["pmax"][0] - config["pmin"][0]
+        assert width(capped) < width(uncapped), \
+            "the cap did not bite, so this fixture cannot tell a centred shrink from no shrink at all"
+        assert centre(capped) == pytest.approx(centre(uncapped))
