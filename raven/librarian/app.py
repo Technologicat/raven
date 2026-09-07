@@ -2557,7 +2557,13 @@ avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=av
                                                            voice_speed=librarian_config.avatar_config.voice_speed,
                                                            emotion_blacklist=librarian_config.avatar_config.emotion_blacklist,
                                                            emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
-                                                           idle_timeout=librarian_config.avatar_config.idle_off_timeout)
+                                                           idle_timeout=librarian_config.avatar_config.idle_off_timeout,
+                                                           # The panel changes hands here rather than at the
+                                                           # watch's next tick, so the renderer's "video is
+                                                           # off" text is drawn into a panel the graph has
+                                                           # already taken. A lambda because the handler
+                                                           # takes the instance and this one wants none of it.
+                                                           on_idle=lambda config: _apply_panel_occupancy())
 avatar_controller.tts.warmup(voice=librarian_config.avatar_config.voice)
 
 chat_controller = DPGChatController(llm_settings=llm_settings,
@@ -2812,9 +2818,9 @@ def _build_initial_chat_view(sender, app_data) -> None:
         _start_backend_status_poll(delay_first_probe=True)
 dpg.set_frame_callback(3, _build_initial_chat_view)
 
-# How often to re-ask whether the avatar has video. Both events it waits for are second-scale — a stream
-# warming up, an idle timeout expiring — and the user's own preference does not come through here at all,
-# the checkbox applying itself directly.
+# How often to re-ask whether the avatar has video. Second-scale, because the one thing left for it to
+# notice is a stream warming up: the checkbox applies itself directly, and the idle detector announces
+# itself through `on_idle`.
 _PANEL_OCCUPANCY_TICK_S = 0.2
 
 # One rect, two occupants, and three things with an opinion about which one is in it: the user's
@@ -2873,11 +2879,13 @@ panel_occupancy_task_manager = bgtask.TaskManager(name="librarian_panel_occupanc
 def _panel_occupancy_task(task_env: env) -> None:
     """Watch for the avatar's video coming and going, and hand the panel over as it does.
 
-    A poll rather than a notification. The two transitions it waits for happen inside the client layer —
-    the first frame of a stream arriving, and the idle detector switching the video off — and neither
-    announces itself to anyone. Reading a pair of flags five times a second cannot miss one and costs
-    nothing measurable, where a callback added for this would put a new contract on that layer for the
-    sake of one consumer.
+    A poll, for the transitions that announce themselves to nobody: a stream delivering its first frame,
+    and a `ping` waking a sleeping avatar. Reading a pair of flags five times a second cannot miss one and
+    costs nothing measurable.
+
+    The switch-*off* does not come through here — `on_idle` carries it, because that one is the transition
+    where being a tick late is visible: the renderer draws "video is off" into the panel it is losing. The
+    poll would still catch it, so this remains the safety net for both directions.
     """
     while not (task_env.cancelled or _shutting_down):
         _apply_panel_occupancy()

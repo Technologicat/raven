@@ -1106,8 +1106,15 @@ consumer. The graph consequently also fills the seconds a freshly started avatar
 brief asked for.
 
 **Driven live, all four transitions**: preference on pauses the video; unchecking resumes it and gives the
-panel back with no *"[Video is off]"* flash; fifteen seconds of quiet hands it to the graph unattended;
-re-checking restores. Clean shutdown, no exceptions from the watch.
+panel back; fifteen seconds of quiet hands it to the graph unattended; re-checking restores. Clean
+shutdown, no exceptions from the watch.
+
+**That run said nothing about flashes, in either direction, and an earlier version of this section claimed
+it did** (*"gives the panel back with no `[Video is off]` flash"*). It could not have: the screenshots were
+three seconds apart, and what is being claimed absent lasts a fifth of a second at most. Juha, 2026-09-07:
+*"I'll believe that when I see it — 0.1 s or more between screenshots is far too coarse a resolution to
+verify that."* The static reading of the code is sound and is not what was in doubt; the empirics are
+owed, and want a video capture rather than stills.
 
 **Three paths are built but unexercised**, each needing an LLM turn or audio. **Juha is driving that test**
 (2026-09-07); this is the list to work through:
@@ -1125,18 +1132,28 @@ re-checking restores. Clean shutdown, no exceptions from the watch.
   seen in a running app with a caption on screen. Note the cost if it is wrong is a caption lost for its
   sentence, ten seconds or so, rather than something the next sentence repairs.
 
-**And one artifact to look for that is predicted rather than observed**: a flash of *"[Video is off]"* when
-the avatar idles out while it holds the panel. The idle detector pauses the renderer, which shows and
-centres that text in a panel still on screen, and the watch hands the panel over on its next tick — so the
-text is up for as much as `_PANEL_OCCUPANCY_TICK_S`, 200 ms. Whether that reads as a flicker or as nothing
-is a matter for the eye; it was not seen during the 2026-09-07 drive because the screenshots were taken
-seconds either side of it rather than during.
+**The idle-out flash is closed by `on_idle`, built the same day.** The artifact predicted here was a flash
+of *"[Video is off]"* when the avatar idles out while holding the panel: the idle detector pauses the
+renderer, which draws that text into a panel still on screen, and the watch would hand the panel over only
+on its next tick — up to 200 ms later.
 
-Three ways out, if it does read as one. Shortening the tick is nearly free and cuts the window without
-closing it. Closing it properly means the pause happening *after* the swap, which the idle detector cannot
-arrange, since it lives in the client layer and knows nothing about panels — that is what an `on_idle`
-callback would be for, the one `register_avatar_instance` already documents and does not have. And one
-frame of it survives either way: `pause` renders the text to measure it before centring it.
+`register_avatar_instance` had documented an `on_idle` callback since before this brief and never had one;
+Juha's call was to build it rather than to correct the docstring, because it is exactly the missing piece.
+The idle detector now sets the state, announces, and *then* pauses, so Librarian takes the panel before the
+indicator is drawn into it. The switch-off no longer goes through the poll at all, which stays as the
+safety net and for the transitions nothing announces — a stream's first frame, and a `ping` waking a
+sleeping avatar.
+
+Two things to know about it. **The ordering is the entire contract**, and is pinned by tests rather than by
+the comment: told after the pause, a handler could only clean up a flash the user had already seen.
+**And the lock discipline is load-bearing** — the announcement is made with no controller lock held,
+because Raven's handler calls straight back in through `set_video_suppressed`, and every other path takes
+the app's lock first and the controller's second. Holding across the call inverts that and the two threads
+meet in the middle.
+
+**One frame of it may survive regardless**, since `pause` renders the text to measure it before centring
+it — into a panel that is now hidden, so the reasoning says invisible. That is a prediction of the same
+kind as the one this section had to retract above, and it is on the live-test list rather than claimed.
 
 **Two things landed alongside**, both from questions Juha asked while reading the diff:
 

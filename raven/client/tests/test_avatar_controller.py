@@ -264,6 +264,7 @@ def video_config():
     config = env(avatar_instance_id="test-instance",
                  avatar_renderer=renderer,
                  idle_timeout=30.0,
+                 on_idle=None,
                  _idle_detector_lock=threading.RLock(),
                  _idle_detector_overrides=0,
                  _idle_detector_t0=time.monotonic_ns(),
@@ -330,6 +331,52 @@ def test_no_stream_means_nothing_to_show(video_config):
     controller, config, renderer = video_config
     renderer.avatar_instance_id = None
     assert not controller.video_available(config)
+
+
+def test_the_idle_event_arrives_before_the_pause(video_config):
+    """The ordering the event exists for.
+
+    An app that puts something else in the avatar's place has to do it before the renderer draws "video is
+    off" into the panel it is losing. Told afterwards, the app can only clean up a flash the user saw.
+    """
+    controller, config, renderer = video_config
+    order = []
+    config.on_idle = lambda cfg: order.append("on_idle")
+    renderer.pause = lambda action: order.append(f"pause:{action}")
+
+    controller._switch_video_off_for_idle(config)
+
+    assert order == ["on_idle", "pause:pause"]
+
+
+def test_the_idle_event_sees_the_avatar_as_already_unavailable(video_config):
+    """A handler asks `video_available` — that is the question it was woken to answer — so the flag has to
+    be down before it runs, or it decides to keep showing an avatar that is about to stop."""
+    controller, config, renderer = video_config
+    seen = []
+    config.on_idle = lambda cfg: seen.append(controller.video_available(cfg))
+
+    controller._switch_video_off_for_idle(config)
+
+    assert seen == [False]
+
+
+def test_a_handler_that_raises_does_not_stop_the_pause(video_config):
+    """The app's business is the panel; the controller's is the avatar, and it has to finish its own job."""
+    controller, config, renderer = video_config
+    config.on_idle = lambda cfg: 1 / 0
+
+    controller._switch_video_off_for_idle(config)
+
+    assert renderer.actions == ["pause"]
+
+
+def test_no_handler_is_fine(video_config):
+    """Most instances have none — the settings editor registers one with no renderer at all."""
+    controller, config, renderer = video_config
+    controller._switch_video_off_for_idle(config)
+    assert renderer.actions == ["pause"]
+    assert config._idle_paused is True
 
 
 def test_an_idle_paused_avatar_has_nothing_to_show_until_the_next_ping(video_config):

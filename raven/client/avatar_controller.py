@@ -151,8 +151,12 @@ class DPGAvatarController:
                        (i.e. have no further effect if called more than once).
 
                        Note also that in the case of multiple avatars, this event does not distinguish
-                       between them; this is global for the TTS system. For an avatar instance specific
-                       idle event, see `on_idle` in `register_avatar_instance` instead.
+                       between them; this is global for the TTS system.
+
+                       Distinct from `on_idle` in `register_avatar_instance`, which the similar name
+                       invites confusing it with. That one is per avatar instance and is about *activity*:
+                       it fires once, when an instance has been idle long enough to have its video switched
+                       off. This one is about *speech*, and repeats.
 
         `tts_idle_check_interval`: seconds. How often to check whether TTS has become idle,
                                    and trigger `on_tts_idle` if it has.
@@ -247,7 +251,8 @@ class DPGAvatarController:
                                  voice_speed: Optional[float],
                                  emotion_blacklist: Tuple[str],
                                  emotion_autoreset_interval: Optional[float],
-                                 idle_timeout: Optional[float]) -> env:
+                                 idle_timeout: Optional[float],
+                                 on_idle: Optional[Callable] = None) -> env:
         """Register an avatar instance, for methods that take a `config` parameter.
 
         Returns `config: unpythonic.env.env`, the avatar-instance-specific configuration record.
@@ -283,11 +288,32 @@ class DPGAvatarController:
                                         - The last update to the avatar's emotion using `update_emotion_from_text`.
 
         `idle_timeout`: seconds, or `None` to disable. How long of no activity (for this avatar instance)
-                        until `on_idle` triggers.
+                        until its video is switched off, and `on_idle` triggers.
 
                         To reset the timeout, call the `ping` method.
 
                         To temporarily override the timeout, see the `idle_override` context manager.
+
+        `on_idle`: Called when this avatar instance has been idle for `idle_timeout` and its video is about
+                   to be switched off. Takes one argument, this instance's `config`. The return value is
+                   ignored, and an exception it raises is logged and swallowed — a handler cannot call off
+                   the pause it is being told about.
+
+                   Called *before* the renderer pauses, which is the point of it: an app that shows
+                   something else in the avatar's place can do so first, instead of after the renderer has
+                   drawn its "video is off" indicator into a panel that is about to be replaced.
+
+                   `video_available` already answers `False` by the time this is called, so a handler that
+                   asks gets the answer it was woken for. It is called with no lock of this controller's
+                   held, so a handler is free to take its own and to call back in here.
+
+                   Fires once per switch-off: there is nothing here to repeat about, the video being off
+                   until something pings the instance awake again.
+
+                   Not to be confused with `on_tts_idle` in the constructor, which the name invites. That
+                   one is about *speech* — the TTS queue has drained and nothing is being spoken, which is
+                   how a caller learns that a reply has finished being read out across all its sentences —
+                   and it repeats for as long as that stays true. This one is about *activity*.
 
         The fadeout duration of the "data eyes" effect (LLM tool access indicator) is the animator setting
         `data_eyes_fadeout_duration`.
@@ -301,6 +327,7 @@ class DPGAvatarController:
         config.emotion_blacklist = tuple(emotion_blacklist)  # Ensure it's hashable, for LRU cache
         config.emotion_autoreset_interval = emotion_autoreset_interval
         config.idle_timeout = idle_timeout
+        config.on_idle = on_idle
 
         config._emotion_autoreset_t0 = time.monotonic_ns()
         config._current_emotion = "neutral"  # last emotion we sent; a fresh avatar instance starts neutral
@@ -351,19 +378,23 @@ class DPGAvatarController:
                         except Exception:  # exit task if the avatar instance is gone
                             logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar instance is gone, exiting.")
                             return
+                # Decide under the lock, act outside it. The second half is the one that matters: acting
+                # means calling `on_idle`, which belongs to the app, and a handler that puts something else
+                # in the avatar's place calls back into this controller — Raven's does, through
+                # `set_video_suppressed`, which takes this very lock. Every other path takes the app's lock
+                # first and this one second, so holding it across the call inverts that order and the two
+                # threads meet in the middle.
+                switching_off = False
                 with config._idle_detector_lock:
                     if (config.avatar_renderer is not None) and (config.avatar_renderer.animator_running) and (config._idle_detector_overrides == 0) and (config.idle_timeout is not None):
                         time_now = time.monotonic_ns()
                         dt = (time_now - config._idle_detector_t0) / 10**9
                         if not config._avatar_speaking and dt > config.idle_timeout:
-                            logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar idle for at least {config.idle_timeout} seconds; pausing avatar video")
-                            try:
-                                if config.avatar_renderer is not None:
-                                    config.avatar_renderer.pause(action="pause")
-                                    config._idle_paused = True
-                            except Exception:
-                                logger.exception(f"emotion_autoreset_task: instance {task_env.task_name}: caught exception during `avatar_renderer.pause`")
-                            config._idle_detector_t0 = time_now  # reset the timeout last, so that the old timestamp is available during `on_idle`.
+                            logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar idle for at least {config.idle_timeout} seconds; switching the avatar video off")
+                            config._idle_detector_t0 = time_now
+                            switching_off = True
+                if switching_off:
+                    self._switch_video_off_for_idle(config)
                 time.sleep(0.1)
         # Save the env and the task handle for possible cancellation.
         config._emotion_autoreset_task_env = env()
@@ -389,6 +420,36 @@ class DPGAvatarController:
             if connected and (not config._video_suppressed) and (not config.avatar_renderer.animator_running):
                 config.avatar_renderer.pause(action="resume")
                 config._idle_paused = False
+
+    def _switch_video_off_for_idle(self,
+                                   config: env) -> None:
+        """Announce that this avatar instance has gone idle, then switch its video off.
+
+        `config`: Configuration for controlling a specific avatar instance and its GUI elements.
+                  See `register_avatar_instance`. Must have a renderer; the caller decides that.
+
+        The order is the whole content of this method, and it is why the announcement exists at all: an app
+        that shows something else in the avatar's place gets to do that *before* the renderer draws its
+        "video is off" indicator into the panel it is losing.
+        """
+        # The flag before the announcement, so that a handler asking `video_available` — which is the
+        # question it was woken to answer — is not told the video is still there, and does not decide to
+        # keep showing an avatar that is about to stop.
+        #
+        # No lock: it is one bool store, and `ping` clears it without the lock either, so taking it here
+        # would order this against nothing.
+        config._idle_paused = True
+
+        if config.on_idle is not None:
+            try:
+                config.on_idle(config)
+            except Exception:  # noqa: BLE001 -- an app's handler must not be able to call off the pause it is being told about
+                logger.exception(f"_switch_video_off_for_idle: instance '{config.avatar_instance_id}': `on_idle` handler raised")
+
+        try:
+            config.avatar_renderer.pause(action="pause")
+        except Exception:
+            logger.exception(f"_switch_video_off_for_idle: instance '{config.avatar_instance_id}': caught exception during `avatar_renderer.pause`")
 
     def set_video_suppressed(self,
                              config: env,
