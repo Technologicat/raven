@@ -1078,6 +1078,32 @@ class TestAttachmentThumbnails:
                          > 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2]))
         assert first_card > last_text
 
+    def test_a_card_is_not_capped_the_way_a_role_glyph_is(self):
+        """The two margins want opposite answers, and giving them the same one was the defect.
+
+        A role glyph's asset is shipped at its display size, so a cap is right: it has nothing better to
+        show. An attachment's source image is large, so capping the *drawn* size means the picture stops
+        growing while its frame — an ordinary polygon — carries on with the zoom. Zoomed well in, that is a
+        huge empty card with a small sharp stamp marooned in it, which is not the blur either of us
+        predicted.
+        """
+        forest, carrier = self._forest(1)
+        built = self._build(forest, carrier, config=None)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=carrier),
+                                role_icons=ROLE_ICONS, thumbnail_for=ready_thumbnail)
+        node = built.graph.get_node_by_name(carrier)
+        centre = 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2])
+
+        def centre_of(shape):
+            box = shape.get_bounding_box()
+            return 0.5 * (box[0] + box[2])
+        images = [sh for sh in node.shapes if isinstance(sh, xdotgraph.ImageShape)]
+        glyphs = [sh for sh in images if centre_of(sh) < centre]
+        cards = [sh for sh in images if centre_of(sh) > centre]
+        assert glyphs and cards, "the fixture has no glyph or no card, so it compares nothing"
+        assert glyphs[0].max_screen_size == chatgraph.LayoutConfig().role_icon_native_size
+        assert all(card.max_screen_size is None for card in cards)
+
     def test_a_document_gets_a_card_too(self):
         """A message that is *only* attachments has no words either. Drawn without them it reads as a turn
         that never happened — which is what a chat of three attached papers looked like: one box saying

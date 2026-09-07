@@ -590,8 +590,18 @@ class LayoutConfig:
     # sixth through whole, since replacing two thumbnails with a box saying "+2" saves nothing and costs
     # the reader a count. Seven is where it starts hiding.
     attachment_max_shown: int = 5
-    # The size the panel prepares a thumbnail at, and therefore the size past which drawing one upsamples.
-    # DPG samples nearest-neighbour; see `ImageShape`.
+    # The size the panel prepares a thumbnail at, in pixels, and therefore the size past which drawing one
+    # upsamples -- DPG samples nearest-neighbour, so past this a card goes soft.
+    #
+    # **Not a cap on how large a card is drawn**, which is what it was until 2026-09-07 and which failed in
+    # a way neither of us predicted. We both expected a zoomed-in thumbnail to go blurry; capping the
+    # *drawn* size instead meant it stopped growing, so a card zoomed well in was a huge empty frame with a
+    # small sharp stamp marooned in the middle of it. The frame is a polygon and scaled with the zoom like
+    # everything else; only the picture was pinned.
+    #
+    # A cap is right for the role glyph, whose asset is shipped at its display size and has nothing better
+    # to show. An attachment's source image is large, so the answer to "the card is bigger now" is a bigger
+    # texture, not a smaller picture.
     attachment_native_size: float = 128.0
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
@@ -1725,10 +1735,12 @@ def _attachment_shapes(attachments: Sequence[Optional["Thumbnail"]], hidden: int
             # `None` texture draws nothing while still saying so -- which keeps the shape list the same
             # before and after the thumbnail lands, and gives anything asking what a box carries one
             # answer rather than two.
+            # No `max_screen_size`: the picture fills its card at every zoom. Softness past the prepared
+            # size is a texture-resolution question -- see `attachment_native_size` -- and the remedy for
+            # it is a larger texture, not a picture that stops growing while its frame does not.
             picture = _letterboxed(x1, y1, x2, y2, thumbnail)
             shapes.append(xdotgraph.ImageShape(thumbnail.texture if thumbnail is not None else None,
-                                               *picture,
-                                               max_screen_size=config.attachment_native_size))
+                                               *picture))
         shapes.append(xdotgraph.PolygonShape(pen, corners, filled=False))
 
     shapes: List[xdotgraph.Shape] = []

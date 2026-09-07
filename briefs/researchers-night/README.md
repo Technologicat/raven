@@ -274,6 +274,12 @@ dropped out of the spoken plan.
    - Sized *"straightforward and small, so it can probably be crammed in"*, with a risk that cannot be
      settled before it is tested: the avatar holding neutral while the final text streams in may look
      uncanny, and what to do about it then is not obvious.
+   - **So take the risk first, as a spike rather than a build** (Juha, 2026-09-07): *"worth seeing if it's
+     as small as it looks, or whether the uncanny pause breaks the whole idea into
+     don't-know-how-to-solve-this-land."* The two outcomes want different amounts of the remaining
+     nineteen days, and which one it is can be found out in an afternoon by wiring the expression to
+     `on_start_sentence` and watching one reply arrive. Building the whole item and *then* discovering the
+     pause is unsolvable spends the time twice.
 4. **Block-level Markdown, the remaining steps** — still the declared slack, which is what Juha's *"I'd of
    course like to take it if there is time left"* amounts to. Nothing to change.
 

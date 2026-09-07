@@ -7,10 +7,23 @@ thumbnails). Not Researchers' Night work — this is the follow-on the chat grap
 
 1. **`XDotWidget` honours xdot's `I` operation**, so a GraphViz graph with `image=` on a node draws it, and
    `raven-xdot-viewer` gets that for free.
-2. **A drawn image stops going blocky when the reader zooms in.** The chat graph's thumbnails have this
-   problem today: they are prepared once at 128 px and DPG samples nearest-neighbour, so past that size on
-   screen they are visibly stepped. Juha, 2026-09-07: *"thumbnails shouldn't get blurry if the user zooms
-   in."*
+2. **A drawn image stops going blocky when the reader zooms in.** Juha, 2026-09-07: *"thumbnails
+   shouldn't get blurry if the user zooms in."*
+
+   **The chat graph did not in fact go blurry, and finding out why is worth reading before building any of
+   this.** Both of us predicted blur; what actually happened is that the thumbnail *stopped growing*.
+   `max_screen_size` capped the drawn size at the prepared 128 px while the card's frame — an ordinary
+   polygon — went on scaling with the zoom, so a card zoomed well in was a large empty frame with a small
+   sharp stamp marooned in the middle of it. Juha's screenshot, not either prior.
+
+   **The cap is now off the attachment cards** (2026-09-07), which restores the geometry and *makes the
+   predicted blur reachable* — a 128 px texture drawn across a card several hundred pixels wide. So the
+   defect this brief exists to fix is real, and it is now the one we thought it was rather than a
+   different one wearing its name.
+
+   The cap stays on the **role glyph**, where it is right: that asset is shipped at its display size and
+   has nothing better to show. The two margins want opposite answers, and giving them the same one was the
+   whole of the mistake. A test pins the distinction.
 
 They are one brief because they are one mechanism. The parser cannot honour `I` without solving the second
 problem — an `image=` file has no size chosen for the display, so there is no single size to prepare it at.
@@ -101,6 +114,17 @@ about a third, the parser the remainder.
 
 **The mip work is separable and is the part with independent value**: done alone, it fixes the chat graph's
 blockiness without any `I` support at all. If the day has to be split, that is where to cut it.
+
+**And it wants a session of its own rather than the tail of another**, which is why it was not done on
+2026-09-07 when the diagnosis above was made. It changes `ImageShape`'s contract — one texture becomes a
+chain, and the renderer gains the job of choosing from it — so it reaches the widget, its tests, and both
+consumers. The one-line cap removal that day was the part that stands alone.
+
+**A trap that follows from the diagnosis, and is easy to walk into**: preparing at a larger size *without*
+mips is a regression, not a partial fix. A 512 px texture drawn at a 55-unit card is a 9x downsample
+through nearest-neighbour, which aliases visibly — worse at the zoom people actually read at than the
+softness it was meant to cure at a zoom they rarely use. The larger preparation and the mip chain are one
+change.
 
 ## What closes
 
