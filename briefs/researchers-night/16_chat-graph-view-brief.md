@@ -1108,16 +1108,37 @@ forest's generation nor HEAD, which are the only two things it polls.
 the graph keeps its own" resolved the first way. The chat log's inline box is 220×480 and a card here is 55
 units, so the two coexist rather than evict each other.
 
-**The real path was driven once, because nothing in the suite covers it.** Every test uses a fake
-provider, so the decode, the letterboxing, the upload and the two `split_frame`s from a background thread
-are exactly the part no test touches — and a fake provider that answers instantly also never exercises the
-*waiting*. A probe stored four real PNGs of assorted shapes (square, wide, tall, 4:3) as sidecars and ran
-the actual `DPGChatController._prepare_graph_thumbnail` through the actual panel: all four landed, the
-awaited set emptied, nothing failed, and the fan drew them.
+**The real path is covered by a test of its own**, `test_thumbnail_pipeline.py`, and it needed one:
+every other test hands the panel a provider answering instantly with a made-up texture, which exercises
+neither the decode, the letterboxing, the upload and the two `split_frame`s, nor the *waiting*. It carries
+the `gui` marker because `split_frame` needs a render loop — and a test can be one, pumping frames on the
+main thread while the preparation runs on a worker, exactly as the app does.
 
-It stays a probe rather than becoming a test. `split_frame` waits for a render loop, so this needs a mapped
-window — which puts it in the `--run-gui` group at best, and that group takes the developer's keyboard.
-Worth re-running by hand if the preparation path is touched.
+An earlier version of this section said the opposite: that it had to stay a probe because it needed a
+mapped window. It was also sitting in a ramdisk, so the note telling a future reader to re-run it by hand
+pointed at a file that would not survive a reboot (Juha caught both).
+
+### Two defects the first live run found, 2026-09-07
+
+Both reported by Juha from the running app, and both are the kind of thing only a real message shows.
+
+- **The picture was stretched to a square.** `fit_contain` preserves aspect and reports its own
+  dimensions; the card drew the texture to a square rectangle regardless. A provider now answers with a
+  `Thumbnail` carrying the prepared size, since `chatgraph` holds no DPG and cannot ask a texture how big
+  it is. **The card stays square and the picture is letterboxed inside it** — a card taking the picture's
+  shape would make a fan of mixed photographs ragged, and the fan is read as a count; a card that is not
+  ready has no proportions of its own either, so it would change shape when the picture arrived.
+- **A document attachment got no card at all**, only `image_url` parts being read. A message carrying
+  three papers and no prose was a single box reading `[empty]` — a turn that never happened, as far as
+  the picture was concerned. **This brief said images only, and that was the oversight** (Juha's words):
+  the reasoning it gave — that a box is a few dozen pixels of caption and cannot spare them for "there is
+  also a PDF" — is exactly wrong for the case that actually occurs, where the attachments are the whole
+  message.
+
+  A document is drawn as its **file type's icon**, from the file dialog's own assets. That needed
+  `icon_name_for_extension` and `IMAGES_DIR` made public there — the second consumer finding the API gap
+  the first one hid, which is the pattern `raven/common/gui`'s note describes. Every document of one type
+  is one texture, which is the economy content addressing already gives images.
 
 **What is not built**: clicking a thumbnail does nothing. The brief's note stands — the clickable area and
 the drawn area are not the same shape, and something has to give the day that changes.

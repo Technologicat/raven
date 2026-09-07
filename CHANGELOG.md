@@ -20,9 +20,10 @@
       message's speak button always speak, captions or no.
   - **Every box says who is speaking and what they attached.** The speaker's icon — the same one the chat
     log uses, your character's own where it has one — sits on the box's left edge, and any images the
-    message carries fan off its right edge as a deck of thumbnails. Both hang outside the box, so neither
-    costs the message's own words any room. A long stack is abbreviated to the first two, the last two,
-    and a count.
+    message carries fan off its right edge as a deck of thumbnails — and an attached document as its file
+    type's icon, so a message that is nothing but attachments no longer reads as an empty one. Both
+    decorations hang outside the box, so neither costs the message's own words any room. A long stack is
+    abbreviated to the first two, the last two, and a count.
   - <!-- TODO: fill this in when the view settles. Still to come: search. Details worth a reader's time:
       preview-then-commit clicking, the gap boxes and what clicking each one does (the tool round
       included, with Backspace to close it again), the three marks (hover, HEAD, previewed), the
