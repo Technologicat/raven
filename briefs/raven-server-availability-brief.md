@@ -144,6 +144,9 @@ in what looks like increasing order of effort:
    — the point is not to revise it automatically but to let the user revise it without relaunching. This
    is the piece that needs real design: the services are built during an import, so "switch now" has to
    mean something definite about a run in progress.
+   - **Relaunching is the expensive alternative, which is what makes this worth building.** A restart loses
+     the user's selection undo/redo history, selections not being saveable yet. So "just restart it" is not
+     the cheap escape it sounds like, and a user whose server dies mid-session currently has no other move.
 
 ### Both actions live in the pill, and deliberately not as a matching pair
 
@@ -168,9 +171,15 @@ should say what it may cost, so that a user meets the download *before* clicking
 
 **No confirmation on the switch.** Raven does have a pattern for this — two clicks with a warning flash, as
 in the file dialog's overwrite and Librarian's delete-subtree — and it is the house way to confirm
-something. Judged overengineering here (Juha): the action is deliberate, tooltip-warned, and undone by
-restarting. Recorded because the pattern is the right one to reach for if practice proves otherwise, not
-because the question is still open.
+something. Judged overengineering here (Juha): the action is deliberate and tooltip-warned, which for a
+button nobody reaches by accident is enough. Recorded because the pattern is the right one to reach for if
+practice proves otherwise, not because the question is still open.
+
+**What is *not* part of that argument: "and you can always restart".** Restarting the Visualizer loses the
+user's selection undo/redo history, selections not being saveable yet — so a restart is a real cost rather
+than the escape hatch it looks like, and an earlier draft of this brief leaned on it. That cuts the other
+way too, and is the strongest argument for building the switch at all: without it, a user whose server dies
+mid-session has *only* the expensive remedy.
 
 **An import is a batch job**, which is what makes item 3 harder than its Librarian counterpart: a failure
 part-way means partial results, and both "cancel" and "switch to local" have to say what happens to what has
