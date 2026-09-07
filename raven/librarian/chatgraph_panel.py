@@ -22,7 +22,7 @@ import dataclasses
 import logging
 import threading
 import uuid
-from typing import Callable, Optional, Sequence, Tuple, Union
+from typing import Callable, Mapping, Optional, Sequence, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +108,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                  input_blocked: Optional[Callable[[], bool]] = None,
                  on_focus_requested: Optional[Callable[[], None]] = None,
                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
+                 role_icons: Optional[Callable[[], Mapping[str, Union[int, str]]]] = None,
                  dark_mode: bool = True,
                  show: bool = False):
         """Build the panel.
@@ -137,6 +138,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
         `graph_text_fonts`: `(size, font_id)` pairs for graph labels; the renderer picks the closest to the
                             size it is drawing at. `None` (the default) loads a ladder of sizes into
                             `themes_and_fonts` and uses that, since every caller wants the same one.
+        `role_icons`: Called at each rebuild for the role -> texture table the boxes draw their speaker
+                      glyph from; see `chatgraph.build`. A callable rather than the table itself, because
+                      the table belongs to `DPGChatController`, which is built later than this panel is —
+                      and because a character loaded afterwards replaces the AI's icon, which a table
+                      captured once would not pick up. `None` draws no glyphs.
         `dark_mode`: Whether to invert the graph's lightness for a dark background. Raven's interface is
                      dark, so this defaults on.
         `show`: Whether the panel starts visible.
@@ -151,6 +157,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._on_commit = on_commit
         self._on_focus_requested = on_focus_requested
         self._input_blocked = input_blocked
+        self._role_icons = role_icons
         # Button tag -> the caption it promises, filled by `_build_toolbar`. DPG offers no route from a
         # widget to its tooltip, so this is the only way to ask afterwards what the toolbar says.
         self._toolbar_captions = {}
@@ -796,7 +803,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
         """Build the picture, or return `None` if the node it would be drawn around is gone."""
         try:
             return chatgraph.build(self.datastore, self._view_state, self._layout,
-                                   measure_text=self._measure_text)
+                                   measure_text=self._measure_text,
+                                   role_icons=self._role_icons() if self._role_icons is not None else None)
         except KeyError:
             return None
 

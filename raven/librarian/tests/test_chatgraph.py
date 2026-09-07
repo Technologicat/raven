@@ -735,6 +735,128 @@ class TestEmphasis:
 
 
 # ---------------------------------------------------------------------------
+# Role glyphs
+# ---------------------------------------------------------------------------
+
+ROLE_ICONS = {"system": "tex_system", "user": "tex_user",
+              "assistant": "tex_ai", "tool": "tex_tool"}
+
+
+class TestRoleGlyphs:
+    """Who is speaking, as the mark the chat log uses for the same role.
+
+    The `U:`/`AI:` prefix this view started with is text, and text is the first thing to go when the
+    reader zooms out far enough to take in a wide fan — which is exactly the view where "whose branch is
+    this" most needs answering. A glyph survives that.
+
+    Textures are opaque to this module: it holds no DearPyGui and never looks inside one, so these
+    fixtures pass strings.
+    """
+
+    def _glyphs(self, built, node_name):
+        node = built.graph.get_node_by_name(node_name)
+        return [s for s in node.shapes if isinstance(s, xdotgraph.ImageShape)]
+
+    def test_each_box_gets_the_glyph_for_its_role(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply),
+                                role_icons=ROLE_ICONS)
+        assert [g.texture for g in self._glyphs(built, system)] == ["tex_system"]
+        assert [g.texture for g in self._glyphs(built, user)] == ["tex_user"]
+        assert [g.texture for g in self._glyphs(built, reply)] == ["tex_ai"]
+
+    def test_a_gap_box_gets_none(self, conversation):
+        """Nobody said a gap, so there is nobody to name — and a glyph there would claim otherwise."""
+        forest = Forest()
+        ids = chain(forest, 30)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids[-1]),
+                                role_icons=ROLE_ICONS)
+        gap = only_depth_gap(built)
+        assert [s for s in gap.shapes if isinstance(s, xdotgraph.ImageShape)] == []
+        assert self._glyphs(built, ids[-1]), \
+            "no box drew a glyph at all, so the gap having none says nothing"
+
+    def test_no_table_means_no_glyphs(self, conversation):
+        """The parameter is optional, and a caller without DPG — a test, mostly — gets the same layout."""
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
+        assert self._glyphs(built, reply) == []
+
+    def test_a_role_the_table_does_not_name_gets_none(self, conversation):
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply),
+                                role_icons={"user": "tex_user"})
+        assert [g.texture for g in self._glyphs(built, user)] == ["tex_user"], \
+            "not even the named role drew one, so this fixture cannot tell a lookup from a blanket refusal"
+        assert self._glyphs(built, reply) == []
+
+    def test_it_straddles_the_left_edge(self, conversation):
+        """Half in and half out. That is what leaves the box's interior to the text and its right edge to
+        the attachment thumbnails, so no node has to hold three things in a space that fits one."""
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply),
+                                role_icons=ROLE_ICONS)
+        node = built.graph.get_node_by_name(reply)
+        x1, y1, x2, y2 = node.get_bounding_box()
+        gx1, gy1, gx2, gy2 = self._glyphs(built, reply)[0].get_bounding_box()
+        assert gx1 < x1 < gx2, "the glyph does not cross the left edge"
+        assert 0.5 * (gx1 + gx2) == pytest.approx(x1)
+        assert 0.5 * (gy1 + gy2) == pytest.approx(0.5 * (y1 + y2))
+
+    def test_it_scales_with_the_node_and_stops_at_the_asset(self, conversation):
+        """A fraction of node height, so it shrinks with everything else when the reader zooms out — a
+        constant screen size is wider than the node in exactly the wide-fan view it was chosen to serve.
+        Capped at native, because DPG samples nearest-neighbour and past 64 px these turn into squares."""
+        forest, system, greeting, user, reply = conversation
+        config = chatgraph.LayoutConfig()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply), config,
+                                role_icons=ROLE_ICONS)
+        glyph = self._glyphs(built, reply)[0]
+        gx1, _gy1, gx2, _gy2 = glyph.get_bounding_box()
+        assert gx2 - gx1 == pytest.approx(config.role_icon_fraction * config.node_h)
+        assert glyph.max_screen_size == config.role_icon_native_size
+
+    def test_the_overhang_fits_between_two_siblings(self):
+        """Half the glyph hangs into the gap its box's left-hand neighbour is separated by, so the two
+        numbers are coupled: raise the fraction, or narrow the spacing, and a glyph lands on a box.
+
+        Nothing else would catch it. `overlapping_pairs` compares *node* boxes, and a glyph lives outside
+        its node's box exactly as a pill does — so the collision is visual only, and invisible to the
+        layout, the hit test and every other test here.
+        """
+        config = chatgraph.LayoutConfig()
+        overhang = 0.5 * config.role_icon_fraction * config.node_h
+        assert overhang < config.horizontal_spacing, \
+            (f"a glyph hangs {overhang} units past its box into a {config.horizontal_spacing}-unit gap, "
+             "so it is drawn over the sibling to its left")
+
+    def test_it_costs_the_label_nothing(self, conversation):
+        """The whole argument for straddling the edge. A glyph inside the box would take width off every
+        label in the tree, and the label is what the box is mostly for."""
+        forest, system, greeting, user, reply = conversation
+        state = chatgraph.ViewState(head_node_id=reply)
+        without = texts_on(chatgraph.build(forest, state), reply)
+        with_glyph = texts_on(chatgraph.build(forest, state, role_icons=ROLE_ICONS), reply)
+        assert with_glyph == without
+
+    def test_it_is_drawn_over_the_box_rather_than_under_it(self, conversation):
+        """Shapes are drawn in list order, and a glyph half-covered by the box's own border would read as
+        damage rather than as a mark."""
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply, cursor_name=reply),
+                                role_icons=ROLE_ICONS)
+        node = built.graph.get_node_by_name(reply)
+        box_width = node.get_bounding_box()[2] - node.get_bounding_box()[0]
+        glyph_at = [i for i, s in enumerate(node.shapes) if isinstance(s, xdotgraph.ImageShape)][0]
+        # The box's own shapes: its fill, its outline, and the cursor ring. The pills are polygons too and
+        # are drawn last of all, so they are excluded by width rather than by position.
+        box_at = [i for i, s in enumerate(node.shapes)
+                  if isinstance(s, xdotgraph.PolygonShape) and _width_of(s) >= box_width]
+        assert len(box_at) == 3, f"expected fill, outline and ring; found {len(box_at)} box-wide polygons"
+        assert glyph_at > max(box_at)
+
+
+# ---------------------------------------------------------------------------
 # Pointer pills
 # ---------------------------------------------------------------------------
 

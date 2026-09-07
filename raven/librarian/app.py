@@ -1638,6 +1638,7 @@ with timer() as tim:
                     # Through a lambda, as `input_blocked` above is and for the same reason: both are
                     # defined further down this module than the panel is built.
                     on_focus_requested=lambda: _give_keyboard_to_graph(),
+                    role_icons=lambda: chat_controller.gui_role_icons,
                     show=False)
 
                 with dpg.child_window(tag="mode_toggle_controls",

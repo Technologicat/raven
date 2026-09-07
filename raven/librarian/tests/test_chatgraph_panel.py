@@ -1621,3 +1621,61 @@ class TestLifecycle:
         built.destroy()
         assert built not in gui_animation.animator._animations
         built.destroy = lambda: None  # the fixture tears down too; once is enough
+
+
+class TestRoleIcons:
+    """The panel asks its caller for the role -> texture table at each rebuild, and hands it to the build.
+
+    A callable rather than a table because `DPGChatController`, which owns the table, is built later than
+    this panel is — and because loading a character replaces the AI's entry, which a table captured once
+    would not see.
+    """
+
+    def test_the_table_reaches_the_picture(self, dpg_context):
+        themes_and_fonts = dpg_context
+        forest = Forest()
+        root = forest.create_node(payload("system", "hi"), parent_id=None)
+        reply = forest.create_node(payload("assistant", "hello"), parent_id=root)
+        app_state = {"HEAD": reply}
+        with dpg.window() as holder:
+            built = chatgraph_panel.DPGChatGraphPanel(
+                gui_parent=holder, datastore=forest, app_state=app_state,
+                themes_and_fonts=themes_and_fonts, width=200, height=200,
+                role_icons=lambda: {"assistant": "tex_ai"})
+        built.refresh()
+        node = built._chat_graph.graph.get_node_by_name(reply)
+        assert [s.texture for s in node.shapes if isinstance(s, xdotgraph.ImageShape)] == ["tex_ai"]
+        built.destroy()
+        dpg.delete_item(holder)
+
+    def test_it_is_asked_again_at_each_rebuild(self, dpg_context):
+        """So a character loaded after the panel was built gets its own icon rather than the generic one."""
+        themes_and_fonts = dpg_context
+        forest = Forest()
+        root = forest.create_node(payload("system", "hi"), parent_id=None)
+        reply = forest.create_node(payload("assistant", "hello"), parent_id=root)
+        app_state = {"HEAD": reply}
+        table = {"assistant": "tex_generic_ai"}
+        with dpg.window() as holder:
+            built = chatgraph_panel.DPGChatGraphPanel(
+                gui_parent=holder, datastore=forest, app_state=app_state,
+                themes_and_fonts=themes_and_fonts, width=200, height=200,
+                role_icons=lambda: table)
+        built.refresh()
+
+        def texture_now():
+            node = built._chat_graph.graph.get_node_by_name(reply)
+            return [s.texture for s in node.shapes if isinstance(s, xdotgraph.ImageShape)]
+        assert texture_now() == ["tex_generic_ai"], \
+            "no glyph was drawn at all, so a changed table proves nothing"
+        table["assistant"] = "tex_character_ai"
+        built.refresh()
+        assert texture_now() == ["tex_character_ai"]
+        built.destroy()
+        dpg.delete_item(holder)
+
+    def test_no_callable_means_no_glyphs(self, panel):
+        """The default. Every other test in this module builds a panel without one."""
+        built, forest, app_state, ids, calls = panel
+        node = built._chat_graph.graph.get_node_by_name(ids["taken_tip"])
+        assert [s for s in node.shapes if isinstance(s, xdotgraph.ImageShape)] == []

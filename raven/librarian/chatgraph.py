@@ -43,7 +43,7 @@ import dataclasses
 import logging
 import math
 import textwrap
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -511,6 +511,19 @@ class LayoutConfig:
     # A pill's *width* follows its own label; see `_pill_shapes`. Its height is the font plus room to
     # breathe inside the stadium's caps.
     pill_h: float = 0.7 * librarian_config.gui_config.font_size + 6.0
+    # The role glyph straddles the box's left edge, half of it hanging outside. A fraction of the node
+    # height rather than a fixed number of pixels, so it shrinks with everything else when the reader
+    # zooms out to take in a wide fan -- which is exactly the view a constant screen size fails in, the
+    # nodes there being a few dozen pixels across and a 64 px glyph then wider than the box carrying it.
+    #
+    # Straddling costs the box no interior. The speaker line and the label keep their full width, and the
+    # right edge is left to the attachment thumbnails, so no node is asked to hold three things in a space
+    # that fits one.
+    role_icon_fraction: float = 0.5
+    # ...and never drawn larger than the asset, which the shipped icons are 64x64 of. DPG samples
+    # nearest-neighbour, so past native size the glyph turns into visible squares; downsampling from 64 is
+    # the path the chat log already takes with the same files.
+    role_icon_native_size: float = 64.0
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
     margin: float = 20.0
@@ -1068,7 +1081,8 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                 dashed: bool, pills: Tuple[str, ...],
                 speaker: Optional[str] = None, sub_label: Optional[str] = None,
                 measure_text: Optional[MeasureText] = None,
-                emphasized: bool = False, previewed: bool = False) -> List[xdotgraph.Shape]:
+                emphasized: bool = False, previewed: bool = False,
+                role_icon: Optional[Union[int, str]] = None) -> List[xdotgraph.Shape]:
     """Return the shapes for one box: its outline, its text, and any pointer pills above it.
 
     `width`: The box's width. A gap is narrower than a node, and the row layout allocates it that much
@@ -1085,6 +1099,8 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     `previewed`: Draw a dotted ring outside the box. This is the cursor — the box a click or `Enter` acts
                  on — and on a message it is also the branch a second click would commit to, dotted
                  because that selection is tentative until the second one.
+    `role_icon`: DPG texture for who is speaking, straddling the left edge. `None` for a gap, and for a
+                 role no icon was supplied for.
     """
     x1, y1 = x - 0.5 * width, y - 0.5 * config.node_h
     x2, y2 = x + 0.5 * width, y + 0.5 * config.node_h
@@ -1118,6 +1134,16 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
             _rounded_rect_points(x1 - offset, y1 - offset, x2 + offset, y2 + offset,
                                  config.corner_radius + offset),
             filled=False))
+
+    if role_icon is not None:
+        # Centred on the left edge and on the box's own centre, so half of it hangs outside. Appended
+        # after the outline and the ring, which puts it on top of both: shapes are drawn in list order,
+        # and a glyph half-covered by the box's own border would read as damage rather than as a mark.
+        side = config.role_icon_fraction * config.node_h
+        shapes.append(xdotgraph.ImageShape(role_icon,
+                                           x1 - 0.5 * side, y - 0.5 * side,
+                                           x1 + 0.5 * side, y + 0.5 * side,
+                                           max_screen_size=config.role_icon_native_size))
 
     text_pen = xdotgraph.Pen()
     text_pen.color = LINE_COLOR
@@ -1332,7 +1358,8 @@ def _edge_between(src: xdotgraph.Node, dst: xdotgraph.Node, config: LayoutConfig
 def build(datastore: chattree.Forest,
           state: ViewState,
           config: Optional[LayoutConfig] = None,
-          measure_text: Optional[MeasureText] = None) -> ChatGraph:
+          measure_text: Optional[MeasureText] = None,
+          role_icons: Optional[Mapping[str, Union[int, str]]] = None) -> ChatGraph:
     """Build the picture of the chat forest around `state.focus_node_id`, or HEAD if none is given.
 
     `datastore`: The chat forest. Read under its own lock, and not modified.
@@ -1341,6 +1368,14 @@ def build(datastore: chattree.Forest,
     `measure_text`: How to ask what a string actually measures — `(text, font size) -> width`. Optional;
                     without it, widths are estimated from an average glyph advance, which is enough to
                     size a box and not enough to centre text inside one. See `MeasureText`.
+    `role_icons`: Role -> DPG texture, for the glyph on each message box. `None`, or a role missing from
+                  it, draws no glyph. Optional because this module holds no DPG and cannot register a
+                  texture itself; a caller with one to hand supplies it, and a test without one gets the
+                  same layout minus the picture.
+
+                  Hand over `DPGChatController.gui_role_icons` rather than loading the icon files: it is
+                  where the per-character override is already resolved, so an AI with an icon of its own
+                  gets that one, and a caller reading `raven/icons/ai.png` would silently lose it.
 
     Returns a `ChatGraph`: the `Graph` to hand to `XDotWidget.set_graph`, plus the table saying what each
     of its nodes stands for.
@@ -1532,7 +1567,8 @@ def build(datastore: chattree.Forest,
                                  sub_label=sub_label,
                                  measure_text=measure_text,
                                  emphasized=(node_id == state.head_node_id),
-                                 previewed=(node_id == state.cursor_name))
+                                 previewed=(node_id == state.cursor_name),
+                                 role_icon=(role_icons or {}).get(ref.role))
             return ref, shapes
 
         for row_index, row in enumerate(rows):
@@ -2027,5 +2063,16 @@ def _translate_shapes(shapes: Sequence[xdotgraph.Shape], dx: float, dy: float) -
             shape.y0 += dy
         elif isinstance(shape, (xdotgraph.PolygonShape, xdotgraph.LineShape, xdotgraph.BezierShape)):
             shape.points = [(x + dx, y + dy) for x, y in shape.points]
+        elif isinstance(shape, xdotgraph.ImageShape):
+            shape.x1 += dx
+            shape.x2 += dx
+            shape.y1 += dy
+            shape.y2 += dy
         elif isinstance(shape, xdotgraph.CompoundShape):
             _translate_shapes(shape.shapes, dx, dy)
+        else:
+            # A shape type nobody taught this function about stays where it was built, which is the origin
+            # of a layout that has since moved -- so it is drawn somewhere unrelated to the box it belongs
+            # to, and nothing else goes wrong to say so. Say so here instead.
+            logger.warning(f"_translate_shapes: no rule for {type(shape).__name__}; it will not move with "
+                           "the layout")
