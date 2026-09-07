@@ -1,4 +1,4 @@
-Connected to LLM backend at http://maia.local:1234
+Connected to LLM backend at http://<redacted>:1234
 --- cluster 31  (140 entries) ---
     KEYWORDS: Physics-Informed Neural Networks, Partial Differential Equations, Machine Learning, Neural Operators, Reduced-Order Models, Computational Fluid Dynamics
 

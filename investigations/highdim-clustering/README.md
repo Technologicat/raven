@@ -427,8 +427,8 @@ support:
     more records than lowering a size threshold does, leaves the residue clusters out, and calibrates
     itself against the corpus. Only the floor of two survives, and it is structural rather than a
     setting.
-  - **Cost at 21378 records: 1 min 44 s and 3.9 GB peak**, so `maia`'s 32 GB is not troubled at this
-    size. The n² distance matrix still governs, and ~50k would need about 20 GB, so the existing
+  - **Cost at 21378 records: 1 min 44 s and 3.9 GB peak**, so the development machine's 32 GB is not
+    troubled at this size. The n² distance matrix still governs, and ~50k would need about 20 GB, so the existing
     `max_n` sampling does not go away — it moves further out.
   - Average linkage chains, so AOKK's largest cluster holds 944 of 5007 papers and hydrogen's 4016 of
     21378 — **19% of the corpus in both cases**. That is not the method: HDBSCAN found the same AOKK mass
@@ -441,7 +441,7 @@ support:
 
 ## Open, and deliberately not answered here
 
-- **The 32 GB constraint.** `maia` has 32 GB and must keep working. HDBSCAN with `metric="cosine"` and
+- **The 32 GB constraint.** The development machine has 32 GB and must keep working. HDBSCAN with `metric="cosine"` and
   agglomerative with `metric="cosine"` both materialize a full pairwise distance matrix — one such
   matrix is 3.7 GB at 21378 records and would be ~20 GB at 50k, which is what forces `importer.py`'s
   current `max_n=10000` sample. **Measured**: `matched_control.py` on the 21378-record hydrogen corpus

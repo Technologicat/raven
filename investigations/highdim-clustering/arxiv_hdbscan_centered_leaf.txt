@@ -1,4 +1,4 @@
-Connected to LLM backend at http://maia.local:1234
+Connected to LLM backend at http://<redacted>:1234
 --- cluster 24  (27 entries) ---
     KEYWORDS: Scaling Laws, Generalization, Double Descent, Overparameterization, Neural Tangent Kernel, Training Dynamics
     A Dynamical Model of Neural Scaling Laws

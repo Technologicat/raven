@@ -1,4 +1,4 @@
-Connected to LLM backend at http://maia.local:1234
+Connected to LLM backend at http://<redacted>:1234
 --- cluster 4  (46 entries) ---
     KEYWORDS: Axially moving viscoelastic systems, Dynamic stability, Transverse vibrations, Nonlinear dynamics, Parametric resonance, Viscoelastic damping
 

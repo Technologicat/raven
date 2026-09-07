@@ -1,4 +1,4 @@
-Connected to LLM backend at http://maia.local:1234
+Connected to LLM backend at http://<redacted>:1234
 --- cluster 9  (1864 entries) ---
     KEYWORDS: Photocatalytic hydrogen production, Water splitting, Photocatalysts, Heterojunctions, Solar energy conversion, Nanocomposite catalysts
 

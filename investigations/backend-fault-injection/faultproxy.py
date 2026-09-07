@@ -14,7 +14,7 @@ Control file (default `/tmp/faultproxy.mode`), read per request:
 
 Usage::
 
-    python faultproxy.py --port 8998 --upstream http://maia.local:1234
+    python faultproxy.py --port 8998 --upstream http://localhost:1234
     raven-librarian --backend-url http://127.0.0.1:8998
 
 Then, from anywhere::

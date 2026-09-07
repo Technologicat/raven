@@ -23,7 +23,7 @@ import time
 
 import requests
 
-URL = sys.argv[1] if len(sys.argv) > 1 else "http://maia.local:1234"
+URL = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:1234"
 
 # Big enough that a full re-prefill is unmistakable against a cache hit. The content is filler on purpose:
 # what is measured is the prompt's length and its prefix, not what the model makes of it.

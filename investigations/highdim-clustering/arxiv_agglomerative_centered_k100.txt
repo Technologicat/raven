@@ -1,4 +1,4 @@
-Connected to LLM backend at http://maia.local:1234
+Connected to LLM backend at http://<redacted>:1234
 --- cluster 1  (52 entries) ---
     KEYWORDS: Large Language Models, LLM Evaluation, Reasoning Capabilities, Model Alignment, Machine Psychology, Self-Correction
     Large Language Model Alignment: A Survey
