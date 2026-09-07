@@ -1104,6 +1104,44 @@ class TestAttachmentThumbnails:
         assert glyphs[0].max_screen_size == chatgraph.LayoutConfig().role_icon_native_size
         assert all(card.max_screen_size is None for card in cards)
 
+    def test_a_card_carries_the_chain_its_thumbnail_was_prepared_with(self):
+        """The other half of the answer the cap was the wrong one to.
+
+        Uncapping a card lets it grow, which is what makes the softness reachable; the chain is what the
+        renderer draws instead of a single texture stretched across it. A role glyph has one size and
+        wants none, so the two margins differ here as well.
+        """
+        levels = (xdotgraph.MipLevel(64, 64, "tex_half"), xdotgraph.MipLevel(32, 32, "tex_quarter"))
+
+        def prepared(name):
+            return chatgraph.Thumbnail(texture=f"tex_{name}", width=128, height=128, mips=levels)
+
+        forest, carrier = self._forest(1)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=carrier),
+                                role_icons=ROLE_ICONS, thumbnail_for=prepared)
+        node = built.graph.get_node_by_name(carrier)
+        centre = 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2])
+
+        def centre_of(shape):
+            box = shape.get_bounding_box()
+            return 0.5 * (box[0] + box[2])
+        images = [sh for sh in node.shapes if isinstance(sh, xdotgraph.ImageShape)]
+        glyphs = [sh for sh in images if centre_of(sh) < centre]
+        cards = [sh for sh in images if centre_of(sh) > centre]
+        assert glyphs and cards, "the fixture has no glyph or no card, so it compares nothing"
+        assert all(card.mips == levels for card in cards)
+        assert glyphs[0].mips == ()
+
+    def test_a_card_whose_picture_has_not_landed_carries_no_chain(self):
+        """A placeholder is a rectangle and nothing else, so there is nothing to choose a level from."""
+        forest, carrier = self._forest(1)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=carrier),
+                                role_icons=ROLE_ICONS, thumbnail_for=lambda name: None)
+        node = built.graph.get_node_by_name(carrier)
+        cards = [sh for sh in node.shapes if isinstance(sh, xdotgraph.ImageShape) and sh.texture is None]
+        assert cards, "every card was ready, so this fixture never sees a placeholder"
+        assert all(card.mips == () for card in cards)
+
     def test_a_document_gets_a_card_too(self):
         """A message that is *only* attachments has no words either. Drawn without them it reads as a turn
         that never happened — which is what a chat of three attached papers looked like: one box saying

@@ -17,7 +17,7 @@ import pytest
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
 from raven.common.gui import animation  # noqa: E402 -- after importorskip by design
-from raven.common.gui.xdotwidget.graph import (Graph, Node, Edge, Pen, ImageShape,  # noqa: E402 -- after importorskip by design
+from raven.common.gui.xdotwidget.graph import (Graph, Node, Edge, Pen, ImageShape, MipLevel,  # noqa: E402 -- after importorskip by design
                                                TextShape, EllipseShape, LineShape, PolygonShape)
 from raven.common.gui.xdotwidget.widget import XDotWidget  # noqa: E402 -- after importorskip by design
 
@@ -438,3 +438,83 @@ class TestImageShapesAreDrawn:
         assert width(capped) < width(uncapped), \
             "the cap did not bite, so this fixture cannot tell a centred shrink from no shrink at all"
         assert centre(capped) == pytest.approx(centre(uncapped))
+
+
+@pytest.fixture(scope="module")
+def chain(dpg_context):
+    """A picture prepared at four sizes: `(finest texture, its coarser levels, all of them by size)`."""
+    with dpg.texture_registry():
+        levels = {size: dpg.add_static_texture(2, 2, [1.0] * 16, label=f"level{size}")
+                  for size in (256, 128, 64, 32)}
+    return (levels[256], [MipLevel(128, 128, levels[128]),
+                          MipLevel(64, 64, levels[64]),
+                          MipLevel(32, 32, levels[32])], levels)
+
+
+class TestTheMipLevelDrawnFollowsTheScreenSize:
+    """A picture that has several prepared sizes: which one reaches the drawlist.
+
+    DPG samples nearest-neighbour, so one texture cannot serve a graph that zooms — drawn much larger than
+    it was prepared it goes blocky, and much smaller it aliases. The chain is the answer, and choosing
+    from it is the renderer's job because the renderer is the one place that knows the zoom.
+
+    The textures here are 2x2 whatever they claim to be: what is under test is the arithmetic on the sizes
+    a `MipLevel` *declares*, and the pixels behind them play no part in it.
+    """
+
+    @staticmethod
+    def graph_with(shape) -> Graph:
+        return Graph(width=100.0, height=100.0,
+                     nodes=[Node(x=50.0, y=50.0, w=100.0, h=100.0,
+                                 shapes=[shape], internal_name="only")])
+
+    @staticmethod
+    def drawn_texture(instance: XDotWidget):
+        for item in dpg.get_item_children(instance.drawlist, DRAWLIST_SLOT) or []:
+            if dpg.get_item_type(item) == "mvAppItemType::mvDrawImage":
+                return dpg.get_item_configuration(item)["texture_tag"]
+        return None
+
+    def test_each_zoom_gets_the_coarsest_level_that_still_covers_it(self, widget, chain):
+        """The rectangle is 60 graph units, so the drawn size is 60x the zoom.
+
+        Four zooms and four different answers, which is what says the selection is a function of the size
+        rather than a constant: a renderer that always drew `shape.texture` would pass only the last row,
+        and one that always drew the coarsest only the first.
+        """
+        finest, mips, levels = chain
+        widget.set_graph(self.graph_with(ImageShape(finest, 20.0, 20.0, 80.0, 80.0, mips=mips)))
+        drawn_at = {}
+        for zoom in (0.25, 1.0, 2.0, 4.0):
+            widget.set_zoom(zoom, animate=False)
+            widget._render()
+            drawn_at[zoom] = self.drawn_texture(widget)
+        assert drawn_at == {0.25: levels[32],   # 15 px drawn
+                            1.0: levels[64],    # 60
+                            2.0: levels[128],   # 120
+                            4.0: levels[256]}   # 240 -- past every mip, so the finest, upsampled
+
+    def test_a_shape_with_no_chain_draws_its_one_texture(self, widget, chain):
+        """The role glyphs' case, and every caller that predates the chain."""
+        finest, _mips, levels = chain
+        widget.set_graph(self.graph_with(ImageShape(finest, 20.0, 20.0, 80.0, 80.0)))
+        for zoom in (0.25, 4.0):
+            widget.set_zoom(zoom, animate=False)
+            widget._render()
+            assert self.drawn_texture(widget) == levels[256]
+
+    def test_the_level_follows_the_capped_size_rather_than_the_wanted_one(self, widget, chain):
+        """A cap decides how large the picture is drawn, so it decides which level is drawn too.
+
+        Without the cap this zoom asks for the finest level — asserted, since otherwise the fixture could
+        not tell a renderer that consults the cap from one that ignores it.
+        """
+        finest, mips, levels = chain
+        widget.set_zoom(4.0, animate=False)  # 240 px wanted
+        widget.set_graph(self.graph_with(ImageShape(finest, 20.0, 20.0, 80.0, 80.0, mips=mips)))
+        widget._render()
+        assert self.drawn_texture(widget) == levels[256]
+        widget.set_graph(self.graph_with(ImageShape(finest, 20.0, 20.0, 80.0, 80.0, mips=mips,
+                                                    max_screen_size=60.0)))
+        widget._render()
+        assert self.drawn_texture(widget) == levels[64]

@@ -146,16 +146,21 @@ def pipeline(mapped_gui_context, themes_and_fonts):
 
 
 def cards(panel, node_name):
-    """The cards fanned off one box, left to right."""
+    """The cards fanned off one box, in the order the message carries its attachments.
+
+    By drawing order reversed, which is what that order is: the deck is drawn back to front so the first
+    attachment lies on top. **Not by position** — the pile lays its columns out as a Latin square, so for
+    three cards the middle one is the rightmost, and sorting by x silently pairs each assertion with the
+    wrong attachment.
+    """
     node = panel._chat_graph.graph.get_node_by_name(node_name)
     centre_of_box = 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2])
 
     def centre(shape):
         box = shape.get_bounding_box()
         return 0.5 * (box[0] + box[2])
-    return sorted((s for s in node.shapes
-                   if isinstance(s, xdotgraph.ImageShape) and centre(s) > centre_of_box),
-                  key=centre)
+    return list(reversed([s for s in node.shapes
+                          if isinstance(s, xdotgraph.ImageShape) and centre(s) > centre_of_box]))
 
 
 def test_real_attachments_become_drawn_cards(pipeline):
@@ -202,3 +207,29 @@ def test_one_texture_serves_every_document_of_a_type(pipeline):
     assert identity("one.pdf") == identity("another.pdf")
     assert identity(names["wide"]) != identity(names["tall"]), \
         "two different images share an identity, so they would share a texture"
+
+
+def test_a_picture_arrives_as_a_mip_chain(pipeline):
+    """One prepared size cannot serve a graph that zooms, and this is the end that builds the rest.
+
+    The declared sizes are checked against the textures DPG actually holds, because they are what the
+    renderer chooses by: a chain whose levels claim sizes they do not have would pick wrongly while
+    looking perfectly well formed.
+    """
+    panel, forest, names, carrier, pump = pipeline
+    assert pump(lambda: all(c.texture is not None for c in cards(panel, carrier)))
+    wide, tall = cards(panel, carrier)[0], cards(panel, carrier)[1]
+
+    def size_of(texture):
+        configuration = dpg.get_item_configuration(texture)
+        return (configuration["width"], configuration["height"])
+
+    for card in (wide, tall):
+        assert card.mips, "the picture came back as a single texture, so there is no chain to draw from"
+        for level in card.mips:
+            assert (level.width, level.height) == size_of(level.texture), \
+                f"a level claims {(level.width, level.height)} and holds {size_of(level.texture)}"
+        sizes = [size_of(card.texture)] + [(level.width, level.height) for level in card.mips]
+        for finer, coarser in zip(sizes, sizes[1:]):
+            assert coarser[0] < finer[0] and coarser[1] < finer[1], \
+                f"the chain does not descend: {sizes}"

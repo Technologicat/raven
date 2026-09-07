@@ -4,7 +4,7 @@ import pytest
 
 from raven.common.tests import approx
 
-from ..graph import (Graph, Node, Edge, TextShape, Pen, ImageShape,
+from ..graph import (Graph, Node, Edge, TextShape, Pen, ImageShape, MipLevel,
                      tessellate_bezier)
 
 
@@ -194,3 +194,14 @@ class TestImageShape:
     def test_it_carries_no_pen(self):
         """An image has no ink, which is what keeps the dark-mode lightness inversion off the picture."""
         assert ImageShape("some_texture", 0.0, 0.0, 1.0, 1.0).pen is None
+
+    def test_a_shape_with_one_size_has_an_empty_chain(self):
+        """An icon shipped at its display size is the common case and says nothing about mips."""
+        assert ImageShape("some_texture", 0.0, 0.0, 1.0, 1.0).mips == ()
+
+    def test_the_chain_is_kept_as_a_tuple(self):
+        """The renderer walks it once per frame per card, and a caller's list is a caller's to mutate."""
+        levels = [MipLevel(64, 64, "half"), MipLevel(32, 32, "quarter")]
+        shape = ImageShape("some_texture", 0.0, 0.0, 1.0, 1.0, mips=levels)
+        levels.clear()
+        assert shape.mips == (MipLevel(64, 64, "half"), MipLevel(32, 32, "quarter"))

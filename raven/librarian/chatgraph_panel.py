@@ -147,6 +147,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
         `thumbnail_for`: `(attachment sidecar filename, size in pixels) -> env(texture_tag, w, h)`, or
                          `None` if it is not ready. What draws the cards fanned off a box's right edge;
                          see `chatgraph.build`. `DPGChatController.get_graph_thumbnail_texture` is it.
+                         An optional `mips` field carries coarser levels as `(width, height, texture_tag)`
+                         triples, coarsest last, which is what keeps a card sharp across the zoom range;
+                         a provider with one size for every zoom may leave it out.
                          It must not block: a rebuild runs on the render thread, where waiting for a
                          texture upload deadlocks, so the provider queues the work and answers `None` until
                          it lands. This panel then notices the answer changing and redraws — nothing else
@@ -837,7 +840,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._awaited_thumbnails.add(filename)
             return None
         self._awaited_thumbnails.discard(filename)
-        return chatgraph.Thumbnail(texture=prepared.texture_tag, width=prepared.w, height=prepared.h)
+        return chatgraph.Thumbnail(texture=prepared.texture_tag, width=prepared.w, height=prepared.h,
+                                   mips=tuple(xdotgraph.MipLevel(*level)
+                                              for level in prepared.get("mips", ())))
 
     def _measure_text(self, text: str, font_size: float) -> Optional[float]:
         """Return how wide `text` is at `font_size`, in graph units, or `None` if DPG cannot say yet.

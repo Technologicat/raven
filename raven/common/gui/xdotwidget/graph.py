@@ -25,6 +25,7 @@ __all__ = ["mix_colors",
            "PolygonShape",
            "LineShape",
            "BezierShape",
+           "MipLevel",
            "ImageShape",
            "CompoundShape",
            "Element",
@@ -33,7 +34,7 @@ __all__ = ["mix_colors",
            "Graph"]
 
 from itertools import chain
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, NamedTuple, Optional, Sequence, Set, Tuple, Union
 
 from ... import utils as common_utils
 
@@ -320,13 +321,27 @@ class BezierShape(Shape):
         return (min(xs), min(ys), max(xs), max(ys))
 
 
+class MipLevel(NamedTuple):
+    """One coarser level of an `ImageShape`'s mip chain: a texture, and the pixel size it holds.
+
+    The size is here because the renderer chooses a level by comparing it against the size the picture is
+    about to be drawn at, and this package holds no DPG at the data-model layer — so whoever prepared the
+    texture says how big it is.
+    """
+
+    width: int
+    height: int
+    texture: Union[int, str]
+
+
 class ImageShape(Shape):
     """A bitmap, drawn from a texture the caller has already registered with DPG.
 
     Attributes:
-        texture: DPG texture tag or ID, or `None` to draw nothing.
+        texture: DPG texture tag or ID of the finest level, or `None` to draw nothing.
         x1, y1, x2, y2: The rectangle to draw into, in graph coordinates.
         max_screen_size: Longest side the image may be drawn at, in screen pixels, or `None` for no cap.
+        mips: The chain *below* `texture`, coarsest last, as `MipLevel`s. Empty for a single-level image.
 
     The rectangle is in graph coordinates like every other shape here, so the image pans and zooms with
     the drawing. `max_screen_size` then puts a ceiling on how large it is allowed to get. Shrinking to
@@ -340,10 +355,17 @@ class ImageShape(Shape):
       - An icon shipped at its display size — the chat log's role glyphs are 64x64 — needs nothing but a
         `max_screen_size` that stops it being drawn larger than it is. Downsampling from there is the
         path the chat log itself already takes.
-      - Anything else wants a Lanczos mip chain on the GPU: `raven.common.image.lanczos.mipchain` builds
-        the levels and `raven.common.image.lanczos.mip_scale_for_zoom` picks one for a given zoom. That
-        is what Cherrypick's image viewer and the file dialog's thumbnail grid do, and a caller drawing
-        photographs here should do the same rather than upload one texture and let DPG scale it.
+      - Anything else wants a Lanczos mip chain, which `raven.common.image.lanczos.mipchain` builds: pass
+        the finest level as `texture` and the rest as `mips`, and the renderer draws whichever level suits
+        the size on screen. That is what Cherrypick's image viewer and the file dialog's thumbnail grid do
+        with their own drawing, and it is why a card can be zoomed into without going soft and read at 1:1
+        without aliasing — one texture cannot do both.
+
+    Prepare `texture` at the largest size the picture could reasonably be wanted at rather than at the
+    size it is usually drawn: past that the renderer has nothing finer to reach for and DPG upsamples.
+    **A larger preparation without the chain is worse than neither**, since drawing a 512 px texture into a
+    55 px card is a 9x nearest-neighbour downsample, which aliases at the zoom people read at to cure a
+    softness at a zoom they rarely use.
 
     A `None` texture is an ordinary state rather than a fault: it is what a caller draws while an image is
     still being prepared on a background thread, and it lets the shape carry the rectangle the image will
@@ -352,7 +374,8 @@ class ImageShape(Shape):
 
     def __init__(self, texture: Optional[Union[int, str]],
                  x1: float, y1: float, x2: float, y2: float,
-                 max_screen_size: Optional[float] = None):
+                 max_screen_size: Optional[float] = None,
+                 mips: Sequence[MipLevel] = ()):
         super().__init__()
         self.texture = texture
         self.x1 = x1
@@ -360,6 +383,7 @@ class ImageShape(Shape):
         self.x2 = x2
         self.y2 = y2
         self.max_screen_size = max_screen_size
+        self.mips = tuple(mips)
 
     def get_bounding_box(self) -> Tuple[float, float, float, float]:
         return (min(self.x1, self.x2), min(self.y1, self.y2),

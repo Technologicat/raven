@@ -25,6 +25,12 @@ logger = logging.getLogger(__name__)
 # and are their own identity. See `DPGChatController.graph_thumbnail_identity`.
 _DOCUMENT_ICON_PREFIX = "icon:"
 
+# Short edge, in pixels, at which a chat-graph thumbnail's mip chain stops halving. Sixteen rather than
+# the resampler's default of sixty-four because a card is some 55 graph units across, so an overview at
+# quarter zoom draws it at fourteen pixels -- and the two extra levels that buys are together under one
+# percent of the finest level's pixels.
+_GRAPH_THUMBNAIL_MIN_MIP = 16
+
 import collections
 import concurrent.futures
 import dataclasses
@@ -4363,11 +4369,13 @@ class DPGChatController:
     def get_graph_thumbnail_texture(self, filename: str, size: float) -> env | None:
         """Return the chat graph's thumbnail of sidecar `filename`, or `None` if it is not ready.
 
-        `size`: The longest edge to prepare it at, in pixels. Part of the cache key, so the same image can
-                be held at the chat log's inline size and at the graph's much smaller one at once.
+        `size`: The longest edge to prepare the *finest* level at, in pixels. Part of the cache key, so
+                the same image can be held at the chat log's inline size and at the graph's at once.
 
-        Returns an `env(texture_tag, w, h)` — the dimensions included because the graph draws the picture
-        at its own proportions and cannot ask a texture how big it is.
+        Returns an `env(texture_tag, w, h, mips)`: the finest level, its dimensions, and the coarser levels
+        below it as `(width, height, texture_tag)` triples, coarsest last. The dimensions are included
+        because the graph draws the picture at its own proportions and cannot ask a texture how big it is,
+        and the chain because it zooms continuously — see `_prepare_graph_thumbnail`.
 
         **Never blocks, and `None` is an ordinary answer rather than a failure.** The graph rebuilds from
         its animator hook, which runs on the render thread, and preparing a texture needs `split_frame` --
@@ -4390,11 +4398,20 @@ class DPGChatController:
         return None
 
     def _prepare_graph_thumbnail(self, key: tuple, filename: str, size: float, task_env: env) -> None:
-        """Turn one attachment into a graph-sized texture. Runs on a background thread."""
+        """Turn one attachment into a mip chain of graph textures. Runs on a background thread.
+
+        A chain rather than one texture because the graph zooms continuously and DPG samples
+        nearest-neighbour, so the size a card is drawn at is not known here: the finest level is prepared
+        at `size` and the renderer draws whichever level suits the card on screen.
+
+        Uploading the whole chain before publishing any of it is what keeps the graph from drawing a
+        half-arrived picture — the shape reads its levels without a lock, one rebuild at a time.
+        """
         try:
             if task_env.cancelled:  # shutdown, most likely; the pending mark is cleared in `finally`
                 return
             from ..common.image import codec  # deferred: pulls torch / Pillow only when an image is shown
+            from ..common.image import lanczos
             from ..common.image import utils as image_utils
             identity = key[0]
             if identity.startswith(_DOCUMENT_ICON_PREFIX):
@@ -4414,16 +4431,33 @@ class DPGChatController:
             # stretch a wide photograph into a square one, which is a lie about the picture and looks like
             # one -- the *card* is square, and the picture is letterboxed inside it.
             tensor = image_utils.fit_contain(tensor, int(size), int(size))
-            disp_h, disp_w = int(tensor.shape[2]), int(tensor.shape[3])
-            flat = image_utils.tensor_to_dpg_flat(tensor)  # flat float32 RGBA in [0, 1]
-            texture_tag = f"chat_graph_thumbnail_{int(size)}_{identity}"  # tag  # one per cache key
-            dpg.add_static_texture(disp_w, disp_h, flat,
-                                   tag=texture_tag,  # tag
-                                   parent=self._inline_image_texture_registry)
+            # Down to a level small enough for the card at the zooms a whole conversation is read at: a
+            # card is some 55 graph units across, so an overview at 0.25 draws it at 14 pixels.
+            levels = lanczos.mipchain(tensor, min_size=_GRAPH_THUMBNAIL_MIN_MIP)
+            del tensor
+            # No cancellation check in here, unlike the one above: a tag registered by a run that then
+            # bailed would collide with the retry's, and a duplicate DPG tag crashes the process rather
+            # than raising. The loop is a few array conversions -- the decode and the resize, which are
+            # what a shutdown wants to cut short, are already done.
+            uploaded = []
+            for index, level in enumerate(levels):
+                level_h, level_w = int(level.shape[2]), int(level.shape[3])
+                flat = image_utils.tensor_to_dpg_flat(level)  # flat float32 RGBA in [0, 1]
+                # One tag per (cache key, level). The suffix is the level index rather than its size:
+                # two levels of a very wide picture can share a short edge, and a size-named tag would
+                # then collide -- which crashes the process rather than raising.
+                texture_tag = f"chat_graph_thumbnail_{int(size)}_{identity}_mip{index}"  # tag
+                dpg.add_static_texture(level_w, level_h, flat,
+                                       tag=texture_tag,  # tag
+                                       parent=self._inline_image_texture_registry)
+                uploaded.append((level_w, level_h, texture_tag))
+            del levels
             dpg.split_frame()  # trigger the deferred OpenGL upload...
             dpg.split_frame()  # ...and ensure it completed before the graph draws it (dpg-notes.md, "Texture upload ordering")
+            finest_w, finest_h, finest_tag = uploaded[0]
             with self._graph_thumbnail_lock:
-                self._graph_thumbnail_textures[key] = env(texture_tag=texture_tag, w=disp_w, h=disp_h)
+                self._graph_thumbnail_textures[key] = env(texture_tag=finest_tag, w=finest_w, h=finest_h,
+                                                          mips=tuple(uploaded[1:]))
         except Exception as exc:  # noqa: BLE001 -- a broken sidecar must not break the graph
             logger.error(f"DPGChatController._prepare_graph_thumbnail: failed to prepare '{filename}' at {size}: {type(exc)}: {exc}")
             with self._graph_thumbnail_lock:

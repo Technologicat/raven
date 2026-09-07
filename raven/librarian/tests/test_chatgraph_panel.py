@@ -1730,6 +1730,32 @@ class TestAttachmentThumbnails:
         built.destroy()
         dpg.delete_item(holder)
 
+    def test_the_providers_mip_chain_reaches_the_card(self, dpg_context):
+        """The adapter's other half: the controller answers in an `env`, the picture takes `MipLevel`s.
+
+        A provider need not offer a chain — a single prepared size is a legitimate answer, and the
+        no-`mips` case is asserted alongside so that neither reading is the only one exercised.
+        """
+        themes_and_fonts = dpg_context
+        forest, root, carrier = self._forest_with_an_attachment()
+        app_state = {"HEAD": carrier}
+        answer = {"a0.png": env(texture_tag="tex_a0", w=128, h=96,
+                                mips=((64, 48, "tex_a0_mip1"), (32, 24, "tex_a0_mip2")))}
+        with dpg.window() as holder:
+            built = chatgraph_panel.DPGChatGraphPanel(
+                gui_parent=holder, datastore=forest, app_state=app_state,
+                themes_and_fonts=themes_and_fonts, width=200, height=200,
+                thumbnail_for=lambda name, size: answer.get(name))
+        built.refresh()
+        assert self._cards(built._chat_graph, carrier)[0].mips == (
+            xdotgraph.MipLevel(64, 48, "tex_a0_mip1"), xdotgraph.MipLevel(32, 24, "tex_a0_mip2"))
+
+        answer["a0.png"] = env(texture_tag="tex_a0", w=128, h=96)
+        built.refresh()
+        assert self._cards(built._chat_graph, carrier)[0].mips == ()
+        built.destroy()
+        dpg.delete_item(holder)
+
     def test_it_stops_waiting_for_a_thumbnail_it_no_longer_draws(self, dpg_context):
         """Otherwise a reader who pans away from an attachment keeps the panel polling for its texture."""
         themes_and_fonts = dpg_context

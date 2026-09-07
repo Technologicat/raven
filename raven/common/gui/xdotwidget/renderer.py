@@ -410,9 +410,34 @@ def _render_image_shape(drawlist: Union[int, str],
         cx, cy = 0.5 * (x1 + x2), 0.5 * (y1 + y2)
         x1, x2 = cx - 0.5 * t * w, cx + 0.5 * t * w
         y1, y2 = cy - 0.5 * t * h, cy + 0.5 * t * h
+        w, h = x2 - x1, y2 - y1
 
-    dpg.draw_image(shape.texture, (x1, y1), (x2, y2),
+    dpg.draw_image(_texture_for_screen_size(shape, w, h), (x1, y1), (x2, y2),
                    uv_min=(0.0, 0.0), uv_max=(1.0, 1.0), parent=drawlist)
+
+
+def _texture_for_screen_size(shape: ImageShape, w: float, h: float) -> Union[int, str]:
+    """Return the level of `shape`'s mip chain to draw at `w` x `h` screen pixels.
+
+    The coarsest level that still covers the drawn size in both axes, since a level that has to be
+    downsampled to fit stays sharp where the next one down would have to be stretched. Nothing coarse
+    enough — the picture is drawn larger than any level was prepared at — leaves the finest, which DPG
+    then upsamples.
+
+    Both axes, because the rectangle need not carry the texture's proportions: a picture stretched to fit
+    wants whichever axis is the more demanding of the two, and asking for both is the answer that never
+    upsamples.
+
+    **What decides the level is the size in screen pixels, which is the size in graph units times the
+    zoom.** A graph shown at 1:1 says nothing on its own — a card 55 graph units across is 55 pixels
+    there, and a level prepared at 512 would be a nine-fold downsample.
+    """
+    texture = shape.texture
+    for level in shape.mips:  # finest first
+        if level.width < w or level.height < h:
+            break
+        texture = level.texture
+    return texture
 
 
 def _get_element_fillcolor(element: Optional[Element]) -> Optional[Color]:

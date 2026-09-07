@@ -244,8 +244,9 @@ MeasureText = Callable[[str, float], Optional[float]]
 class Thumbnail:
     """A prepared attachment thumbnail: its texture, and the pixel size that texture holds.
 
-    `texture`: DPG texture tag or ID.
-    `width`, `height`: The texture's own dimensions.
+    `texture`: DPG texture tag or ID, of the finest level prepared.
+    `width`, `height`: That texture's own dimensions.
+    `mips`: The coarser levels below it, coarsest last, for the renderer to choose from by drawn size.
 
     The dimensions are here because a card has to draw the picture at the picture's proportions. A square
     rectangle stretches a wide photograph into a square one, which is a lie about the image and looks like
@@ -257,6 +258,7 @@ class Thumbnail:
     texture: Union[int, str]
     width: int
     height: int
+    mips: Tuple[xdotgraph.MipLevel, ...] = ()
 
 
 def _text_width(text: str, font_size: float,
@@ -590,8 +592,15 @@ class LayoutConfig:
     # sixth through whole, since replacing two thumbnails with a box saying "+2" saves nothing and costs
     # the reader a count. Seven is where it starts hiding.
     attachment_max_shown: int = 5
-    # The size the panel prepares a thumbnail at, in pixels, and therefore the size past which drawing one
-    # upsamples -- DPG samples nearest-neighbour, so past this a card goes soft.
+    # The *finest* level the panel prepares a thumbnail at, in pixels, and therefore the size past which
+    # drawing one upsamples -- DPG samples nearest-neighbour, so past this a card goes visibly blocky.
+    # Coarser levels are prepared alongside it as a mip chain, and the renderer draws whichever suits the
+    # card's size on screen, so this being far larger than a card at 1:1 costs nothing in sharpness.
+    #
+    # A card is `attachment_fraction * node_h` graph units across -- some 55 -- so 512 is sharp out to
+    # about 9x, which is well past where a reader zooms in to look at a picture. Past that DPG upsamples
+    # and the card goes blocky, which is what happens at *some* magnification whatever this says: the
+    # widget zooms to 100x, and preparing for that would be several megabytes a card.
     #
     # **Not a cap on how large a card is drawn**, which is what it was until 2026-09-07 and which failed in
     # a way neither of us predicted. We both expected a zoomed-in thumbnail to go blurry; capping the
@@ -600,13 +609,9 @@ class LayoutConfig:
     # everything else; only the picture was pinned.
     #
     # A cap is right for the role glyph, whose asset is shipped at its display size and has nothing better
-    # to show. An attachment's source image is large, so the answer to "the card is bigger now" is a bigger
-    # texture, not a smaller picture.
-    #
-    # TODO (briefs/xdot-image-shapes-brief.md): prepare a mip chain instead of one size, and draw the level
-    # TODO: that suits the card's size on screen. One number cannot serve both ends -- raising this alone
-    # TODO: trades softness at high zoom for aliasing at the zoom people actually read at.
-    attachment_native_size: float = 128.0
+    # to show. An attachment's source image is large, so the answer to "the card is bigger now" is a finer
+    # level, not a smaller picture.
+    attachment_native_size: float = 512.0
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
     margin: float = 20.0
@@ -1688,8 +1693,9 @@ def _attachment_shapes(attachments: Sequence[Optional["Thumbnail"]], hidden: int
                        measure_text: Optional[MeasureText]) -> List[xdotgraph.Shape]:
     """Return the shapes for a fan of attachment thumbnails straddling `right_edge`.
 
-    Drawn back to front, so the first attachment ends up on top and the fan reads left to right the way
-    the message carries them.
+    Drawn back to front, so the first attachment is the one lying on top. That is the order the deck reads
+    in — the pile is a Latin square over the two fan steps, so left to right is not the order the message
+    carries its attachments in, and depth is (see `LayoutConfig._get_attachment_deck_origin`).
     """
     if not attachments and hidden <= 0:
         return []
@@ -1739,17 +1745,19 @@ def _attachment_shapes(attachments: Sequence[Optional["Thumbnail"]], hidden: int
             # `None` texture draws nothing while still saying so -- which keeps the shape list the same
             # before and after the thumbnail lands, and gives anything asking what a box carries one
             # answer rather than two.
-            # No `max_screen_size`: the picture fills its card at every zoom. Softness past the prepared
-            # size is a texture-resolution question -- see `attachment_native_size` -- and the remedy for
-            # it is a larger texture, not a picture that stops growing while its frame does not.
+            # No `max_screen_size`: the picture fills its card at every zoom. Which of the prepared levels
+            # is drawn is the renderer's to decide from the size on screen -- see `attachment_native_size`
+            # for what is prepared -- so the remedy for softness is a finer level, not a picture that stops
+            # growing while its frame does not.
             picture = _letterboxed(x1, y1, x2, y2, thumbnail)
             shapes.append(xdotgraph.ImageShape(thumbnail.texture if thumbnail is not None else None,
-                                               *picture))
+                                               *picture,
+                                               mips=thumbnail.mips if thumbnail is not None else ()))
         shapes.append(xdotgraph.PolygonShape(pen, corners, filled=False))
 
     shapes: List[xdotgraph.Shape] = []
-    # Back to front, so the first attachment ends up on top and the fan reads left to right the way the
-    # message carries them.
+    # Back to front, so the first attachment is the one lying on top -- which is where the deck's order is
+    # read, the columns being a Latin square rather than a staircase.
     for index in reversed(range(len(attachments))):
         card(index, attachments[index], frame_pen)
 
