@@ -7,9 +7,14 @@
 3. Making the Visualizer recover from Raven-server going down mid-session.
 
 **Item 3 is deliberately not "the same as Librarian"** (Juha's correction, on reading the first draft). The
-Visualizer needs no boot-without-server and no status row: the server is optional to it already, and one
-part uses it. What it needs is the ability to notice the server leaving and carry on, which is a narrower
-job with a different answer.
+Visualizer needs no boot-without-server: it is *designed* to run without Raven-server, that being what local
+mode is for. What it needs is to survive losing the server mid-session, which is a narrower job.
+
+It does still need a status indication, and an earlier draft of this brief said otherwise — reasoning from
+"the server is optional to the Visualizer" to "so it never has to report on the server". True of a
+Visualizer that *started* without one, false of a Visualizer that started with one: that app is in remote
+mode, and when the server goes its importer is unusable until the server returns or the user asks for local
+mode. Being unusable with no explanation is the thing a status row exists to prevent.
 
 **What Raven-server is, for the purpose of this brief:** the avatar, speech, subtitles, translation, the
 embeddings behind document search, and the AI's internet access. Not the chat — that goes to a separate LLM
@@ -69,32 +74,33 @@ answers. Every later call assumes that answer. So a server that dies mid-run lea
 mode with no route back — which is exactly Juha's description of the Visualizer importer: *"if the server
 was up when it was started, the importer assumes it stays up."*
 
-**`allow_local` is what settles it, and it settles it differently for the two kinds of caller** — which is
-why this reads as one question and is two.
+**Settled 2026-09-07, Juha's call, and it is neither of the two answers this section first proposed.** The
+once-only decision **stays**: instantiation time is when the mode is declared, and nothing switches by
+itself afterwards.
 
-- **`allow_local=True` means the caller has already declared it can work without the server**, and for the
-  Visualizer that is not a concession but a *deployment*: local mode exists so that someone who only wants
-  the Visualizer never has to set up Raven-server at all (Juha, 2026-09-07). Calling it a fallback
-  undersells it — it is one of the two ways the app is meant to run.
-  - Which makes the mid-session case easy to reason about. Losing the server does not degrade such a
-    Visualizer into something unsupported; it lands it in the configuration a whole class of its users run
-    all the time. **The once-only decision is the defect**, not the switch.
-  - The cost the constructor's docstring warns about — entering local mode *loads the model locally*, which
-    can mean fetching several gigabytes — is unchanged by *when* the decision is taken, and does not apply
-    at all to the users local mode was built for, who have those models already. It bites exactly one
-    person: a Visualizer user who has a server and has therefore never needed the local models. Worth
-    keeping in view, but it is a narrower case than it first looks.
-- **`allow_local=False` means the app needs the server for other things anyway**, so there is nothing to
-  fall back to and the operation fails. That is Juha's stated policy verbatim, and it is the whole rule for
-  these callers.
+- **What is missing is not the switch, it is the declaration being invisible.** So: say which mode is in
+  force, loudly in the log, and — for the Visualizer — in the GUI at startup. Today nothing tells a user
+  which of the two ways their app is running.
+- **If the server then goes down in remote mode, that is the user's to resolve**: bring the server back, or
+  choose local mode. What must not happen is Raven choosing for them.
+- **Choosing local mode should be a click, not a restart.** That is the part that needs building; a
+  declaration you can only revise by relaunching is not much of a choice.
 
-**So the shape is: re-decide the mode when a remote call fails, and let `allow_local` decide what
-re-deciding means.** Whether that is a retry inside the service or a rebuild by the caller is an
-implementation choice; the service is the better home, since the caller would otherwise need to know which
-exceptions mean "the server left".
+**Why not switch automatically**, since an earlier draft of this brief argued for it and the argument was
+not silly: `allow_local=True` really does mean the caller can work without the server, and for the
+Visualizer local mode is a *deployment* rather than a concession — it exists so that someone who only wants
+the Visualizer never has to set up Raven-server at all. The trouble is that the switch is not free and not
+invisible. It can mean fetching several gigabytes of models, and it changes where the work runs and how
+long it takes. A user who has a server has never needed those models, and is exactly the person a silent
+switch would surprise. Juha's summary: *"it's nontrivial which is better"* — which is the reason to put it
+in front of the user rather than to pick harder.
+
+**`allow_local=False` is unaffected**: the app needs the server for other things anyway, so there is
+nothing to offer and the operation simply fails, with the warning. That is the stated policy verbatim, and
+it is the whole rule for those callers.
 
 Either way `allow_local`'s docstring has to say *when* the decision is made. It currently does not, and that
-silence is what let the once-only behaviour go unnoticed.
+silence is what let the once-only behaviour read as an oversight rather than as the design.
 
 ## Item 2: Librarian boots before Raven-server does
 
@@ -126,15 +132,23 @@ The importer is the only part that uses the server, and it uses it through `mayb
 `allow_local=True` — `Dehyphenator`, `Embedder`, `NLP`. So its exposure is exactly the `mayberemote`
 question above, and it inherits whatever is decided there.
 
-**No status row and no boot work here.** The Visualizer is *designed* to run without Raven-server — that is
-what local mode is for — so "the server is not there" is not a condition to report, it is a supported way
-to run. What is missing is only the transition: the app can start without the server and cannot survive
-losing it.
+**No boot work here** — the Visualizer already starts happily with no server. What it needs is three things,
+in what looks like increasing order of effort:
 
-What is different is that **an import is a batch job**: a failure part-way means partial results, and
-"cancel the operation" has to say something about what has already been imported. The dehyphenation crash
-fixed earlier in this release cycle is the precedent — it could fail a run part-way and lose the whole
-thing.
+1. **Say which mode it is in**, loudly in the log and in the GUI at startup. Cheapest, and useful on its own:
+   nothing currently tells a user whether their embeddings are being computed on a server or in-process.
+2. **Say when remote mode has broken**, i.e. a status row like Librarian's, for the app that booted with a
+   server and lost it. Its importer is unusable until the server is back, and unusable-with-no-explanation
+   is what the row prevents.
+3. **Offer the switch to local mode from the GUI.** The declaration is made at instantiation and stays made
+   — the point is not to revise it automatically but to let the user revise it without relaunching. This
+   is the piece that needs real design: the services are built during an import, so "switch now" has to
+   mean something definite about a run in progress.
+
+**An import is a batch job**, which is what makes item 3 harder than its Librarian counterpart: a failure
+part-way means partial results, and both "cancel" and "switch to local" have to say what happens to what has
+already been imported. The dehyphenation crash fixed earlier in this release cycle is the precedent — it
+could fail a run part-way and lose the whole thing.
 
 ## Later, and deliberately not now
 
