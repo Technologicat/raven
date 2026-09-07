@@ -1705,8 +1705,8 @@ class TestAttachmentThumbnails:
     def _cards(built, node_name):
         node = built.graph.get_node_by_name(node_name)
         centre_of_box = 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2])
-        return [s for s in node.shapes if isinstance(s, xdotgraph.ImageShape)
-                and 0.5 * (s.get_bounding_box()[0] + s.get_bounding_box()[2]) > centre_of_box]
+        return list(reversed([s for s in node.shapes if isinstance(s, xdotgraph.ImageShape)
+                              and 0.5 * (s.get_bounding_box()[0] + s.get_bounding_box()[2]) > centre_of_box]))
 
     def test_a_thumbnail_arriving_makes_the_picture_stale(self, dpg_context):
         themes_and_fonts = dpg_context

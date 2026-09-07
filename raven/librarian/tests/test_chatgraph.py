@@ -8,6 +8,7 @@ The module needs no DearPyGui: the xdot package imports its widget lazily, and e
 `Graph`, `Node`, the shapes -- is plain data.
 """
 
+import itertools
 import math
 
 import pytest
@@ -953,10 +954,12 @@ class TestAttachmentThumbnails:
                 and y1 <= sh.get_bounding_box()[1] and sh.get_bounding_box()[3] <= y2]
 
     def _cards(self, built, node_name):
-        """The thumbnail images drawn on one box, left to right.
+        """The thumbnail cards drawn on one box, in the order the message carries them.
 
-        By position rather than by order, because a role glyph is an `ImageShape` too — on the *other*
-        margin — and because the cards are appended back to front so the first ends up on top.
+        Selected by position, because a role glyph is an `ImageShape` too — on the *other* margin — and
+        ordered by reversing the draw order, because the cards go down back to front so the first ends up
+        on top. Not by x: a hand-laid pile is deliberately not left-to-right, and sorting by position
+        would quietly re-order the very thing under test.
         """
         node = built.graph.get_node_by_name(node_name)
         centre_of_box = 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2])
@@ -964,9 +967,8 @@ class TestAttachmentThumbnails:
         def centre(shape):
             box = shape.get_bounding_box()
             return 0.5 * (box[0] + box[2])
-        return sorted((s for s in node.shapes
-                       if isinstance(s, xdotgraph.ImageShape) and centre(s) > centre_of_box),
-                      key=centre)
+        return list(reversed([s for s in node.shapes
+                              if isinstance(s, xdotgraph.ImageShape) and centre(s) > centre_of_box]))
 
     def _build(self, forest, node, config=None, thumbnail_for=None):
         thumbnail_for = thumbnail_for or ready_thumbnail
@@ -1004,9 +1006,11 @@ class TestAttachmentThumbnails:
         right = node.get_bounding_box()[2]
         centres = [0.5 * (c.get_bounding_box()[0] + c.get_bounding_box()[2])
                    for c in self._cards(built, carrier)]
-        assert centres[0] == pytest.approx(right), "the first card does not straddle the edge"
-        assert centres == sorted(centres) and len(set(centres)) == len(centres), \
-            "the cards do not each hang further out than the last"
+        assert min(centres) == pytest.approx(right), \
+            "the deck's leftmost card does not straddle the edge"
+        assert len(set(centres)) == len(centres), "two cards sit in the same column"
+        assert sorted(centres) != centres, \
+            "the cards walk straight out, so this is a staircase rather than a pile"
 
     def test_a_long_fan_is_abbreviated_with_a_count(self):
         """Somebody will attach fifty files, and a fan of fifty is a smear."""
@@ -1143,16 +1147,71 @@ class TestAttachmentThumbnails:
                   and 0.5 * (s.get_bounding_box()[0] + s.get_bounding_box()[2]) < centre]
         assert [g.texture for g in glyphs] == ["tex_ai"]
 
+    def test_every_pile_is_a_latin_square(self):
+        """One card per row and one per column, which is what makes a pile a pile rather than a stagger:
+        no card is exactly behind another, and the silhouette is ragged on both axes by construction.
+
+        Checked past the searched range too, where the answer is constructed rather than found — that
+        branch is the one nothing else would exercise, and a construction that is not a permutation draws
+        two cards on top of each other, so the picture merely looks like one fewer attachment.
+        """
+        config = chatgraph.LayoutConfig()
+        for count in list(range(1, 9)) + [10, 15]:
+            columns = chatgraph._pile_columns(count, config.attachment_fan_offset,
+                                              config.attachment_fan_drop)
+            assert sorted(columns) == list(range(count)), \
+                f"the pile for {count} card(s) is not a permutation: {columns}"
+
+    def test_a_pile_is_not_the_staircase_it_replaced(self):
+        """The identity permutation is a legal Latin square and is exactly the thing being avoided, so the
+        structural test above cannot stand in for this one."""
+        config = chatgraph.LayoutConfig()
+        for count in range(3, 8):  # two cards have only two permutations, and the other is the mirror
+            columns = chatgraph._pile_columns(count, config.attachment_fan_offset,
+                                              config.attachment_fan_drop)
+            assert list(columns) != list(range(count)), \
+                f"the pile for {count} cards is the plain staircase"
+
+    def test_the_pile_spreads_the_cards_as_far_as_a_permutation_can(self):
+        """Maximin: no other permutation has its closest pair further apart. This is what picks *which*
+        Latin square, and it is what reproduces the shapes laid out by hand."""
+        config = chatgraph.LayoutConfig()
+        step_x, step_y = config.attachment_fan_offset, config.attachment_fan_drop
+
+        def closest_pair(columns):
+            points = [(column * step_x, row * step_y) for row, column in enumerate(columns)]
+            return min(math.dist(a, b) for a, b in itertools.combinations(points, 2))
+
+        for count in range(2, 7):
+            chosen = closest_pair(chatgraph._pile_columns(count, step_x, step_y))
+            best = max(closest_pair(p) for p in itertools.permutations(range(count)))
+            assert chosen == pytest.approx(best)
+            assert closest_pair(tuple(range(count))) <= chosen, \
+                "the staircase is as spread out as the chosen pile, so this fixture proves nothing"
+
+    def test_the_hand_laid_shapes_are_what_comes_out(self):
+        """The two- and three-card piles were drawn by eye before any of this was derived. They are what
+        the derivation returns, which is the evidence for having replaced the table with it."""
+        config = chatgraph.LayoutConfig()
+        step_x, step_y = config.attachment_fan_offset, config.attachment_fan_drop
+        assert chatgraph._pile_columns(2, step_x, step_y) == (0, 1)
+        assert chatgraph._pile_columns(3, step_x, step_y) == (0, 2, 1)
+        # The four-card shape was drawn as (2, 0, 3, 1) and the derivation returns its mirror. Both are
+        # optimal, and they are the same picture read from the other side.
+        assert chatgraph._pile_columns(4, step_x, step_y) == (1, 3, 0, 2)
+
     def test_the_fan_stays_inside_the_gap_to_the_row_below(self):
         """The drop is what stops two cards' borders landing on each other, and it is also what can put a
         card on the row beneath. Nothing else would notice: the layout compares node boxes, and a card is
         outside its box by construction."""
         config = chatgraph.LayoutConfig()
-        n_cards = config.attachment_max_shown + 1  # the most a fan is ever drawn whole
+        n_cards = config.attachment_max_shown + 1  # the most a deck is ever drawn whole
         side = config.attachment_fraction * config.node_h
-        below_centre = config._get_attachment_fan_y(n_cards - 1, n_cards) + 0.5 * side
+        _origin_x, origin_y = config._get_attachment_deck_origin(n_cards)
+        lowest = max(config._get_attachment_card_offset(i, n_cards)[1] for i in range(n_cards))
+        below_centre = origin_y + lowest + 0.5 * side
         assert below_centre > 0.5 * config.node_h, \
-            "the fan does not reach past the box at all, so this fixture cannot tell a collision from none"
+            "the deck does not reach past the box at all, so this fixture cannot tell a collision from none"
         assert below_centre < 0.5 * config.node_h + config.vertical_spacing
 
     def test_the_gap_to_the_next_sibling_holds_the_fan(self):

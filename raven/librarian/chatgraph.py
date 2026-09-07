@@ -42,6 +42,7 @@ __all__ = ["LINE_COLOR",
 import colorsys
 import dataclasses
 import functools
+import itertools
 import logging
 import math
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
@@ -571,6 +572,18 @@ class LayoutConfig:
     # beside the message rather than a deck belonging to it, and it spends the gap between rows on a
     # decoration -- where the horizontal direction has a gap of its own that widens to fit.
     attachment_fan_drop: float = 8.0
+    # Where each card sits is *derived* rather than configured -- see `_pile_columns`, which lays a pile
+    # out as a maximin Latin square over these two steps::
+    #
+    #     2:  X        3:  X        4:    X
+    #          X            X            X
+    #                      X               X
+    #                                    X
+    #
+    # Where the deck sits down the box, as a fraction of node height: 0 is the top edge, 1 the bottom.
+    # Bottom-weighted rather than centred, because a decoration hanging off the lower corner reads as
+    # *attached to* the message where one across its middle reads as part of it.
+    attachment_anchor: float = 0.78
     # Past this many, the fan is abbreviated: the first two, the last two, and a box saying how many were
     # left out. Somebody will attach fifty files, and a fan of fifty is a smear.
     #
@@ -587,32 +600,45 @@ class LayoutConfig:
     label_width: Optional[float] = None
     label_lines: int = 2
 
-    def _get_attachment_fan_y(self, index: int, n_cards: int) -> float:
-        """Return the `index`-th of `n_cards` cards' centre, as an offset from the box's own centre line.
+    def _get_attachment_card_offset(self, index: int, n_cards: int) -> Tuple[float, float]:
+        """Return the `index`-th of `n_cards` cards' centre, offset from the deck's own top-left anchor.
 
-        The deck is centred on the box vertically however far it fans, so a message with one attachment
-        and one with six sit their cards on the same axis. Growing downward from the centre instead would
-        make the fan's *height* read as its length, which is what the horizontal offset already says.
-
-        `n_cards` counts the count box, if there is one, for the same reason the centring exists: computed
-        per card from a different total, the last card and the box behind it end up on different axes.
+        The hand-laid pile where the table has a shape for this count, and a plain diagonal past it. In
+        graph units: the table is in step units, so the two knobs above still set the scale.
         """
-        return (index - 0.5 * (max(1, n_cards) - 1)) * self.attachment_fan_drop
+        column = _pile_columns(n_cards, self.attachment_fan_offset, self.attachment_fan_drop)[index]
+        return (column * self.attachment_fan_offset, index * self.attachment_fan_drop)
 
-    def _get_attachment_fan_x(self, index: int, shown: int) -> float:
-        """Return the `index`-th card's centre, as an offset from the box's right edge.
+    def _get_attachment_deck_origin(self, n_cards: int) -> Tuple[float, float]:
+        """Return where card offsets are measured from: `(box's right edge, box's centre line)` offsets.
 
-        `shown`: How many thumbnails the fan draws. Index `shown` is the count box, if there is one.
+        **The deck is anchored as a shape, not by its first card.** In the hand-laid piles the first card
+        is not always the leftmost or the topmost — that is most of what makes them read as piles — so
+        pinning card zero would let a deck of four sit visibly further left than a deck of three.
 
-        The cards fan by `attachment_fan_offset` each, so a card shows that much of the one behind it.
-        **The count box is placed a card's width out instead**, clear of the fan: it overlaps the deck
-        just enough to belong to it, where one more fan step would put it on top of the last two cards and
-        hide the very thing it is there to say.
+        Horizontally, the leftmost card straddles the box's right edge, which is the one thing every deck
+        has in common. Vertically, the deck's whole extent is placed by `attachment_anchor`, so a deck of
+        two and a deck of six hang off the same corner rather than the taller one drifting past it.
         """
-        side = self.attachment_fraction * self.node_h
-        if index >= shown:
-            return max(0, shown - 1) * self.attachment_fan_offset + 0.8 * side
-        return index * self.attachment_fan_offset
+        if n_cards <= 0:
+            return (0.0, 0.0)
+        offsets = [self._get_attachment_card_offset(i, n_cards) for i in range(n_cards)]
+        drops = [offset[1] for offset in offsets]
+        return (-min(offset[0] for offset in offsets),
+                (self.attachment_anchor - 0.5) * self.node_h - 0.5 * (min(drops) + max(drops)))
+
+    def _get_attachment_count_box_x(self, n_cards: int) -> float:
+        """Return the count box's centre, as an offset from the box's right edge.
+
+        **A card's width past the rightmost of the pile rather than one more step into it.** It is the only
+        thing saying the hidden ones exist, and a step put it on top of the last cards — hiding two of the
+        four the abbreviation had just chosen to keep. Placed squarely, too: it is a label about the pile
+        rather than one of it.
+        """
+        origin_x, _origin_y = self._get_attachment_deck_origin(n_cards)
+        rightmost = max((self._get_attachment_card_offset(i, n_cards)[0] for i in range(n_cards)),
+                        default=0.0)
+        return origin_x + rightmost + 0.8 * self.attachment_fraction * self.node_h
 
     def _get_attachment_reach(self, shown: int, has_count_box: bool) -> float:
         """Return how far past a box's right edge its thumbnails reach, in graph units.
@@ -622,8 +648,15 @@ class LayoutConfig:
         """
         if shown <= 0 and not has_count_box:
             return 0.0
-        last = shown if has_count_box else shown - 1
-        return self._get_attachment_fan_x(last, shown) + 0.5 * self.attachment_fraction * self.node_h
+        half_card = 0.5 * self.attachment_fraction * self.node_h
+        if has_count_box:
+            return self._get_attachment_count_box_x(shown) + half_card
+        origin_x, _origin_y = self._get_attachment_deck_origin(shown)
+        # The furthest of them, not the last of them: in a pile the last card need not be the rightmost,
+        # and a reach read off it leaves whichever card overtook it hanging into the neighbour's gap
+        # unaccounted for.
+        return origin_x + max(self._get_attachment_card_offset(i, shown)[0]
+                              for i in range(shown)) + half_card
 
     def _get_attachment_gutter(self) -> float:
         """Return how far into the box the nearest thumbnail reaches, in graph units.
@@ -815,6 +848,56 @@ def _arrowhead_points(tip: xdotconstants.Point, tail: xdotconstants.Point,
     return [tip,
             (base[0] - halfwidth * uy, base[1] + halfwidth * ux),
             (base[0] + halfwidth * uy, base[1] - halfwidth * ux)]
+
+
+# Beyond this many cards the pile is constructed rather than searched for. `n!` is fine at 8 (40320,
+# computed once and cached) and is not at 12; the deck is abbreviated long before either, so the exact
+# answer is the one that ever gets used.
+_MAX_SEARCHED_PILE = 8
+
+
+@functools.lru_cache(maxsize=None)
+def _pile_columns(n_cards: int, step_x: float, step_y: float) -> Tuple[int, ...]:
+    """Return which column each card of a pile of `n_cards` sits in — one card per row, one per column.
+
+    A **maximin Latin hypercube**: of all the permutations, the one whose closest pair of cards is as far
+    apart as it can be, ties broken by the next-closest pair and so on down.
+
+    Both halves of that do a job. The Latin square — one per row, one per column — is what makes a pile a
+    pile rather than a stagger: no card sits exactly behind another, and the silhouette comes out ragged
+    on both axes by construction. The maximin criterion is what picks *which* Latin square, and it rules
+    out the identity, which is the plain staircase and reads as a machine-stacked deck however far apart
+    the cards are.
+
+    See McKay, Beckman and Conover (1979) for the sampling design this is the two-dimensional case of:
+    https://en.wikipedia.org/wiki/Latin_hypercube_sampling
+
+    The distances are measured in graph units rather than in grid cells, so the answer follows the two
+    step sizes: a deck fanned wide and dropped little wants a different permutation from a square one.
+    Rows go down the screen, so card 0 is the top of the pile as well as the front of it.
+
+    **Ties are broken lexicographically**, which is not arbitrary detail: several permutations are optimal
+    at most counts, and taking the first is what yields `(0, 1)` and `(0, 2, 1)` — the shapes drawn by
+    hand and preferred by eye.
+
+    **This is a derivation of what was first laid out by hand.** Juha drew the two-, three- and four-card
+    piles by eye, then noticed that each was a permutation; all three turn out to be maximin-optimal, and
+    the four-card one is one of the two optimal permutations at that count (the other is its mirror). So
+    the criterion reproduces the eye, which is the evidence for using it in place of a hand-kept table —
+    where a repeated column would have been a typo drawing two cards on top of each other, and the picture
+    would merely have looked like one fewer attachment.
+    """
+    if n_cards <= 1:
+        return (0,)
+    if n_cards > _MAX_SEARCHED_PILE:
+        # Odd rows first, then even. A permutation, and spread out, without a factorial search.
+        return tuple(list(range(1, n_cards, 2)) + list(range(0, n_cards, 2)))
+
+    def spread(permutation: Tuple[int, ...]) -> List[float]:
+        points = [(column * step_x, row * step_y) for row, column in enumerate(permutation)]
+        return sorted(math.dist(a, b) for a, b in itertools.combinations(points, 2))
+
+    return max(itertools.permutations(range(n_cards)), key=spread)
 
 
 # How many stripped messages to remember. A rebuild draws a few dozen boxes and the next one draws mostly
@@ -1585,12 +1668,18 @@ def _attachment_shapes(attachments: Sequence[Optional["Thumbnail"]], hidden: int
     gap_pen.linewidth = config.line_width
     gap_pen.dash = _GAP_DASH
 
-    n_cards = len(attachments) + (1 if hidden > 0 else 0)
+    n_cards = len(attachments)
+    origin_x, origin_y = config._get_attachment_deck_origin(n_cards)
 
     def frame_at(index: int) -> Tuple[float, float, float, float]:
-        """The rectangle of the `index`-th card. Index `len(attachments)` is the count box."""
-        cx = right_edge + config._get_attachment_fan_x(index, len(attachments))
-        cy = center_y + config._get_attachment_fan_y(index, n_cards)
+        """The rectangle of the `index`-th card. Index `n_cards` is the count box."""
+        if index >= n_cards:
+            cx = right_edge + config._get_attachment_count_box_x(n_cards)
+            cy = center_y + origin_y
+        else:
+            offset_x, offset_y = config._get_attachment_card_offset(index, n_cards)
+            cx = right_edge + origin_x + offset_x
+            cy = center_y + origin_y + offset_y
         return (cx - 0.5 * side, cy - 0.5 * side, cx + 0.5 * side, cy + 0.5 * side)
 
     def card(index: int, thumbnail: Optional[Thumbnail], pen: xdotgraph.Pen,
@@ -1631,8 +1720,8 @@ def _attachment_shapes(attachments: Sequence[Optional["Thumbnail"]], hidden: int
         # Last of all, so its small overlap with the deck goes over rather than under. It sits a card's
         # width out rather than one fan step; a fan step put it on top of the last two cards, hiding two
         # of the four thumbnails the abbreviation had just chosen to keep.
-        card(len(attachments), None, gap_pen, is_count_box=True)
-        x1, _y1, x2, _y2 = frame_at(len(attachments))
+        card(n_cards, None, gap_pen, is_count_box=True)
+        x1, _y1, x2, _y2 = frame_at(n_cards)
         label = f"+{hidden}"
         text_pen = xdotgraph.Pen()
         text_pen.color = GAP_LINE_COLOR
