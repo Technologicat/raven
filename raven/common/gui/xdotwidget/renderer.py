@@ -311,8 +311,9 @@ def _render_polygon_shape(drawlist: Union[int, str],
             # differ at the seam: repeating the vertex ends one stroke and starts another, so two butt
             # caps meet there instead of a join, and the outer corner is left unfilled. The width of that
             # notch is the line width, which scales with the zoom -- invisible at 1:1 and a bite out of
-            # the corner once a reader has zoomed in. It lands on the first vertex, which for a box built
-            # by `chatgraph` is the top left.
+            # the corner once a reader has zoomed in. It lands on the outline's *first vertex*, wherever
+            # whoever built the outline put that: GraphViz writes a box starting at its top right, while
+            # a rectangle built corner-by-corner in Python usually starts at the top left.
             dpg.draw_polyline(points, closed=True, color=stroke_color,
                               thickness=thickness, parent=drawlist)
 

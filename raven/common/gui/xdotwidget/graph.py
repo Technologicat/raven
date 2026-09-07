@@ -352,13 +352,11 @@ class ImageShape(Shape):
 
     **A chain rather than one texture, because DPG samples nearest-neighbour.** Anything drawn at a size
     its texture was not prepared for aliases, and a graph zooms continuously, so there is no one size to
-    prepare at: the renderer draws whichever level suits the size on screen. `raven.common.image.lanczos`
-    builds the levels — `mipchain` — and Cherrypick's image viewer and the file dialog's thumbnail grid
-    do the same for their own drawing.
+    prepare at: the renderer draws whichever level suits the size on screen. A Lanczos resampler is the
+    usual way to build the levels; in this constellation that is `raven.common.image.lanczos.mipchain`.
 
-    An asset shipped at its display size is the degenerate case and is spelled the same way: a chain of
-    one, plus a `max_screen_size` that stops it being drawn larger than it is. The chat log's role glyphs,
-    which are 64x64, are that.
+    An asset shipped at one display size is the degenerate case and is spelled the same way: a chain of
+    one, plus a `max_screen_size` that stops it being drawn larger than it is. A 64x64 icon is that.
 
     Prepare the finest level at the largest size the picture could reasonably be wanted at rather than at
     the size it is usually drawn: past that the renderer has nothing finer to reach for and DPG upsamples.
