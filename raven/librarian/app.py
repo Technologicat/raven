@@ -43,6 +43,7 @@ with timer() as tim:
     import platform
     import requests
     import sys
+    import threading
     import time
     from collections.abc import Callable
 
@@ -1539,16 +1540,11 @@ with timer() as tim:
                             app_state["avatar_subtitles_enabled"] = not app_state["avatar_subtitles_enabled"]
                             avatar_controller.subtitles_enabled = app_state["avatar_subtitles_enabled"]
                         def toggle_chat_graph():
-                            # One rect, two occupants. Hide the outgoing one before showing the incoming
-                            # one: they are siblings in the same group, so two shown at once would stack
-                            # rather than overlap.
+                            # The checkbox is a *preference*, not the panel's state: the graph also stands
+                            # in whenever the avatar has nothing to show. So this records what the user
+                            # asked for and lets the one writer work out what that means right now.
                             app_state["chat_graph_shown"] = dpg.get_value("chat_graph_checkbox")  # tag
-                            if app_state["chat_graph_shown"]:
-                                dpg.hide_item("avatar_panel")  # tag
-                                chat_graph_panel.show()
-                            else:
-                                chat_graph_panel.hide()
-                                dpg.show_item("avatar_panel")  # tag
+                            _apply_panel_occupancy()
                         def toggle_show_thinking():
                             app_state["show_thinking"] = not app_state["show_thinking"]
                         def toggle_thinking_enabled():
@@ -1600,7 +1596,9 @@ with timer() as tim:
                                      "Every chat ever started is in there, branching. Clicking a message\n"
                                      "shows it; clicking it again switches the conversation to it, so you\n"
                                      "can look around without changing anything.\n\n"
-                                     "The avatar's video pauses while it is covered.",
+                                     "The avatar's video pauses while it is covered. With this off, the\n"
+                                     "graph still stands in whenever the avatar has nothing to show:\n"
+                                     "while its video starts up, and once it switches itself off.",
                                      parent="chat_graph_tooltip")  # tag
 
                         # No line, matching the toolbar below the chat, which separates its sections by
@@ -2552,6 +2550,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     docs_search_progress_text_widget="docs_search_progress_text",
                                     web_indicator_widget=web_indicator_group,
                                     is_any_modal_window_visible=is_any_modal_window_visible,
+                                    avatar_panel_covered=(lambda: chat_graph_panel.is_shown),
                                     executor=bg)
 
 def _get_cleanup_roots() -> tuple[str, ...]:
@@ -2619,6 +2618,7 @@ def _gui_cancel_tasks() -> None:
     gui_resize_task_manager.clear(wait=False)  # cancel any in-flight GUI resize (it can use split_frame)
     cleanup_dialog.task_manager.clear(wait=False)  # cancel thumbnail loading (it too can use split_frame)
     backend_status_task_manager.clear(wait=False)  # stop watching the LLM backend (it rebuilds the chat view)
+    panel_occupancy_task_manager.clear(wait=False)  # stop watching the avatar's video (it swaps panels, and can use split_frame)
     dpg_avatar_renderer.stop(wait=False)  # signal the avatar renderer's background (OpenGL) task to stop (no wait)
     avatar_controller.stop_tts()          # stop TTS playback (no wait)
     audio_recorder.require().stop()       # the capture task writes the VU readout into DPG widgets (no wait)
@@ -2654,6 +2654,7 @@ def gui_shutdown() -> None:
     hybridir.shutdown()
     gui_resize_task_manager.clear(wait=True)
     backend_status_task_manager.clear(wait=True)
+    panel_occupancy_task_manager.clear(wait=True)
     chat_controller.shutdown()
     avatar_controller.shutdown()
     dpg_avatar_renderer.stop(wait=True)
@@ -2780,21 +2781,94 @@ def _build_initial_chat_view(sender, app_data) -> None:
         _start_backend_status_poll(delay_first_probe=True)
 dpg.set_frame_callback(3, _build_initial_chat_view)
 
+# How often to re-ask whether the avatar has video. Both events it waits for are second-scale — a stream
+# warming up, an idle timeout expiring — and the user's own preference does not come through here at all,
+# the checkbox applying itself directly.
+_PANEL_OCCUPANCY_TICK_S = 0.2
+
+# One rect, two occupants, and three things with an opinion about which one is in it: the user's
+# preference, whether the avatar has video to show, and the poll below. One writer resolves all three,
+# under this lock. Two writers would each show their own occupant, and the two panels being siblings in
+# one group, the pair would stack rather than replace each other.
+_panel_occupancy_lock = threading.RLock()
+
+def _apply_panel_occupancy() -> None:
+    """Put the right occupant in the avatar's panel, and stop the avatar's video when it is not the one.
+
+    The chat graph holds the panel when the user asked for it, and also whenever the avatar has nothing to
+    show: during the seconds a freshly started stream takes to deliver its first frame, and after the idle
+    detector has switched the video off. The avatar gets the panel back when its video returns, if that is
+    where the user's preference points.
+
+    Call after anything that changes either half. It does nothing when the panel already holds the right
+    occupant, so calling it more often than necessary is free.
+
+    Not callable from the render thread: pausing the animator and re-measuring the subtitle both wait for
+    a frame.
+    """
+    with _panel_occupancy_lock:
+        avatar_has_video = avatar_controller.video_available(avatar_record)
+        show_graph = app_state["chat_graph_shown"] or not avatar_has_video
+        # Suppress only what there is to suppress. A stream that has not yet delivered a frame must be
+        # left running: pausing it stops the frames, and the first of those frames is the very thing that
+        # would end the warmup — so a suppression applied here would hold the avatar unavailable, and the
+        # graph in front of it, for the rest of the session.
+        suppress_video = show_graph and avatar_has_video
+
+        if show_graph and not chat_graph_panel.is_shown:
+            # Hide the outgoing occupant before showing the incoming one, in both directions.
+            dpg.hide_item("avatar_panel")  # tag
+            chat_graph_panel.show()
+        elif chat_graph_panel.is_shown and not show_graph:
+            # Resume before the swap, so the panel does not come back holding the "[Video is off]" text
+            # that pausing put in it.
+            avatar_controller.set_video_suppressed(avatar_record, False)
+            chat_graph_panel.hide()
+            dpg.show_item("avatar_panel")  # tag
+            # A hidden item is not laid out at all, so the subtitle still carries whatever width it had
+            # when the graph took the panel — and it is placed by measuring itself. Re-measure now that it
+            # renders again, or a caption spoken while the graph was up comes back at the wrong height.
+            avatar_controller.reposition_subtitle()
+
+        # Last, and outside the swap: the occupant can stay the same while this changes. A stream
+        # finishing its warmup under a graph the user asked for is exactly that case.
+        avatar_controller.set_video_suppressed(avatar_record, suppress_video)
+
+# Sequential, so a restart supersedes rather than races the watch already running.
+panel_occupancy_task_manager = bgtask.TaskManager(name="librarian_panel_occupancy",
+                                                  mode="sequential",
+                                                  executor=bg)
+
+def _panel_occupancy_task(task_env: env) -> None:
+    """Watch for the avatar's video coming and going, and hand the panel over as it does.
+
+    A poll rather than a notification. The two transitions it waits for happen inside the client layer —
+    the first frame of a stream arriving, and the idle detector switching the video off — and neither
+    announces itself to anyone. Reading a pair of flags five times a second cannot miss one and costs
+    nothing measurable, where a callback added for this would put a new contract on that layer for the
+    sake of one consumer.
+    """
+    while not (task_env.cancelled or _shutting_down):
+        _apply_panel_occupancy()
+        time.sleep(_PANEL_OCCUPANCY_TICK_S)
+
+def _start_panel_occupancy_watch() -> None:
+    """Start watching who should hold the avatar's panel. Supersedes a watch already running."""
+    if _shutting_down:
+        return
+    panel_occupancy_task_manager.submit(_panel_occupancy_task, env())
+
 def _apply_saved_panel_choice(sender, app_data) -> None:
-    """Put the chat graph back in the right-hand panel if that is where the user left it.
+    """Start deciding who holds the right-hand panel, which also puts the chat graph back if that is where the user left it.
 
     Frame 4, which is after the avatar has started (frame 2) and the chat view has been built (frame 3).
     Later rather than at GUI build time for two reasons: the avatar renderer initializes into that panel
     and should not have to do it while the panel is hidden, and the graph's first build wants a datastore
     and a chat view that already exist.
-
-    Goes through the checkbox's own callback rather than repeating what it does. The pair of show/hide
-    calls has to stay in one place — two occupants of one rect, and getting the order wrong stacks them.
     """
     if _shutting_down:
         return
-    if app_state["chat_graph_shown"]:
-        toggle_chat_graph()
+    _start_panel_occupancy_watch()
 
     # The blue that says where the keyboard is, on the composer. A *caret* follower, not a focus one:
     # ImGui gives nav focus to the first navigable item of a window by itself, so the composer reports

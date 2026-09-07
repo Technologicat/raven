@@ -3796,6 +3796,7 @@ class DPGChatController:
                  docs_search_progress_text_widget: str | int,
                  web_indicator_widget: str | int,
                  is_any_modal_window_visible: Callable[[], bool] | None = None,
+                 avatar_panel_covered: Callable[[], bool] | None = None,
                  executor: concurrent.futures.Executor | None = None):
         """Controller for LLM scaffold to GUI integration.
 
@@ -3874,6 +3875,15 @@ class DPGChatController:
                                        opens. The app layer owns the list of its own dialogs, and this layer
                                        must not import it, so it arrives as a callable.
 
+        `avatar_panel_covered`: Zero-argument predicate: is something else currently occupying the avatar's
+                                panel? `None` means never. When it answers `True`, the avatar and the
+                                subtitles drawn in its rect are both off screen, and a reply that would be
+                                captioned does not start speaking of its own accord. An explicit request
+                                — `Ctrl+S`, or a message's speak button — still speaks.
+
+                                Like `is_any_modal_window_visible`, a callable rather than a value: the app
+                                layer owns its panels and this layer must not import it.
+
         `web_indicator_widget`: DPG tag or ID of the widget to show while a "websearch" tool call is in progress.
 
         `executor`: A `ThreadPoolExecutor` or something duck-compatible with it. Used for background tasks.
@@ -3897,6 +3907,7 @@ class DPGChatController:
         self.app_state = app_state
         self.avatar_controller = avatar_controller
         self.avatar_record = avatar_record
+        self.avatar_panel_covered = avatar_panel_covered if avatar_panel_covered is not None else (lambda: False)
         self.chat_stop_generation_button_widget = chat_stop_generation_button_widget
         self.indicator_glow_animation = indicator_glow_animation
         self.think_glow_animation = think_glow_animation
@@ -4674,7 +4685,20 @@ class DPGChatController:
             if self.gui_updates_safe:
                 dpg.enable_item(self.chat_stop_generation_button_widget)
 
-            speech_enabled = self.app_state["avatar_speech_enabled"]  # grab once, in case the user toggles it while this AI turn is being processed
+            # Whether this reply speaks itself. Grabbed once, in case the user toggles something while the
+            # turn is being processed.
+            #
+            # Subtitles are a text widget positioned in the avatar's rect, so while another panel holds
+            # that rect they are simply not on screen — and a reply that speaks with its captions missing
+            # is precisely what someone who switched captions on cannot use. So it waits, silently, rather
+            # than speaking uncaptioned. With captions off there is nothing to lose and it speaks as usual,
+            # the only channel the panel covers then being lipsync, which is paused anyway.
+            #
+            # This is about speech *starting on its own*. An explicit request — `Ctrl+S`, a message's speak
+            # button — is honoured whatever holds the panel: it was asked for, and the reader can see for
+            # themselves where the captions went.
+            captions_would_be_hidden = self.app_state["avatar_subtitles_enabled"] and self.avatar_panel_covered()
+            speak_this_turn = self.app_state["avatar_speech_enabled"] and not captions_would_be_hidden
 
             try:
                 def streaming_widget() -> "DPGStreamingChatMessage | None":
@@ -4878,7 +4902,7 @@ class DPGChatController:
                             # on the first chunk that really is the answer — which is the next one, the
                             # close tag having ended the thinking block.
                             task_env.seen_content = False
-                            if not speech_enabled:
+                            if not speak_this_turn:
                                 # The generic talking animation — randomized mouth, no audio, used only when
                                 # TTS is off, since otherwise lipsync drives the mouth. It says the AI is
                                 # writing the visible answer, and was started on that claim. It has not
@@ -4910,7 +4934,7 @@ class DPGChatController:
                     if not is_thought and not task_env.seen_content:
                         task_env.seen_content = True
                         logger.info("ai_turn.ai_turn_task.on_llm_progress: AI started writing the visible answer.")
-                        if not speech_enabled:  # If TTS is NOT enabled, show the generic talking animation while the LLM is writing
+                        if not speak_this_turn:  # If TTS is not speaking this turn, show the generic talking animation while the LLM is writing
                             _client_api().avatar_start_talking(self.avatar_record.avatar_instance_id)
 
                     # If the channel changed mid-paragraph (thought <-> answer), commit the in-progress paragraph
@@ -4982,7 +5006,7 @@ class DPGChatController:
                         return
                     advance_head(node_id)  # update just in case of Ctrl+C or crash during tool calls
                     if self.gui_updates_safe:
-                        if not speech_enabled:  # If TTS is NOT enabled, stop the generic talking animation now that the LLM is done
+                        if not speak_this_turn:  # If TTS is not speaking this turn, stop the generic talking animation now that the LLM is done
                             _client_api().avatar_stop_talking(self.avatar_record.avatar_instance_id)
 
                         unused_role, persona, text = chatutil.get_node_message_text_without_persona(self.datastore, node_id)
@@ -4995,7 +5019,7 @@ class DPGChatController:
                                               add_persona=False)
 
                         # Avatar speech and subtitling
-                        if speech_enabled:  # If TTS enabled, send final message text to TTS preprocess queue (this always uses lipsync)
+                        if speak_this_turn:  # send final message text to TTS preprocess queue (this always uses lipsync)
                             logger.info("ai_turn.ai_turn_task.on_done: sending final (non-thought) message content for translation, TTS, and subtitling")
                             self.avatar_controller.send_text_to_tts(config=self.avatar_record,
                                                                     text=text,
@@ -5197,7 +5221,7 @@ class DPGChatController:
                     dpg.disable_item(self.chat_stop_generation_button_widget)
                     while turn_data_eyes_uses:  # release anything this turn started and did not finish
                         stop_turn_data_eyes()
-                    if not speech_enabled:  # make sure the generic talking animation ends (if we invoked it)
+                    if not speak_this_turn:  # make sure the generic talking animation ends (if we invoked it)
                         _client_api().avatar_stop_talking(self.avatar_record.avatar_instance_id)
                     # Also make sure that the AI-turn-scoped processing indicators hide. The INDEXING
                     # indicator is intentionally *not* touched here — it has its own polling-driven
