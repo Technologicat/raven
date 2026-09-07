@@ -1639,6 +1639,7 @@ with timer() as tim:
                     # defined further down this module than the panel is built.
                     on_focus_requested=lambda: _give_keyboard_to_graph(),
                     role_icons=lambda: chat_controller.gui_role_icons,
+                    thumbnail_for=lambda name, size: chat_controller.get_graph_thumbnail_texture(name, size),
                     show=False)
 
                 with dpg.child_window(tag="mode_toggle_controls",

@@ -22,7 +22,7 @@ import dataclasses
 import logging
 import threading
 import uuid
-from typing import Callable, Mapping, Optional, Sequence, Tuple, Union
+from typing import Callable, Mapping, Optional, Sequence, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +109,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                  on_focus_requested: Optional[Callable[[], None]] = None,
                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
                  role_icons: Optional[Callable[[], Mapping[str, Union[int, str]]]] = None,
+                 thumbnail_for: Optional[Callable[[str, float], Optional[Union[int, str]]]] = None,
                  dark_mode: bool = True,
                  show: bool = False):
         """Build the panel.
@@ -143,6 +144,12 @@ class DPGChatGraphPanel(gui_animation.Animation):
                       the table belongs to `DPGChatController`, which is built later than this panel is —
                       and because a character loaded afterwards replaces the AI's icon, which a table
                       captured once would not pick up. `None` draws no glyphs.
+        `thumbnail_for`: `(attachment sidecar filename, size in pixels) -> texture, or `None` if not ready`.
+                         What draws the thumbnails fanned off a box's right edge; see `chatgraph.build`.
+                         It must not block: a rebuild runs on the render thread, where waiting for a
+                         texture upload deadlocks, so the provider queues the work and answers `None` until
+                         it lands. This panel then notices the answer changing and redraws — nothing else
+                         would, a new texture changing neither the forest nor HEAD.
         `dark_mode`: Whether to invert the graph's lightness for a dark background. Raven's interface is
                      dark, so this defaults on.
         `show`: Whether the panel starts visible.
@@ -158,6 +165,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._on_focus_requested = on_focus_requested
         self._input_blocked = input_blocked
         self._role_icons = role_icons
+        self._thumbnail_for = thumbnail_for
+        # Sidecars asked for during the last rebuild that were not ready then. Re-asked once per frame;
+        # any that has since landed makes the picture stale. Cleared and refilled by every rebuild, so a
+        # reader who pans away stops waiting for thumbnails they can no longer see.
+        self._awaited_thumbnails: Set[str] = set()
         # Button tag -> the caption it promises, filled by `_build_toolbar`. DPG offers no route from a
         # widget to its tooltip, so this is the only way to ask afterwards what the toolbar says.
         self._toolbar_captions = {}
@@ -735,6 +747,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._view_state.new_chat_node_id = self.app_state.get("new_chat_HEAD")
             generation = self.datastore.generation
 
+            self._awaited_thumbnails.clear()  # refilled by the build below, through `_thumbnail_of`
             chat_graph = self._try_build()
             if chat_graph is None:  # the node the picture was drawn around is gone -- fall back to HEAD
                 logger.info("DPGChatGraphPanel.refresh: the focused node is gone; falling back to HEAD")
@@ -804,9 +817,21 @@ class DPGChatGraphPanel(gui_animation.Animation):
         try:
             return chatgraph.build(self.datastore, self._view_state, self._layout,
                                    measure_text=self._measure_text,
-                                   role_icons=self._role_icons() if self._role_icons is not None else None)
+                                   role_icons=self._role_icons() if self._role_icons is not None else None,
+                                   thumbnail_for=self._thumbnail_of)
         except KeyError:
             return None
+
+    def _thumbnail_of(self, filename: str) -> Optional[Union[int, str]]:
+        """Ask the provider for one attachment's texture, remembering the ones that were not ready."""
+        if self._thumbnail_for is None:
+            return None
+        texture = self._thumbnail_for(filename, self._layout.attachment_native_size)
+        if texture is None:
+            self._awaited_thumbnails.add(filename)
+        else:
+            self._awaited_thumbnails.discard(filename)
+        return texture
 
     def _measure_text(self, text: str, font_size: float) -> Optional[float]:
         """Return how wide `text` is at `font_size`, in graph units, or `None` if DPG cannot say yet.
@@ -890,7 +915,23 @@ class DPGChatGraphPanel(gui_animation.Animation):
         nodes that were already there. A branch switch changes only the second.
         """
         return (self.datastore.generation != self._seen_generation
-                or self.app_state["HEAD"] != self._seen_head)
+                or self.app_state["HEAD"] != self._seen_head
+                or self._a_thumbnail_has_landed())
+
+    def _a_thumbnail_has_landed(self) -> bool:
+        """Return whether any thumbnail the last rebuild drew empty is now ready.
+
+        The third signal, and the only one that is not about the forest: a texture prepared on a background
+        task changes neither the generation nor HEAD, so without this the frames stay empty until something
+        else happens to force a rebuild.
+
+        Costs one dictionary lookup per thumbnail still waiting, and the set empties as they arrive — so
+        the steady state is an empty set and no work at all.
+        """
+        if self._thumbnail_for is None or not self._awaited_thumbnails:
+            return False
+        return any(self._thumbnail_for(name, self._layout.attachment_native_size) is not None
+                   for name in tuple(self._awaited_thumbnails))
 
     # ------------------------------------------------------------------
     # Clicks

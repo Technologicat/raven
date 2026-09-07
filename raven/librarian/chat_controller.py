@@ -3900,6 +3900,14 @@ class DPGChatController:
         self._inline_image_texture_registry = dpg.add_texture_registry(tag="librarian_chat_inline_image_textures")  # tag
         self._inline_image_textures = {}  # {sidecar_filename: env(texture_tag, w, h)}
         self._inline_image_lock = threading.RLock()
+        # The chat graph's thumbnails, which are the same sidecars at a different size -- so a cache of
+        # their own, keyed by both. A lock of its own too: the chat log's cache is read from a message
+        # build and this one from the render thread, and there is no reason for either to wait on the
+        # other.
+        self._graph_thumbnail_textures = {}  # {(sidecar_filename, size): texture_tag}
+        self._graph_thumbnail_pending = set()  # keys a background task is currently preparing
+        self._graph_thumbnail_failed = set()  # keys that could not be prepared, so nothing retries forever
+        self._graph_thumbnail_lock = threading.Lock()
 
         self.llm_settings = llm_settings
         self.datastore = datastore
@@ -4327,6 +4335,64 @@ class DPGChatController:
             except Exception as exc:  # noqa: BLE001 -- a broken sidecar must not break rendering the rest of the chat
                 logger.error(f"DPGChatController.get_inline_image_texture: failed to load sidecar '{filename}': {type(exc)}: {exc}")
                 return None
+
+    def get_graph_thumbnail_texture(self, filename: str, size: float) -> str | None:
+        """Return a texture for the chat graph's thumbnail of sidecar `filename`, or `None` if not ready.
+
+        `size`: The longest edge to prepare it at, in pixels. Part of the cache key, so the same image can
+                be held at the chat log's inline size and at the graph's much smaller one at once.
+
+        **Never blocks, and `None` is an ordinary answer rather than a failure.** The graph rebuilds from
+        its animator hook, which runs on the render thread, and preparing a texture needs `split_frame` --
+        which deadlocks there. So a miss queues the work and answers `None`; the graph draws an empty frame
+        meanwhile, and the panel notices when the answer changes.
+
+        An image that cannot be decoded is remembered as such, so a broken sidecar costs one attempt rather
+        than one per rebuild for the life of the session.
+        """
+        key = (filename, size)
+        with self._graph_thumbnail_lock:
+            cached = self._graph_thumbnail_textures.get(key)
+            if cached is not None or key in self._graph_thumbnail_failed:
+                return cached
+            if key in self._graph_thumbnail_pending:
+                return None
+            self._graph_thumbnail_pending.add(key)
+        self.task_manager.submit(lambda task_env: self._prepare_graph_thumbnail(filename, size, task_env),
+                                 env())
+        return None
+
+    def _prepare_graph_thumbnail(self, filename: str, size: float, task_env: env) -> None:
+        """Decode one attachment sidecar into a graph-sized texture. Runs on a background thread."""
+        key = (filename, size)
+        try:
+            if task_env.cancelled:  # shutdown, most likely; the pending mark is cleared in `finally`
+                return
+            from ..common.image import codec  # deferred: pulls torch / Pillow only when an image is shown
+            from ..common.image import utils as image_utils
+            raw = self.datastore.read_sidecar(filename)
+            arr = image_utils.ensure_rgba(codec.decode(raw))  # (H, W, 4) uint8
+            tensor = image_utils.np_to_tensor(arr, device="cpu")  # (1, 4, H, W) float32
+            # Letterboxed into a square, so every card in a fan is the same shape whatever it holds -- the
+            # fan is read as a count, and cards of differing widths read as differing importance instead.
+            tensor = image_utils.fit_contain(tensor, int(size), int(size))
+            disp_h, disp_w = int(tensor.shape[2]), int(tensor.shape[3])
+            flat = image_utils.tensor_to_dpg_flat(tensor)  # flat float32 RGBA in [0, 1]
+            texture_tag = f"chat_graph_thumbnail_{int(size)}_{filename}"  # tag  # content-addressed, so unique
+            dpg.add_static_texture(disp_w, disp_h, flat,
+                                   tag=texture_tag,  # tag
+                                   parent=self._inline_image_texture_registry)
+            dpg.split_frame()  # trigger the deferred OpenGL upload...
+            dpg.split_frame()  # ...and ensure it completed before the graph draws it (dpg-notes.md, "Texture upload ordering")
+            with self._graph_thumbnail_lock:
+                self._graph_thumbnail_textures[key] = texture_tag
+        except Exception as exc:  # noqa: BLE001 -- a broken sidecar must not break the graph
+            logger.error(f"DPGChatController._prepare_graph_thumbnail: failed to load sidecar '{filename}' at {size}: {type(exc)}: {exc}")
+            with self._graph_thumbnail_lock:
+                self._graph_thumbnail_failed.add(key)
+        finally:
+            with self._graph_thumbnail_lock:
+                self._graph_thumbnail_pending.discard(key)
 
     def _render_context_fill(self, count: int, is_exact: bool) -> None:
         """Set the bottom-toolbar context-fill readout text from a token `count`. Low-level; does no scheduling.

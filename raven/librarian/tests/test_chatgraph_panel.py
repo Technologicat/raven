@@ -24,7 +24,7 @@ from raven.librarian import chatgraph_panel  # noqa: E402 -- after importorskip 
 from raven.librarian.chattree import Forest  # noqa: E402 -- after importorskip by design
 
 
-def payload(role: str, text: str) -> dict:
+def payload(role: str, text: str, images=()) -> dict:
     """A chat node payload of the shape `chatutil` writes.
 
     The timestamp is not filler. `chatutil.descend_to_latest` orders siblings by it, and `chatgraph.build`
@@ -34,7 +34,9 @@ def payload(role: str, text: str) -> dict:
     """
     global _payload_serial
     _payload_serial += 1
-    return {"message": {"role": role, "content": [{"type": "text", "text": text}]},
+    content = [{"type": "text", "text": text}]
+    content += [{"type": "image_url", "image_url": {"url": f"sidecar:{name}"}} for name in images]
+    return {"message": {"role": role, "content": content},
             "general_metadata": {"persona": None, "timestamp": _payload_serial}}
 
 
@@ -1679,3 +1681,73 @@ class TestRoleIcons:
         built, forest, app_state, ids, calls = panel
         node = built._chat_graph.graph.get_node_by_name(ids["taken_tip"])
         assert [s for s in node.shapes if isinstance(s, xdotgraph.ImageShape)] == []
+
+
+class TestAttachmentThumbnails:
+    """The panel's half of the thumbnails: asking for them, and noticing when they arrive.
+
+    A texture prepared on a background task changes neither the forest's generation nor HEAD, so the two
+    signals the panel otherwise polls both say "nothing happened" — and the frames would stay empty until
+    something else forced a rebuild.
+    """
+
+    @staticmethod
+    def _forest_with_an_attachment():
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        carrier = forest.create_node(payload("user", "look at this", images=["a0.png"]),
+                                     parent_id=root)
+        return forest, root, carrier
+
+    @staticmethod
+    def _cards(built, node_name):
+        node = built.graph.get_node_by_name(node_name)
+        centre_of_box = 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2])
+        return [s for s in node.shapes if isinstance(s, xdotgraph.ImageShape)
+                and 0.5 * (s.get_bounding_box()[0] + s.get_bounding_box()[2]) > centre_of_box]
+
+    def test_a_thumbnail_arriving_makes_the_picture_stale(self, dpg_context):
+        themes_and_fonts = dpg_context
+        forest, root, carrier = self._forest_with_an_attachment()
+        app_state = {"HEAD": carrier}
+        ready = {}  # what the provider currently has; a background task would fill this
+        with dpg.window() as holder:
+            built = chatgraph_panel.DPGChatGraphPanel(
+                gui_parent=holder, datastore=forest, app_state=app_state,
+                themes_and_fonts=themes_and_fonts, width=200, height=200,
+                thumbnail_for=lambda name, size: ready.get(name))
+        built.refresh()
+
+        assert self._cards(built._chat_graph, carrier)[0].texture is None, \
+            "the provider answered on the first ask, so nothing here is waiting for anything"
+        assert not built._is_stale(), "the picture is stale for some other reason, which would mask this"
+        ready["a0.png"] = "tex_a0"
+        assert built._is_stale()
+        built.refresh()
+        assert self._cards(built._chat_graph, carrier)[0].texture == "tex_a0"
+        built.destroy()
+        dpg.delete_item(holder)
+
+    def test_it_stops_waiting_for_a_thumbnail_it_no_longer_draws(self, dpg_context):
+        """Otherwise a reader who pans away from an attachment keeps the panel polling for its texture."""
+        themes_and_fonts = dpg_context
+        forest, root, carrier = self._forest_with_an_attachment()
+        app_state = {"HEAD": carrier}
+        with dpg.window() as holder:
+            built = chatgraph_panel.DPGChatGraphPanel(
+                gui_parent=holder, datastore=forest, app_state=app_state,
+                themes_and_fonts=themes_and_fonts, width=200, height=200,
+                thumbnail_for=lambda name, size: None)
+        built.refresh()
+        assert built._awaited_thumbnails == {"a0.png"}, "nothing was awaited, so clearing proves nothing"
+
+        forest.delete_subtree(carrier)
+        app_state["HEAD"] = root
+        built.refresh()
+        assert built._awaited_thumbnails == set()
+
+    def test_no_provider_means_no_waiting(self, panel):
+        """The default. Every other test in this module builds a panel without one."""
+        built, forest, app_state, ids, calls = panel
+        assert built._awaited_thumbnails == set()
+        assert not built._is_stale()
