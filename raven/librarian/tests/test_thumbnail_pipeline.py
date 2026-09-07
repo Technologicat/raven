@@ -22,6 +22,11 @@ import pytest
 
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 Image = pytest.importorskip("PIL.Image", reason="Pillow not installed")
+# The methods under test are the controller's, and importing it reaches the ML stack -- `hybridir` alone
+# wants bm25s, chromadb and watchdog. Skipping on the module itself is what `test_chat_controller.py` does
+# and for the same reason; naming a dependency instead would only name whichever one moved last. Nothing
+# is lost in CI, which skips this module anyway for want of a display.
+pytest.importorskip("raven.librarian.chat_controller")  # noqa: E402 -- see above
 
 from raven.common import bgtask  # noqa: E402 -- after importorskip by design
 from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
