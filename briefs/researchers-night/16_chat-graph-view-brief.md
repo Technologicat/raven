@@ -1222,10 +1222,12 @@ including emptying mid-reply, which happens whenever preparing the next sentence
 previous one. It is edge-triggered now, and the interval is the quiet a batch sits through before it counts
 as finished.
 
-**Whether it should exist at all is open** and is a separate question from whether it works: an event with
-no consumers, and a documented better alternative for the case that displaced it, is a candidate for
-deletion rather than repair. Left in place and now correct; raised for Juha rather than decided here, the
-class being a foundation-layer public API.
+**Whether it should exist at all was then asked and answered: it stays** (Juha, 2026-09-07 — "removing that
+would be unnecessary churn"). The question was fair — an event with no consumers, and a documented better
+alternative for the case that displaced it, is on the face of it a candidate for deletion rather than
+repair — but it is a working, now-correct piece of a foundation-layer public API, and removing such a thing
+because this repo happens not to call it is churn rather than tidying. Recorded so the same reasoning does
+not have to be redone by whoever next notices it has no callers.
 
 The same shape had already cost one bug: the emotion-autoreset log spam fixed in `e8be9f3a` (2026-08-04).
 That was a different mechanism — `emotion_autoreset_task`'s own periodic loop — and it was fixed at the
