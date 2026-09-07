@@ -1061,13 +1061,55 @@ growable, which the other two deliberately avoid needing.
 
 ## Where this stands, 2026-09-07
 
-**Items 6 and 4 are done.** What item 6 shipped is in *How item 6 came out* below; item 4 — `ImageShape`
-in the widget, and the role glyphs it was wanted for — is in *How item 4 came out*. **The demo now needs 5
-and 8**, with 10 as the final look afterwards.
+**Items 6, 4 and 5 are done**, all on 2026-09-07. What item 6 shipped is in *How item 6 came out* below;
+items 4 and 5 are in *How item 4 came out* and *How item 5 came out*. **The demo now needs 8**, with 10 as
+the final look afterwards.
 
 **Monday's choice resolved itself the other way**: 6 was taken first, on the argument the 09-04 section
-already made for it — it waited on nothing and cleared two visible symptoms. Item 4 followed it the same
-day, and item 5 is next.
+already made for it — it waited on nothing and cleared two visible symptoms. Items 4 and 5 followed it the
+same day, and they were indeed one piece of work in practice.
+
+### How item 5 came out, 2026-09-07
+
+**The design held; the numbers all had to be found by looking, which is what the brief said would happen.**
+
+- **The fan offset** was picked from 1, 2, 3, 6 and 9 attachments rendered side by side at 9, 18 and 27
+  graph units. At 9 a fan of six is one card with coloured stripes down its edge and cannot be counted; at
+  27 the cards stop reading as a stack and become a row of separate tiles. **18.**
+- **The cap is five, not six**, so that the tolerance has something to do: a sixth goes through whole on
+  `_MIN_HIDDEN_FOR_GAP`, and seven is where the abbreviation starts. Six was the obvious number and made
+  the tolerance dead code.
+- **The count box needed its own ground.** Drawn in fan order it is the back-most card and came out as a
+  sliver behind four others — a box whose entire job is to be read, covered up. Drawn last but at one more
+  fan step, it covered the last two of the four thumbnails the abbreviation had just chosen to keep. It
+  sits a card's *width* out, overlapping the deck just enough to belong to it.
+
+**The spacing question the brief left open is settled, and the role glyph is what forced it.** The glyph
+takes 21 units of the 24-unit gap from the *left*, so a fan straddling the right edge had nowhere to go at
+all. Of the brief's two options — grow the spacing, or make the offset small enough that six fit — the
+second is not available: six cards at any legible offset reach further than the whole gap.
+
+**So the gap widens, per gap rather than globally**, to hold this box's fan plus the next box's glyph.
+Attachments are occasional and a spacing sized for the worst case would make every ordinary row airy for
+nothing. The cost is a pass of its own before the layout: the decorations have to be known before anything
+is placed, and the shapes cannot be built until it is. That is what `_Decorations` is for.
+
+**The test the brief asked for exists, and it was checked against the code without the widening.** Nothing
+else would catch a fan drawn over the neighbour: `overlapping_pairs` compares *node* boxes, and both
+decorations live outside theirs — so the picture would be wrong while the layout reported itself fine.
+
+**The threading came out as designed.** `get_graph_thumbnail_texture` never blocks and `None` is an
+ordinary answer; a card is drawn as an `ImageShape` with no texture until one lands, so the count is
+legible before any picture is and the fan does not change shape when they arrive. The one thing the brief
+did not name: **the panel has to notice the answer changing**, because a texture landing alters neither the
+forest's generation nor HEAD, which are the only two things it polls.
+
+**The cache is keyed by `(filename, size)`**, which is the brief's "either it becomes `(filename, size)` or
+the graph keeps its own" resolved the first way. The chat log's inline box is 220×480 and a card here is 55
+units, so the two coexist rather than evict each other.
+
+**What is not built**: clicking a thumbnail does nothing. The brief's note stands — the clickable area and
+the drawn area are not the same shape, and something has to give the day that changes.
 
 ### How item 4 came out, 2026-09-07
 
@@ -1603,8 +1645,9 @@ list is a judgement about how the picture reads, and those are decided in front 
      the labels do not put side by side. Worth deciding whether that is wanted before it is built.
    - Next up as of 2026-09-03, and it starts clean: nothing else in the remaining list depends on the
      cursor work or on the tool-round gap.
-5. **Attachment thumbnails**, to the design above: straddling the right edge, stacked and capped, bordered
-   in the graph's line pen, prepared on a background task with a placeholder meanwhile.
+~~5. **Attachment thumbnails**, to the design above: straddling the right edge, stacked and capped, bordered
+   in the graph's line pen, prepared on a background task with a placeholder meanwhile.~~ **Built
+   2026-09-07** — see *How item 5 came out* above.
 ~~6. **The avatar pause gate, and the auto-switch that goes with it.**~~ **Built 2026-09-07** — see *How
    item 6 came out* below for what shipped, what it cost, and the three paths still unexercised. The rest
    of this item is the design it was built from, kept because most of it is still the explanation.
@@ -1708,7 +1751,8 @@ list is a judgement about how the picture reads, and those are decided in front 
       gated on the FileDialog keyboard brief. This view's constants are more of the same, and the two
       should probably be one pass rather than two.
 
-**So the demo needs 4, 5, 6 and 8** (Juha, 2026-09-04), with 10 as the final look afterwards. Nothing else
+**So the demo needs 4, 5, 6 and 8** (Juha, 2026-09-04), with 10 as the final look afterwards. Three of
+those are done; **8 is what remains**. Nothing else
 on this list is Researchers' Night work.
 
 **The loose ends that used to sit here are in `TODO_DEFERRED.md` now** (2026-09-04, Juha's call), so that

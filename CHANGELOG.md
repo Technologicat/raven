@@ -18,10 +18,15 @@
       the avatar's rect, so the graph covers them, and speech whose captions are missing is the one thing
       that switch says you cannot use. With *Subtitles* off, replies speak as usual. `Ctrl+S` and a
       message's speak button always speak, captions or no.
-  - <!-- TODO: fill this in when the view settles. Still to come: attachment thumbnails and role glyphs,
-      and search. Details worth a reader's time: preview-then-commit clicking, the gap boxes and what
-      clicking each one does (the tool round included, with Backspace to close it again), the three marks
-      (hover, HEAD, previewed), the keyboard, the navigation history, and the toolbar.
+  - **Every box says who is speaking and what they attached.** The speaker's icon — the same one the chat
+    log uses, your character's own where it has one — sits on the box's left edge, and any images the
+    message carries fan off its right edge as a deck of thumbnails. Both hang outside the box, so neither
+    costs the message's own words any room. A long stack is abbreviated to the first two, the last two,
+    and a count.
+  - <!-- TODO: fill this in when the view settles. Still to come: search. Details worth a reader's time:
+      preview-then-commit clicking, the gap boxes and what clicking each one does (the tool round
+      included, with Backspace to close it again), the three marks (hover, HEAD, previewed), the
+      keyboard, the navigation history, and the toolbar.
       See briefs/researchers-night/16_chat-graph-view-brief.md
       -->
 
