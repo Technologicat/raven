@@ -127,8 +127,6 @@ class DPGAvatarController:
                  subtitle_bottom_y0: int,
                  translator_source_lang: str,
                  translator_target_lang: Optional[str],
-                 main_window_w: int,
-                 main_window_h: int,
                  executor: Optional[concurrent.futures.Executor] = None):
         """Avatar TTS (text to speech) and subtitling system controller.
 
@@ -187,12 +185,6 @@ class DPGAvatarController:
                                   Use the special value `None` for no translation, i.e. to replace subtitles
                                   with closed captions (CC) in the source language.
 
-        `main_window_w`: Width of main window, in pixels. Used for temporarily positioning the subtitle
-                         offscreen for rendered size measurement.
-
-        `main_window_h`: Height of main window, in pixels. Used for temporarily positioning the subtitle
-                         offscreen for rendered size measurement.
-
         `executor`: A `ThreadPoolExecutor` or something duck-compatible with it.
                     Used for running the background tasks.
         """
@@ -206,8 +198,6 @@ class DPGAvatarController:
         self.subtitle_bottom_y0 = subtitle_bottom_y0
         self.translator_source_lang = translator_source_lang
         self.translator_target_lang = translator_target_lang
-        self.main_window_w = main_window_w
-        self.main_window_h = main_window_h
 
         if executor is None:
             executor = concurrent.futures.ThreadPoolExecutor()
@@ -928,20 +918,23 @@ class DPGAvatarController:
         """Reposition the current subtitle, if any.
 
         This should be done when the GUI is resized in a way that causes the
-        avatar panel to change its size.
+        avatar panel to change its size, and whenever the subtitle becomes
+        visible again after a spell of not being laid out at all.
         """
         with guiutils.nonexistent_ok():
             if (self.subtitle_text_gui_widget is not None) and (dpg.get_value(self.subtitle_text_gui_widget) != ""):
-                # position subtitle offscreen to measure size
-                dpg.set_item_pos(self.subtitle_text_gui_widget, (self.main_window_w,
-                                                                 self.main_window_h))
-                dpg.split_frame()
+                # Position the subtitle offscreen to measure it: the bottom edge is what is being placed,
+                # so the height has to be known first, and a widget reports the size it was last laid out
+                # at. Parked rather than hidden, a hidden item not being laid out at all.
+                guiutils.park_offscreen(self.subtitle_text_gui_widget)
+                # `required=False`: a misplaced caption is a much better outcome than a hung app.
+                guiutils.split_frame(operation="measuring the subtitle to place it", required=False)
                 w, h = guiutils.get_widget_size(self.subtitle_text_gui_widget)
 
                 # position subtitle at bottom
                 dpg.set_item_pos(self.subtitle_text_gui_widget, (self.subtitle_left_x0,
                                                                  self.subtitle_bottom_y0 - h))
-                dpg.split_frame()
+                guiutils.split_frame(operation="showing the repositioned subtitle", required=False)
 
     def speak_task(self, task_env: env) -> None:
         """TTS, with avatar lipsync and subtitles (from AI translator)."""

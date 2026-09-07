@@ -1743,8 +1743,6 @@ avatar_controller = DPGAvatarController(stop_tts_button_gui_widget=None,  # We h
                                         subtitle_bottom_y0=0,
                                         translator_source_lang=None,
                                         translator_target_lang=None,
-                                        main_window_w=0,
-                                        main_window_h=0,
                                         executor=bg)  # use the same thread pool as our main task manager
 avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=avatar_instance_id,
                                                            avatar_renderer=None,  # no need to auto-pause/resume avatar video in this app
