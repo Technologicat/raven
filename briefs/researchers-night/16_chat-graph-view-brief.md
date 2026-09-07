@@ -1108,6 +1108,17 @@ forest's generation nor HEAD, which are the only two things it polls.
 the graph keeps its own" resolved the first way. The chat log's inline box is 220×480 and a card here is 55
 units, so the two coexist rather than evict each other.
 
+**The real path was driven once, because nothing in the suite covers it.** Every test uses a fake
+provider, so the decode, the letterboxing, the upload and the two `split_frame`s from a background thread
+are exactly the part no test touches — and a fake provider that answers instantly also never exercises the
+*waiting*. A probe stored four real PNGs of assorted shapes (square, wide, tall, 4:3) as sidecars and ran
+the actual `DPGChatController._prepare_graph_thumbnail` through the actual panel: all four landed, the
+awaited set emptied, nothing failed, and the fan drew them.
+
+It stays a probe rather than becoming a test. `split_frame` waits for a render loop, so this needs a mapped
+window — which puts it in the `--run-gui` group at best, and that group takes the developer's keyboard.
+Worth re-running by hand if the preparation path is touched.
+
 **What is not built**: clicking a thumbnail does nothing. The brief's note stands — the clickable area and
 the drawn area are not the same shape, and something has to give the day that changes.
 
