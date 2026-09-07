@@ -1,7 +1,7 @@
 # file_dialog 3.1
 # MIT licensed
 
-__all__ = ["FileDialog"]
+__all__ = ["IMAGES_DIR", "icon_name_for_extension", "FileDialog"]
 
 import enum
 import logging
@@ -173,6 +173,10 @@ _ICON_NAMES = [
 # Extensions this dialog can show a *picture* of rather than an icon for — everything
 # `raven.common.image.codec` decodes. Also what makes a file type filter "image-typed", which is what turns
 # the grid view on by itself.
+# Where the icon assets live. Public alongside `icon_name_for_extension`, because that function answers
+# with a *name* and a caller outside this module then has nowhere to look it up.
+IMAGES_DIR = os.path.join(os.path.dirname(__file__), "images")
+
 _DECODABLE_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff",
                                ".avif", ".qoi")
 
@@ -210,12 +214,15 @@ _EXTENSION_ICONS = {
 }
 
 
-def _icon_name_for_extension(file_name: str) -> Optional[str]:
+def icon_name_for_extension(file_name: str) -> Optional[str]:
     """Which icon `file_name`'s extension asks for, or `None` for a type with no icon of its own.
 
     Matched case-insensitively, so `PHOTO.JPG` gets the picture icon that `photo.jpg` does. The answer is
-    an icon *name*, not a texture: the table draws it small and the grid draws it at tile size, so the two
-    views share this table and pick their own assets from it.
+    an icon *name*, not a texture: each view draws the asset at its own size, so they share this table and
+    pick their own assets from `IMAGES_DIR`.
+
+    Public because the answer is about file types rather than about this dialog. Librarian's chat graph is
+    the second consumer: it draws a document attachment as its type's icon, having no picture to show.
     """
     file_name = file_name.lower()
     for extensions, icon_name in _EXTENSION_ICONS.items():
@@ -355,7 +362,7 @@ class FileDialog:
                 dpg.add_key_press_handler(tag="fdialog_hotkeys_handler", callback=fdialog_hotkeys_callback)
                 dpg.add_key_release_handler(tag="fdialog_key_release_handler", callback=fdialog_key_release_callback)
 
-            cls.fd_img_path = os.path.join(os.path.dirname(__file__), "images")
+            cls.fd_img_path = IMAGES_DIR
 
             # file dialog theme
             with dpg.theme() as cls.selec_alignt:
@@ -1438,7 +1445,7 @@ class FileDialog:
             return self.img_mini_folder
         if entry.kind == filelisting.KIND_BROKEN_LINK:
             return self.img_mini_error
-        icon_name = _icon_name_for_extension(entry.name)
+        icon_name = icon_name_for_extension(entry.name)
         if icon_name is None:
             return self.img_mini_document
         return getattr(self, f"img_{icon_name}")
@@ -1537,7 +1544,7 @@ class FileDialog:
             return "mini_error"
         if entry.name.lower().endswith(_DECODABLE_IMAGE_EXTENSIONS):
             return None
-        return _icon_name_for_extension(entry.name) or "document"
+        return icon_name_for_extension(entry.name) or "document"
 
     def sort_by(self, sort_key, descending=None):
         """Order the listing by `sort_key`, and rebuild it.
