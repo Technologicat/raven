@@ -1113,24 +1113,31 @@ shutdown, no exceptions from the watch.
 it did** (*"gives the panel back with no `[Video is off]` flash"*). It could not have: the screenshots were
 three seconds apart, and what is being claimed absent lasts a fifth of a second at most. Juha, 2026-09-07:
 *"I'll believe that when I see it — 0.1 s or more between screenshots is far too coarse a resolution to
-verify that."* The static reading of the code is sound and is not what was in doubt; the empirics are
-owed, and want a video capture rather than stills.
+verify that."* The static reading of the code was sound and was not what was in doubt.
 
-**Three paths are built but unexercised**, each needing an LLM turn or audio. **Juha is driving that test**
-(2026-09-07); this is the list to work through:
+The empirics were then simply watched, later the same day, and the flash is absent in both directions. The
+capture was never built: a person driving the app resolves 16 ms as well as `ffmpeg` does, and the live
+test was happening anyway. Worth remembering as the cheaper instrument next time a sub-frame claim needs
+settling — but note it only works because someone is already at the keyboard.
 
-- **The autostart suppression itself** — a reply arriving with the graph up and *Subtitles* on. Read in the
-  code, not watched.
-- **`Ctrl+S` under the graph.** The open question here is answered rather than pending: **`speak_lipsynced`
-  does not care about the pause state** (Juha, 2026-09-07) — it overrides morphs in real time, and pausing
-  means the server stops *using* those values, not that setting them fails. So audio plays, the morphs go
-  nowhere visible, and there is nothing to fix. What is left is watching it.
-- **The subtitle re-measure on hand-back.** `reposition_subtitle` is called when the avatar takes the panel
-  back, because a hidden item is not laid out and keeps whatever width it last had. Predicted, then
-  confirmed against `dpg-notes.md`, which already records the mechanism — and records that
-  `reposition_subtitle` parks the subtitle offscreen rather than hiding it for exactly this reason. Not yet
-  seen in a running app with a caption on screen. Note the cost if it is wrong is a caption lost for its
-  sentence, ten seconds or so, rather than something the next sentence repairs.
+**All of it is verified now.** Juha drove the whole list on 2026-09-07 and everything below passed,
+including the two flash questions that stills could not answer — a person watching is a better instrument
+than a screenshot pair, and it made the video capture unnecessary. **One inconsistency turned up, and it is
+fixed**; see *Switching the graph off wakes the avatar* below.
+
+The list, kept because it is what to re-run if any of this is touched again:
+
+- **The autostart suppression.** A reply arriving with the graph up and *Subtitles* on does not speak;
+  switching the graph off and sending again, it does. **Passes.**
+- **`Ctrl+S` under the graph.** Speaks, with the captions going into the hidden panel. **Passes** — and the
+  question that was open before the test never arose: **`speak_lipsynced` does not care about the pause
+  state** (Juha, 2026-09-07), since it overrides morphs in real time and pausing stops the server *using*
+  those values rather than making them fail to set.
+- **The subtitle re-measure on hand-back.** Switching the graph off mid-caption brings the avatar back with
+  the current caption at the right height. **Passes**, which was the one to bet against: a hidden item is
+  not laid out and keeps whatever width it last had, so the placement depends entirely on the re-measure at
+  the swap. Had it been wrong, the cost would have been a caption lost for its sentence — ten seconds or so
+  — rather than something the next sentence repairs.
 
 **The idle-out flash is closed by `on_idle`, built the same day.** The artifact predicted here was a flash
 of *"[Video is off]"* when the avatar idles out while holding the panel: the idle detector pauses the
@@ -1152,8 +1159,29 @@ the app's lock first and the controller's second. Holding across the call invert
 meet in the middle.
 
 **One frame of it may survive regardless**, since `pause` renders the text to measure it before centring
-it — into a panel that is now hidden, so the reasoning says invisible. That is a prediction of the same
-kind as the one this section had to retract above, and it is on the live-test list rather than claimed.
+it — into a panel that is now hidden, so the reasoning says invisible. **Watched for and not seen**
+(2026-09-07), in both directions: neither the idle-out nor the hand-back shows the indicator.
+
+### Switching the graph off wakes the avatar (2026-09-07)
+
+The one inconsistency the live test found, and it is the shape worth remembering rather than the fix.
+Switching the graph off brought the avatar back however long it had been hidden — but *only* when the
+avatar had been visible at the moment the graph took the panel. Where it had already idled out by then, the
+switch did nothing at all.
+
+The two cases differ in something the user cannot see, which is what makes it a defect rather than a quirk.
+Covering a *live* avatar suppresses it, and suppression bypasses the idle detector entirely — the guard
+wants `animator_running` — so it is never marked idle-paused, and unchecking hands it straight back.
+Covering an avatar that had *already* gone to sleep suppresses nothing: the graph is standing in for an
+absence rather than covering anything, so unchecking recomputes to "still no video, keep the graph".
+
+Juha's call, and the framing is his: the accidental behaviour is the better one, so make it the rule.
+Switching the graph off is a request for the avatar, and a request for the avatar is activity — so it pings,
+and the gesture now wakes a sleeping avatar either way.
+
+It goes in the checkbox callback rather than in `_apply_panel_occupancy`, which runs five times a second; a
+ping there would keep the avatar permanently awake. `Alt+G` inherits it for free, which is the payoff of
+having the hotkey run the checkbox's own callback rather than a parallel copy — the two cannot drift.
 
 **Two things landed alongside**, both from questions Juha asked while reading the diff:
 
