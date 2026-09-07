@@ -1061,13 +1061,63 @@ growable, which the other two deliberately avoid needing.
 
 ## Where this stands, 2026-09-07
 
-**Item 6 is done** — the pause gate, the auto-switch, and the speech rule that goes with them. What shipped
-and what it cost is in *How item 6 came out* below. **The demo now needs 4, 5 and 8**, with 10 as the final
-look afterwards.
+**Items 6 and 4 are done.** What item 6 shipped is in *How item 6 came out* below; item 4 — `ImageShape`
+in the widget, and the role glyphs it was wanted for — is in *How item 4 came out*. **The demo now needs 5
+and 8**, with 10 as the final look afterwards.
 
 **Monday's choice resolved itself the other way**: 6 was taken first, on the argument the 09-04 section
-already made for it — it waited on nothing and cleared two visible symptoms. **Items 4 and 5 are next**, and
-they remain one piece of work in practice.
+already made for it — it waited on nothing and cleared two visible symptoms. Item 4 followed it the same
+day, and item 5 is next.
+
+### How item 4 came out, 2026-09-07
+
+**Three commits and one detour.** The widget half — `ImageShape`, its renderer, its tests — went in on its
+own, then the glyphs, then a correction the first live render found.
+
+- **The shape is a texture plus a rectangle in graph coordinates**, so it pans and zooms with everything
+  else, with a `max_screen_size` capping how large it may be drawn (uniformly, about its centre). A `None`
+  texture draws nothing and keeps its rectangle, which is the placeholder item 5 needs.
+- **Dark mode leaves the picture alone, and this is measured now rather than reasoned.** `dpg.draw_image`
+  takes a tint whose default reads back as `[1.0, 1.0, 1.0, 1.0]`, and the renderer passes none; the
+  brief's prediction was right and the live render confirms it. The lightness inversion is for ink, and
+  the glyph's border — when item 5 adds one — is a pen and does invert.
+- **The parser still skips `I`**, but the comment saying why is no longer false. Juha's correction while
+  reading it: honouring one is not "load the file and hand over a texture" — DPG samples nearest-
+  neighbour, so an arbitrary image needs the Lanczos mip chain, and the TODO says so.
+  - **Which turned up a misplaced helper.** Writing that comment meant pointing a foundation-layer
+    docstring at `raven.cherrypick.preload.mip_scale_for_zoom` — arithmetic about a mip chain and a zoom,
+    living in an app package because that is where it was first needed. It is `raven.common.image.lanczos`
+    now, beside `mipchain`, and its docstring has lost the two Cherrypick-specific references it carried.
+
+**The placement was the one open question, and it was Juha's call** (2026-09-07, from three priced
+options): **the glyph straddles the box's left edge**, half of it hanging outside, mirroring what the
+thumbnails will do on the right.
+
+- **Sized as a fraction of node height, capped at the asset's 64 px**, which is the brief's own rule above.
+- **The table comes from `DPGChatController.gui_role_icons` through a callable**, not from the icon files
+  and not captured once — the controller is built later than the panel, and loading a character replaces
+  the AI's entry.
+
+**Two things the live render found that no test would have.**
+
+- **`_translate_shapes` had no rule for `ImageShape`** and silently left it at the untranslated origin, so
+  every glyph sat in a heap away from its box. It has an `else` branch now that says so out loud the next
+  time a shape type is added: the failure is a picture drawn somewhere unrelated, with nothing else going
+  wrong to point at it.
+- **The glyph was drawn on top of the first character of every label.** It is centred on the box's centre,
+  so it crosses the label rather than passing above or below it. The fix is a gutter — both text lines
+  start past the glyph's inner edge — and the cost is **two characters of label**, against the five a
+  glyph drawn wholly inside would have taken. That is the argument for straddling, restated correctly:
+  half a glyph is reserved rather than a whole one plus its own inset.
+  - **The test asserting otherwise passed vacuously**, which is the part worth remembering. It compared
+    the drawn strings with and without a glyph, and the fixture's messages were short — a short label is
+    centred clear of the glyph whatever the inset is. Replaced by one that draws a message long enough to
+    fill the box, with a control asserting the glyph reaches inside at all.
+
+**The overhang and `horizontal_spacing` are now coupled** — 21 units into a 24-unit gap — and a test says
+so, because nothing else would notice: `overlapping_pairs` compares *node* boxes, and a glyph lives outside
+its box exactly as a pill does. Item 5 wants the same gap from the other side, so this is the constraint to
+settle when the thumbnails arrive rather than a comfortable margin.
 
 ### How item 6 came out, 2026-09-07
 
@@ -1533,7 +1583,9 @@ list is a judgement about how the picture reads, and those are decided in front 
        wrong way round first; the test that named its own expectation caught it.
      - `raven-xdot-viewer` is untouched by both — it passes `clamp_pan_to_graph=False` and names no
        anchor, which are the two switches involved.
-4. **`ImageShape` in the widget.** Unblocks two things at once and they are not the same size: role glyphs
+~~4. **`ImageShape` in the widget.**~~ **Built 2026-09-07** — see *How item 4 came out* above for what
+   shipped, the placement decision, and the two defects the first live render found. The rest of this item
+   is the design it was built from. Unblocks two things at once and they are not the same size: role glyphs
    need no texture upload (`chat_controller.gui_role_icons` are registered at class init), attachment
    thumbnails do — and that upload cannot happen during a rebuild, since a rebuild runs on the render
    thread where `split_frame` deadlocks.
