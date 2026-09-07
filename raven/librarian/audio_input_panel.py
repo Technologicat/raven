@@ -236,9 +236,9 @@ class DPGAudioInputPanel:
         elif key == dpg.mvKey_R:
             self._reset_to_configured_defaults()
         elif key == dpg.mvKey_A:
-            self._toggle_checkbox("audio_input_autodetect_checkbox", self._on_autodetect_checkbox)  # tag
+            guiutils.toggle_checkbox("audio_input_autodetect_checkbox")  # tag
         elif key == dpg.mvKey_S:
-            self._toggle_checkbox("audio_input_autostop_checkbox", self._on_autostop_checkbox)  # tag
+            guiutils.toggle_checkbox("audio_input_autostop_checkbox")  # tag
         elif key == dpg.mvKey_D:
             dpg.focus_item("audio_input_device_combo")  # tag
         elif key in (dpg.mvKey_Up, dpg.mvKey_Down, dpg.mvKey_Home, dpg.mvKey_End):
@@ -246,12 +246,6 @@ class DPGAudioInputPanel:
         else:
             return False
         return True
-
-    def _toggle_checkbox(self, tag: Union[int, str], callback: Callable) -> None:
-        """Flip a checkbox and run its callback, which `set_value` does not do by itself."""
-        value = not dpg.get_value(tag)
-        dpg.set_value(tag, value)
-        callback(tag, value)
 
     def _browse_devices(self, key: int) -> bool:
         """Step the microphone chooser, as the arrow keys do for a combo elsewhere in the constellation.

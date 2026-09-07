@@ -476,3 +476,79 @@ class TestSnapSlider:
         parameters = inspect.signature(guiutils.snap_slider).parameters
         assert len(parameters) == 3, "if this is 2, the wrappers at the call sites are no longer needed"
         assert parameters["decimals"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+class TestToggleCheckbox:
+    """`toggle_checkbox` exists because DPG is not consistent about it and Raven is: clicking a checkbox
+    runs its callback, `set_value` does not, so anything reaching a checkbox from the keyboard has to know
+    which of the two it is imitating. It always wants the click.
+    """
+
+    @pytest.fixture
+    def checkbox(self, dpg_context):
+        """A checkbox wired the way a real one is, recording what its callback was given."""
+        calls = []
+        with dpg.window() as window:
+            widget = dpg.add_checkbox(default_value=False,
+                                      user_data="UD",
+                                      callback=lambda sender, app_data, user_data: calls.append((sender, app_data, user_data)),
+                                      parent=window)
+            yield widget, calls
+            dpg.delete_item(window)
+
+    def test_it_flips_the_value(self, checkbox):
+        widget, unused_calls = checkbox
+        assert guiutils.toggle_checkbox(widget) is True
+        assert dpg.get_value(widget) is True
+        assert guiutils.toggle_checkbox(widget) is False
+        assert dpg.get_value(widget) is False
+
+    def test_it_runs_the_checkbox_own_callback(self, checkbox):
+        """The point of the whole helper: a key and a click are the same gesture."""
+        widget, calls = checkbox
+        assert calls == [], "the fixture fired a callback before the test did anything, so nothing below is about `toggle_checkbox`"
+        guiutils.toggle_checkbox(widget)
+        assert len(calls) == 1
+
+    def test_the_callback_is_given_what_dpg_would_give_it(self, checkbox):
+        """Sender, the new value, and the item's own `user_data` — so a callback cannot tell the two apart."""
+        widget, calls = checkbox
+        guiutils.toggle_checkbox(widget)
+        assert calls == [(widget, True, "UD")]
+
+    def test_the_callback_sees_the_new_value_on_the_widget(self, checkbox):
+        """DPG flips the widget before calling, and a callback that reads it back rather than tracking the
+        state itself is the common shape — it would otherwise undo what the key just did."""
+        seen = []
+        widget, unused_calls = checkbox
+        dpg.configure_item(widget, callback=lambda: seen.append(dpg.get_value(widget)))
+        guiutils.toggle_checkbox(widget)
+        assert seen == [True]
+
+    def test_a_zero_parameter_callback_is_called_with_nothing(self, checkbox):
+        """The shape Librarian's mode toggles use. DPG fills as many parameters as are declared."""
+        widget, unused_calls = checkbox
+        ran = []
+        dpg.configure_item(widget, callback=lambda: ran.append(True))
+        guiutils.toggle_checkbox(widget)
+        assert ran == [True]
+
+    def test_an_explicit_callback_replaces_the_checkbox_own(self, checkbox):
+        widget, calls = checkbox
+        mine = []
+        guiutils.toggle_checkbox(widget, callback=lambda sender, app_data: mine.append(app_data))
+        assert mine == [True]
+        assert calls == [], "the checkbox's own callback ran as well as the override"
+
+    def test_a_tag_is_resolved_to_the_id_dpg_would_pass(self, dpg_context):
+        """A callback may compare `sender` against an ID, so the tag spelling must not reach it."""
+        calls = []
+        with dpg.window() as window:
+            # `add_*` hands back the tag it was given, not the ID, so the ID has to be asked for.
+            dpg.add_checkbox(default_value=False, tag="test_toggle_checkbox_tagged",  # tag
+                             callback=lambda sender: calls.append(sender), parent=window)
+            widget_id = dpg.get_alias_id("test_toggle_checkbox_tagged")  # tag
+            assert widget_id != "test_toggle_checkbox_tagged", "the two spellings are the same here, so this fixture cannot tell a resolved sender from an unresolved one"  # tag
+            guiutils.toggle_checkbox("test_toggle_checkbox_tagged")  # tag
+            assert calls == [widget_id], "the callback was handed the tag rather than the numeric ID"
+            dpg.delete_item(window)

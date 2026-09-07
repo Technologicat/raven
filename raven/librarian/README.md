@@ -624,6 +624,17 @@ For the chat message actions, the **hotkeys affect the most recent message** in 
 
 Below the avatar panel at the right, there are **mode toggles**, grouped by what they govern: what the AI may reach for, what the AI does when it answers, how the chat log is shown, and what the avatar does.
 
+Each has a hotkey, mnemonic on its label, and they work while you are typing — which is when you usually want one, on noticing that the answer wants the web or the documents:
+
+| key | toggle | | key | toggle |
+|---|---|---|---|---|
+| `Alt+T` | Thinking | | `Alt+G` | Chat graph |
+| `Alt+Shift+T` | Show thinking | | `Alt+S` | Speech |
+| `Alt+I` | Internet | | `Alt+C` | Subtitles (**c**aptions) |
+| `Alt+D` | Documents | | | |
+
+*Show thinking* is `Alt+Shift+T` rather than a letter of its own because the pair is the point: `Alt+T` is what the AI does, `Alt+Shift+T` is what you see of it.
+
 The first two each govern one group of tools (see [Tools](#tools) above), and neither overrides the other — all four combinations mean something. A tool belonging to neither group answers to no switch and is always offered; `get_current_time` is the one, because the current time is injected into every turn regardless of either switch.
 
 - **Internet**

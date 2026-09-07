@@ -28,7 +28,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "wait_for_resize",
            "park_offscreen", "recenter_window",
 
-           "snap_slider",
+           "snap_slider", "toggle_checkbox",
            "add_section_separator", "add_toolbar_separator",
 
            "get_pixels_per_plotter_data_unit"]
@@ -36,9 +36,11 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
 import logging
 logger = logging.getLogger(__name__)
 
+import inspect
 import os
 import pathlib
 import threading
+from collections.abc import Callable
 
 from unpythonic.env import env
 
@@ -920,6 +922,45 @@ def snap_slider(sender: str | int,
     """
     value = round(float(value), decimals)
     dpg.set_value(sender, value)
+    return value
+
+def toggle_checkbox(widget: str | int, callback: Callable | None = None) -> bool:
+    """Flip a checkbox (DPG tag or ID) exactly as a click would, callback and all, and return its new value.
+
+    For giving a checkbox a hotkey, or reaching one from anywhere else that is not the mouse.
+
+    `callback`: what to run afterwards, or `None` to run the checkbox's own `callback=`, which is what
+                makes this a click rather than an assignment. To flip one *without* running anything, there
+                is already a spelling for that: `dpg.set_value`.
+
+    The callback receives what DPG would give it: its parameters filled positionally from
+    `(sender, app_data, user_data)`, as many as its signature declares.
+    """
+    # Firing the callback is the whole point, because DPG is not consistent here and Raven is: a click runs
+    # a checkbox's callback and `set_value` does not, so code that reaches a checkbox from the keyboard has
+    # to remember which of the two it is imitating. It always wants the click.
+    #
+    # The value before the callback, which is also DPG's order — a checkbox's callback runs after the click
+    # has flipped it. Reversed, a callback that reads the widget back rather than tracking the state itself
+    # sees the old value, and the row ends up showing the opposite of what just happened.
+    value = not dpg.get_value(widget)
+    dpg.set_value(widget, value)
+
+    configuration = dpg.get_item_configuration(widget)
+    if callback is None:
+        callback = configuration.get("callback")
+    if callback is not None:
+        # The dispatch is mirrored from `dearpygui.run_callbacks` rather than simplified, because this
+        # calls the very object a click calls: a callback that worked one way and not the other would be
+        # worse than no helper at all. It inherits that rule's sharp edge along with it — `len(parameters)`
+        # counts keyword-only and defaulted parameters too, so a general-purpose function is often not
+        # bindable however it reads at the call site (`snap_slider` is the worked example).
+        #
+        # `sender` is the numeric ID, as DPG passes it, so a callback may compare it against one.
+        sender = dpg.get_alias_id(widget) if isinstance(widget, str) else widget
+        available = (sender, value, configuration.get("user_data"))
+        n_parameters = len(inspect.signature(callback).parameters)
+        callback(*available[:n_parameters])
     return value
 
 def add_section_separator(*,

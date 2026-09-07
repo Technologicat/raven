@@ -1555,15 +1555,15 @@ with timer() as tim:
                         # in a flat row the display preference reads as one more thing the AI does.
                         dpg.add_checkbox(label="Thinking", default_value=app_state["thinking_enabled"], callback=toggle_thinking_enabled, tag="thinking_enabled_checkbox")
                         dpg.add_tooltip("thinking_enabled_checkbox", tag="thinking_enabled_tooltip")  # tag
-                        dpg.add_text("Let a thinking model reason before it answers.\n\nWith this off, the same model answers immediately: replies arrive sooner\nand are shorter. Reasoning is how these models work through a hard\nquestion, so switching it off trades accuracy on those for speed.\n\nDoes nothing to a model that does not reason.\n\nTakes effect from the AI's next chat message onward.", parent="thinking_enabled_tooltip")  # tag
+                        dpg.add_text("Let a thinking model reason before it answers. [Alt+T]\n\nWith this off, the same model answers immediately: replies arrive sooner\nand are shorter. Reasoning is how these models work through a hard\nquestion, so switching it off trades accuracy on those for speed.\n\nDoes nothing to a model that does not reason.\n\nTakes effect from the AI's next chat message onward.", parent="thinking_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Internet", default_value=app_state["internet_enabled"], callback=toggle_internet_enabled, tag="internet_enabled_checkbox")
                         dpg.add_tooltip("internet_enabled_checkbox", tag="internet_enabled_tooltip")  # tag
-                        dpg.add_text("Let the AI reach the internet: web search, and fetching a page it finds\nor that you link to.\n\nThis is the only switch that lets anything leave this machine on the AI's\ninitiative, so it is the one to turn off when the conversation should stay\nlocal. Your messages still go to whichever LLM backend you configured;\nthat is set in the config file, not here.\n\nWith this off, the AI can still read your document database (see next\ntoggle) and can still ask what time it is.", parent="internet_enabled_tooltip")  # tag
+                        dpg.add_text("Let the AI reach the internet: web search, and fetching a page it finds\nor that you link to. [Alt+I]\n\nThis is the only switch that lets anything leave this machine on the AI's\ninitiative, so it is the one to turn off when the conversation should stay\nlocal. Your messages still go to whichever LLM backend you configured;\nthat is set in the config file, not here.\n\nWith this off, the AI can still read your document database (see next\ntoggle) and can still ask what time it is.", parent="internet_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
-                        dpg.add_text("Before responding, search document database for relevant information.\nAlso lets the AI search the database itself; with this off, the document\ntools are not offered at all.\n\nWhile on, the AI is asked to ground claims about your documents in what\nwas actually retrieved, and any reply that got nothing to stand on is\nmarked [no sources retrieved].\n\nThe search always injects its best matches, even when the topic is not\nin the database and those matches are noise. That costs prompt-processing\ntime before each reply, so it is worth switching off while discussing\nsomething the database does not cover.", parent="docs_enabled_tooltip")  # tag
+                        dpg.add_text("Before responding, search document database for relevant information. [Alt+D]\nAlso lets the AI search the database itself; with this off, the document\ntools are not offered at all.\n\nWhile on, the AI is asked to ground claims about your documents in what\nwas actually retrieved, and any reply that got nothing to stand on is\nmarked [no sources retrieved].\n\nThe search always injects its best matches, even when the topic is not\nin the database and those matches are noise. That costs prompt-processing\ntime before each reply, so it is worth switching off while discussing\nsomething the database does not cover.", parent="docs_enabled_tooltip")  # tag
 
                         # No line, matching the toolbar below the chat, which separates its sections by
                         # spacing alone at every one of its call sites.
@@ -1574,7 +1574,7 @@ with timer() as tim:
 
                         dpg.add_checkbox(label="Show thinking", default_value=app_state["show_thinking"], callback=toggle_show_thinking, tag="show_thinking_checkbox")
                         dpg.add_tooltip("show_thinking_checkbox", tag="show_thinking_tooltip")  # tag
-                        dpg.add_text("Start a thinking model's reasoning trace open instead of collapsed.\n\nThis is about what you *see*. Whether the AI reasons at all is the\n*Thinking* switch, at the left of this row.\n\nTakes effect from the AI's next chat message onward. For a reply already\non screen, the cloud beside it opens its trace - or press Ctrl+T.", parent="show_thinking_tooltip")  # tag
+                        dpg.add_text("Start a thinking model's reasoning trace open instead of collapsed. [Alt+Shift+T]\n\nThis is about what you *see*. Whether the AI reasons at all is the\n*Thinking* switch, at the left of this row.\n\nTakes effect from the AI's next chat message onward. For a reply already\non screen, the cloud beside it opens its trace - or press Ctrl+T.", parent="show_thinking_tooltip")  # tag
 
                         # No line, matching the toolbar below the chat, which separates its sections by
                         # spacing alone at every one of its call sites.
@@ -1592,7 +1592,7 @@ with timer() as tim:
                                          default_value=app_state["chat_graph_shown"],
                                          callback=toggle_chat_graph, tag="chat_graph_checkbox")  # tag
                         dpg.add_tooltip("chat_graph_checkbox", tag="chat_graph_tooltip")  # tag
-                        dpg.add_text("Show the chat tree in place of the avatar.\n\n"
+                        dpg.add_text("Show the chat tree in place of the avatar. [Alt+G]\n\n"
                                      "Every chat ever started is in there, branching. Clicking a message\n"
                                      "shows it; clicking it again switches the conversation to it, so you\n"
                                      "can look around without changing anything.\n\n"
@@ -1610,7 +1610,7 @@ with timer() as tim:
 
                         dpg.add_checkbox(label="Speech", default_value=app_state["avatar_speech_enabled"], callback=toggle_speech_enabled, tag="speech_enabled_checkbox")
                         dpg.add_tooltip("speech_enabled_checkbox", tag="speech_enabled_tooltip")  # tag
-                        dpg.add_text("Have the avatar speak the final response (TTS, text to speech).", parent="speech_enabled_tooltip")  # tag
+                        dpg.add_text("Have the avatar speak the final response (TTS, text to speech). [Alt+S]", parent="speech_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Subtitles", default_value=app_state["avatar_subtitles_enabled"], callback=toggle_subtitles_enabled, tag="avatar_subtitles_checkbox")
                         dpg.add_tooltip("avatar_subtitles_checkbox", tag="subtitles_enabled_tooltip")  # tag
@@ -1618,7 +1618,7 @@ with timer() as tim:
                             subtitle_explanation_str = f"Subtitle the avatar's speech (language: {gui_config.translator_target_lang.upper()})."
                         else:
                             subtitle_explanation_str = "Closed-caption (CC) the avatar's speech."
-                        dpg.add_text(f"{subtitle_explanation_str}\nUsed when TTS is ON.\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
+                        dpg.add_text(f"{subtitle_explanation_str} [Alt+C]\nUsed when TTS is ON.\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
 
                     # Utility actions — one-shot actions, kept a visually distinct group from the
                     # persistent-state toggles above (their own rows, under a separator). The panel below the
@@ -1966,6 +1966,11 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                # row that pays: it is the way *in*, and from inside the graph the arrows, Enter and Esc
                # are what a reader tries first. The rest are in the Chat graph section of the README, and
                # belong on this card once it is redesigned (`TODO_DEFERRED.md`).
+               #
+               # The seven `Alt+` switch keys are left off for the same reason and are owed the same
+               # redesign. They cost the least by being absent: each is written into its own switch's
+               # tooltip, which is where a reader who is looking at the row will find it, and they are
+               # tabulated in the Mode toggles section of the README.
                env(key_indent=0, key="Tab", action_indent=0, action="Move the keyboard between panes", notes="Composer, chat log, chat graph"),
                env(key_indent=0, key="Page Up", action_indent=0, action="Scroll chat up one page", notes="Also while typing"),
                env(key_indent=0, key="Page Down", action_indent=0, action="Scroll chat down one page", notes="Also while typing"),
@@ -2355,6 +2360,34 @@ def librarian_hotkeys_callback(sender, app_data):
             dpg.show_font_manager()
         elif key == dpg.mvKey_L:
             dpg.show_style_editor()
+    # Alt+... — the switches in the row below the avatar, one key each, mnemonic on the label. Alt is
+    # otherwise unused here, which is what leaves seven letters free in one place; the graph claims
+    # Alt+Left/Alt+Right for its history, and is offered the key further up, while it holds the keyboard.
+    #
+    # Live while the composer has the caret, like the Ctrl chords above and unlike the bare keys below:
+    # Alt+letter types nothing into a text field, and these are exactly the switches a reader reaches for
+    # mid-sentence, on noticing that the answer wants the web or the documents.
+    elif alt_pressed:
+        # Each flips its checkbox and runs whatever that checkbox is wired to, so a key and a click are the
+        # same gesture and cannot drift apart if one of them is later rewired.
+        #
+        # `Alt+Shift+T` rather than a letter of its own, because the pair is the point: what the AI does
+        # when it answers, and what you then see of it. The row is grouped that way and the README says so.
+        if key == dpg.mvKey_T and shift_pressed:
+            guiutils.toggle_checkbox("show_thinking_checkbox")  # tag
+        elif key == dpg.mvKey_T:
+            guiutils.toggle_checkbox("thinking_enabled_checkbox")  # tag
+        elif key == dpg.mvKey_I:
+            guiutils.toggle_checkbox("internet_enabled_checkbox")  # tag
+        elif key == dpg.mvKey_D:
+            guiutils.toggle_checkbox("docs_enabled_checkbox")  # tag
+        elif key == dpg.mvKey_G:
+            guiutils.toggle_checkbox("chat_graph_checkbox")  # tag
+        elif key == dpg.mvKey_S:
+            guiutils.toggle_checkbox("speech_enabled_checkbox")  # tag
+        elif key == dpg.mvKey_C:  # C for captions; S is taken by Speech, which this one qualifies
+            guiutils.toggle_checkbox("avatar_subtitles_checkbox")  # tag
+
     # Tab moves the keyboard between the panes, Shift+Tab the other way. Above the Ctrl branch and above
     # the composer's own branch, because it has to be reachable *from* the composer: Tab types nothing
     # into a multiline field, so it was doing nothing at all there.
@@ -2517,8 +2550,6 @@ avatar_controller = DPGAvatarController(stop_tts_button_gui_widget="chat_stop_sp
                                         subtitle_bottom_y0=_get_subtitle_bottom_y0(avatar_panel_h),
                                         translator_source_lang=gui_config.translator_source_lang,
                                         translator_target_lang=gui_config.translator_target_lang,
-                                        main_window_w=gui_config.main_window_w,
-                                        main_window_h=gui_config.main_window_h,
                                         executor=bg)  # use the same thread pool as our main task manager
 avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=avatar_instance_id,
                                                            avatar_renderer=dpg_avatar_renderer,
