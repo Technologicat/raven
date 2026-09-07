@@ -432,7 +432,8 @@ diagonals and curves. A last resort, not needed so far.
 ## Closing a stroked outline: `draw_polyline(closed=True)`, never a repeated first vertex
 
 Two ways to draw the outline of a polygon, and both obvious ones are wrong. Measured 2026-09-08 against
-dearpygui 2.x by rendering the same rectangle three ways at thickness 24 and reading the frame buffer.
+dearpygui 2.x by rendering the same rectangle several ways at thickness 24 and reading the frame
+buffer back; the apparatus and the pictures are in `investigations/dpg-polygon-closing/`.
 
 - **`dpg.draw_polygon(points, color=..., thickness=...)` strokes an *open* path.** The edge from the last
   vertex back to the first is simply not drawn, so a four-point rectangle comes out as three sides. It
