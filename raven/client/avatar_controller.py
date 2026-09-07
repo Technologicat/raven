@@ -146,11 +146,10 @@ class DPGAvatarController:
 
                        This can be used to trigger additional GUI actions when the avatar stops speaking.
 
-                       Note, however, that this will be called again every `tts_idle_check_interval`
-                       as long as the avatar is not speaking, so the actions should be idempotent
-                       (i.e. have no further effect if called more than once).
+                       Called once each time the TTS falls silent, not repeatedly for as long as it stays
+                       silent — so a handler may do something that only makes sense once.
 
-                       Note also that in the case of multiple avatars, this event does not distinguish
+                       Note that in the case of multiple avatars, this event does not distinguish
                        between them; this is global for the TTS system.
 
                        Distinct from `on_idle` in `register_avatar_instance`, which the similar name
@@ -158,8 +157,10 @@ class DPGAvatarController:
                        it fires once, when an instance has been idle long enough to have its video switched
                        off. This one is about *speech*, and repeats.
 
-        `tts_idle_check_interval`: seconds. How often to check whether TTS has become idle,
-                                   and trigger `on_tts_idle` if it has.
+        `tts_idle_check_interval`: seconds. How much quiet counts as the TTS having become idle, before
+                                   `on_tts_idle` triggers. Long enough to sit through the gap between two
+                                   sentences of one reply, which is a real gap: the queue is empty there
+                                   whenever preparing the next sentence outlasts speaking the previous one.
 
                                    Set to `None` to disable.
 
@@ -1010,6 +1011,7 @@ class DPGAvatarController:
             logger.info(f"speak_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, sentence {sentence_uuid}: starting processing")
             with task_env.lock:
                 task_env.tts_speaking = True  # for `speak_task` main loop
+                task_env.tts_idle_announced = False  # there is speech again, so there is a next fall-silent to announce
                 config._avatar_speaking = True  # per-avatar-instance flag, for emotion autoreset
 
             def speak_task_on_start_speaking():
@@ -1044,6 +1046,7 @@ class DPGAvatarController:
                         dpg.disable_item(self.stop_tts_button_gui_widget)
                 with task_env.lock:
                     config._emotion_autoreset_t0 = time.monotonic_ns()  # reset the emotion autoreset timer, so that the last emotion stays for a couple more seconds once speaking ends.
+                    self.tts_idle_check_t0 = time.monotonic_ns()  # and the quiet the TTS idle event waits out, which starts here rather than at the last announcement
                     self.ping(config)  # similarly, reset the idle countdown when speaking ends.
                     # Set the speaking state flags very last. These events are called from a different thread (the TTS client's background task),
                     # and our task threads (for `speak_task`, `emotion_autoreset_task`) monitor these flags and take action immediately.
@@ -1064,6 +1067,9 @@ class DPGAvatarController:
 
         task_env.lock = threading.RLock()
         task_env.tts_speaking = False
+        # Starts armed-as-already-said: "the TTS fell silent" means nothing before anything has spoken,
+        # and without this the event fires once, `tts_idle_check_interval` after the app starts.
+        task_env.tts_idle_announced = True
         try:
             while True:
                 if task_env.cancelled:  # co-operative shutdown
@@ -1077,10 +1083,16 @@ class DPGAvatarController:
                     output_record = self.tts_output_queue.get(block=False)
                 except queue.Empty:  # wait until we have a sentence to speak
                     time_now = time.monotonic_ns()
-                    if self.tts_idle_check_interval is not None:  # trigger the TTS idle event if relevant now (if configured)
+                    # Once per fall-silent, not once per interval for as long as the silence lasts. The
+                    # interval is the quiet a batch has to sit through before it counts as finished, which
+                    # is what keeps the gap between two sentences of one reply from reading as the end of
+                    # it — the queue really is empty in that gap, whenever preparing the next sentence
+                    # takes longer than speaking the previous one.
+                    if self.tts_idle_check_interval is not None and not task_env.tts_idle_announced:
                         dt = (time_now - self.tts_idle_check_t0) / 10**9
                         if not task_env.tts_speaking and dt > self.tts_idle_check_interval:
-                            self.tts_idle_check_t0 = time_now
+                            with task_env.lock:
+                                task_env.tts_idle_announced = True
                             if self.on_tts_idle is not None:
                                 self.on_tts_idle()
                     time.sleep(0.2)
