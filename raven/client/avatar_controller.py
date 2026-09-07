@@ -18,9 +18,10 @@ The sentences are guaranteed to be spoken in the same order that the queued text
 
 Another background task reads this output queue and controls the TTS playback and showing/hiding the subtitles.
 
-That second background task also takes care of triggering a global `on_tts_idle` event when the queue becomes empty,
-repeating every few seconds until an item arrives in the queue. If you want a per-avatar-instance trigger for
-end-of-speaking, it is better to use the `on_stop_speaking` event of `dpg_avatar_controller.send_text_to_tts`.
+That second background task also takes care of triggering a global `on_tts_idle` event once the queue has been
+empty and nothing spoken for `tts_idle_check_interval` — long enough that the gap between two sentences of one
+reply does not read as the end of it. If you want a per-avatar-instance trigger for end-of-speaking, it is
+better to use the `on_stop_speaking` event of `dpg_avatar_controller.send_text_to_tts`.
 """
 
 __all__ = ["DEFAULT_DISCONTINUITY_EFFECT",
@@ -146,16 +147,16 @@ class DPGAvatarController:
 
                        This can be used to trigger additional GUI actions when the avatar stops speaking.
 
-                       Called once each time the TTS falls silent, not repeatedly for as long as it stays
-                       silent — so a handler may do something that only makes sense once.
+                       Called once each time the TTS falls silent, so a handler may do something that only
+                       makes sense once.
 
                        Note that in the case of multiple avatars, this event does not distinguish
                        between them; this is global for the TTS system.
 
                        Distinct from `on_idle` in `register_avatar_instance`, which the similar name
                        invites confusing it with. That one is per avatar instance and is about *activity*:
-                       it fires once, when an instance has been idle long enough to have its video switched
-                       off. This one is about *speech*, and repeats.
+                       it fires when an instance has been idle long enough to have its video switched off.
+                       This one is about *speech*.
 
         `tts_idle_check_interval`: seconds. How much quiet counts as the TTS having become idle, before
                                    `on_tts_idle` triggers. Long enough to sit through the gap between two
@@ -308,13 +309,13 @@ class DPGAvatarController:
                    asks gets the answer it was woken for. It is called with no lock of this controller's
                    held, so a handler is free to take its own and to call back in here.
 
-                   Fires once per switch-off: there is nothing here to repeat about, the video being off
-                   until something pings the instance awake again.
+                   Fires once per switch-off, the video then staying off until something pings the instance
+                   awake again.
 
                    Not to be confused with `on_tts_idle` in the constructor, which the name invites. That
                    one is about *speech* — the TTS queue has drained and nothing is being spoken, which is
-                   how a caller learns that a reply has finished being read out across all its sentences —
-                   and it repeats for as long as that stays true. This one is about *activity*.
+                   how a caller learns that a reply has finished being read out across all its sentences.
+                   This one is about *activity*.
 
         The fadeout duration of the "data eyes" effect (LLM tool access indicator) is the animator setting
         `data_eyes_fadeout_duration`.

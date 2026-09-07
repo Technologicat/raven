@@ -1171,11 +1171,25 @@ kind as the one this section had to retract above, and it is on the live-test li
 graph covers the renderer's own *"[Connection lost]"* text. The graph is more useful than a dead panel, but
 that indication is genuinely gone. Left as it is.
 
-**One doc/code disagreement found in passing, not touched**: `register_avatar_instance` documents
-`idle_timeout` as "how long of no activity until `on_idle` triggers", and `on_tts_idle` points at "`on_idle`
-in `register_avatar_instance`" for a per-instance idle event. There is no such parameter and no such
-callback. Either the docstrings are stale or the callback was planned and never built — it would have been
-the push half of what the poll above does. Juha's call.
+**A doc/code disagreement found in passing, and resolved by building the missing half**:
+`register_avatar_instance` documented `idle_timeout` as "how long of no activity until `on_idle` triggers",
+and `on_tts_idle` pointed at "`on_idle` in `register_avatar_instance`" for a per-instance idle event; there
+was no such parameter and no such callback. Juha's call was to build it, since it is the push half of what
+the poll above does by hand — see *How item 6 came out*.
+
+**Reading `on_tts_idle` closely enough to write that cross-reference turned up two more things**, which is
+the argument for writing them at all. It fired **repeatedly** while the TTS stayed silent, with a docstring
+telling handlers to be idempotent — and nothing consumes it: both callers in this repo pass
+`on_tts_idle=None`, and `tts_idle_check_interval=None` besides. Juha's read, that the repeat was there
+because edge-detection was harder rather than because anything wanted it, is borne out. Worse, its interval
+was measured from *the last announcement* rather than from when speech stopped, so after any speech longer
+than the interval the event fired the instant the queue emptied — including emptying mid-reply, which
+happens whenever preparing the next sentence outlasts speaking the previous one. It is edge-triggered now,
+and the interval is the quiet a batch sits through before it counts as finished.
+
+The same shape had already cost one bug: the emotion-autoreset log spam fixed in `e8be9f3a` (2026-08-04).
+That was a different mechanism — `emotion_autoreset_task`'s own periodic loop — and it was fixed at the
+logging site, so the pattern survived in the file. Both instances are now edge-triggered.
 
 ## Where this stands, end of 2026-09-04
 
