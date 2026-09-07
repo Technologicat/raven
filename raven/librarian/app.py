@@ -646,6 +646,122 @@ def _start_backend_status_poll(delay_first_probe: bool) -> None:
         return
     backend_status_task_manager.submit(_backend_status_poll_task, env(delay_first_probe=delay_first_probe))
 
+# How often to ask Raven-server whether it is still there. Unlike the LLM backend's poll, this one runs for
+# the whole session: the LLM row appears at startup or when a send fails, both of which announce themselves,
+# where a Raven-server that dies mid-session announces nothing at all. Everything it serves — the avatar,
+# speech, subtitles, translation, the embeddings behind document search — is called only on demand, so
+# without this the news arrives as a failure the next time the user asks for one of them.
+_SERVER_POLL_INTERVAL_S = 5.0
+# How long the row stays up to announce a recovery before it goes away.
+_SERVER_RECOVERED_LINGER_S = 4.0
+
+# Sequential, so a click on the row supersedes the poll that is currently sleeping rather than racing it.
+server_status_task_manager = bgtask.TaskManager(name="librarian_server_status",
+                                                mode="sequential",
+                                                executor=bg)
+
+_server_was_available = True  # what the row currently claims; the poll only acts on changes
+
+def _describe_server_status(available: bool) -> tuple[str, str, str]:
+    """Return `(icon, label, tooltip)` for the utility panel's Raven-server row.
+
+    `available`: whether the server is answering.
+
+    The tooltip names what stops working rather than only that something did. Raven-server is where the
+    avatar, the speech and the embeddings behind document search all live, and which of those the reader
+    cares about decides whether this is an emergency or an annoyance. It also says what is *not* affected:
+    the chat goes to a different server, so a reader watching their conversation still work would otherwise
+    have to guess whether this row was about them.
+    """
+    if available:
+        return (fa.ICON_PLUG_CIRCLE_CHECK,
+                "Raven-server connected",
+                f"Raven-server at {raven_server_url} is answering again.\n\nClick to check again.")
+    return (fa.ICON_PLUG_CIRCLE_XMARK,
+            "Raven-server not connected",
+            f"Cannot reach Raven-server at {raven_server_url}.\n"
+            "The avatar, speech, subtitles, translation, the search over your\n"
+            "documents and the AI's internet access all run there, and will fail\n"
+            "until it is back. The chat itself does not - that is the LLM backend,\n"
+            "which is separate.\n\n"
+            "Retrying automatically. Click to retry now.")
+
+def _refresh_server_status_pill(available: bool) -> None:
+    """Put the server's status into the utility panel's row, and show the row."""
+    icon, label, caption = _describe_server_status(available)
+    dpg.set_value("server_status_icon", icon)  # tag
+    dpg.configure_item("server_status_button", label=label)  # tag
+    # Through the flash rather than around it, as the backend row does: a click flashes its own message into
+    # this tooltip, and a plain write would be put back when the flash ended.
+    gui_animation.set_text_under_flash(server_status_tooltip, caption)
+    if available:
+        dpg.bind_item_theme("server_status_icon", "my_steady_green_backend_theme")  # tag
+        dpg.bind_item_theme("server_status_button", "my_steady_green_backend_theme")  # tag
+    else:
+        dpg.bind_item_theme("server_status_icon", "my_pulsating_caution_backend_theme")  # tag
+        dpg.bind_item_theme("server_status_button", "my_steady_caution_backend_theme")  # tag
+    dpg.show_item("server_status_pill")  # tag
+
+def _hide_server_status_pill() -> None:
+    """Take the utility panel's server row down."""
+    with guiutils.nonexistent_ok():
+        dpg.hide_item("server_status_pill")  # tag
+
+def _server_status_poll_task(task_env: env) -> None:
+    """Watch Raven-server for the whole session, and put the row up when it goes away.
+
+    Edge-triggered: the row is written when the answer *changes*, so a server that stays down does not have
+    its caption rewritten every few seconds, and one that stays up costs nothing but the probe.
+
+    `task_env.delay_first_probe`: whether to wait out an interval before the first probe. `True` for the
+                                  standing watch, `False` when the user clicked and is waiting for an
+                                  answer now.
+    """
+    global _server_was_available
+
+    def keep_waiting(duration: float) -> bool:
+        """Wait up to `duration` seconds in slices. Return whether the caller should carry on."""
+        deadline = time.monotonic() + duration
+        while time.monotonic() < deadline:
+            if task_env.cancelled or _shutting_down:
+                return False
+            time.sleep(_BACKEND_POLL_TICK_S)
+        return not (task_env.cancelled or _shutting_down)
+
+    if task_env.delay_first_probe and not keep_waiting(_SERVER_POLL_INTERVAL_S):
+        return
+    while True:
+        available = api.raven_server_available()
+        if task_env.cancelled or _shutting_down:  # the probe takes a network timeout; the app may be gone by now
+            return
+        if available != _server_was_available:
+            logger.info(f"_server_status_poll_task: {task_env.task_name}: Raven-server at {raven_server_url} went from "
+                        f"{'up' if _server_was_available else 'down'} to {'up' if available else 'down'}.")
+            _server_was_available = available
+            _refresh_server_status_pill(available)
+            if available:
+                # Announce the recovery, then stand down. A row that stayed up would become furniture, and
+                # the next one to appear would not be noticed.
+                if not keep_waiting(_SERVER_RECOVERED_LINGER_S):
+                    return
+                _hide_server_status_pill()
+        if not keep_waiting(_SERVER_POLL_INTERVAL_S):
+            return
+
+def _start_server_status_poll(delay_first_probe: bool) -> None:
+    """Start watching Raven-server. Supersedes a watch already running."""
+    if _shutting_down:
+        return
+    server_status_task_manager.submit(_server_status_poll_task, env(delay_first_probe=delay_first_probe))
+
+def _request_server_recheck() -> None:
+    """Probe Raven-server now instead of at the poll's next tick. The server row's click action."""
+    gui_animation.flash_button(button="server_status_button",  # tag
+                               message="Checking Raven-server...",
+                               duration=gui_config.acknowledgment_duration,
+                               tooltip=server_status_tooltip)
+    _start_server_status_poll(delay_first_probe=False)
+
 def _request_backend_reconnect() -> None:
     """Re-probe the LLM backend now, instead of at the poll's next tick. The status row's click action."""
     gui_animation.flash_button(button="backend_status_button",  # tag
@@ -1712,6 +1828,28 @@ with timer() as tim:
                         util_cleanup_tooltip = gui_tooltip.Tooltip("util_cleanup_button",  # tag
                                                                     "Clean up and save the chat data\n(shows what would be deleted first)")
 
+                    # Raven-server's status, on the same pattern as the composer's LLM-backend row and for
+                    # the same reason: a server that has gone away is something the user has to be told,
+                    # since nothing else in the window says so until they try to use it and it fails.
+                    #
+                    # Here rather than in either panel above, and that placement is the whole trick: this
+                    # column sits *outside* the rect the avatar and the chat graph take turns in, so the row
+                    # is visible whichever of them holds it — no occupancy test, and no reparenting a widget
+                    # between two containers as the panel changes hands.
+                    #
+                    # Shown only when something is wrong, plus a moment on the way back. A row that said
+                    # "connected" all day would be teaching the user to stop reading it.
+                    with dpg.group(tag="server_status_pill", horizontal=True, show=False):  # tag
+                        dpg.add_text(fa.ICON_PLUG_CIRCLE_XMARK, tag="server_status_icon")  # tag
+                        dpg.bind_item_font("server_status_icon", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.add_button(label="",
+                                       callback=lambda: _request_server_recheck(),
+                                       tag="server_status_button")  # tag
+                        # Self-sizing, for the same reason as the backend row's: the caption is rewritten on
+                        # every status change and again by the click flash, and a `dpg.tooltip` would be
+                        # drawn at its previous size each time that happened.
+                        server_status_tooltip = gui_tooltip.Tooltip("server_status_button", "")  # tag
+
         # The bottom row is split into two child windows that mirror the panels above them: the chat-side
         # buttons sit under the chat panel, the AI-disclosure label under the avatar panel. Splitting is what
         # makes the label centerable at all - in one full-width row its position depended on the total width
@@ -2672,6 +2810,7 @@ def _gui_cancel_tasks() -> None:
     cleanup_dialog.task_manager.clear(wait=False)  # cancel thumbnail loading (it too can use split_frame)
     backend_status_task_manager.clear(wait=False)  # stop watching the LLM backend (it rebuilds the chat view)
     panel_occupancy_task_manager.clear(wait=False)  # stop watching the avatar's video (it swaps panels, and can use split_frame)
+    server_status_task_manager.clear(wait=False)  # stop watching Raven-server (it writes into the utility panel's row)
     dpg_avatar_renderer.stop(wait=False)  # signal the avatar renderer's background (OpenGL) task to stop (no wait)
     avatar_controller.stop_tts()          # stop TTS playback (no wait)
     audio_recorder.require().stop()       # the capture task writes the VU readout into DPG widgets (no wait)
@@ -2708,6 +2847,7 @@ def gui_shutdown() -> None:
     gui_resize_task_manager.clear(wait=True)
     backend_status_task_manager.clear(wait=True)
     panel_occupancy_task_manager.clear(wait=True)
+    server_status_task_manager.clear(wait=True)
     chat_controller.shutdown()
     avatar_controller.shutdown()
     dpg_avatar_renderer.stop(wait=True)
@@ -2924,6 +3064,9 @@ def _apply_saved_panel_choice(sender, app_data) -> None:
     if _shutting_down:
         return
     _start_panel_occupancy_watch()
+    # Raven-server was reachable at startup or the app would have exited, so the watch starts believing that
+    # and waits an interval before its first probe.
+    _start_server_status_poll(delay_first_probe=True)
 
     # The blue that says where the keyboard is, on the composer. A *caret* follower, not a focus one:
     # ImGui gives nav focus to the first navigable item of a window by itself, so the composer reports
