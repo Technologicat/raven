@@ -1178,14 +1178,26 @@ was no such parameter and no such callback. Juha's call was to build it, since i
 the poll above does by hand — see *How item 6 came out*.
 
 **Reading `on_tts_idle` closely enough to write that cross-reference turned up two more things**, which is
-the argument for writing them at all. It fired **repeatedly** while the TTS stayed silent, with a docstring
-telling handlers to be idempotent — and nothing consumes it: both callers in this repo pass
-`on_tts_idle=None`, and `tts_idle_check_interval=None` besides. Juha's read, that the repeat was there
-because edge-detection was harder rather than because anything wanted it, is borne out. Worse, its interval
-was measured from *the last announcement* rather than from when speech stopped, so after any speech longer
-than the interval the event fired the instant the queue emptied — including emptying mid-reply, which
-happens whenever preparing the next sentence outlasts speaking the previous one. It is edge-triggered now,
-and the interval is the quiet a batch sits through before it counts as finished.
+the argument for writing them at all — Juha, on seeing the two events described side by side: *"This was
+one of those things that stops making sense once you see it written out in the docstrings."*
+
+It fired **repeatedly** while the TTS stayed silent, with a docstring telling handlers to be idempotent.
+And nothing consumes it: both callers in this repo pass `on_tts_idle=None`, and
+`tts_idle_check_interval=None` besides. **That is supersession rather than neglect** — Juha built the
+global event first, found that what he actually needed was per-avatar, and used the `on_stop_speaking` hook
+of `send_text_to_tts` instead, leaving this one in place (his account, 2026-09-07). The module docstring
+has been steering readers to that hook ever since.
+
+Worse than the repeat, its interval was measured from *the last announcement* rather than from when speech
+stopped, so after any speech longer than the interval the event fired the instant the queue emptied —
+including emptying mid-reply, which happens whenever preparing the next sentence outlasts speaking the
+previous one. It is edge-triggered now, and the interval is the quiet a batch sits through before it counts
+as finished.
+
+**Whether it should exist at all is open** and is a separate question from whether it works: an event with
+no consumers, and a documented better alternative for the case that displaced it, is a candidate for
+deletion rather than repair. Left in place and now correct; raised for Juha rather than decided here, the
+class being a foundation-layer public API.
 
 The same shape had already cost one bug: the emotion-autoreset log spam fixed in `e8be9f3a` (2026-08-04).
 That was a different mechanism — `emotion_autoreset_task`'s own periodic loop — and it was fixed at the
