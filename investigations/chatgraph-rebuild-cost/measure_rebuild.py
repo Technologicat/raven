@@ -4,9 +4,21 @@ from raven.librarian import chatgraph
 from raven.librarian.chattree import Forest
 
 
+_serial = 0
+
+
 def payload(role, text):
+    """A node payload, with a timestamp. This script went without one until 2026-09-07.
+
+    The timestamp is not filler. `chatutil.descend_to_latest` orders siblings by it; with none the builder
+    cannot say which child is latest, logs a warning per drawn box, and draws the branch only as far as
+    the focus rather than on to its tip. That is a different picture from the one the app renders, so a run
+    without timestamps times a shape nobody sees.
+    """
+    global _serial
+    _serial += 1
     return {"message": {"role": role, "content": [{"type": "text", "text": text}]},
-            "general_metadata": {"persona": None}}
+            "general_metadata": {"persona": None, "timestamp": _serial}}
 
 
 def make_forest(n_chats, depth_per_chat, head_depth):
