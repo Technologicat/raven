@@ -40,6 +40,7 @@ __all__ = ["LINE_COLOR",
 
 import colorsys
 import dataclasses
+import functools
 import logging
 import math
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
@@ -710,6 +711,14 @@ def _arrowhead_points(tip: xdotconstants.Point, tail: xdotconstants.Point,
             (base[0] + halfwidth * uy, base[1] - halfwidth * ux)]
 
 
+# How many stripped messages to remember. A rebuild draws a few dozen boxes and the next one draws mostly
+# the same ones, so a cache this size is a near-total hit rate for as long as the reader stays in one part
+# of the tree, and it holds the labels of the widest sibling window anyone would set. Bounded because the
+# key is a whole message: a few hundred of those is a megabyte or two, and a forest is unbounded.
+_PLAIN_CACHE_SIZE = 512
+
+
+@functools.lru_cache(maxsize=_PLAIN_CACHE_SIZE)
 def _plain(text: str) -> str:
     """Return `text` with its Markdown syntax removed, for a label that renders none of it.
 
@@ -721,6 +730,11 @@ def _plain(text: str) -> str:
     the way any other empty message is, so a box whose whole content was a horizontal rule reads as empty
     rather than as three asterisks.
     """
+    # Memoized because this is by a wide margin the most expensive thing a rebuild does -- two thirds of
+    # it, measured. `strip_markdown` renders the text to HTML and parses that back with BeautifulSoup, and
+    # builds a fresh `markdown.Markdown` parser per call to do it, none of which is ours to make cheaper.
+    # A pure function of its argument, so there is nothing to go stale: an edited message is different
+    # text and misses.
     return strip_markdown.strip_markdown(text) or ""
 
 
