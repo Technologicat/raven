@@ -27,6 +27,8 @@ __all__ = ["mix_colors",
            "BezierShape",
            "MipLevel",
            "ImageShape",
+
+           "union_of_boxes",
            "CompoundShape",
            "Element",
            "Node",
@@ -34,7 +36,7 @@ __all__ = ["mix_colors",
            "Graph"]
 
 from itertools import chain
-from typing import Dict, List, NamedTuple, Optional, Sequence, Set, Tuple, Union
+from typing import Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple, Union
 
 from ... import utils as common_utils
 
@@ -390,6 +392,16 @@ class ImageShape(Shape):
                 max(self.x1, self.x2), max(self.y1, self.y2))
 
 
+def union_of_boxes(boxes: Iterable[Optional[Tuple[float, float, float, float]]]
+                   ) -> Optional[Tuple[float, float, float, float]]:
+    """Return the smallest box enclosing all of `boxes`, ignoring `None`s. `None` if none is left."""
+    boxes = [b for b in boxes if b is not None]
+    if not boxes:
+        return None
+    return (min(b[0] for b in boxes), min(b[1] for b in boxes),
+            max(b[2] for b in boxes), max(b[3] for b in boxes))
+
+
 class CompoundShape(Shape):
     """Container for multiple shapes."""
 
@@ -398,15 +410,7 @@ class CompoundShape(Shape):
         self.shapes = shapes
 
     def get_bounding_box(self) -> Optional[Tuple[float, float, float, float]]:
-        boxes = [s.get_bounding_box() for s in self.shapes]
-        boxes = [b for b in boxes if b is not None]
-        if not boxes:
-            return None
-        x1 = min(b[0] for b in boxes)
-        y1 = min(b[1] for b in boxes)
-        x2 = max(b[2] for b in boxes)
-        y2 = max(b[3] for b in boxes)
-        return (x1, y1, x2, y2)
+        return union_of_boxes(s.get_bounding_box() for s in self.shapes)
 
 
 class Element(CompoundShape):
@@ -418,6 +422,20 @@ class Element(CompoundShape):
     def get_texts(self) -> List[str]:
         """Return text content of any TextShapes in this element."""
         return [s.t for s in self.shapes if isinstance(s, TextShape)]
+
+    def get_drawn_bounding_box(self) -> Optional[Tuple[float, float, float, float]]:
+        """Return the box enclosing everything this element puts on screen.
+
+        Which is a different question from `get_bounding_box`, and the one to ask about whether an
+        element is worth drawing. A `Node`'s own box is the layout cell it occupies — what hit testing,
+        anchoring and edge routing reason about — and a decoration deliberately drawn in the margin lies
+        outside it: an icon straddling an edge, a deck of thumbnails hanging past a corner. Culling on the
+        cell makes those vanish while they are still on screen, which is visible as soon as anything is
+        zoomed in far enough for the margin to fill the view.
+
+        For an `Edge`, whose box already is what it draws, the two agree.
+        """
+        return union_of_boxes([CompoundShape.get_bounding_box(self), self.get_bounding_box()])
 
 
 class Node(Element):

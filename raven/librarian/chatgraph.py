@@ -2412,20 +2412,14 @@ def build(datastore: chattree.Forest,
 
 
 def _content_bbox(nodes: Sequence[xdotgraph.Node]) -> Tuple[float, float, float, float]:
-    """Return the box enclosing every node *and everything drawn on it*.
+    """Return the box enclosing every node *and everything drawn on it*. `nodes` must not be empty.
 
     A node's own bounding box is the layout cell it occupies, which is what the row placement reasons
     about. It is not what has to fit on screen: a pointer pill is drawn in the space above its node, so
     the topmost row's pills sit outside every node box there is, and a fit computed from those alone
     clips the one label that says which node HEAD is on.
     """
-    boxes = []
-    for node in nodes:
-        boxes.append(node.get_bounding_box())
-        boxes.extend(box for box in (shape.get_bounding_box() for shape in node.shapes)
-                     if box is not None)
-    return (min(box[0] for box in boxes), min(box[1] for box in boxes),
-            max(box[2] for box in boxes), max(box[3] for box in boxes))
+    return xdotgraph.union_of_boxes(node.get_drawn_bounding_box() for node in nodes)
 
 
 def _rows_for(datastore: chattree.Forest,

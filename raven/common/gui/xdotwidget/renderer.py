@@ -489,8 +489,14 @@ def _render_shape(drawlist: Union[int, str],
 
 
 def _is_element_visible(element: Element, viewport: Viewport) -> bool:
-    """Check if an element is visible in the current viewport."""
-    bbox = element.get_bounding_box()
+    """Check if an element is visible in the current viewport.
+
+    Asked of everything the element *draws* rather than of the layout cell it occupies, the two differing
+    for a node that carries decorations in its margins — see `Element.get_drawn_bounding_box`. Culling on
+    the cell drops the decorations along with it, and the further in the view is zoomed the more of the
+    screen they are.
+    """
+    bbox = element.get_drawn_bounding_box()
     if bbox is None:
         return True  # If no bbox, assume visible
     return viewport.is_visible(*bbox)

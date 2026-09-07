@@ -518,3 +518,58 @@ class TestTheMipLevelDrawnFollowsTheScreenSize:
                                                     max_screen_size=60.0)))
         widget._render()
         assert self.drawn_texture(widget) == levels[64]
+
+
+class TestDecorationsInTheMarginSurviveCulling:
+    """A node's margins carry things drawn outside its own box, and culling must not drop them.
+
+    Librarian's chat graph hangs a role glyph off a box's left edge and a deck of attachment thumbnails
+    off its right, each half outside the box on purpose. A `Node`'s bounding box is the layout cell it
+    occupies and does not grow to cover them, so culling on it makes a decoration vanish while it is
+    still on screen — and the further in the view is zoomed, the more of the screen that is. Reported
+    live: an attachment card zoomed into disappeared the moment the box it belongs to left the view.
+    """
+
+    @staticmethod
+    def graph_with_a_decoration(texture) -> Graph:
+        """One node at the origin, 40 wide, with an image hanging 100 units off its right edge."""
+        pen = Pen()
+        return Graph(width=400.0, height=400.0,
+                     nodes=[Node(x=0.0, y=0.0, w=40.0, h=40.0, internal_name="only",
+                                 shapes=[PolygonShape(pen, [(-20.0, -20.0), (20.0, -20.0),
+                                                            (20.0, 20.0), (-20.0, 20.0)]),
+                                         ImageShape(texture, 100.0, -20.0, 140.0, 20.0)])])
+
+    @staticmethod
+    def drawn_image(instance: XDotWidget):
+        for item in dpg.get_item_children(instance.drawlist, DRAWLIST_SLOT) or []:
+            if dpg.get_item_type(item) == "mvAppItemType::mvDrawImage":
+                return item
+        return None
+
+    def test_a_decoration_is_drawn_with_the_node_box_out_of_view(self, widget, texture):
+        """Looking at the image alone, which is where a reader who zoomed into it ends up.
+
+        The control is the third case: an element with nothing on screen at all is still culled, so a
+        renderer that had simply stopped culling would fail here rather than pass the first two.
+        """
+        widget.set_graph(self.graph_with_a_decoration(texture))
+
+        # Zoomed out far enough to hold both, which is where the defect is invisible.
+        widget.set_zoom(1.0, animate=False)
+        widget.pan_to_point(60.0, 0.0, animate=False)
+        widget._render()
+        assert self.drawn_image(widget) is not None, "the fixture never draws the image at all"
+
+        # Zoomed in on the image alone. The view is then 60 graph units wide against the widget's 600, so
+        # the node's own box -- a hundred units to the left -- is well outside it while the image is not.
+        widget.set_zoom(10.0, animate=False)
+        widget.pan_to_point(120.0, 0.0, animate=False)
+        widget._render()
+        assert self.drawn_image(widget) is not None, \
+            "the node was culled on its own box, so the decoration hanging outside it went too"
+
+        widget.pan_to_point(5000.0, 5000.0, animate=False)
+        widget._render()
+        assert self.drawn_image(widget) is None, \
+            "nothing is culled at all, so the assertions above say nothing about culling"

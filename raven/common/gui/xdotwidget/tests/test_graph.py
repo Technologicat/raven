@@ -1,10 +1,10 @@
-"""Tests for graph data model: tessellate_bezier, get_linked_elements, and ImageShape."""
+"""Tests for graph data model: tessellate_bezier, get_linked_elements, bounding boxes, and ImageShape."""
 
 import pytest
 
 from raven.common.tests import approx
 
-from ..graph import (Graph, Node, Edge, TextShape, Pen, ImageShape, MipLevel,
+from ..graph import (Graph, Node, Edge, TextShape, LineShape, Pen, ImageShape, MipLevel,
                      tessellate_bezier)
 
 
@@ -160,6 +160,45 @@ class TestGetLinkedElements:
         graph, a, b, c, d, e_ab, e_ac, e_bd, e_cd = diamond_graph
         linked = graph.get_linked_elements(a, "incoming")
         assert len(linked) == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: what an element draws, as against the cell it occupies
+# ---------------------------------------------------------------------------
+
+class TestDrawnBoundingBox:
+    """`get_drawn_bounding_box` — the question culling asks, which is not the one `get_bounding_box` answers."""
+
+    @staticmethod
+    def node_with_a_decoration() -> Node:
+        """A 40x40 node at the origin, with an image hanging a hundred units off its right edge."""
+        return Node(x=0.0, y=0.0, w=40.0, h=40.0, internal_name="only",
+                    shapes=[ImageShape("some_texture", 100.0, -20.0, 140.0, 20.0)])
+
+    def test_it_covers_what_is_drawn_outside_the_node_box(self):
+        node = self.node_with_a_decoration()
+        assert node.get_bounding_box() == (-20.0, -20.0, 20.0, 20.0)
+        assert node.get_drawn_bounding_box() == (-20.0, -20.0, 140.0, 20.0)
+
+    def test_it_covers_the_node_box_even_where_nothing_is_drawn_in_it(self):
+        """A node's cell is its own extent whatever its shapes cover, so the two are unioned rather than
+        the shapes simply replacing it."""
+        node = Node(x=0.0, y=0.0, w=40.0, h=40.0, internal_name="only",
+                    shapes=[ImageShape("some_texture", 100.0, -5.0, 140.0, 5.0)])
+        assert node.get_drawn_bounding_box() == (-20.0, -20.0, 140.0, 20.0)
+
+    def test_a_node_with_no_shapes_still_has_its_cell(self):
+        node = Node(x=0.0, y=0.0, w=40.0, h=40.0, internal_name="only", shapes=[])
+        assert node.get_drawn_bounding_box() == (-20.0, -20.0, 20.0, 20.0)
+
+    def test_for_an_edge_the_two_agree(self):
+        """An edge's box already is what it draws, nothing being laid out around it."""
+        pen = Pen()
+        src = Node(x=0.0, y=0.0, w=10.0, h=10.0, shapes=[], internal_name="src")
+        dst = Node(x=100.0, y=100.0, w=10.0, h=10.0, shapes=[], internal_name="dst")
+        edge = Edge(src, dst, [(0.0, 0.0), (100.0, 100.0)],
+                    [LineShape(pen, [(0.0, 0.0), (100.0, 100.0)])])
+        assert edge.get_drawn_bounding_box() == edge.get_bounding_box()
 
 
 # ---------------------------------------------------------------------------

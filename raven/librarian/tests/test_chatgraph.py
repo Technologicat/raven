@@ -1132,6 +1132,28 @@ class TestAttachmentThumbnails:
         assert all(card.mips == levels for card in cards)
         assert glyphs[0].mips == ()
 
+    def test_the_deck_is_inside_what_the_node_says_it_draws(self):
+        """Which is what keeps a card on screen once the reader has zoomed past its box.
+
+        The renderer culls on `get_drawn_bounding_box`, and a card hangs outside the node's own box on
+        purpose — so a deck outside *both* is a card that vanishes the moment its box leaves the view.
+        Asserted against the plain box as well, since a decoration that had drifted inside it would make
+        this pass for the wrong reason.
+        """
+        forest, carrier = self._forest(3)
+        built = self._build(forest, carrier)
+        node = built.graph.get_node_by_name(carrier)
+        cell = node.get_bounding_box()
+        drawn = node.get_drawn_bounding_box()
+        cards = [sh for sh in node.shapes if isinstance(sh, xdotgraph.ImageShape)]
+        assert max(sh.get_bounding_box()[2] for sh in cards) > cell[2], \
+            "no card reaches past the node's own box, so this fixture cannot tell the two boxes apart"
+        for card in cards:
+            box = card.get_bounding_box()
+            assert (drawn[0] <= box[0] and drawn[1] <= box[1]
+                    and box[2] <= drawn[2] and box[3] <= drawn[3]), \
+                f"a decoration at {box} lies outside what the node says it draws, {drawn}"
+
     def test_a_card_whose_picture_has_not_landed_carries_no_chain(self):
         """A placeholder is a rectangle and nothing else, so there is nothing to choose a level from."""
         forest, carrier = self._forest(1)
