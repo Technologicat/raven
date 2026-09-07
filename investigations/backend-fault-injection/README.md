@@ -17,8 +17,10 @@ python tcprelay.py --port 8999 --upstream localhost:5100
 raven-librarian --server-url http://127.0.0.1:8999
 ```
 
-Kill it and the server has vanished; run it again and the server is back. The real Raven-server keeps
-running throughout, which matters when it holds several gigabytes of models that take minutes to load.
+Kill it and the server has vanished; run it again and the server is back — instantly, and as often as the
+test needs. The real Raven-server keeps running throughout, which is the point: restarting it costs a model
+reload of half a minute or so, which is not long enough to matter once and quite long enough to matter
+twenty times.
 
 **What it found (2026-09-07).** Librarian ran at full frame rate for the rest of the session after
 Raven-server went down. `DPGAvatarRenderer.pause` told the server to stop the avatar *before* clearing

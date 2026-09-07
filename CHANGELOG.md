@@ -34,6 +34,10 @@
 - **a *Show thinking* toggle**, for when the reasoning is the part you want to read. Off by default, so a thinking model's trace starts collapsed behind its cloud; turn it on and traces arrive open. It takes effect from the next reply onward; the cloud, or Ctrl+T, opens the trace of a reply already on screen.
   - It says what is **shown**; whether the AI reasons at all is the *Thinking* toggle beside it. The row is now grouped by that distinction — what the AI does when it answers, how the chat log is shown, what the avatar does.
 
+- **Librarian now says when Raven-server has gone away.** A row appears below the mode toggles, and stays until the server answers again; it names what stops working while it is down — the avatar, speech, subtitles, translation, the search over your documents and the AI's internet access — and what does not, the chat itself going to a separate LLM backend. Click it to retry immediately instead of waiting for the next check.
+  - It sits outside the panel the avatar and the chat graph take turns in, so it is readable whichever of them is showing.
+  - Shown only when something is wrong, plus a moment on the way back: a row that said "connected" all day would stop being read.
+
 - **every mode toggle now has a hotkey**, mnemonic on its label: `Alt+T` *Thinking*, `Alt+Shift+T` *Show thinking*, `Alt+I` *Internet*, `Alt+D` *Documents*, `Alt+G` *Chat graph*, `Alt+S` *Speech*, `Alt+C` *Subtitles* (captions). They work while you are typing, which is when you tend to want one — on noticing that the answer wants the web, or the documents. Each key is in its switch's tooltip, and the seven are tabulated in the README.
 
 - **what the thinking cost is now reported**, where before the single largest consumer of a reasoning turn was the one part of the message with no numbers on it. The thought bubble carries the same three figures the message does — tokens, wall time, speed — for the reasoning alone, and while a reply is being generated the cloud counts up (`Thinking… 12.4s, ~480t`), so a collapsed trace still says how long you have been waiting.
@@ -428,6 +432,8 @@
 - button flashes and error reports in the file dialog no longer fade in steps. The idle throttle, which drops the app to ~12 fps when nothing is happening, asked only the graph whether anything was animating — so a flash lasting a second, or a report standing for three, ran at the idle rate once the half second bought by your click had passed.
 
 *Constellation-wide*
+
+- **an app no longer runs at full frame rate for the rest of the session after Raven-server goes down.** Losing the video stream makes the avatar renderer pause itself, and pausing told the server first — the same server that had just gone away — so the call failed and the renderer stayed marked as running. The idle throttle reads that mark, so it never engaged again. Telling the server is now a courtesy done last, and a missing GUI widget cannot skip the mark either.
 
 - **`&amp;` and `&nbsp;` no longer survive into text taken from a bibliography.** A database that exports HTML into a BibTeX field leaves them there, and Raven decoded the neighbouring entities (`&lt;`, `&le;`, `&auml;`) while passing these two through — so a title reading `Q&A` displayed as `Q&amp;A`, in the Visualizer's word cloud and info panel and in Librarian's citations alike. An escaped entity is still decoded only once, so a source that wrote `&amp;lt;` to mean a literal `&lt;` keeps saying that.
 

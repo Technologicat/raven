@@ -684,6 +684,16 @@ class DPGAvatarRenderer:
         assert action in ("pause", "resume")
 
         if action == "pause":
+            # The state first, before anything that can fail, because the state is what the app runs on:
+            # the idle-framerate throttle reads `animator_running`, so a pause that does not reach this line
+            # costs full frame rate for the rest of the session, for an animator that has already stopped.
+            #
+            # Both of the things below have failed in exactly the case where that matters most. A server
+            # that goes away mid-session makes `avatar_stop` raise — the renderer's own error path pauses in
+            # response to losing the stream, so it is calling a server it already knows is gone — and
+            # `nonexistent_ok` leaves its block at the *first* missing widget, taking every later line with
+            # it. Either one used to skip the assignment.
+            self.animator_running = False
             # center the paused indicator on the video feed in the GUI
             with guiutils.nonexistent_ok() as nok:
                 # Park it offscreen and render, to compute its size: it is centered afterwards, and a
@@ -696,12 +706,24 @@ class DPGAvatarRenderer:
                 self._reposition_paused_text()
                 dpg.hide_item(f"avatar_live_image_{self.live_texture_id_counter}")
                 dpg.hide_item(self.backdrop_drawlist_gui_widget)
-                api.avatar_stop(self.avatar_instance_id)
-                self.animator_running = False
             if nok.errored:  # window or live image widget does not exist
                 logger.info(f"DPGAvatarRenderer.pause (avatar instance '{self.avatar_instance_id}', action '{action}'): Pause text GUI widget doesn't exist.")
+            # Telling the server is a courtesy, and last: an avatar on a server this client can no longer
+            # reach has stopped either way, and there is nothing useful to do about the failure here.
+            try:
+                api.avatar_stop(self.avatar_instance_id)
+            except Exception as exc:
+                logger.warning(f"DPGAvatarRenderer.pause (avatar instance '{self.avatar_instance_id}', action '{action}'): could not tell the server to stop the avatar, continuing anyway: {type(exc)}: {exc}")
         else:  # action == "resume":
-            api.avatar_start(self.avatar_instance_id)
+            try:
+                api.avatar_start(self.avatar_instance_id)
+            except Exception as exc:
+                # Nothing to resume, so stay paused — which `animator_running` already says, this path not
+                # having reached the assignment below. Swallowed rather than raised because the caller is
+                # usually `ping`, on whichever background task happened to count as activity, and taking
+                # that task down over an unreachable server would cost far more than the resume did.
+                logger.warning(f"DPGAvatarRenderer.pause (avatar instance '{self.avatar_instance_id}', action '{action}'): could not tell the server to start the avatar, staying paused: {type(exc)}: {exc}")
+                return
             dpg.hide_item(self.paused_text_gui_widget)
             dpg.show_item(self.backdrop_drawlist_gui_widget)
             dpg.show_item(f"avatar_live_image_{self.live_texture_id_counter}")
