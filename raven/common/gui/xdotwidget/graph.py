@@ -27,7 +27,6 @@ __all__ = ["mix_colors",
            "BezierShape",
            "MipLevel",
            "ImageShape",
-
            "union_of_boxes",
            "CompoundShape",
            "Element",
