@@ -562,6 +562,15 @@ class LayoutConfig:
     # side by side at 9, 18 and 27: at 9 a fan of six is a card with coloured stripes down its edge and
     # cannot be counted, and at 27 the cards stop reading as a stack and become a row of separate tiles.
     attachment_fan_offset: float = 18.0
+    # ...and downward, so that two cards' borders do not land on each other. Purely horizontal, a deck of
+    # same-sized squares is a row of vertical lines and the eye has nothing to separate one card's edge
+    # from the next one's.
+    #
+    # A *diagonal* fan rather than a vertical one, chosen from the three rendered side by side. Making the
+    # drop dominant and the horizontal step small (8 across, 15 down) reads as a column of loose cards
+    # beside the message rather than a deck belonging to it, and it spends the gap between rows on a
+    # decoration -- where the horizontal direction has a gap of its own that widens to fit.
+    attachment_fan_drop: float = 8.0
     # Past this many, the fan is abbreviated: the first two, the last two, and a box saying how many were
     # left out. Somebody will attach fifty files, and a fan of fifty is a smear.
     #
@@ -577,6 +586,18 @@ class LayoutConfig:
     margin: float = 20.0
     label_width: Optional[float] = None
     label_lines: int = 2
+
+    def _get_attachment_fan_y(self, index: int, n_cards: int) -> float:
+        """Return the `index`-th of `n_cards` cards' centre, as an offset from the box's own centre line.
+
+        The deck is centred on the box vertically however far it fans, so a message with one attachment
+        and one with six sit their cards on the same axis. Growing downward from the centre instead would
+        make the fan's *height* read as its length, which is what the horizontal offset already says.
+
+        `n_cards` counts the count box, if there is one, for the same reason the centring exists: computed
+        per card from a different total, the last card and the box behind it end up on different axes.
+        """
+        return (index - 0.5 * (max(1, n_cards) - 1)) * self.attachment_fan_drop
 
     def _get_attachment_fan_x(self, index: int, shown: int) -> float:
         """Return the `index`-th card's centre, as an offset from the box's right edge.
@@ -604,6 +625,15 @@ class LayoutConfig:
         last = shown if has_count_box else shown - 1
         return self._get_attachment_fan_x(last, shown) + 0.5 * self.attachment_fraction * self.node_h
 
+    def _get_attachment_gutter(self) -> float:
+        """Return how far into the box the nearest thumbnail reaches, in graph units.
+
+        Half a card. The first straddles the right edge and the rest fan outward from it, so this one is
+        the only part of the deck that is over the box at all — and the text has to start short of it, the
+        same bargain the role glyph strikes at the other end.
+        """
+        return 0.5 * self.attachment_fraction * self.node_h
+
     def _get_role_icon_gutter(self) -> float:
         """Return how far into the box a role glyph reaches, in graph units.
 
@@ -613,7 +643,8 @@ class LayoutConfig:
         """
         return 0.5 * self.role_icon_fraction * self.node_h
 
-    def _get_effective_speaker_width(self, has_role_icon: bool = False) -> float:
+    def _get_effective_speaker_width(self, has_role_icon: bool = False,
+                                     has_attachments: bool = False) -> float:
         """Return how wide the speaker line may run across a node, in graph units.
 
         The same room the label gets. Needed as a budget of its own because that line can carry a model
@@ -623,13 +654,15 @@ class LayoutConfig:
         whatever is beside it.
         """
         return max(1.0, self.node_w - 2 * _LABEL_INSET
-                   - (self._get_role_icon_gutter() if has_role_icon else 0.0))
+                   - (self._get_role_icon_gutter() if has_role_icon else 0.0)
+                   - (self._get_attachment_gutter() if has_attachments else 0.0))
 
-    def _get_effective_label_width(self, has_role_icon: bool = False) -> float:
+    def _get_effective_label_width(self, has_role_icon: bool = False,
+                                   has_attachments: bool = False) -> float:
         """Return `label_width`, or how much room a label has across a node when it was left unset."""
         if self.label_width is not None:
             return self.label_width
-        return self._get_effective_speaker_width(has_role_icon)
+        return self._get_effective_speaker_width(has_role_icon, has_attachments)
 
     # These two are the ones a user has a reason to change, so they live in `config` and are picked up from
     # there; the rest of this class is drawing detail. Neither is speed-bound in any range worth using --
@@ -988,7 +1021,7 @@ def _fit_bracketed(speaker: str, detail: str, max_width: float, font_size: float
 
 
 def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
-                          config: "LayoutConfig", has_role_icon: bool,
+                          config: "LayoutConfig", has_role_icon: bool, has_attachments: bool,
                           measure_text: Optional[MeasureText]) -> Tuple[str, List[str], Optional[str]]:
     """Return `(who said it, the lines of what they said, a quieter second line or `None`)` for `node_id`.
 
@@ -1001,8 +1034,8 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
     nothing at all. Drawn as one `[empty]` box, as they were until 2026-09-03, the commonest of the three
     reads as a tree full of replies that never happened.
     """
-    width = config._get_effective_label_width(has_role_icon)
-    speaker_width = config._get_effective_speaker_width(has_role_icon)
+    width = config._get_effective_label_width(has_role_icon, has_attachments)
+    speaker_width = config._get_effective_speaker_width(has_role_icon, has_attachments)
     max_lines = config.label_lines
 
     def wrap(what: str, lines_left: int) -> List[str]:
@@ -1429,8 +1462,12 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     # That gutter is what the glyph costs, and it is the argument for straddling rather than for drawing
     # the thing inside: half a glyph is reserved instead of a whole one plus its own inset.
     left_inset = _LABEL_INSET + (config._get_role_icon_gutter() if role_icon is not None else 0.0)
+    # And the same at the other end, for the nearest thumbnail. Without it a label runs the full width and
+    # the deck is drawn over its last few characters: "Please summarize the attached pape".
+    has_attachments = bool(attachments) or hidden_attachments > 0
+    right_inset = _LABEL_INSET + (config._get_attachment_gutter() if has_attachments else 0.0)
     text_x1 = x1 + left_inset
-    text_x2 = x2 - _LABEL_INSET
+    text_x2 = x2 - right_inset
 
     if role_icon is not None:
         # Centred on the left edge and on the box's own centre, so half of it hangs outside. Appended
@@ -1441,8 +1478,6 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                                            x1 - 0.5 * side, y - 0.5 * side,
                                            x1 + 0.5 * side, y + 0.5 * side,
                                            max_screen_size=config.role_icon_native_size))
-
-    shapes.extend(_attachment_shapes(attachments, hidden_attachments, x2, y, config, measure_text))
 
     text_pen = xdotgraph.Pen()
     text_pen.color = LINE_COLOR
@@ -1492,6 +1527,12 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         cursor += config.role_font_size
         shapes.append(xdotgraph.TextShape(sub_pen, text_center, cursor, xdotgraph.TextShape.CENTER,
                                           text_x2 - text_x1, sub_label))
+
+    # After the text, which is the backstop for the gutter above rather than a substitute for it: the two
+    # are meant never to meet, and where a measurement is off by a character the reader should see a
+    # picture over a letter rather than a letter over a picture. The first reads as one thing in front of
+    # another; the second reads as a rendering fault.
+    shapes.extend(_attachment_shapes(attachments, hidden_attachments, x2, y, config, measure_text))
 
     # Pills are a separate visual class from nodes -- outlined rather than filled -- so that SYS, NEW and
     # HEAD read as labels attached to a node rather than as part of what the node says. Two reasons for
@@ -1544,10 +1585,13 @@ def _attachment_shapes(attachments: Sequence[Optional["Thumbnail"]], hidden: int
     gap_pen.linewidth = config.line_width
     gap_pen.dash = _GAP_DASH
 
+    n_cards = len(attachments) + (1 if hidden > 0 else 0)
+
     def frame_at(index: int) -> Tuple[float, float, float, float]:
         """The rectangle of the `index`-th card. Index `len(attachments)` is the count box."""
         cx = right_edge + config._get_attachment_fan_x(index, len(attachments))
-        return (cx - 0.5 * side, center_y - 0.5 * side, cx + 0.5 * side, center_y + 0.5 * side)
+        cy = center_y + config._get_attachment_fan_y(index, n_cards)
+        return (cx - 0.5 * side, cy - 0.5 * side, cx + 0.5 * side, cy + 0.5 * side)
 
     def card(index: int, thumbnail: Optional[Thumbnail], pen: xdotgraph.Pen,
              is_count_box: bool = False) -> None:
@@ -2019,7 +2063,8 @@ def build(datastore: chattree.Forest,
                               pills=_pills_for(node_id, state, is_root=is_root))
             decoration = decorations_of(node_id)
             speaker, label_lines, sub_label = _speaker_and_label_of(
-                datastore, node_id, config, decoration.role_icon is not None, measure_text)
+                datastore, node_id, config, decoration.role_icon is not None,
+                bool(decoration.attachments) or decoration.hidden_attachments > 0, measure_text)
             shapes = _box_shapes(x, y, config.node_w, config, label_lines,
                                  fill=_fill_for(ref.role, node_id in current_branch,
                                                 asked_for_tools=bool(ref.tool_call_count)),

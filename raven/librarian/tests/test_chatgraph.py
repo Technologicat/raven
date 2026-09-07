@@ -941,6 +941,17 @@ class TestAttachmentThumbnails:
             forest.create_node(payload("user", f"a plain sibling {k}"), parent_id=greeting)
         return forest, carrier
 
+    @staticmethod
+    def _texts_inside(node):
+        """The text a box carries, pills excluded — those sit in the space *above* it and to its right.
+
+        By position rather than by content: a pill's label is an ordinary `TextShape` and a test picking
+        them out by their words would be asserting the current pill vocabulary.
+        """
+        y1, y2 = node.get_bounding_box()[1], node.get_bounding_box()[3]
+        return [sh for sh in node.shapes if isinstance(sh, xdotgraph.TextShape)
+                and y1 <= sh.get_bounding_box()[1] and sh.get_bounding_box()[3] <= y2]
+
     def _cards(self, built, node_name):
         """The thumbnail images drawn on one box, left to right.
 
@@ -1033,6 +1044,35 @@ class TestAttachmentThumbnails:
         last = cards[-1].get_bounding_box()
         assert count_box.get_bounding_box()[0] > 0.5 * (last[0] + last[2])
 
+    def test_the_label_stops_short_of_the_nearest_card(self):
+        """Without the gutter the label ran the full width and the deck was drawn over its last few
+        characters: "Please summarize the attached pape"."""
+        forest, carrier = self._forest(2, text="please summarize the attached papers, all of them, "
+                                               "and say which one is the most interesting of the lot")
+        built = self._build(forest, carrier)
+        node = built.graph.get_node_by_name(carrier)
+        nearest_card = min(c.get_bounding_box()[0] for c in self._cards(built, carrier))
+        texts = self._texts_inside(node)
+        assert texts, "nothing was drawn, so clearing the deck says nothing"
+        assert nearest_card < node.get_bounding_box()[2], \
+            "no card reaches inside the box, so there was nothing for the text to run into"
+        for shape in texts:
+            assert shape.get_bounding_box()[2] <= nearest_card, f"'{shape.t}' runs under the deck"
+
+    def test_the_cards_are_drawn_over_the_text_rather_than_under_it(self):
+        """The backstop for the gutter above, not a substitute for it. Where a measurement is off by a
+        character the reader should see a picture over a letter — one thing in front of another — rather
+        than a letter over a picture, which reads as a rendering fault."""
+        forest, carrier = self._forest(2)
+        built = self._build(forest, carrier)
+        node = built.graph.get_node_by_name(carrier)
+        inside = set(id(sh) for sh in self._texts_inside(node))
+        last_text = max(i for i, sh in enumerate(node.shapes) if id(sh) in inside)
+        first_card = min(i for i, sh in enumerate(node.shapes) if isinstance(sh, xdotgraph.ImageShape)
+                         and 0.5 * (sh.get_bounding_box()[0] + sh.get_bounding_box()[2])
+                         > 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2]))
+        assert first_card > last_text
+
     def test_a_document_gets_a_card_too(self):
         """A message that is *only* attachments has no words either. Drawn without them it reads as a turn
         that never happened — which is what a chat of three attached papers looked like: one box saying
@@ -1102,6 +1142,18 @@ class TestAttachmentThumbnails:
         glyphs = [s for s in node.shapes if isinstance(s, xdotgraph.ImageShape)
                   and 0.5 * (s.get_bounding_box()[0] + s.get_bounding_box()[2]) < centre]
         assert [g.texture for g in glyphs] == ["tex_ai"]
+
+    def test_the_fan_stays_inside_the_gap_to_the_row_below(self):
+        """The drop is what stops two cards' borders landing on each other, and it is also what can put a
+        card on the row beneath. Nothing else would notice: the layout compares node boxes, and a card is
+        outside its box by construction."""
+        config = chatgraph.LayoutConfig()
+        n_cards = config.attachment_max_shown + 1  # the most a fan is ever drawn whole
+        side = config.attachment_fraction * config.node_h
+        below_centre = config._get_attachment_fan_y(n_cards - 1, n_cards) + 0.5 * side
+        assert below_centre > 0.5 * config.node_h, \
+            "the fan does not reach past the box at all, so this fixture cannot tell a collision from none"
+        assert below_centre < 0.5 * config.node_h + config.vertical_spacing
 
     def test_the_gap_to_the_next_sibling_holds_the_fan(self):
         """The invariant nothing else would catch. `overlapping_pairs` compares *node* boxes, and both a

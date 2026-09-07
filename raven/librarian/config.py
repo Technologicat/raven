@@ -34,7 +34,8 @@ llm_state_file = librarian_userdata_dir / "state.json"  # important node IDs for
 # Its contents will be automatically set as the Authorization field of the HTTP headers when `llmclient` starts.
 #
 # llm_backend_url = "http://localhost:5000"  # oobabooga default OAI compatible port
-llm_backend_url = "http://localhost:1234"  # LM Studio default OAI compatible port
+# llm_backend_url = "http://localhost:1234"  # LM Studio default OAI compatible port
+llm_backend_url = "http://maia.local:1234"  # XXX testing
 llm_api_key_file = librarian_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
 
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.
@@ -583,6 +584,16 @@ gui_config = env(  # ----------------------------------------
                  # the shape the tree has than one trimmed to a rectangle.
                  chat_graph_siblings_each_side=5,  # siblings shown either side of the focused one, at each level
                  chat_graph_max_visible_depth=12,  # boxes down the current branch, the root included
+                 #
+                 # Whether a box shows the speaker's icon, straddling its left edge. On, because the role
+                 # is otherwise carried by the speaker line alone, and text is the first thing to go when
+                 # the reader zooms out far enough to take in a wide fan -- which is exactly the view where
+                 # "whose branch is this" most needs answering.
+                 #
+                 # Off gives the label back the room the icon reserves: about two characters, the glyph's
+                 # inner half being a gutter the text starts past. A matter of taste rather than of
+                 # legibility, which is why it is a setting.
+                 chat_graph_role_icons=True,
                  # ----------------------------------------
                  # Avatar TTS speech subtitling / closed-captioning
                  #
