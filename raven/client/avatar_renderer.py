@@ -161,7 +161,7 @@ class DPGAvatarRenderer:
         self.full_w = None  # width of the full (uncropped) output, in pixels; from the X-Full-Size header
         self.full_h = None  # height of the full (uncropped) output, in pixels; from the X-Full-Size header
         self.crop_bbox: Mapping[str, Any] = NO_CROP  # current crop bbox; updated per-frame from the X-Crop header. `NO_CROP` is a `frozendict`; per-frame values from the wire are plain dicts.
-        self.first_frame_received = False  # set True once at least one frame has been processed; gates overlay visibility so the warmup state doesn't show a stale full-bbox outline
+        self.first_frame_received = False  # set True once at least one frame of the current stream has been processed; reset by `start`. Gates overlay visibility (so the warmup state doesn't show a stale full-bbox outline), and answers whether there is a picture to show at all.
         self.avatar_x_center = avatar_x_center
         self.avatar_y_bottom = avatar_y_bottom
         # Intended panel size, used for the crop-overlay clip rect. DPG's `set_item_width`/`set_item_height`
@@ -768,6 +768,7 @@ class DPGAvatarRenderer:
         logger.info(f"DPGAvatarRenderer.start: Setting up background task for avatar instance '{avatar_instance_id}'.")
 
         self.avatar_instance_id = avatar_instance_id  # store for pause/resume
+        self.first_frame_received = False  # a fresh stream is in warmup until its first frame arrives, however many the previous one delivered
 
         # We must continuously retrieve new frames as they become ready, so this runs in the background.
         def update_live_texture(task_env) -> None:

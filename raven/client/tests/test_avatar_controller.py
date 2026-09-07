@@ -233,3 +233,112 @@ def test_no_settings_loaded_means_no_effect(effect_config):
     controller.mark_discontinuity(config)
     assert sent == []
     assert config._effect_timer is None
+
+
+# --------------------------------------------------------------------------------
+# Video suppression, and the availability answer a panel switch is driven from
+#
+# An app that gives the avatar's panel to something else asks two things of the controller: switch the
+# video off while nothing is showing it, and say whether the avatar has anything to show. Those have to be
+# independent, because the second one drives the decision that causes the first.
+
+class FakeRenderer:
+    """Enough `DPGAvatarRenderer` to record what the controller asked of it. No GUI, no server."""
+
+    def __init__(self, avatar_instance_id="test-instance", first_frame_received=True):
+        self.avatar_instance_id = avatar_instance_id
+        self.first_frame_received = first_frame_received
+        self.animator_running = True
+        self.actions = []
+
+    def pause(self, action):
+        self.actions.append(action)
+        self.animator_running = (action == "resume")
+
+
+@pytest.fixture
+def video_config():
+    """A controller and an instance whose renderer is a recorder, with one frame already delivered."""
+    controller = avatar_controller.DPGAvatarController.__new__(avatar_controller.DPGAvatarController)
+    renderer = FakeRenderer()
+    config = env(avatar_instance_id="test-instance",
+                 avatar_renderer=renderer,
+                 idle_timeout=30.0,
+                 _idle_detector_lock=threading.RLock(),
+                 _idle_detector_overrides=0,
+                 _idle_detector_t0=time.monotonic_ns(),
+                 _video_suppressed=False,
+                 _idle_paused=False)
+    return controller, config, renderer
+
+
+def test_suppressing_pauses_the_video(video_config):
+    controller, config, renderer = video_config
+    controller.set_video_suppressed(config, True)
+    assert renderer.actions == ["pause"]
+    assert not renderer.animator_running
+
+
+def test_suppressing_twice_does_not_re_pause(video_config):
+    """`set_video_suppressed` is called once per tick of the panel watch, so nearly every call is a repeat."""
+    controller, config, renderer = video_config
+    controller.set_video_suppressed(config, True)
+    controller.set_video_suppressed(config, True)
+    assert renderer.actions == ["pause"]
+
+
+def test_un_suppressing_resumes_the_video(video_config):
+    controller, config, renderer = video_config
+    controller.set_video_suppressed(config, True)
+    controller.set_video_suppressed(config, False)
+    assert renderer.actions == ["pause", "resume"]
+    assert renderer.animator_running
+
+
+def test_a_ping_does_not_resume_a_suppressed_video(video_config):
+    """Speaking, and every other thing that counts as activity, pings. None of them is a reason to start
+    animating a face that nothing is showing."""
+    controller, config, renderer = video_config
+    controller.set_video_suppressed(config, True)
+    controller.ping(config)
+    assert renderer.actions == ["pause"], "the ping resumed a video that nothing was displaying"
+
+
+def test_suppression_does_not_make_the_avatar_read_as_unavailable(video_config):
+    """The property the whole arrangement rests on.
+
+    A caller hides the avatar *because* this answer said the video was off. If suppressing then changed the
+    answer, that caller would be reading back its own decision, and would go on hiding the avatar forever.
+    """
+    controller, config, renderer = video_config
+    assert controller.video_available(config)
+    controller.set_video_suppressed(config, True)
+    assert not renderer.animator_running, ("nothing was paused, so this fixture cannot tell an answer that "
+                                           "ignores suppression from one that reads `animator_running`")
+    assert controller.video_available(config), "suppressing the video made the avatar look unavailable"
+
+
+def test_a_stream_still_warming_up_has_nothing_to_show(video_config):
+    """The seconds between starting the renderer and the first frame arriving are a blank panel."""
+    controller, config, renderer = video_config
+    renderer.first_frame_received = False
+    assert not controller.video_available(config)
+
+
+def test_no_stream_means_nothing_to_show(video_config):
+    """Never started, stopped, or lost: the renderer drops the instance ID in each case."""
+    controller, config, renderer = video_config
+    renderer.avatar_instance_id = None
+    assert not controller.video_available(config)
+
+
+def test_an_idle_paused_avatar_has_nothing_to_show_until_the_next_ping(video_config):
+    """The idle detector's own pause is a real absence, and it is the one a ping is supposed to end."""
+    controller, config, renderer = video_config
+    config._idle_paused = True  # as the idle detector leaves it
+    renderer.animator_running = False
+    assert not controller.video_available(config)
+
+    controller.ping(config)
+    assert renderer.actions == ["resume"]
+    assert controller.video_available(config)

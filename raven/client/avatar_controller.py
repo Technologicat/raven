@@ -317,6 +317,13 @@ class DPGAvatarController:
         config._idle_detector_lock = threading.RLock()
         config._idle_detector_overrides = 0
         config._idle_detector_t0 = time.monotonic_ns()
+        # The two ways the video can be off, kept apart because a caller deciding *whether to show the
+        # avatar at all* must not read its own effect. Suppression is that caller's own doing — it turns
+        # the video off because nothing is displaying it — so a predicate that counted suppression as
+        # unavailability would answer "unavailable" for as long as it kept the avatar hidden, and the
+        # avatar would never come back. See `set_video_suppressed` and `video_available`.
+        config._video_suppressed = False  # the app says nothing is showing this avatar right now
+        config._idle_paused = False  # the idle detector switched the video off
         # Counted rather than a flag, because more than one thing can be consulting an external source at
         # once: a turn's tool call runs on the turn's thread while an attachment is being read on a
         # background one, and whichever finished first would otherwise switch the effect off under the
@@ -363,6 +370,7 @@ class DPGAvatarController:
                             try:
                                 if config.avatar_renderer is not None:
                                     config.avatar_renderer.pause(action="pause")
+                                    config._idle_paused = True
                             except Exception:
                                 logger.exception(f"emotion_autoreset_task: instance {task_env.task_name}: caught exception during `avatar_renderer.pause`")
                             config._idle_detector_t0 = time_now  # reset the timeout last, so that the old timestamp is available during `on_idle`.
@@ -382,12 +390,71 @@ class DPGAvatarController:
                   See `register_avatar_instance`.
 
         If `avatar_renderer` is provided in `config`: resume the avatar video, if currently paused.
+        Except while the video is suppressed — there is no point resuming a stream nothing is showing,
+        and doing so would undo `set_video_suppressed` at the next thing that counts as activity.
         """
         config._idle_detector_t0 = time.monotonic_ns()
         if config.avatar_renderer is not None:
             connected = (config.avatar_renderer.avatar_instance_id is not None)
-            if connected and (not config.avatar_renderer.animator_running):
+            if connected and (not config._video_suppressed) and (not config.avatar_renderer.animator_running):
                 config.avatar_renderer.pause(action="resume")
+                config._idle_paused = False
+
+    def set_video_suppressed(self,
+                             config: env,
+                             suppressed: bool) -> None:
+        """Tell the controller whether anything is currently showing this avatar's video.
+
+        `config`: Configuration for controlling a specific avatar instance and its GUI elements.
+                  See `register_avatar_instance`.
+
+        `suppressed`: `True` when the avatar's panel has been given to something else, `False` when
+                      the avatar has it back.
+
+        While suppressed, the animator is paused (both in the GUI and on the server) and stays paused:
+        `ping` will not resume it, and the idle detector has nothing left to switch off. Un-suppressing
+        resumes the video and restarts the idle countdown, an uncovering being activity by definition.
+
+        Idempotent, and safe to call before the renderer has been started — a renderer with no avatar
+        instance has no animator to pause, and the suppression still takes effect for whatever starts next.
+
+        Not callable from the render thread: pausing the animator waits for a frame.
+        """
+        with config._idle_detector_lock:
+            if suppressed == config._video_suppressed:
+                return
+            config._video_suppressed = suppressed
+            if suppressed:
+                renderer = config.avatar_renderer
+                if (renderer is not None) and (renderer.avatar_instance_id is not None) and renderer.animator_running:
+                    logger.info(f"set_video_suppressed: instance '{config.avatar_instance_id}': nothing is showing this avatar; pausing its video")
+                    renderer.pause(action="pause")
+            else:
+                logger.info(f"set_video_suppressed: instance '{config.avatar_instance_id}': the avatar is on screen again; resuming its video")
+                self.ping(config)
+
+    def video_available(self,
+                        config: env) -> bool:
+        """Whether this avatar has live video to look at, ignoring whether anything is looking.
+
+        `config`: Configuration for controlling a specific avatar instance and its GUI elements.
+                  See `register_avatar_instance`.
+
+        `False` while the stream is warming up — the renderer is started well before the first frame
+        arrives, and the seconds in between are a blank panel — while the idle detector has the video
+        switched off, and when there is no stream at all (never started, stopped, or lost).
+        """
+        # The obvious reading, `animator_running`, is the one that cannot be used: it also goes false
+        # when the video is suppressed, so a caller switching panels on this answer would be reading
+        # back its own decision. Every term below is a cause the caller cannot cause by hiding the avatar.
+        #
+        # Read without `_idle_detector_lock`: three bools, and a caller acting one tick late on any of
+        # them shows the wrong panel for a fraction of a second. Taking the lock here would put a waiter
+        # on whatever is mid-pause, which for this answer is a poor trade.
+        renderer = config.avatar_renderer
+        if renderer is None or renderer.avatar_instance_id is None:
+            return False
+        return renderer.first_frame_received and not config._idle_paused
 
     @contextlib.contextmanager
     def idle_override(self,
