@@ -1648,7 +1648,8 @@ class TestRoleIcons:
                 role_icons=lambda: {"assistant": "tex_ai"})
         built.refresh()
         node = built._chat_graph.graph.get_node_by_name(reply)
-        assert [s.texture for s in node.shapes if isinstance(s, xdotgraph.ImageShape)] == ["tex_ai"]
+        assert [s.levels[0].texture for s in node.shapes
+                if isinstance(s, xdotgraph.ImageShape)] == ["tex_ai"]
         built.destroy()
         dpg.delete_item(holder)
 
@@ -1669,7 +1670,8 @@ class TestRoleIcons:
 
         def texture_now():
             node = built._chat_graph.graph.get_node_by_name(reply)
-            return [s.texture for s in node.shapes if isinstance(s, xdotgraph.ImageShape)]
+            return [s.levels[0].texture for s in node.shapes
+                    if isinstance(s, xdotgraph.ImageShape)]
         assert texture_now() == ["tex_generic_ai"], \
             "no glyph was drawn at all, so a changed table proves nothing"
         table["assistant"] = "tex_character_ai"
@@ -1720,39 +1722,40 @@ class TestAttachmentThumbnails:
                 thumbnail_for=lambda name, size: ready.get(name))
         built.refresh()
 
-        assert self._cards(built._chat_graph, carrier)[0].texture is None, \
+        assert self._cards(built._chat_graph, carrier)[0].levels == (), \
             "the provider answered on the first ask, so nothing here is waiting for anything"
         assert not built._is_stale(), "the picture is stale for some other reason, which would mask this"
-        ready["a0.png"] = env(texture_tag="tex_a0", w=128, h=96)
+        ready["a0.png"] = env(levels=((128, 96, "tex_a0"),))
         assert built._is_stale()
         built.refresh()
-        assert self._cards(built._chat_graph, carrier)[0].texture == "tex_a0"
+        assert self._cards(built._chat_graph, carrier)[0].levels[0].texture == "tex_a0"
         built.destroy()
         dpg.delete_item(holder)
 
     def test_the_providers_mip_chain_reaches_the_card(self, dpg_context):
-        """The adapter's other half: the controller answers in an `env`, the picture takes `MipLevel`s.
-
-        A provider need not offer a chain — a single prepared size is a legitimate answer, and the
-        no-`mips` case is asserted alongside so that neither reading is the only one exercised.
-        """
+        """The adapter's other half: the controller answers in an `env` of triples, the picture takes
+        `MipLevel`s. A chain of one is a legitimate answer and is asserted alongside, so that neither
+        length is the only one exercised."""
         themes_and_fonts = dpg_context
         forest, root, carrier = self._forest_with_an_attachment()
         app_state = {"HEAD": carrier}
-        answer = {"a0.png": env(texture_tag="tex_a0", w=128, h=96,
-                                mips=((64, 48, "tex_a0_mip1"), (32, 24, "tex_a0_mip2")))}
+        answer = {"a0.png": env(levels=((128, 96, "tex_a0"), (64, 48, "tex_a0_mip1"),
+                                        (32, 24, "tex_a0_mip2")))}
         with dpg.window() as holder:
             built = chatgraph_panel.DPGChatGraphPanel(
                 gui_parent=holder, datastore=forest, app_state=app_state,
                 themes_and_fonts=themes_and_fonts, width=200, height=200,
                 thumbnail_for=lambda name, size: answer.get(name))
         built.refresh()
-        assert self._cards(built._chat_graph, carrier)[0].mips == (
-            xdotgraph.MipLevel(64, 48, "tex_a0_mip1"), xdotgraph.MipLevel(32, 24, "tex_a0_mip2"))
+        assert self._cards(built._chat_graph, carrier)[0].levels == (
+            xdotgraph.MipLevel(128, 96, "tex_a0"),
+            xdotgraph.MipLevel(64, 48, "tex_a0_mip1"),
+            xdotgraph.MipLevel(32, 24, "tex_a0_mip2"))
 
-        answer["a0.png"] = env(texture_tag="tex_a0", w=128, h=96)
+        answer["a0.png"] = env(levels=((128, 96, "tex_a0"),))
         built.refresh()
-        assert self._cards(built._chat_graph, carrier)[0].mips == ()
+        assert self._cards(built._chat_graph, carrier)[0].levels == (
+            xdotgraph.MipLevel(128, 96, "tex_a0"),)
         built.destroy()
         dpg.delete_item(holder)
 

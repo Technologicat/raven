@@ -323,11 +323,13 @@ class BezierShape(Shape):
 
 
 class MipLevel(NamedTuple):
-    """One coarser level of an `ImageShape`'s mip chain: a texture, and the pixel size it holds.
+    """One level of an `ImageShape`'s mip chain: a texture, and the pixel size it holds.
 
     The size is here because the renderer chooses a level by comparing it against the size the picture is
     about to be drawn at, and this package holds no DPG at the data-model layer — so whoever prepared the
-    texture says how big it is.
+    texture says how big it is. Stated per level rather than as a scale against a native size, which is
+    the other way Raven spells a chain (`raven.cherrypick.imageview`), because it saves every reader of a
+    level the arithmetic.
     """
 
     width: int
@@ -336,55 +338,49 @@ class MipLevel(NamedTuple):
 
 
 class ImageShape(Shape):
-    """A bitmap, drawn from a texture the caller has already registered with DPG.
+    """A bitmap, drawn from textures the caller has already registered with DPG.
 
     Attributes:
-        texture: DPG texture tag or ID of the finest level, or `None` to draw nothing.
+        levels: The mip chain, finest first, as `MipLevel`s. Empty to draw nothing.
         x1, y1, x2, y2: The rectangle to draw into, in graph coordinates.
         max_screen_size: Longest side the image may be drawn at, in screen pixels, or `None` for no cap.
-        mips: The chain *below* `texture`, coarsest last, as `MipLevel`s. Empty for a single-level image.
 
     The rectangle is in graph coordinates like every other shape here, so the image pans and zooms with
     the drawing. `max_screen_size` then puts a ceiling on how large it is allowed to get. Shrinking to
     obey it is uniform and about the rectangle's centre, so the picture keeps both its proportions and
     its place.
 
-    **The texture has to hold the pixels the display wants, because DPG samples nearest-neighbour.**
-    Anything drawn at a size the texture was not prepared for aliases, and a graph zooms continuously, so
-    there is no one size to prepare it at. Two answers, and which one applies depends on the asset:
+    **A chain rather than one texture, because DPG samples nearest-neighbour.** Anything drawn at a size
+    its texture was not prepared for aliases, and a graph zooms continuously, so there is no one size to
+    prepare at: the renderer draws whichever level suits the size on screen. `raven.common.image.lanczos`
+    builds the levels — `mipchain` — and Cherrypick's image viewer and the file dialog's thumbnail grid
+    do the same for their own drawing.
 
-      - An icon shipped at its display size — the chat log's role glyphs are 64x64 — needs nothing but a
-        `max_screen_size` that stops it being drawn larger than it is. Downsampling from there is the
-        path the chat log itself already takes.
-      - Anything else wants a Lanczos mip chain, which `raven.common.image.lanczos.mipchain` builds: pass
-        the finest level as `texture` and the rest as `mips`, and the renderer draws whichever level suits
-        the size on screen. That is what Cherrypick's image viewer and the file dialog's thumbnail grid do
-        with their own drawing, and it is why a card can be zoomed into without going soft and read at 1:1
-        without aliasing — one texture cannot do both.
+    An asset shipped at its display size is the degenerate case and is spelled the same way: a chain of
+    one, plus a `max_screen_size` that stops it being drawn larger than it is. The chat log's role glyphs,
+    which are 64x64, are that.
 
-    Prepare `texture` at the largest size the picture could reasonably be wanted at rather than at the
-    size it is usually drawn: past that the renderer has nothing finer to reach for and DPG upsamples.
-    **A larger preparation without the chain is worse than neither**, since drawing a 512 px texture into a
-    55 px card is a 9x nearest-neighbour downsample, which aliases at the zoom people read at to cure a
-    softness at a zoom they rarely use.
+    Prepare the finest level at the largest size the picture could reasonably be wanted at rather than at
+    the size it is usually drawn: past that the renderer has nothing finer to reach for and DPG upsamples.
+    **A larger preparation without the rest of the chain is worse than neither**, since drawing a 1024 px
+    texture into a 55 px card is an eighteen-fold nearest-neighbour downsample — aliasing at the zoom
+    people read at, to cure a softness at one they rarely reach.
 
-    A `None` texture is an ordinary state rather than a fault: it is what a caller draws while an image is
+    An empty chain is an ordinary state rather than a fault: it is what a caller draws while an image is
     still being prepared on a background thread, and it lets the shape carry the rectangle the image will
     occupy so that whatever the caller draws in the meantime is the right size.
     """
 
-    def __init__(self, texture: Optional[Union[int, str]],
+    def __init__(self, levels: Sequence[MipLevel],
                  x1: float, y1: float, x2: float, y2: float,
-                 max_screen_size: Optional[float] = None,
-                 mips: Sequence[MipLevel] = ()):
+                 max_screen_size: Optional[float] = None):
         super().__init__()
-        self.texture = texture
+        self.levels = tuple(levels)
         self.x1 = x1
         self.y1 = y1
         self.x2 = x2
         self.y2 = y2
         self.max_screen_size = max_screen_size
-        self.mips = tuple(mips)
 
     def get_bounding_box(self) -> Tuple[float, float, float, float]:
         return (min(self.x1, self.x2), min(self.y1, self.y2),

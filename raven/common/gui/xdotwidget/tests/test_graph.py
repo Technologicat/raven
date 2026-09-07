@@ -173,7 +173,7 @@ class TestDrawnBoundingBox:
     def node_with_a_decoration() -> Node:
         """A 40x40 node at the origin, with an image hanging a hundred units off its right edge."""
         return Node(x=0.0, y=0.0, w=40.0, h=40.0, internal_name="only",
-                    shapes=[ImageShape("some_texture", 100.0, -20.0, 140.0, 20.0)])
+                    shapes=[ImageShape([MipLevel(40, 40, "some_texture")], 100.0, -20.0, 140.0, 20.0)])
 
     def test_it_covers_what_is_drawn_outside_the_node_box(self):
         node = self.node_with_a_decoration()
@@ -184,7 +184,7 @@ class TestDrawnBoundingBox:
         """A node's cell is its own extent whatever its shapes cover, so the two are unioned rather than
         the shapes simply replacing it."""
         node = Node(x=0.0, y=0.0, w=40.0, h=40.0, internal_name="only",
-                    shapes=[ImageShape("some_texture", 100.0, -5.0, 140.0, 5.0)])
+                    shapes=[ImageShape([MipLevel(40, 10, "some_texture")], 100.0, -5.0, 140.0, 5.0)])
         assert node.get_drawn_bounding_box() == (-20.0, -20.0, 140.0, 20.0)
 
     def test_a_node_with_no_shapes_still_has_its_cell(self):
@@ -211,8 +211,13 @@ class TestImageShape:
     The drawing itself needs DPG and is covered in `test_widget.py`.
     """
 
+    @staticmethod
+    def one_level():
+        """A chain of one, which is how an asset shipped at its display size is spelled."""
+        return [MipLevel(64, 64, "some_texture")]
+
     def test_bounding_box_is_the_rectangle(self):
-        shape = ImageShape("some_texture", 10.0, 20.0, 50.0, 70.0)
+        shape = ImageShape(self.one_level(), 10.0, 20.0, 50.0, 70.0)
         assert shape.get_bounding_box() == (10.0, 20.0, 50.0, 70.0)
 
     def test_the_corners_may_arrive_in_either_order(self):
@@ -221,26 +226,22 @@ class TestImageShape:
         Culling compares the box against the view, so a box with a negative extent is never visible and
         the image silently never draws.
         """
-        shape = ImageShape("some_texture", 50.0, 70.0, 10.0, 20.0)
+        shape = ImageShape(self.one_level(), 50.0, 70.0, 10.0, 20.0)
         assert shape.get_bounding_box() == (10.0, 20.0, 50.0, 70.0)
 
-    def test_a_shape_with_no_texture_still_has_its_rectangle(self):
+    def test_a_shape_with_no_levels_still_has_its_rectangle(self):
         """A placeholder holds the space its image will take, so what stands in for it is the right size."""
-        shape = ImageShape(None, 10.0, 20.0, 50.0, 70.0)
-        assert shape.texture is None
+        shape = ImageShape((), 10.0, 20.0, 50.0, 70.0)
+        assert shape.levels == ()
         assert shape.get_bounding_box() == (10.0, 20.0, 50.0, 70.0)
 
     def test_it_carries_no_pen(self):
         """An image has no ink, which is what keeps the dark-mode lightness inversion off the picture."""
-        assert ImageShape("some_texture", 0.0, 0.0, 1.0, 1.0).pen is None
-
-    def test_a_shape_with_one_size_has_an_empty_chain(self):
-        """An icon shipped at its display size is the common case and says nothing about mips."""
-        assert ImageShape("some_texture", 0.0, 0.0, 1.0, 1.0).mips == ()
+        assert ImageShape(self.one_level(), 0.0, 0.0, 1.0, 1.0).pen is None
 
     def test_the_chain_is_kept_as_a_tuple(self):
         """The renderer walks it once per frame per card, and a caller's list is a caller's to mutate."""
-        levels = [MipLevel(64, 64, "half"), MipLevel(32, 32, "quarter")]
-        shape = ImageShape("some_texture", 0.0, 0.0, 1.0, 1.0, mips=levels)
+        levels = [MipLevel(128, 128, "finest"), MipLevel(64, 64, "half")]
+        shape = ImageShape(levels, 0.0, 0.0, 1.0, 1.0)
         levels.clear()
-        assert shape.mips == (MipLevel(64, 64, "half"), MipLevel(32, 32, "quarter"))
+        assert shape.levels == (MipLevel(128, 128, "finest"), MipLevel(64, 64, "half"))

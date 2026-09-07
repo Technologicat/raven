@@ -242,23 +242,31 @@ MeasureText = Callable[[str, float], Optional[float]]
 
 @dataclasses.dataclass(frozen=True)
 class Thumbnail:
-    """A prepared attachment thumbnail: its texture, and the pixel size that texture holds.
+    """A prepared attachment thumbnail: the mip chain its picture is drawn from, finest level first.
 
-    `texture`: DPG texture tag or ID, of the finest level prepared.
-    `width`, `height`: That texture's own dimensions.
-    `mips`: The coarser levels below it, coarsest last, for the renderer to choose from by drawn size.
+    `levels`: One `xdotgraph.MipLevel` per prepared size, finest first. Never empty — a thumbnail that is
+              not ready yet is `None`, not one with no levels.
 
-    The dimensions are here because a card has to draw the picture at the picture's proportions. A square
-    rectangle stretches a wide photograph into a square one, which is a lie about the image and looks like
-    one; the card stays square so a fan of them reads as a count, and the picture is letterboxed inside it.
+    A chain rather than one texture because the graph zooms continuously; `xdotgraph.ImageShape` says why.
+    `width` and `height` are the finest level's, and are what a card draws the picture's proportions from:
+    a square rectangle stretches a wide photograph into a square one, which is a lie about the image and
+    looks like one, so the card stays square — a fan of them reads as a count — and the picture is
+    letterboxed inside it.
 
     This module holds no DPG and cannot ask a texture how big it is, so whoever prepared it says.
     """
 
-    texture: Union[int, str]
-    width: int
-    height: int
-    mips: Tuple[xdotgraph.MipLevel, ...] = ()
+    levels: Tuple[xdotgraph.MipLevel, ...]
+
+    def _get_width(self) -> int:
+        """The finest level's width in pixels."""
+        return self.levels[0].width
+    width = property(fget=_get_width, doc="The picture's own width in pixels, at the finest level prepared.")
+
+    def _get_height(self) -> int:
+        """The finest level's height in pixels."""
+        return self.levels[0].height
+    height = property(fget=_get_height, doc="The picture's own height in pixels, at the finest level prepared.")
 
 
 def _text_width(text: str, font_size: float,
@@ -597,10 +605,15 @@ class LayoutConfig:
     # Coarser levels are prepared alongside it as a mip chain, and the renderer draws whichever suits the
     # card's size on screen, so this being far larger than a card at 1:1 costs nothing in sharpness.
     #
-    # A card is `attachment_fraction * node_h` graph units across -- some 55 -- so 512 is sharp out to
-    # about 9x, which is well past where a reader zooms in to look at a picture. Past that DPG upsamples
-    # and the card goes blocky, which is what happens at *some* magnification whatever this says: the
-    # widget zooms to 100x, and preparing for that would be several megabytes a card.
+    # Sized from the zoom a reader actually reaches, which is "the card fills the panel": a card is
+    # `attachment_fraction * node_h` graph units across -- some 55 -- so a 780 px panel is 14x, and a
+    # maximized one more. 1024 covers that; 512 did not, and came out visibly soft at the zoom someone
+    # goes to when they want to look at the picture. Past this DPG upsamples and the card goes blocky,
+    # which happens at *some* magnification whatever this says -- the widget zooms to 100x, and
+    # preparing for that would be a hundred megabytes a card.
+    #
+    # Costs nothing for a small attachment: the preparation never upscales, so a source below this size
+    # is prepared at its own and the chain simply starts lower.
     #
     # **Not a cap on how large a card is drawn**, which is what it was until 2026-09-07 and which failed in
     # a way neither of us predicted. We both expected a zoomed-in thumbnail to go blurry; capping the
@@ -611,7 +624,7 @@ class LayoutConfig:
     # A cap is right for the role glyph, whose asset is shipped at its display size and has nothing better
     # to show. An attachment's source image is large, so the answer to "the card is bigger now" is a finer
     # level, not a smaller picture.
-    attachment_native_size: float = 512.0
+    attachment_native_size: float = 1024.0
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
     margin: float = 20.0
@@ -1597,7 +1610,11 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         # after the outline and the ring, which puts it on top of both: shapes are drawn in list order,
         # and a glyph half-covered by the box's own border would read as damage rather than as a mark.
         side = config.role_icon_fraction * config.node_h
-        shapes.append(xdotgraph.ImageShape(role_icon,
+        # A chain of one: the asset is shipped at its display size, so there is no coarser level to
+        # prepare and nothing finer to reach for. `max_screen_size` is what keeps it from being drawn
+        # past that size, which is the other half of the same answer.
+        native = int(config.role_icon_native_size)
+        shapes.append(xdotgraph.ImageShape([xdotgraph.MipLevel(native, native, role_icon)],
                                            x1 - 0.5 * side, y - 0.5 * side,
                                            x1 + 0.5 * side, y + 0.5 * side,
                                            max_screen_size=config.role_icon_native_size))
@@ -1750,9 +1767,8 @@ def _attachment_shapes(attachments: Sequence[Optional["Thumbnail"]], hidden: int
             # for what is prepared -- so the remedy for softness is a finer level, not a picture that stops
             # growing while its frame does not.
             picture = _letterboxed(x1, y1, x2, y2, thumbnail)
-            shapes.append(xdotgraph.ImageShape(thumbnail.texture if thumbnail is not None else None,
-                                               *picture,
-                                               mips=thumbnail.mips if thumbnail is not None else ()))
+            shapes.append(xdotgraph.ImageShape(thumbnail.levels if thumbnail is not None else (),
+                                               *picture))
         shapes.append(xdotgraph.PolygonShape(pen, corners, filled=False))
 
     shapes: List[xdotgraph.Shape] = []

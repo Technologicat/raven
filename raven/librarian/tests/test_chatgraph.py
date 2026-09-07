@@ -794,9 +794,9 @@ class TestRoleGlyphs:
         forest, system, greeting, user, reply = conversation
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply),
                                 role_icons=ROLE_ICONS)
-        assert [g.texture for g in self._glyphs(built, system)] == ["tex_system"]
-        assert [g.texture for g in self._glyphs(built, user)] == ["tex_user"]
-        assert [g.texture for g in self._glyphs(built, reply)] == ["tex_ai"]
+        assert [texture_on(g) for g in self._glyphs(built, system)] == ["tex_system"]
+        assert [texture_on(g) for g in self._glyphs(built, user)] == ["tex_user"]
+        assert [texture_on(g) for g in self._glyphs(built, reply)] == ["tex_ai"]
 
     def test_a_gap_box_gets_none(self, conversation):
         """Nobody said a gap, so there is nobody to name — and a glyph there would claim otherwise."""
@@ -819,7 +819,7 @@ class TestRoleGlyphs:
         forest, system, greeting, user, reply = conversation
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply),
                                 role_icons={"user": "tex_user"})
-        assert [g.texture for g in self._glyphs(built, user)] == ["tex_user"], \
+        assert [texture_on(g) for g in self._glyphs(built, user)] == ["tex_user"], \
             "not even the named role drew one, so this fixture cannot tell a lookup from a blanket refusal"
         assert self._glyphs(built, reply) == []
 
@@ -979,7 +979,7 @@ class TestAttachmentThumbnails:
     def test_one_card_per_attachment(self):
         forest, carrier = self._forest(3)
         built = self._build(forest, carrier)
-        assert [c.texture for c in self._cards(built, carrier)] == ["tex_a0.png", "tex_a1.png", "tex_a2.png"]
+        assert [texture_on(c) for c in self._cards(built, carrier)] == ["tex_a0.png", "tex_a1.png", "tex_a2.png"]
 
     def test_a_message_with_none_gets_none(self):
         forest, carrier = self._forest(0)
@@ -996,8 +996,8 @@ class TestAttachmentThumbnails:
 
         assert ([c.get_bounding_box() for c in self._cards(waiting, carrier)]
                 == [c.get_bounding_box() for c in self._cards(ready, carrier)])
-        assert [c.texture for c in self._cards(waiting, carrier)] == [None, None, None]
-        assert [c.texture for c in self._cards(ready, carrier)] != [None, None, None], \
+        assert [texture_on(c) for c in self._cards(waiting, carrier)] == [None, None, None]
+        assert [texture_on(c) for c in self._cards(ready, carrier)] != [None, None, None], \
             "nothing was ready either, so this fixture compares two identical states"
 
     def test_the_fan_straddles_the_right_edge_and_walks_outward(self):
@@ -1111,10 +1111,12 @@ class TestAttachmentThumbnails:
         renderer draws instead of a single texture stretched across it. A role glyph has one size and
         wants none, so the two margins differ here as well.
         """
-        levels = (xdotgraph.MipLevel(64, 64, "tex_half"), xdotgraph.MipLevel(32, 32, "tex_quarter"))
+        levels = (xdotgraph.MipLevel(128, 128, "tex_finest"),
+                  xdotgraph.MipLevel(64, 64, "tex_half"),
+                  xdotgraph.MipLevel(32, 32, "tex_quarter"))
 
         def prepared(name):
-            return chatgraph.Thumbnail(texture=f"tex_{name}", width=128, height=128, mips=levels)
+            return chatgraph.Thumbnail(levels=levels)
 
         forest, carrier = self._forest(1)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=carrier),
@@ -1129,8 +1131,8 @@ class TestAttachmentThumbnails:
         glyphs = [sh for sh in images if centre_of(sh) < centre]
         cards = [sh for sh in images if centre_of(sh) > centre]
         assert glyphs and cards, "the fixture has no glyph or no card, so it compares nothing"
-        assert all(card.mips == levels for card in cards)
-        assert glyphs[0].mips == ()
+        assert all(card.levels == levels for card in cards)
+        assert len(glyphs[0].levels) == 1, "a role glyph is one shipped size, so a chain of one"
 
     def test_the_deck_is_inside_what_the_node_says_it_draws(self):
         """Which is what keeps a card on screen once the reader has zoomed past its box.
@@ -1154,15 +1156,15 @@ class TestAttachmentThumbnails:
                     and box[2] <= drawn[2] and box[3] <= drawn[3]), \
                 f"a decoration at {box} lies outside what the node says it draws, {drawn}"
 
-    def test_a_card_whose_picture_has_not_landed_carries_no_chain(self):
+    def test_a_card_whose_picture_has_not_landed_carries_no_levels(self):
         """A placeholder is a rectangle and nothing else, so there is nothing to choose a level from."""
         forest, carrier = self._forest(1)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=carrier),
                                 role_icons=ROLE_ICONS, thumbnail_for=lambda name: None)
         node = built.graph.get_node_by_name(carrier)
-        cards = [sh for sh in node.shapes if isinstance(sh, xdotgraph.ImageShape) and sh.texture is None]
+        cards = [sh for sh in node.shapes if isinstance(sh, xdotgraph.ImageShape) and not sh.levels]
         assert cards, "every card was ready, so this fixture never sees a placeholder"
-        assert all(card.mips == () for card in cards)
+        assert all(card.levels == () for card in cards)
 
     def test_a_document_gets_a_card_too(self):
         """A message that is *only* attachments has no words either. Drawn without them it reads as a turn
@@ -1170,14 +1172,14 @@ class TestAttachmentThumbnails:
         `[empty]`."""
         forest, carrier = self._forest(0, text="", documents=["b0.pdf", "b1.bib", "b2.txt"])
         built = self._build(forest, carrier)
-        assert [c.texture for c in self._cards(built, carrier)] == ["tex_b0.pdf", "tex_b1.bib", "tex_b2.txt"]
+        assert [texture_on(c) for c in self._cards(built, carrier)] == ["tex_b0.pdf", "tex_b1.bib", "tex_b2.txt"]
         assert "[empty]" in texts_on(built, carrier), \
             "the fixture's message has text after all, so the box was never the empty one this is about"
 
     def test_images_and_documents_share_one_fan_in_the_order_they_were_attached(self):
         forest, carrier = self._forest(2, documents=["b0.pdf"])
         built = self._build(forest, carrier)
-        assert [c.texture for c in self._cards(built, carrier)] == \
+        assert [texture_on(c) for c in self._cards(built, carrier)] == \
             ["tex_a0.png", "tex_a1.png", "tex_b0.pdf"]
 
     def test_a_picture_keeps_its_proportions_inside_a_square_card(self):
@@ -1227,12 +1229,12 @@ class TestAttachmentThumbnails:
                                 role_icons=ROLE_ICONS, thumbnail_for=ready_thumbnail)
         assert built.graph.get_node_by_name(inlined) is not None, \
             "the child was not inlined, so this fixture does not exercise the path it is about"
-        assert [c.texture for c in self._cards(built, inlined)] == ["tex_b0.png", "tex_b1.png"]
+        assert [texture_on(c) for c in self._cards(built, inlined)] == ["tex_b0.png", "tex_b1.png"]
         node = built.graph.get_node_by_name(inlined)
         centre = 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2])
         glyphs = [s for s in node.shapes if isinstance(s, xdotgraph.ImageShape)
                   and 0.5 * (s.get_bounding_box()[0] + s.get_bounding_box()[2]) < centre]
-        assert [g.texture for g in glyphs] == ["tex_ai"]
+        assert [texture_on(g) for g in glyphs] == ["tex_ai"]
 
     def test_every_pile_is_a_latin_square(self):
         """One card per row and one per column, which is what makes a pile a pile rather than a stagger:
@@ -1383,9 +1385,18 @@ class TestAttachmentThumbnails:
             "the fan runs into the next box's role glyph"
 
 
+def texture_on(shape):
+    """The texture an `ImageShape` draws at its finest level, or `None` while its picture is unprepared.
+
+    A placeholder is an empty chain rather than a null texture, so the two states have to be told apart
+    once here instead of at every assertion that names a card.
+    """
+    return shape.levels[0].texture if shape.levels else None
+
+
 def ready_thumbnail(name, width=128, height=128):
     """A prepared thumbnail, as a provider that had one to hand would answer."""
-    return chatgraph.Thumbnail(texture=f"tex_{name}", width=width, height=height)
+    return chatgraph.Thumbnail(levels=(xdotgraph.MipLevel(width, height, f"tex_{name}"),))
 
 
 # ---------------------------------------------------------------------------

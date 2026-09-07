@@ -167,10 +167,10 @@ def test_real_attachments_become_drawn_cards(pipeline):
     """The seam: bytes in a sidecar, out the other end as textures the graph has drawn."""
     panel, forest, names, carrier, pump = pipeline
 
-    assert [c.texture for c in cards(panel, carrier)] == [None, None, None], \
+    assert [c.levels for c in cards(panel, carrier)] == [(), (), ()], \
         "something was ready before a frame had rendered, so this test never waits for anything"
-    assert pump(lambda: all(c.texture is not None for c in cards(panel, carrier))), \
-        f"not every card was filled: {[c.texture for c in cards(panel, carrier)]}"
+    assert pump(lambda: all(c.levels for c in cards(panel, carrier))), \
+        f"not every card was filled: {[c.levels for c in cards(panel, carrier)]}"
     assert len(cards(panel, carrier)) == 3
     assert panel._awaited_thumbnails == set(), "the panel is still waiting for something it has"
 
@@ -179,16 +179,16 @@ def test_a_document_is_drawn_as_its_file_type(pipeline):
     """It has no picture of its own, and a message that is only attachments has no words either — so
     without this it is an `[empty]` box with nothing beside it."""
     panel, forest, names, carrier, pump = pipeline
-    assert pump(lambda: all(c.texture is not None for c in cards(panel, carrier)))
+    assert pump(lambda: all(c.levels for c in cards(panel, carrier)))
     document_card = cards(panel, carrier)[-1]  # attached last, so drawn last in the fan
-    assert "document" in str(document_card.texture), \
-        f"the .pdf did not get the generic document icon: {document_card.texture}"
+    finest = document_card.levels[0].texture
+    assert "document" in str(finest), f"the .pdf did not get the generic document icon: {finest}"
 
 
 def test_the_pictures_keep_their_proportions(pipeline):
     """A 4:1 image and a 1:4 one, so a card that squared them would be caught either way round."""
     panel, forest, names, carrier, pump = pipeline
-    assert pump(lambda: all(c.texture is not None for c in cards(panel, carrier)))
+    assert pump(lambda: all(c.levels for c in cards(panel, carrier)))
     wide, tall = cards(panel, carrier)[0], cards(panel, carrier)[1]
 
     def aspect(card):
@@ -202,7 +202,7 @@ def test_one_texture_serves_every_document_of_a_type(pipeline):
     """Three attached PDFs are one icon, not three copies of it. Images stay their own, being content
     addressed already — the same picture attached twice decodes once for that reason instead."""
     panel, forest, names, carrier, pump = pipeline
-    assert pump(lambda: all(c.texture is not None for c in cards(panel, carrier)))
+    assert pump(lambda: all(c.levels for c in cards(panel, carrier)))
     identity = DPGChatController.graph_thumbnail_identity
     assert identity("one.pdf") == identity("another.pdf")
     assert identity(names["wide"]) != identity(names["tall"]), \
@@ -217,7 +217,7 @@ def test_a_picture_arrives_as_a_mip_chain(pipeline):
     looking perfectly well formed.
     """
     panel, forest, names, carrier, pump = pipeline
-    assert pump(lambda: all(c.texture is not None for c in cards(panel, carrier)))
+    assert pump(lambda: all(c.levels for c in cards(panel, carrier)))
     wide, tall = cards(panel, carrier)[0], cards(panel, carrier)[1]
 
     def size_of(texture):
@@ -225,11 +225,12 @@ def test_a_picture_arrives_as_a_mip_chain(pipeline):
         return (configuration["width"], configuration["height"])
 
     for card in (wide, tall):
-        assert card.mips, "the picture came back as a single texture, so there is no chain to draw from"
-        for level in card.mips:
+        assert len(card.levels) > 1, \
+            "the picture came back as a single size, so there is no chain to choose from"
+        for level in card.levels:
             assert (level.width, level.height) == size_of(level.texture), \
                 f"a level claims {(level.width, level.height)} and holds {size_of(level.texture)}"
-        sizes = [size_of(card.texture)] + [(level.width, level.height) for level in card.mips]
+        sizes = [(level.width, level.height) for level in card.levels]
         for finer, coarser in zip(sizes, sizes[1:]):
             assert coarser[0] < finer[0] and coarser[1] < finer[1], \
                 f"the chain does not descend: {sizes}"

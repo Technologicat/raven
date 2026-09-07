@@ -403,7 +403,7 @@ def _render_image_shape(drawlist: Union[int, str],
     and inverting a photograph or an icon would make it wrong rather than dark-friendly. A caller that
     wants the image to sit in the drawing outlines it, and *that* line is a pen and does invert.
     """
-    if shape.texture is None:  # still being prepared; the caller draws whatever stands in for it
+    if not shape.levels:  # still being prepared; the caller draws whatever stands in for it
         return
 
     x1, y1 = viewport.graph_to_screen(min(shape.x1, shape.x2), min(shape.y1, shape.y2))
@@ -438,14 +438,14 @@ def _texture_for_screen_size(shape: ImageShape, w: float, h: float) -> Union[int
 
     **What decides the level is the size in screen pixels, which is the size in graph units times the
     zoom.** A graph shown at 1:1 says nothing on its own — a card 55 graph units across is 55 pixels
-    there, and a level prepared at 512 would be a nine-fold downsample.
+    there, and a level prepared at 1024 would be an eighteen-fold downsample.
     """
-    texture = shape.texture
-    for level in shape.mips:  # finest first
+    chosen = shape.levels[0]
+    for level in shape.levels[1:]:  # finest first
         if level.width < w or level.height < h:
             break
-        texture = level.texture
-    return texture
+        chosen = level
+    return chosen.texture
 
 
 def _get_element_fillcolor(element: Optional[Element]) -> Optional[Color]:

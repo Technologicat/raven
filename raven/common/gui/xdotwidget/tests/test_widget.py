@@ -346,6 +346,15 @@ def texture(dpg_context):
         yield dpg.add_static_texture(2, 2, [1.0] * 16)
 
 
+def one_level(texture, size=1000):
+    """`texture` as a chain of one, declared large enough that no test picks a level by accident.
+
+    Every test that hands over a single texture is asking about something else — the rectangle, the cap,
+    culling — so the declared size is chosen to keep level selection out of the answer.
+    """
+    return [MipLevel(size, size, texture)]
+
+
 class TestImageShapesAreDrawn:
     """`ImageShape` — the shape Librarian's chat graph draws role glyphs and attachment thumbnails with.
 
@@ -369,21 +378,21 @@ class TestImageShapesAreDrawn:
         return None
 
     def test_an_image_shape_reaches_the_drawlist(self, widget, texture):
-        widget.set_graph(self.graph_with(ImageShape(texture, 20.0, 20.0, 80.0, 80.0)))
+        widget.set_graph(self.graph_with(ImageShape(one_level(texture), 20.0, 20.0, 80.0, 80.0)))
         widget.zoom_to_fit(animate=False)
         widget._render()
         assert self.drawn_image(widget) is not None
 
     def test_a_shape_with_no_texture_draws_nothing(self, widget, texture):
         """A placeholder holds its space in the layout without putting anything on screen."""
-        widget.set_graph(self.graph_with(ImageShape(None, 20.0, 20.0, 80.0, 80.0)))
+        widget.set_graph(self.graph_with(ImageShape((), 20.0, 20.0, 80.0, 80.0)))
         widget.zoom_to_fit(animate=False)
         widget._render()
         assert self.drawn_image(widget) is None
 
     def test_the_rectangle_follows_the_zoom(self, widget, texture):
         """It is a shape in graph space, so it grows and shrinks with everything else."""
-        widget.set_graph(self.graph_with(ImageShape(texture, 20.0, 20.0, 80.0, 80.0)))
+        widget.set_graph(self.graph_with(ImageShape(one_level(texture), 20.0, 20.0, 80.0, 80.0)))
         widget.set_zoom(1.0, animate=False)
         widget._render()
         at_1to1 = self.drawn_image(widget)
@@ -402,7 +411,7 @@ class TestImageShapesAreDrawn:
         The negative control is the assertion at 1:1: below the cap the shape is untouched, so a renderer
         that clamped unconditionally — or one that ignored the cap entirely — fails one of the two.
         """
-        widget.set_graph(self.graph_with(ImageShape(texture, 20.0, 20.0, 80.0, 80.0,
+        widget.set_graph(self.graph_with(ImageShape(one_level(texture), 20.0, 20.0, 80.0, 80.0,
                                                     max_screen_size=90.0)))
         widget.set_zoom(1.0, animate=False)
         widget._render()
@@ -420,12 +429,12 @@ class TestImageShapesAreDrawn:
 
     def test_the_cap_shrinks_it_about_its_centre(self, widget, texture):
         """So a capped image keeps the place the layout gave it instead of sliding towards a corner."""
-        widget.set_graph(self.graph_with(ImageShape(texture, 20.0, 20.0, 80.0, 80.0,
+        widget.set_graph(self.graph_with(ImageShape(one_level(texture), 20.0, 20.0, 80.0, 80.0,
                                                     max_screen_size=30.0)))
         widget.set_zoom(1.0, animate=False)
         widget._render()
         capped = self.drawn_image(widget)
-        widget.set_graph(self.graph_with(ImageShape(texture, 20.0, 20.0, 80.0, 80.0)))
+        widget.set_graph(self.graph_with(ImageShape(one_level(texture), 20.0, 20.0, 80.0, 80.0)))
         widget._render()
         uncapped = self.drawn_image(widget)
 
@@ -442,13 +451,14 @@ class TestImageShapesAreDrawn:
 
 @pytest.fixture(scope="module")
 def chain(dpg_context):
-    """A picture prepared at four sizes: `(finest texture, its coarser levels, all of them by size)`."""
+    """A picture prepared at four sizes: `(the chain finest-first, the textures by size)`."""
     with dpg.texture_registry():
         levels = {size: dpg.add_static_texture(2, 2, [1.0] * 16, label=f"level{size}")
                   for size in (256, 128, 64, 32)}
-    return (levels[256], [MipLevel(128, 128, levels[128]),
-                          MipLevel(64, 64, levels[64]),
-                          MipLevel(32, 32, levels[32])], levels)
+    return ([MipLevel(256, 256, levels[256]),
+             MipLevel(128, 128, levels[128]),
+             MipLevel(64, 64, levels[64]),
+             MipLevel(32, 32, levels[32])], levels)
 
 
 class TestTheMipLevelDrawnFollowsTheScreenSize:
@@ -479,11 +489,11 @@ class TestTheMipLevelDrawnFollowsTheScreenSize:
         """The rectangle is 60 graph units, so the drawn size is 60x the zoom.
 
         Four zooms and four different answers, which is what says the selection is a function of the size
-        rather than a constant: a renderer that always drew `shape.texture` would pass only the last row,
+        rather than a constant: a renderer that always drew the finest level would pass only the last row,
         and one that always drew the coarsest only the first.
         """
-        finest, mips, levels = chain
-        widget.set_graph(self.graph_with(ImageShape(finest, 20.0, 20.0, 80.0, 80.0, mips=mips)))
+        prepared, levels = chain
+        widget.set_graph(self.graph_with(ImageShape(prepared, 20.0, 20.0, 80.0, 80.0)))
         drawn_at = {}
         for zoom in (0.25, 1.0, 2.0, 4.0):
             widget.set_zoom(zoom, animate=False)
@@ -494,10 +504,10 @@ class TestTheMipLevelDrawnFollowsTheScreenSize:
                             2.0: levels[128],   # 120
                             4.0: levels[256]}   # 240 -- past every mip, so the finest, upsampled
 
-    def test_a_shape_with_no_chain_draws_its_one_texture(self, widget, chain):
-        """The role glyphs' case, and every caller that predates the chain."""
-        finest, _mips, levels = chain
-        widget.set_graph(self.graph_with(ImageShape(finest, 20.0, 20.0, 80.0, 80.0)))
+    def test_a_chain_of_one_draws_that_one_at_every_size(self, widget, chain):
+        """The role glyphs' case: an asset shipped at its display size has nothing else to offer."""
+        prepared, levels = chain
+        widget.set_graph(self.graph_with(ImageShape(prepared[:1], 20.0, 20.0, 80.0, 80.0)))
         for zoom in (0.25, 4.0):
             widget.set_zoom(zoom, animate=False)
             widget._render()
@@ -509,12 +519,12 @@ class TestTheMipLevelDrawnFollowsTheScreenSize:
         Without the cap this zoom asks for the finest level — asserted, since otherwise the fixture could
         not tell a renderer that consults the cap from one that ignores it.
         """
-        finest, mips, levels = chain
+        prepared, levels = chain
         widget.set_zoom(4.0, animate=False)  # 240 px wanted
-        widget.set_graph(self.graph_with(ImageShape(finest, 20.0, 20.0, 80.0, 80.0, mips=mips)))
+        widget.set_graph(self.graph_with(ImageShape(prepared, 20.0, 20.0, 80.0, 80.0)))
         widget._render()
         assert self.drawn_texture(widget) == levels[256]
-        widget.set_graph(self.graph_with(ImageShape(finest, 20.0, 20.0, 80.0, 80.0, mips=mips,
+        widget.set_graph(self.graph_with(ImageShape(prepared, 20.0, 20.0, 80.0, 80.0,
                                                     max_screen_size=60.0)))
         widget._render()
         assert self.drawn_texture(widget) == levels[64]
@@ -538,7 +548,7 @@ class TestDecorationsInTheMarginSurviveCulling:
                      nodes=[Node(x=0.0, y=0.0, w=40.0, h=40.0, internal_name="only",
                                  shapes=[PolygonShape(pen, [(-20.0, -20.0), (20.0, -20.0),
                                                             (20.0, 20.0), (-20.0, 20.0)]),
-                                         ImageShape(texture, 100.0, -20.0, 140.0, 20.0)])])
+                                         ImageShape(one_level(texture), 100.0, -20.0, 140.0, 20.0)])])
 
     @staticmethod
     def drawn_image(instance: XDotWidget):
