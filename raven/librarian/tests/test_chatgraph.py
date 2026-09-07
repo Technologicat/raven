@@ -830,14 +830,38 @@ class TestRoleGlyphs:
             (f"a glyph hangs {overhang} units past its box into a {config.horizontal_spacing}-unit gap, "
              "so it is drawn over the sibling to its left")
 
-    def test_it_costs_the_label_nothing(self, conversation):
-        """The whole argument for straddling the edge. A glyph inside the box would take width off every
-        label in the tree, and the label is what the box is mostly for."""
+    def test_the_text_starts_past_the_glyph(self, conversation):
+        """The glyph is centred on the box's own centre, so it crosses the label rather than passing above
+        or below it. Both lines therefore start past its inner edge; text drawn under it would be text
+        with a picture on top of it, which is what the first live render showed on every box."""
         forest, system, greeting, user, reply = conversation
-        state = chatgraph.ViewState(head_node_id=reply)
-        without = texts_on(chatgraph.build(forest, state), reply)
-        with_glyph = texts_on(chatgraph.build(forest, state, role_icons=ROLE_ICONS), reply)
-        assert with_glyph == without
+        # A message long enough to fill the box. A short one is centred clear of the glyph whatever the
+        # inset is, so it cannot tell a reserved gutter from none -- which is exactly how the first
+        # version of this test passed against code that drew the label under the glyph.
+        forest.create_node(payload("assistant", "a reply long enough to run the whole width of its box "
+                                                "and then some, twice over, so that it wraps"),
+                           parent_id=user)
+        tip = chatutil.descend_to_latest(forest, user)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=tip),
+                                role_icons=ROLE_ICONS)
+        node = built.graph.get_node_by_name(tip)
+        glyph_inner_edge = self._glyphs(built, tip)[0].get_bounding_box()[2]
+        texts = [s for s in node.shapes if isinstance(s, xdotgraph.TextShape)]
+        assert texts, "nothing was drawn, so clearing the glyph says nothing"
+        for shape in texts:
+            assert shape.get_bounding_box()[0] >= glyph_inner_edge, \
+                f"'{shape.t}' starts under the glyph"
+        assert node.get_bounding_box()[0] < glyph_inner_edge, \
+            "the glyph does not reach inside the box at all, so clearing it costs nothing to arrange"
+
+    def test_the_gutter_is_the_glyph_s_inner_half_and_nothing_more(self):
+        """What it costs, stated as a number so a change to either constant shows up as a diff here."""
+        config = chatgraph.LayoutConfig()
+        assert config._get_role_icon_gutter() == pytest.approx(0.5 * config.role_icon_fraction * config.node_h)
+        without = config._get_effective_label_chars(False)
+        with_glyph = config._get_effective_label_chars(True)
+        assert without - with_glyph == 2, \
+            f"a glyph costs {without - with_glyph} characters of label, not the 2 recorded here"
 
     def test_it_is_drawn_over_the_box_rather_than_under_it(self, conversation):
         """Shapes are drawn in list order, and a glyph half-covered by the box's own border would read as

@@ -516,9 +516,10 @@ class LayoutConfig:
     # zooms out to take in a wide fan -- which is exactly the view a constant screen size fails in, the
     # nodes there being a few dozen pixels across and a 64 px glyph then wider than the box carrying it.
     #
-    # Straddling costs the box no interior. The speaker line and the label keep their full width, and the
-    # right edge is left to the attachment thumbnails, so no node is asked to hold three things in a space
-    # that fits one.
+    # Straddling is what makes it cheap rather than free. The glyph's inner half is a gutter the text
+    # starts past -- two characters off a label at the shipped sizes, against the five a glyph drawn
+    # wholly inside would take -- and the right edge is left to the attachment thumbnails, so no node is
+    # asked to hold three things in a space that fits one.
     role_icon_fraction: float = 0.5
     # ...and never drawn larger than the asset, which the shipped icons are 64x64 of. DPG samples
     # nearest-neighbour, so past native size the glyph turns into visible squares; downsampling from 64 is
@@ -530,7 +531,16 @@ class LayoutConfig:
     label_chars: Optional[int] = None
     label_lines: int = 2
 
-    def _get_effective_speaker_chars(self) -> int:
+    def _get_role_icon_gutter(self) -> float:
+        """Return how far into the box a role glyph reaches, in graph units.
+
+        Half the glyph, the other half hanging outside the left edge. The text starts past this, which is
+        the whole of what the glyph costs a box: two characters off a label at the shipped sizes, against
+        the five a glyph drawn wholly inside would take.
+        """
+        return 0.5 * self.role_icon_fraction * self.node_h
+
+    def _get_effective_speaker_chars(self, has_role_icon: bool = False) -> int:
         """Return how many characters fit across a node on the speaker line, at the role font size.
 
         The label's budget, computed for the smaller font the speaker line uses. Needed because that line
@@ -539,13 +549,15 @@ class LayoutConfig:
         text is already too small to read. So an over-long speaker line does not clip -- it spills out of
         the box and across whatever is beside it.
         """
-        return max(1, int((self.node_w - 2 * _LABEL_INSET) / (self.role_font_size * _LABEL_ADVANCE_PER_CHAR)))
+        room = self.node_w - 2 * _LABEL_INSET - (self._get_role_icon_gutter() if has_role_icon else 0.0)
+        return max(1, int(room / (self.role_font_size * _LABEL_ADVANCE_PER_CHAR)))
 
-    def _get_effective_label_chars(self) -> int:
+    def _get_effective_label_chars(self, has_role_icon: bool = False) -> int:
         """Return `label_chars`, or how many characters fit across a node when it was left unset."""
         if self.label_chars is not None:
             return self.label_chars
-        return max(1, int((self.node_w - 2 * _LABEL_INSET) / (self.font_size * _LABEL_ADVANCE_PER_CHAR)))
+        room = self.node_w - 2 * _LABEL_INSET - (self._get_role_icon_gutter() if has_role_icon else 0.0)
+        return max(1, int(room / (self.font_size * _LABEL_ADVANCE_PER_CHAR)))
 
     # These two are the ones a user has a reason to change, so they live in `config` and are picked up from
     # there; the rest of this class is drawing detail. Neither is speed-bound in any range worth using --
@@ -1135,6 +1147,16 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                                  config.corner_radius + offset),
             filled=False))
 
+    # How far the text starts from the left edge. The glyph's inner half is a gutter: it is centred on the
+    # box's own centre, so it crosses the label rather than passing above or below it, and text drawn
+    # under it is text with a picture on top of it.
+    #
+    # That gutter is what the glyph costs, and it is the argument for straddling rather than for drawing
+    # the thing inside: half a glyph is reserved instead of a whole one plus its own inset.
+    left_inset = _LABEL_INSET + (config._get_role_icon_gutter() if role_icon is not None else 0.0)
+    text_x1 = x1 + left_inset
+    text_x2 = x2 - _LABEL_INSET
+
     if role_icon is not None:
         # Centred on the left edge and on the box's own centre, so half of it hangs outside. Appended
         # after the outline and the ring, which puts it on top of both: shapes are drawn in list order,
@@ -1161,9 +1183,9 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         cursor = y1 + config.text_top_inset + config.role_font_size
         # Left-aligned, unlike the label. The speaker is the same handful of short words on every node, so
         # a common left edge lets the eye read the column of them without tracking a centre that moves.
-        shapes.append(xdotgraph.TextShape(speaker_pen, x1 + _LABEL_INSET, cursor,
+        shapes.append(xdotgraph.TextShape(speaker_pen, text_x1, cursor,
                                           xdotgraph.TextShape.LEFT,
-                                          width - 2 * _LABEL_INSET, speaker))
+                                          text_x2 - text_x1, speaker))
         cursor += _LINE_GAP
     else:
         # A gap box has nobody to attribute it to, so its text takes the middle -- however many lines it
@@ -1173,10 +1195,14 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
             block += config.role_font_size + _LINE_GAP
         cursor = y - 0.5 * block
 
+    # Centred in what is left of the box rather than on the box, so a glyph shifts the label off-centre by
+    # exactly the room it took. Centring on the box instead would let a long line run under the glyph
+    # while a short one sat clear of it -- the collision then depending on the message.
+    text_center = 0.5 * (text_x1 + text_x2)
     for line in label_lines:
         cursor += config.font_size
-        shapes.append(xdotgraph.TextShape(text_pen, x, cursor,
-                                          xdotgraph.TextShape.CENTER, width - 2 * _LABEL_INSET, line))
+        shapes.append(xdotgraph.TextShape(text_pen, text_center, cursor,
+                                          xdotgraph.TextShape.CENTER, text_x2 - text_x1, line))
         cursor += _LINE_GAP
 
     if sub_label is not None:
@@ -1187,8 +1213,8 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         sub_pen.color = GAP_LINE_COLOR
         sub_pen.fontsize = config.role_font_size
         cursor += config.role_font_size
-        shapes.append(xdotgraph.TextShape(sub_pen, x, cursor, xdotgraph.TextShape.CENTER,
-                                          width - 2 * _LABEL_INSET, sub_label))
+        shapes.append(xdotgraph.TextShape(sub_pen, text_center, cursor, xdotgraph.TextShape.CENTER,
+                                          text_x2 - text_x1, sub_label))
 
     # Pills are a separate visual class from nodes -- outlined rather than filled -- so that SYS, NEW and
     # HEAD read as labels attached to a node rather than as part of what the node says. Two reasons for
@@ -1557,9 +1583,10 @@ def build(datastore: chattree.Forest,
                               on_current_branch=(node_id in current_branch),
                               tool_call_count=_tool_call_count(datastore, node_id),
                               pills=_pills_for(node_id, state, is_root=is_root))
+            icon = (role_icons or {}).get(ref.role)
             speaker, label_lines, sub_label = _speaker_and_label_of(
-                datastore, node_id, config._get_effective_label_chars(), config.label_lines,
-                config._get_effective_speaker_chars())
+                datastore, node_id, config._get_effective_label_chars(icon is not None), config.label_lines,
+                config._get_effective_speaker_chars(icon is not None))
             shapes = _box_shapes(x, y, config.node_w, config, label_lines,
                                  fill=_fill_for(ref.role, node_id in current_branch,
                                                 asked_for_tools=bool(ref.tool_call_count)),
@@ -1568,7 +1595,7 @@ def build(datastore: chattree.Forest,
                                  measure_text=measure_text,
                                  emphasized=(node_id == state.head_node_id),
                                  previewed=(node_id == state.cursor_name),
-                                 role_icon=(role_icons or {}).get(ref.role))
+                                 role_icon=icon)
             return ref, shapes
 
         for row_index, row in enumerate(rows):
