@@ -20,6 +20,11 @@ __all__ = ["format_chat_message_for_clipboard",
 import logging
 logger = logging.getLogger(__name__)
 
+# Marks a chat-graph thumbnail cache key as "a file-type icon" rather than "this image's own
+# pixels". Every document of one type then shares a texture, where images are content-addressed
+# and are their own identity. See `DPGChatController.graph_thumbnail_identity`.
+_DOCUMENT_ICON_PREFIX = "icon:"
+
 import collections
 import concurrent.futures
 import dataclasses
@@ -40,6 +45,7 @@ from unpythonic.env import env
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
 from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
+from ..vendor.file_dialog import fdialog  # for the file-type icons a document attachment is drawn as
 
 # `raven.client.api` imports torch and spaCy at module scope, and `avatar_controller` reaches it, so a
 # module-level import of either drags the whole ML stack in — and with it, the reason this module's tests
@@ -4336,21 +4342,42 @@ class DPGChatController:
                 logger.error(f"DPGChatController.get_inline_image_texture: failed to load sidecar '{filename}': {type(exc)}: {exc}")
                 return None
 
-    def get_graph_thumbnail_texture(self, filename: str, size: float) -> str | None:
-        """Return a texture for the chat graph's thumbnail of sidecar `filename`, or `None` if not ready.
+    @staticmethod
+    def graph_thumbnail_identity(filename: str) -> str:
+        """What two attachments must share for one prepared thumbnail to serve both.
+
+        A picture is its own subject, and sidecar names are content-addressed, so an image is its own
+        identity and the same bytes attached twice decode once. A *document* has no picture: it is drawn
+        as its file type's icon, so every PDF in the datastore is one texture rather than one each.
+
+        The type icons and the mapping onto them are the file dialog's — the same picture for the same
+        kind of file, wherever in Raven it appears. `.pdf` maps to nothing there on purpose (there is no
+        presentation icon either, and the generic document is the right picture for all of them), which is
+        what the fallback is for.
+        """
+        from ..common.image import codec  # deferred, as the decode below is
+        if os.path.splitext(filename)[1].lower() in codec.IMAGE_EXTENSIONS:
+            return filename
+        return f"{_DOCUMENT_ICON_PREFIX}{fdialog.icon_name_for_extension(filename) or 'document'}"
+
+    def get_graph_thumbnail_texture(self, filename: str, size: float) -> env | None:
+        """Return the chat graph's thumbnail of sidecar `filename`, or `None` if it is not ready.
 
         `size`: The longest edge to prepare it at, in pixels. Part of the cache key, so the same image can
                 be held at the chat log's inline size and at the graph's much smaller one at once.
+
+        Returns an `env(texture_tag, w, h)` — the dimensions included because the graph draws the picture
+        at its own proportions and cannot ask a texture how big it is.
 
         **Never blocks, and `None` is an ordinary answer rather than a failure.** The graph rebuilds from
         its animator hook, which runs on the render thread, and preparing a texture needs `split_frame` --
         which deadlocks there. So a miss queues the work and answers `None`; the graph draws an empty frame
         meanwhile, and the panel notices when the answer changes.
 
-        An image that cannot be decoded is remembered as such, so a broken sidecar costs one attempt rather
-        than one per rebuild for the life of the session.
+        An attachment that cannot be prepared is remembered as such, so a broken sidecar costs one attempt
+        rather than one per rebuild for the life of the session.
         """
-        key = (filename, size)
+        key = (self.graph_thumbnail_identity(filename), size)
         with self._graph_thumbnail_lock:
             cached = self._graph_thumbnail_textures.get(key)
             if cached is not None or key in self._graph_thumbnail_failed:
@@ -4358,36 +4385,47 @@ class DPGChatController:
             if key in self._graph_thumbnail_pending:
                 return None
             self._graph_thumbnail_pending.add(key)
-        self.task_manager.submit(lambda task_env: self._prepare_graph_thumbnail(filename, size, task_env),
+        self.task_manager.submit(lambda task_env: self._prepare_graph_thumbnail(key, filename, size, task_env),
                                  env())
         return None
 
-    def _prepare_graph_thumbnail(self, filename: str, size: float, task_env: env) -> None:
-        """Decode one attachment sidecar into a graph-sized texture. Runs on a background thread."""
-        key = (filename, size)
+    def _prepare_graph_thumbnail(self, key: tuple, filename: str, size: float, task_env: env) -> None:
+        """Turn one attachment into a graph-sized texture. Runs on a background thread."""
         try:
             if task_env.cancelled:  # shutdown, most likely; the pending mark is cleared in `finally`
                 return
             from ..common.image import codec  # deferred: pulls torch / Pillow only when an image is shown
             from ..common.image import utils as image_utils
-            raw = self.datastore.read_sidecar(filename)
+            identity = key[0]
+            if identity.startswith(_DOCUMENT_ICON_PREFIX):
+                # A document has no picture, so it gets its type's icon. Read from the file dialog's own
+                # assets rather than copied, so the two views cannot come to disagree about what a `.bib`
+                # file looks like.
+                icon_path = os.path.join(fdialog.IMAGES_DIR,
+                                         f"{identity[len(_DOCUMENT_ICON_PREFIX):]}.png")
+                with open(icon_path, "rb") as icon_file:
+                    raw = icon_file.read()
+            else:
+                raw = self.datastore.read_sidecar(filename)
             arr = image_utils.ensure_rgba(codec.decode(raw))  # (H, W, 4) uint8
             tensor = image_utils.np_to_tensor(arr, device="cpu")  # (1, 4, H, W) float32
-            # Letterboxed into a square, so every card in a fan is the same shape whatever it holds -- the
-            # fan is read as a count, and cards of differing widths read as differing importance instead.
+            # Aspect preserved, and never upscaled: `fit_contain` scales the whole image to fit the box
+            # and hands back its own dimensions, which the graph then draws it at. Squaring it here would
+            # stretch a wide photograph into a square one, which is a lie about the picture and looks like
+            # one -- the *card* is square, and the picture is letterboxed inside it.
             tensor = image_utils.fit_contain(tensor, int(size), int(size))
             disp_h, disp_w = int(tensor.shape[2]), int(tensor.shape[3])
             flat = image_utils.tensor_to_dpg_flat(tensor)  # flat float32 RGBA in [0, 1]
-            texture_tag = f"chat_graph_thumbnail_{int(size)}_{filename}"  # tag  # content-addressed, so unique
+            texture_tag = f"chat_graph_thumbnail_{int(size)}_{identity}"  # tag  # one per cache key
             dpg.add_static_texture(disp_w, disp_h, flat,
                                    tag=texture_tag,  # tag
                                    parent=self._inline_image_texture_registry)
             dpg.split_frame()  # trigger the deferred OpenGL upload...
             dpg.split_frame()  # ...and ensure it completed before the graph draws it (dpg-notes.md, "Texture upload ordering")
             with self._graph_thumbnail_lock:
-                self._graph_thumbnail_textures[key] = texture_tag
+                self._graph_thumbnail_textures[key] = env(texture_tag=texture_tag, w=disp_w, h=disp_h)
         except Exception as exc:  # noqa: BLE001 -- a broken sidecar must not break the graph
-            logger.error(f"DPGChatController._prepare_graph_thumbnail: failed to load sidecar '{filename}' at {size}: {type(exc)}: {exc}")
+            logger.error(f"DPGChatController._prepare_graph_thumbnail: failed to prepare '{filename}' at {size}: {type(exc)}: {exc}")
             with self._graph_thumbnail_lock:
                 self._graph_thumbnail_failed.add(key)
         finally:

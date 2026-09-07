@@ -23,7 +23,7 @@ from raven.librarian.chattree import Forest
 # Fixtures
 # ---------------------------------------------------------------------------
 
-def payload(role: str, text: str, tool_calls=None, images=()) -> dict:
+def payload(role: str, text: str, tool_calls=None, images=(), documents=()) -> dict:
     """A chat node payload of the shape `chatutil` writes, with only the fields this module reads.
 
     The timestamp is real data rather than filler: `chatutil.descend_to_latest` orders siblings by it, so
@@ -34,6 +34,8 @@ def payload(role: str, text: str, tool_calls=None, images=()) -> dict:
     _payload_serial += 1
     content = [{"type": "text", "text": text}]
     content += [{"type": "image_url", "image_url": {"url": f"sidecar:{name}"}} for name in images]
+    content += [{"type": "text_file", "text_file": {"url": f"sidecar:{name}", "name": name}}
+                for name in documents]
     message = {"role": role, "content": content}
     if tool_calls is not None:
         message["tool_calls"] = tool_calls
@@ -926,13 +928,14 @@ class TestAttachmentThumbnails:
     answer for one that is still being prepared.
     """
 
-    def _forest(self, n_images, siblings_after=0):
-        """A conversation whose user message carries `n_images` attachments. Returns (forest, node)."""
+    def _forest(self, n_images, siblings_after=0, text="look at these", documents=()):
+        """A conversation whose user message carries the given attachments. Returns (forest, node)."""
         forest = Forest()
         root = forest.create_node(payload("system", "the card"), parent_id=None)
         greeting = forest.create_node(payload("assistant", "hello"), parent_id=root)
-        carrier = forest.create_node(payload("user", "look at these",
-                                             images=[f"a{i}.png" for i in range(n_images)]),
+        carrier = forest.create_node(payload("user", text,
+                                             images=[f"a{i}.png" for i in range(n_images)],
+                                             documents=documents),
                                      parent_id=greeting)
         for k in range(siblings_after):  # to the *right*, which is where a fan hangs
             forest.create_node(payload("user", f"a plain sibling {k}"), parent_id=greeting)
@@ -954,7 +957,8 @@ class TestAttachmentThumbnails:
                        if isinstance(s, xdotgraph.ImageShape) and centre(s) > centre_of_box),
                       key=centre)
 
-    def _build(self, forest, node, config=None, thumbnail_for=lambda name: f"tex_{name}"):
+    def _build(self, forest, node, config=None, thumbnail_for=None):
+        thumbnail_for = thumbnail_for or ready_thumbnail
         return chatgraph.build(forest, chatgraph.ViewState(head_node_id=node), config,
                                thumbnail_for=thumbnail_for)
 
@@ -1029,6 +1033,51 @@ class TestAttachmentThumbnails:
         last = cards[-1].get_bounding_box()
         assert count_box.get_bounding_box()[0] > 0.5 * (last[0] + last[2])
 
+    def test_a_document_gets_a_card_too(self):
+        """A message that is *only* attachments has no words either. Drawn without them it reads as a turn
+        that never happened — which is what a chat of three attached papers looked like: one box saying
+        `[empty]`."""
+        forest, carrier = self._forest(0, text="", documents=["b0.pdf", "b1.bib", "b2.txt"])
+        built = self._build(forest, carrier)
+        assert [c.texture for c in self._cards(built, carrier)] == ["tex_b0.pdf", "tex_b1.bib", "tex_b2.txt"]
+        assert "[empty]" in texts_on(built, carrier), \
+            "the fixture's message has text after all, so the box was never the empty one this is about"
+
+    def test_images_and_documents_share_one_fan_in_the_order_they_were_attached(self):
+        forest, carrier = self._forest(2, documents=["b0.pdf"])
+        built = self._build(forest, carrier)
+        assert [c.texture for c in self._cards(built, carrier)] == \
+            ["tex_a0.png", "tex_a1.png", "tex_b0.pdf"]
+
+    def test_a_picture_keeps_its_proportions_inside_a_square_card(self):
+        """Drawing it to the square stretched a wide photograph into a square one — a lie about the image
+        that looks like one. The *card* stays square, so a fan of mixed photographs is still read as a
+        count rather than as a ragged row."""
+        forest, carrier = self._forest(1)
+        built = self._build(forest, carrier,
+                            thumbnail_for=lambda name: ready_thumbnail(name, width=200, height=50))
+        picture = self._cards(built, carrier)[0].get_bounding_box()
+        assert (picture[2] - picture[0]) / (picture[3] - picture[1]) == pytest.approx(200 / 50)
+
+        square = self._build(forest, carrier,
+                             thumbnail_for=lambda name: ready_thumbnail(name, width=64, height=64))
+        square_box = square.graph.get_node_by_name(carrier)
+        card = [sh for sh in square_box.shapes
+                if isinstance(sh, xdotgraph.PolygonShape) and not sh.filled
+                and sh.get_bounding_box()[2] > square_box.get_bounding_box()[2]][0].get_bounding_box()
+        assert (card[2] - card[0]) == pytest.approx(card[3] - card[1]), "the card is not square"
+        assert (picture[2] - picture[0]) <= card[2] - card[0] + 1e-9, "the picture ran outside its card"
+        assert (picture[3] - picture[1]) < card[3] - card[1], \
+            "the wide picture is as tall as the card, so nothing was letterboxed"
+
+    def test_a_card_with_no_thumbnail_yet_holds_the_whole_square(self):
+        """A placeholder has no proportions of its own, and filling the card is what says how much room
+        the picture will take."""
+        forest, carrier = self._forest(1)
+        built = self._build(forest, carrier, thumbnail_for=lambda name: None)
+        placeholder = self._cards(built, carrier)[0].get_bounding_box()
+        assert (placeholder[2] - placeholder[0]) == pytest.approx(placeholder[3] - placeholder[1])
+
     def test_a_message_drawn_in_place_of_a_gap_keeps_its_decorations(self):
         """A node with one child has that child drawn instead of a "…1 more" box, and such a box is in no
         row slot. Asking a table built from the slots alone gave it no glyph and no thumbnails — silently,
@@ -1044,7 +1093,7 @@ class TestAttachmentThumbnails:
                                      parent_id=aside)
 
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=spine),
-                                role_icons=ROLE_ICONS, thumbnail_for=lambda name: f"tex_{name}")
+                                role_icons=ROLE_ICONS, thumbnail_for=ready_thumbnail)
         assert built.graph.get_node_by_name(inlined) is not None, \
             "the child was not inlined, so this fixture does not exercise the path it is about"
         assert [c.texture for c in self._cards(built, inlined)] == ["tex_b0.png", "tex_b1.png"]
@@ -1061,7 +1110,7 @@ class TestAttachmentThumbnails:
         config = chatgraph.LayoutConfig()
         forest, carrier = self._forest(6, siblings_after=2)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=carrier), config,
-                                role_icons=ROLE_ICONS, thumbnail_for=lambda name: f"tex_{name}")
+                                role_icons=ROLE_ICONS, thumbnail_for=ready_thumbnail)
         boxes = boxes_of(built)
         carrier_box = boxes[carrier]
         fan_reaches_to = max(c.get_bounding_box()[2] for c in self._cards(built, carrier))
@@ -1075,7 +1124,9 @@ class TestAttachmentThumbnails:
             "the fan runs into the next box's role glyph"
 
 
-_CARD_SIDE = chatgraph.LayoutConfig().attachment_fraction * chatgraph.LayoutConfig().node_h
+def ready_thumbnail(name, width=128, height=128):
+    """A prepared thumbnail, as a provider that had one to hand would answer."""
+    return chatgraph.Thumbnail(texture=f"tex_{name}", width=width, height=height)
 
 
 # ---------------------------------------------------------------------------

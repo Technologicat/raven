@@ -21,6 +21,7 @@ __all__ = ["LINE_COLOR",
            "PREVIEW_COLOR",
 
            "MeasureText",
+           "Thumbnail",
 
            "Ref",
            "ChatNodeRef",
@@ -236,6 +237,25 @@ _LABEL_ADVANCE_PER_CHAR = 0.5
 # a test suite, which renders none -- gets the estimate and no complaint. An exception means something
 # actually went wrong, and is logged.
 MeasureText = Callable[[str, float], Optional[float]]
+
+
+@dataclasses.dataclass(frozen=True)
+class Thumbnail:
+    """A prepared attachment thumbnail: its texture, and the pixel size that texture holds.
+
+    `texture`: DPG texture tag or ID.
+    `width`, `height`: The texture's own dimensions.
+
+    The dimensions are here because a card has to draw the picture at the picture's proportions. A square
+    rectangle stretches a wide photograph into a square one, which is a lie about the image and looks like
+    one; the card stays square so a fan of them reads as a count, and the picture is letterboxed inside it.
+
+    This module holds no DPG and cannot ask a texture how big it is, so whoever prepared it says.
+    """
+
+    texture: Union[int, str]
+    width: int
+    height: int
 
 
 def _text_width(text: str, font_size: float,
@@ -766,8 +786,8 @@ def _arrowhead_points(tip: xdotconstants.Point, tail: xdotconstants.Point,
 
 # How many stripped messages to remember. A rebuild draws a few dozen boxes and the next one draws mostly
 # the same ones, so a cache this size is a near-total hit rate for as long as the reader stays in one part
-# of the tree, and it holds the labels of the widest sibling window anyone would set. Bounded because the
-# key is a whole message: a few hundred of those is a megabyte or two, and a forest is unbounded.
+# of the tree, and it holds the labels of the widest sibling window anyone would set. Bounded at all
+# because the key is a whole message and a forest is not.
 _PLAIN_CACHE_SIZE = 512
 
 
@@ -891,27 +911,33 @@ def _role_of(datastore: chattree.Forest, node_id: str) -> str:
     return message.get("role") or ""
 
 
+# The content-part types that carry an attachment, and where each keeps its URL. Both kinds get a card:
+# an image shows itself, and a document shows its type's icon -- because a message that is *only*
+# attachments has no words either, and drawn without them it reads as a turn that never happened.
+_ATTACHMENT_PARTS = {"image_url": "image_url", "text_file": "text_file"}
+
+
 def _attachment_sidecars(datastore: chattree.Forest, node_id: str) -> Tuple[str, ...]:
-    """Return the image sidecars a message carries, in the order it carries them.
+    """Return the attachment sidecars a message carries, in the order it carries them.
 
-    Images only. A document attachment has no picture to draw, and a chip saying so is the chat log's job:
-    a box in this view is a few dozen pixels of caption, and spending it on "there is also a PDF" would
-    cost the message its own words.
-
-    Filenames rather than resolved anything, because this module holds no DPG. The caller maps one to a
-    texture — see `build`'s `thumbnail_for`.
+    Images and documents alike. Filenames rather than resolved anything, because this module holds no DPG
+    — and the filename is enough for a caller to answer with either, a sidecar keeping the extension of
+    the file it was made from. See `build`'s `thumbnail_for`.
     """
     content = ((_payload_of(datastore, node_id).get("message") or {}).get("content") or ())
     if not isinstance(content, list):  # a legacy bare string, or something else unexpected
         return ()
     found = []
     for part in content:
-        if not isinstance(part, dict) or part.get("type") != "image_url":
+        if not isinstance(part, dict):
             continue
-        url = (part.get("image_url") or {}).get("url") or ""
+        field = _ATTACHMENT_PARTS.get(part.get("type"))
+        if field is None:
+            continue
+        url = (part.get(field) or {}).get("url") or ""
         try:
             found.append(sidecarstore.sidecar_filename_from_url(url, caller="_attachment_sidecars"))
-        except ValueError:  # a live `https://` or `data:` image, which has no stored copy to draw
+        except ValueError:  # a live `https://` or `data:` reference, which has no stored copy to draw
             continue
     return tuple(found)
 
@@ -1138,7 +1164,7 @@ class _Decorations:
     """What hangs off a box's margins, and therefore how much room the gaps beside it need.
 
     `role_icon`: The speaker glyph's texture, or `None`. Straddles the left edge.
-    `attachments`: One texture (or `None`, for one not yet prepared) per thumbnail this box shows.
+    `attachments`: One `Thumbnail` (or `None`, for one not yet prepared) per card this box shows.
                    Straddles the right edge, fanned.
     `hidden_attachments`: How many the fan left out.
 
@@ -1148,7 +1174,7 @@ class _Decorations:
     """
 
     def __init__(self, role_icon: Optional[Union[int, str]] = None,
-                 attachments: Sequence[Optional[Union[int, str]]] = (),
+                 attachments: Sequence[Optional["Thumbnail"]] = (),
                  hidden_attachments: int = 0):
         self.role_icon = role_icon
         self.attachments = tuple(attachments)
@@ -1176,7 +1202,7 @@ _ATTACHMENT_ANCHORS = 2
 
 def _decorations_of(datastore: chattree.Forest, node_id: str, role: str, config: "LayoutConfig",
                     role_icons: Optional[Mapping[str, Union[int, str]]],
-                    thumbnail_for: Optional[Callable[[str], Optional[Union[int, str]]]]
+                    thumbnail_for: Optional[Callable[[str], Optional["Thumbnail"]]]
                     ) -> _Decorations:
     """Return what hangs off one message box's margins.
 
@@ -1356,10 +1382,10 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                  because that selection is tentative until the second one.
     `role_icon`: DPG texture for who is speaking, straddling the left edge. `None` for a gap, and for a
                  role no icon was supplied for.
-    `attachments`: One entry per image this message carries and this box shows, straddling the *right*
-                   edge and fanned. `None` for one whose thumbnail is not ready — the frame is drawn
-                   either way, so the count is legible before any picture is, and the stack does not
-                   change shape when they land.
+    `attachments`: One `Thumbnail` per attachment this message carries and this box shows, straddling the
+                   *right* edge and fanned. `None` for one that is not ready — the card is drawn either
+                   way, so the count is legible before any picture is, and the fan does not change shape
+                   when they land.
     `hidden_attachments`: How many the fan left out, drawn as a broken-outlined box after the last one.
                           Zero when they all fit.
     """
@@ -1482,7 +1508,23 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     return shapes
 
 
-def _attachment_shapes(attachments: Sequence[Optional[Union[int, str]]], hidden: int,
+def _letterboxed(x1: float, y1: float, x2: float, y2: float,
+                 thumbnail: Optional["Thumbnail"]) -> Tuple[float, float, float, float]:
+    """Return the largest rectangle with `thumbnail`'s proportions, centred inside `(x1, y1, x2, y2)`.
+
+    The whole square for a thumbnail that is not there yet, or one whose reported size makes no sense: a
+    placeholder has no proportions of its own, and filling the card is what says how much room the picture
+    will take.
+    """
+    if thumbnail is None or thumbnail.width <= 0 or thumbnail.height <= 0:
+        return (x1, y1, x2, y2)
+    scale = min((x2 - x1) / thumbnail.width, (y2 - y1) / thumbnail.height)
+    half_w, half_h = 0.5 * scale * thumbnail.width, 0.5 * scale * thumbnail.height
+    cx, cy = 0.5 * (x1 + x2), 0.5 * (y1 + y2)
+    return (cx - half_w, cy - half_h, cx + half_w, cy + half_h)
+
+
+def _attachment_shapes(attachments: Sequence[Optional["Thumbnail"]], hidden: int,
                        right_edge: float, center_y: float, config: LayoutConfig,
                        measure_text: Optional[MeasureText]) -> List[xdotgraph.Shape]:
     """Return the shapes for a fan of attachment thumbnails straddling `right_edge`.
@@ -1507,7 +1549,7 @@ def _attachment_shapes(attachments: Sequence[Optional[Union[int, str]]], hidden:
         cx = right_edge + config._get_attachment_fan_x(index, len(attachments))
         return (cx - 0.5 * side, center_y - 0.5 * side, cx + 0.5 * side, center_y + 0.5 * side)
 
-    def card(index: int, texture: Optional[Union[int, str]], pen: xdotgraph.Pen,
+    def card(index: int, thumbnail: Optional[Thumbnail], pen: xdotgraph.Pen,
              is_count_box: bool = False) -> None:
         """Append one card: an opaque back, the place its picture goes, then its outline."""
         x1, y1, x2, y2 = frame_at(index)
@@ -1520,11 +1562,18 @@ def _attachment_shapes(attachments: Sequence[Optional[Union[int, str]]], hidden:
         corners = _rounded_rect_points(x1, y1, x2, y2, 0.0)
         shapes.append(xdotgraph.PolygonShape(backing, corners, filled=True))
         if not is_count_box:
+            # The picture is letterboxed into the card at its own proportions, and the *card* stays
+            # square. Drawing it to the square would stretch a wide photograph into a square one, which is
+            # a lie about the image and looks like one; letting the card take the picture's shape instead
+            # would make a fan of mixed photographs ragged, and the fan is read as a count.
+            #
             # Emitted even with no texture yet. An `ImageShape` is where a picture *goes*, and one with a
             # `None` texture draws nothing while still saying so -- which keeps the shape list the same
             # before and after the thumbnail lands, and gives anything asking what a box carries one
             # answer rather than two.
-            shapes.append(xdotgraph.ImageShape(texture, x1, y1, x2, y2,
+            picture = _letterboxed(x1, y1, x2, y2, thumbnail)
+            shapes.append(xdotgraph.ImageShape(thumbnail.texture if thumbnail is not None else None,
+                                               *picture,
                                                max_screen_size=config.attachment_native_size))
         shapes.append(xdotgraph.PolygonShape(pen, corners, filled=False))
 
@@ -1722,7 +1771,7 @@ def build(datastore: chattree.Forest,
           config: Optional[LayoutConfig] = None,
           measure_text: Optional[MeasureText] = None,
           role_icons: Optional[Mapping[str, Union[int, str]]] = None,
-          thumbnail_for: Optional[Callable[[str], Optional[Union[int, str]]]] = None) -> ChatGraph:
+          thumbnail_for: Optional[Callable[[str], Optional[Thumbnail]]] = None) -> ChatGraph:
     """Build the picture of the chat forest around `state.focus_node_id`, or HEAD if none is given.
 
     `datastore`: The chat forest. Read under its own lock, and not modified.
@@ -1739,8 +1788,9 @@ def build(datastore: chattree.Forest,
                   Hand over `DPGChatController.gui_role_icons` rather than loading the icon files: it is
                   where the per-character override is already resolved, so an AI with an icon of its own
                   gets that one, and a caller reading `raven/icons/ai.png` would silently lose it.
-    `thumbnail_for`: Attachment sidecar filename -> DPG texture, for the thumbnails fanned off a box's
-                     right edge. **`None` is an ordinary answer** and means "not ready yet": preparing one
+    `thumbnail_for`: Attachment sidecar filename -> `Thumbnail`, for the cards fanned off a box's right
+                     edge. Images and documents both — a document has no picture of its own, and what a
+                     caller answers with there is its file type's icon. **`None` is an ordinary answer** and means "not ready yet": preparing one
                      needs a texture upload, which cannot happen on the thread a rebuild runs on, so a
                      caller queues the work and answers `None` until it lands. The frame is drawn either
                      way, so the count is legible before any picture is and the fan does not change shape

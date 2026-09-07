@@ -109,7 +109,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                  on_focus_requested: Optional[Callable[[], None]] = None,
                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
                  role_icons: Optional[Callable[[], Mapping[str, Union[int, str]]]] = None,
-                 thumbnail_for: Optional[Callable[[str, float], Optional[Union[int, str]]]] = None,
+                 thumbnail_for: Optional[Callable[[str, float], Optional[env]]] = None,
                  dark_mode: bool = True,
                  show: bool = False):
         """Build the panel.
@@ -144,8 +144,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
                       the table belongs to `DPGChatController`, which is built later than this panel is —
                       and because a character loaded afterwards replaces the AI's icon, which a table
                       captured once would not pick up. `None` draws no glyphs.
-        `thumbnail_for`: `(attachment sidecar filename, size in pixels) -> texture, or `None` if not ready`.
-                         What draws the thumbnails fanned off a box's right edge; see `chatgraph.build`.
+        `thumbnail_for`: `(attachment sidecar filename, size in pixels) -> env(texture_tag, w, h)`, or
+                         `None` if it is not ready. What draws the cards fanned off a box's right edge;
+                         see `chatgraph.build`. `DPGChatController.get_graph_thumbnail_texture` is it.
                          It must not block: a rebuild runs on the render thread, where waiting for a
                          texture upload deadlocks, so the provider queues the work and answers `None` until
                          it lands. This panel then notices the answer changing and redraws — nothing else
@@ -822,16 +823,21 @@ class DPGChatGraphPanel(gui_animation.Animation):
         except KeyError:
             return None
 
-    def _thumbnail_of(self, filename: str) -> Optional[Union[int, str]]:
-        """Ask the provider for one attachment's texture, remembering the ones that were not ready."""
+    def _thumbnail_of(self, filename: str) -> Optional[chatgraph.Thumbnail]:
+        """Ask the provider for one attachment's thumbnail, remembering the ones that were not ready.
+
+        Also the adapter between the two layers' vocabularies: the controller answers in the `env` its own
+        texture cache holds, and `chatgraph` — which knows no DPG and nothing about controllers — takes a
+        `Thumbnail`.
+        """
         if self._thumbnail_for is None:
             return None
-        texture = self._thumbnail_for(filename, self._layout.attachment_native_size)
-        if texture is None:
+        prepared = self._thumbnail_for(filename, self._layout.attachment_native_size)
+        if prepared is None:
             self._awaited_thumbnails.add(filename)
-        else:
-            self._awaited_thumbnails.discard(filename)
-        return texture
+            return None
+        self._awaited_thumbnails.discard(filename)
+        return chatgraph.Thumbnail(texture=prepared.texture_tag, width=prepared.w, height=prepared.h)
 
     def _measure_text(self, text: str, font_size: float) -> Optional[float]:
         """Return how wide `text` is at `font_size`, in graph units, or `None` if DPG cannot say yet.

@@ -13,6 +13,8 @@ import time
 
 import pytest
 
+from unpythonic.env import env
+
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
 from raven.common.gui import animation as gui_animation  # noqa: E402 -- after importorskip by design
@@ -1721,7 +1723,7 @@ class TestAttachmentThumbnails:
         assert self._cards(built._chat_graph, carrier)[0].texture is None, \
             "the provider answered on the first ask, so nothing here is waiting for anything"
         assert not built._is_stale(), "the picture is stale for some other reason, which would mask this"
-        ready["a0.png"] = "tex_a0"
+        ready["a0.png"] = env(texture_tag="tex_a0", w=128, h=96)
         assert built._is_stale()
         built.refresh()
         assert self._cards(built._chat_graph, carrier)[0].texture == "tex_a0"
