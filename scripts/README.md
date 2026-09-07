@@ -46,11 +46,17 @@ Run it before pushing anything that adds an import or removes an `importorskip`:
 python scripts/check_ci_imports.py
 ```
 
-**Two things it knows that a naive version does not**, both learned by being wrong first:
+**Three things it knows that a naive version does not**, all learned by being wrong first:
 
 - **`importorskip` guards are honoured, including in `conftest.py`.** `raven/client/tests/` guards its whole
   directory from the conftest, deliberately, so no individual file needs to. A checker reading only test
   files calls that directory broken while CI is green.
+- **A guard only counts if it would actually fire**, which is not the same as being present.
+  `test_thumbnail_pipeline.py` guards on `dearpygui` and `PIL.Image` — both of which CI installs — and then
+  imports the chat controller and the ML stack behind it. Honouring the guard's *existence* exempted it, so
+  the report was green and the push was red on all four jobs. The question is whether the named module can
+  be imported in CI: a third-party package absent from the pinned list, or a first-party module whose own
+  transitive imports are not satisfied, which is how `importorskip` on a `raven` module works at all.
 - **Only module-level imports count.** A function-local import is the standard way to let a heavy or optional
   dependency degrade gracefully, and flagging those buries the real finding.
 
