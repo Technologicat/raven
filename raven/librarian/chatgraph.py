@@ -42,7 +42,6 @@ import colorsys
 import dataclasses
 import logging
 import math
-import textwrap
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
@@ -475,8 +474,8 @@ class LayoutConfig:
                           `2 * siblings_each_side + 3` items counting the two gaps.
     `max_visible_depth`: How many spine nodes to draw, the root included. Anything between the root and the
                          last `max_visible_depth - 1` of them becomes one depth gap.
-    `label_chars`: Coarse cut for a node's label, or `None` to derive it from the node width and the font
-                   size — the default, and what keeps the three in step when any one of them moves. The
+    `label_width`: How wide a node's label may run, in graph units, or `None` to derive it from the node
+                   width and the insets — the default, and what keeps them in step when either moves. The
                    widget compacts further when the text will not fit at the current zoom; this is the cut
                    that stops a whole chat message from becoming the graph's width at zoom 1.
     """
@@ -528,7 +527,7 @@ class LayoutConfig:
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
     margin: float = 20.0
-    label_chars: Optional[int] = None
+    label_width: Optional[float] = None
     label_lines: int = 2
 
     def _get_role_icon_gutter(self) -> float:
@@ -540,24 +539,23 @@ class LayoutConfig:
         """
         return 0.5 * self.role_icon_fraction * self.node_h
 
-    def _get_effective_speaker_chars(self, has_role_icon: bool = False) -> int:
-        """Return how many characters fit across a node on the speaker line, at the role font size.
+    def _get_effective_speaker_width(self, has_role_icon: bool = False) -> float:
+        """Return how wide the speaker line may run across a node, in graph units.
 
-        The label's budget, computed for the smaller font the speaker line uses. Needed because that line
-        can now carry a model name, and nothing downstream would cut it: the renderer draws a `TextShape`
-        in full, `w` serving only to offset justification, and its compaction callback fires only when the
-        text is already too small to read. So an over-long speaker line does not clip -- it spills out of
-        the box and across whatever is beside it.
+        The same room the label gets. Needed as a budget of its own because that line can carry a model
+        name, and nothing downstream would cut it: the renderer draws a `TextShape` in full, `w` serving
+        only to offset justification, and its compaction callback fires only when the text is already too
+        small to read. So an over-long speaker line does not clip -- it spills out of the box and across
+        whatever is beside it.
         """
-        room = self.node_w - 2 * _LABEL_INSET - (self._get_role_icon_gutter() if has_role_icon else 0.0)
-        return max(1, int(room / (self.role_font_size * _LABEL_ADVANCE_PER_CHAR)))
+        return max(1.0, self.node_w - 2 * _LABEL_INSET
+                   - (self._get_role_icon_gutter() if has_role_icon else 0.0))
 
-    def _get_effective_label_chars(self, has_role_icon: bool = False) -> int:
-        """Return `label_chars`, or how many characters fit across a node when it was left unset."""
-        if self.label_chars is not None:
-            return self.label_chars
-        room = self.node_w - 2 * _LABEL_INSET - (self._get_role_icon_gutter() if has_role_icon else 0.0)
-        return max(1, int(room / (self.font_size * _LABEL_ADVANCE_PER_CHAR)))
+    def _get_effective_label_width(self, has_role_icon: bool = False) -> float:
+        """Return `label_width`, or how much room a label has across a node when it was left unset."""
+        if self.label_width is not None:
+            return self.label_width
+        return self._get_effective_speaker_width(has_role_icon)
 
     # These two are the ones a user has a reason to change, so they live in `config` and are picked up from
     # there; the rest of this class is drawing detail. Neither is speed-bound in any range worth using --
@@ -726,17 +724,82 @@ def _plain(text: str) -> str:
     return strip_markdown.strip_markdown(text) or ""
 
 
-def _wrap(text: str, width: int, max_lines: int) -> List[str]:
-    """Fold `text` into at most `max_lines` lines of about `width` characters, marking anything cut.
+def _longest_prefix_that_fits(text: str, max_width: float,
+                              width_of: Callable[[str], float]) -> str:
+    """Return the longest prefix of `text` no wider than `max_width`, or its first character.
+
+    At least one character, always, so that a caller stepping through a word cannot fail to make progress
+    and spin. A single character too wide for the box is a box too narrow to draw text in at all, and the
+    honest answer there is one character overflowing rather than an empty label.
+
+    Binary search rather than a walk: width grows with length, and the alternative measures once per
+    character dropped — which for a long identifier in a narrow box is dozens of measurements per box, on
+    the render thread.
+    """
+    if width_of(text) <= max_width:
+        return text
+    low, high = 1, len(text)  # `low` always fits by fiat; `high` is known not to
+    while low < high - 1:
+        middle = (low + high) // 2
+        if width_of(text[:middle]) <= max_width:
+            low = middle
+        else:
+            high = middle
+    return text[:low]
+
+
+def _wrap(text: str, max_width: float, max_lines: int, font_size: float,
+          measure_text: Optional[MeasureText]) -> List[str]:
+    """Fold `text` into at most `max_lines` lines no wider than `max_width` graph units, marking any cut.
 
     The message's own line breaks go first — `split` collapses every run of whitespace, so a message that
     opens "Hi!" and continues after a blank line becomes one flowing string. That is the point: a blank
     line copied faithfully into a two-line label spends half of it on nothing.
+
+    Wrapped by measured width rather than by a character count, where `measure_text` can answer. A count
+    has to assume an average glyph advance, and no single average is right: the figure that keeps capitals
+    inside the box cuts ordinary lowercase prose a fifth short of the edge, which shows up as boxes with
+    an inch of unused white on the right and messages wrapped that would have fitted on one line. Without
+    a measurer it falls back to that average, which is what a test — or a build before the font atlas
+    exists — gets.
     """
     text = " ".join(text.split())
     if not text:
         return []
-    return textwrap.wrap(text, width=width, max_lines=max_lines, placeholder="…") or [text[:width]]
+
+    def width_of(candidate: str) -> float:
+        return _text_width(candidate, font_size, measure_text, _LABEL_ADVANCE_PER_CHAR)
+
+    words = text.split(" ")
+    lines: List[str] = []
+    while words and len(lines) < max_lines:
+        line = ""
+        while words:
+            candidate = f"{line} {words[0]}" if line else words[0]
+            if width_of(candidate) <= max_width:
+                line = candidate
+                words.pop(0)
+                continue
+            if line:  # it fits on the next line; this one is full
+                break
+            # A single word wider than the box, so no line break can help: cut it here and leave the
+            # remainder to the next line. A URL or a long identifier, usually.
+            head = _longest_prefix_that_fits(words[0], max_width, width_of)
+            words[0] = words[0][len(head):]
+            line = head
+            break
+        lines.append(line)
+
+    if words and lines:  # something was left over, and the label has to say so rather than stop mid-word
+        lines[-1] = _with_ellipsis(lines[-1], max_width, width_of)
+    return lines
+
+
+def _with_ellipsis(line: str, max_width: float, width_of: Callable[[str], float]) -> str:
+    """Return `line` with an ellipsis appended, shortened until the result fits `max_width`."""
+    if width_of(f"{line}…") <= max_width:
+        return f"{line}…"
+    return f"{_longest_prefix_that_fits(line, max_width - width_of('…'), width_of)}…"
 
 
 # --------------------------------------------------------------------------------
@@ -778,24 +841,37 @@ def _tool_call_count(datastore: chattree.Forest, node_id: str) -> int:
 _ROLE_CAPTIONS = {"system": "SYSTEM", "tool": "TOOL", "user": "USER", "assistant": "AI"}
 
 
-def _fit_bracketed(speaker: str, detail: str, budget: int) -> str:
-    """Return `"speaker [detail]"`, shortened to `budget` characters, or the bare speaker if it cannot fit.
+def _fit_bracketed(speaker: str, detail: str, max_width: float, font_size: float,
+                   measure_text: Optional[MeasureText]) -> str:
+    """Return `"speaker [detail]"` fitted into `max_width` graph units, or the bare speaker if it cannot.
 
     The detail is what gives, never the speaker: a box whose author's name has been eaten to make room for
     a model number has lost the more important of the two. Dropped entirely rather than cut to a stub,
     below the point where what survives would identify nothing.
     """
-    room = budget - len(speaker) - len(" []")
-    if room >= len(detail):
+    def width_of(candidate: str) -> float:
+        return _text_width(candidate, font_size, measure_text, _LABEL_ADVANCE_PER_CHAR)
+
+    if width_of(f"{speaker} [{detail}]") <= max_width:
         return f"{speaker} [{detail}]"
-    if room >= _MIN_BRACKETED_CHARS:
-        return f"{speaker} [{detail[:room - 1]}…]"
-    return speaker
+    # How much of the detail survives, by binary search on its length. The shortest form kept is
+    # `_MIN_BRACKETED_CHARS` characters counting the ellipsis; below that the bracket goes entirely.
+    shortest = _MIN_BRACKETED_CHARS - 1
+    low, high = shortest - 1, len(detail)  # `low` is known not to fit, or is the give-up mark
+    while low < high - 1:
+        middle = (low + high) // 2
+        if width_of(f"{speaker} [{detail[:middle]}…]") <= max_width:
+            low = middle
+        else:
+            high = middle
+    if low < shortest:
+        return speaker
+    return f"{speaker} [{detail[:low]}…]"
 
 
 def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
-                          width: int, max_lines: int,
-                          speaker_width: int) -> Tuple[str, List[str], Optional[str]]:
+                          config: "LayoutConfig", has_role_icon: bool,
+                          measure_text: Optional[MeasureText]) -> Tuple[str, List[str], Optional[str]]:
     """Return `(who said it, the lines of what they said, a quieter second line or `None`)` for `node_id`.
 
     The speaker is the message's stored persona where it has one, and the role otherwise — the same
@@ -807,13 +883,20 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
     nothing at all. Drawn as one `[empty]` box, as they were until 2026-09-03, the commonest of the three
     reads as a tree full of replies that never happened.
     """
+    width = config._get_effective_label_width(has_role_icon)
+    speaker_width = config._get_effective_speaker_width(has_role_icon)
+    max_lines = config.label_lines
+
+    def wrap(what: str, lines_left: int) -> List[str]:
+        return _wrap(what, width, lines_left, config.font_size, measure_text)
+
     try:
         role, persona, text = chatutil.get_node_message_text_without_persona(datastore, node_id)
     except (KeyError, TypeError):
         return "?", ["[missing]"], None
     speaker = persona or _ROLE_CAPTIONS.get(role, (role or "?").upper())
     payload = _payload_of(datastore, node_id)
-    lines = _wrap(_plain(text), width, max_lines)
+    lines = wrap(_plain(text), max_lines)
     tool_calls = (payload.get("message") or {}).get("tool_calls") or ()
 
     # A turn that asked for tools ends this line with `[tool call]`, and the room for it is reserved
@@ -821,7 +904,8 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
     # marker is appended past its end, and the result runs out of the box -- 52 characters against a
     # budget of 40, for a long identity on a message that called a tool.
     marker = " [tool call]" if (tool_calls and not lines) else ""
-    room = speaker_width - len(marker)
+    room = speaker_width - _text_width(marker, config.role_font_size, measure_text,
+                                       _LABEL_ADVANCE_PER_CHAR)
 
     if role == "assistant":
         # Which model wrote it, in the bracket a tool result uses for the tool that answered -- one
@@ -830,7 +914,8 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
         # characters wide at this font, and "Aria [qwen3.5-4b, Q4_K_XL, 128 Ki context]" is 42.
         maybe_model = chatutil.short_model_name(payload)
         if maybe_model:
-            speaker = _fit_bracketed(speaker, maybe_model, room)
+            speaker = _fit_bracketed(speaker, maybe_model, room,
+                                     config.role_font_size, measure_text)
     elif role == "tool":
         # Which tool answered, in the bracketed aside the calling message uses for its own request. A run
         # of boxes all reading TOOL says only that the machinery ran; naming them makes the round legible
@@ -840,7 +925,8 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
         # the field existed. The bare caption is then the honest answer.
         function_name = chatutil.tool_name_of(payload)
         if function_name:
-            speaker = _fit_bracketed(speaker, function_name, room)
+            speaker = _fit_bracketed(speaker, function_name, room,
+                                     config.role_font_size, measure_text)
 
     if lines:
         return speaker, lines, None
@@ -862,7 +948,7 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
         sub_label = f"{len(tool_calls)} tool calls" if len(tool_calls) > 1 else None
         lines_for_calls = max_lines - 1 if sub_label is not None else max_lines
         return (f"{speaker}{marker}",
-                _wrap(chatutil.format_tool_calls(tool_calls), width, lines_for_calls),
+                wrap(chatutil.format_tool_calls(tool_calls), lines_for_calls),
                 sub_label)
     # Square brackets, which is how the constellation says something in its own voice rather than the
     # message's -- `[Video is off]`, `[no extractable text]`, `[Interrupted — the reply was stopped here]`.
@@ -1585,8 +1671,7 @@ def build(datastore: chattree.Forest,
                               pills=_pills_for(node_id, state, is_root=is_root))
             icon = (role_icons or {}).get(ref.role)
             speaker, label_lines, sub_label = _speaker_and_label_of(
-                datastore, node_id, config._get_effective_label_chars(icon is not None), config.label_lines,
-                config._get_effective_speaker_chars(icon is not None))
+                datastore, node_id, config, icon is not None, measure_text)
             shapes = _box_shapes(x, y, config.node_w, config, label_lines,
                                  fill=_fill_for(ref.role, node_id in current_branch,
                                                 asked_for_tools=bool(ref.tool_call_count)),

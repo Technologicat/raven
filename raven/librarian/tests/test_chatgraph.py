@@ -128,6 +128,17 @@ def _width_of(shape) -> float:
     return box[2] - box[0]
 
 
+def estimated_width(text: str, font_size: float) -> float:
+    """How wide the builder reckons `text` is with no measurer to ask, which is a test's situation.
+
+    The builder wraps by measured width where DPG can answer and falls back to an average glyph advance
+    where it cannot. Nothing here renders a frame, so every test takes the fallback — and an assertion
+    about what fits has to use the same arithmetic the code under test used, or it is comparing a width to
+    a different width.
+    """
+    return chatgraph._text_width(text, font_size, None, chatgraph._LABEL_ADVANCE_PER_CHAR)
+
+
 # ---------------------------------------------------------------------------
 # The spine
 # ---------------------------------------------------------------------------
@@ -569,7 +580,7 @@ class TestSpeaker:
         forest, reply = self._reply("a-very-long-model-identifier-that-goes-on-and-on-forever")
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply), config)
         speaker = next(text for text in self._texts(built, reply) if text.startswith("Aria"))
-        assert len(speaker) <= config._get_effective_speaker_chars()
+        assert estimated_width(speaker, config.role_font_size) <= config._get_effective_speaker_width()
         assert speaker.endswith("…]"), "the line was cut without saying that it was"
 
     def test_a_speaker_with_no_room_left_keeps_its_name_and_drops_the_model(self):
@@ -580,7 +591,8 @@ class TestSpeaker:
         # model to fewer than `_MIN_BRACKETED_CHARS` is where the bracket is abandoned, and a wider one
         # would merely truncate — which is the *other* behaviour, and would pass this assertion trivially.
         narrow = chatgraph.LayoutConfig(node_w=90.0)
-        assert narrow._get_effective_speaker_chars() - len("Aria") - len(" []") < chatgraph._MIN_BRACKETED_CHARS, \
+        shortest = f"Aria [{'x' * (chatgraph._MIN_BRACKETED_CHARS - 1)}…]"
+        assert estimated_width(shortest, narrow.role_font_size) > narrow._get_effective_speaker_width(), \
             "this box is wide enough to truncate into, so the drop is not what is being tested"
         forest, reply = self._reply("qwen3.5-4b, Q4_K_XL, 128 Ki context")
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply), narrow)
@@ -603,7 +615,7 @@ class TestSpeaker:
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=asking))
         speaker = next(text for text in self._texts(built, asking) if text.startswith("Aria"))
         assert speaker.endswith("[tool call]"), "the fixture drew no marker, so it reserves nothing"
-        assert len(speaker) <= config._get_effective_speaker_chars(), \
+        assert estimated_width(speaker, config.role_font_size) <= config._get_effective_speaker_width(), \
             f"the marker was appended past the end of the line: {speaker!r}"
 
     def test_a_tool_result_with_a_long_name_is_cut_the_same_way(self):
@@ -613,7 +625,7 @@ class TestSpeaker:
         forest, result, reply = self._tool_result("a_tool_with_an_unreasonably_long_function_name_indeed")
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
         speaker = next(text for text in self._texts(built, result) if text.startswith("TOOL"))
-        assert len(speaker) <= config._get_effective_speaker_chars()
+        assert estimated_width(speaker, config.role_font_size) <= config._get_effective_speaker_width()
 
     def _tool_result(self, function_name):
         """A drawn tool result, named or not. Returns `(forest, the result node, HEAD)`.
@@ -656,13 +668,28 @@ class TestSpeaker:
         # them cannot leave a label that overflows its box or stops short of it.
         narrow = chatgraph.LayoutConfig(node_w=120.0)
         wide = chatgraph.LayoutConfig(node_w=600.0)
-        assert wide._get_effective_label_chars() > narrow._get_effective_label_chars()
+        assert wide._get_effective_label_width() > narrow._get_effective_label_width()
 
-        big_font = chatgraph.LayoutConfig(font_size=40.0)
-        assert big_font._get_effective_label_chars() < chatgraph.LayoutConfig()._get_effective_label_chars()
-
-        assert chatgraph.LayoutConfig(label_chars=7)._get_effective_label_chars() == 7, \
+        assert chatgraph.LayoutConfig(label_width=70.0)._get_effective_label_width() == 70.0, \
             "an explicit setting must still win"
+
+    def test_a_bigger_font_fits_less_of_the_message(self):
+        # The font used to enter through the budget, which was a character count. It enters through the
+        # *wrap* now: the budget is room in graph units, and how much text fits in it is what the font
+        # decides. So this asks the built picture rather than the config.
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        reply = forest.create_node(payload("assistant",
+                                           "a reply long enough that no font setting fits the whole of "
+                                           "it into two lines of one box, however roomy"),
+                                   parent_id=root)
+        state = chatgraph.ViewState(head_node_id=reply)
+
+        def drawn_chars(config):
+            built = chatgraph.build(forest, state, config)
+            return sum(len(text) for text in self._texts(built, reply))
+
+        assert drawn_chars(chatgraph.LayoutConfig(font_size=40.0)) < drawn_chars(chatgraph.LayoutConfig())
 
 
 # ---------------------------------------------------------------------------
@@ -858,10 +885,12 @@ class TestRoleGlyphs:
         """What it costs, stated as a number so a change to either constant shows up as a diff here."""
         config = chatgraph.LayoutConfig()
         assert config._get_role_icon_gutter() == pytest.approx(0.5 * config.role_icon_fraction * config.node_h)
-        without = config._get_effective_label_chars(False)
-        with_glyph = config._get_effective_label_chars(True)
-        assert without - with_glyph == 2, \
-            f"a glyph costs {without - with_glyph} characters of label, not the 2 recorded here"
+        without = config._get_effective_label_width(False)
+        with_glyph = config._get_effective_label_width(True)
+        assert without - with_glyph == pytest.approx(config._get_role_icon_gutter())
+        # The same thing in the unit a reader thinks in. Two characters of ordinary lowercase prose, at
+        # the shipped node width and font -- which is the figure the design notes quote.
+        assert 1.5 < config._get_role_icon_gutter() / estimated_width("n", config.font_size) < 2.5
 
     def test_it_is_drawn_over_the_box_rather_than_under_it(self, conversation):
         """Shapes are drawn in list order, and a glyph half-covered by the box's own border would read as
