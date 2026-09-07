@@ -23,7 +23,7 @@ from raven.librarian.chattree import Forest
 # Fixtures
 # ---------------------------------------------------------------------------
 
-def payload(role: str, text: str, tool_calls=None) -> dict:
+def payload(role: str, text: str, tool_calls=None, images=()) -> dict:
     """A chat node payload of the shape `chatutil` writes, with only the fields this module reads.
 
     The timestamp is real data rather than filler: `chatutil.descend_to_latest` orders siblings by it, so
@@ -32,7 +32,9 @@ def payload(role: str, text: str, tool_calls=None) -> dict:
     """
     global _payload_serial
     _payload_serial += 1
-    message = {"role": role, "content": [{"type": "text", "text": text}]}
+    content = [{"type": "text", "text": text}]
+    content += [{"type": "image_url", "image_url": {"url": f"sidecar:{name}"}} for name in images]
+    message = {"role": role, "content": content}
     if tool_calls is not None:
         message["tool_calls"] = tool_calls
     return {"message": message,
@@ -907,6 +909,148 @@ class TestRoleGlyphs:
                   if isinstance(s, xdotgraph.PolygonShape) and _width_of(s) >= box_width]
         assert len(box_at) == 3, f"expected fill, outline and ring; found {len(box_at)} box-wide polygons"
         assert glyph_at > max(box_at)
+
+
+# ---------------------------------------------------------------------------
+# Attachment thumbnails
+# ---------------------------------------------------------------------------
+
+class TestAttachmentThumbnails:
+    """A message with attachments says so, fanned off the box's right edge.
+
+    The opposite margin from the role glyph, by design: both live outside the box, so neither costs the
+    label anything and the two cannot collide. What they *can* collide with is the neighbouring box, which
+    is what the spacing tests below are about.
+
+    Textures are opaque to this module, so these fixtures pass strings — and `None`, which is the ordinary
+    answer for one that is still being prepared.
+    """
+
+    def _forest(self, n_images, siblings_after=0):
+        """A conversation whose user message carries `n_images` attachments. Returns (forest, node)."""
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello"), parent_id=root)
+        carrier = forest.create_node(payload("user", "look at these",
+                                             images=[f"a{i}.png" for i in range(n_images)]),
+                                     parent_id=greeting)
+        for k in range(siblings_after):  # to the *right*, which is where a fan hangs
+            forest.create_node(payload("user", f"a plain sibling {k}"), parent_id=greeting)
+        return forest, carrier
+
+    def _cards(self, built, node_name):
+        """The thumbnail images drawn on one box, left to right.
+
+        By position rather than by order, because a role glyph is an `ImageShape` too — on the *other*
+        margin — and because the cards are appended back to front so the first ends up on top.
+        """
+        node = built.graph.get_node_by_name(node_name)
+        centre_of_box = 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2])
+
+        def centre(shape):
+            box = shape.get_bounding_box()
+            return 0.5 * (box[0] + box[2])
+        return sorted((s for s in node.shapes
+                       if isinstance(s, xdotgraph.ImageShape) and centre(s) > centre_of_box),
+                      key=centre)
+
+    def _build(self, forest, node, config=None, thumbnail_for=lambda name: f"tex_{name}"):
+        return chatgraph.build(forest, chatgraph.ViewState(head_node_id=node), config,
+                               thumbnail_for=thumbnail_for)
+
+    def test_one_card_per_attachment(self):
+        forest, carrier = self._forest(3)
+        built = self._build(forest, carrier)
+        assert [c.texture for c in self._cards(built, carrier)] == ["tex_a0.png", "tex_a1.png", "tex_a2.png"]
+
+    def test_a_message_with_none_gets_none(self):
+        forest, carrier = self._forest(0)
+        built = self._build(forest, carrier)
+        assert self._cards(built, carrier) == []
+
+    def test_the_frames_are_drawn_before_the_pictures_arrive(self):
+        """`None` means "not ready", not "no attachment" — preparing one needs a texture upload, which
+        cannot happen on the thread a rebuild runs on. So the count is legible before any picture is, and
+        the fan does not change shape when they land."""
+        forest, carrier = self._forest(3)
+        ready = self._build(forest, carrier)
+        waiting = self._build(forest, carrier, thumbnail_for=lambda name: None)
+
+        assert ([c.get_bounding_box() for c in self._cards(waiting, carrier)]
+                == [c.get_bounding_box() for c in self._cards(ready, carrier)])
+        assert [c.texture for c in self._cards(waiting, carrier)] == [None, None, None]
+        assert [c.texture for c in self._cards(ready, carrier)] != [None, None, None], \
+            "nothing was ready either, so this fixture compares two identical states"
+
+    def test_the_fan_straddles_the_right_edge_and_walks_outward(self):
+        forest, carrier = self._forest(4)
+        built = self._build(forest, carrier)
+        node = built.graph.get_node_by_name(carrier)
+        right = node.get_bounding_box()[2]
+        centres = [0.5 * (c.get_bounding_box()[0] + c.get_bounding_box()[2])
+                   for c in self._cards(built, carrier)]
+        assert centres[0] == pytest.approx(right), "the first card does not straddle the edge"
+        assert centres == sorted(centres) and len(set(centres)) == len(centres), \
+            "the cards do not each hang further out than the last"
+
+    def test_a_long_fan_is_abbreviated_with_a_count(self):
+        """Somebody will attach fifty files, and a fan of fifty is a smear."""
+        config = chatgraph.LayoutConfig()
+        forest, carrier = self._forest(9)
+        built = self._build(forest, carrier)
+        assert len(self._cards(built, carrier)) == 2 * chatgraph._ATTACHMENT_ANCHORS
+        assert "+5" in texts_on(built, carrier), \
+            f"nothing says how many were left out: {texts_on(built, carrier)}"
+        assert 9 > config.attachment_max_shown, "this fixture is inside the cap, so nothing is abbreviated"
+
+    def test_a_fan_a_little_over_the_cap_is_drawn_whole(self):
+        """The same tolerance every other gap here has. Replacing two thumbnails with a box saying "+2"
+        saves nothing and costs the reader a count."""
+        config = chatgraph.LayoutConfig()
+        over = config.attachment_max_shown + 1
+        assert over - 2 * chatgraph._ATTACHMENT_ANCHORS < chatgraph._MIN_HIDDEN_FOR_GAP, \
+            "one over the cap already hides enough to abbreviate, so the tolerance is not being tested"
+        forest, carrier = self._forest(over)
+        built = self._build(forest, carrier)
+        assert len(self._cards(built, carrier)) == over
+        assert not any(text.startswith("+") for text in texts_on(built, carrier))
+
+    def test_the_count_box_is_clear_of_the_last_card(self):
+        """It is the only thing saying the hidden ones exist, and one more fan step put it on top of the
+        last two cards — hiding two of the four the abbreviation had just chosen to keep."""
+        forest, carrier = self._forest(9)
+        built = self._build(forest, carrier)
+        node = built.graph.get_node_by_name(carrier)
+        cards = self._cards(built, carrier)
+        count_box = [s for s in node.shapes
+                     if isinstance(s, xdotgraph.PolygonShape) and s.pen.dash
+                     and s.get_bounding_box()[0] > node.get_bounding_box()[2]][0]
+        # Its left edge is past the *centre* of the last card, so the whole of its own face is free.
+        last = cards[-1].get_bounding_box()
+        assert count_box.get_bounding_box()[0] > 0.5 * (last[0] + last[2])
+
+    def test_the_gap_to_the_next_sibling_holds_the_fan(self):
+        """The invariant nothing else would catch. `overlapping_pairs` compares *node* boxes, and both a
+        fan and a role glyph live outside theirs — so a fan drawn over the neighbour is a picture that is
+        wrong and a layout that reports itself fine."""
+        config = chatgraph.LayoutConfig()
+        forest, carrier = self._forest(6, siblings_after=2)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=carrier), config,
+                                role_icons=ROLE_ICONS, thumbnail_for=lambda name: f"tex_{name}")
+        boxes = boxes_of(built)
+        carrier_box = boxes[carrier]
+        fan_reaches_to = max(c.get_bounding_box()[2] for c in self._cards(built, carrier))
+        assert fan_reaches_to > carrier_box[2] + config.horizontal_spacing, \
+            "the fan does not even reach into the gap, so this fixture cannot tell a widened gap from none"
+        to_the_right = [box for box in boxes.values() if box[0] > carrier_box[2]]
+        assert to_the_right, "no sibling to the right, so nothing was at risk"
+        nearest = min(box[0] for box in to_the_right)
+        glyph_reach = config._get_role_icon_gutter()
+        assert nearest - glyph_reach > fan_reaches_to, \
+            "the fan runs into the next box's role glyph"
+
+
+_CARD_SIDE = chatgraph.LayoutConfig().attachment_fraction * chatgraph.LayoutConfig().node_h
 
 
 # ---------------------------------------------------------------------------

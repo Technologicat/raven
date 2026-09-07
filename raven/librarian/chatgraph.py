@@ -56,6 +56,7 @@ from ..common.gui.xdotwidget import renderer as xdotrenderer
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
+from . import sidecarstore
 
 # Authored for a light background and inverted by the renderer, which is the path a parsed graph takes too
 # -- so the two cannot drift apart, and there is one place to look when a colour is wrong.
@@ -166,6 +167,11 @@ PREVIEW_COLOR: xdotconstants.Color = (0.10, 0.35, 0.80, 1.0)
 # Dash pattern for the outline of a gap, in graph units: on, off. A gap stands for content that is not
 # here, and a broken outline says that before any label is read.
 _GAP_DASH: Tuple[float, float] = (6.0, 4.0)
+
+# What a thumbnail's frame is filled with before its picture arrives, and what sits behind a picture that
+# does not fill its square. Darker than any box fill and lighter than the panel, so a card reads as a card
+# whether or not it has an image in it -- and so that a fan of them is legible as a count while they load.
+_ATTACHMENT_BACKING: xdotconstants.Color = _authored_for_dark(_BRANCH_HUE, 0.06, 0.26)
 
 # And for the ring around a tentatively selected box. Shorter marks than the gap's pattern, so the two
 # broken lines do not read as the same thing -- they say related but different things, "this is not here"
@@ -525,11 +531,58 @@ class LayoutConfig:
     # nearest-neighbour, so past native size the glyph turns into visible squares; downsampling from 64 is
     # the path the chat log already takes with the same files.
     role_icon_native_size: float = 64.0
+    # Attachment thumbnails, straddling the box's *right* edge as the role glyph straddles its left --
+    # the two decorations at opposite ends, each in the margin rather than in the text.
+    #
+    # Several stack, each hanging further out than the last, like a fanned deck. Fanned rather than
+    # tiled because the count is what a reader wants at a glance and the pictures are the cheapest way to
+    # say it: three overlapping corners read as three without anything having to be counted.
+    attachment_fraction: float = 0.65  # of node height, as the role glyph is a fraction of it
+    # How much further out each successive card sits. Chosen by looking at 1, 2, 3, 6 and 9 attachments
+    # side by side at 9, 18 and 27: at 9 a fan of six is a card with coloured stripes down its edge and
+    # cannot be counted, and at 27 the cards stop reading as a stack and become a row of separate tiles.
+    attachment_fan_offset: float = 18.0
+    # Past this many, the fan is abbreviated: the first two, the last two, and a box saying how many were
+    # left out. Somebody will attach fifty files, and a fan of fifty is a smear.
+    #
+    # Five rather than six so that the tolerance below has something to do: `_MIN_HIDDEN_FOR_GAP` lets a
+    # sixth through whole, since replacing two thumbnails with a box saying "+2" saves nothing and costs
+    # the reader a count. Seven is where it starts hiding.
+    attachment_max_shown: int = 5
+    # The size the panel prepares a thumbnail at, and therefore the size past which drawing one upsamples.
+    # DPG samples nearest-neighbour; see `ImageShape`.
+    attachment_native_size: float = 128.0
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
     margin: float = 20.0
     label_width: Optional[float] = None
     label_lines: int = 2
+
+    def _get_attachment_fan_x(self, index: int, shown: int) -> float:
+        """Return the `index`-th card's centre, as an offset from the box's right edge.
+
+        `shown`: How many thumbnails the fan draws. Index `shown` is the count box, if there is one.
+
+        The cards fan by `attachment_fan_offset` each, so a card shows that much of the one behind it.
+        **The count box is placed a card's width out instead**, clear of the fan: it overlaps the deck
+        just enough to belong to it, where one more fan step would put it on top of the last two cards and
+        hide the very thing it is there to say.
+        """
+        side = self.attachment_fraction * self.node_h
+        if index >= shown:
+            return max(0, shown - 1) * self.attachment_fan_offset + 0.8 * side
+        return index * self.attachment_fan_offset
+
+    def _get_attachment_reach(self, shown: int, has_count_box: bool) -> float:
+        """Return how far past a box's right edge its thumbnails reach, in graph units.
+
+        Zero for none. This is what the gap to the next sibling has to hold, alongside that sibling's own
+        role glyph coming the other way.
+        """
+        if shown <= 0 and not has_count_box:
+            return 0.0
+        last = shown if has_count_box else shown - 1
+        return self._get_attachment_fan_x(last, shown) + 0.5 * self.attachment_fraction * self.node_h
 
     def _get_role_icon_gutter(self) -> float:
         """Return how far into the box a role glyph reaches, in graph units.
@@ -838,6 +891,31 @@ def _role_of(datastore: chattree.Forest, node_id: str) -> str:
     return message.get("role") or ""
 
 
+def _attachment_sidecars(datastore: chattree.Forest, node_id: str) -> Tuple[str, ...]:
+    """Return the image sidecars a message carries, in the order it carries them.
+
+    Images only. A document attachment has no picture to draw, and a chip saying so is the chat log's job:
+    a box in this view is a few dozen pixels of caption, and spending it on "there is also a PDF" would
+    cost the message its own words.
+
+    Filenames rather than resolved anything, because this module holds no DPG. The caller maps one to a
+    texture — see `build`'s `thumbnail_for`.
+    """
+    content = ((_payload_of(datastore, node_id).get("message") or {}).get("content") or ())
+    if not isinstance(content, list):  # a legacy bare string, or something else unexpected
+        return ()
+    found = []
+    for part in content:
+        if not isinstance(part, dict) or part.get("type") != "image_url":
+            continue
+        url = (part.get("image_url") or {}).get("url") or ""
+        try:
+            found.append(sidecarstore.sidecar_filename_from_url(url, caller="_attachment_sidecars"))
+        except ValueError:  # a live `https://` or `data:` image, which has no stored copy to draw
+            continue
+    return tuple(found)
+
+
 def _tool_call_count(datastore: chattree.Forest, node_id: str) -> int:
     """Return how many tool calls the message in `node_id` requested.
 
@@ -1056,6 +1134,69 @@ def _pills_for(node_id: str, state: ViewState, is_root: bool) -> Tuple[str, ...]
 # --------------------------------------------------------------------------------
 # Choosing what to show
 
+class _Decorations:
+    """What hangs off a box's margins, and therefore how much room the gaps beside it need.
+
+    `role_icon`: The speaker glyph's texture, or `None`. Straddles the left edge.
+    `attachments`: One texture (or `None`, for one not yet prepared) per thumbnail this box shows.
+                   Straddles the right edge, fanned.
+    `hidden_attachments`: How many the fan left out.
+
+    Computed before the layout rather than during the drawing, which is the whole reason it is a type: a
+    fan of six thumbnails reaches further past a box than the gap between siblings is wide, so the gaps
+    cannot be spaced until it is known which boxes have one.
+    """
+
+    def __init__(self, role_icon: Optional[Union[int, str]] = None,
+                 attachments: Sequence[Optional[Union[int, str]]] = (),
+                 hidden_attachments: int = 0):
+        self.role_icon = role_icon
+        self.attachments = tuple(attachments)
+        self.hidden_attachments = hidden_attachments
+
+    def _get_left_reach(self, config: "LayoutConfig") -> float:
+        """Return how far the decorations reach past the box's left edge."""
+        return config._get_role_icon_gutter() if self.role_icon is not None else 0.0
+
+    def _get_right_reach(self, config: "LayoutConfig") -> float:
+        """Return how far the decorations reach past the box's right edge."""
+        return config._get_attachment_reach(len(self.attachments), bool(self.hidden_attachments))
+
+
+_NO_DECORATIONS = _Decorations()
+
+# How much clear ground to leave between one box's decorations and the next box's, in graph units. Small
+# on purpose: it separates two things that are already visually distinct, where `horizontal_spacing`
+# separates two boxes and has to read as a gap.
+_DECORATION_CLEARANCE = 6.0
+
+# How many thumbnails survive at each end when a fan is abbreviated.
+_ATTACHMENT_ANCHORS = 2
+
+
+def _decorations_of(datastore: chattree.Forest, node_id: str, role: str, config: "LayoutConfig",
+                    role_icons: Optional[Mapping[str, Union[int, str]]],
+                    thumbnail_for: Optional[Callable[[str], Optional[Union[int, str]]]]
+                    ) -> _Decorations:
+    """Return what hangs off one message box's margins.
+
+    The fan is abbreviated on the same terms as every other gap in this picture: only when it hides at
+    least `_MIN_HIDDEN_FOR_GAP`. Replacing three thumbnails with two and a box saying "+1" saves a slot
+    and costs the reader a count, so a fan a little over the limit is drawn whole.
+    """
+    sidecars = _attachment_sidecars(datastore, node_id)
+    if len(sidecars) > config.attachment_max_shown:
+        hidden = len(sidecars) - 2 * _ATTACHMENT_ANCHORS
+        if hidden >= _MIN_HIDDEN_FOR_GAP:
+            shown = sidecars[:_ATTACHMENT_ANCHORS] + sidecars[-_ATTACHMENT_ANCHORS:]
+            return _Decorations((role_icons or {}).get(role),
+                                [thumbnail_for(name) if thumbnail_for else None for name in shown],
+                                hidden)
+    return _Decorations((role_icons or {}).get(role),
+                        [thumbnail_for(name) if thumbnail_for else None for name in sidecars],
+                        0)
+
+
 class _Slot:
     """One position in a row: either a chat node, or a gap standing for several of them.
 
@@ -1194,7 +1335,9 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                 speaker: Optional[str] = None, sub_label: Optional[str] = None,
                 measure_text: Optional[MeasureText] = None,
                 emphasized: bool = False, previewed: bool = False,
-                role_icon: Optional[Union[int, str]] = None) -> List[xdotgraph.Shape]:
+                role_icon: Optional[Union[int, str]] = None,
+                attachments: Sequence[Optional[Union[int, str]]] = (),
+                hidden_attachments: int = 0) -> List[xdotgraph.Shape]:
     """Return the shapes for one box: its outline, its text, and any pointer pills above it.
 
     `width`: The box's width. A gap is narrower than a node, and the row layout allocates it that much
@@ -1213,6 +1356,12 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                  because that selection is tentative until the second one.
     `role_icon`: DPG texture for who is speaking, straddling the left edge. `None` for a gap, and for a
                  role no icon was supplied for.
+    `attachments`: One entry per image this message carries and this box shows, straddling the *right*
+                   edge and fanned. `None` for one whose thumbnail is not ready — the frame is drawn
+                   either way, so the count is legible before any picture is, and the stack does not
+                   change shape when they land.
+    `hidden_attachments`: How many the fan left out, drawn as a broken-outlined box after the last one.
+                          Zero when they all fit.
     """
     x1, y1 = x - 0.5 * width, y - 0.5 * config.node_h
     x2, y2 = x + 0.5 * width, y + 0.5 * config.node_h
@@ -1266,6 +1415,8 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                                            x1 - 0.5 * side, y - 0.5 * side,
                                            x1 + 0.5 * side, y + 0.5 * side,
                                            max_screen_size=config.role_icon_native_size))
+
+    shapes.extend(_attachment_shapes(attachments, hidden_attachments, x2, y, config, measure_text))
 
     text_pen = xdotgraph.Pen()
     text_pen.color = LINE_COLOR
@@ -1328,6 +1479,75 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     # fill, and a node carrying a second filled shape would have some of its text coloured for the wrong
     # background.
     shapes.extend(_pill_shapes(pills, x2, y1 - 4.0, config, measure_text))
+    return shapes
+
+
+def _attachment_shapes(attachments: Sequence[Optional[Union[int, str]]], hidden: int,
+                       right_edge: float, center_y: float, config: LayoutConfig,
+                       measure_text: Optional[MeasureText]) -> List[xdotgraph.Shape]:
+    """Return the shapes for a fan of attachment thumbnails straddling `right_edge`.
+
+    Drawn back to front, so the first attachment ends up on top and the fan reads left to right the way
+    the message carries them.
+    """
+    if not attachments and hidden <= 0:
+        return []
+
+    side = config.attachment_fraction * config.node_h
+    frame_pen = xdotgraph.Pen()
+    frame_pen.color = LINE_COLOR
+    frame_pen.linewidth = config.line_width
+    gap_pen = xdotgraph.Pen()
+    gap_pen.color = GAP_LINE_COLOR
+    gap_pen.linewidth = config.line_width
+    gap_pen.dash = _GAP_DASH
+
+    def frame_at(index: int) -> Tuple[float, float, float, float]:
+        """The rectangle of the `index`-th card. Index `len(attachments)` is the count box."""
+        cx = right_edge + config._get_attachment_fan_x(index, len(attachments))
+        return (cx - 0.5 * side, center_y - 0.5 * side, cx + 0.5 * side, center_y + 0.5 * side)
+
+    def card(index: int, texture: Optional[Union[int, str]], pen: xdotgraph.Pen,
+             is_count_box: bool = False) -> None:
+        """Append one card: an opaque back, the place its picture goes, then its outline."""
+        x1, y1, x2, y2 = frame_at(index)
+        # The back is what stops a card blending into the one behind it. Two photographs of similar tone
+        # merge into one shape otherwise, and the count is the whole point of showing more than one.
+        backing = xdotgraph.Pen()
+        backing.fillcolor = _ATTACHMENT_BACKING
+        # Square corners, unlike everything else here. A photograph has square corners, and rounding the
+        # frame around one leaves a sliver of ground at each corner that reads as a printing fault.
+        corners = _rounded_rect_points(x1, y1, x2, y2, 0.0)
+        shapes.append(xdotgraph.PolygonShape(backing, corners, filled=True))
+        if not is_count_box:
+            # Emitted even with no texture yet. An `ImageShape` is where a picture *goes*, and one with a
+            # `None` texture draws nothing while still saying so -- which keeps the shape list the same
+            # before and after the thumbnail lands, and gives anything asking what a box carries one
+            # answer rather than two.
+            shapes.append(xdotgraph.ImageShape(texture, x1, y1, x2, y2,
+                                               max_screen_size=config.attachment_native_size))
+        shapes.append(xdotgraph.PolygonShape(pen, corners, filled=False))
+
+    shapes: List[xdotgraph.Shape] = []
+    # Back to front, so the first attachment ends up on top and the fan reads left to right the way the
+    # message carries them.
+    for index in reversed(range(len(attachments))):
+        card(index, attachments[index], frame_pen)
+
+    if hidden > 0:
+        # Last of all, so its small overlap with the deck goes over rather than under. It sits a card's
+        # width out rather than one fan step; a fan step put it on top of the last two cards, hiding two
+        # of the four thumbnails the abbreviation had just chosen to keep.
+        card(len(attachments), None, gap_pen, is_count_box=True)
+        x1, _y1, x2, _y2 = frame_at(len(attachments))
+        label = f"+{hidden}"
+        text_pen = xdotgraph.Pen()
+        text_pen.color = GAP_LINE_COLOR
+        text_pen.fontsize = config.role_font_size
+        shapes.append(xdotgraph.TextShape(
+            text_pen, 0.5 * (x1 + x2), center_y + 0.3 * config.role_font_size,
+            xdotgraph.TextShape.CENTER,
+            _text_width(label, config.role_font_size, measure_text, _PILL_ADVANCE_PER_CHAR), label))
     return shapes
 
 
@@ -1485,7 +1705,8 @@ def build(datastore: chattree.Forest,
           state: ViewState,
           config: Optional[LayoutConfig] = None,
           measure_text: Optional[MeasureText] = None,
-          role_icons: Optional[Mapping[str, Union[int, str]]] = None) -> ChatGraph:
+          role_icons: Optional[Mapping[str, Union[int, str]]] = None,
+          thumbnail_for: Optional[Callable[[str], Optional[Union[int, str]]]] = None) -> ChatGraph:
     """Build the picture of the chat forest around `state.focus_node_id`, or HEAD if none is given.
 
     `datastore`: The chat forest. Read under its own lock, and not modified.
@@ -1502,6 +1723,14 @@ def build(datastore: chattree.Forest,
                   Hand over `DPGChatController.gui_role_icons` rather than loading the icon files: it is
                   where the per-character override is already resolved, so an AI with an icon of its own
                   gets that one, and a caller reading `raven/icons/ai.png` would silently lose it.
+    `thumbnail_for`: Attachment sidecar filename -> DPG texture, for the thumbnails fanned off a box's
+                     right edge. **`None` is an ordinary answer** and means "not ready yet": preparing one
+                     needs a texture upload, which cannot happen on the thread a rebuild runs on, so a
+                     caller queues the work and answers `None` until it lands. The frame is drawn either
+                     way, so the count is legible before any picture is and the fan does not change shape
+                     when they arrive.
+
+                     Omitting the callable entirely draws every frame empty, which is what a test gets.
 
     Returns a `ChatGraph`: the `Graph` to hand to `XDotWidget.set_graph`, plus the table saying what each
     of its nodes stands for.
@@ -1558,6 +1787,23 @@ def build(datastore: chattree.Forest,
         rows = _rows_for(datastore, state, config, visible_spine, branch_tip, state.head_node_id)
         subtree_counts = _subtree_counts_for(datastore, rows, drawn_spine)
 
+        # What hangs off each box's margins, settled before anything is placed. A fan of thumbnails
+        # reaches further past a box than `horizontal_spacing` is wide, and the box beside it has a role
+        # glyph coming the other way, so the gaps cannot be sized until both are known -- and the shapes
+        # cannot be built until the boxes are placed. Hence a pass of its own, whose results both later
+        # passes read.
+        decorations: Dict[str, _Decorations] = {}
+        for row in rows:
+            for slot in row.slots:
+                if slot.node_id is not None and slot.node_id not in decorations:
+                    decorations[slot.node_id] = _decorations_of(datastore, slot.node_id,
+                                                                _role_of(datastore, slot.node_id),
+                                                                config, role_icons, thumbnail_for)
+
+        def decorations_of(node_id: Optional[str]) -> _Decorations:
+            """What hangs off `node_id`'s box, or nothing for a gap box, which has no message behind it."""
+            return decorations.get(node_id, _NO_DECORATIONS) if node_id is not None else _NO_DECORATIONS
+
         # ------------------------------------------------------------------
         # Horizontal placement, which has to come first: whether a row needs a band under it turns on
         # whether the level below has room for what would otherwise go in one.
@@ -1568,9 +1814,19 @@ def build(datastore: chattree.Forest,
             widths = [config.gap_node_w if slot.is_gap else config.node_w for slot in row.slots]
             centers: List[float] = []
             cursor = 0.0
-            for width in widths:
+            # The gap after each box is `horizontal_spacing`, widened where that would not clear what the
+            # two boxes hang into it -- this one's thumbnails reaching right, the next one's role glyph
+            # reaching left. Widened per gap rather than everywhere, because attachments are occasional
+            # and a spacing sized for the worst case would make every ordinary row airy to no purpose.
+            for index, width in enumerate(widths):
                 centers.append(cursor + 0.5 * width)
-                cursor += width + config.horizontal_spacing
+                decorated = config.horizontal_spacing
+                if index + 1 < len(widths):
+                    decorated = max(decorated,
+                                    decorations_of(row.slots[index].node_id)._get_right_reach(config)
+                                    + decorations_of(row.slots[index + 1].node_id)._get_left_reach(config)
+                                    + _DECORATION_CLEARANCE)
+                cursor += width + decorated
             shift = -centers[row.anchor_index]  # put the anchor on x = 0
             row_x.append([center + shift for center in centers])
             row_w.append(widths)
@@ -1683,9 +1939,9 @@ def build(datastore: chattree.Forest,
                               on_current_branch=(node_id in current_branch),
                               tool_call_count=_tool_call_count(datastore, node_id),
                               pills=_pills_for(node_id, state, is_root=is_root))
-            icon = (role_icons or {}).get(ref.role)
+            decoration = decorations_of(node_id)
             speaker, label_lines, sub_label = _speaker_and_label_of(
-                datastore, node_id, config, icon is not None, measure_text)
+                datastore, node_id, config, decoration.role_icon is not None, measure_text)
             shapes = _box_shapes(x, y, config.node_w, config, label_lines,
                                  fill=_fill_for(ref.role, node_id in current_branch,
                                                 asked_for_tools=bool(ref.tool_call_count)),
@@ -1694,7 +1950,9 @@ def build(datastore: chattree.Forest,
                                  measure_text=measure_text,
                                  emphasized=(node_id == state.head_node_id),
                                  previewed=(node_id == state.cursor_name),
-                                 role_icon=icon)
+                                 role_icon=decoration.role_icon,
+                                 attachments=decoration.attachments,
+                                 hidden_attachments=decoration.hidden_attachments)
             return ref, shapes
 
         for row_index, row in enumerate(rows):
