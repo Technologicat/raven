@@ -92,6 +92,57 @@ def first_party_deps(path: pathlib.Path, root: pathlib.Path) -> set[pathlib.Path
     return deps
 
 
+_IMPORTORSKIP = re.compile(r"""importorskip\(\s*["']([^"']+)["']""")
+
+
+def guard_targets(sources: list[pathlib.Path]) -> set[str]:
+    """Every module named in an `importorskip(...)` across `sources`."""
+    found = set()
+    for source in sources:
+        if source.is_file():
+            found |= set(_IMPORTORSKIP.findall(source.read_text(errors="replace")))
+    return found
+
+
+def guard_fires_in_ci(target: str, root: pathlib.Path, allowed: set[str], stdlib: set[str]) -> bool:
+    """Would `importorskip(target)` actually skip the module in CI?
+
+    A guard naming something CI *has* protects nothing. This is the whole of what the check used to get
+    wrong: a module carrying any `importorskip` at all was exempted, so one guarded on `dearpygui` — which
+    CI installs — was free to go on and import the ML stack, and the report came back green while the push
+    came back red.
+
+    Third-party: it fires when the package is absent from CI's list. First-party: it fires when *that*
+    module's own transitive imports are not satisfied there, which is how `importorskip` on a `raven`
+    module works at all — the import runs and raises from somewhere further down.
+    """
+    top = target.split(".")[0]
+    if top != "raven":
+        return top not in stdlib and top.lower() not in allowed
+    for candidate in (root.joinpath(*target.split(".")).with_suffix(".py"),
+                      root.joinpath(*target.split(".")) / "__init__.py"):
+        if candidate.is_file():
+            return bool(unsatisfied_imports(candidate, root, allowed, stdlib))
+    return False  # names nothing that exists, so it cannot be relied on to skip
+
+
+def unsatisfied_imports(start: pathlib.Path, root: pathlib.Path,
+                        allowed: set[str], stdlib: set[str]) -> list[str]:
+    """Walk first-party imports from `start`; report every module-level import CI could not satisfy."""
+    findings, seen, queue = [], set(), [start]
+    while queue:
+        current = queue.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        queue += [d for d in first_party_deps(current, root) if d not in seen]
+        missing = sorted(m for m in module_level_imports(current)
+                         if m not in stdlib and m != "raven" and m.lower() not in allowed)
+        if missing:
+            findings.append(f"{current.relative_to(root)} imports {missing}")
+    return findings
+
+
 def main() -> None:
     root = pathlib.Path(subprocess.run(["git", "rev-parse", "--show-toplevel"],
                                        capture_output=True, text=True).stdout.strip())
@@ -101,9 +152,13 @@ def main() -> None:
     findings: dict[str, list[str]] = {}
     n_modules = 0
     for test in sorted(root.glob("raven/**/tests/test_*.py")):
-        # A module guarded by `importorskip` is allowed to need anything: CI skips it instead of erroring.
-        # Without this the report is dominated by tests that are already correct — dearpygui, chromadb,
-        # kokoro and the rest are all deliberately absent and deliberately guarded.
+        # A module whose `importorskip` actually fires in CI is allowed to need anything: CI skips it
+        # instead of erroring. Without this the report is dominated by tests that are already correct —
+        # dearpygui, chromadb, kokoro and the rest are all deliberately absent and deliberately guarded.
+        #
+        # **A guard naming something CI has protects nothing**, which is why this asks whether each one
+        # fires rather than whether one exists. A module guarded on `dearpygui` — installed in CI — went
+        # on to import the ML stack, and this script called it fine while the push came back red.
         #
         # The guard may live in a `conftest.py` rather than in the test file: `raven/client/tests/conftest.py`
         # guards the whole directory that way, on purpose, so each file does not need its own. Checking only
@@ -111,27 +166,17 @@ def main() -> None:
         # learned to read conftests.
         sources = [test] + [p / "conftest.py" for p in test.parents
                             if (p / "conftest.py").is_file() and root in p.parents or p == root]
-        if any(re.search(r"importorskip\(", s.read_text(errors="replace"))
-               for s in sources if s.is_file()):
+        if any(guard_fires_in_ci(target, root, allowed, stdlib)
+               for target in guard_targets(sources)):
             continue
 
-        seen, queue = set(), [test]
-        while queue:
-            f = queue.pop()
-            if f in seen:
-                continue
-            seen.add(f)
-            queue += [d for d in first_party_deps(f, root) if d not in seen]
-            missing = sorted(m for m in module_level_imports(f)
-                             if m not in stdlib and m != "raven" and m.lower() not in allowed)
-            if missing:
-                findings.setdefault(str(test.relative_to(root)), []).append(
-                    f"{f.relative_to(root)} imports {missing}")
-        n_modules += len(seen)
+        for finding in unsatisfied_imports(test, root, allowed, stdlib):
+            findings.setdefault(str(test.relative_to(root)), []).append(finding)
+        n_modules += 1
 
     if not findings:
-        print(f"OK: {n_modules} module loads reachable from the unguarded tests; "
-              "every module-level import is available in CI.")
+        print(f"OK: {n_modules} test module(s) whose guards would not fire in CI, and everything they "
+              "reach; every module-level import is available there.")
         return
     print(f"{len(findings)} unguarded test module(s) would fail to collect in CI:\n")
     for test, reasons in sorted(findings.items()):
