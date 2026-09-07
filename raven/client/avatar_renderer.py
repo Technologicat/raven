@@ -686,8 +686,11 @@ class DPGAvatarRenderer:
         if action == "pause":
             # center the paused indicator on the video feed in the GUI
             with guiutils.nonexistent_ok() as nok:
-                # position offscreen and render, to compute size
-                dpg.set_item_pos(self.paused_text_gui_widget, (0, -100))
+                # Park it offscreen and render, to compute its size: it is centered afterwards, and a
+                # widget reports the size it was last laid out at. Parked at the far corner rather than at
+                # some negative offset, which has to assume how tall the text is — this one is outside
+                # however large it grows.
+                guiutils.park_offscreen(self.paused_text_gui_widget)
                 dpg.show_item(self.paused_text_gui_widget)
                 self._split_frame_unless_stopping()  # wait for the text to show so that DPG computes its size
                 self._reposition_paused_text()
