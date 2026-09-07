@@ -1184,7 +1184,7 @@ one of those things that stops making sense once you see it written out in the d
 It fired **repeatedly** while the TTS stayed silent, with a docstring telling handlers to be idempotent.
 And nothing consumes it: both callers in this repo pass `on_tts_idle=None`, and
 `tts_idle_check_interval=None` besides. **That is supersession rather than neglect** — Juha built the
-global event first, found that what he actually needed was per-avatar, and used the `on_stop_speaking` hook
+global event first, found that what he actually needed was per-avatar, and built the `on_stop_speaking` hook
 of `send_text_to_tts` instead, leaving this one in place (his account, 2026-09-07). The module docstring
 has been steering readers to that hook ever since.
 
