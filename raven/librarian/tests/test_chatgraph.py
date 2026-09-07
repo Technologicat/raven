@@ -1029,6 +1029,31 @@ class TestAttachmentThumbnails:
         last = cards[-1].get_bounding_box()
         assert count_box.get_bounding_box()[0] > 0.5 * (last[0] + last[2])
 
+    def test_a_message_drawn_in_place_of_a_gap_keeps_its_decorations(self):
+        """A node with one child has that child drawn instead of a "…1 more" box, and such a box is in no
+        row slot. Asking a table built from the slots alone gave it no glyph and no thumbnails — silently,
+        because a box with nothing hanging off it looks exactly like a box whose message carries nothing.
+        """
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello"), parent_id=root)
+        spine = forest.create_node(payload("user", "the branch we are on"), parent_id=greeting)
+        # An off-spine sibling with exactly one child: the child is inlined rather than counted.
+        aside = forest.create_node(payload("user", "a sibling"), parent_id=greeting)
+        inlined = forest.create_node(payload("assistant", "its only reply", images=["b0.png", "b1.png"]),
+                                     parent_id=aside)
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=spine),
+                                role_icons=ROLE_ICONS, thumbnail_for=lambda name: f"tex_{name}")
+        assert built.graph.get_node_by_name(inlined) is not None, \
+            "the child was not inlined, so this fixture does not exercise the path it is about"
+        assert [c.texture for c in self._cards(built, inlined)] == ["tex_b0.png", "tex_b1.png"]
+        node = built.graph.get_node_by_name(inlined)
+        centre = 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2])
+        glyphs = [s for s in node.shapes if isinstance(s, xdotgraph.ImageShape)
+                  and 0.5 * (s.get_bounding_box()[0] + s.get_bounding_box()[2]) < centre]
+        assert [g.texture for g in glyphs] == ["tex_ai"]
+
     def test_the_gap_to_the_next_sibling_holds_the_fan(self):
         """The invariant nothing else would catch. `overlapping_pairs` compares *node* boxes, and both a
         fan and a role glyph live outside theirs — so a fan drawn over the neighbour is a picture that is

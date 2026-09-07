@@ -1607,28 +1607,44 @@ def _pill_shapes(pills: Tuple[str, ...], anchor_x: float, bottom_y: float, confi
     return shapes
 
 
-def _column_is_free(x: float, width: float,
-                    centers: Sequence[float], widths: Sequence[float], clearance: float) -> bool:
-    """Return whether a box of `width` centred on `x` clears every box in a row, by at least `clearance`."""
-    return all(abs(x - center) >= 0.5 * (width + other) + clearance
-               for center, other in zip(centers, widths))
+def _column_is_free(x: float, width: float, reach: Tuple[float, float],
+                    centers: Sequence[float], widths: Sequence[float],
+                    reaches: Sequence[Tuple[float, float]], clearance: float) -> bool:
+    """Return whether a box of `width` centred on `x` clears every box in a row, by at least `clearance`.
+
+    `reach` and `reaches` are `(left, right)` pairs saying how far each box's decorations hang past its
+    edges — the role glyph one way, the attachment fan the other. They are part of the box's footprint
+    here even though they are outside its rectangle: two boxes that clear each other while one's fan is
+    drawn over the other's glyph are a picture that is wrong and a layout that reports itself fine.
+    """
+    low, high = x - 0.5 * width - reach[0], x + 0.5 * width + reach[1]
+    for center, other_width, other_reach in zip(centers, widths, reaches):
+        other_low = center - 0.5 * other_width - other_reach[0]
+        other_high = center + 0.5 * other_width + other_reach[1]
+        if low < other_high + clearance and other_low < high + clearance:
+            return False
+    return True
 
 
-def _row_has_room(row_index: int, x: float, width: float,
+def _row_has_room(row_index: int, x: float, width: float, reach: Tuple[float, float],
                   rows: Sequence["_Row"], row_x: Sequence[Sequence[float]],
-                  widths: Sequence[Sequence[float]], config: LayoutConfig) -> bool:
+                  widths: Sequence[Sequence[float]], reaches: Sequence[Sequence[Tuple[float, float]]],
+                  config: LayoutConfig) -> bool:
     """Return whether a box of `width` centred on `x` fits on row `row_index` without touching anything."""
     if not (0 <= row_index < len(rows)):
         return False
-    return _column_is_free(x, width, row_x[row_index], widths[row_index], config.horizontal_spacing)
+    return _column_is_free(x, width, reach, row_x[row_index], widths[row_index], reaches[row_index],
+                           config.horizontal_spacing)
 
 
 def _extra_subtree(datastore: chattree.Forest, owner: str, x: float, owner_row: int,
                    rows: Sequence["_Row"], row_x: Sequence[Sequence[float]],
-                   widths: Sequence[Sequence[float]], config: LayoutConfig) -> "_Extra":
+                   widths: Sequence[Sequence[float]], reaches: Sequence[Sequence[Tuple[float, float]]],
+                   config: LayoutConfig) -> "_Extra":
     """Return the gap box standing in for what is not drawn below `owner`, placed as deep as it fits."""
     at_depth = owner_row + 1
-    fits = _row_has_room(at_depth, x, config.gap_node_w, rows, row_x, widths, config)
+    # A gap box has no decorations of its own -- nobody said it, and it carries nothing.
+    fits = _row_has_room(at_depth, x, config.gap_node_w, (0.0, 0.0), rows, row_x, widths, reaches, config)
     hidden, depth_range = _subtree_below(datastore, owner)
     return _Extra("subtree", owner=owner, x=x,
                   hidden=hidden, depth_range=depth_range,
@@ -1787,22 +1803,27 @@ def build(datastore: chattree.Forest,
         rows = _rows_for(datastore, state, config, visible_spine, branch_tip, state.head_node_id)
         subtree_counts = _subtree_counts_for(datastore, rows, drawn_spine)
 
-        # What hangs off each box's margins, settled before anything is placed. A fan of thumbnails
-        # reaches further past a box than `horizontal_spacing` is wide, and the box beside it has a role
-        # glyph coming the other way, so the gaps cannot be sized until both are known -- and the shapes
-        # cannot be built until the boxes are placed. Hence a pass of its own, whose results both later
-        # passes read.
+        # What hangs off each box's margins. A fan of thumbnails reaches further past a box than
+        # `horizontal_spacing` is wide, and the box beside it has a role glyph coming the other way, so
+        # the gaps cannot be sized until both are known -- and the shapes cannot be built until the boxes
+        # are placed. So this is asked before the layout and read again while drawing, and memoized so
+        # that the two passes cannot disagree and `thumbnail_for` is asked once per message.
         decorations: Dict[str, _Decorations] = {}
-        for row in rows:
-            for slot in row.slots:
-                if slot.node_id is not None and slot.node_id not in decorations:
-                    decorations[slot.node_id] = _decorations_of(datastore, slot.node_id,
-                                                                _role_of(datastore, slot.node_id),
-                                                                config, role_icons, thumbnail_for)
 
         def decorations_of(node_id: Optional[str]) -> _Decorations:
-            """What hangs off `node_id`'s box, or nothing for a gap box, which has no message behind it."""
-            return decorations.get(node_id, _NO_DECORATIONS) if node_id is not None else _NO_DECORATIONS
+            """What hangs off `node_id`'s box, or nothing for a gap box, which has no message behind it.
+
+            Computed on demand rather than only for the rows' own slots. A message drawn *in place of* a
+            gap is not in any slot, and asking a table that only held slots would have given it no glyph
+            and no thumbnails -- silently, since a box with nothing hanging off it looks like a box whose
+            message carries nothing.
+            """
+            if node_id is None:
+                return _NO_DECORATIONS
+            if node_id not in decorations:
+                decorations[node_id] = _decorations_of(datastore, node_id, _role_of(datastore, node_id),
+                                                       config, role_icons, thumbnail_for)
+            return decorations[node_id]
 
         # ------------------------------------------------------------------
         # Horizontal placement, which has to come first: whether a row needs a band under it turns on
@@ -1810,8 +1831,11 @@ def build(datastore: chattree.Forest,
 
         row_x: List[List[float]] = []      # slot centres, per row, aligned on the row's anchor
         row_w: List[List[float]] = []
+        row_reach: List[List[Tuple[float, float]]] = []  # (left, right) decoration overhang, per slot
         for row in rows:
             widths = [config.gap_node_w if slot.is_gap else config.node_w for slot in row.slots]
+            reaches = [(decorations_of(slot.node_id)._get_left_reach(config),
+                        decorations_of(slot.node_id)._get_right_reach(config)) for slot in row.slots]
             centers: List[float] = []
             cursor = 0.0
             # The gap after each box is `horizontal_spacing`, widened where that would not clear what the
@@ -1823,13 +1847,12 @@ def build(datastore: chattree.Forest,
                 decorated = config.horizontal_spacing
                 if index + 1 < len(widths):
                     decorated = max(decorated,
-                                    decorations_of(row.slots[index].node_id)._get_right_reach(config)
-                                    + decorations_of(row.slots[index + 1].node_id)._get_left_reach(config)
-                                    + _DECORATION_CLEARANCE)
+                                    reaches[index][1] + reaches[index + 1][0] + _DECORATION_CLEARANCE)
                 cursor += width + decorated
             shift = -centers[row.anchor_index]  # put the anchor on x = 0
             row_x.append([center + shift for center in centers])
             row_w.append(widths)
+            row_reach.append(reaches)
 
         # Room for the picture to grow downward. An off-spine node at the deepest drawn level still has a
         # level below it, even though the branch does not reach that far -- and an empty one collides with
@@ -1839,6 +1862,7 @@ def build(datastore: chattree.Forest,
         rows = list(rows) + [_EMPTY_ROW, _EMPTY_ROW]
         row_x += [[], []]
         row_w += [[], []]
+        row_reach += [[], []]
 
         # Everything that stands for content at a known depth is drawn at that depth. An inlined child is
         # a real message and has one; a subtree gap stands for messages one level below the node it hangs
@@ -1866,8 +1890,12 @@ def build(datastore: chattree.Forest,
                 if child_count is None:
                     continue
                 x = row_x[row_index][slot_index]
-                if child_count == 1 and _row_has_room(row_index + 1, x, config.node_w, rows, row_x, row_w,
-                                                      config):
+                child_id = datastore.get_children(slot.node_id)[0] if child_count == 1 else None
+                child_reach = ((decorations_of(child_id)._get_left_reach(config),
+                                decorations_of(child_id)._get_right_reach(config))
+                               if child_id is not None else (0.0, 0.0))
+                if child_count == 1 and _row_has_room(row_index + 1, x, config.node_w, child_reach,
+                                                      rows, row_x, row_w, row_reach, config):
                     # One child costs a whole box to announce, so draw the child instead: a message says
                     # more than the number 1, and the click is better too -- previewing the child redraws
                     # around the child, where a gap redraws around its parent.
@@ -1876,7 +1904,6 @@ def build(datastore: chattree.Forest,
                     # one column, and a child that cannot go at its own depth is worth less than the gap
                     # box it would replace: the box says what is missing, where a message in the wrong
                     # place says something untrue about where it sits.
-                    child_id = datastore.get_children(slot.node_id)[0]
                     extras.append(_Extra("child", owner=slot.node_id, node_id=child_id, x=x,
                                          row=row_index + 1, band_row=None))
                     if datastore.get_children(child_id):
@@ -1884,10 +1911,10 @@ def build(datastore: chattree.Forest,
                         # answer, and it terminates here: a gap box stands for content and is never itself
                         # expanded.
                         extras.append(_extra_subtree(datastore, child_id, x, row_index + 1, rows,
-                                                     row_x, row_w, config))
+                                                     row_x, row_w, row_reach, config))
                     continue
                 extras.append(_extra_subtree(datastore, slot.node_id, x, row_index, rows,
-                                             row_x, row_w, config))
+                                             row_x, row_w, row_reach, config))
 
         # Give back whichever of the two spare levels nothing wanted.
         last_used = max([index for index, row in enumerate(rows) if row.slots]
@@ -1896,6 +1923,7 @@ def build(datastore: chattree.Forest,
         del rows[last_used + 1:]
         del row_x[last_used + 1:]
         del row_w[last_used + 1:]
+        del row_reach[last_used + 1:]
 
         # ------------------------------------------------------------------
         # Vertical placement. A row gets a whole empty row's worth of space below it when something has to
