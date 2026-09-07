@@ -643,8 +643,9 @@ class XDotAttrParser:
                 # levels and `raven.common.image.lanczos.mip_scale_for_zoom` picks the one to draw at a
                 # given zoom, which is what Cherrypick's image viewer and the file dialog's thumbnail grid
                 # both go through.
-                # TODO: load the named image, resample it through the Lanczos mip chain, and hand
-                # TODO: `ImageShape` a texture for the level that suits the current zoom
+                # TODO (briefs/xdot-image-shapes-brief.md): load the named image, resample it through
+                # TODO: the Lanczos mip chain, and hand `ImageShape` a texture for the level that suits
+                # TODO: the size it is being drawn at
                 logger.warning("XDotAttrParser.parse: image shapes are currently not supported; skipping.")
                 # x0, y0 = self.read_point()
                 # w = self.read_number()

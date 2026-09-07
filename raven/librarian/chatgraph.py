@@ -602,6 +602,10 @@ class LayoutConfig:
     # A cap is right for the role glyph, whose asset is shipped at its display size and has nothing better
     # to show. An attachment's source image is large, so the answer to "the card is bigger now" is a bigger
     # texture, not a smaller picture.
+    #
+    # TODO (briefs/xdot-image-shapes-brief.md): prepare a mip chain instead of one size, and draw the level
+    # TODO: that suits the card's size on screen. One number cannot serve both ends -- raising this alone
+    # TODO: trades softness at high zoom for aliasing at the zoom people actually read at.
     attachment_native_size: float = 128.0
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
