@@ -74,11 +74,12 @@ from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from . import config
 from .triage import TriageState, TriageManager
 from .history import TriageHistory
+from ..common.image import lanczos
 from ..common.image import thumbnails
 from .imageview import ImageView
 from .grid import TriageGrid, FilterMode
 from ..common.gui.gridnav import resolve_undo_nav_target
-from .preload import PreloadCache, donate_outgoing_image, mip_scale_for_zoom
+from .preload import PreloadCache, donate_outgoing_image
 from .compare import CompareMode
 
 from unpythonic import namelambda
@@ -414,11 +415,11 @@ def _load_current_image() -> None:
 
             # If the preloaded mips are too small to display crisply at the
             # current zoom, generate the larger levels in the background.
-            # Preloads are capped adaptively to the zoom (mip_scale_for_zoom),
+            # Preloads are capped adaptively to the zoom (`lanczos.mip_scale_for_zoom`),
             # so a photo preloaded at a small fit-zoom is already crisp and
             # skips the augment; only a later zoom-in (or a donated entry that
             # happens to be smaller) triggers it.
-            needed_scale = mip_scale_for_zoom(iv.zoom)
+            needed_scale = lanczos.mip_scale_for_zoom(iv.zoom)
             largest_cached = max((s for s, _w, _h, _f in cached.mips),
                                  default=0.0)
             if largest_cached < needed_scale:
@@ -888,7 +889,7 @@ def _ensure_mips_for_zoom(zoom: float) -> None:
     idx = iv.image_key
     if not isinstance(idx, int) or not (0 <= idx < len(triage)):
         return
-    if iv.loaded_max_scale < mip_scale_for_zoom(zoom):
+    if iv.loaded_max_scale < lanczos.mip_scale_for_zoom(zoom):
         iv.augment_mips(triage[idx].path)
 
 

@@ -10,11 +10,10 @@ they are not drawn. DPG textures are created only on ``take()``, by the
 caller (ImageView), using its texture pool for fast ``set_value`` reuse.
 """
 
-__all__ = ["mip_scale_for_zoom", "PreloadCache", "donate_outgoing_image"]
+__all__ = ["PreloadCache", "donate_outgoing_image"]
 
 import concurrent.futures
 import logging
-import math
 import threading
 import time
 from collections.abc import Sequence
@@ -82,26 +81,6 @@ def _compute_targets(vis_pos, n_visible, n_cols, window):
         offer(vis_pos + d * n_cols, d)     # vertical (same column), Down
 
     return [p for p, _d in sorted(nearest.items(), key=lambda kv: (kv[1], kv[0]))]
-
-
-def mip_scale_for_zoom(zoom: float) -> float:
-    """Smallest mip scale (1.0, 0.5, 0.25, …) that displays crisply at *zoom*.
-
-    A mip chain halves from 1.0, and the mip engine picks the smallest mip whose
-    scale is ``>= zoom`` so it downsamples a larger level rather than upsampling
-    a smaller one (see ``ImageView._select_mip_from``). The matching preload cap
-    is therefore ``2 ** ceil(log2(zoom))``, clamped to ``<= 1.0`` — no mip
-    exceeds native, so past 1:1 (reachable with the zoom-fit 100% cap off) this
-    returns 1.0 and the *view* magnifies the native level.
-
-    This is the adaptive half of the preload cap: a 1 MP image at fit-zoom
-    (~0.8) needs the 1.0 level, while a multi-MP photo at fit-zoom (~0.2) needs
-    only 0.25 — so we never read back levels finer than the pane can show.
-    Degenerate / unknown zooms (``<= 0``) fall back to full res.
-    """
-    if zoom >= 1.0 or zoom <= 0.0:
-        return 1.0
-    return min(1.0, 2.0 ** math.ceil(math.log2(zoom)))
 
 
 class PreloadCache:
@@ -204,7 +183,7 @@ class PreloadCache:
         if current_idx not in visible:
             return  # current is filtered out; don't preload
 
-        max_scale = mip_scale_for_zoom(display_scale)
+        max_scale = lanczos.mip_scale_for_zoom(display_scale)
 
         vis_pos = visible.index(current_idx)
         target_positions = _compute_targets(vis_pos, len(visible), n_cols,

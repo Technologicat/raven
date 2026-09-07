@@ -16,7 +16,7 @@ and ringing on sharp edges:
 All operations use standard PyTorch tensor ops.
 """
 
-__all__ = ["resize", "mipchain"]
+__all__ = ["resize", "mipchain", "mip_scale_for_zoom"]
 
 import math
 
@@ -231,3 +231,21 @@ def mipchain(tensor: torch.Tensor,
         level = _halve(_halve(levels[-1], dim=2, order=order), dim=3, order=order)
         levels.append(level)
     return levels
+
+
+def mip_scale_for_zoom(zoom: float) -> float:
+    """Smallest mip scale (1.0, 0.5, 0.25, …) that displays crisply at `zoom`.
+
+    A `mipchain` halves from 1.0, so displaying at `zoom` wants the smallest level whose scale is still
+    `>= zoom`: that level is downsampled to fit, where the next one down would have to be upsampled, and
+    upsampling a mip is how a picture goes soft. The answer is `2 ** ceil(log2(zoom))`, clamped to
+    `<= 1.0` — no level exceeds native, so past 1:1 this returns 1.0 and the *viewer* magnifies the
+    native level. Degenerate or unknown zooms (`<= 0`) fall back to full resolution.
+
+    It is also the rule for deciding how much to *prepare*: a 1 MP image displayed at 0.8 needs the 1.0
+    level, while a multi-MP photograph displayed at 0.2 needs only 0.25, so a cache built to this never
+    holds levels finer than the display can show.
+    """
+    if zoom >= 1.0 or zoom <= 0.0:
+        return 1.0
+    return min(1.0, 2.0 ** math.ceil(math.log2(zoom)))

@@ -341,8 +341,8 @@ class ImageShape(Shape):
         `max_screen_size` that stops it being drawn larger than it is. Downsampling from there is the
         path the chat log itself already takes.
       - Anything else wants a Lanczos mip chain on the GPU: `raven.common.image.lanczos.mipchain` builds
-        the levels and `raven.cherrypick.preload.mip_scale_for_zoom` picks one for a given zoom. That is
-        what Cherrypick's image viewer and the file dialog's thumbnail grid do, and a caller drawing
+        the levels and `raven.common.image.lanczos.mip_scale_for_zoom` picks one for a given zoom. That
+        is what Cherrypick's image viewer and the file dialog's thumbnail grid do, and a caller drawing
         photographs here should do the same rather than upload one texture and let DPG scale it.
 
     A `None` texture is an ordinary state rather than a fault: it is what a caller draws while an image is

@@ -258,3 +258,32 @@ class TestMipchain:
         for level in chain:
             assert level.shape[0] == 1  # batch
             assert level.shape[1] == 4  # RGBA
+
+
+class TestMipScaleForZoom:
+    """Tests for `lanczos.mip_scale_for_zoom` — which level of a `mipchain` to display at a given zoom."""
+
+    def test_returns_smallest_mip_not_below_zoom(self):
+        # Smallest mip scale (1.0, 0.5, 0.25, …) that is >= zoom.
+        assert lanczos.mip_scale_for_zoom(0.8) == 1.0   # needs the 1.0 level
+        assert lanczos.mip_scale_for_zoom(0.5) == 0.5   # exact boundary
+        assert lanczos.mip_scale_for_zoom(0.51) == 1.0  # just past 0.5 → 1.0
+        assert lanczos.mip_scale_for_zoom(0.25) == 0.25
+        assert lanczos.mip_scale_for_zoom(0.2) == 0.25  # multi-MP photo at small fit
+        assert lanczos.mip_scale_for_zoom(0.1) == 0.125
+
+    def test_clamps_at_native(self):
+        # No mip exceeds 1.0 — zoom past 1:1 still caps at native res.
+        assert lanczos.mip_scale_for_zoom(1.0) == 1.0
+        assert lanczos.mip_scale_for_zoom(2.5) == 1.0
+
+    def test_degenerate_zoom_falls_back_to_full(self):
+        assert lanczos.mip_scale_for_zoom(0.0) == 1.0
+        assert lanczos.mip_scale_for_zoom(-1.0) == 1.0
+
+    def test_never_below_zoom(self):
+        # Below 1:1 the chosen mip is >= zoom, so a viewer downsamples a
+        # larger level rather than upsampling a smaller one. (Past 1:1 it clamps
+        # to native and the *view* magnifies — covered by test_clamps_at_native.)
+        for zoom in (0.01, 0.13, 0.27, 0.49, 0.5, 0.51, 0.99):
+            assert lanczos.mip_scale_for_zoom(zoom) >= zoom

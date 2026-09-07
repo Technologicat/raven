@@ -640,9 +640,9 @@ class XDotAttrParser:
                 # uploaded at the file's own size and drawn at any other one aliases visibly, and a graph
                 # zooms continuously -- there is no size to prepare it at once and be done. Raven's answer
                 # is a Lanczos mip chain on the GPU: `raven.common.image.lanczos.mipchain` builds the
-                # levels and `raven.cherrypick.preload.mip_scale_for_zoom` picks the one to draw at a given
-                # zoom, which is what Cherrypick's image viewer and the file dialog's thumbnail grid both
-                # go through.
+                # levels and `raven.common.image.lanczos.mip_scale_for_zoom` picks the one to draw at a
+                # given zoom, which is what Cherrypick's image viewer and the file dialog's thumbnail grid
+                # both go through.
                 # TODO: load the named image, resample it through the Lanczos mip chain, and hand
                 # TODO: `ImageShape` a texture for the level that suits the current zoom
                 logger.warning("XDotAttrParser.parse: image shapes are currently not supported; skipping.")
