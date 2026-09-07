@@ -618,7 +618,7 @@ Hover the dot and it says so.
   - Switch to last sibling (Ctrl+End)
     - Switch to the most recently created sibling node at this position.
 
-For the chat message actions, the **hotkeys affect the most recent message** in the chat.
+The hotkeys for all of these are collected in the [keyboard reference](#keyboard-reference).
 
 ## Mode toggles
 
@@ -682,6 +682,122 @@ The next two are about the AI's reasoning: whether it happens at all, and whethe
   - The **Speech** and **Subtitles** mode toggles control features of the AI avatar. See [AI avatar and voice mode](#ai-avatar-and-voice-mode).
 
 The toggles persist across sessions. They are stored in the app state file, which by default is saved in `~/.config/raven/llmclient/state.json`. The file is loaded at app startup, and saved at app exit.
+
+## Keyboard reference
+
+Every hotkey in one place. What each one *does* is in the sections above; this says what exists, and — more
+usefully — **when each key is live**, which is the part that is hard to reconstruct by trying things.
+
+Keys are grouped by what holds the keyboard. Raven's panes take the keyboard rather than opening modally,
+so the same physical key means different things depending on where the keyboard is. **Tab moves it**, and
+the blue mark shows where it went.
+
+### Always live
+
+| Key | Action |
+|---|---|
+| `F11` | Toggle fullscreen — the one key that works even while a dialog is open |
+
+### While no dialog is open
+
+| Key | Action |
+|---|---|
+| `F1` | Help card |
+| `F8` | Copy the linearized chatlog to the clipboard |
+| `Shift+F8` | ...with node IDs and metadata included |
+| `F9` | Audio input panel |
+| `Tab` / `Shift+Tab` | Move the keyboard to the next / previous pane |
+| `Ctrl+Space` | Put the caret in the message field |
+| `Ctrl+N` | Start a new chat |
+| `Ctrl+G` | Stop the AI's text generation |
+| `Ctrl+S` | Speak the marked message — or stop the avatar, if it is already speaking |
+| `Ctrl+Shift+Enter` | Record an audio message |
+| `Ctrl+Shift+O` | Attach a file |
+| `Enter` *or* `Ctrl+Enter` | Send — whichever is not the newline key; see `send_message_key` in [`config.py`](config.py) |
+| `Ctrl+Enter` *or* `Enter` | ...the other one of the pair inserts a new line, while writing |
+| `Esc` | Clear the message and cancel, while writing |
+
+### Chat log
+
+Live whenever the message field does not hold the caret, except the two paging keys, which work from
+inside it as well — looking back at what you are replying to is something you do *while* typing.
+
+| Key | Action |
+|---|---|
+| `Page Up` / `Page Down` | Page the log, from anywhere |
+| `Up` / `Down` | Scroll the log |
+| `Home` / `End` | Top / bottom of the log — `End` is the quickest way to put the mark on the newest reply |
+
+### The marked message
+
+The blue dot says which message these act on: the bottommost one whose whole button row is on screen.
+
+| Key | Action |
+|---|---|
+| `Ctrl+R` | Reroll (AI messages) |
+| `Ctrl+U` | Continue generating (last message, AI only) |
+| `Ctrl+T` | Show/hide the thinking trace |
+| `Ctrl+S` | Speak it |
+| `Ctrl+Left` / `Ctrl+Right` | Previous / next sibling |
+| `Ctrl+Shift+Left` / `Ctrl+Shift+Right` | Ten siblings left / right |
+| `Ctrl+Home` / `Ctrl+End` | First / last sibling |
+| `Ctrl+Down` | Show chat continuation (last message only) |
+
+### Mode toggles
+
+One key each, mnemonic on the label, and live while you are typing — these are the switches you reach for
+mid-sentence, on noticing that the answer wants the web or the documents.
+
+| Key | Toggle |
+|---|---|
+| `Alt+T` | Thinking |
+| `Alt+Shift+T` | Show thinking |
+| `Alt+I` | Internet |
+| `Alt+D` | Documents |
+| `Alt+G` | Chat graph |
+| `Alt+S` | Speech |
+| `Alt+C` | Subtitles (captions) |
+
+### Audio input panel
+
+Live only while the panel holds the keyboard — bare letters, which is what not being modal buys: it takes
+the keys only while the focus is on one of its own controls, and passes everything else through.
+
+| Key | Action |
+|---|---|
+| `D` | Choose the microphone — then `Up` / `Down` / `Home` / `End` |
+| `M` | Measure the room |
+| `A` | Measure at each recording |
+| `S` | Stop on silence |
+| `R` | Reset to configured |
+| `Esc` | Close the panel |
+
+### Chat graph
+
+**Live only while the graph holds the keyboard — press `Tab` to send it there, or click the graph.** It
+passes on anything it does not claim, so `F1` and the rest still work from inside it.
+
+| Key | Action |
+|---|---|
+| `Up` / `Down` / `Left` / `Right` | Move the cursor between boxes |
+| `Enter` | Do what clicking the box under the cursor does: preview it, or commit on the second press |
+| `Esc` | Put the cursor away |
+| `Backspace` | Fold an opened tool round back up |
+| `Shift`+arrows | Pan |
+| `Ctrl+Left` / `Ctrl+Right` | Previous / next sibling at this level |
+| `Ctrl+Shift+Left` / `Ctrl+Shift+Right` | Ten siblings left / right |
+| `Ctrl+Home` / `Ctrl+End` | First / last sibling |
+| `Alt+Left` / `Alt+Right` | Back / forward through the views this panel has shown |
+| `F` | Zoom to fit |
+| `B` | Fit the current branch |
+| `1` (main row or numpad) | Actual size (1:1) |
+| numpad `+` / `-` | Zoom in / out |
+| `Home` | Back to where you are (HEAD) |
+
+### Hidden debug keys
+
+`Ctrl+Shift+` **M**, **R**, **T**, **L** — DPG's metrics window (plus the avatar's frame-rate counter),
+item registry, font manager and style editor. Mnemonic: *Mr. T Lite*.
 
 # AI transparency
 
