@@ -253,6 +253,36 @@ That inverts the cut order recorded on 08-26, which named the Markdown remainder
 give up. The dust is at the front with `crt` now rather than being the slack, and the Markdown remainder is
 the declared slack in its place.
 
+### Where the reorder stands, 2026-09-07 — and the item that fell out of view
+
+19 days out. Recorded because taking stock produced no diff, and because one of the four items had
+dropped out of the spoken plan.
+
+1. ~~**`crt-display` and `atmospheric-dust`**~~ — done 2026-08-31.
+2. **The graph view** — items 4, 5 and 6 done 2026-09-07; **item 8 (search, both halves) and item 10 (the
+   look pass) remain**. Juha's estimate for search is **1–2 days including getting the UX right**, and
+   brief 14's half supports it: the match unit is the *message*, the scroll-and-flash operation already
+   exists (`DPGChatMessage._make_jump_to_tool_call`), and the control layout has the Visualizer's info
+   panel to copy. The tree-wide half in the graph is the less specified of the two. Item 10 is a *check*
+   rather than a design (settled 2026-09-04) and is now unblocked, the glyphs and the attachment pile
+   having been the two things nobody had seen against this palette.
+3. **The avatar's expression follows the spoken words** (band-2 item 11) — **not done, and not in the
+   spoken plan on 2026-09-07.** `TODO.md` still opens with *"Monday starts on item 11"*, written
+   2026-08-28; there is no commit and no changelog entry. It is the one remaining item that is
+   *exhibit-facing in a way the rest is not* — TTS is on whenever the avatar speaks, so a face reacting to
+   a sentence the voice has not reached is live all evening, in front of everybody.
+   - Sized *"straightforward and small, so it can probably be crammed in"*, with a risk that cannot be
+     settled before it is tested: the avatar holding neutral while the final text streams in may look
+     uncanny, and what to do about it then is not obvious.
+4. **Block-level Markdown, the remaining steps** — still the declared slack, which is what Juha's *"I'd of
+   course like to take it if there is time left"* amounts to. Nothing to change.
+
+**`filedialog-navigation-history-brief.md` stays unscheduled** and is explicitly after the event (it wants
+icons). That is what this README already said, so pushing it past RN changes nothing.
+
+**So the remainder is: search, item 11, and the look pass** — against 19 days, with the Markdown remainder
+as the thing that gives.
+
 ### Sized 2026-08-28 — what the last four weeks hold
 
 Juha's sizing of what is left, with 29 days to the deadline. Recorded because it is a scheduling
