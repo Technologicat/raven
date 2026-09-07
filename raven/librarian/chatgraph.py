@@ -575,10 +575,14 @@ class LayoutConfig:
     # Where each card sits is *derived* rather than configured: `_pile_columns` lays a deck out as a
     # maximin Latin square over these two steps, which is what makes it read as a pile rather than as a
     # staircase. The shapes are drawn out in its docstring.
-    # Where the deck sits down the box, as a fraction of node height: 0 is the top edge, 1 the bottom.
-    # Bottom-weighted rather than centred, because a decoration hanging off the lower corner reads as
-    # *attached to* the message where one across its middle reads as part of it.
-    attachment_anchor: float = 0.78
+    # How far the front card's bottom edge hangs below the box's own, in graph units.
+    #
+    # Stated as the front card's overhang rather than as a position for the deck, because the front card
+    # is what the eye reads as sitting on the corner -- and because the two are not the same thing once
+    # the pile is more than one card deep. Centring the deck's *extent* on the corner instead put a
+    # three-card pile's front card flush with the bottom edge, which reads as a card that failed to line
+    # up rather than as one deliberately laid over the corner.
+    attachment_overhang: float = 12.0
     # Past this many, the fan is abbreviated: the first two, the last two, and a box saying how many were
     # left out. Somebody will attach fifty files, and a fan of fifty is a smear.
     #
@@ -607,20 +611,31 @@ class LayoutConfig:
     def _get_attachment_deck_origin(self, n_cards: int) -> Tuple[float, float]:
         """Return where card offsets are measured from: `(box's right edge, box's centre line)` offsets.
 
-        **The deck is anchored as a shape, not by its first card.** In the hand-laid piles the first card
-        is not always the leftmost or the topmost — that is most of what makes them read as piles — so
-        pinning card zero would let a deck of four sit visibly further left than a deck of three.
+        **Horizontally the deck is anchored as a shape, not by its first card.** In a pile the first card
+        is not always the leftmost — that is part of what makes it read as a pile — so pinning card zero
+        would let a deck of four sit visibly further left than a deck of three. The leftmost card
+        straddles the box's right edge, which is the one thing every deck has in common.
 
-        Horizontally, the leftmost card straddles the box's right edge, which is the one thing every deck
-        has in common. Vertically, the deck's whole extent is placed by `attachment_anchor`, so a deck of
-        two and a deck of six hang off the same corner rather than the taller one drifting past it.
+        **Vertically it is anchored by the front card**, whose bottom hangs `attachment_overhang` below
+        the box's own. That is the card the eye reads as lying on the corner, and it is always the top row
+        — card index is row index — so the rest of the pile grows downward from it.
+
+        **Except that a tall pile is pulled back up** when its lowest card would otherwise reach past the
+        gap to the row below. Six cards is the most a deck is ever drawn whole and it does reach: the
+        alternative is a card drawn over the next level, which the layout cannot see, since it compares
+        node boxes and every card is outside its box by construction.
         """
         if n_cards <= 0:
             return (0.0, 0.0)
         offsets = [self._get_attachment_card_offset(i, n_cards) for i in range(n_cards)]
         drops = [offset[1] for offset in offsets]
-        return (-min(offset[0] for offset in offsets),
-                (self.attachment_anchor - 0.5) * self.node_h - 0.5 * (min(drops) + max(drops)))
+        half_card = 0.5 * self.attachment_fraction * self.node_h
+        origin_y = 0.5 * self.node_h + self.attachment_overhang - half_card - drops[0]
+        room_below = 0.5 * self.node_h + self.vertical_spacing - _DECORATION_CLEARANCE
+        overshoot = origin_y + max(drops) + half_card - room_below
+        if overshoot > 0:
+            origin_y -= overshoot
+        return (-min(offset[0] for offset in offsets), origin_y)
 
     def _get_attachment_count_box_x(self, n_cards: int) -> float:
         """Return the count box's centre, as an offset from the box's right edge.

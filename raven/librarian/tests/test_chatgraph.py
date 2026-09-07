@@ -1233,6 +1233,35 @@ class TestAttachmentThumbnails:
         # optimal, and they are the same picture read from the other side.
         assert chatgraph._pile_columns(4, step_x, step_y) == (1, 3, 0, 2)
 
+    def test_the_front_card_hangs_off_the_bottom_corner_by_the_same_amount(self):
+        """However deep the pile. It is the card the eye reads as lying on the corner, and a deck placed
+        by its own extent instead put a three-card pile's front card flush with the bottom edge — which
+        reads as a card that failed to line up rather than one deliberately laid over the corner."""
+        config = chatgraph.LayoutConfig()
+        half_card = 0.5 * config.attachment_fraction * config.node_h
+        for count in range(1, 5):  # up to where the clamp below starts biting
+            _origin_x, origin_y = config._get_attachment_deck_origin(count)
+            front = config._get_attachment_card_offset(0, count)[1]
+            assert origin_y + front + half_card - 0.5 * config.node_h \
+                == pytest.approx(config.attachment_overhang), f"with {count} card(s)"
+
+    def test_a_deep_pile_is_pulled_up_rather_than_drawn_over_the_next_row(self):
+        """The clamp, and the control that says it fires at all. Six is the most a deck is ever drawn
+        whole, and at that depth the overhang above would put its lowest card past the gap below."""
+        config = chatgraph.LayoutConfig()
+        half_card = 0.5 * config.attachment_fraction * config.node_h
+
+        def front_overhang(count):
+            _origin_x, origin_y = config._get_attachment_deck_origin(count)
+            return origin_y + config._get_attachment_card_offset(0, count)[1] + half_card \
+                - 0.5 * config.node_h
+
+        deepest = config.attachment_max_shown + 1
+        assert front_overhang(deepest) < config.attachment_overhang, \
+            "nothing was clamped, so this fixture cannot tell a clamp from a constant offset"
+        assert front_overhang(2) == pytest.approx(config.attachment_overhang), \
+            "a shallow pile was clamped too, so the clamp is not conditional on depth"
+
     def test_the_fan_stays_inside_the_gap_to_the_row_below(self):
         """The drop is what stops two cards' borders landing on each other, and it is also what can put a
         card on the row beneath. Nothing else would notice: the layout compares node boxes, and a card is
