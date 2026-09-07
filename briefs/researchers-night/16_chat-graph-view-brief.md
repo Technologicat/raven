@@ -1125,6 +1125,19 @@ re-checking restores. Clean shutdown, no exceptions from the watch.
   seen in a running app with a caption on screen. Note the cost if it is wrong is a caption lost for its
   sentence, ten seconds or so, rather than something the next sentence repairs.
 
+**And one artifact to look for that is predicted rather than observed**: a flash of *"[Video is off]"* when
+the avatar idles out while it holds the panel. The idle detector pauses the renderer, which shows and
+centres that text in a panel still on screen, and the watch hands the panel over on its next tick — so the
+text is up for as much as `_PANEL_OCCUPANCY_TICK_S`, 200 ms. Whether that reads as a flicker or as nothing
+is a matter for the eye; it was not seen during the 2026-09-07 drive because the screenshots were taken
+seconds either side of it rather than during.
+
+Three ways out, if it does read as one. Shortening the tick is nearly free and cuts the window without
+closing it. Closing it properly means the pause happening *after* the swap, which the idle detector cannot
+arrange, since it lives in the client layer and knows nothing about panels — that is what an `on_idle`
+callback would be for, the one `register_avatar_instance` already documents and does not have. And one
+frame of it survives either way: `pause` renders the text to measure it before centring it.
+
 **Two things landed alongside**, both from questions Juha asked while reading the diff:
 
 - **The seven mode toggles have hotkeys** (`Alt+T`, `Alt+Shift+T`, `Alt+I`, `Alt+D`, `Alt+G`, `Alt+S`,
