@@ -145,6 +145,33 @@ in what looks like increasing order of effort:
    is the piece that needs real design: the services are built during an import, so "switch now" has to
    mean something definite about a run in progress.
 
+### Both actions live in the pill, and deliberately not as a matching pair
+
+Settled 2026-09-07. The row carries two actions — *retry the connection now*, and *switch to local mode* —
+and they are **asymmetric on purpose**: the body of the pill retries when clicked, as Librarian's already
+does, and the switch is a button of its own.
+
+**The asymmetry is the safety argument, not a layout accident.** The two actions differ sharply in
+consequence: a retry is a cheap probe that changes nothing, while switching modes moves the work off the
+server and can pull down several gigabytes for exactly the user who has a server and has therefore never
+needed the local models. So the question is which mis-aimed click one would rather people make. With a big
+forgiving target for the retry and a small deliberate button for the switch, a missed click costs a probe.
+With two identical buttons, a missed click can start a download.
+
+Symmetry is normally the least-surprise argument, which is why it was the tempting one; here it would put a
+consequential action and a trivial one on equal footing, which is the thing least-surprise arguments usually
+exist to prevent.
+
+The cost of the asymmetry is discoverability — "click here to retry" is invisible without the tooltip. That
+is already how Librarian's row works, so the tooltip carries it, and the same tooltip is where the switch
+should say what it may cost, so that a user meets the download *before* clicking rather than after.
+
+**No confirmation on the switch.** Raven does have a pattern for this — two clicks with a warning flash, as
+in the file dialog's overwrite and Librarian's delete-subtree — and it is the house way to confirm
+something. Judged overengineering here (Juha): the action is deliberate, tooltip-warned, and undone by
+restarting. Recorded because the pattern is the right one to reach for if practice proves otherwise, not
+because the question is still open.
+
 **An import is a batch job**, which is what makes item 3 harder than its Librarian counterpart: a failure
 part-way means partial results, and both "cancel" and "switch to local" have to say what happens to what has
 already been imported. The dehyphenation crash fixed earlier in this release cycle is the precedent — it
