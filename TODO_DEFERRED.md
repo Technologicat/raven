@@ -17,6 +17,47 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## A checker for the hotkey tables the READMEs and the help cards each hold
+
+*Cluster: discoverability · Cost: S · Gate: none · Filed: 2026-09-08 · See also: "Librarian's help card has no room to describe attachments"*
+
+Nine apps carry a curated `hotkey_info` in source — Librarian, Visualizer, xdot viewer, cherrypick,
+conference timer, both avatar editors, and `vendor/file_dialog` — which is what the F1 card renders. A
+README keyboard section is therefore a second copy, and hand-copying is measurably lossy: the first pass at
+Librarian's, read from the key handler alone, missed the audio input panel's bare letters entirely.
+
+Wanted, in the `scripts/check_*.py` family: assert every key in an app's `hotkey_info` appears in its
+README's keyboard section. Decided over generating the section instead (Juha, 2026-09-08) — the generator
+is half a day against an hour, cannot import an `app.py` (which parses argv at module scope) and so needs
+an AST pass with a fallback for the non-literal entries, and it would take the prose away from a human.
+
+**It must check the card against the README and not the reverse.** The card is knowingly incomplete — see
+the item on its lack of room — so a README that lists more than the card is the correct state, and a
+symmetric check would report the good direction as a failure.
+
+**Only Librarian has a keyboard section so far**; the Visualizer's is the obvious next one, its
+`hotkey_info` being the most thorough of the nine. The remaining apps' READMEs do not exist yet, and
+writing them is not mid-sprint work.
+
+## Lanczos as an avatar upscaling option
+
+*Cluster: avatar · Cost: S · Gate: none · Filed: 2026-09-08*
+
+`raven.common.video.upscaler` offers `low` / `high` (Anime4K model sizes) and `bilinear` / `bicubic` (fast
+bypass, no Anime4K). Raven resamples with Lanczos nearly everywhere else, and it is missing from the one
+place a user picks a scaler by name.
+
+**Decided: Lanczos for RGB, bilinear for alpha** (Juha, 2026-09-08). The existing bypass already treats
+alpha separately, because bicubic's negative lobes ring along the silhouette edge; Lanczos has the same
+lobes, so it inherits the same answer rather than the same code path.
+
+Mostly wiring: a branch in `upscaler.py`'s bypass calling `lanczos.resize`, the string added to its
+validation tuple, and the option named in `client.mayberemote`'s two docstrings, `librarian/config.py`'s
+comment, and the settings editor's dropdown. What makes it an afternoon rather than an hour is checking
+whether the server module validates the name independently, and measuring where it sits for speed — the
+existing options are described by speed ("lightning-fast", "very fast"), so a new one is expected to say,
+and `raven/common/video/tests/bench_postprocessor.py` is the instrument.
+
 ## A metrics readout for the chat graph, and a placement bug in the avatar's
 
 *Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-08*
@@ -2584,6 +2625,12 @@ the two "this is a tech demo" claims gone. **Attachments are still not mentioned
 
 The card is a fixed-height window with `no_scrollbar=True`, so prose that grows is simply clipped, and the
 hotkey table can no longer be rebalanced to make room (already at the `ceil(total/2)` floor, 16 rows of 32).
+
+**The chat graph's own keys are the second thing this has cost** (2026-09-08). The graph binds some
+nineteen — the four arrows, `Enter`, `Esc`, `Backspace`, `Shift`+arrows, four `Ctrl` sibling steps,
+`Alt+Left`/`Alt+Right`, `F`, `B`, `1`, numpad `+`/`-` and `Home` — and none of them is on the card, for
+want of the rows. So the card is now knowingly *incomplete* rather than merely cramped, and the complete
+inventory lives in `raven/librarian/README.md` under "Keyboard reference".
 The update above had to buy each new sentence by cutting another, and it now sits one line under the
 ceiling: every remaining line was measured, and the widest is within ~50 px of the right edge. So the next
 addition of any size needs the shape decision first.
