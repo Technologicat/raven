@@ -17,6 +17,25 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## A metrics readout for the chat graph, and a placement bug in the avatar's
+
+*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-08*
+
+**The readout.** The chat graph has no numbers on it, so judging a design choice against it means computing
+one by hand offline — which is how `attachment_native_size` came to be set to a value that ran out at a zoom
+readers actually reach: nothing on screen said what the zoom was. Wanted, following the avatar's own
+counter: zoom level, node and edge counts, texture count, frame time, and mean rebuild time, the last two as
+sliding averages as the avatar does them.
+
+**It goes at the top left of the graph area, not over the toolbar** (Juha, 2026-09-08). Reached the same way
+as the avatar's, `Ctrl+Shift+M` being already spent on exactly this question — "Mr. T Lite", the hidden debug
+group in `librarian/app.py`.
+
+**And the avatar's own counter is shown while the avatar panel is hidden, which is a bug** (Juha,
+2026-09-08). The graph and the avatar take turns at that panel, so with the graph up the counter is drawn
+over something else's picture. Worth fixing alongside, the two being one question about where a metrics
+overlay belongs.
+
 ## Tell a wedged reply from a hard one, instead of capping both
 
 *Cluster: agent-scripting · Cost: M · Gate: none, but see the last paragraph — this may retire itself, and watching the field is how that gets noticed · Filed: 2026-09-03*
