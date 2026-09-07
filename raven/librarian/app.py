@@ -679,7 +679,7 @@ def _describe_server_status(available: bool) -> tuple[str, str, str]:
                 f"Raven-server at {raven_server_url} is answering again.\n\nClick to check again.")
     return (fa.ICON_PLUG_CIRCLE_XMARK,
             "Raven-server not connected",
-            f"Cannot reach Raven-server at {raven_server_url}.\n"
+            f"Cannot reach Raven-server at {raven_server_url}.\n\n"
             "The avatar, speech, subtitles, translation, the search over your\n"
             "documents and the AI's internet access all run there, and will fail\n"
             "until it is back. The chat itself does not - that is the LLM backend,\n"
@@ -1839,16 +1839,31 @@ with timer() as tim:
                     #
                     # Shown only when something is wrong, plus a moment on the way back. A row that said
                     # "connected" all day would be teaching the user to stop reading it.
-                    with dpg.group(tag="server_status_pill", horizontal=True, show=False):  # tag
-                        dpg.add_text(fa.ICON_PLUG_CIRCLE_XMARK, tag="server_status_icon")  # tag
-                        dpg.bind_item_font("server_status_icon", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.add_button(label="",
-                                       callback=lambda: _request_server_recheck(),
-                                       tag="server_status_button")  # tag
-                        # Self-sizing, for the same reason as the backend row's: the caption is rewritten on
-                        # every status change and again by the click flash, and a `dpg.tooltip` would be
-                        # drawn at its previous size each time that happened.
-                        server_status_tooltip = gui_tooltip.Tooltip("server_status_button", "")  # tag
+                    # Parked at the bottom of the panel rather than following the utility rows, which leaves
+                    # the empty middle as the gap between them: the row is not a third utility action and
+                    # should not read as one.
+                    #
+                    # Positioned rather than spaced, and set once rather than tracked, because this child
+                    # window's *height* is the fixed `chat_controls_h` while only its width follows the
+                    # window. Right-aligning would be the other story entirely — the width does move, and
+                    # the pill's own width differs between its two labels, so it would want measuring after
+                    # every status change.
+                    with dpg.group(tag="server_status_pill", show=False):  # tag
+                        with dpg.group(horizontal=True):
+                            dpg.add_text(fa.ICON_PLUG_CIRCLE_XMARK, tag="server_status_icon")  # tag
+                            dpg.bind_item_font("server_status_icon", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.add_button(label="",
+                                           callback=lambda: _request_server_recheck(),
+                                           tag="server_status_button")  # tag
+                            # Self-sizing, for the same reason as the backend row's: the caption is
+                            # rewritten on every status change and again by the click flash, and a
+                            # `dpg.tooltip` would be drawn at its previous size each time that happened.
+                            server_status_tooltip = gui_tooltip.Tooltip("server_status_button", "")  # tag
+                    # Bottom edge, less one row and the padding the child window keeps below it. Outside the
+                    # group's own `with`, so it applies to the group rather than to a member of it.
+                    dpg.set_item_pos("server_status_pill",  # tag
+                                     (guiutils.DPG_WINDOW_PADDING,
+                                      gui_config.chat_controls_h - gui_config.mode_toggle_row_h - 2 * guiutils.DPG_WINDOW_PADDING))
 
         # The bottom row is split into two child windows that mirror the panels above them: the chat-side
         # buttons sit under the chat panel, the AI-disclosure label under the avatar panel. Splitting is what
