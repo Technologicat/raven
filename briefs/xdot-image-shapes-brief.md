@@ -8,6 +8,11 @@ picks a level by drawn screen size, and the chat graph prepares one. What remain
 image store on the widget, and the parser's `I` branch — which is what deliverable 1 below needs and
 deliverable 2 no longer does.
 
+**Pieces 1 and 2 are not Researchers' Night work** (Juha, 2026-09-08): wanted in the near future, now that
+the machinery is close enough to support them, and a candidate for 0.2.9 — but nothing on the RN path
+needs them. Worth knowing before picking this up in the run-up, because the remaining work touches the
+shared widget and a new GUI surface, which is the shape that reliably emits unplanned items.
+
 **Two deliverables, and the second is a defect in shipped code**:
 
 1. **`XDotWidget` honours xdot's `I` operation**, so a GraphViz graph with `image=` on a node draws it, and
