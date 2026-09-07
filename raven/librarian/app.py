@@ -1544,6 +1544,21 @@ with timer() as tim:
                             # in whenever the avatar has nothing to show. So this records what the user
                             # asked for and lets the one writer work out what that means right now.
                             app_state["chat_graph_shown"] = dpg.get_value("chat_graph_checkbox")  # tag
+                            if not app_state["chat_graph_shown"]:
+                                # Switching the graph off is a request for the avatar, and a request for
+                                # the avatar is activity — so it wakes one that had gone to sleep, exactly
+                                # as clicking into the chat would.
+                                #
+                                # Without this the switch does nothing whenever the avatar had already
+                                # idled out *before* the graph took the panel: the graph is then standing
+                                # in for an absence rather than covering anything, so unchecking recomputes
+                                # to "still no video, keep the graph". The state that decides which of
+                                # those two happened is invisible to the user, so the same gesture would
+                                # work or not for reasons nobody can see.
+                                #
+                                # Here rather than in `_apply_panel_occupancy`, which runs five times a
+                                # second: a ping there would keep the avatar awake forever.
+                                avatar_controller.ping(avatar_record)
                             _apply_panel_occupancy()
                         def toggle_show_thinking():
                             app_state["show_thinking"] = not app_state["show_thinking"]
@@ -1596,8 +1611,9 @@ with timer() as tim:
                                      "Every chat ever started is in there, branching. Clicking a message\n"
                                      "shows it; clicking it again switches the conversation to it, so you\n"
                                      "can look around without changing anything.\n\n"
-                                     "The avatar's video pauses while it is covered. With this off, the\n"
-                                     "graph still stands in whenever the avatar has nothing to show:\n"
+                                     "The avatar's video pauses while it is covered, and switching this\n"
+                                     "off wakes it, even if it had gone to sleep meanwhile. With this off,\n"
+                                     "the graph still stands in whenever the avatar has nothing to show:\n"
                                      "while its video starts up, and once it switches itself off.",
                                      parent="chat_graph_tooltip")  # tag
 
