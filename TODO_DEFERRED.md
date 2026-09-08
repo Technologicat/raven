@@ -36,28 +36,6 @@ plausibly wants the same treatment against the graph's background colour. Not fi
 filled against the background stops being transparent over the *edges* it currently sits on, and whether
 that reads better is a thing to look at rather than to reason about.
 
-## A checker for the hotkey tables the READMEs and the help cards each hold
-
-*Cluster: discoverability · Cost: S · Gate: none · Filed: 2026-09-08 · See also: "Librarian's help card has no room to describe attachments"*
-
-Nine apps carry a curated `hotkey_info` in source — Librarian, Visualizer, xdot viewer, cherrypick,
-conference timer, both avatar editors, and `vendor/file_dialog` — which is what the F1 card renders. A
-README keyboard section is therefore a second copy, and hand-copying is measurably lossy: the first pass at
-Librarian's, read from the key handler alone, missed the audio input panel's bare letters entirely.
-
-Wanted, in the `scripts/check_*.py` family: assert every key in an app's `hotkey_info` appears in its
-README's keyboard section. Decided over generating the section instead (Juha, 2026-09-08) — the generator
-is half a day against an hour, cannot import an `app.py` (which parses argv at module scope) and so needs
-an AST pass with a fallback for the non-literal entries, and it would take the prose away from a human.
-
-**It must check the card against the README and not the reverse.** The card is knowingly incomplete — see
-the item on its lack of room — so a README that lists more than the card is the correct state, and a
-symmetric check would report the good direction as a failure.
-
-**Only Librarian has a keyboard section so far**; the Visualizer's is the obvious next one, its
-`hotkey_info` being the most thorough of the nine. The remaining apps' READMEs do not exist yet, and
-writing them is not mid-sprint work.
-
 ## A metrics readout for the chat graph, and a placement bug in the avatar's
 
 *Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-08*
