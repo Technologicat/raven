@@ -19,7 +19,7 @@ backlog. The recurring moment to ask is the triage step in the release procedure
 
 ## A stored message wears the *current* character's face, not the one that wrote it
 
-*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-08*
+*Cluster: chat-graph · Cost: M · Gate: none — wanted in the Researchers' Night sprint · Filed: 2026-09-08*
 
 Noticed by Juha (2026-09-07): a "Juha" character card in the chat datastore is drawn with Aria's icon,
 which looks as odd as it sounds. Not specific to that card — every stored assistant message is drawn with
@@ -41,6 +41,19 @@ that path being reachable for a character that is merely *mentioned* by a stored
 What it needs: per-character icon loading with that fallback, a cache keyed by character rather than by
 role (textures are per-character now, so they accumulate with the cast rather than being a fixed three),
 and the two call sites asking with a persona instead of with a role alone.
+
+**Why it was not built with the rest** (Juha, 2026-09-08): the shape he had in mind wants scanning the
+datastore for every AI character it mentions, resolving each one's icon or its fallback, and registering
+those textures — and he was too busy with the surrounding work to take that on at the time. Worth recording
+because the omission was a scoping call rather than an oversight, and because the scan may not be needed:
+`DPGChatController` already loads-and-caches a texture on first use for inline images, on a worker, with
+the two `split_frame`s that needs. Per-persona icons could follow that path and skip the startup scan
+entirely — which also covers a character that first appears *after* startup, where a scan would not.
+
+**It is demo-critical, and the chat graph is what made it so** (Juha, 2026-09-08). In the chat log a
+mismatched face is one avatar beside one message; in the graph a whole branch of them is on screen at once,
+so a cast wearing one face is the first thing a viewer sees. Wanted inside the Researchers' Night sprint
+rather than after it.
 
 ## A metrics readout for the chat graph, and a placement bug in the avatar's
 
