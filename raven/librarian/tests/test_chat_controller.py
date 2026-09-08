@@ -527,9 +527,10 @@ class TestTheSpeakerGlyphFollowsTheStoredCharacter:
             "the configured character has no icon of its own here, so borrowing it cannot be detected"
         assert controller.icon_texture_for("assistant", "Juha") == "tex_generic_ai"
 
-    def test_a_message_with_no_recorded_character_gets_the_generic_glyph(self, monkeypatch):
-        # Written before the field existed. We do not know who wrote it, and drawing the configured
-        # character's face would be asserting something nothing recorded.
+    def test_an_assistant_message_with_no_recorded_character_gets_the_generic_glyph(self, monkeypatch):
+        # The defensive branch rather than a case anyone meets: every payload gets a persona written with
+        # it. Pinned because what it must not do is guess — drawing the configured character's face here
+        # would assert something nothing recorded, which is the defect this whole method exists to remove.
         controller = self._controller(monkeypatch, configured="Aria", character_icon="tex_aria")
         assert controller.icon_texture_for("assistant", None) == "tex_generic_ai"
 
@@ -539,13 +540,17 @@ class TestTheSpeakerGlyphFollowsTheStoredCharacter:
         assert controller.icon_texture_for("assistant", "Aria") == "tex_generic_ai"
 
     def test_the_other_roles_answer_from_the_role_alone(self, monkeypatch):
-        # A user, a system prompt and a tool result have no character behind them, so a persona must not
-        # change what is drawn for them.
+        """A user going by a different name is still a user, and there is one glyph for that.
+
+        The realistic case rather than a contrived one: the configured user name can change between
+        sessions exactly as the character's can, so stored user turns carry whatever it was then. Only
+        the assistant role has a per-character face to get wrong.
+        """
         controller = self._controller(monkeypatch, character_icon="tex_aria")
         for role, expected in (("user", "tex_user"), ("system", "tex_system"), ("tool", "tex_tool")):
             assert controller.icon_texture_for(role, None) == expected
-            assert controller.icon_texture_for(role, "Aria") == expected, \
-                f"a persona changed the glyph for role '{role}'"
+            assert controller.icon_texture_for(role, "somebody else entirely") == expected, \
+                f"an unplaceable persona changed the glyph for role '{role}'"
 
     def test_an_unknown_role_draws_nothing(self, monkeypatch):
         controller = self._controller(monkeypatch)

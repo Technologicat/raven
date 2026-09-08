@@ -254,9 +254,11 @@ MeasureText = Callable[[str, float], Optional[float]]
 # grew the second argument — has nowhere to put a second character's face, so every stored message ends up
 # wearing whichever one is configured now.
 #
-# `persona` is `None` for the roles that have no character, and for messages written before the field
-# existed. A resolver that cannot place a name should fall back rather than draw nothing: an unknown
-# character is still an AI, and the generic glyph says so.
+# `persona` is `None` for the roles that have no character. A resolver that cannot place a name should
+# fall back to that name's *role* rather than draw nothing — a name it does not recognize is still
+# somebody, and which kind of somebody is exactly what the role knows. An unplaceable name on an
+# assistant message is an AI whose face we do not have; on a user message it is a user going by a
+# different name than the one configured now.
 IconFor = Callable[[str, Optional[str]], Optional[Union[int, str]]]
 
 
@@ -1103,8 +1105,8 @@ def _persona_of(datastore: chattree.Forest, node_id: str) -> Optional[str]:
     Stored per message rather than derived from the configuration, which is the whole point: a chat may
     hold turns by several characters, and the one configured now is not who wrote the older ones.
 
-    `None` is an ordinary answer — a role that has no character behind it (a tool result), and messages
-    written before the field existed.
+    `None` is an ordinary answer: it is what the roles with no character behind them carry — a user turn,
+    a system prompt, a tool result.
     """
     return (_payload_of(datastore, node_id).get("general_metadata") or {}).get("persona")
 

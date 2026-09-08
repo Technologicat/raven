@@ -27,12 +27,14 @@ message, `chatgraph.build` takes an `icon_for` resolver instead of a role-keyed 
 table is private with no `"assistant"` entry in it. A character we cannot place gets the generic AI glyph
 — the HAL 9000 eye — rather than somebody else's face.
 
-**What is left is that "cannot place" covers everyone but one.** A persona is stored as a bare name, and
-there is no mapping anywhere from a name to an image: `llm_char_name` and `avatar_config.image_path` are
-independent settings a user changes together, the character assets are bare `.png` files with no metadata
-beside them (checked 2026-09-08: nothing but images under `raven/avatar/assets/characters/`), and a message
-payload's `general_metadata` carries only `timestamp`, `datetime` and `persona`. So the configured
-character gets its icon and every other one falls back, which is correct but plain.
+**What is left is that "cannot place" covers everyone but one.** Half the mapping already exists and is a
+convention: a character image `aria1.png` has a sidecar `aria1_icon.png` beside it, which Librarian reads
+and the avatar system skips. The missing half is the first step — nothing says that the name *"Aria"* is
+the character in `aria1.png`. `llm_char_name` and `avatar_config.image_path` are independent settings a
+user changes together; the assets are bare `.png` files with no metadata beside them (checked 2026-09-08:
+nothing but images under `raven/avatar/assets/characters/`); and a payload's `general_metadata` carries
+only `timestamp`, `datetime` and `persona`. So the configured character gets its icon and every other one
+falls back, which is correct but plain.
 
 The resolver is one method with the whole policy in it, so whichever shape is chosen lands there:
 
