@@ -691,8 +691,9 @@ class DPGChatMessage:
                                          height=(2 * gui_config.margin + gui_config.chat_icon_size),
                                          tag=f"chat_icon_drawlist_{self.gui_uuid}",
                                          parent=icon_and_text_container_group)  # empty drawlist acts as placeholder if no icon
-        if role in self.parent_view.chat_controller.gui_role_icons:
-            dpg.draw_image(self.parent_view.chat_controller.gui_role_icons[role],
+        icon_texture = self.parent_view.chat_controller.icon_texture_for(role, persona)
+        if icon_texture is not None:
+            dpg.draw_image(icon_texture,
                            (gui_config.margin, gui_config.margin),
                            (gui_config.margin + gui_config.chat_icon_size, gui_config.margin + gui_config.chat_icon_size),
                            uv_min=(0, 0),
@@ -3785,11 +3786,40 @@ class DPGChatController:
             w, h, c, data = dpg.load_image(str(character_icon_path))
             self.icon_ai_texture = dpg.add_static_texture(w, h, data, tag=f"icon_ai_texture_0x{id(self):x}", parent="librarian_chat_controller_textures")  # tag
 
-        self.gui_role_icons = {"assistant": self.icon_ai_texture,
-                               "system": self.icon_system_texture,
-                               "tool": self.icon_tool_texture,
-                               "user": self.icon_user_texture,
-                               }
+        # The glyphs for the roles that have no character behind them. Private, and deliberately no longer
+        # holding an "assistant" entry: a table keyed by role has exactly one slot for the AI's face, so
+        # every stored message drawn from it wears whichever character is configured now. Ask
+        # `icon_texture_for`, which takes the message's own persona as well.
+        self._role_icon_textures = {"system": self.icon_system_texture,
+                                    "tool": self.icon_tool_texture,
+                                    "user": self.icon_user_texture,
+                                    }
+
+    def icon_texture_for(self,
+                         role: str,
+                         persona: str | None) -> int | str | None:
+        """Return the speaker glyph for a message written by `persona` in `role`. `None` draws no glyph.
+
+        `role`: One of "assistant", "system", "tool", "user".
+        `persona`: The character name *stored with that message*, or `None` where the role has none.
+                   Not the configured character: a chat may hold turns by several, and the one configured
+                   now is not who wrote the older ones.
+
+        Satisfies `chatgraph.IconFor`, and is what both views ask — the chat log draws one message's glyph,
+        the graph draws a branch of them at once, and a rule applied in only one of them would be visible
+        as a disagreement between the two.
+        """
+        if role != "assistant":
+            return self._role_icon_textures.get(role)
+        # An AI character gets its own icon where we can place it, and the generic glyph otherwise. Only
+        # the configured character can be placed: a persona is stored as a bare name, and nothing maps a
+        # name to an image — `llm_char_name` and `avatar_config.image_path` are separate settings that a
+        # user changes together. So a chat's other characters fall back, which is the honest answer and
+        # the one thing that must not happen is drawing them as *this* one.
+        configured = self.llm_settings.personas.get("assistant")
+        if persona is not None and persona == configured:
+            return self.icon_ai_texture  # per-character where one exists; `_load_instance_textures` shadows the generic
+        return type(self).icon_ai_texture  # the generic AI glyph, never an instance's character icon
 
     def __init__(self,
                  llm_settings: env,

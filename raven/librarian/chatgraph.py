@@ -21,6 +21,7 @@ __all__ = ["LINE_COLOR",
            "PREVIEW_COLOR",
 
            "MeasureText",
+           "IconFor",
            "Thumbnail",
 
            "Ref",
@@ -45,7 +46,7 @@ import functools
 import itertools
 import logging
 import math
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +245,19 @@ _LABEL_ADVANCE_PER_CHAR = 0.5
 # a test suite, which renders none -- gets the estimate and no complaint. An exception means something
 # actually went wrong, and is logged.
 MeasureText = Callable[[str, float], Optional[float]]
+
+# `(role, persona) -> DPG texture`, for the speaker glyph on a message box. `None` draws no glyph.
+#
+# Both arguments, because neither answers alone. The role settles it for a user, a system prompt or a tool
+# result, none of which has a character behind it; for an assistant message the *persona* is the answer,
+# and the role only says to go looking for one. A table keyed by role — which is what this was until it
+# grew the second argument — has nowhere to put a second character's face, so every stored message ends up
+# wearing whichever one is configured now.
+#
+# `persona` is `None` for the roles that have no character, and for messages written before the field
+# existed. A resolver that cannot place a name should fall back rather than draw nothing: an unknown
+# character is still an AI, and the generic glyph says so.
+IconFor = Callable[[str, Optional[str]], Optional[Union[int, str]]]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1083,6 +1097,18 @@ def _role_of(datastore: chattree.Forest, node_id: str) -> str:
     return message.get("role") or ""
 
 
+def _persona_of(datastore: chattree.Forest, node_id: str) -> Optional[str]:
+    """Return the character name recorded as having written `node_id`, or `None` if none was.
+
+    Stored per message rather than derived from the configuration, which is the whole point: a chat may
+    hold turns by several characters, and the one configured now is not who wrote the older ones.
+
+    `None` is an ordinary answer — a role that has no character behind it (a tool result), and messages
+    written before the field existed.
+    """
+    return (_payload_of(datastore, node_id).get("general_metadata") or {}).get("persona")
+
+
 # The content-part types that carry an attachment, and where each keeps its URL. Both kinds get a card:
 # an image shows itself, and a document shows its type's icon -- because a message that is *only*
 # attachments has no words either, and drawn without them it reads as a turn that never happened.
@@ -1372,8 +1398,9 @@ _DECORATION_CLEARANCE = 6.0
 _ATTACHMENT_ANCHORS = 2
 
 
-def _decorations_of(datastore: chattree.Forest, node_id: str, role: str, config: "LayoutConfig",
-                    role_icons: Optional[Mapping[str, Union[int, str]]],
+def _decorations_of(datastore: chattree.Forest, node_id: str, role: str, persona: Optional[str],
+                    config: "LayoutConfig",
+                    icon_for: Optional["IconFor"],
                     thumbnail_for: Optional[Callable[[str], Optional["Thumbnail"]]]
                     ) -> _Decorations:
     """Return what hangs off one message box's margins.
@@ -1382,15 +1409,16 @@ def _decorations_of(datastore: chattree.Forest, node_id: str, role: str, config:
     least `_MIN_HIDDEN_FOR_GAP`. Replacing three thumbnails with two and a box saying "+1" saves a slot
     and costs the reader a count, so a fan a little over the limit is drawn whole.
     """
+    icon = icon_for(role, persona) if icon_for is not None else None
     sidecars = _attachment_sidecars(datastore, node_id)
     if len(sidecars) > config.attachment_max_shown:
         hidden = len(sidecars) - 2 * _ATTACHMENT_ANCHORS
         if hidden >= _MIN_HIDDEN_FOR_GAP:
             shown = sidecars[:_ATTACHMENT_ANCHORS] + sidecars[-_ATTACHMENT_ANCHORS:]
-            return _Decorations((role_icons or {}).get(role),
+            return _Decorations(icon,
                                 [thumbnail_for(name) if thumbnail_for else None for name in shown],
                                 hidden)
-    return _Decorations((role_icons or {}).get(role),
+    return _Decorations(icon,
                         [thumbnail_for(name) if thumbnail_for else None for name in sidecars],
                         0)
 
@@ -1971,7 +1999,7 @@ def build(datastore: chattree.Forest,
           state: ViewState,
           config: Optional[LayoutConfig] = None,
           measure_text: Optional[MeasureText] = None,
-          role_icons: Optional[Mapping[str, Union[int, str]]] = None,
+          icon_for: Optional[IconFor] = None,
           thumbnail_for: Optional[Callable[[str], Optional[Thumbnail]]] = None) -> ChatGraph:
     """Build the picture of the chat forest around `state.focus_node_id`, or HEAD if none is given.
 
@@ -1981,14 +2009,17 @@ def build(datastore: chattree.Forest,
     `measure_text`: How to ask what a string actually measures — `(text, font size) -> width`. Optional;
                     without it, widths are estimated from an average glyph advance, which is enough to
                     size a box and not enough to centre text inside one. See `MeasureText`.
-    `role_icons`: Role -> DPG texture, for the glyph on each message box. `None`, or a role missing from
-                  it, draws no glyph. Optional because this module holds no DPG and cannot register a
-                  texture itself; a caller with one to hand supplies it, and a test without one gets the
-                  same layout minus the picture.
+    `icon_for`: `(role, persona) -> DPG texture`, for the speaker glyph on each message box; see
+                `IconFor`. The persona comes from the message being drawn, so a chat holding turns by
+                several characters draws each one's own face. `None`, or a `None` answer, draws no glyph.
 
-                  Hand over `DPGChatController.gui_role_icons` rather than loading the icon files: it is
-                  where the per-character override is already resolved, so an AI with an icon of its own
-                  gets that one, and a caller reading `raven/icons/ai.png` would silently lose it.
+                Optional because this module holds no DPG and cannot register a texture itself; a caller
+                with one to hand supplies it, and a test without one gets the same layout minus the
+                picture.
+
+                Hand over `DPGChatController.icon_texture_for` rather than loading the icon files: it is
+                where the per-character resolution and its fallback live, so an AI with an icon of its
+                own gets that one, and a caller reading `raven/icons/ai.png` would silently lose it.
     `thumbnail_for`: Attachment sidecar filename -> `Thumbnail`, for the cards fanned off a box's right
                      edge. Images and documents both — a document has no picture of its own, and what a
                      caller answers with there is its file type's icon. **`None` is an ordinary answer** and means "not ready yet": preparing one
@@ -2072,8 +2103,10 @@ def build(datastore: chattree.Forest,
             if node_id is None:
                 return _NO_DECORATIONS
             if node_id not in decorations:
-                decorations[node_id] = _decorations_of(datastore, node_id, _role_of(datastore, node_id),
-                                                       config, role_icons, thumbnail_for)
+                decorations[node_id] = _decorations_of(datastore, node_id,
+                                                       _role_of(datastore, node_id),
+                                                       _persona_of(datastore, node_id),
+                                                       config, icon_for, thumbnail_for)
             return decorations[node_id]
 
         # ------------------------------------------------------------------

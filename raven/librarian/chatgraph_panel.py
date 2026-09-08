@@ -22,7 +22,7 @@ import dataclasses
 import logging
 import threading
 import uuid
-from typing import Callable, Mapping, Optional, Sequence, Set, Tuple, Union
+from typing import Callable, Optional, Sequence, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                  input_blocked: Optional[Callable[[], bool]] = None,
                  on_focus_requested: Optional[Callable[[], None]] = None,
                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
-                 role_icons: Optional[Callable[[], Mapping[str, Union[int, str]]]] = None,
+                 icon_for: Optional[Callable[[], Optional[chatgraph.IconFor]]] = None,
                  thumbnail_for: Optional[Callable[[str, float], Optional[env]]] = None,
                  dark_mode: bool = True,
                  show: bool = False):
@@ -140,11 +140,12 @@ class DPGChatGraphPanel(gui_animation.Animation):
         `graph_text_fonts`: `(size, font_id)` pairs for graph labels; the renderer picks the closest to the
                             size it is drawing at. `None` (the default) loads a ladder of sizes into
                             `themes_and_fonts` and uses that, since every caller wants the same one.
-        `role_icons`: Called at each rebuild for the role -> texture table the boxes draw their speaker
-                      glyph from; see `chatgraph.build`. A callable rather than the table itself, because
-                      the table belongs to `DPGChatController`, which is built later than this panel is —
-                      and because a character loaded afterwards replaces the AI's icon, which a table
-                      captured once would not pick up. `None` draws no glyphs.
+        `icon_for`: Called at each rebuild for the `(role, persona) -> texture` resolver the boxes draw
+                    their speaker glyph from; see `chatgraph.build` and `chatgraph.IconFor`. A callable
+                    returning the resolver, rather than the resolver itself, because it belongs to
+                    `DPGChatController`, which is built later than this panel is — and because loading a
+                    character replaces the AI's icon, which a resolver captured once would not pick up.
+                    `None`, or a `None` answer, draws no glyphs.
         `thumbnail_for`: `(attachment sidecar filename, size in pixels) -> env(levels)`, or `None` if it
                          is not ready. What draws the cards fanned off a box's right edge; see
                          `chatgraph.build`. `DPGChatController.get_graph_thumbnail_texture` is it.
@@ -169,7 +170,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._on_commit = on_commit
         self._on_focus_requested = on_focus_requested
         self._input_blocked = input_blocked
-        self._role_icons = role_icons
+        self._icon_for = icon_for
         self._thumbnail_for = thumbnail_for
         # Sidecars asked for during the last rebuild that were not ready then. Re-asked once per frame;
         # any that has since landed makes the picture stale. Cleared and refilled by every rebuild, so a
@@ -956,7 +957,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         try:
             return chatgraph.build(self.datastore, self._view_state, self._layout,
                                    measure_text=self._measure_text,
-                                   role_icons=self._role_icons() if self._role_icons is not None else None,
+                                   icon_for=self._icon_for() if self._icon_for is not None else None,
                                    thumbnail_for=self._thumbnail_of)
         except KeyError:
             return None

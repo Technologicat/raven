@@ -20,6 +20,8 @@ import pytest
 
 pytest.importorskip("raven.librarian.chat_controller")  # noqa: E402 -- still reaches the ML stack; see above
 
+from unpythonic.env import env  # noqa: E402 -- the class; `from unpythonic import env` gets the submodule
+
 from raven.librarian import chat_controller  # noqa: E402
 
 
@@ -478,3 +480,73 @@ class TestRemovingAMessageByNode:
 
         assert view.chat_controller.current_chat_history == []
         assert demolished == [stored]
+
+
+class TestTheSpeakerGlyphFollowsTheStoredCharacter:
+    """`icon_texture_for`, which both the chat log and the chat graph ask.
+
+    A chat holds turns by whichever characters wrote them, and the character configured *now* is not who
+    wrote the older ones. Keyed by role alone — which is how this worked until 0.2.9 — there is exactly
+    one slot for the AI's face, so a stored "Juha" message was drawn wearing Aria's.
+
+    Nothing here needs widgets: the textures are opaque handles and the method only chooses between them.
+    """
+
+    @staticmethod
+    def _controller(monkeypatch, configured="Aria", character_icon=None):
+        """A controller with just the fields the resolver reads.
+
+        `character_icon`: what `_load_instance_textures` would have set for a character that ships an icon
+                          of its own, as an *instance* attribute shadowing the class's generic one.
+                          `None` leaves the generic showing, which is a character without one.
+        """
+        controller = chat_controller.DPGChatController.__new__(chat_controller.DPGChatController)
+        # On the class, because that is where `_load_class_textures` puts it and where the fallback reads
+        # it from. `monkeypatch` puts it back, so no other test inherits it.
+        monkeypatch.setattr(chat_controller.DPGChatController, "icon_ai_texture", "tex_generic_ai",
+                            raising=False)
+        controller._role_icon_textures = {"system": "tex_system", "tool": "tex_tool", "user": "tex_user"}
+        controller.llm_settings = env(personas={"assistant": configured, "user": "Juha",
+                                                "system": None, "tool": None})
+        if character_icon is not None:
+            controller.icon_ai_texture = character_icon
+        return controller
+
+    def test_the_configured_character_wears_its_own_face(self, monkeypatch):
+        controller = self._controller(monkeypatch, configured="Aria", character_icon="tex_aria")
+        assert controller.icon_texture_for("assistant", "Aria") == "tex_aria"
+
+    def test_another_character_does_not_wear_it(self, monkeypatch):
+        """The defect this exists to fix, with its own control beside it.
+
+        The first assertion is the control: a resolver that answered the generic glyph for *everything*
+        would satisfy the second one while fixing nothing, and would look exactly like a pass.
+        """
+        controller = self._controller(monkeypatch, configured="Aria", character_icon="tex_aria")
+        assert controller.icon_texture_for("assistant", "Aria") == "tex_aria", \
+            "the configured character has no icon of its own here, so borrowing it cannot be detected"
+        assert controller.icon_texture_for("assistant", "Juha") == "tex_generic_ai"
+
+    def test_a_message_with_no_recorded_character_gets_the_generic_glyph(self, monkeypatch):
+        # Written before the field existed. We do not know who wrote it, and drawing the configured
+        # character's face would be asserting something nothing recorded.
+        controller = self._controller(monkeypatch, configured="Aria", character_icon="tex_aria")
+        assert controller.icon_texture_for("assistant", None) == "tex_generic_ai"
+
+    def test_a_character_without_an_icon_of_its_own_gets_the_generic_one(self, monkeypatch):
+        """Which is what happens today for such a character when it is the configured one."""
+        controller = self._controller(monkeypatch, configured="Aria", character_icon=None)
+        assert controller.icon_texture_for("assistant", "Aria") == "tex_generic_ai"
+
+    def test_the_other_roles_answer_from_the_role_alone(self, monkeypatch):
+        # A user, a system prompt and a tool result have no character behind them, so a persona must not
+        # change what is drawn for them.
+        controller = self._controller(monkeypatch, character_icon="tex_aria")
+        for role, expected in (("user", "tex_user"), ("system", "tex_system"), ("tool", "tex_tool")):
+            assert controller.icon_texture_for(role, None) == expected
+            assert controller.icon_texture_for(role, "Aria") == expected, \
+                f"a persona changed the glyph for role '{role}'"
+
+    def test_an_unknown_role_draws_nothing(self, monkeypatch):
+        controller = self._controller(monkeypatch)
+        assert controller.icon_texture_for("narrator", None) is None

@@ -775,6 +775,16 @@ ROLE_ICONS = {"system": "tex_system", "user": "tex_user",
               "assistant": "tex_ai", "tool": "tex_tool"}
 
 
+def by_role(table):
+    """An `IconFor` that answers from the role alone, ignoring the persona.
+
+    What the glyphs were keyed by before they had to tell one stored character from another, so it is
+    what the tests below want wherever the question is about placement, scaling or gaps rather than about
+    whose face is drawn.
+    """
+    return lambda role, persona: table.get(role)
+
+
 class TestRoleGlyphs:
     """Who is speaking, as the mark the chat log uses for the same role.
 
@@ -793,7 +803,7 @@ class TestRoleGlyphs:
     def test_each_box_gets_the_glyph_for_its_role(self, conversation):
         forest, system, greeting, user, reply = conversation
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply),
-                                role_icons=ROLE_ICONS)
+                                icon_for=by_role(ROLE_ICONS))
         assert [texture_on(g) for g in self._glyphs(built, system)] == ["tex_system"]
         assert [texture_on(g) for g in self._glyphs(built, user)] == ["tex_user"]
         assert [texture_on(g) for g in self._glyphs(built, reply)] == ["tex_ai"]
@@ -803,7 +813,7 @@ class TestRoleGlyphs:
         forest = Forest()
         ids = chain(forest, 30)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids[-1]),
-                                role_icons=ROLE_ICONS)
+                                icon_for=by_role(ROLE_ICONS))
         gap = only_depth_gap(built)
         assert [s for s in gap.shapes if isinstance(s, xdotgraph.ImageShape)] == []
         assert self._glyphs(built, ids[-1]), \
@@ -815,10 +825,45 @@ class TestRoleGlyphs:
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
         assert self._glyphs(built, reply) == []
 
+    def test_the_stored_persona_reaches_the_resolver(self, conversation):
+        """The whole point of `(role, persona)` over a role-keyed table.
+
+        A chat holds turns by whichever characters wrote them, and the one configured now is not who
+        wrote the older ones. Without the persona reaching the resolver there is one slot for the AI's
+        face, and every stored message wears whatever is loaded today.
+        """
+        forest, system, greeting, user, reply = conversation
+        forest.get_payload(greeting)["general_metadata"]["persona"] = "Aria"
+        forest.get_payload(reply)["general_metadata"]["persona"] = "Juha"
+
+        asked = []
+
+        def remember(role, persona):
+            asked.append((role, persona))
+            return f"tex_{persona or role}"
+
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply), icon_for=remember)
+        assert ("assistant", "Aria") in asked
+        assert ("assistant", "Juha") in asked
+        assert [texture_on(g) for g in self._glyphs(built, greeting)] == ["tex_Aria"]
+        assert [texture_on(g) for g in self._glyphs(built, reply)] == ["tex_Juha"], \
+            "two AI messages by different characters drew the same glyph"
+
+    def test_a_message_with_no_stored_persona_asks_with_none(self, conversation):
+        # The ordinary case for a role that has no character, and for anything written before the field
+        # existed. The resolver is still asked — what to draw for an unknown character is its decision,
+        # not this module's.
+        forest, system, greeting, user, reply = conversation
+        asked = []
+        chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply),
+                        icon_for=lambda role, persona: asked.append((role, persona)))
+        assert ("user", None) in asked
+        assert ("system", None) in asked
+
     def test_a_role_the_table_does_not_name_gets_none(self, conversation):
         forest, system, greeting, user, reply = conversation
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply),
-                                role_icons={"user": "tex_user"})
+                                icon_for=by_role({"user": "tex_user"}))
         assert [texture_on(g) for g in self._glyphs(built, user)] == ["tex_user"], \
             "not even the named role drew one, so this fixture cannot tell a lookup from a blanket refusal"
         assert self._glyphs(built, reply) == []
@@ -828,7 +873,7 @@ class TestRoleGlyphs:
         the attachment thumbnails, so no node has to hold three things in a space that fits one."""
         forest, system, greeting, user, reply = conversation
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply),
-                                role_icons=ROLE_ICONS)
+                                icon_for=by_role(ROLE_ICONS))
         node = built.graph.get_node_by_name(reply)
         x1, y1, x2, y2 = node.get_bounding_box()
         gx1, gy1, gx2, gy2 = self._glyphs(built, reply)[0].get_bounding_box()
@@ -843,7 +888,7 @@ class TestRoleGlyphs:
         forest, system, greeting, user, reply = conversation
         config = chatgraph.LayoutConfig()
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply), config,
-                                role_icons=ROLE_ICONS)
+                                icon_for=by_role(ROLE_ICONS))
         glyph = self._glyphs(built, reply)[0]
         gx1, _gy1, gx2, _gy2 = glyph.get_bounding_box()
         assert gx2 - gx1 == pytest.approx(config.role_icon_fraction * config.node_h)
@@ -876,7 +921,7 @@ class TestRoleGlyphs:
                            parent_id=user)
         tip = chatutil.descend_to_latest(forest, user)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=tip),
-                                role_icons=ROLE_ICONS)
+                                icon_for=by_role(ROLE_ICONS))
         node = built.graph.get_node_by_name(tip)
         glyph_inner_edge = self._glyphs(built, tip)[0].get_bounding_box()[2]
         texts = [s for s in node.shapes if isinstance(s, xdotgraph.TextShape)]
@@ -903,7 +948,7 @@ class TestRoleGlyphs:
         damage rather than as a mark."""
         forest, system, greeting, user, reply = conversation
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply, cursor_name=reply),
-                                role_icons=ROLE_ICONS)
+                                icon_for=by_role(ROLE_ICONS))
         node = built.graph.get_node_by_name(reply)
         box_width = node.get_bounding_box()[2] - node.get_bounding_box()[0]
         glyph_at = [i for i, s in enumerate(node.shapes) if isinstance(s, xdotgraph.ImageShape)][0]
@@ -1090,7 +1135,7 @@ class TestAttachmentThumbnails:
         forest, carrier = self._forest(1)
         built = self._build(forest, carrier, config=None)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=carrier),
-                                role_icons=ROLE_ICONS, thumbnail_for=ready_thumbnail)
+                                icon_for=by_role(ROLE_ICONS), thumbnail_for=ready_thumbnail)
         node = built.graph.get_node_by_name(carrier)
         centre = 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2])
 
@@ -1120,7 +1165,7 @@ class TestAttachmentThumbnails:
 
         forest, carrier = self._forest(1)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=carrier),
-                                role_icons=ROLE_ICONS, thumbnail_for=prepared)
+                                icon_for=by_role(ROLE_ICONS), thumbnail_for=prepared)
         node = built.graph.get_node_by_name(carrier)
         centre = 0.5 * (node.get_bounding_box()[0] + node.get_bounding_box()[2])
 
@@ -1160,7 +1205,7 @@ class TestAttachmentThumbnails:
         """A placeholder is a rectangle and nothing else, so there is nothing to choose a level from."""
         forest, carrier = self._forest(1)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=carrier),
-                                role_icons=ROLE_ICONS, thumbnail_for=lambda name: None)
+                                icon_for=by_role(ROLE_ICONS), thumbnail_for=lambda name: None)
         node = built.graph.get_node_by_name(carrier)
         cards = [sh for sh in node.shapes if isinstance(sh, xdotgraph.ImageShape) and not sh.levels]
         assert cards, "every card was ready, so this fixture never sees a placeholder"
@@ -1226,7 +1271,7 @@ class TestAttachmentThumbnails:
                                      parent_id=aside)
 
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=spine),
-                                role_icons=ROLE_ICONS, thumbnail_for=ready_thumbnail)
+                                icon_for=by_role(ROLE_ICONS), thumbnail_for=ready_thumbnail)
         assert built.graph.get_node_by_name(inlined) is not None, \
             "the child was not inlined, so this fixture does not exercise the path it is about"
         assert [texture_on(c) for c in self._cards(built, inlined)] == ["tex_b0.png", "tex_b1.png"]
@@ -1371,7 +1416,7 @@ class TestAttachmentThumbnails:
         config = chatgraph.LayoutConfig()
         forest, carrier = self._forest(6, siblings_after=2)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=carrier), config,
-                                role_icons=ROLE_ICONS, thumbnail_for=ready_thumbnail)
+                                icon_for=by_role(ROLE_ICONS), thumbnail_for=ready_thumbnail)
         boxes = boxes_of(built)
         carrier_box = boxes[carrier]
         fan_reaches_to = max(c.get_bounding_box()[2] for c in self._cards(built, carrier))

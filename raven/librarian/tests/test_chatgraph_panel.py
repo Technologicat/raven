@@ -1628,14 +1628,14 @@ class TestLifecycle:
 
 
 class TestRoleIcons:
-    """The panel asks its caller for the role -> texture table at each rebuild, and hands it to the build.
+    """The panel asks its caller for the `(role, persona)` resolver at each rebuild, and hands it to the build.
 
-    A callable rather than a table because `DPGChatController`, which owns the table, is built later than
-    this panel is — and because loading a character replaces the AI's entry, which a table captured once
-    would not see.
+    A callable returning the resolver, rather than the resolver itself, because `DPGChatController` owns
+    it and is built later than this panel is — and because loading a character replaces the AI's icon,
+    which a resolver captured once would not see.
     """
 
-    def test_the_table_reaches_the_picture(self, dpg_context):
+    def test_the_resolver_reaches_the_picture(self, dpg_context):
         themes_and_fonts = dpg_context
         forest = Forest()
         root = forest.create_node(payload("system", "hi"), parent_id=None)
@@ -1645,7 +1645,7 @@ class TestRoleIcons:
             built = chatgraph_panel.DPGChatGraphPanel(
                 gui_parent=holder, datastore=forest, app_state=app_state,
                 themes_and_fonts=themes_and_fonts, width=200, height=200,
-                role_icons=lambda: {"assistant": "tex_ai"})
+                icon_for=lambda: (lambda role, persona: "tex_ai" if role == "assistant" else None))
         built.refresh()
         node = built._chat_graph.graph.get_node_by_name(reply)
         assert [s.levels[0].texture for s in node.shapes
@@ -1665,7 +1665,7 @@ class TestRoleIcons:
             built = chatgraph_panel.DPGChatGraphPanel(
                 gui_parent=holder, datastore=forest, app_state=app_state,
                 themes_and_fonts=themes_and_fonts, width=200, height=200,
-                role_icons=lambda: table)
+                icon_for=lambda: (lambda role, persona: table.get(role)))
         built.refresh()
 
         def texture_now():

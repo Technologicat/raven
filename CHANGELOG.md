@@ -308,6 +308,12 @@
 
 *Raven-librarian*
 
+- **a stored message now wears the face of the character that wrote it, not the one loaded right now.**
+  Every AI message was drawn with the currently configured character's icon, so a chat with turns by
+  several characters showed them all as the same one. A character we cannot place gets the generic AI
+  glyph rather than somebody else's face. Most visible in the chat graph, where a whole branch of them is
+  on screen at once.
+
 - **copying a long tool result now copies the whole document, not the part the chat log had room for.** A
   fetched page too long to show inline is kept as an attachment and previewed as an excerpt; the copy
   button was taking the preview.
