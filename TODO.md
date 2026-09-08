@@ -53,6 +53,12 @@ leaves the one large item a safe margin rather than a hopeful one.
 
 Then item 10 of brief 16, the look check, once the thumbnails and role glyphs are all in place.
 
+**The superseded block below still holds two open items**, and they are not on the sprint path — said here
+because a heading reading "Superseded" is an invitation to skip what is under it. They are the two briefs
+that were *"written or forgotten"* (the ooba cluster, and containing the OpenAI wire shape), and the
+undecided question of where token counting should live. The `continue_` fix above them is done; what it
+leaves live is that ooba is excluded from the seed and wants re-testing, which the ooba brief would cover.
+
 ## Superseded: next session, from 2026-08-31
 
 **Band-2 item 10 is done** — designed, built, live-tested and closed on 2026-08-28, as
