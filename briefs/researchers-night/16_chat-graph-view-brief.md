@@ -180,13 +180,30 @@ Markdown-stripped and cut to about forty characters — a box that matched shows
 its *first* match, with the match itself in red. Same red as the chat log's, so the two views agree about
 what a hit looks like.
 
-**The cost is in the colour, not the windowing.** A `TextShape` carries one `Pen`, so one colour per shape:
-painting a fragment red inside a label means splitting it into up to three shapes — before, match, after —
-and placing them, which needs each piece's measured width rather than the whole label's. `measure_text` is
-already threaded through `chatgraph` for exactly this kind of arithmetic (it exists because an estimated
-width displaced a pill's glyphs by half the error), so the machinery is there; the work is that a label
-stops being one shape. Worth knowing before the estimate is made, since "highlight the match" sounds like a
-colour change and is a layout change.
+**The colour is a layout change, not a colour change**, because a `TextShape` carries one `Pen`. Painting a
+fragment red means the line becomes up to three shapes — before, match, after — placed at cumulative
+measured widths.
+
+**Settled 2026-09-08: do the three shapes.** Two alternatives were weighed and dropped.
+
+- **Colouring the whole label red** is free and useless (Juha): no utility over the ordinary text colour,
+  worse readability, and it says nothing the picture does not — once search filters the node selection,
+  every box on screen matched.
+- **Runs in the model** — `TextShape` carrying coloured spans, or a `RichTextShape` beside it — is the same
+  layout work plus a change to the shared widget, so it wants more than one caller first. Maybe later.
+- **Markdown in labels is not available**, and the reason is structural rather than a matter of wiring:
+  `dpg_markdown` emits *widgets*, and the graph draws into a drawlist under its own viewport transform. A
+  widget knows nothing about that transform, so a Markdown label would neither pan nor zoom with its box.
+
+**And the split is cheaper than it first looked, because wrapping is already solved.** Each wrapped label
+line is emitted as its own `TextShape` in a loop, so a run split happens *within one line* and never has to
+reason about a match straddling a line break. The pieces are placed left to right from the line's own left
+edge at cumulative widths, which is exactly what `measure_text` is threaded through `chatgraph` for — it
+exists because an estimated width once displaced a pill's glyphs by half the error.
+
+**The one thing to watch**: where `measure_text` is unavailable the widths are estimated from an average
+advance, and for a split line that error shows up as uneven gaps *between the runs* rather than as a label
+sitting slightly off. Same fallback the whole-label case already tolerates, but it fails more visibly.
 
 **There is probably a general algorithm here, and a second caller for it.** The Visualizer's author search
 wants the same shape: highlight `Korhonen` inside `Aaltonen et al.` where the *et al.* is two hundred
