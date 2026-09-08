@@ -32,18 +32,42 @@ lose their claim on the next four weeks.
 6. **The fleet lint policy** — `~/.claude/TODO_DEFERRED.md`, "Whitespace checking fell out of the fleet when
    it moved to ruff". Not this repo's file, and not this repo's decision alone.
 
-## Next session, from 2026-09-08
+## The release numbering, settled 2026-09-08
 
-**The sprint's build order, decided by Juha 2026-09-08**, with the exhibit 18 days out. The first three are
-meant to be done inside a day or two — **by end of Thursday 2026-09-10 at the latest** — which is what
+**0.2.9 is the Researchers' Night release — whatever is in it on the day.** The date is the fixed point and
+the contents are not, which is the opposite of how the version was being treated: items had accumulated
+against "0.2.9" meaning "the next release", and there were 34 of them, which is several releases' worth.
+
+So every gate in `TODO_DEFERRED.md` that named a version moved up one: `0.2.9` → `0.2.10`, and
+`post-0.2.9` → `post-0.2.10`, since that meant "after the release those 34 items were going into". Done
+mechanically, without triage — the point was to stop the number lying, not to decide what ships.
+
+**A PyPI upload is no longer assumed to be coming.** It is a nice ideal, and it is not clear it makes sense
+for a constellation carrying this much of an ML stack. Packaging wants looking at, behind several other
+things. The distribution rename to `raven-lab` therefore keeps its hard gate — a name cannot be corrected
+after publishing — without that gate being on any release path.
+
+## Next session, from 2026-09-09
+
+**Start with the help card's paging**, which is where 2026-09-08 stopped: it is specced in
+`TODO_DEFERRED.md` and it is a look-at-it job, so it wants the maintainer at the keyboard rather than
+being built blind and measured afterwards.
+
+**What 2026-09-08 closed**, so the build order below picks up from the right place: the chat graph's
+metrics readout (item 1a), and the per-character speaker icons (item 2) — the latter grown into a
+character-declaration mechanism, so a character now carries its own name, voice, card and glyph, and
+`llm_char_name` selects it. Also five things found along the way: an animation-leak crash that named the
+wrong module, a missing panel teardown, the audio panel's missing `destroy`, the card reaching the model as
+a Markdown code block, and the prompt prose moving out of `.py` into `raven/librarian/prompts/`.
+
+**The sprint's build order, decided by Juha 2026-09-08**, with the exhibit 18 days out. The first three
+were meant to be done inside a day or two — **by end of Thursday 2026-09-10 at the latest** — which is what
 leaves the one large item a safe margin rather than a hopeful one.
 
-1. **The two hammerspace items**, both specced in `TODO_DEFERRED.md` and neither needing a decision first:
-   the chat graph's metrics readout, and the help card's paging. Small-ish, and each improves the product
-   rather than merely repairing it.
-2. **Per-character role icons for stored messages** — `TODO_DEFERRED.md`. Small-ish, and it fixes a defect
-   the chat graph made conspicuous: a whole branch of messages wearing the currently configured
-   character's face.
+1. ~~**The two hammerspace items.**~~ The chat graph's metrics readout is **done 2026-09-08**; the help
+   card's paging is what tomorrow starts on.
+2. ~~**Per-character role icons for stored messages.**~~ **Done 2026-09-08**, and wider than filed — see
+   above. What is left of that item is the design decision it uncovered, which is now its whole content.
 3. **Band-2 item 11, the avatar's expression following the spoken words** — open, and at this point it is a
    *prototype and a decision* rather than a build. See the gate in `briefs/researchers-night/README.md`.
 4. **Brief 16 item 8, search in both halves.** The large one: nontrivial GUI and UX work, probably at least

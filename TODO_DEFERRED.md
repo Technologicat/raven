@@ -416,7 +416,7 @@ Reported by Juha while live-testing the in-progress-reply-as-a-node work (2026-0
 
 ## Ctrl+Left / Ctrl+Right cannot flick between siblings, because each switch re-picks its own target
 
-*Cluster: librarian-keyboard · Cost: S to build, the design is the work · Gate: RN2026 if time allows, else 0.2.9 (Juha, 2026-08-27) · Filed: 2026-08-21 · Updated: 2026-08-27*
+*Cluster: librarian-keyboard · Cost: S to build, the design is the work · Gate: RN2026 if time allows, else 0.2.10 (Juha, 2026-08-27) · Filed: 2026-08-21 · Updated: 2026-08-27*
 
 **When this lands, re-check the branch-switch glitch's ceiling** (Juha, 2026-08-25). The glitch extends on
 each switch and is capped from the first one — 1.5 s at present — so what the cap is *for* is a sustained
@@ -837,7 +837,7 @@ neither, now.
 
 ## Sweep `## Declined` for decisions whose follow-through was never filed
 
-*Cluster: hygiene-sweep · Cost: S · Gate: post-0.2.9 · Filed: 2026-08-14*
+*Cluster: hygiene-sweep · Cost: S · Gate: post-0.2.10 · Filed: 2026-08-14*
 
 `## Declined` was originally built — by claude.ai, at the start of the project — as a section for
 *completed or already-decided* items, and only later corrected to its stated meaning of *considered and
@@ -856,7 +856,7 @@ ones.
 
 ## Rename the distribution to `raven-lab` — before the first PyPI upload, not after
 
-*Cluster: ? · Cost: S · Gate: 0.2.9, and hard-blocking the first PyPI upload · Filed: 2026-08-14*
+*Cluster: ? · Cost: S · Gate: 0.2.10, and hard-blocking the first PyPI upload · Filed: 2026-08-14*
 
 `pyproject.toml` still says `name = "raven-visualizer"`. The name was **settled on 2026-08-12** — the
 distribution is `raven-lab`, the import package stays `raven` — but that decision was recorded in
@@ -876,9 +876,16 @@ shared environments, and the venv requirement is the mitigation — already stat
 `README.md` under "The Raven constellation", which is where a user meets this and why nothing more is
 needed in the docs.
 
-**The gate is hard.** A distribution name cannot be corrected after publishing — the old name stays on the
-index forever, and anyone who installed it keeps a package that is no longer the one being developed. So
-this must land before the first upload, and it is cheap only while that is still true.
+**The gate is hard, and it is also not imminent.** A distribution name cannot be corrected after publishing
+— the old name stays on the index forever, and anyone who installed it keeps a package that is no longer
+the one being developed. So this must land before the first upload, and it is cheap only while that is
+still true.
+
+**But whether there is ever a PyPI upload is now itself an open question** (Juha, 2026-09-08): it is a nice
+ideal, and it is not clear that it makes sense for a constellation carrying this much of an ML stack, where
+the install is the hard part and an index entry solves none of it. Packaging does want looking at — several
+other items ahead of it first. So the version on the gate is a placeholder for "before we publish, if we
+publish", and this item should not be read as blocking a release.
 
 Raised in priority by Juha, 2026-08-14, on noticing the name had begun leaking into runtime code: the
 `--qr` overlay reads `importlib.metadata.metadata("raven-visualizer")`, and every such call is another site
@@ -1021,7 +1028,7 @@ static with show/hide)* is the obvious first cut, since the help section is iden
 
 ## The `flake8` → `ruff` migration dropped indentation checking
 
-*Cluster: hygiene-sweep · Cost: S · Gate: 0.2.9 · Filed: 2026-08-10 · See also: "Assert the linter actually runs the rules we rely on"*
+*Cluster: hygiene-sweep · Cost: S · Gate: 0.2.10 · Filed: 2026-08-10 · See also: "Assert the linter actually runs the rules we rely on"*
 
 `[tool.ruff.lint] select = ["E", "W", "F", "SIM"]` looks like it covers pycodestyle, and does not: the E1
 (indentation) family splits in two, and ruff ships neither half by default.
@@ -1067,7 +1074,7 @@ Tidy-up either way: decide whether `flake8` stays in dev dependencies, and say w
 
 ## Assert the linter actually runs the rules we rely on
 
-*Cluster: ? · Cost: S · Gate: 0.2.9 · Filed: 2026-08-10*
+*Cluster: ? · Cost: S · Gate: 0.2.10 · Filed: 2026-08-10*
 
 `select = ["E", "W", "F", "SIM"]` reads as covering pycodestyle's error rules and does not enable the E1
 indentation family at all. Nothing warned: no error, no skipped-rule notice. The lint passed and the checks
@@ -1093,7 +1100,7 @@ applied to tooling.
 
 ## Replace `torchaudio.functional.resample`, and drop torchaudio
 
-*Cluster: ? · Cost: S · Gate: 0.2.9 · Filed: 2026-08-10 · See also: "Easy install with a chosen CUDA version"*
+*Cluster: ? · Cost: S · Gate: 0.2.10 · Filed: 2026-08-10 · See also: "Easy install with a chosen CUDA version"*
 
 **Higher priority than it looks**, because torchaudio is already a hard dependency rather than a future one,
 and it is silently pinning torch.
@@ -1138,7 +1145,7 @@ which is a real cost, and also stops the escape route depending on a package tha
 
 ## Batch tools: LLM reconnect mid-run
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-08-12 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-08-12 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
 
 The model-loaded work made `raven-pdf2bib` and `raven-importer` stop at *start time* on both failure states
 — unreachable, and reachable-with-no-model. The second was the one that most needed it: the backend answers,
@@ -1159,7 +1166,7 @@ batch runs with no durability, and one resume mechanism answers both.
 
 ## `chat_controller` is not importable without spaCy
 
-*Cluster: ? · Cost: S · Gate: 0.2.9 · Filed: 2026-08-12*
+*Cluster: ? · Cost: S · Gate: 0.2.10 · Filed: 2026-08-12*
 
 Same anti-pattern as the just-completed *Lazy `api.initialize` in `llmclient` and `hybridir`*, one layer up:
 `chat_controller` reaches the full ML stack through the avatar client, so `test_chat_controller.py` has to
@@ -1171,7 +1178,7 @@ shape: move the side-effecting import behind the seam that already exists.
 
 ## Audit what the built wheel actually contains
 
-*Cluster: ? · Cost: S · Gate: 0.2.9, with the first PyPI upload · Filed: 2026-08-12*
+*Cluster: ? · Cost: S · Gate: 0.2.10, with the first PyPI upload · Filed: 2026-08-12*
 
 **The 83% case is fixed** (2026-08-12): `**/00_workfiles` is excluded, taking the wheel from **107 MB to
 14.4 MB**, 7.5× smaller. Those were editing masters — GIMP `.xcf`, source SVG, camera originals — which
@@ -1214,7 +1221,7 @@ compare wheel size against the previous release and flag a large jump.
 
 ## `chattree.get_all_root_nodes` is an O(n) scan
 
-*Cluster: ? · Cost: S · Gate: — while the graph view does not show roots; 0.2.9 if it does · Filed: 2026-08-12 · See also: "Datastore scaling: a single `chat.json` …"*
+*Cluster: ? · Cost: S · Gate: — while the graph view does not show roots; 0.2.10 if it does · Filed: 2026-08-12 · See also: "Datastore scaling: a single `chat.json` …"*
 
 `get_all_root_nodes` scans the whole forest for nodes whose parent is `None`. Deliberate, and the docstring
 says so.
@@ -1239,7 +1246,7 @@ scan is over every node, so the index is small and the saving grows with the dat
 
 ## Librarian: open a chat datastore other than the configured default
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-08-11*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-08-11*
 
 Librarian loads one datastore, fixed at `librarian_config.llm_datastore_file`. There is no way to open
 another from inside the app.
@@ -1352,7 +1359,7 @@ first time.
 
 ## Agent skills for Librarian (natural-language workflows over the document database)
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-08-11*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-08-11*
 
 Design work deliberately postponed; this records the idea and what is already established about it.
 
@@ -1530,7 +1537,7 @@ than a flash.
 
 ## The ingest pool's concurrency is nominal: pypdf is pure Python
 
-*Cluster: ? · Cost: M · Gate: post-0.2.9 · Filed: 2026-08-12 (measured 2026-08-06)*
+*Cluster: ? · Cost: M · Gate: post-0.2.10 · Filed: 2026-08-12 (measured 2026-08-06)*
 
 Split out 2026-08-12 from "Indexing a large corpus is silent for minutes", whose titular half shipped. This
 half did not, and it is the larger one.
@@ -1559,7 +1566,7 @@ Raised by Juha (2026-08-06), asking why the indexer was still on its first docum
 
 ## System prompt templating: the user should choose where the per-turn facts go
 
-*Cluster: ? · Cost: M · Gate: post-0.2.9 · Filed: 2026-08-12 · See also: "Make the canned AI greeting optional", "Modernize the Librarian system prompt / character card"*
+*Cluster: ? · Cost: M · Gate: post-0.2.10 · Filed: 2026-08-12 · See also: "Make the canned AI greeting optional", "Modernize the Librarian system prompt / character card"*
 
 Filed 2026-08-12 to make good on a condition set when the multi-root work landed: today's advice — **do not
 use `{model}` or `{context_length}` in a card** — is documented at the `# TODO:` block in
@@ -1595,7 +1602,7 @@ them separately risks three answers to one question.
 
 ## The vendored Markdown renderer has no way to say it has finished
 
-*Cluster: markdown-renderer · Cost: S · Gate: 0.2.9 · Filed: 2026-08-12*
+*Cluster: markdown-renderer · Cost: S · Gate: 0.2.10 · Filed: 2026-08-12*
 
 `raven/vendor/DearPyGui_Markdown` lays a message out in pieces from its own worker thread
 (`CallInNextFrame._worker`), and nothing tells a caller when the last piece has landed. Anything that needs
@@ -1632,7 +1639,7 @@ add a finish event").
 
 ## Holding the chat view's scrollbar does not hold your place while a reply streams
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-03*
+*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-08-03*
 
 `raven/librarian/chat_controller.py` plus a new per-frame hook, probably in
 `raven/common/gui/animation.py`. Grab the scrollbar mid-reply and hold it: the view creeps downward, roughly
@@ -1862,7 +1869,7 @@ Discovered by Juha (2026-07-30), during the chat-view scrolling live tests.
 
 ## Revisit `recenter_window`'s degrade-instead-of-raise policy
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-30*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-07-30*
 
 `guiutils.recenter_window` passes `required=False` for its offscreen-measure wait, so calling it from the
 render loop thread warns and centers using whatever size the window reports pre-autosize. Provisional, kept
@@ -2033,7 +2040,7 @@ Raised by Juha (2026-07-30), while reviewing the `WidgetFlash` theme-restore fix
 
 ## Web status panel: check on a long job without being at the machine
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-30*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-07-30*
 
 The motivating case is concrete: a ~12k-abstract hydrogen indexing run, and no way to see how it is doing
 except the Librarian window and the terminal that launched it. From a phone, from another room, there is
@@ -2152,7 +2159,7 @@ Raised by Juha (2026-07-30), from wanting to check the hydrogen indexing run fro
 
 ## Browse *all* attachments in the datastore, not just the orphaned ones
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-07-29*
 
 The cleanup dialog (`raven/librarian/cleanup_dialog.py`) turned out to be a decent attachment browser that
 happens to be filtered to orphans. Point the same machinery at `list_sidecar_files()` instead of
@@ -2229,7 +2236,7 @@ Raised by Juha (2026-07-29), right after the cleanup dialog landed.
 
 ## Move the avatar backdrop onto `image.utils.fit_cover`
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9, early · Filed: 2026-07-29 · See also: "Consolidate remaining numpy/tensor/DPG image conversions"*
+*Cluster: ? · Cost: ? · Gate: 0.2.10, early · Filed: 2026-07-29 · See also: "Consolidate remaining numpy/tensor/DPG image conversions"*
 
 `DPGAvatarRenderer.configure_backdrop` (`raven/client/avatar_renderer.py`) scales its backdrop with PIL —
 `scale = max(...)`, resize, crop — which is exactly what `raven.common.image.utils.fit_cover` now does. Porting
@@ -2305,7 +2312,7 @@ Discovered while closing brief 10 and finding a stale item next to an accurate o
 
 ## Make the canned AI greeting optional
 
-*Cluster: system-prompt-and-greeting · Cost: M · Gate: post-0.2.9 — and a `chatutil` cleanup now waits on it too (2026-08-25) · Filed: 2026-07-28 · See also: "System prompt templating: the user should choose where the per-turn facts go", "Modernize the Librarian system prompt / character card"*
+*Cluster: system-prompt-and-greeting · Cost: M · Gate: post-0.2.10 — and a `chatutil` cleanup now waits on it too (2026-08-25) · Filed: 2026-07-28 · See also: "System prompt templating: the user should choose where the per-turn facts go", "Modernize the Librarian system prompt / character card"*
 
 A new chat opens with a canned greeting from the AI (`raven.librarian.config`, "Names, AI's greeting"). That is a
 2024-ism: as of mid-2026 the first message after the system prompt can just as well be the user's, and an opening
@@ -2364,7 +2371,7 @@ Raised by Juha (2026-07-28).
 
 ## TTS reads arXiv IDs digit by digit
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-28*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-07-28*
 
 Qwen likes to cite arXiv papers by their full identifier, and the TTS then says
 "twenty twenty six dot zero five ... v three" — long, and the least informative part of the sentence gets the most
@@ -2381,7 +2388,7 @@ Discovered while fixing the zero-segment TTS crash (2026-07-28, reported by Juha
 
 ## The licensing story is accurate only in a subdirectory README
 
-*Cluster: discoverability · Cost: ? · Gate: 0.2.9, with the first PyPI upload · Filed: 2026-08-03 · See also: "Rename the distribution to `raven-lab`" (which carries the naming decision)*
+*Cluster: discoverability · Cost: ? · Gate: 0.2.10, with the first PyPI upload · Filed: 2026-08-03 · See also: "Rename the distribution to `raven-lab`" (which carries the naming decision)*
 
 Raven ships under **three** licences, and none of the three places a reader would look says so. Verified in
 the tree 2026-08-03:
@@ -2539,7 +2546,7 @@ PEP 639 deprecates those, and this project is already clean on that axis.
 
 ## Two adopted directories ship without their licence text
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9, soon · Filed: 2026-08-03*
+*Cluster: ? · Cost: ? · Gate: 0.2.10, soon · Filed: 2026-08-03*
 
 Found while enumerating the adopted licences for the sibling item on Raven's own licensing docs, and filed
 separately because it is a different kind of problem with a different urgency: shipping someone else's code
@@ -2751,7 +2758,7 @@ above is wanted under this shape as much as any other.
 
 ## Modernize the Librarian system prompt / character card
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
 
 The default system prompt (`raven.librarian.config`) reads as dated for current instruction-tuned models —
 "take a deep breath and think step by step", "believe in your abilities and strive for excellence", "you are
@@ -2853,7 +2860,7 @@ Raised while scoping RAG reranking (2026-07-28, Juha).
 
 ## Remaining server modules without a MaybeRemote
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9, scoped down · Filed: 2026-04-22*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10, scoped down · Filed: 2026-04-22*
 
 With `Classifier`, `Translator`, `Postprocessor`, `Upscaler` landed (2026-04-22), the following server modules still don't participate in the MaybeRemote pattern:
 
@@ -2864,7 +2871,7 @@ These are both intentional omissions, not TODO gaps. Kept as a navigational note
 
 ## Client-local avatar animator (licensing-bounded)
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9, deprioritized · Filed: 2026-04-17*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10, deprioritized · Filed: 2026-04-17*
 
 The avatar animator currently lives only in `raven.server.modules.avatar` under AGPL. THA3 upstream (the underlying ML model, vendored in `raven/vendor/tha3/`) is MIT — so the AGPL does not come from the model. It comes from the *detour*: the animator reached Raven through SillyTavern-Extras, which is AGPL, and `raven/avatar/README.md` says the licence exists to comply with that. Raven-side extensions are the one thing that is *not* the source of it.
 
@@ -3022,7 +3029,7 @@ Discovered during raven-cherrypick loader pipeline design.
 
 ## Consolidate remaining numpy/tensor/DPG image conversions
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 if it fits · Filed: 2026-03-20 · See also: "Move the avatar backdrop onto `image.utils.fit_cover`"*
+*Cluster: ? · Cost: ? · Gate: 0.2.10 if it fits · Filed: 2026-03-20 · See also: "Move the avatar backdrop onto `image.utils.fit_cover`"*
 
 `raven/common/image/utils.py` provides canonical `np_to_tensor`, `tensor_to_np`, `tensor_to_dpg_flat`. The `imagefx.py` conversions have been migrated. Remaining sites have intentional differences that make direct replacement impractical:
 
@@ -3076,7 +3083,7 @@ Discovered during raven-cherrypick development.
 
 ## Faster PNG decoder
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-03-18*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-03-18*
 
 PIL's PNG decode via libpng is slow (~59 ms for a 1 MP image). Unlike JPEG (where turbojpeg provides scaled decode), libpng has no equivalent fast path. Options to investigate:
 - `cv2.imread` — uses libpng but OpenCV's memory handling may be faster
@@ -3088,7 +3095,7 @@ Discovered during raven-cherrypick test drive.
 
 ## Preload cache: 16MP image optimization
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9, if it measurably helps · Filed: 2026-03-19*
+*Cluster: ? · Cost: ? · Gate: 0.2.10, if it measurably helps · Filed: 2026-03-19*
 
 With 16MP images (4624×3472), each cached mipchain is ~342MB as flat arrays. The current 1500MB budget fits only ~4 images, causing most preloads to be dropped after doing the full GPU work (wasted ~530ms each, with GPU contention degrading frame times to ~90ms).
 
@@ -3100,13 +3107,13 @@ Three improvements needed:
 5. **Wait for preload CUDA completion on cancel** — `cancel_pending()` is cooperative (sets flag, doesn't wait). Cancelled preload tasks may still be mid-CUDA-operation (Lanczos mipchain, tensor transfers). The bg_mip_task's `cuda.synchronize` then blocks on both its own work AND the lingering preload ops. Observed: `mipgen=508ms` for 1024×1024 (should be ~1ms) after a far jump. Consider `cuda.synchronize` before starting the bg_mip_task, or use CUDA streams to isolate preload vs display work.
 
 **There is now a concrete corpus to test against**: a large set of 16MP photos from ECCOMAS 2026. Measure on
-those before doing the work, and let the measurement decide whether it lands in 0.2.9.
+those before doing the work, and let the measurement decide whether it lands in 0.2.10.
 
 Discovered during raven-cherrypick preload performance session.
 
 ## raven-cherrypick: export image sequence (QOI→PNG batch conversion)
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-03-19*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-03-19*
 
 raven-cherrypick is effectively an image viewer with QOI support, which is rare. This makes it ideal for previewing avatar recordings frame-by-frame. Integrate `raven-qoi2png` CLI functionality so that raven-cherrypick can export avatar recordings for external consumption (e.g. as a PNG image sequence for OpenShot or other video editors).
 
@@ -3118,7 +3125,7 @@ The fix isn't missing — it's queued. Last commit on pygame's `main` was 2025-1
 
 ## raven-cherrypick: further reduce idle CPU/GPU load
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-03-19*
+*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-03-19*
 
 Idle throttle (2026-04-05) reduced CPU load from ~80% to ~20% of one core by sleeping ~80ms between frames when nothing needs updating. The remaining ~20% is the floor cost of `render_dearpygui_frame()` at ~12fps — ImGui resubmits the entire UI each call. Further reduction options: adaptive sleep ramp (80ms → 500ms over ~5s idle, snap back on input), or skipping `render_dearpygui_frame()` entirely (risky — event processing is tied to the render call).
 
@@ -3158,7 +3165,7 @@ Adjacent but distinct: "raven-cherrypick: low FPS with large images" is about th
 
 ## raven-cherrypick: low FPS with large images
 
-*Cluster: ? · Cost: ? · Gate: investigate in 0.2.9 · Filed: 2026-03-28*
+*Cluster: ? · Cost: ? · Gate: investigate in 0.2.10 · Filed: 2026-03-28*
 
 With large images (e.g. 4247×891, 5203×1313), steady-state FPS drops to 10–15 (66ms/frame) compared to ~30 FPS for 1MP images. DPG metrics show the bottleneck is in presentation/rendering, not input routing. Likely causes:
 
@@ -3216,7 +3223,7 @@ Discovered during raven-cherrypick compare mode planning (2026-03-30).
 
 ## Extract `raven.common` into an upstream library ("corvid")
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 (or —); nothing is waiting on it · Filed: 2026-04-03 · See also: "Rename the distribution to `raven-lab`" (same decision, applied to Raven; do the two together)*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 (or —); nothing is waiting on it · Filed: 2026-04-03 · See also: "Rename the distribution to `raven-lab`" (same decision, applied to Raven; do the two together)*
 
 Raven's `common/` package has grown into a general-purpose DPG toolkit: GUI widgets (file dialog, markdown, helpcard, xdot widget, animation framework, VU meter), video/audio processing, networking utils, bgtask infrastructure. This creates a gravitational well — new apps land in Raven because the batteries are there, even when they have nothing to do with NLP/ML.
 
@@ -3240,7 +3247,7 @@ Discovered during tooltip feature session (2026-04-03).
 
 ## Avatar settings editor: custom postprocessor chain ordering
 
-*Cluster: ? · Cost: L · Gate: post-0.2.9 · Filed: 2026-04-09*
+*Cluster: ? · Cost: L · Gate: post-0.2.10 · Filed: 2026-04-09*
 
 **This is a GUI limitation only** — the band-scheme comment above the first filter definition in
 `raven/common/video/postprocessor.py` establishes that the backend has always
@@ -3279,7 +3286,7 @@ Discovered during postprocessor chain ordering redesign (2026-04-09).
 
 ## raven.papers user manual
 
-*Cluster: discoverability · Cost: ? · Gate: 0.2.9, with the README correctness sweep · Filed: 2026-04-13*
+*Cluster: discoverability · Cost: ? · Gate: 0.2.10, with the README correctness sweep · Filed: 2026-04-13*
 
 The `raven.papers` tool collection has grown to the point where it deserves its own user manual, like Visualizer, Librarian and Server already have.
 
@@ -3294,7 +3301,7 @@ completeness but that out-of-date docs scare away potential users, and both jobs
 
 ## Easy install with a chosen CUDA version (and a sensible CPU default)
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9, re-scope first · Filed: 2026-04-29 · See also: "Replace `torchaudio.functional.resample`, and drop torchaudio", "`pdm.lock` is gitignored"*
+*Cluster: ? · Cost: ? · Gate: 0.2.10, re-scope first · Filed: 2026-04-29 · See also: "Replace `torchaudio.functional.resample`, and drop torchaudio", "`pdm.lock` is gitignored"*
 
 Raven's `[cuda]` extra currently pulls a torch / torchaudio / torchvision combo pinned to one CUDA toolchain (currently `+cu128`). The PyTorch project ships these via `--index-url https://download.pytorch.org/whl/cuXXX`, and the matching `nvidia-cuda-runtime-cuYY` runtime is also installable as a Python package — so a Raven install could in principle bundle a complete CUDA stack from PyPI without touching the host's toolchain.
 
@@ -3353,7 +3360,7 @@ Discovered during cancellable-commit work (2026-04-27).
 
 ## webfetch "approve denied host" button relocates in brief 03
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-06-04*
+*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-06-04*
 
 The brief-01 override affordance (approve a denied host for the session, then re-run the fetch on
 a new branch — `scaffold.retry_tool_calls`) is wired to a button in `chat_controller.build_buttons`,
@@ -3755,7 +3762,7 @@ Discovered while wrapping up brief 01 webfetch (2026-06-03).
 
 ## Context-window budgeting and conversation compaction (Librarian)
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-06-04*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-06-04*
 
 Librarian does not yet budget the prompt against the model's context window, nor compact long
 conversations. After brief 02 (LM Studio compat), the loaded context-window figure captured per
@@ -3774,7 +3781,7 @@ Discovered during brief 02 (LM Studio compat) kickoff (2026-06-04).
 
 ## Fleet-wide: shared two-phase DPG shutdown helper + audit
 
-*Cluster: abnormal-exit · Cost: ? · Gate: 0.2.9 · Filed: 2026-06-04*
+*Cluster: abnormal-exit · Cost: ? · Gate: 0.2.10 · Filed: 2026-06-04*
 
 **`abnormal-exit` wants writing up as a brief, in the post-sprint cleanup** (agreed 2026-09-03). It has
 five members now — this helper, the `is_dearpygui_running` segfault, the leaked avatar instance and its
@@ -4034,7 +4041,7 @@ plugin surface today, so this tool is the only concrete case in sight.
 
 ## Reconsider the webfetch allowlist default: ship deny-by-default?
 
-*Cluster: ? · Cost: ? · Gate: RN2026 for the demo config, 0.2.9 for the shipped default · Filed: 2026-06-05*
+*Cluster: ? · Cost: ? · Gate: RN2026 for the demo config, 0.2.10 for the shipped default · Filed: 2026-06-05*
 
 `librarian_config.webfetch_allowlist` defaults to `None`, which means **allow-all**: the allowlist gate in
 `webfetch_wrapper` (`raven/librarian/llmclient.py`) is skipped entirely (`if allowlist is not None:`), so the
@@ -4078,7 +4085,7 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 ## Fleet audit: every hotkey discoverable in a tooltip + help card
 
-*Cluster: discoverability · Cost: ? · Gate: post-0.2.9 · Filed: 2026-06-07 · See also: "Librarian's help card has no room to describe attachments"*
+*Cluster: discoverability · Cost: ? · Gate: post-0.2.10 · Filed: 2026-06-07 · See also: "Librarian's help card has no room to describe attachments"*
 
 Policy (now in `raven-style-guide.md`, "Hotkey discoverability"): every hotkey must be surfaced both in the `F1` help card *and* in the tooltip of the GUI control it triggers (bracketed, e.g. `"Open folder [Ctrl+O]"`). Most apps in the wild miss the tooltip half; Raven apps shouldn't.
 
@@ -4093,7 +4100,7 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 ## Cherrypick: zoom-in doesn't upgrade already-cached preload neighbors
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 if time, else next · Filed: 2026-06-09*
+*Cluster: ? · Cost: ? · Gate: 0.2.10 if time, else next · Filed: 2026-06-09*
 
 The preload cap is adaptive to the current zoom (`raven.common.image.lanczos.mip_scale_for_zoom`): `schedule_neighbors` prefetches each neighbor at the smallest mip that displays crisply at the zoom in effect when it runs. But an already-cached neighbor is skipped (`if idx in self._cache: continue`), so if the user zooms *in* after a neighbor was cached at a smaller scale, that entry keeps its now-too-small mips. The first navigation to it then triggers the on-arrival augment (a one-time re-sharpen); take/donate cycles heal it thereafter.
 
@@ -4118,7 +4125,7 @@ Discovered during brief-03 Half-2 doc pass (2026-07-16); the renderer comments a
 
 ## Upgrade oobabooga and re-check Raven's ooba support
 
-*Cluster: ? · Cost: ? · Gate: — until after RN, possibly after 0.2.9 too · Filed: 2026-07-16*
+*Cluster: ? · Cost: ? · Gate: — until after RN, possibly after 0.2.10 too · Filed: 2026-07-16*
 
 text-generation-webui (oobabooga) hasn't been pulled in a long time; its OpenAI-compat API may have drifted from what Raven's `llmclient` assumes. Upgrade the local ooba install, then re-validate the ooba code paths against the current version: backend-flavor detection (`detect_backend_flavor`), model-info resolution (`_resolve_model_info` — the `/v1/internal/model/info` shape, and whether ooba now exposes a VLM-capability field so `model_is_vlm` can be better than `None`), the `mode: "instruct"` request field, the explicit `continue_` flag, the reasoning/tool-call streaming shape, and the exact token-count endpoint. Live-test a real generation + a tool call + (if supported) an image attach through ooba.
 
@@ -4169,7 +4176,7 @@ Discovered during brief-03 Half-2 composer rework (2026-07-17, flagged by Juha).
 
 ## Datastore scaling: a single `chat.json` (+ flat sidecar dir) won't hold years of chats
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-17 · See also: "Version the chat datastore file …", "`chattree.get_all_root_nodes` is an O(n) scan"*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-07-17 · See also: "Version the chat datastore file …", "`chattree.get_all_root_nodes` is an O(n) scan"*
 
 Librarian stores *every* chat — all nodes, all payload revisions, across the whole forest — in one
 `chat.json` (`chattree.PersistentForest`), and every attachment as a file in one flat
@@ -4205,7 +4212,7 @@ data folder" button making the single-store design visible).
 
 ## Colorblind-safe status signaling (ok/error flashes distinguished by color alone)
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-07-17*
+*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-17*
 
 `animation.flash_button(ok=...)` (and, more broadly, Raven's flash/highlight vocabulary) conveys success vs.
 failure by *color alone* — green for ok, red for error. That's invisible to the ~8% of men with red–green
@@ -4239,7 +4246,7 @@ Discovered during brief-03 Half-2 checkpoint C (2026-07-17, flagged by Juha whil
 
 ## Expose the docs-DB source files behind a reply's RAG citations
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9, wanted this year · Filed: 2026-07-18*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10, wanted this year · Filed: 2026-07-18*
 
 When the AI composes a reply using the document database, it sees a set of retrieved snippets, and that
 provenance is already tracked per turn (the payload's `retrieval` field records the query and the snippets the
@@ -4297,7 +4304,7 @@ Discovered during the plain-text/PDF interlude (2026-07-18, raised by Juha).
 
 ## Same file formats in the docs DB and in chat attachments
 
-*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.10, with the cluster · Filed: 2026-07-29*
 
 The docs database and chat attachments should accept the *same* set of formats. A user who can attach a file
 to a message reasonably expects to be able to drop it in the documents folder, and vice versa; a split between
@@ -4328,7 +4335,7 @@ Raised during the 0.2.8 release scoping (2026-07-29, Juha).
 
 ## Spreadsheets in the docs DB and attachments (`.xlsx`, `.ods`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster · Filed: 2026-07-29 · See also: `briefs/spreadsheet-ingestion-brief.md`*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.10, with the cluster · Filed: 2026-07-29 · See also: `briefs/spreadsheet-ingestion-brief.md`*
 
 Left out of the office-formats work deliberately: a spreadsheet is a different problem class wearing the same
 file picker. Its content is tabular, so "the text of this file" is not well defined — reading a sheet row-major
@@ -4343,7 +4350,7 @@ Raised while scoping office-format support (2026-07-29, Juha).
 
 ## Text out of images, so figures work without a vision model (OCR, and SVG `<text>`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster · Filed: 2026-07-30*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.10, with the cluster · Filed: 2026-07-30*
 
 The image → text cell of the 2×2 in the SVG item below: given an image, produce its plain text. Wanted for
 three distinct reasons, which is what makes it worth building rather than a nice-to-have:
@@ -4429,7 +4436,7 @@ Raised by Juha (2026-07-30), from the `imageextract` question.
 
 ## Vector figures in the docs DB and attachments (`.svg`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster · Filed: 2026-07-30*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.10, with the cluster · Filed: 2026-07-30*
 
 Hand-authored figures — problem setups, schematics, diagrams — are commonly SVG, because that is what you get
 when you draw them yourself for a manuscript rather than exporting them from a plotting library. So this is not
@@ -4520,7 +4527,7 @@ Raised by Juha (2026-07-30).
 
 ## Read documents as page images, for figure- and math-heavy sources
 
-*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster — and the one that bites hardest · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.10, with the cluster — and the one that bites hardest · Filed: 2026-07-29*
 
 Current extraction is **text-layer only**, for PDFs and (as of 0.2.8) office formats alike. That loses exactly
 what matters in the sources this project exists to read: equations, plots, diagrams, tables-as-figures. A paper
@@ -4623,7 +4630,7 @@ those tracks, which will otherwise each build half of it differently.
 
 ## No way for the user to attach a document from a URL
 
-*Cluster: document-ingestion · Cost: ? · Gate: 0.2.9 · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-29*
 
 The attach button takes a local file. There is no affordance for "attach *this URL* as a document to my
 message", even though the storage layer was designed expecting one: `sidecarstore.base_provenance` names
@@ -4678,7 +4685,7 @@ full-text link, or attach the page and let the model follow the link with `webfe
 user has to be able to see which reading they got — silently picking one and being right half the time is the
 outcome to avoid.
 
-**Targeted at 0.2.9**, deliberately out of 0.2.8's scope: the second half is not small, and the DWIM question
+**Targeted at 0.2.10**, deliberately out of 0.2.8's scope: the second half is not small, and the DWIM question
 above wants deciding rather than guessing. Until then the workaround is the obvious one and worth stating in
 the docs if users ask — download the document, then attach the file.
 
@@ -4689,7 +4696,7 @@ Raised during the 0.2.8 format work (2026-07-29, Juha).
 
 ## Version the chat datastore file, so migrations can be skipped once applied
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-07-29 · See also: "Datastore scaling: a single `chat.json` …", "`chattree.get_all_root_nodes` is an O(n) scan"*
+*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-29 · See also: "Datastore scaling: a single `chat.json` …", "`chattree.get_all_root_nodes` is an O(n) scan"*
 
 Raised 2026-07-29 (Juha), from noticing that `appstate.backfill_sidecar_metadata` walks every revision of every
 node at every load. Nothing today tells a loaded datastore apart from one that has already been through each
@@ -4865,7 +4872,7 @@ about, since a mode that merely hides the avatar panel saves nothing that matter
 
 ## Cherrypick: crown the winner without leaving the compare cycle
 
-*Cluster: cherrypick · Cost: S · Gate: post-0.2.9 · Filed: 2026-08-14*
+*Cluster: cherrypick · Cost: S · Gate: post-0.2.10 · Filed: 2026-08-14*
 
 `Ctrl+Shift+C` is `_mark_winner`: cherry the current image, lemon the rest of the selection. Its docstring
 says it is "designed for committing a compare-mode choice", and the sequence it was built for is *press the
@@ -4887,7 +4894,7 @@ as a safeguard or as a nuisance.
 
 ## The thumbnail grid's textures are dynamic, and probably need not be
 
-*Cluster: performance · Cost: S · Gate: post-0.2.9 · Filed: 2026-08-14*
+*Cluster: performance · Cost: S · Gate: post-0.2.10 · Filed: 2026-08-14*
 
 `ThumbnailGrid.set_thumbnail` creates a **dynamic** DPG texture per thumbnail, so a Cherrypick folder of a
 few hundred images registers a few hundred of them. `raven.cherrypick.preload`'s own docstring records the
@@ -4912,7 +4919,7 @@ texture memory, or with both.
 
 ## Raven's global theme sets three of ImGui's seven rounding vars
 
-*Cluster: polish · Cost: S · Gate: post-0.2.9 · Filed: 2026-08-14*
+*Cluster: polish · Cost: S · Gate: post-0.2.10 · Filed: 2026-08-14*
 
 `raven.common.gui.utils.setup_themes` sets `FrameRounding` 6, `WindowRounding` 8, `ChildRounding` 8, and
 **`PopupRounding` 6 as of 2026-08-14** — added because a combo's dropdown list is a popup, so it took none
@@ -4932,7 +4939,7 @@ kind.
 
 ## Visualizer's importer should read the document database, not just `.bib` files
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-07-29*
 
 Visualizer ingests BibTeX databases. That is where it started — scientific abstracts, one entry per paper — and
 it is now the wrong boundary. What the importer actually wants as its source is **the same document database
@@ -5022,7 +5029,7 @@ drawn, giving the pass a scaffold rather than a blank page.
 
 ## Let the AI drive the constellation's own views (tools, and then voice)
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9, this year if possible · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10, this year if possible · Filed: 2026-07-29*
 
 Falls out of the item above, and is easy to miss because it looks like prose: *"show me the map"*, *"search my
 documents"*, *"show me what cleanup is about to delete"* are not descriptions of features, they are things a
@@ -5088,7 +5095,7 @@ Raised while implementing brief 03 D (2026-07-29, Juha's idea, and Juha's placem
 
 ## HTML pages whose content is produced by running them
 
-*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.9, with the cluster · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: post-0.2.10, with the cluster · Filed: 2026-07-29*
 
 `raven.common.docextract` reads HTML through `trafilatura`'s readability extraction, which looks at markup. A
 page that has no text in its markup — because a script writes it at load — therefore extracts as empty, and the
@@ -5139,7 +5146,7 @@ Raised while adding HTML support (2026-07-29, Juha's example).
 
 ## Rendering LaTeX equations in the chat log
 
-*Cluster: markdown-renderer · Cost: ? · Gate: 0.2.9 · Filed: 2026-07-29 · See also: `briefs/researchers-night/markdown-block-rendering-brief.md`*
+*Cluster: markdown-renderer · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-29 · See also: `briefs/researchers-night/markdown-block-rendering-brief.md`*
 
 Models emit LaTeX — `$...$`, `$$...$$`, `\begin{equation}` — whenever the subject is mathematical, and Librarian
 currently shows it as source. For a research assistant aimed at scientific work this is the wrong way round: the
@@ -5177,7 +5184,7 @@ Raised during the 0.2.8 format work (2026-07-29, Juha).
 
 ## Librarian leaks its server-side avatar instance when it doesn't exit normally
 
-*Cluster: abnormal-exit · Cost: ? · Gate: 0.2.9 · Filed: 2026-07-29*
+*Cluster: abnormal-exit · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-29*
 
 Librarian releases its avatar instance in `app_shutdown` (`raven/librarian/app.py`), which is registered with
 `atexit`. That covers the normal exit, but `atexit` handlers run only when the interpreter shuts down cleanly —
@@ -5223,7 +5230,7 @@ Discovered during brief 07 GUI testing (2026-07-29, raised by Juha).
 
 ## `pdm.lock` is gitignored, against the fleet policy for applications
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 if it resolves cleanly, else next · Filed: 2026-08-04 · See also: "Easy install with a chosen CUDA version"*
+*Cluster: ? · Cost: ? · Gate: 0.2.10 if it resolves cleanly, else next · Filed: 2026-08-04 · See also: "Easy install with a chosen CUDA version"*
 
 Fleet policy is that libraries don't commit `pdm.lock` and applications do — a lockfile is what makes a
 deployment reproducible, and Raven is an application. Raven's `.gitignore` has ignored it since early on
@@ -5272,10 +5279,10 @@ been.
 
 **Do it in one session with "Easy install with a chosen CUDA version"** — same blocker, the lock/index
 interaction, asked from two directions. Dropping torchaudio simplifies both. **And do not let it become a
-large must-resolve item inside 0.2.9**: if the interaction turns out thorny, move it to `next` rather than
+large must-resolve item inside 0.2.10**: if the interaction turns out thorny, move it to `next` rather than
 expanding the cycle around it.
 
-Do it for 0.2.8 if the check is quick, otherwise 0.2.9 — it is a packaging defect with no user-visible
+Do it for 0.2.8 if the check is quick, otherwise 0.2.10 — it is a packaging defect with no user-visible
 symptom today, so it does not gate a release.
 
 Noticed 2026-08-04 while bumping the `dearpygui` floor and finding `pdm lock` produced no diff to review.
@@ -5319,7 +5326,7 @@ the current once-per-session write, and every later design needs it anyway.
 
 ## The docs DB stores each document's full text *and* its chunks, both in the JSON
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9, resolve soon · Filed: 2026-08-04 · See also: "Version the chat datastore file …", "Datastore scaling …"*
+*Cluster: ? · Cost: ? · Gate: 0.2.10, resolve soon · Filed: 2026-08-04 · See also: "Version the chat datastore file …", "Datastore scaling …"*
 
 `HybridIR`'s `fulldocs/data.json` holds, per document, a `"text"` field (`# copy of original text as-is`,
 `hybridir.py`) and a `"chunks"` list whose entries each carry their own `"text"`. The chunks are slices of the
@@ -5396,7 +5403,7 @@ measurement was taken.
 
 ## A fetched web page is budgeted as a user attachment, not as a speculative fetch
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-04*
+*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-08-04*
 
 0.2.8 stores a long `webfetch` result as an attachment sidecar, which put it under
 `fit_attachments_to_context` — the *user attachment* budget, bounded only by `context_reserve_fraction`
@@ -5507,7 +5514,7 @@ Raised by Juha (2026-08-04), asking whether the fetched-page chip should open on
 
 ## A crash during ingest loses the whole run, however long it was
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.9, with the per-document LLM pass · Filed: 2026-08-06 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10, with the per-document LLM pass · Filed: 2026-08-06 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
 
 The delayed-commit coalescer defers a commit for one second after each finished document read, so on a
 large corpus it never fires until the reads stop arriving. Measured on the 1268-PDF fulltext corpus
@@ -5680,7 +5687,7 @@ Raised by Juha (2026-08-13), for discussion before building — the in-app cue i
 
 *Cluster: markdown-renderer · Cost: ? · Gate: RN2026, with the rest of the renderer work · Filed: 2026-08-27 · See also: `raven/vendor/DearPyGui_Markdown/text_attributes.py`*
 
-**Bump to 0.2.9 if it does not fall quickly** (Juha, 2026-08-27). It rides with the renderer work because
+**Bump to 0.2.10 if it does not fall quickly** (Juha, 2026-08-27). It rides with the renderer work because
 that is when this code is open anyway; it is not worth hunting a timing fault on its own account with the
 exhibit close. A stray grey box is cosmetic, and visitors will not know it was not meant to be there.
 
@@ -5720,7 +5727,7 @@ The URL *underline*, on the other hand, is one of the six sites above and belong
 
 ## Nothing remembers which sibling the reader was on
 
-*Cluster: chat-navigation · Cost: M · Gate: 0.2.9 or `next` · Filed: 2026-08-27*
+*Cluster: chat-navigation · Cost: M · Gate: 0.2.10 or `next` · Filed: 2026-08-27*
 
 HEAD is the whole of the app's memory of where it is in the chat tree, and it names a *node*, not a path
 taken to it. So any operation that has to put the reader back somewhere can only guess, and guesses by
@@ -5757,7 +5764,7 @@ Discovered while fixing the cancelled-reroll case (2026-08-27).
 
 ## Re-test whether `reasoning_effort` makes Qwen 3.8 usable interactively
 
-*Cluster: llm-backends · Cost: S · Gate: 0.2.9 or `next` — needs the maintainer at the keyboard · Filed: 2026-08-27*
+*Cluster: llm-backends · Cost: S · Gate: 0.2.10 or `next` — needs the maintainer at the keyboard · Filed: 2026-08-27*
 
 Qwen 3.8 thinks for so long that it is unusable for interactive chat, and `reasoning_effort: "none"` is the
 lever meant to fix that. Whether it works is still unknown, because the test that said it did not was itself
