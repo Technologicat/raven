@@ -7,20 +7,31 @@ docstring. Prose cannot import anything, so the copies are hand-maintained, and 
 has an opinion about them. A value added to the code and not to the prose is invisible to every reader who
 learns the options from the documentation, which is most of them.
 
-Two lists are checked today, and they arrived from opposite directions:
+Three lists are checked today:
 
 - **The avatar upscaler's `quality` settings.** They lived in nine places before `UPSCALE_QUALITIES` became
   the definitive one (2026-09-08). Four were machine-readable and now derive from it; the remaining five
   are prose and are what this checks.
-- **Raven-librarian's hotkeys.** The F1 help card builds its table from `hotkey_info`, and the README
-  repeats it for a reader who does not have the app open. The first hand-written copy of that table, read
-  from the key handler rather than from the card, was missing an entire scope — the audio input panel's
-  bare letters — which is what prompted this script.
+- **Raven-librarian's and Raven-visualizer's hotkeys.** Each app's F1 help card builds its table from
+  `hotkey_info`, and the README repeats it for a reader who does not have the app open. The first
+  hand-written copy of Librarian's table, read from the key handler rather than from the card, was missing
+  an entire scope — the audio input panel's bare letters — which is what prompted this script.
 
-**Direction matters, and it is one-way: everything in the code list must appear in the prose, never the
-reverse.** Librarian's help card is knowingly incomplete — the card is a fixed-height window and the chat
-graph's nineteen keys do not fit — so its README lists *more* than `hotkey_info` does. That is the correct
-state, and a symmetric check would report it as a failure.
+**The two directions are not symmetric, and only one of them fails the run.**
+
+- **Code into prose is an error.** A value in the list that no documented copy names is a value its readers
+  cannot find.
+- **Prose into code is a note.** A help card is knowingly the smaller document: it is a fixed-height window,
+  and Librarian's chat graph alone binds more keys than the card has rows left. So a README naming keys the
+  card omits is the expected state, and the note exists to say *which* — so that when the card is
+  redesigned, what has been waiting for the room is already written down rather than rediscovered.
+
+**The reverse direction reads the first column of the section's tables**, rather than every delimited run
+in it. A keyboard section says plenty of other things in backticks — a config setting, a module path — and
+the alternative to reading the table structurally is a guess about what looks like a key, tuned on the two
+sections that happen to exist. A key documented outside a table is therefore invisible to the reverse
+direction, which is the right default: those lines spell out a *group* in prose, and the two that exist are
+the hidden debug rows, which are deliberately absent from the cards.
 
 **A name counts as present only inside backticks or quotes**, not as bare prose. Both lists contain words
 like `low` and `high` that occur incidentally in any English paragraph, so a substring search would pass
@@ -65,6 +76,9 @@ class Rule:
     name: str
     shape: str
     targets: Tuple[Target, ...]
+    # Also look the other way, and *note* what the prose documents that the code list omits. Only for a
+    # list where the prose is deliberately the fuller document -- see `note_reverse` in `check`.
+    note_reverse: bool = False
 
 
 RULES = (
@@ -81,7 +95,15 @@ RULES = (
          module="raven/librarian/app.py",
          name="hotkey_info",
          shape=ENV_KEY_KWARG,
-         targets=(Target("raven/librarian/README.md", section="## Keyboard reference"),)),
+         targets=(Target("raven/librarian/README.md", section="## Keyboard reference"),),
+         note_reverse=True),
+
+    Rule(what="Raven-visualizer's hotkeys",
+         module="raven/visualizer/app.py",
+         name="hotkey_info",
+         shape=ENV_KEY_KWARG,
+         targets=(Target("raven/visualizer/README.md", section="## Keyboard reference"),),
+         note_reverse=True),
 )
 
 
@@ -165,6 +187,31 @@ def section_of(text: str, heading: str) -> str:
 _DELIMITED = re.compile(r"`([^`\n]+)`|\"([^\"\n]+)\"|'([^'\n]+)'")
 
 
+_TABLE_ROW = re.compile(r"^\|(?P<first>[^|\n]*)\|", flags=re.MULTILINE)
+
+
+def first_column_tokens(text: str) -> Dict[str, str]:
+    """Return `{normalized: as written}` for the delimited runs in the first column of each table row.
+
+    The reverse check needs the *keys* a section documents, and a keyboard section says plenty of other
+    things in backticks -- a config setting, a module path, a filename. Reading the first column of the
+    Markdown tables is structural rather than a guess about what looks like a key, which matters because
+    the alternative is a heuristic tuned on the two sections that exist today.
+
+    A key documented outside a table is therefore invisible here. That is the right default: those are the
+    lines that spell a *group* of keys in prose -- Raven's two hidden debug rows, `Ctrl+Shift+` M, R, T, L
+    -- which are deliberately absent from the help cards.
+    """
+    found: Dict[str, str] = {}
+    for row in _TABLE_ROW.finditer(text):
+        for match in _DELIMITED.finditer(row.group("first")):
+            span = match.group(1) or match.group(2) or match.group(3)
+            key = normalize(span)
+            if key and key not in found:
+                found[key] = span
+    return found
+
+
 def delimited_tokens(text: str) -> Set[str]:
     """Return every backticked or quoted run in `text`, normalized."""
     tokens = set()
@@ -210,6 +257,17 @@ def check(rule: Rule) -> Tuple[List[str], List[str]]:
             listed = ", ".join(repr(name) for name in missing)
             problems.append(f"{where}: does not name {listed} — "
                             f"defined in {rule.module} as part of `{rule.name}`")
+
+        if rule.note_reverse:
+            known = {key for _name, key in wanted}
+            documented = first_column_tokens(text)
+            absent = [written for key, written in documented.items() if key not in known]
+            if absent:
+                listed = ", ".join(repr(name) for name in absent)
+                caveat = (" (some may be there under a computed name — see the unreadable entries above)"
+                          if unresolved else "")
+                notes.append(f"{where}: documents {len(absent)} key(s) that `{rule.name}` does not "
+                             f"offer, so they are missing from the F1 card{caveat}: {listed}")
     return problems, notes
 
 

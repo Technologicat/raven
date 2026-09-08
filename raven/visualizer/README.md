@@ -468,6 +468,76 @@ This dialog works similarly to the dataset save-as dialog in the *BibTeX import 
 The file extension (`.png`) is added automatically to the filename you specify.
 
 
+## Keyboard reference
+
+Every hotkey in one place. What each one *does* is explained in the sections above and on the built-in help
+card (**F1**); this says what exists, and **when each key is live**, which is the part that is hard to work
+out by trying things.
+
+Two terms the table leans on. The **current item** is the topmost entry *fully* visible in the info panel,
+marked with a pulsating blue dot — most of the per-item keys act on it. The **selection** is the set of
+entries you have gathered, which the plotter highlights. Several keys offer the usual set operations on it,
+and the modifier is the same every time: bare replaces the selection, Shift adds to it, Ctrl subtracts from
+it, and Ctrl+Shift intersects with it. The tables below spell each combination out.
+
+### Always live
+
+| Key | Action |
+|---|---|
+| `F1` | Help card |
+| `F11` | Toggle fullscreen |
+
+### Datasets and search
+
+| Key | Action |
+|---|---|
+| `Ctrl+O` | Open a dataset |
+| `Ctrl+I` | Import BibTeX files — this is how a dataset is made |
+| `Ctrl+F` | Put the caret in the search field |
+| `Enter` | Select the search matches and leave the field |
+| `Shift+Enter` / `Ctrl+Enter` / `Ctrl+Shift+Enter` | ...adding to / subtracting from / intersecting with the selection |
+| `Esc` | Cancel the edit and leave the field |
+| `F3` / `Shift+F3` | Scroll to the next / previous search match |
+
+### Moving around the info panel
+
+Live whenever the search field does not hold the caret.
+
+| Key | Action |
+|---|---|
+| `Home` / `End` | Top / bottom |
+| `Page Up` / `Page Down` | Page up / down |
+| `Up arrow` / `Down arrow` | Scroll a little |
+| `Ctrl+U` | To the start of the current cluster ("up") |
+| `Ctrl+N` / `Ctrl+P` | To the next / previous cluster |
+| `Ctrl+Home` | Reset the plotter's zoom |
+
+### The current item, and the selection
+
+| Key | Action |
+|---|---|
+| `F6` | Search for the current item, which highlights it in the plotter — `Shift+F6` selects only it, `Ctrl+F6` removes it from the selection |
+| `F7` | Select the current cluster |
+| `Shift+F7` / `Ctrl+F7` / `Ctrl+Shift+F7` | ...adding to / subtracting from / intersecting with the selection |
+| `F9` | Select everything currently visible in the plotter |
+| `Shift+F9` / `Ctrl+F9` / `Ctrl+Shift+F9` | ...adding to / subtracting from / intersecting with the selection |
+| `Ctrl+Shift+C` | Copy the current item to the clipboard, as plain text for a web search |
+| `Ctrl+Shift+Z` / `Ctrl+Shift+Y` | Undo / redo the last selection change |
+| `F8` | Copy the report to the clipboard as plain text — `Shift+F8` for Markdown |
+| `F10` | Toggle the word cloud window, built from the keywords of the selected items |
+
+### Word cloud window
+
+| Key | Action |
+|---|---|
+| `Ctrl+S` | Save the word cloud as a PNG |
+
+### Hidden debug keys
+
+`Ctrl+Shift+` **M**, **R**, **T**, **L** — DPG's metrics window, item registry, font manager and style
+editor. Mnemonic: *Mr. T Lite*.
+
+
 # Limitations
 
 - Scalability? Beta version tested up to 12k entries, but datasets can be 100k entries in size.

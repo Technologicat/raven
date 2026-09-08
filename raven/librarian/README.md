@@ -783,7 +783,7 @@ passes on anything it does not claim, so `F1` and the rest still work from insid
 | `Enter` | Do what clicking the box under the cursor does: preview it, or commit on the second press |
 | `Esc` | Put the cursor away |
 | `Backspace` | Fold an opened tool round back up |
-| `Shift`+arrows | Pan |
+| `Shift+Up` / `Shift+Down` / `Shift+Left` / `Shift+Right` | Pan |
 | `Ctrl+Left` / `Ctrl+Right` | Previous / next sibling at this level |
 | `Ctrl+Shift+Left` / `Ctrl+Shift+Right` | Ten siblings left / right |
 | `Ctrl+Home` / `Ctrl+End` | First / last sibling |
@@ -791,7 +791,7 @@ passes on anything it does not claim, so `F1` and the rest still work from insid
 | `F` | Zoom to fit |
 | `B` | Fit the current branch |
 | `1` (main row or numpad) | Actual size (1:1) |
-| numpad `+` / `-` | Zoom in / out |
+| `Numpad +` / `Numpad -` | Zoom in / out |
 | `Home` | Back to where you are (HEAD) |
 
 ### Hidden debug keys

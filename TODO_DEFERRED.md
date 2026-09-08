@@ -2568,6 +2568,11 @@ the two "this is a tech demo" claims gone. **Attachments are still not mentioned
 The card is a fixed-height window with `no_scrollbar=True`, so prose that grows is simply clipped, and the
 hotkey table can no longer be rebalanced to make room (already at the `ceil(total/2)` floor, 16 rows of 32).
 
+**What is waiting for the room is no longer something to rediscover**: `scripts/check_option_lists.py`
+prints it on every run, as the keys each README documents that the app's `hotkey_info` does not offer. As
+of 2026-09-08 that is Librarian's seven `Alt+` mode toggles, `Shift+Tab`, the chat graph's fourteen, and
+the Visualizer's `Ctrl+S` for saving a word cloud.
+
 **The chat graph's own keys are the second thing this has cost** (2026-09-08). The graph binds some
 nineteen — the four arrows, `Enter`, `Esc`, `Backspace`, `Shift`+arrows, four `Ctrl` sibling steps,
 `Alt+Left`/`Alt+Right`, `F`, `B`, `1`, numpad `+`/`-` and `Home` — and none of them is on the card, for
