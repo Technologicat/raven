@@ -17,43 +17,37 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
-## A stored message wears the *current* character's face, not the one that wrote it
+## Nothing maps a character's name to its picture, so only the configured one can wear its own face
 
-*Cluster: chat-graph · Cost: M · Gate: none — wanted in the Researchers' Night sprint · Filed: 2026-09-08*
+*Cluster: chat-graph · Cost: M · Gate: needs a design decision — see the three shapes below · Filed: 2026-09-08 · Narrowed: 2026-09-08*
 
-Noticed by Juha (2026-09-07): a "Juha" character card in the chat datastore is drawn with Aria's icon,
-which looks as odd as it sounds. Not specific to that card — every stored assistant message is drawn with
-whatever character is configured *now*.
+**The defect this was filed for is fixed.** A stored message no longer wears the *current* character's
+face: both views ask `DPGChatController.icon_texture_for(role, persona)` with the persona stored on the
+message, `chatgraph.build` takes an `icon_for` resolver instead of a role-keyed table, and the role-keyed
+table is private with no `"assistant"` entry in it. A character we cannot place gets the generic AI glyph
+— the HAL 9000 eye — rather than somebody else's face.
 
-**Why**: `DPGChatController.gui_role_icons` is a `{role: texture}` mapping — one entry for `"assistant"`,
-built at startup from the configured character — and both surfaces read that one table: the chat log draws
-from it directly, and the chat graph is handed it through `app.py`'s `role_icons=` callable. Role is the
-only key, so there is nowhere for a second character's face to go.
+**What is left is that "cannot place" covers everyone but one.** A persona is stored as a bare name, and
+there is no mapping anywhere from a name to an image: `llm_char_name` and `avatar_config.image_path` are
+independent settings a user changes together, the character assets are bare `.png` files with no metadata
+beside them (checked 2026-09-08: nothing but images under `raven/avatar/assets/characters/`), and a message
+payload's `general_metadata` carries only `timestamp`, `datetime` and `persona`. So the configured
+character gets its icon and every other one falls back, which is correct but plain.
 
-**The datum is already stored.** Every message payload carries `general_metadata["persona"]`, the character
-name that wrote it. So this is a resolution problem rather than a data problem: the icon should be looked up
-per *stored* persona, in both views, regardless of who is configured.
+The resolver is one method with the whole policy in it, so whichever shape is chosen lands there:
 
-**And the fallback already works** — a character with no icon of its own gets the generic AI glyph, the
-HAL 9000 eye, which is what happens today when such a character is the configured one. What is missing is
-that path being reachable for a character that is merely *mentioned* by a stored message.
+- **A name → icon table in `librarian_config`.** Explicit, and a second thing to keep in step with
+  `llm_char_name` / `image_path` — the two that already have to be changed together.
+- **A per-character metadata file beside the assets**, naming the character and pointing at its images.
+  More work, and the thing that would let a character be *chosen* by name anywhere else too.
+- **Store the character's image path in `general_metadata` when the message is written.** No lookup at
+  all afterwards, and it is the only shape that stays right when a character is renamed or removed — but
+  it does nothing for messages already on disk, which is the whole existing cast.
 
-What it needs: per-character icon loading with that fallback, a cache keyed by character rather than by
-role (textures are per-character now, so they accumulate with the cast rather than being a fixed three),
-and the two call sites asking with a persona instead of with a role alone.
-
-**Why it was not built with the rest** (Juha, 2026-09-08): the shape he had in mind wants scanning the
-datastore for every AI character it mentions, resolving each one's icon or its fallback, and registering
-those textures — and he was too busy with the surrounding work to take that on at the time. Worth recording
-because the omission was a scoping call rather than an oversight, and because the scan may not be needed:
-`DPGChatController` already loads-and-caches a texture on first use for inline images, on a worker, with
-the two `split_frame`s that needs. Per-persona icons could follow that path and skip the startup scan
-entirely — which also covers a character that first appears *after* startup, where a scan would not.
-
-**It is demo-critical, and the chat graph is what made it so** (Juha, 2026-09-08). In the chat log a
-mismatched face is one avatar beside one message; in the graph a whole branch of them is on screen at once,
-so a cast wearing one face is the first thing a viewer sees. Wanted inside the Researchers' Night sprint
-rather than after it.
+Whichever it is, the loading wants the path `DPGChatController` already uses for inline images:
+load-and-cache on first use, on a worker, with the two `split_frame`s that needs. That covers a character
+first seen *after* startup, which a startup scan of the datastore would not — and it is why no scan is
+needed (Juha's observation, 2026-09-08, made while the scan was still the assumed shape).
 
 ## A metrics readout for the chat graph, and a placement bug in the avatar's
 
