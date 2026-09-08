@@ -1445,6 +1445,28 @@ class TestPills:
                                         shape.points[k - 1]) <= chatgraph._COINCIDENT_POINT_TOLERANCE]
                 assert doubled == [], f"repeated vertices at {doubled} in a drawn outline"
 
+    def test_a_pill_has_a_ground_of_its_own(self):
+        """Otherwise whatever it overlaps shows through its middle, and neither reads as being in front.
+
+        A pill and an attachment deck both hang off a box's margins by design, so they meet. The pill was
+        already drawn after the deck and so already on top — which turns out not to be the same as looking
+        it, without something opaque underneath. The control is the second assertion: a ground that did not
+        cover the whole pill would leave the same hole while still being a filled shape.
+        """
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        user = forest.create_node(payload("user", "hello"), parent_id=system)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=user))
+
+        node = built.graph.get_node_by_name(system)
+        small = [sh for sh in node.shapes
+                 if isinstance(sh, xdotgraph.PolygonShape)
+                 and _width_of(sh) < chatgraph.LayoutConfig().node_w]
+        assert [sh.filled for sh in small] == [True, False], \
+            "expected the pill as a filled ground and then its outline, in that order"
+        assert small[0].get_bounding_box() == small[1].get_bounding_box(), \
+            "the ground does not cover the outline exactly, so part of the pill is still see-through"
+
     def test_a_pill_label_is_measured_rather_than_given_the_box_width(self):
         """The renderer centres text by starting it at `centre - w/2` and drawing left-aligned.
 
@@ -1463,9 +1485,12 @@ class TestPills:
         pill_texts = [s for s in node.shapes
                       if isinstance(s, xdotgraph.TextShape) and s.t == "SYS"]
         assert len(pill_texts) == 1
+        # The pill is two coincident polygons — an opaque ground and the outline over it — so this asks
+        # for the outline specifically rather than for "the one small box".
         pill_boxes = [s for s in node.shapes
-                      if isinstance(s, xdotgraph.PolygonShape) and _width_of(s) < chatgraph.LayoutConfig().node_w]
-        assert len(pill_boxes) == 1, "expected exactly one box smaller than the node: the pill"
+                      if isinstance(s, xdotgraph.PolygonShape) and not s.filled
+                      and _width_of(s) < chatgraph.LayoutConfig().node_w]
+        assert len(pill_boxes) == 1, "expected exactly one outline smaller than the node: the pill"
 
         text_w = pill_texts[0].w
         box_w = _width_of(pill_boxes[0])

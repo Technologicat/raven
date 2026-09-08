@@ -175,6 +175,12 @@ _GAP_DASH: Tuple[float, float] = (6.0, 4.0)
 # whether or not it has an image in it -- and so that a fan of them is legible as a count while they load.
 _ATTACHMENT_BACKING: xdotconstants.Color = _authored_for_dark(_BRANCH_HUE, 0.06, 0.26)
 
+# What a pointer pill sits on. The panel's own lightness, so a pill over empty space looks like it always
+# did -- what this buys is the case where it is *not* over empty space: a pill and an attachment deck both
+# hang off a box's margins, and where they meet, an unfilled pill let the card show through its middle and
+# neither read as being in front. Draw order already put the pill on top; what it lacked was a ground.
+_PILL_BACKING: xdotconstants.Color = _authored_for_dark(_BRANCH_HUE, 0.06, 0.18)
+
 # And for the ring around a tentatively selected box. Shorter marks than the gap's pattern, so the two
 # broken lines do not read as the same thing -- they say related but different things, "this is not here"
 # against "this is not settled".
@@ -1836,10 +1842,14 @@ def _pill_shapes(pills: Tuple[str, ...], anchor_x: float, bottom_y: float, confi
     for pill, text_w, box_w in zip(pills, text_widths, box_widths):
         px1, px2 = cursor, cursor + box_w
         py1 = bottom_y - config.pill_h
-        shapes.append(xdotgraph.PolygonShape(pill_pen,
-                                             _rounded_rect_points(px1, py1, px2, bottom_y,
-                                                                  0.5 * config.pill_h),
-                                             filled=False))
+        corners = _rounded_rect_points(px1, py1, px2, bottom_y, 0.5 * config.pill_h)
+        # An opaque ground first, then the outline over it. Same two-shape treatment an attachment card
+        # gets, and for the same reason: without it, whatever the pill overlaps shows through its middle,
+        # and being drawn later is not by itself enough to read as being in front.
+        backing_pen = xdotgraph.Pen()
+        backing_pen.fillcolor = _PILL_BACKING
+        shapes.append(xdotgraph.PolygonShape(backing_pen, corners, filled=True))
+        shapes.append(xdotgraph.PolygonShape(pill_pen, corners, filled=False))
         shapes.append(xdotgraph.TextShape(pill_text_pen,
                                           0.5 * (px1 + px2), bottom_y - 0.3 * config.pill_h,
                                           xdotgraph.TextShape.CENTER, text_w, pill))

@@ -17,25 +17,6 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
-## A pointer pill and an attachment deck overlap with nothing to say which is in front
-
-*Cluster: chat-graph · Cost: S · Gate: none · Filed: 2026-09-08*
-
-Where a HEAD pill and a box's fan of attachment cards land on the same pixels, neither reads as on top of
-the other (Juha, 2026-09-08, with a screenshot). Both decorations hang off a box's margins by design, so
-the overlap is not a layout accident and moving one is not obviously the answer.
-
-**What the shapes actually are**, from a built graph: the card is three shapes — an opaque backing
-(`_ATTACHMENT_BACKING`), the picture, then an unfilled outline — while the pill is two, an unfilled polygon
-and its text. The pill is appended *after* the deck, so it is already on top in draw order; what it lacks
-is a ground of its own, so the card shows through its interior and the figure dissolves.
-
-**The card already solved this for card-against-card** — the backing exists because two photographs of
-similar tone otherwise merge into one shape, and the count is the whole point of showing several. The pill
-plausibly wants the same treatment against the graph's background colour. Not filed as decided: a pill
-filled against the background stops being transparent over the *edges* it currently sits on, and whether
-that reads better is a thing to look at rather than to reason about.
-
 ## A metrics readout for the chat graph, and a placement bug in the avatar's
 
 *Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-08*
