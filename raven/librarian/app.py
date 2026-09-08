@@ -2527,8 +2527,13 @@ def librarian_hotkeys_callback(sender, app_data):
 
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         elif key == dpg.mvKey_M:
+            # One state, "show me the numbers", not a toggle per overlay: each of these reports on the
+            # view it is drawn on, and the graph is up exactly when the avatar is not — so both follow
+            # the key, and whichever view is on screen answers it. DPG's own Metrics window is the third,
+            # and is what carries the numbers that belong to the app rather than to either view.
             dpg.show_metrics()
             dpg_avatar_renderer.configure_fps_counter(show=None)  # `None` = toggle
+            chat_graph_panel.configure_metrics_readout(show=None)  # ...ditto
         elif key == dpg.mvKey_R:
             dpg.show_item_registry()
         elif key == dpg.mvKey_T:
@@ -2762,7 +2767,11 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     docs_search_progress_text_widget="docs_search_progress_text",
                                     web_indicator_widget=web_indicator_group,
                                     is_any_modal_window_visible=is_any_modal_window_visible,
-                                    avatar_panel_covered=(lambda: chat_graph_panel.is_shown),
+                                    # Asked of the renderer, which owns the answer, rather than of
+                                    # whichever pane happens to have taken the space. The two agree
+                                    # today; only one of them keeps agreeing when a third occupant of
+                                    # the avatar column arrives.
+                                    avatar_panel_covered=(lambda: not dpg_avatar_renderer.is_shown),
                                     executor=bg)
 
 def _get_cleanup_roots() -> tuple[str, ...]:
@@ -3031,14 +3040,14 @@ def _apply_panel_occupancy() -> None:
 
         if show_graph and not chat_graph_panel.is_shown:
             # Hide the outgoing occupant before showing the incoming one, in both directions.
-            dpg.hide_item("avatar_panel")  # tag
+            dpg_avatar_renderer.hide()
             chat_graph_panel.show()
         elif chat_graph_panel.is_shown and not show_graph:
             # Resume before the swap, so the panel does not come back holding the "[Video is off]" text
             # that pausing put in it.
             avatar_controller.set_video_suppressed(avatar_record, False)
             chat_graph_panel.hide()
-            dpg.show_item("avatar_panel")  # tag
+            dpg_avatar_renderer.show()
             # A hidden item is not laid out at all, so the subtitle still carries whatever width it had
             # when the graph took the panel — and it is placed by measuring itself. Re-measure now that it
             # renders again, or a caption spoken while the graph was up comes back at the wrong height.
@@ -3108,18 +3117,20 @@ logger.info("App render loop starting.")
 exitcode = 0
 try:
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
-    # The avatar's crop overlay and FPS counter live in `front=True` viewport drawlists, which DPG draws
-    # above the whole window hierarchy — over a modal, whose input it correctly blocks but whose pixels it
-    # does not, and over whatever else is occupying the avatar's panel. Neither is something DPG can be
-    # asked to stop; the app has to say when the avatar is covered. See
-    # `DPGAvatarRenderer.set_overlays_suppressed`.
-    _avatar_was_covered = False
+    # The debug overlays — the avatar's crop overlay and FPS counter, the chat graph's metrics readout —
+    # live in `front=True` viewport drawlists, which DPG draws above the whole window hierarchy, including
+    # over a modal, whose input it correctly blocks but whose pixels it does not. That is not something DPG
+    # can be asked to stop, and it is not something either overlay can see, so the app says.
+    # See `DPGAvatarRenderer.set_overlays_suppressed`.
     while dpg.is_dearpygui_running():
         update_animations()
-        avatar_covered = is_any_modal_window_visible() or chat_graph_panel.is_shown
-        if avatar_covered != _avatar_was_covered:
-            dpg_avatar_renderer.set_overlays_suppressed(avatar_covered)
-            _avatar_was_covered = avatar_covered
+        # Each of the two occupants of the avatar column draws its debug overlay in a `front=True`
+        # viewport drawlist, and gets told the one thing neither can see for itself. Whether its own
+        # panel is up is not that thing — each owns it, and gates on it — so both are told the same.
+        # Both no-op when the value is unchanged.
+        modal_up = is_any_modal_window_visible()
+        dpg_avatar_renderer.set_overlays_suppressed(modal_up)
+        chat_graph_panel.set_overlays_suppressed(modal_up)
         dpg.render_dearpygui_frame()
 
         # Idle throttle: sleep when nothing needs updating (avatar paused, no LLM streaming, no RAG indexing, no recent input).

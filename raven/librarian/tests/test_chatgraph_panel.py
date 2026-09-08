@@ -1782,3 +1782,139 @@ class TestAttachmentThumbnails:
         built, forest, app_state, ids, calls = panel
         assert built._awaited_thumbnails == set()
         assert not built._is_stale()
+
+
+# ---------------------------------------------------------------------------
+# The metrics readout
+# ---------------------------------------------------------------------------
+
+def readout_text(built) -> str:
+    """What the readout currently says. Empty before it has ever been updated."""
+    return dpg.get_item_configuration(built._metrics_text)["text"]
+
+
+def readout_is_visible(built) -> bool:
+    """Whether the readout is actually on screen, as against merely wanted."""
+    return dpg.get_item_configuration(built._metrics_text)["show"]
+
+
+class TestTheMetricsReadoutSaysWhatThisPictureCosts:
+    """Numbers about the *graph*, so that a design choice can be judged while looking at the thing.
+
+    The failure it exists to prevent is not hypothetical: `attachment_native_size` was set to a value that
+    ran out at a zoom readers reach, and what let that through is that nothing on screen said what the zoom
+    was. So what it reports has to be the picture's own — the app's frame time belongs to DPG's Metrics
+    window, which is on the same chord.
+    """
+
+    def test_it_is_off_until_asked_for(self, panel):
+        built, forest, app_state, ids, calls = panel
+        assert not readout_is_visible(built)
+
+    def test_it_reports_the_picture_it_was_built_from(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built.configure_metrics_readout(True)
+        text = readout_text(built)
+        graph = built._chat_graph.graph
+        assert f"{len(graph.nodes)} nodes" in text
+        assert f"{len(graph.edges)} edges" in text
+        assert len(graph.nodes) > 1, "a one-box picture cannot show that the count is the picture's"
+
+    def test_the_counts_follow_a_rebuild(self, panel):
+        # The whole point is a readout that answers for what is on screen now, so a count captured once
+        # and never updated would be worse than none.
+        built, forest, app_state, ids, calls = panel
+        built.configure_metrics_readout(True)
+        before = built._picture_nodes
+        forest.create_node(payload("assistant", "one more"), parent_id=ids["taken_tip"])
+        built.refresh()
+        assert built._picture_nodes > before
+
+    def test_it_counts_the_textures_the_picture_references(self, dpg_context):
+        """Across every mip level of every image, wherever in the drawing it sits."""
+        themes_and_fonts = dpg_context
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        carrier = forest.create_node(payload("user", "look at this", images=["a0.png"]), parent_id=root)
+        app_state = {"HEAD": carrier}
+        with dpg.window() as holder:
+            built = chatgraph_panel.DPGChatGraphPanel(
+                gui_parent=holder, datastore=forest, app_state=app_state,
+                themes_and_fonts=themes_and_fonts, width=200, height=200,
+                thumbnail_for=lambda name, size: env(levels=((128, 96, "tex_a0"), (64, 48, "tex_a0_half"))))
+        built.refresh()
+        assert built._picture_textures == 2, "both levels of the one card are textures the picture holds"
+        built.destroy()
+        dpg.delete_item(holder)
+
+    def test_a_picture_with_no_images_holds_no_textures(self, panel):
+        # The negative control for the count above: without it, a texture counter that always answered
+        # zero would pass every assertion a chat with no attachments in it can make.
+        built, forest, app_state, ids, calls = panel
+        assert built._picture_textures == 0
+
+    def test_the_draw_time_is_averaged_over_redraws_rather_than_frames(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built._widget.update()  # the graph the panel set is still pending its first draw
+        built.render_frame(0)
+        assert len(built._draw_time.data) == 1, "no redraw was sampled, so there is nothing to average"
+
+        for _ in range(5):  # frames in which nothing changed, so the widget redraws nothing
+            built.render_frame(0)
+        assert len(built._draw_time.data) == 1, \
+            "an idle frame was sampled, so the window fills with one repeated value while nothing draws"
+
+    def test_a_rebuild_is_timed(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built.refresh()
+        assert built._rebuild_time.average() > 0.0
+
+
+class TestWhenTheReadoutIsDrawn:
+    """Wanted, on screen, and not covered — three separate questions, and the wish outlives the other two.
+
+    A `front=True` viewport drawlist is drawn over every window including a properly modal one, whose input
+    DPG blocks but whose pixels it does not. So the app has to say when something is on top, and the
+    readout has to come back by itself afterwards without the reader asking again.
+    """
+
+    def test_asking_for_it_shows_it(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built.configure_metrics_readout(True)
+        assert readout_is_visible(built)
+
+    def test_none_toggles(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built.configure_metrics_readout(None)
+        assert readout_is_visible(built)
+        built.configure_metrics_readout(None)
+        assert not readout_is_visible(built)
+
+    def test_suppressing_takes_it_off_screen_without_forgetting_it(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built.configure_metrics_readout(True)
+        built.set_overlays_suppressed(True)
+        assert not readout_is_visible(built)
+        built.set_overlays_suppressed(False)
+        assert readout_is_visible(built), "the wish was spent rather than held, so a modal turned it off"
+
+    def test_toggling_while_covered_still_reads_the_wish(self, panel):
+        # Asking the draw item instead would make the key a no-op whenever anything was on top, which is
+        # a key that works only when you do not need it.
+        built, forest, app_state, ids, calls = panel
+        built.set_overlays_suppressed(True)
+        built.configure_metrics_readout(None)
+        assert not readout_is_visible(built), "suppression was overridden by the toggle"
+        built.set_overlays_suppressed(False)
+        assert readout_is_visible(built), "the toggle did not register while covered"
+
+    def test_a_hidden_panel_draws_no_readout(self, panel):
+        # The graph is up exactly when the avatar is not, so this is what lets one key serve both without
+        # the app arbitrating: each overlay declines while its own view is away.
+        built, forest, app_state, ids, calls = panel
+        built.configure_metrics_readout(True)
+        assert readout_is_visible(built), "it was never on screen, so hiding proves nothing"
+        built.hide()
+        assert not readout_is_visible(built)
+        built.show()
+        assert readout_is_visible(built)

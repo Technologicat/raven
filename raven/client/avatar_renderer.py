@@ -117,6 +117,12 @@ class DPGAvatarRenderer:
         This can only be instantiated after DPG bootup is complete, because the constructor sets up some GUI widgets.
 
         `gui_parent`: DPG tag or ID; where to put the GUI image widget that displays the live texture.
+
+                      **The renderer owns whether this is shown** — `show`, `hide` and `is_shown` are
+                      here rather than at the caller. An app that hides the panel itself takes the
+                      renderer's own visibility away from it without telling it, and the renderer then
+                      goes on drawing its `front=True` overlays over whatever took the space. Give it a
+                      container of its own and let it hide that.
         `avatar_x_center`: x center position of avatar video feed, in pixels, in the coordinate system of `gui_parent`.
         `avatar_y_bottom`: y bottom (one past end) of avatar video feed, in pixels, in the coordinate system of `gui_parent`.
         `paused_text`: Text to show when the animator is not running, or `None` to leave empty.
@@ -205,6 +211,15 @@ class DPGAvatarRenderer:
         # the counter had nothing — and the counter went on being drawn over Librarian's chat graph and
         # over every modal in both apps, because a caller fixing one had no reason to think of the other.
         self._overlays_suppressed = False
+        # Whether the panel this renderer draws into is on screen. Its own, because everything below in a
+        # `front=True` viewport drawlist keeps drawing over whatever took the space otherwise — and an app
+        # that hides the panel behind the renderer's back leaves it with no way to notice. It cannot poll
+        # for it either: hiding the panel is normally accompanied by suppressing the video, so the frame
+        # loop that would do the polling is exactly what stops.
+        #
+        # Distinct from `_overlays_suppressed`, which says something is *on top of* the avatar. This says
+        # the avatar is not there at all.
+        self._is_shown = True
         # What `configure_fps_counter` was last told to want, as against whether it is drawn: a counter
         # switched on and then covered must come back when the cover goes away, without the user asking
         # for it again.
@@ -224,13 +239,53 @@ class DPGAvatarRenderer:
         # The viewport drawlist itself stays permanently shown — DPG does not cascade `show=False` from
         # a viewport drawlist to its draw children, so visibility lives on the draw_text item instead.
         self.fps_text_viewport_drawlist = dpg.add_viewport_drawlist(tag="avatar_fps_viewport_drawlist", front=True, show=True)
-        self.fps_text_draw_item = dpg.draw_text((0, 0), "Loading...", color=(0, 255, 0), size=20, show=False, parent=self.fps_text_viewport_drawlist)
+        self.fps_text_draw_item = dpg.draw_text((0, 0), "Loading...",
+                                                color=guiutils.DEBUG_OVERLAY_COLOR,
+                                                size=guiutils.DEBUG_OVERLAY_FONT_SIZE,
+                                                show=False, parent=self.fps_text_viewport_drawlist)
         # Text to show while paused. This will be positioned when shown.
         paused_str = paused_text if paused_text is not None else ""
         self.paused_text_gui_widget = dpg.add_text(paused_str,
                                                    show=False,
                                                    tag="paused_text",
                                                    parent=gui_parent)
+
+    def _get_is_shown(self) -> bool:
+        """Return whether the avatar's panel is currently shown."""
+        return self._is_shown
+
+    is_shown = property(fget=_get_is_shown,
+                        doc="Whether the avatar's panel is on screen. Change it with `show` or `hide`. "
+                            "Also the app-facing answer to 'has something else taken the avatar's place?', "
+                            "asked of the object that knows rather than of whatever took it.")
+
+    def show(self) -> None:
+        """Put the avatar's panel back on screen, with whatever overlays were wanted before it went away."""
+        self._set_shown(True)
+
+    def hide(self) -> None:
+        """Take the avatar's panel off screen, overlays included.
+
+        Nothing about what is *wanted* is disturbed: the crop overlay and the FPS counter come back as
+        they were when `show` is called, without the user asking for them again.
+        """
+        self._set_shown(False)
+
+    def _set_shown(self, shown: bool) -> None:
+        """Show or hide the panel and everything drawn over it. Idempotent."""
+        if shown == self._is_shown:
+            return
+        self._is_shown = shown
+        try:
+            with guiutils.nonexistent_ok():
+                if shown:
+                    dpg.show_item(self.gui_parent)
+                else:
+                    dpg.hide_item(self.gui_parent)
+            self._redraw_crop_overlay()
+            self._apply_fps_counter_visibility()
+        except AttributeError:  # GUI instance went bye-bye (can happen at app shutdown)
+            pass
 
     def configure_fps_counter(self, show: Optional[bool]) -> None:
         """Show or hide the FPS counter.
@@ -247,10 +302,10 @@ class DPGAvatarRenderer:
         self._apply_fps_counter_visibility()
 
     def _apply_fps_counter_visibility(self) -> None:
-        """Draw the counter if it is both wanted and not suppressed."""
+        """Draw the counter if it is wanted, the panel is up, and nothing is covering it."""
         try:
             with guiutils.nonexistent_ok():
-                if self._fps_counter_wanted and not self._overlays_suppressed:
+                if self._fps_counter_wanted and self._is_shown and not self._overlays_suppressed:
                     dpg.show_item(self.fps_text_draw_item)
                 else:
                     dpg.hide_item(self.fps_text_draw_item)
@@ -289,17 +344,20 @@ class DPGAvatarRenderer:
     def set_overlays_suppressed(self, suppressed: bool) -> None:
         """When True, draw nothing that would sit in front of the avatar: crop overlay, FPS counter.
 
-        Used by the host app when something else is on top of the avatar — a modal window (fdialog,
-        helpcard, messagebox), or another pane occupying the avatar's panel. Both of those things are
-        drawn in `front=True` viewport drawlists, which DPG renders above all windows including
-        properly-modal ones: input is blocked but the drawing is not, so suppressing from this side is
-        the only way to hide them.
+        Used by the host app when something is on top of the avatar — a modal window (fdialog, helpcard,
+        messagebox). Those are drawn in `front=True` viewport drawlists, which DPG renders above all
+        windows including properly-modal ones: input is blocked but the drawing is not, so suppressing
+        from this side is the only way to hide them.
+
+        **Only for what the renderer cannot see for itself**, which is why the list above is modals and
+        nothing else. The avatar's panel being given over to another pane is the same question and is
+        *not* asked here: that is `hide`, and the renderer holds the answer to it.
 
         Neither `show_crop_overlay` nor `configure_fps_counter` is disturbed — this says what may be
         *drawn*, they say what is *wanted*, and each comes back by itself when the cover goes away.
 
-        Callers typically poll their app's "is anything covering the avatar" state each frame and call
-        this when it flips; the renderer no-ops when the value is unchanged.
+        Callers typically poll their app's "is a modal up" state each frame and call this when it flips;
+        the renderer no-ops when the value is unchanged.
         """
         if suppressed == self._overlays_suppressed:
             return
@@ -319,7 +377,8 @@ class DPGAvatarRenderer:
             dpg.delete_item(self.crop_overlay_drawlist_gui_widget, children_only=True)
 
             effective = self.overlay_bbox_preview if self.overlay_bbox_preview is not None else self.crop_bbox
-            if not self.show_crop_overlay or self._overlays_suppressed or self.full_w is None or not self.first_frame_received:
+            if (not self.show_crop_overlay or not self._is_shown or self._overlays_suppressed
+                    or self.full_w is None or not self.first_frame_received):
                 # Leave the drawlist empty — no hide_item needed since an empty viewport drawlist renders nothing.
                 return
 
@@ -668,10 +727,12 @@ class DPGAvatarRenderer:
             self._redraw_crop_overlay()
 
             # FPS text lives in a viewport drawlist (viewport-absolute coords), so it needs explicit
-            # repositioning whenever the gui_parent moves (resize, etc.). Match the pre-refactor widget
-            # offset of (8, 0) relative to gui_parent's top-left.
+            # repositioning whenever the gui_parent moves (resize, etc.). The inset is the constellation's,
+            # shared with the other overlays `Ctrl+Shift+M` brings up; its value is this counter's own
+            # pre-refactor offset relative to gui_parent's top-left.
             parent_x0, parent_y0 = guiutils.get_widget_pos(self.gui_parent)
-            dpg.configure_item(self.fps_text_draw_item, pos=(parent_x0 + 8, parent_y0 + 0))
+            inset_x, inset_y = guiutils.DEBUG_OVERLAY_INSET
+            dpg.configure_item(self.fps_text_draw_item, pos=(parent_x0 + inset_x, parent_y0 + inset_y))
         if nok.errored:  # window or live image widget does not exist
             logger.info("DPGAvatarRenderer.reposition: GUI widget doesn't exist; ignoring. (This is normal at app shutdown.)")
         else:

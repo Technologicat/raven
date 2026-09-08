@@ -28,9 +28,10 @@ logger = logging.getLogger(__name__)
 
 import dearpygui.dearpygui as dpg
 
-from unpythonic import env, sym
+from unpythonic import env, si_prefix, sym, timer
 
 from ..common import navhistory
+from ..common.running_average import RunningAverage
 from ..common.gui import animation as gui_animation
 from ..common.gui import keyboardmark
 from ..common.gui import utils as guiutils
@@ -279,6 +280,35 @@ class DPGChatGraphPanel(gui_animation.Animation):
                                   clamp_pan_to_graph=True,
                                   dark_mode=dark_mode,
                                   tag=f"chat_graph_widget_{self.gui_uuid}")  # tag
+
+        # The metrics readout. Off unless asked for; see `configure_metrics_readout`.
+        #
+        # A `front=True` viewport drawlist, like the avatar's counter, so that it needs no opinion about
+        # its z-order against the graph: the graph's own content is drawn into the widget's drawlist, and
+        # an overlay sharing that would have to be either a sibling ordered against it or something
+        # reaching into a widget this panel does not own. A viewport drawlist sidesteps both, at the price
+        # of the suppression below — DPG draws it over every window, modals included.
+        #
+        # Coordinates are therefore viewport-absolute, and the canvas moves when the app is resized, so
+        # the position is recomputed with the text rather than set once.
+        self._metrics_wanted = False
+        self._metrics_suppressed = False
+        # What the last rebuild produced. Counted there rather than per frame: they are properties of the
+        # picture, and the picture only changes when it is rebuilt.
+        self._picture_nodes = 0
+        self._picture_edges = 0
+        self._picture_textures = 0
+        self._rebuild_time = RunningAverage()
+        self._draw_time = RunningAverage()
+        # The widget redraws only when something changed, so its `last_render_time` has to be sampled per
+        # *redraw*. Sampling per frame would fill the window with one repeated value the moment the picture
+        # went still, and report a mean draw time for a graph that is not drawing.
+        self._seen_render_count = self._widget.render_count
+        self._metrics_drawlist = dpg.add_viewport_drawlist(front=True, show=True)
+        self._metrics_text = dpg.draw_text((0, 0), "",
+                                           color=guiutils.DEBUG_OVERLAY_COLOR,
+                                           size=guiutils.DEBUG_OVERLAY_FONT_SIZE,
+                                           show=False, parent=self._metrics_drawlist)
 
         gui_animation.animator.add(self)
 
@@ -713,6 +743,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self.refresh()
         with guiutils.nonexistent_ok():
             dpg.show_item(self._container)
+        self._apply_metrics_visibility()
 
     def hide(self) -> None:
         """Hide the panel, and give up the keyboard if it had it."""
@@ -722,6 +753,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self.has_keyboard = False
         with guiutils.nonexistent_ok():
             dpg.hide_item(self._container)
+        self._apply_metrics_visibility()
 
     def toggle(self) -> bool:
         """Show the panel if it is hidden, hide it if it is shown. Returns the new state."""
@@ -730,6 +762,98 @@ class DPGChatGraphPanel(gui_animation.Animation):
         else:
             self.show()
         return self._is_shown
+
+    # ------------------------------------------------------------------
+    # The metrics readout
+
+    def configure_metrics_readout(self, show: Optional[bool]) -> None:
+        """Show or hide the metrics readout over the graph. `show is None` toggles it.
+
+        What this sets is whether the readout is *wanted*; whether it is drawn is that, plus the panel
+        being on screen, plus `set_overlays_suppressed`. Toggling therefore reads the wish rather than the
+        draw item — asking the item would make the key a no-op whenever something was covering the graph,
+        and would silently forget the setting every time the reader switched back to the avatar.
+        """
+        if show is None:
+            show = not self._metrics_wanted
+        self._metrics_wanted = show
+        self._apply_metrics_visibility()
+
+    def set_overlays_suppressed(self, suppressed: bool) -> None:
+        """When True, draw nothing that would sit in front of the graph: the metrics readout.
+
+        The complement of `DPGAvatarRenderer.set_overlays_suppressed`, and needed for the same reason: a
+        `front=True` viewport drawlist is drawn above every window including a properly modal one, whose
+        input is blocked but whose pixels are not. What is on top of the graph is the app's knowledge, so
+        the app says.
+
+        The panel's own visibility is not this question and is not disturbed here — a hidden panel draws
+        no readout regardless, which is what keeps the key answering for whichever view is up.
+
+        Cheap to call every frame; no-ops when the value is unchanged.
+        """
+        if suppressed == self._metrics_suppressed:
+            return
+        self._metrics_suppressed = suppressed
+        self._apply_metrics_visibility()
+
+    def _metrics_are_drawn(self) -> bool:
+        """Return whether the readout should be on screen right now."""
+        return self._metrics_wanted and self._is_shown and not self._metrics_suppressed
+
+    def _apply_metrics_visibility(self) -> None:
+        """Put the readout on screen, or take it off, according to `_metrics_are_drawn`."""
+        with guiutils.nonexistent_ok():
+            if self._metrics_are_drawn():
+                self._update_metrics_readout()  # so it appears with numbers rather than with last frame's
+                dpg.show_item(self._metrics_text)
+            else:
+                dpg.hide_item(self._metrics_text)
+
+    def _update_metrics_readout(self) -> None:
+        """Refresh the readout's text and its position. Called per frame while it is drawn."""
+        zoom = self._widget.get_zoom()
+        lines = [f"zoom {zoom:0.2f}x | {self._picture_nodes} nodes, {self._picture_edges} edges | "
+                 f"{self._picture_textures} textures",
+                 # `always_separate` so the unit is spaced the same whether or not the magnitude took a
+                 # prefix: without it, "12.30 ms" and "1.05s" come out of the same format string.
+                 f"rebuild {si_prefix(self._rebuild_time.average(), always_separate=True)}s | "
+                 f"draw {si_prefix(self._draw_time.average(), always_separate=True)}s (mean)"]
+        with guiutils.nonexistent_ok():
+            canvas_x0, canvas_y0 = guiutils.get_widget_pos(self._canvas)
+            inset_x, inset_y = guiutils.DEBUG_OVERLAY_INSET
+            dpg.configure_item(self._metrics_text,
+                               text="\n".join(lines),
+                               pos=(canvas_x0 + inset_x, canvas_y0 + inset_y))
+
+    def _measure_picture(self, graph: xdotgraph.Graph) -> None:
+        """Record what the picture just built contains, for the readout to report.
+
+        Counted here rather than per frame because these are properties of the picture, and the picture
+        only changes when it is rebuilt.
+
+        The textures are the distinct ones the drawing *references*, across every mip level of every image
+        in it — deliberately not the size of the controller's thumbnail cache, which this panel cannot see
+        and should not: it takes a `thumbnail_for` callback precisely so it need not know a controller
+        exists. It is also the more useful number, being what this picture costs rather than what the
+        session has accumulated.
+        """
+        self._picture_nodes = len(graph.nodes)
+        self._picture_edges = len(graph.edges)
+        self._picture_textures = len({level.texture
+                                      for shape in graph.iter_shapes()
+                                      if isinstance(shape, xdotgraph.ImageShape)
+                                      for level in shape.levels})
+
+    def _sample_draw_time(self) -> None:
+        """Take the widget's render time, if it has redrawn since we last looked.
+
+        Costs one integer comparison on a frame where nothing was redrawn, which is the steady state.
+        """
+        render_count = self._widget.render_count
+        if render_count != self._seen_render_count:
+            self._seen_render_count = render_count
+            self._draw_time.add_datapoint(self._widget.last_render_time)
 
     def set_size(self, width: int, height: int) -> None:
         """Resize the panel and the graph inside it."""
@@ -746,6 +870,16 @@ class DPGChatGraphPanel(gui_animation.Animation):
         Called for itself whenever the forest or HEAD changes; call it directly after doing something the
         change counter cannot see.
         """
+        try:
+            with timer() as tictoc:
+                self._rebuild()
+        finally:
+            # In a `finally` because `_rebuild` returns early on a picture it cannot draw, and that costs
+            # time too. This is the expensive path and the one the readout is for.
+            self._rebuild_time.add_datapoint(tictoc.dt)
+
+    def _rebuild(self) -> None:
+        """The rebuild itself. Split from `refresh` only so that the timing there wraps all of it."""
         with self._lock:
             self._view_state.head_node_id = self.app_state["HEAD"]
             self._view_state.new_chat_node_id = self.app_state.get("new_chat_HEAD")
@@ -783,6 +917,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._seen_generation = generation
             self._seen_head = self._view_state.head_node_id
             self._widget.set_graph(chat_graph.graph)
+            self._measure_picture(chat_graph.graph)
             anchor = (self._cursor_name
                       or self._view_state.focus_node_id
                       or self._view_state.head_node_id)
@@ -898,6 +1033,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
     def destroy(self) -> None:
         """Tear the panel down. Reverse of the order things were set up in."""
         gui_animation.animator.cancel(self)
+        with guiutils.nonexistent_ok():
+            dpg.delete_item(self._metrics_drawlist)  # takes the draw_text inside it with it
         self._keyboard_mark.detach()
         self._widget.destroy()
         with guiutils.nonexistent_ok():
@@ -915,6 +1052,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
         """
         if self._is_shown and self._is_stale():
             self.refresh()
+        # Sampled whether or not the readout is up, so that switching it on shows a mean of the redraws
+        # that have actually happened rather than starting from nothing.
+        self._sample_draw_time()
+        if self._metrics_are_drawn():
+            self._update_metrics_readout()
         return gui_animation.action_continue
 
     def _is_stale(self) -> bool:

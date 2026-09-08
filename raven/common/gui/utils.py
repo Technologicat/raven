@@ -11,6 +11,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
 
            "DISABLED_TEXT_COLOR", "DEFAULT_TEXT_COLOR", "DEFAULT_BUTTON_BG_COLOR",  # what the default theme draws
            "SECTION_SEPARATOR_SPACING",  # the constellation's vertical rhythm
+           "DEBUG_OVERLAY_COLOR", "DEBUG_OVERLAY_FONT_SIZE", "DEBUG_OVERLAY_INSET",  # how a numbers overlay looks
 
            "bootup", "load_extra_font",  # high-level bootup API, you usually want these two for app bootup
            "get_font_path",  # mostly internal, but available for exotic use cases
@@ -92,6 +93,17 @@ DEFAULT_BUTTON_BG_COLOR = (51, 51, 55)
 # each side — that is the constellation's rhythm for this shape, and a panel using a different number
 # reads as a different app. Named rather than left as a default so the two can be compared.
 SECTION_SEPARATOR_SPACING = 4
+
+# How a debug numbers overlay is drawn, and how far its top left corner sits inside whatever it reports on.
+#
+# Shared because several of these exist across the constellation — the avatar's video counter, the chat
+# graph's — and `Ctrl+Shift+M` is one state, "show me the numbers", showing whichever belong to the view
+# that is up. Two overlays reached by the same key that do not look alike read as two features, and values
+# copied per app agree only until one of them is adjusted.
+#
+DEBUG_OVERLAY_COLOR = (0, 255, 0)
+DEBUG_OVERLAY_FONT_SIZE = 20
+DEBUG_OVERLAY_INSET = (8, 0)  # (x, y) from the top left corner of the region reported on
 
 # ---------------------------------------------------------------------------
 # Fonts & themes
