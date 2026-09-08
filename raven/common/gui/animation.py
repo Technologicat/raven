@@ -117,6 +117,12 @@ class Animator:
                 # This catches *unguarded* escapes only. An animation that expects its widget to come and
                 # go — a view rebuilt mid-draw — guards its own drawing and never reaches here, which is
                 # what keeps this an error rather than a routine event.
+                #
+                # It is also the only guard: a test-side one, asserting that no test module finishes with
+                # animations still registered, was considered and judged redundant against this (Juha,
+                # 2026-09-08). It would catch a leak that never faults, which this cannot — but a leak
+                # that never faults is one nothing is drawing into a dead widget for, and the moment that
+                # stops being true, this fires and names it.
                 with guiutils.nonexistent_ok() as nok:
                     action = animation.render_frame(t=time_now)
                 if nok.errored:
