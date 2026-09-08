@@ -49,9 +49,15 @@ after publishing — without that gate being on any release path.
 
 ## Next session, from 2026-09-09
 
-**Start with the help card's paging**, which is where 2026-09-08 stopped: it is specced in
-`TODO_DEFERRED.md` and it is a look-at-it job, so it wants the maintainer at the keyboard rather than
-being built blind and measured afterwards.
+**First: review the character and prompt configuration changes** (commit `7e808613`), which landed late on
+2026-09-08 and have not been read yet. They are a larger change than the item that prompted them — a
+character declaring its own name, voice, card and glyph; the prompt prose moving out of `.py` into
+`raven/librarian/prompts/`; and `setup_character_card` and its siblings moving from `config` to
+`llmclient`. Reviewing before building on them is the cheaper order.
+
+**Then the help card's paging**, which is where 2026-09-08 stopped: it is specced in `TODO_DEFERRED.md`
+and it is a look-at-it job, so it wants the maintainer at the keyboard rather than being built blind and
+measured afterwards.
 
 **What 2026-09-08 closed**, so the build order below picks up from the right place: the chat graph's
 metrics readout (item 1a), and the per-character speaker icons (item 2) — the latter grown into a
