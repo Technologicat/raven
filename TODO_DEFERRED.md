@@ -75,32 +75,56 @@ avatar". So what is left here is the readout itself.
 
 ### Spec
 
-**Where.** Top left of the graph area, inside the panel — *not* over the toolbar, and **not** a `front=True`
-viewport drawlist. That morning's bug is the argument: a viewport drawlist would draw over modals and over
-whatever replaces the panel, and would then need the same suppression the avatar's overlays just grew. The
-graph is drawn into an ordinary drawlist with no `add_image` over it, so nothing forces the big hammer here.
-See `dpg-notes.md`, "`add_image` covers in-window drawlists".
+**Where.** Top left of the graph area, not over the toolbar: the toolbar is a row of button edges and
+icons already competing for attention, and the graph usually has empty space at the top — or the reader can
+make some by panning (Juha, 2026-09-08).
 
-**How it is reached.** `Ctrl+Shift+M`, with the avatar's counter — that chord is already "show me the
-numbers", and the hidden debug group it belongs to is spelled out in `librarian/app.py` ("Mr. T Lite").
-Same wanted-versus-drawn split the avatar counter now has, so the key still answers while the graph is
-hidden.
+**Drawn as a `front=True` viewport drawlist**, like the avatar's counter. An earlier draft of this spec said
+the opposite on the grounds that nothing forces the big hammer here; that argument was aimed at the wrong
+primitive. The graph's own images are `draw_image` inside its drawlist rather than `add_image` widgets, so
+the hazard is not the documented one — but an in-window overlay would still have to be either a sibling
+drawlist whose ordering against the graph's content has to be got right, or drawn into the shared widget's
+own drawlist, which the panel has no business reaching into. A viewport drawlist sidesteps both, and the
+suppression plumbing it needs already exists as of 2026-09-08. **Its trigger is the complement of the
+avatar's**: the graph is showing exactly when the avatar is not, so suppress this one when the avatar is up
+and, like everything in a `front=True` drawlist, whenever a modal is.
 
-**What it shows.** Zoom; node and edge counts; texture count; frame time; mean rebuild time. The last two
-as sliding averages, as `DPGAvatarRenderer` does its FPS — a per-frame number is unreadable.
+**How it is reached.** `Ctrl+Shift+M`, with the avatar's counter. **One state, "show me the numbers"**,
+showing whichever numbers belong to the view that is up — not a toggle per overlay. Same wanted-versus-drawn
+split the avatar counter grew, so the key still answers while the graph is hidden.
 
-**Where the numbers come from, which is the part with a decision in it.** The two times have different
-owners: a rebuild is `DPGChatGraphPanel.refresh`, and a frame is the widget's own `_render`. So the sampler
-belongs to the panel, with the widget reporting its render time upward rather than the panel reaching into
-the widget — the widget is shared code and does not know it is in a chat.
+**What it shows, chosen by what is free rather than by what would be nice.** Everything below except one
+item is already in the panel's hands, and none of it makes the shared widget know it is in a chat:
+
+- **Zoom** — the widget's viewport has it.
+- **Node and edge counts** — from the `ChatGraph` the panel just built.
+- **Textures in the drawn picture** — count the distinct textures across the built graph's `ImageShape`s.
+  Deliberately *not* the size of the controller's thumbnail cache, which the panel cannot see and should
+  not: the panel takes a `thumbnail_for` callback precisely so it does not know a controller exists. The
+  count over the drawn graph is also the more useful number — what this picture costs, rather than what the
+  session has accumulated.
+- **Mean rebuild time** — `DPGChatGraphPanel.refresh` timing itself. This is the expensive path and the one
+  worth watching.
+- **Mean frame time / FPS** — the app owns its render loop, so it can time `render_dearpygui_frame`
+  directly. Time the render call rather than the loop body: Raven's idle throttle sleeps in there, and a
+  frame time that includes the sleep says nothing.
+- **The widget's own render time** is the one item that is not free, and is worth its small cost: let
+  `XDotWidget` time its `_render` and expose the last figure read-only. That is a thing a widget may
+  legitimately know about itself, so it stays a property of the widget rather than a hole cut for this
+  overlay — and it separates "the picture was rebuilt" from "the picture was drawn", which is the
+  distinction a reader chasing a slow graph actually needs.
+
+Sliding averages for the three times, as `DPGAvatarRenderer` does for its FPS: a per-frame number is
+unreadable. Format with `unpythonic.si_prefix`, which is what the avatar's overlay uses.
 
 **Why it is wanted, which is worth keeping so a later pass does not trim it as decoration.** Judging a
 design choice against the graph currently means computing a number offline: `attachment_native_size` was
 set to a value that ran out at a zoom readers reach, and the reason nobody noticed is that nothing on
 screen says what the zoom is. A readout is what makes that judgeable while looking at the thing.
 
-**Cost: M**, a few hours — an overlay, a sampler with sliding averages on two paths, and a toggle. Wants a
-fresh session: it is a new GUI surface rather than a change to an existing one.
+**Cost: M**, a few hours — an overlay, a sampler with sliding averages on three paths, a toggle, and one
+small addition to the widget. Wants a fresh session: it is a new GUI surface rather than a change to an
+existing one.
 
 ## Tell a wedged reply from a hard one, instead of capping both
 
