@@ -11,6 +11,7 @@ generated `WordCloud` object — stays module-local.
 
 __all__ = ["update",
            "toggle_window",
+           "handle_key",
            "show_save_dialog",
            "save_callback",
            "save_to_file",
@@ -190,6 +191,19 @@ def toggle_window():
 
 # --------------------------------------------------------------------------------
 # Saving
+
+def handle_key(key, ctrl_pressed: bool, shift_pressed: bool) -> bool:
+    """Act on `key` if this window binds it. Returns whether it did.
+
+    The bindings live here, beside the window they act on, and the app asks each of its non-modal windows
+    in turn. Returning whether the key was taken is what lets a key this window does not bind carry on to
+    whoever does — the app itself, or another window that is also open.
+    """
+    if ctrl_pressed and key == dpg.mvKey_S:
+        show_save_dialog()
+        return True
+    return False
+
 
 def show_save_dialog():
     """Show the "save word cloud" file dialog, to ask the user for a filename to save the word cloud image as."""

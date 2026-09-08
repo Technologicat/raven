@@ -426,3 +426,41 @@ def test_clearing_tasks_reaches_the_task_manager_once_there_is_one(monkeypatch):
     monkeypatch.setattr(word_cloud, "_task_manager", FakeTaskManager())
     word_cloud.clear_tasks(wait=True)
     assert cleared == [True]
+
+
+# ---------------------------------------------------------------------------
+# Tests: the window's own hotkeys
+# ---------------------------------------------------------------------------
+
+class TestHandleKey:
+    """`handle_key` reports whether it acted, which is what lets the app offer a key to several windows.
+
+    The app's non-modal windows can be on screen together, so it asks each of them in turn and stops at
+    the first that takes the key. A handler that claimed everything, or that acted without saying so,
+    would put the others' bindings out of reach — which is the defect this contract exists to prevent.
+    """
+
+    @staticmethod
+    def calls(monkeypatch):
+        """Record what `handle_key` reaches for, instead of opening a real dialog."""
+        opened = []
+        monkeypatch.setattr(word_cloud, "show_save_dialog", lambda: opened.append("save"))
+        return opened
+
+    def test_ctrl_s_saves_and_says_it_did(self, monkeypatch):
+        opened = self.calls(monkeypatch)
+        assert word_cloud.handle_key(word_cloud.dpg.mvKey_S, ctrl_pressed=True, shift_pressed=False) is True
+        assert opened == ["save"]
+
+    def test_a_key_it_does_not_bind_is_declined_untouched(self, monkeypatch):
+        """Declining has to be silent as well as False: the next window is about to be offered this key."""
+        opened = self.calls(monkeypatch)
+        assert word_cloud.handle_key(word_cloud.dpg.mvKey_O, ctrl_pressed=True, shift_pressed=False) is False
+        assert word_cloud.handle_key(word_cloud.dpg.mvKey_Return, ctrl_pressed=True, shift_pressed=False) is False
+        assert opened == [], "it acted on a key it did not claim"
+
+    def test_the_bare_key_is_not_enough(self, monkeypatch):
+        """S alone belongs to whoever is typing, not to this window."""
+        opened = self.calls(monkeypatch)
+        assert word_cloud.handle_key(word_cloud.dpg.mvKey_S, ctrl_pressed=False, shift_pressed=False) is False
+        assert opened == []

@@ -590,9 +590,25 @@ A collision between two scopes is a defect by default, and the exception is narr
   ambiguous while several things are open, where a toggle is not: `F10` for the Visualizer's word cloud and
   `Ctrl+I` for its importer both close what they opened, which is the shape to copy.
 
-**A live instance, unfixed as of 2026-09-08**: the Visualizer's word cloud and importer windows are both
-non-modal, neither hides the other, and the word cloud is tested first — so with both open, the importer's
-`Ctrl+S`, `Ctrl+O` and `Ctrl+Enter` are shadowed. Note also that a cross-*app* collision is a different and
+**How to dispatch, which is the part that makes the exception safe.** Each non-modal window exposes
+`handle_key(key, ctrl_pressed, shift_pressed) -> bool` in *its own module*, beside what the keys do, and
+reports whether it acted. The app then offers the key to every open one, **focused first**, and stops at
+the first that takes it. Three properties follow, and each is a defect that has actually occurred:
+
+- **Every open window is asked**, so a key one of them does not bind reaches whoever does. Testing
+  visibility in an `elif` chain gives the whole keyboard to whichever branch is written first.
+- **The focused one is asked first**, so a shared key goes to the window the reader is looking at.
+  `is_item_focused` answers for a top-level window, and clicking one is what sets it (measured 2026-09-08).
+- **A window that declines must not act**, since another is about to be offered the same key. That is worth
+  a test of its own; the two in `raven/visualizer/tests/` are the pattern.
+
+Visible-but-unfocused windows are still asked, after the focused one: a window just opened may not have
+taken focus yet, and its keys should work from the moment it is on screen. Raven-librarian reaches the same
+place from the other end — its non-modal panes answer `has_keyboard()` before `handle_key()`.
+
+**The live instance this came from** (fixed 2026-09-08): the Visualizer's word cloud and importer windows
+are both non-modal, neither hides the other, and the word cloud was tested first — so with both open, the
+importer's `Ctrl+S`, `Ctrl+O` and `Ctrl+Enter` were shadowed. Note also that a cross-*app* collision is a different and
 milder thing: `Ctrl+S` is save in the Visualizer and speak in Librarian, which holds only because Librarian
 has nothing to save, its datastore being autosaved. That is a deliberate vacancy rather than an oversight,
 and it ends the day Librarian grows something saveable.

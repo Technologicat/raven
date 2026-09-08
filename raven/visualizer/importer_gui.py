@@ -18,6 +18,7 @@ before `dpg.destroy_context`.
 
 __all__ = ["show_window",
            "toggle_window",
+           "handle_key",
 
            "initialize_filedialogs",
            "destroy_filedialogs",
@@ -138,6 +139,24 @@ def toggle_window():
 
 # --------------------------------------------------------------------------------
 # File dialogs
+
+def handle_key(key, ctrl_pressed: bool, shift_pressed: bool) -> bool:
+    """Act on `key` if this window binds it. Returns whether it did.
+
+    See `raven.visualizer.word_cloud.handle_key`; same contract, and the app asks both.
+    """
+    if not ctrl_pressed:
+        return False
+    if key == dpg.mvKey_O:
+        show_open_dialog()
+    elif key == dpg.mvKey_S:
+        show_save_dialog()
+    elif key == dpg.mvKey_Return:
+        start_or_stop()
+    else:
+        return False
+    return True
+
 
 def initialize_filedialogs(default_path):
     """Create the importer's two file dialogs, both starting at `default_path`.

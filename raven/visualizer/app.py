@@ -1049,6 +1049,36 @@ def mouse_release_callback(sender, app_data):
         plotter.clear_select_radius_indicator()
         selection.commit_change_to_undo_history()
 
+# The app's non-modal subwindows that bind keys of their own, as `(window tag, handler)`. Each handler
+# takes the key and reports whether it acted on it; the bindings live in the window's own module, beside
+# what they do.
+_SUBWINDOWS_WITH_HOTKEYS = (("word_cloud_window", word_cloud.handle_key),  # tag
+                            ("importer_window", importer_gui.handle_key))  # tag
+
+
+def _handled_by_a_subwindow(key, ctrl_pressed: bool, shift_pressed: bool) -> bool:
+    """Offer `key` to each open non-modal subwindow, focused one first. Returns whether one took it."""
+    # **Every open one gets a chance, rather than only the first that happens to be open.** These windows
+    # are non-modal and can be on screen together, and this used to be a chain of `elif`s testing
+    # visibility -- so whenever the word cloud was open, the importer's Ctrl+O, Ctrl+S and Ctrl+Enter were
+    # dead, and pressing them silently did the main window's thing instead.
+    #
+    # **Focused first**, so that a key both of them bind reaches the window the reader is looking at.
+    # `Ctrl+S` is that key, and legitimately so: it means "save what is in front of me" in each, which is
+    # the one kind of collision worth allowing. Measured 2026-09-08: `is_item_focused` answers for a
+    # top-level window, and clicking one is what sets it.
+    #
+    # Visible-but-unfocused ones are still asked, after: a window that has just been opened may not have
+    # taken focus yet, and its keys should work from the moment it is on screen.
+    open_subwindows = [(tag, handler) for tag, handler in _SUBWINDOWS_WITH_HOTKEYS
+                       if dpg.is_item_visible(tag)]
+    open_subwindows.sort(key=lambda entry: not dpg.is_item_focused(entry[0]))  # a stable sort, so ties keep declaration order
+    for _tag, handler in open_subwindows:  # noqa: SIM110 -- `any` would work only by short-circuiting, and that a handler runs *because no earlier one took the key* is the whole rule; a loop says it
+        if handler(key, ctrl_pressed, shift_pressed):
+            return True
+    return False
+
+
 def hotkeys_callback(sender, app_data):
     """Handle hotkeys."""
     key = app_data  # for documentation only
@@ -1074,24 +1104,9 @@ def hotkeys_callback(sender, app_data):
           importer_gui.is_any_dialog_visible()):
         return
 
-    # Hotkeys while the word cloud viewer is shown
-    elif dpg.is_item_visible("word_cloud_window"):
-        if ctrl_pressed and key == dpg.mvKey_S:
-            word_cloud.show_save_dialog()
-            return
-
-    # Hotkeys while the BibTeX importer window is shown
-    elif dpg.is_item_visible("importer_window"):  # tag
-        if ctrl_pressed:
-            if key == dpg.mvKey_O:
-                importer_gui.show_open_dialog()
-                return
-            elif key == dpg.mvKey_S:
-                importer_gui.show_save_dialog()
-                return
-            elif key == dpg.mvKey_Return:
-                importer_gui.start_or_stop()
-                return
+    # Hotkeys belonging to a non-modal subwindow that is open
+    elif _handled_by_a_subwindow(key, ctrl_pressed, shift_pressed):
+        return
 
     # Hotkeys for main window, while no modal window is shown
     #

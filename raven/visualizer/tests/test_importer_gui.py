@@ -462,3 +462,44 @@ def test_the_save_dialog_returning_two_files_is_an_error(gui, monkeypatch):
     monkeypatch.setattr(app_state, "exit_modal_mode", lambda: None, raising=False)
     with pytest.raises(ValueError):
         importer_gui._save_dialog_callback(["/out/one.pickle", "/out/two.pickle"])
+
+
+# ---------------------------------------------------------------------------
+# Tests: the window's own hotkeys
+# ---------------------------------------------------------------------------
+
+class TestHandleKey:
+    """`handle_key` reports whether it acted, so the app can offer a key to several open windows in turn.
+
+    This window and the word cloud can be on screen together and both bind `Ctrl+S` — legitimately, since
+    it means "save what is in front of me" in each. The app resolves that by asking the focused one first;
+    what it needs from each window is an honest answer about whether the key was taken.
+    """
+
+    @staticmethod
+    def calls(monkeypatch):
+        """Record what `handle_key` reaches for, instead of opening dialogs or starting an import."""
+        did = []
+        monkeypatch.setattr(importer_gui, "show_open_dialog", lambda: did.append("open"))
+        monkeypatch.setattr(importer_gui, "show_save_dialog", lambda: did.append("save"))
+        monkeypatch.setattr(importer_gui, "start_or_stop", lambda: did.append("start_or_stop"))
+        return did
+
+    def test_the_three_it_binds(self, monkeypatch):
+        did = self.calls(monkeypatch)
+        for key in (importer_gui.dpg.mvKey_O, importer_gui.dpg.mvKey_S, importer_gui.dpg.mvKey_Return):
+            assert importer_gui.handle_key(key, ctrl_pressed=True, shift_pressed=False) is True
+        assert did == ["open", "save", "start_or_stop"]
+
+    def test_a_key_it_does_not_bind_is_declined_untouched(self, monkeypatch):
+        """Declining has to be silent as well as False: another open window is about to be offered this."""
+        did = self.calls(monkeypatch)
+        assert importer_gui.handle_key(importer_gui.dpg.mvKey_F, ctrl_pressed=True, shift_pressed=False) is False
+        assert did == [], "it acted on a key it did not claim"
+
+    def test_without_ctrl_it_claims_nothing(self, monkeypatch):
+        """Bare O, S and Enter belong to whatever the user is typing into."""
+        did = self.calls(monkeypatch)
+        for key in (importer_gui.dpg.mvKey_O, importer_gui.dpg.mvKey_S, importer_gui.dpg.mvKey_Return):
+            assert importer_gui.handle_key(key, ctrl_pressed=False, shift_pressed=False) is False
+        assert did == []
