@@ -175,6 +175,19 @@ with `a`, `n` and `p` matching becomes
 — the counts recomputed for each surviving run, and the existing `_MIN_HIDDEN_FOR_GAP` rule still deciding
 whether a run of one is worth a box at all.
 
+**2b, also a pony: a matching box previews its match.** Instead of its usual label — the message's opening,
+Markdown-stripped and cut to about forty characters — a box that matched shows a window of context around
+its *first* match, with the match itself in red. Same red as the chat log's, so the two views agree about
+what a hit looks like.
+
+**The cost is in the colour, not the windowing.** A `TextShape` carries one `Pen`, so one colour per shape:
+painting a fragment red inside a label means splitting it into up to three shapes — before, match, after —
+and placing them, which needs each piece's measured width rather than the whole label's. `measure_text` is
+already threaded through `chatgraph` for exactly this kind of arithmetic (it exists because an estimated
+width displaced a pill's glyphs by half the error), so the machinery is there; the work is that a label
+stops being one shape. Worth knowing before the estimate is made, since "highlight the match" sounds like a
+colour change and is a layout change.
+
 **There is probably a general algorithm here, and a second caller for it.** The Visualizer's author search
 wants the same shape: highlight `Korhonen` inside `Aaltonen et al.` where the *et al.* is two hundred
 names. Both are *given an ordered run, a set of matching positions and a budget, produce the sequence of
