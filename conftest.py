@@ -98,6 +98,44 @@ def pytest_collection_modifyitems(config, items) -> None:
             item.add_marker(skip_gui)
 
 
+@pytest.fixture(scope="module", autouse=True)
+def no_leaked_animations(request):
+    """Fail a test module that finishes with animations still registered with the process-wide animator.
+
+    The animator outlives every DPG context in the run, so an animation left in it is still ticked after
+    the widgets it draws into are gone — and the crash then lands in whichever module runs next, naming a
+    test that has nothing to do with it. `Animator.render_frame` drops such an animation and says which it
+    was, but it can only do that once something *faults*; a leak that merely accumulates is invisible
+    there until the day one of its widgets goes away. This is the half that sees it immediately.
+
+    Counted as a difference rather than against zero, so a module inherits no blame for an earlier one's
+    leak. Autouse at module scope, which puts its teardown after the module's own fixtures — the point
+    being to check what is left once they have cleaned up.
+
+    `dearpygui` is imported inside rather than at module scope: this fixture is autouse for *every* test
+    in the project, and a bare `pytest` in an environment without the toolkit must not fail on its import.
+    """
+    try:
+        from raven.common.gui import animation
+    except ImportError:  # no dearpygui here; nothing registers an animation either
+        yield
+        return
+
+    def registered():
+        return list(animation.animator._animations)
+
+    before = len(registered())
+    yield
+    left = registered()
+    if len(left) > before:
+        kinds = ", ".join(sorted(f"{type(a).__name__}@0x{id(a):x}" for a in left[before:]))
+        raise AssertionError(
+            f"{request.node.name} finished with {len(left) - before} animation(s) still registered: "
+            f"{kinds}. Something built a GUI component and dropped it without tearing it down — the "
+            f"animator outlives this module's DPG context, so these go on being ticked against widgets "
+            f"that no longer exist, and the crash surfaces in an unrelated module later.")
+
+
 GUI_VIEWPORT_TITLE = "raven gui tests"
 
 

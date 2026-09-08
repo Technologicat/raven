@@ -1025,8 +1025,8 @@ class TestAnAnimationWhoseWidgetsAreGoneIsDropped:
     That is three places: the failing assertion, the module it fails in, and the fault. Dropping it here
     with a line saying which one it was collapses those into one.
 
-    Live case (2026-09-08): a test built a `DPGChatGraphPanel` and never destroyed it, and the crash
-    landed in `test_animation.py` — this module — as a flash test failing with `Item not found`.
+    The shape it was written for: a test elsewhere built a `DPGChatGraphPanel` and never destroyed it,
+    and the crash landed here — in this module — as a flash test failing with `Item not found`.
     """
 
     class Doomed(animation.Animation):
