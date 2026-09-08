@@ -22,7 +22,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `12_derived-artifact-store-brief.md` | One keying and regeneration mechanism for everything computed *from* a source artifact | v0.2.9. Does not depend on 13 |
 | `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night |
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, ~~PCA preprocessing~~, ~~cosine-to-medoid outlier assignment~~, Procrustes alignment, and **clustering in high-D**. **Items 2, 3 and 5 were measured on 2026-09-01 and the brief now points at `investigations/highdim-clustering/README.md`, which is the specification** — 2 and 3 are measured harmful and must not be built as written, 5 is settled and ready to implement (agglomerative, not HDBSCAN) | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
-| `aokk-corpus-scope-classification-brief.md` | An LLM batch pass over the AOKK corpus, flagging records the boolean search pulled in that are not about AI agents in higher education | Filed 2026-08-31. **Next up, and the only near-term item with a date**: needed within two weeks of 2026-09-01, and its two open questions were settled that day, so it starts from a decided spec. The problem is confirmed rather than suspected: `"conversational agent"` caught a child-helpline paper, and `"learning assistant"` matches 40 records across *two senses* — the AI tool, and the STEM term of art for a human undergraduate Learning Assistant. Carries a warning about reusing `agent-batch-classification`'s confidence-based escalation, whose known failure mode applies directly |
+| `aokk-corpus-scope-classification-brief.md` | An LLM batch pass over the AOKK corpus, flagging records the boolean search pulled in that are not about AI agents in higher education | Filed 2026-08-31. **In hand as of 2026-09-08**, in a parallel session rather than on this repo's main line: the corpus is deduplicated and topic-filtered in the Visualizer already, and what it needs next is the agglomerative clustering that `investigations/highdim-clustering/` measured as the better answer — 1–2 days (Juha). Originally **the only near-term item with a date**: needed within two weeks of 2026-09-01, and its two open questions were settled that day, so it starts from a decided spec. The problem is confirmed rather than suspected: `"conversational agent"` caught a child-helpline paper, and `"learning assistant"` matches 40 records across *two senses* — the AI tool, and the STEM term of art for a human undergraduate Learning Assistant. Carries a warning about reusing `agent-batch-classification`'s confidence-based escalation, whose known failure mode applies directly |
 | `14_chat-search-brief.md` | Search within the chat log | v0.2.9. The match unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer implementation rebuilds the whole panel and so does not transfer to an incrementally-built chat log |
 
 ## Closed
@@ -585,16 +585,27 @@ is not fully specified until someone has watched it run.
     does not excuse: TTS is on every time the avatar speaks, so a face reacting to a sentence the voice has
     not reached is live all evening. The section below carries the design and says why the other two stayed
     out.
+    **It starts as a prototype, and the prototype settles whether it ships** (Juha, 2026-09-08): the
+    question is whether a face tracking the spoken sentence reads as alive or as *uncanny*, and that cannot
+    be answered on paper. If it is not uncanny it is S, M at the outside, and goes in. If it comes out worse
+    than what is on screen today, it is punted past the sprint — which is the safer failure, an exhibit
+    being no place to debut a face that unsettles people.
+
 12. **Block-level Markdown, the remaining steps** — the single-newline split, which is the barrier fenced
     code and multi-line lists are behind. **Step 5 came out of this band and landed on 08-25** with step 1:
     the white bullets were visible the moment headings started rendering, and step 1 had already built the
     fallback the marker colours needed.
 
+    **Reclassified 2026-09-08 (Juha): slack rather than required.** It is worth doing if time remains after
+    the items that are, and the table at the top of this file still reads "Researchers' Night" from when
+    that was the plan. Nothing about the exhibit depends on it.
+
 **Band 3 — the large ones.** *Reordered 2026-08-31 to 14, 15, 13; item 12 moves behind all three.*
 
 13. **The graph view** (brief 16).
 14. ~~**`crt-display`.**~~ **Done 2026-08-31**; see `done/crt-display.md`.
-15. **`atmospheric-dust`.**
+15. ~~**`atmospheric-dust`.**~~ **Done 2026-08-31**, the same session as `crt`; see `done/`. Struck here
+    2026-09-08 — it had been recorded in the Closed table above and not in this list.
 
 And the two whose detail belongs with the ordering rather than in it:
 
