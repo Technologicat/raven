@@ -53,6 +53,11 @@ leaves the one large item a safe margin rather than a hopeful one.
 
 Then item 10 of brief 16, the look check, once the thumbnails and role glyphs are all in place.
 
+**Also next session, off the sprint path: write the two briefs** — the ooba cluster, and containing the
+OpenAI wire shape. They are *"written or forgotten"* (Juha, 2026-08-27) and have been at risk of exactly
+that ever since; listed here rather than only under the superseded heading below so they cannot fall
+between the floorboards. `briefs/design/` is the home for the second.
+
 **The superseded block below still holds two open items**, and they are not on the sprint path — said here
 because a heading reading "Superseded" is an invitation to skip what is under it. They are the two briefs
 that were *"written or forgotten"* (the ooba cluster, and containing the OpenAI wire shape), and the
@@ -95,15 +100,26 @@ Delete once it stops describing where the work is.
      everything else stores, so the wire format has become Raven's internal format by default rather than
      by decision. Wanted *before* the autumn work rather than during it. `briefs/design/` is the home.
 
-3. **Where token counting should live** (raised by Juha, 2026-08-27, and undecided). Exact context-fill
-   counts need the model's `.gguf` on a **local path**, which covers one of three deployments: everything
-   on one machine. Two candidate fixes, and they are not exclusive:
-   - A **Raven-server endpoint** with a client half in `raven.client.api`, covering the case where the
-     server sits beside the LLM backend and the apps are elsewhere. Takes it to two of three.
-   - **Asking the backend to count**, which `gguftokenizer.load` already does to verify itself: two short
-     probes, compared by their *difference* so the chat template's framing cancels. That reaches all three,
-     and the cost objection is weaker than it first looks — the readout updates on the idle-prefill settle,
-     not per keystroke, so two round-trips per recount is cheap. Nobody has measured it.
+3. **An exact token count where neither existing tier reaches** (raised by Juha, 2026-08-27; narrowed
+   2026-09-08). `count_tokens` already has three tiers, and the first two are exact: a configured local
+   tokenizer — the `gguftokenizer` work, offline and backend-agnostic — then oobabooga's
+   `/v1/internal/token-count`, then a calibrated tokens-per-character ratio, which is the estimate the
+   readout marks with `~`. **So the local mode is built**; what is open is narrower than this item used to
+   read.
+
+   The gap is the deployment where neither exact tier applies: the `.gguf` is not on a local path *and*
+   the backend is not ooba. That is the ordinary case here — LM Studio is what the team uses — so a model
+   on another machine falls straight to the estimate. Two candidates, not exclusive:
+   - A **Raven-server endpoint** with a client half in `raven.client.api`, for the case where the server
+     sits beside the LLM backend and the apps are elsewhere.
+   - **Asking the backend to count, offered as a tier of its own.** The mechanism is already written and
+     already runs: `gguftokenizer.load` verifies itself with exactly it — two short probes compared by
+     their *difference*, so the chat template's framing cancels — and it is backend-agnostic in a way
+     tier 2 is not. It simply is not offered for counting. Probably should be (Juha, 2026-09-08). The cost
+     objection is weaker than it looks: the readout updates on the idle-prefill settle rather than per
+     keystroke, so two round-trips per recount is cheap. Still unmeasured *as a counting path*.
+
+   **Installing ooba to widen tier 2 is explicitly not the answer** and can wait (Juha, 2026-09-08).
 
 ---
 
