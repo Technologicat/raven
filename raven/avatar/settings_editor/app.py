@@ -80,6 +80,7 @@ with timer() as tim:
     from ...common.gui import qroverlay
     from ...common.gui import utils as guiutils
     from ...common.image import codec
+    from ...common.video import upscaler  # for the list of upscale qualities it accepts
     from ...common import bgtask
     from ...common import docstring_utils
     from ...common import utils as common_utils
@@ -614,14 +615,24 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_text("Choose Anime4K preset\n    A = optimized to remove blur, resampling artifacts, smearing\n    B = optimized to remove ringing/aliasing\n    C = optimized for images with no degradation\nAnime4K is used when quality is 'low' or 'high'.", parent="upscale_preset_tooltip")  # tag
                         dpg.add_text("Preset")
                     with dpg.group(horizontal=True):
-                        self.upscale_qualities = ["low", "high", "bilinear", "bicubic", "lanczos"]
+                        # Both the choices and their explanations come from the upscaler itself, so a
+                        # quality it gains cannot go unoffered here, and one offered here cannot be
+                        # rejected when the user picks it. Which of them we *suggest* is this app's
+                        # opinion and stays here.
+                        self.upscale_qualities = list(upscaler.UPSCALE_QUALITIES)
+                        recommendations = {"low": " [recommended]",
+                                           "bicubic": " [recommended, low-cost option]"}
+                        quality_help = "\n".join(
+                            ["Choose upscale quality/speed tradeoff. Cheapest last of the three that skip Anime4K."]
+                            + [f"    {name} = {description}{recommendations.get(name, '')}"
+                               for name, description in upscaler.UPSCALE_QUALITIES.items()])
                         dpg.add_combo(items=self.upscale_qualities,
                                       default_value=self.upscale_quality,
                                       width=self.button_width - 64,
                                       callback=self.on_upscaler_settings_change,
                                       tag="upscale_quality_choice")
                         dpg.add_tooltip("upscale_quality_choice", tag="upscale_quality_tooltip")  # tag
-                        dpg.add_text("Choose upscale quality/speed tradeoff.\n    low = Anime4K with chosen preset, low quality mode [recommended]\n    high = Anime4K with chosen preset, high quality mode\n    bilinear = simple bilinear scaling\n    bicubic = bicubic scaling [recommended, low-cost option]\n    lanczos = Lanczos scaling, sharper than bicubic and still cheaper than Anime4K", parent="upscale_quality_tooltip")  # tag
+                        dpg.add_text(quality_help, parent="upscale_quality_tooltip")  # tag
                         dpg.add_text("Quality")
                     dpg.add_text("[Presets as in Anime4K.]", color=(140, 140, 140))
 

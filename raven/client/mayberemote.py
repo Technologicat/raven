@@ -774,8 +774,10 @@ class Upscaler(MaybeRemoteService):
 
         `preset`: one of `"A"`, `"B"`, `"C"` (Anime4K-style pipeline selection).
 
-        `quality`: one of `"low"`, `"high"` (Anime4K model sizes), or `"bilinear"` /
-                   `"bicubic"` / `"lanczos"` (fast bypass — no Anime4K), in that order of cost.
+        `quality`: one of the keys of `raven.common.video.upscaler.UPSCALE_QUALITIES`, which is the
+                   definitive list and describes each. In short: `"low"` / `"high"` are Anime4K model
+                   sizes, and `"bilinear"` / `"bicubic"` / `"lanczos"` bypass Anime4K, in that order
+                   of cost.
 
         Returns the upscaled image as float32 `np.ndarray` in [0, 1], shape `(upscaled_height, upscaled_width, 4)`.
         """

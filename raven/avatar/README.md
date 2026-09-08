@@ -157,7 +157,10 @@ Assets include character images (512x512 PNG RGBA), extra cels (512x512 PNG RGBA
 
 Backdrops are applied at the client side in [`raven.client.avatar_renderer`](../client/avatar_renderer.py). This works by rendering and optionally postprocessing a background texture, then blitting the video texture on top of it. See [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py) for a usage example.
 
-The upscaler supports five quality modes, selected via the `quality` parameter (see [`raven.common.video.upscaler`](../common/video/upscaler.py)):
+The upscaler supports five quality modes, selected via the `quality` parameter. **`UPSCALE_QUALITIES` in
+[`raven.common.video.upscaler`](../common/video/upscaler.py) is the definitive list**, with a one-line
+description of each; what follows here is a longer explanation for convenience, so check there if the two
+ever disagree.
 
 - `"high"` and `"low"`: Anime4K models (PyTorch port), with rudimentary RGBA support added; see the [vendored code](../vendor/anime4k/anime4k.py).
 - `"lanczos"`: [Lanczos resampling](https://en.wikipedia.org/wiki/Lanczos_resampling), the sharpest of the three that bypass Anime4K, and still cheaper than Anime4K's `"low"`. The same resampler Raven uses for still images (see [`raven.common.image.lanczos`](../common/image/lanczos.py)). Bypasses Anime4K entirely.
@@ -168,6 +171,24 @@ For the bypass modes, the alpha channel always uses bilinear interpolation, unle
 does. Bicubic and Lanczos both have negative lobes, which overshoot at a step edge — in colour that is the
 sharpening they are chosen for, but in alpha it produces out-of-range values, which is a halo around the
 silhouette rather than a soft edge.
+
+### What each one costs
+
+One 512×512 RGBA frame upscaled to 1024×1024, on an RTX 4090 Laptop GPU. **Read the ratios rather than the
+numbers** — the absolute figures are a fact about one card, and the picture on a smaller one is the same
+shape further to the right.
+
+| `quality` | ms/frame | frames/s |
+|---|---:|---:|
+| `bilinear` | 0.05 | 22000 |
+| `bicubic` | 0.31 | 3200 |
+| `lanczos` | 2.16 | 460 |
+| `low` (Anime4K) | 4.32 | 230 |
+| `high` (Anime4K) | 10.0 | 100 |
+
+The avatar renders at `target_fps` — 20 by default — so all five leave room on this hardware, and the
+choice is about what else the GPU is doing. On a card where Anime4K does not fit, `lanczos` is the sharpest
+that still does.
 
 The [video postprocessor](../common/video/postprocessor.py) is a set of custom pixel shaders implemented in PyTorch.
 

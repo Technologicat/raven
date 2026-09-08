@@ -3,7 +3,8 @@
 This module is licensed under the MIT license (same license as Anime4K).
 """
 
-__all__ = ["Upscaler"]
+__all__ = ["UPSCALE_QUALITIES",
+           "Upscaler"]
 
 import threading
 
@@ -13,6 +14,23 @@ import torch.nn.functional
 from ..image import lanczos
 
 from ...vendor.anime4k import anime4k
+
+# The upscaler's `quality` settings, in the order they are worth offering, each with a one-line
+# description a caller can put in front of a user.
+#
+# This is the definitive list: `Upscaler` validates against it, and anything offering a choice of
+# upscaler -- a dropdown, a tooltip, a config comment -- should agree with it. The ones that can import
+# it do; the ones that cannot are prose, and say so.
+#
+# Note `quality` names two different axes: model size for Anime4K, and filter choice for the three that
+# bypass it. That conflation predates this list and is left alone here — untangling it changes the API.
+UPSCALE_QUALITIES = {
+    "low": "Anime4K with the chosen preset, small models: fast, with acceptable quality",
+    "high": "Anime4K with the chosen preset, larger models: slow, with good quality",
+    "bilinear": "bilinear interpolation, no Anime4K: nearly free, and blurry",
+    "bicubic": "bicubic interpolation, no Anime4K: very fast, slightly sharper than bilinear",
+    "lanczos": "Lanczos interpolation, no Anime4K: fast, and the sharpest that runs no neural net",
+}
 
 class Upscaler:
     def __init__(self,
@@ -27,21 +45,16 @@ class Upscaler:
         `preset`: One of "A", "B", or "C".
                   These roughly correspond to the presets of Anime4K:
                       https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
-        `quality`: One of:
-                   "low": fast, with acceptable quality (Anime4K small models)
-                   "high": slow, with good quality (Anime4K larger models)
-                   "bilinear": very fast, basic bilinear interpolation (no Anime4K)
-                   "bicubic": very fast, bicubic interpolation (no Anime4K, slightly sharper than bilinear)
-                   "lanczos": fast, Lanczos interpolation (no Anime4K, sharper than bicubic)
-
-        The bypass modes are ordered by cost as listed: bilinear is nearly free, bicubic a few times
-        that, and Lanczos a few times again — still well under half of what Anime4K's "low" costs, so
-        it is the sharpest option that does not go near a neural net.
+        `quality`: One of the keys of `UPSCALE_QUALITIES`, which describes each. In short: "low" and
+                   "high" select Anime4K model sizes, while "bilinear", "bicubic" and "lanczos" bypass
+                   Anime4K and are listed in order of cost — bilinear nearly free, bicubic a few times
+                   that, Lanczos a few times again and still well under half of what "low" costs.
         """
         if preset not in ("A", "B", "C"):
             raise ValueError(f"Unknown preset '{preset}'; valid: 'A', 'B', 'C'.")
-        if quality not in ("low", "high", "bilinear", "bicubic", "lanczos"):
-            raise ValueError(f"Unknown quality '{quality}'; valid: 'low', 'high', 'bilinear', 'bicubic', 'lanczos'.")
+        if quality not in UPSCALE_QUALITIES:
+            valid = ", ".join(repr(name) for name in UPSCALE_QUALITIES)
+            raise ValueError(f"Unknown quality '{quality}'; valid: {valid}.")
 
         self.device = device
         self.dtype = dtype
