@@ -245,3 +245,56 @@ class TestImageShape:
         shape = ImageShape(levels, 0.0, 0.0, 1.0, 1.0)
         levels.clear()
         assert shape.levels == (MipLevel(128, 128, "finest"), MipLevel(64, 64, "half"))
+
+
+# ---------------------------------------------------------------------------
+# Tests: iter_shapes
+# ---------------------------------------------------------------------------
+
+class TestIterShapes:
+    """Asking a question of the whole drawing, rather than of one element.
+
+    Nodes and edges are themselves compounds, so a walk that visits only `graph.shapes` sees a fraction
+    of the picture — and reports a plausible small number rather than failing.
+    """
+
+    @staticmethod
+    def populated_graph():
+        """A background shape, two nodes with a label each, and the edge between them."""
+        pen = Pen()
+        src = _make_node("src", 0, 0)
+        dst = _make_node("dst", 100, 0)
+        edge = Edge(src, dst, [(0, 0), (100, 0)], [LineShape(pen, [(0, 0), (100, 0)])])
+        backdrop = LineShape(pen, [(-10, -10), (110, 10)])
+        return Graph(shapes=[backdrop], nodes=[src, dst], edges=[edge])
+
+    def test_it_reaches_inside_the_nodes_and_edges(self):
+        graph = self.populated_graph()
+        walked = list(graph.iter_shapes())
+        # The nodes' labels are what a walk of `graph.shapes` alone would miss.
+        assert sorted(s.t for s in walked if isinstance(s, TextShape)) == ["dst", "src"]
+        assert len([s for s in walked if isinstance(s, LineShape)]) == 2, \
+            "the backdrop and the edge's own line"
+
+    def test_the_elements_themselves_are_yielded_too(self):
+        """They are compounds, so a caller filtering by leaf type has to be able to skip them."""
+        graph = self.populated_graph()
+        walked = list(graph.iter_shapes())
+        assert len([s for s in walked if isinstance(s, Node)]) == 2
+        assert len([s for s in walked if isinstance(s, Edge)]) == 1
+
+    def test_an_empty_graph_walks_to_nothing(self):
+        assert list(Graph().iter_shapes()) == []
+
+    def test_images_inside_nodes_are_found(self):
+        """What the chat graph's readout counts: every texture the picture references, wherever it sits."""
+        pen = Pen()
+        node = Node(0, 0, 20, 10,
+                    [TextShape(pen, 0, 0, 0, 10, "labelled"),
+                     ImageShape([MipLevel(64, 64, "thumb")], 0.0, 0.0, 8.0, 8.0)],
+                    internal_name="n")
+        graph = Graph(nodes=[node])
+        textures = {level.texture
+                    for shape in graph.iter_shapes() if isinstance(shape, ImageShape)
+                    for level in shape.levels}
+        assert textures == {"thumb"}

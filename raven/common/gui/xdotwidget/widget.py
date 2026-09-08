@@ -12,13 +12,13 @@ import logging
 import threading
 import time
 import uuid
-from typing import Callable, List, Optional, Sequence, Set, Tuple, Union
+from collections.abc import Callable, Sequence
 
 logger = logging.getLogger(__name__)
 
 import dearpygui.dearpygui as dpg
 
-from unpythonic import sym
+from unpythonic import sym, timer
 
 from .. import animation as gui_animation
 from .. import utils as guiutils
@@ -57,17 +57,17 @@ class XDotWidget(gui_animation.Animation):
     """
 
     def __init__(self,
-                 parent: Union[int, str],
+                 parent: int | str,
                  width: int,
                  height: int,
-                 tag: Optional[str] = None,
-                 on_hover: Optional[Callable[[Optional[Element]], None]] = None,
-                 on_click: Optional[Callable[[Element, int], None]] = None,
-                 on_open_url: Optional[Callable[[str], None]] = None,
-                 input_blocked: Optional[Callable[[], bool]] = None,
-                 text_compaction_callback: Optional[Callable[[str, float], str]] = None,
+                 tag: str | None = None,
+                 on_hover: Callable[[Element | None], None] | None = None,
+                 on_click: Callable[[Element, int], None] | None = None,
+                 on_open_url: Callable[[str], None] | None = None,
+                 input_blocked: Callable[[], bool] | None = None,
+                 text_compaction_callback: Callable[[str, float], str] | None = None,
                  highlight_fade_duration: float = 1.0,
-                 graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
+                 graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
                  mouse_wheel_zoom_factor: float = 1.25,
                  clamp_pan_to_graph: bool = False,
                  dark_mode: bool = False,
@@ -140,7 +140,7 @@ class XDotWidget(gui_animation.Animation):
 
         set_dark_mode(dark_mode)
 
-        self._graph: Optional[Graph] = None
+        self._graph: Graph | None = None
         self._viewport = Viewport(width, height)
         self._viewport.clamp_pan = clamp_pan_to_graph
         self._highlight = HighlightState(fade_duration=highlight_fade_duration)
@@ -148,6 +148,13 @@ class XDotWidget(gui_animation.Animation):
 
         self._render_lock = threading.RLock()
         self._needs_render = True
+        # How long the last redraw took, and how many there have been. A renderer is only asked for a
+        # frame when something changed, so these two go together: an observer averaging over *frames*
+        # would fill its window with one repeated value the moment the picture went still, and report a
+        # mean render time for a widget that is not rendering. The counter is what tells one redraw from
+        # the next.
+        self._last_render_time = 0.0  # seconds
+        self._render_count = 0
 
         # Input suppression (e.g. while a modal dialog is open)
         self._input_enabled = True
@@ -164,7 +171,7 @@ class XDotWidget(gui_animation.Animation):
         self._last_ctrl = False
 
         # Follow-edge indicator: screen coords of the endpoint to highlight, or None
-        self._follow_indicator_pos: Optional[Point] = None
+        self._follow_indicator_pos: Point | None = None
 
         # Tooltip window for node annotations (e.g. pyan3 tooltips).
         # Created here (before the render loop) so it gets correct z-order
@@ -190,23 +197,23 @@ class XDotWidget(gui_animation.Animation):
         dpg.bind_item_theme(self._tooltip_window, tooltip_theme)
         self._tooltip_group = dpg.add_group(tag=f"xdot_tooltip_group_{self.gui_uuid}",
                                             parent=self._tooltip_window)
-        self._tooltip_node: Optional[Node] = None  # which node the tooltip is currently showing for
+        self._tooltip_node: Node | None = None  # which node the tooltip is currently showing for
         self._tooltip_hover_start: int = 0  # monotonic_ns when hover on current node began
         self._tooltip_visible: bool = False  # whether the tooltip window is currently shown
 
         # Edge click cycle: repeated clicks on same edge body cycle
         # through midpoint → src → dst → midpoint → ...
-        self._edge_click_edge: Optional[Edge] = None
+        self._edge_click_edge: Edge | None = None
         self._edge_click_cycle: int = 0  # 0=midpoint, 1=src, 2=dst
 
         # Intentional focus: the node the user last navigated to
         # (click, search match, follow-edge). Cleared by manual pan/zoom.
         # Used by the app layer to decide whether to preserve focus
         # across layout engine switches.
-        self._focus_node_name: Optional[str] = None
+        self._focus_node_name: str | None = None
         # Where a left button went down, until it comes up again. A click is a press and a release with no
         # drag between them, and only the release can know which it was.
-        self._pending_click_pos: Optional[Point] = None
+        self._pending_click_pos: Point | None = None
 
         # Build DPG structure
         kwargs = {"parent": parent}
@@ -250,7 +257,7 @@ class XDotWidget(gui_animation.Animation):
             self._search.set_graph(graph)
             self._needs_render = True
 
-    def get_graph(self) -> Optional[Graph]:
+    def get_graph(self) -> Graph | None:
         """Return the current Graph, or None."""
         return self._graph
 
@@ -311,7 +318,7 @@ class XDotWidget(gui_animation.Animation):
             self._viewport.pan_to_point(node.x, node.y, animate=animate)
             self._needs_render = True
 
-    def zoom_in(self, factor: float = 1.2, anchor_node: Optional[str] = None,
+    def zoom_in(self, factor: float = 1.2, anchor_node: str | None = None,
                 anchor_padding: float = 0.0) -> None:
         """Zoom in by a factor.
 
@@ -332,14 +339,14 @@ class XDotWidget(gui_animation.Animation):
         self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(factor, sx, sy),
                               anchor_padding=anchor_padding)
 
-    def zoom_out(self, factor: float = 1.2, anchor_node: Optional[str] = None,
+    def zoom_out(self, factor: float = 1.2, anchor_node: str | None = None,
                  anchor_padding: float = 0.0) -> None:
         """Zoom out by a factor. `anchor_node` and `anchor_padding` are as for `zoom_in`."""
         self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(1.0 / factor, sx, sy),
                               anchor_padding=anchor_padding)
 
-    def _zoom_about_node(self, anchor_node: Optional[str],
-                         zoom: Callable[[Optional[float], Optional[float]], None],
+    def _zoom_about_node(self, anchor_node: str | None,
+                         zoom: Callable[[float | None, float | None], None],
                          animate: bool = True, anchor_padding: float = 0.0) -> None:
         """Run a zoom about `anchor_node`, and leave that node whole on screen.
 
@@ -369,7 +376,7 @@ class XDotWidget(gui_animation.Animation):
                                             margin=_ANCHOR_MARGIN, animate=animate)
         self._needs_render = True
 
-    def _usable_anchor(self, anchor_node: Optional[str]) -> Optional[Node]:
+    def _usable_anchor(self, anchor_node: str | None) -> Node | None:
         """Return the node a zoom should turn about, or `None` to turn about the middle of the view.
 
         `None` for no node, for a name the graph does not have, and for a node that is currently off
@@ -399,7 +406,7 @@ class XDotWidget(gui_animation.Animation):
     # -------------------------------------------------------------------------
     # Public API: Highlighting
 
-    def set_highlighted_nodes(self, node_ids: Set[str]) -> None:
+    def set_highlighted_nodes(self, node_ids: set[str]) -> None:
         """Set programmatic highlighting for a set of nodes.
 
         `node_ids`: Set of node internal names to highlight.
@@ -407,11 +414,11 @@ class XDotWidget(gui_animation.Animation):
         self._highlight.set_highlighted_nodes(node_ids)
         self._needs_render = True
 
-    def get_highlighted_nodes(self) -> Set[str]:
+    def get_highlighted_nodes(self) -> set[str]:
         """Return the set of programmatically highlighted node IDs."""
         return self._highlight.get_highlighted_node_ids()
 
-    def flash_nodes(self, node_ids: Set[str]) -> None:
+    def flash_nodes(self, node_ids: set[str]) -> None:
         """Light the named nodes and let them fade, the way a hover fades when the cursor leaves.
 
         For saying "here" about a view that has just moved. Nothing has to switch it off again: it is the
@@ -432,7 +439,7 @@ class XDotWidget(gui_animation.Animation):
     # -------------------------------------------------------------------------
     # Public API: Search
 
-    def search(self, query: str) -> List[str]:
+    def search(self, query: str) -> list[str]:
         """Search for nodes/edges containing the query text.
 
         `query`: Search string (space-separated fragments).
@@ -448,7 +455,7 @@ class XDotWidget(gui_animation.Animation):
         self._highlight.set_highlighted(set(results))
         self._needs_render = True
 
-    def next_match(self) -> Optional[str]:
+    def next_match(self) -> str | None:
         """Navigate to the next search match.
 
         Returns a description of the match (node ID, or "edge: src → dst"),
@@ -457,7 +464,7 @@ class XDotWidget(gui_animation.Animation):
         element = self._search.next_match()
         return self._pan_to_element(element)
 
-    def prev_match(self) -> Optional[str]:
+    def prev_match(self) -> str | None:
         """Navigate to the previous search match.
 
         Returns a description of the match (node ID, or "edge: src → dst"),
@@ -466,7 +473,7 @@ class XDotWidget(gui_animation.Animation):
         element = self._search.prev_match()
         return self._pan_to_element(element)
 
-    def _pan_to_element(self, element) -> Optional[str]:
+    def _pan_to_element(self, element) -> str | None:
         """Pan the view to center on `element` (Node or Edge).
 
         Pan only — does not change the zoom level.
@@ -485,7 +492,7 @@ class XDotWidget(gui_animation.Animation):
             self._needs_render = True
         return self.describe_element(element)
 
-    def _navigate_to_element(self, element) -> Optional[str]:
+    def _navigate_to_element(self, element) -> str | None:
         """Navigate the view to center on `element` (Node or Edge).
 
         For nodes, pans to center on the node.
@@ -577,7 +584,7 @@ class XDotWidget(gui_animation.Animation):
     # -------------------------------------------------------------------------
     # Public API: Viewport state
 
-    def get_view_center(self) -> Tuple[float, float]:
+    def get_view_center(self) -> tuple[float, float]:
         """Return the viewport center in graph coordinates as ``(pan_x, pan_y)``."""
         return self._viewport.pan_x.current, self._viewport.pan_y.current
 
@@ -585,7 +592,7 @@ class XDotWidget(gui_animation.Animation):
         """Return the current zoom level."""
         return self._viewport.zoom.current
 
-    def set_zoom(self, zoom: float, animate: bool = True, anchor_node: Optional[str] = None,
+    def set_zoom(self, zoom: float, animate: bool = True, anchor_node: str | None = None,
                  anchor_padding: float = 0.0) -> None:
         """Set the zoom level.
 
@@ -601,11 +608,11 @@ class XDotWidget(gui_animation.Animation):
                               lambda sx, sy: self._viewport.zoom_to(zoom, sx, sy, animate=animate),
                               animate=animate, anchor_padding=anchor_padding)
 
-    def get_visible_bounds(self) -> Tuple[float, float, float, float]:
+    def get_visible_bounds(self) -> tuple[float, float, float, float]:
         """Return the visible area in graph coordinates as ``(x1, y1, x2, y2)``."""
         return self._viewport.get_visible_bounds()
 
-    def get_focus_node(self) -> Optional[str]:
+    def get_focus_node(self) -> str | None:
         """Return the internal name of the intentionally focused node, or None.
 
         Set by navigation actions (click, search match, follow-edge).
@@ -697,47 +704,75 @@ class XDotWidget(gui_animation.Animation):
 
         return animating
 
+    def _get_last_render_time(self) -> float:
+        """Return how long the last redraw took, in seconds. Zero before the first one."""
+        return self._last_render_time
+
+    last_render_time = property(fget=_get_last_render_time,
+                                doc="How long the last redraw took, in seconds; zero before the first one. "
+                                    "Pair it with `render_count` to average over redraws — see there.")
+
+    def _get_render_count(self) -> int:
+        """Return how many times the picture has been redrawn since this widget was built."""
+        return self._render_count
+
+    render_count = property(fget=_get_render_count,
+                            doc="How many times the picture has been redrawn since this widget was built. "
+                                "A redraw happens only when something changed, so this is what separates "
+                                "one `last_render_time` from the next: an observer sampling per frame "
+                                "cannot tell a fresh figure from the previous one still standing.")
+
     def _render(self) -> None:
         """Render the graph to the drawlist."""
-        with self._render_lock:
-            if self._graph is None:
-                dpg.delete_item(self.drawlist, children_only=True)
-                return
+        try:
+            with timer() as tictoc:
+                with self._render_lock:
+                    if self._graph is not None:
+                        self._draw_graph()
+                    else:
+                        dpg.delete_item(self.drawlist, children_only=True)
+        finally:
+            # A redraw that raised is still a redraw, and still took time. `timer.__exit__` sets `dt` on
+            # the way out of an exception as well, so the figure below is the real one either way.
+            self._last_render_time = tictoc.dt
+            self._render_count += 1
 
-            # Build per-element intensity dict for the renderer.
-            highlighted = self._highlight.get_all_highlighted(self._graph)
-            highlight_intensities = {
-                e: self._highlight.get_intensity(e, self._graph)
-                for e in highlighted
-            }
+    def _draw_graph(self) -> None:
+        """Draw the current graph. Called by `_render` under the render lock, with a graph in hand."""
+        # Build per-element intensity dict for the renderer.
+        highlighted = self._highlight.get_all_highlighted(self._graph)
+        highlight_intensities = {
+            e: self._highlight.get_intensity(e, self._graph)
+            for e in highlighted
+        }
 
-            bg_color = self._dark_bg_color if self._dark_mode else self._light_bg_color
+        bg_color = self._dark_bg_color if self._dark_mode else self._light_bg_color
 
-            render_graph(
-                self.drawlist,
-                self._graph,
-                self._viewport,
-                highlight_intensities=highlight_intensities,
-                text_compaction_cb=self._text_compaction_callback,
-                graph_text_fonts=self._graph_text_fonts,
-                background_color=bg_color
-            )
+        render_graph(
+            self.drawlist,
+            self._graph,
+            self._viewport,
+            highlight_intensities=highlight_intensities,
+            text_compaction_cb=self._text_compaction_callback,
+            graph_text_fonts=self._graph_text_fonts,
+            background_color=bg_color
+        )
 
-            # Draw follow-edge indicator ring.
-            # Recalculate from current mouse position so the indicator
-            # stays correct during zoom/pan (screen coords shift).
-            if self._is_mouse_inside():
-                sx, sy = self._get_local_mouse_pos()
-                self._follow_indicator_pos = self._get_follow_indicator_pos(sx, sy)
-            else:
-                self._follow_indicator_pos = None
-            if self._follow_indicator_pos is not None:
-                ix, iy = self._follow_indicator_pos
-                base_color, _light = get_highlight_colors()
-                ring_color = color_to_dpg(base_color)
-                r = self._EDGE_ENDPOINT_RADIUS_PX
-                dpg.draw_circle((ix, iy), r, color=ring_color,
-                                thickness=2, parent=self.drawlist)
+        # Draw follow-edge indicator ring.
+        # Recalculate from current mouse position so the indicator
+        # stays correct during zoom/pan (screen coords shift).
+        if self._is_mouse_inside():
+            sx, sy = self._get_local_mouse_pos()
+            self._follow_indicator_pos = self._get_follow_indicator_pos(sx, sy)
+        else:
+            self._follow_indicator_pos = None
+        if self._follow_indicator_pos is not None:
+            ix, iy = self._follow_indicator_pos
+            base_color, _light = get_highlight_colors()
+            ring_color = color_to_dpg(base_color)
+            r = self._EDGE_ENDPOINT_RADIUS_PX
+            dpg.draw_circle((ix, iy), r, color=ring_color,
+                            thickness=2, parent=self.drawlist)
 
     def request_render(self) -> None:
         """Request (force) a re-render on the next update."""
@@ -747,7 +782,7 @@ class XDotWidget(gui_animation.Animation):
     # Element descriptions (for status bar, callbacks)
 
     @staticmethod
-    def describe_element(element) -> Optional[str]:
+    def describe_element(element) -> str | None:
         """Return a human-readable description of a graph element, or `None` if there is none.
 
         Uses the display label text (from TextShapes), not the internal graph ID. This is what a status
@@ -775,7 +810,7 @@ class XDotWidget(gui_animation.Animation):
         return None
 
     @staticmethod
-    def _get_node_tooltip_text(node: Node) -> Optional[str]:
+    def _get_node_tooltip_text(node: Node) -> str | None:
         """Return tooltip text for a node, or None.
 
         Uses the explicit ``tooltip`` attribute from the dot file
@@ -987,7 +1022,7 @@ class XDotWidget(gui_animation.Animation):
         if button == 0:
             self._pending_click_pos = (sx, sy)
 
-    def _nearest_edge_endpoint(self, sx: float, sy: float) -> Optional[Tuple[Edge, str]]:
+    def _nearest_edge_endpoint(self, sx: float, sy: float) -> tuple[Edge, str] | None:
         """Find the nearest edge endpoint within follow radius.
 
         Searches all edges in the graph, independent of the hover hit test.
@@ -1025,7 +1060,7 @@ class XDotWidget(gui_animation.Animation):
         return best
 
     @staticmethod
-    def _arrowhead_centroid(edge: Edge, which: str) -> Optional[Point]:
+    def _arrowhead_centroid(edge: Edge, which: str) -> Point | None:
         """Find the centroid of the arrowhead polygon nearest to an endpoint.
 
         `which`: one of "src", "dst"
@@ -1052,7 +1087,7 @@ class XDotWidget(gui_animation.Animation):
                     best_centroid = (cx, cy)
         return best_centroid
 
-    def _get_follow_indicator_pos(self, sx: float, sy: float) -> Optional[Point]:
+    def _get_follow_indicator_pos(self, sx: float, sy: float) -> Point | None:
         """Return the screen position for the follow-edge indicator ring, or None.
 
         Centers the ring on the arrowhead centroid if one exists near the
@@ -1069,7 +1104,7 @@ class XDotWidget(gui_animation.Animation):
         pt = edge.points[0] if which == "src" else edge.points[-1]
         return self._viewport.graph_to_screen(*pt)
 
-    def _get_edge_follow_target(self, sx: float, sy: float) -> Optional[Node]:
+    def _get_edge_follow_target(self, sx: float, sy: float) -> Node | None:
         """If the cursor is near an edge endpoint, return the node at the
         *other* end (for follow-edge navigation).
 

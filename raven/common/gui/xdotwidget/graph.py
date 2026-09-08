@@ -34,8 +34,9 @@ __all__ = ["mix_colors",
            "Edge",
            "Graph"]
 
+from collections.abc import Iterable, Iterator, Sequence
 from itertools import chain
-from typing import Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple, Union
+from typing import NamedTuple
 
 from ... import utils as common_utils
 
@@ -62,7 +63,7 @@ def mix_colors(rgb1: Color, rgb2: Color, t: float) -> Color:
     return (R, G, B, A)
 
 
-def tessellate_bezier(points: List["Point"], n: int = 10) -> List["Point"]:
+def tessellate_bezier(points: list["Point"], n: int = 10) -> list["Point"]:
     """Tessellate cubic bezier segments into a polyline.
 
     `points`: Bezier control points [P0, C1, C2, P1, C1, C2, P1, ...].
@@ -116,7 +117,7 @@ def set_highlight_colors(base: Color, light: Color) -> None:
     _highlight_light = light
 
 
-def get_highlight_colors() -> Tuple[Color, Color]:
+def get_highlight_colors() -> tuple[Color, Color]:
     """Return the current (base, light) highlight colors."""
     return _highlight_base, _highlight_light
 
@@ -140,7 +141,7 @@ class Pen:
         self.fillcolor: Color = Pen.DEFAULT_FILLCOLOR
         self.linewidth: float = 1.0
         self.fontsize: float = 14.0
-        self.dash: Tuple[float, ...] = ()
+        self.dash: tuple[float, ...] = ()
 
     def copy(self) -> "Pen":
         """Create and return a copy of this pen."""
@@ -184,9 +185,9 @@ class Shape:
     """Abstract base class for all drawing shapes."""
 
     def __init__(self):
-        self.pen: Optional[Pen] = None
+        self.pen: Pen | None = None
 
-    def get_bounding_box(self) -> Optional[Tuple[float, float, float, float]]:
+    def get_bounding_box(self) -> tuple[float, float, float, float] | None:
         """Return (x1, y1, x2, y2) bounding box, or None if not applicable."""
         return None
 
@@ -213,7 +214,7 @@ class TextShape(Shape):
         self.w = w
         self.t = t
 
-    def get_bounding_box(self) -> Tuple[float, float, float, float]:
+    def get_bounding_box(self) -> tuple[float, float, float, float]:
         # Approximate bounding box based on position and width
         # Height is estimated from font size
         h = self.pen.fontsize
@@ -250,7 +251,7 @@ class EllipseShape(Shape):
         self.h = h
         self.filled = filled
 
-    def get_bounding_box(self) -> Tuple[float, float, float, float]:
+    def get_bounding_box(self) -> tuple[float, float, float, float]:
         return (self.x0 - self.w, self.y0 - self.h,
                 self.x0 + self.w, self.y0 + self.h)
 
@@ -264,13 +265,13 @@ class PolygonShape(Shape):
         filled: Whether to fill the polygon.
     """
 
-    def __init__(self, pen: Pen, points: List[Point], filled: bool = False):
+    def __init__(self, pen: Pen, points: list[Point], filled: bool = False):
         super().__init__()
         self.pen = pen.copy()
         self.points = points
         self.filled = filled
 
-    def get_bounding_box(self) -> Optional[Tuple[float, float, float, float]]:
+    def get_bounding_box(self) -> tuple[float, float, float, float] | None:
         if not self.points:
             return None
         xs = [p[0] for p in self.points]
@@ -286,12 +287,12 @@ class LineShape(Shape):
         points: List of (x, y) vertices.
     """
 
-    def __init__(self, pen: Pen, points: List[Point]):
+    def __init__(self, pen: Pen, points: list[Point]):
         super().__init__()
         self.pen = pen.copy()
         self.points = points
 
-    def get_bounding_box(self) -> Optional[Tuple[float, float, float, float]]:
+    def get_bounding_box(self) -> tuple[float, float, float, float] | None:
         if not self.points:
             return None
         xs = [p[0] for p in self.points]
@@ -308,13 +309,13 @@ class BezierShape(Shape):
         filled: Whether to fill the shape.
     """
 
-    def __init__(self, pen: Pen, points: List[Point], filled: bool = False):
+    def __init__(self, pen: Pen, points: list[Point], filled: bool = False):
         super().__init__()
         self.pen = pen.copy()
         self.points = points
         self.filled = filled
 
-    def get_bounding_box(self) -> Optional[Tuple[float, float, float, float]]:
+    def get_bounding_box(self) -> tuple[float, float, float, float] | None:
         if not self.points:
             return None
         xs = [p[0] for p in self.points]
@@ -334,7 +335,7 @@ class MipLevel(NamedTuple):
 
     width: int
     height: int
-    texture: Union[int, str]
+    texture: int | str
 
 
 class ImageShape(Shape):
@@ -371,7 +372,7 @@ class ImageShape(Shape):
 
     def __init__(self, levels: Sequence[MipLevel],
                  x1: float, y1: float, x2: float, y2: float,
-                 max_screen_size: Optional[float] = None):
+                 max_screen_size: float | None = None):
         super().__init__()
         self.levels = tuple(levels)
         self.x1 = x1
@@ -380,13 +381,13 @@ class ImageShape(Shape):
         self.y2 = y2
         self.max_screen_size = max_screen_size
 
-    def get_bounding_box(self) -> Tuple[float, float, float, float]:
+    def get_bounding_box(self) -> tuple[float, float, float, float]:
         return (min(self.x1, self.x2), min(self.y1, self.y2),
                 max(self.x1, self.x2), max(self.y1, self.y2))
 
 
-def union_of_boxes(boxes: Iterable[Optional[Tuple[float, float, float, float]]]
-                   ) -> Optional[Tuple[float, float, float, float]]:
+def union_of_boxes(boxes: Iterable[tuple[float, float, float, float] | None]
+                   ) -> tuple[float, float, float, float] | None:
     """Return the smallest box enclosing all of `boxes`, ignoring `None`s. `None` if none is left."""
     boxes = [b for b in boxes if b is not None]
     if not boxes:
@@ -398,25 +399,25 @@ def union_of_boxes(boxes: Iterable[Optional[Tuple[float, float, float, float]]]
 class CompoundShape(Shape):
     """Container for multiple shapes."""
 
-    def __init__(self, shapes: List[Shape]):
+    def __init__(self, shapes: list[Shape]):
         super().__init__()
         self.shapes = shapes
 
-    def get_bounding_box(self) -> Optional[Tuple[float, float, float, float]]:
+    def get_bounding_box(self) -> tuple[float, float, float, float] | None:
         return union_of_boxes(s.get_bounding_box() for s in self.shapes)
 
 
 class Element(CompoundShape):
     """Base class for graph nodes and edges."""
 
-    def __init__(self, shapes: List[Shape]):
+    def __init__(self, shapes: list[Shape]):
         super().__init__(shapes)
 
-    def get_texts(self) -> List[str]:
+    def get_texts(self) -> list[str]:
         """Return text content of any TextShapes in this element."""
         return [s.t for s in self.shapes if isinstance(s, TextShape)]
 
-    def get_drawn_bounding_box(self) -> Optional[Tuple[float, float, float, float]]:
+    def get_drawn_bounding_box(self) -> tuple[float, float, float, float] | None:
         """Return the box enclosing everything this element puts on screen.
 
         Which is a different question from `get_bounding_box`, and the one to ask about whether an
@@ -444,9 +445,9 @@ class Node(Element):
     """
 
     def __init__(self, x: float, y: float, w: float, h: float,
-                 shapes: List[Shape], url: Optional[str] = None,
-                 internal_name: Optional[str] = None,
-                 tooltip: Optional[str] = None):
+                 shapes: list[Shape], url: str | None = None,
+                 internal_name: str | None = None,
+                 tooltip: str | None = None):
         super().__init__(shapes)
         self.x = x
         self.y = y
@@ -462,7 +463,7 @@ class Node(Element):
         """Return whether point (x, y) is inside this node's bounding box."""
         return self.x1 <= x <= self.x2 and self.y1 <= y <= self.y2
 
-    def get_bounding_box(self) -> Tuple[float, float, float, float]:
+    def get_bounding_box(self) -> tuple[float, float, float, float]:
         return (self.x1, self.y1, self.x2, self.y2)
 
 
@@ -476,7 +477,7 @@ class Edge(Element):
         shapes: Drawing shapes (line, arrows, labels).
     """
 
-    def __init__(self, src: Node, dst: Node, points: List[Point], shapes: List[Shape]):
+    def __init__(self, src: Node, dst: Node, points: list[Point], shapes: list[Shape]):
         super().__init__(shapes)
         self.src = src
         self.dst = dst
@@ -495,9 +496,9 @@ class Graph:
     """
 
     def __init__(self, width: float = 1, height: float = 1,
-                 shapes: Optional[List[Shape]] = None,
-                 nodes: Optional[List[Node]] = None,
-                 edges: Optional[List[Edge]] = None):
+                 shapes: list[Shape] | None = None,
+                 nodes: list[Node] | None = None,
+                 edges: list[Edge] | None = None):
         self.width = width
         self.height = height
         self.shapes = shapes or []
@@ -505,23 +506,23 @@ class Graph:
         self.edges = edges or []
 
         # Build lookup tables
-        self.nodes_by_name: Dict[str, Node] = {}
+        self.nodes_by_name: dict[str, Node] = {}
         for n in self.nodes:
             if n.internal_name:
                 self.nodes_by_name[n.internal_name] = n
 
         # Pre-compute search data (lowercase text for case-insensitive search)
         # Format: [(element, "all text in element lowercase")]
-        self._items_and_texts: List[Tuple[Element, str]] = [
+        self._items_and_texts: list[tuple[Element, str]] = [
             (x, " ".join(x.get_texts()))
             for x in chain(self.nodes, self.edges)
         ]
 
-    def get_size(self) -> Tuple[float, float]:
+    def get_size(self) -> tuple[float, float]:
         """Return (width, height) of the graph."""
         return self.width, self.height
 
-    def filter_items_by_text(self, text: str) -> List[Element]:
+    def filter_items_by_text(self, text: str) -> list[Element]:
         """Return nodes/edges containing all fragments of the search text.
 
         Uses fragment search (like Emacs HELM): "cat photo" matches "photocatalytic".
@@ -534,11 +535,11 @@ class Graph:
         matches_search = common_utils.make_search_matcher(text)
         return [item for item, item_text in self._items_and_texts if matches_search(item_text)]
 
-    def get_node_by_name(self, name: str) -> Optional[Node]:
+    def get_node_by_name(self, name: str) -> Node | None:
         """Return node by its internal name, or None."""
         return self.nodes_by_name.get(name)
 
-    def get_linked_elements(self, node: Node, direction: str) -> Set[Element]:
+    def get_linked_elements(self, node: Node, direction: str) -> set[Element]:
         """Return elements linked to `node` via edges.
 
         `node`: The node to find links for.
@@ -548,7 +549,7 @@ class Graph:
         Returns a set of Elements (edges and their endpoint nodes),
         not including the queried node itself.
         """
-        result: Set[Element] = set()
+        result: set[Element] = set()
         if direction == "outgoing":
             for edge in self.edges:
                 if edge.src is node:
@@ -561,6 +562,23 @@ class Graph:
                     result.add(edge.src)
         return result
 
-    def get_all_elements(self) -> List[Element]:
+    def get_all_elements(self) -> list[Element]:
         """Return all nodes and edges."""
         return list(chain(self.nodes, self.edges))
+
+    def iter_shapes(self) -> Iterator[Shape]:
+        """Yield every shape in the graph, descending into compounds.
+
+        Background shapes first, then the nodes, then the edges. A `CompoundShape` is yielded before the
+        shapes it holds, so a caller after the leaves alone can skip it by type — and `Node` and `Edge`
+        are compounds, so they appear here too.
+
+        For asking a question of the whole drawing: how many distinct textures it references, what fonts
+        it uses, whether anything was left at the origin.
+        """
+        def walk(shapes: Iterable[Shape]) -> Iterator[Shape]:
+            for shape in shapes:
+                yield shape
+                if isinstance(shape, CompoundShape):
+                    yield from walk(shape.shapes)
+        yield from walk(chain(self.shapes, self.nodes, self.edges))

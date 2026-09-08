@@ -221,6 +221,47 @@ class TestItReportsWhetherItIsBusy:
         assert animation.animator.transient_count == 0
 
 
+class TestItReportsWhatItsOwnRedrawsCost:
+    """`last_render_time` and `render_count`, which is what an overlay showing "draw: N ms" reads.
+
+    The pair is the contract, not either half: a redraw happens only when something changed, so an
+    observer sampling once per frame cannot tell a fresh figure from the previous one still standing.
+    The counter is what separates them.
+    """
+
+    def test_a_redraw_is_timed_and_counted(self, widget):
+        widget.update()  # the graph the fixture set is still pending a first draw
+        before = widget.render_count
+        widget.request_render()
+        widget.update()
+        assert widget.render_count == before + 1
+        assert widget.last_render_time > 0.0
+
+    def test_a_frame_that_redrew_nothing_does_not_count(self, widget):
+        widget.update()
+        settled = widget.render_count
+        for _ in range(3):
+            widget.update()
+        assert widget.render_count == settled, \
+            "a frame with nothing to redraw was counted, so the mean is over frames rather than redraws"
+
+    def test_a_redraw_that_raised_is_still_timed_and_counted(self, widget, monkeypatch):
+        # Without this the figures freeze at the last redraw that happened to succeed, and go on being
+        # read as current -- the one state in which someone is most likely to be looking at them.
+        widget.update()
+        before = widget.render_count
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("the renderer fell over")
+        monkeypatch.setattr(widget, "_draw_graph", boom)
+
+        widget.request_render()
+        with pytest.raises(RuntimeError):
+            widget.update()
+        assert widget.render_count == before + 1
+        assert widget.last_render_time > 0.0
+
+
 def test_a_click_hands_over_the_element_rather_than_a_caption(widget, monkeypatch):
     """The contract a caller that must *act* on a click depends on.
 
