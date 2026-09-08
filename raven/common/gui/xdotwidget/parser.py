@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 import colorsys
 import re
 import sys
-from typing import Dict, List, Optional, Tuple
 
 from .constants import Color, Point, X11_COLORS, BREWER_COLORS
 from .graph import (
@@ -58,8 +57,8 @@ def _dot_escape_replace(m: re.Match) -> str:
 class ParseError(Exception):
     """Error during DOT parsing."""
 
-    def __init__(self, msg: Optional[str] = None, filename: Optional[str] = None,
-                 line: Optional[int] = None, col: Optional[int] = None):
+    def __init__(self, msg: str | None = None, filename: str | None = None,
+                 line: int | None = None, col: int | None = None):
         self.msg = msg
         self.filename = filename
         self.line = line
@@ -91,9 +90,9 @@ class Token:
 class Scanner:
     """Stateless lexical scanner."""
 
-    tokens: List[Tuple[int, str, bool]] = []  # language spec for how to tokenize; set in derived class; [(type_, regex, do_test_for_literal), ...]
-    symbols: Dict[str, int] = {}  # language spec for operators, parens, etc.; set in derived class; {literal_text: type_, ...}
-    literals: Dict[str, int] = {}  # language spec for reserved words; set in derived class; {literal_text: type_, ...}
+    tokens: list[tuple[int, str, bool]] = []  # language spec for how to tokenize; set in derived class; [(type_, regex, do_test_for_literal), ...]
+    symbols: dict[str, int] = {}  # language spec for operators, parens, etc.; set in derived class; {literal_text: type_, ...}
+    literals: dict[str, int] = {}  # language spec for reserved words; set in derived class; {literal_text: type_, ...}
     ignorecase: bool = False
 
     def __init__(self):
@@ -105,7 +104,7 @@ class Scanner:
             flags
         )
 
-    def next(self, buf: str, pos: int) -> Tuple[int, str, int]:
+    def next(self, buf: str, pos: int) -> tuple[int, str, int]:
         """Return value is (token_type, text, end_pos)."""
         if pos >= len(buf):
             return EOF, "", pos
@@ -125,11 +124,11 @@ class Scanner:
 class Lexer:
     """Stateful lexer that produces tokens from input."""
 
-    scanner: Optional[Scanner] = None
+    scanner: Scanner | None = None
     tabsize: int = 8  # ancient *nix default; keeping it because this is for dot/xdot, old formats with a strong *nix tradition.
     newline_re = re.compile(r"\r\n?|\n")  # TODO: Is there any difference in performance to the flattened r"\n|\r\n|\r"?
 
-    def __init__(self, buf: str = "", pos: int = 0, filename: Optional[str] = None):
+    def __init__(self, buf: str = "", pos: int = 0, filename: str | None = None):
         """
         buf: the data to lex.
         pos: offset (in characters, i.e. Unicode codepoints) in `buf` where to start lexing. Default is to lex the whole buffer.
@@ -184,7 +183,7 @@ class Lexer:
             pos = tabpos + 1
         self.col += len(text) - pos
 
-    def _filter(self, type_: int, text: str) -> Tuple[int, str]:
+    def _filter(self, type_: int, text: str) -> tuple[int, str]:
         """Filter/transform tokens (override in subclass).
 
         Return value must be (new_type_, new_text).
@@ -308,7 +307,7 @@ class DotLexer(Lexer):
 
     scanner = DotScanner()
 
-    def _filter(self, type_: int, text: str) -> Tuple[int, str]:
+    def _filter(self, type_: int, text: str) -> tuple[int, str]:
         """Filter STR_ID and HTML_ID tokens: strip quotes, unescape DOT string escapes."""
         if type_ == STR_ID:
             text = text[1:-1]  # Strip quotes
@@ -336,9 +335,9 @@ class DotParser(Parser):
 
     def __init__(self, lexer: Lexer):
         super().__init__(lexer)
-        self.graph_attrs: Dict[str, str] = {}
-        self.node_attrs: Dict[str, str] = {}
-        self.edge_attrs: Dict[str, str] = {}
+        self.graph_attrs: dict[str, str] = {}
+        self.node_attrs: dict[str, str] = {}
+        self.edge_attrs: dict[str, str] = {}
 
     def parse(self) -> None:
         self.parse_graph()
@@ -353,7 +352,7 @@ class DotParser(Parser):
             self.parse_stmt()
         self.consume()
 
-    def parse_subgraph(self) -> Optional[str]:
+    def parse_subgraph(self) -> str | None:
         id_ = None
         if self.lookahead.type == SUBGRAPH:
             self.consume()
@@ -401,7 +400,7 @@ class DotParser(Parser):
         if self.lookahead.type == SEMI:
             self.consume()
 
-    def parse_attrs(self) -> Dict[str, str]:
+    def parse_attrs(self) -> dict[str, str]:
         attrs = {}
         while self.lookahead.type == LSQUARE:
             self.consume()
@@ -413,7 +412,7 @@ class DotParser(Parser):
             self.consume()
         return attrs
 
-    def parse_attr(self) -> Tuple[str, str]:
+    def parse_attr(self) -> tuple[str, str]:
         name = self.parse_id()
         if self.lookahead.type == EQUAL:
             self.consume()
@@ -438,15 +437,15 @@ class DotParser(Parser):
         self.consume()
         return id_
 
-    def handle_graph(self, attrs: Dict[str, str]) -> None:
+    def handle_graph(self, attrs: dict[str, str]) -> None:
         """Override in subclass."""
         pass
 
-    def handle_node(self, id_: str, attrs: Dict[str, str]) -> None:
+    def handle_node(self, id_: str, attrs: dict[str, str]) -> None:
         """Override in subclass."""
         pass
 
-    def handle_edge(self, src_id: str, dst_id: str, attrs: Dict[str, str]) -> None:
+    def handle_edge(self, src_id: str, dst_id: str, attrs: dict[str, str]) -> None:
         """Override in subclass."""
         pass
 
@@ -462,7 +461,7 @@ class XDotAttrParser:
         self.buf = buf
         self.pos: int = 0
         self.pen: Pen = Pen()
-        self.shapes: List[Shape] = []
+        self.shapes: list[Shape] = []
 
     def __bool__(self) -> bool:
         return self.pos < len(self.buf)
@@ -497,7 +496,7 @@ class XDotAttrParser:
             self.pos += 1
         return res
 
-    def read_polygon(self) -> List[Point]:
+    def read_polygon(self) -> list[Point]:
         n = self.read_number()
         points = []
         for _ in range(n):
@@ -505,7 +504,7 @@ class XDotAttrParser:
             points.append((x, y))
         return points
 
-    def read_color(self) -> Optional[Color]:
+    def read_color(self) -> Color | None:
         c = self.read_text()
         if not c:
             return None
@@ -536,7 +535,7 @@ class XDotAttrParser:
         else:
             return self._lookup_color(c)
 
-    def _lookup_color(self, c: str) -> Optional[Color]:
+    def _lookup_color(self, c: str) -> Color | None:
         """Look up a named color.
 
         X11 and ColorBrewer color names are supported.
@@ -560,7 +559,7 @@ class XDotAttrParser:
         logger.warning(f"xdot parser: unknown color '{c}'")
         return None
 
-    def parse(self) -> List[Shape]:
+    def parse(self) -> list[Shape]:
         while self:
             op = self.read_code()
             if op == "c":
@@ -667,10 +666,10 @@ class XDotParser(DotParser):
         lexer = DotLexer(buf=xdotcode)
         super().__init__(lexer)
 
-        self.nodes: List[Node] = []
-        self.edges: List[Edge] = []
-        self.shapes: List = []
-        self.node_by_name: Dict[str, Node] = {}
+        self.nodes: list[Node] = []
+        self.edges: list[Edge] = []
+        self.shapes: list[Shape] = []
+        self.node_by_name: dict[str, Node] = {}
         self.top_graph: bool = True
 
         # Transform parameters
@@ -681,7 +680,7 @@ class XDotParser(DotParser):
         self.width: float = 1.0
         self.height: float = 1.0
 
-    def handle_graph(self, attrs: Dict[str, str]) -> None:
+    def handle_graph(self, attrs: dict[str, str]) -> None:
         if self.top_graph:
             try:  # bounding box
                 bb = attrs["bb"]
@@ -708,7 +707,7 @@ class XDotParser(DotParser):
                 parser = XDotAttrParser(self, attrs[attr])
                 self.shapes.extend(parser.parse())
 
-    def handle_node(self, id_: str, attrs: Dict[str, str]) -> None:
+    def handle_node(self, id_: str, attrs: dict[str, str]) -> None:
         try:
             pos = attrs["pos"]
         except KeyError:
@@ -733,7 +732,7 @@ class XDotParser(DotParser):
         if shapes:
             self.nodes.append(node)
 
-    def handle_edge(self, src_id: str, dst_id: str, attrs: Dict[str, str]) -> None:
+    def handle_edge(self, src_id: str, dst_id: str, attrs: dict[str, str]) -> None:
         try:
             pos = attrs["pos"]
         except KeyError:
@@ -760,7 +759,7 @@ class XDotParser(DotParser):
         x, y = pos.split(",")
         return self.transform(float(x), float(y))
 
-    def _parse_edge_pos(self, pos: str) -> List[Point]:
+    def _parse_edge_pos(self, pos: str) -> list[Point]:
         points = []
         for entry in pos.split(" "):
             fields = entry.split(",")

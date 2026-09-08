@@ -6,8 +6,6 @@ This module provides functions for determining which graph element
 
 __all__ = ["hit_test", "get_node", "get_edge", "hit_test_screen", "get_node_screen", "get_edge_screen"]
 
-from typing import List, Optional
-
 from .constants import Point
 from .graph import (Graph, Element, Node, Edge,
                     PolygonShape, BezierShape, LineShape,
@@ -17,7 +15,7 @@ from .viewport import Viewport
 # --------------------------------------------------------------------------------
 # in graph coordinates
 
-def hit_test(graph: Graph, gx: float, gy: float) -> Optional[Element]:
+def hit_test(graph: Graph, gx: float, gy: float) -> Element | None:
     """Find the element at a point in graph coordinates.
 
     `graph`: The Graph to test.
@@ -34,7 +32,7 @@ def hit_test(graph: Graph, gx: float, gy: float) -> Optional[Element]:
         return edge
     return None
 
-def get_node(graph: Graph, gx: float, gy: float) -> Optional[Node]:
+def get_node(graph: Graph, gx: float, gy: float) -> Node | None:
     for node in graph.nodes:
         if node.is_inside(gx, gy):
             return node
@@ -60,7 +58,7 @@ def _point_to_segment_dist_sq(px: float, py: float,
 
 
 def _check_polyline_dist(px: float, py: float,
-                         points: List[Point],
+                         points: list[Point],
                          radius_sq: float) -> bool:
     """Check if (px, py) is within radius of any segment in a polyline."""
     for i in range(len(points) - 1):
@@ -71,7 +69,7 @@ def _check_polyline_dist(px: float, py: float,
     return False
 
 
-def _point_in_polygon(px: float, py: float, polygon: List[tuple]) -> bool:
+def _point_in_polygon(px: float, py: float, polygon: list[tuple]) -> bool:
     """Ray-casting point-in-polygon test.
 
     Returns True if (px, py) is inside the polygon defined by the vertex list.
@@ -90,7 +88,7 @@ def _point_in_polygon(px: float, py: float, polygon: List[tuple]) -> bool:
 
 
 def get_edge(graph: Graph, gx: float, gy: float,
-             radius_sq: float = _EDGE_HIT_RADIUS_PX ** 2) -> Optional[Edge]:
+             radius_sq: float = _EDGE_HIT_RADIUS_PX ** 2) -> Edge | None:
     """Find an edge near point (gx, gy).
 
     Checks proximity to the edge's rendered shapes: tessellated bezier
@@ -119,7 +117,7 @@ def get_edge(graph: Graph, gx: float, gy: float,
 def hit_test_screen(graph: Graph,
                     viewport: Viewport,
                     sx: float,
-                    sy: float) -> Optional[Element]:
+                    sy: float) -> Element | None:
     """Find the element at a point in screen coordinates.
 
     `graph`: The Graph to test.
@@ -147,7 +145,7 @@ def hit_test_screen(graph: Graph,
 def get_node_screen(graph: Graph,
                     viewport: Viewport,
                     sx: float,
-                    sy: float) -> Optional[Node]:
+                    sy: float) -> Node | None:
     """Find a node at a point in screen coordinates.
 
     `graph`: The Graph to test.
@@ -163,7 +161,7 @@ def get_node_screen(graph: Graph,
 def get_edge_screen(graph: Graph,
                     viewport: Viewport,
                     sx: float,
-                    sy: float) -> Optional[Edge]:
+                    sy: float) -> Edge | None:
     """Find an edge at a point in screen coordinates.
 
     `graph`: The Graph to test.

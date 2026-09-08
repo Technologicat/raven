@@ -12,7 +12,6 @@ __all__ = ["HighlightState"]
 
 import threading
 import time
-from typing import Dict, Optional, Set
 
 from ... import numutils
 
@@ -39,23 +38,23 @@ class HighlightState:
         self.fade_duration = fade_duration
 
         # Currently hovered element (instant on)
-        self._hover: Optional[Element] = None
+        self._hover: Element | None = None
 
         # Elements fading out: element -> (start_time, initial_intensity)
-        self._fading: Dict[Element, tuple] = {}
+        self._fading: dict[Element, tuple] = {}
         self._fading_lock = threading.RLock()
 
         # Programmatically highlighted elements (not affected by hover)
         # TODO: These are two unrelated highlight sources, only cleared together. Unify the mechanisms; but check first that doing so doesn't break anything in `raven-xdot-viewer` (there might be a reason we sometimes use IDs).
-        self._programmatic: Set[Element] = set()  # by element reference
-        self._programmatic_node_ids: Set[str] = set()  # by node ID
+        self._programmatic: set[Element] = set()  # by element reference
+        self._programmatic_node_ids: set[str] = set()  # by node ID
         self._programmatic_lock = threading.RLock()
 
         # Link highlights (Shift/Ctrl+hover: outgoing/incoming edges + connected nodes)
-        self._link_highlights: Set[Element] = set()
+        self._link_highlights: set[Element] = set()
         # Protected by _programmatic_lock (same lock, since they're both modifier-key state)
 
-    def set_hover(self, element: Optional[Element]) -> None:
+    def set_hover(self, element: Element | None) -> None:
         """Set the currently hovered element.
 
         When a new element is hovered, any previous hover starts fading out.
@@ -75,11 +74,11 @@ class HighlightState:
             if element is not None and element in self._fading:
                 del self._fading[element]
 
-    def get_hover(self) -> Optional[Element]:
+    def get_hover(self) -> Element | None:
         """Return the currently hovered element, or None."""
         return self._hover
 
-    def set_highlighted_nodes(self, node_ids: Set[str]) -> None:
+    def set_highlighted_nodes(self, node_ids: set[str]) -> None:
         """Set programmatically highlighted nodes by their IDs.
 
         These elements will be highlighted regardless of hover state.
@@ -89,11 +88,11 @@ class HighlightState:
         with self._programmatic_lock:
             self._programmatic_node_ids = set(node_ids)
 
-    def get_highlighted_node_ids(self) -> Set[str]:
+    def get_highlighted_node_ids(self) -> set[str]:
         """Return the set of programmatically highlighted node IDs."""
         return set(self._programmatic_node_ids)
 
-    def flash(self, elements: Set[Element]) -> None:
+    def flash(self, elements: set[Element]) -> None:
         """Light `elements` and let them fade out, the way a hover does when the cursor leaves.
 
         Not the same as `set_highlighted`, which stays lit until something clears it. A flash says "this
@@ -106,7 +105,7 @@ class HighlightState:
             for element in elements:
                 self._fading[element] = (now, 1.0)
 
-    def set_highlighted(self, elements: Set[Element]) -> None:
+    def set_highlighted(self, elements: set[Element]) -> None:
         """Set the programmatically highlighted elements by element reference.
 
         These elements will be highlighted regardless of hover state.
@@ -116,11 +115,11 @@ class HighlightState:
         with self._programmatic_lock:
             self._programmatic = set(elements)
 
-    def get_highlighted(self) -> Set[Element]:
+    def get_highlighted(self) -> set[Element]:
         """Return the set of programmatically highlighted elements."""
         return set(self._programmatic)
 
-    def set_link_highlights(self, elements: Set[Element]) -> None:
+    def set_link_highlights(self, elements: set[Element]) -> None:
         """Set link-highlight elements (shown during Shift/Ctrl+hover)."""
         with self._programmatic_lock:
             self._link_highlights = set(elements)
@@ -232,7 +231,7 @@ class HighlightState:
 
             return len(self._fading) > 0
 
-    def get_all_highlighted(self, graph=None) -> Set[Element]:
+    def get_all_highlighted(self, graph=None) -> set[Element]:
         """Return all currently highlighted elements.
 
         `graph`: Optional Graph, used to resolve programmatic node IDs.

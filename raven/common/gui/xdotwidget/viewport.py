@@ -9,8 +9,6 @@ animated parts, is handled by `widget.py`; this is an internal class.
 
 __all__ = ["SmoothValue", "Viewport"]
 
-from typing import Optional, Tuple
-
 from ... import numutils
 from ...smoothvalue import SmoothValue
 from .. import layout_math
@@ -199,8 +197,8 @@ class Viewport:
             self.pan_x.set_immediate(self.pan_x.target)
             self.pan_y.set_immediate(self.pan_y.target)
 
-    def zoom_to(self, new_zoom: float, center_sx: Optional[float] = None,
-                center_sy: Optional[float] = None, animate: bool = True) -> None:
+    def zoom_to(self, new_zoom: float, center_sx: float | None = None,
+                center_sy: float | None = None, animate: bool = True) -> None:
         """Set the zoom, optionally about a point that is to stay where it is on screen.
 
         `new_zoom`: The zoom to go to. Clamped to `min_zoom` / `max_zoom`.
@@ -233,8 +231,8 @@ class Viewport:
             self.pan_y.set_immediate(self.pan_y.target)
             self.zoom.set_immediate(new_zoom)
 
-    def zoom_by(self, factor: float, center_sx: Optional[float] = None,
-                center_sy: Optional[float] = None) -> None:
+    def zoom_by(self, factor: float, center_sx: float | None = None,
+                center_sy: float | None = None) -> None:
         """Zoom by a multiplicative factor.
 
         `factor`: Zoom multiplier (>1 = zoom in, <1 = zoom out).
@@ -328,7 +326,7 @@ class Viewport:
                 self.pan_y.is_animating() or
                 self.zoom.is_animating())
 
-    def get_visible_bounds(self) -> Tuple[float, float, float, float]:
+    def get_visible_bounds(self) -> tuple[float, float, float, float]:
         """Return the visible area in graph coordinates as (x1, y1, x2, y2)."""
         gx1, gy1 = self.screen_to_graph(0, 0)
         gx2, gy2 = self.screen_to_graph(self.width, self.height)

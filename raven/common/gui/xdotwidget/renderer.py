@@ -8,7 +8,7 @@ __all__ = ["set_dark_mode", "get_dark_mode", "color_to_dpg", "render_graph"]
 
 import colorsys
 import math
-from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
+from collections.abc import Callable, Sequence
 
 import dearpygui.dearpygui as dpg
 
@@ -76,8 +76,8 @@ def color_to_dpg(color: Color) -> DPGColor:  # TODO: move to a utility module, m
 
 
 def _get_effective_pen(shape: Shape,
-                       element: Optional[Element],
-                       highlight_intensities: Dict[Element, float]) -> Pen:
+                       element: Element | None,
+                       highlight_intensities: dict[Element, float]) -> Pen:
     """Get the effective pen for rendering, accounting for highlighting.
 
     `shape`: The shape being rendered.
@@ -107,14 +107,14 @@ def _transform_point(point: Point, viewport: Viewport) -> Point:
     return viewport.graph_to_screen(point[0], point[1])
 
 
-def _transform_points(points: List[Point],
-                      viewport: Viewport) -> List[Point]:
+def _transform_points(points: list[Point],
+                      viewport: Viewport) -> list[Point]:
     """Transform a list of points from graph to screen coordinates."""
     return [viewport.graph_to_screen(p[0], p[1]) for p in points]
 
 
-def _dashify_polyline(points: List[Point],
-                      dash: Tuple[float, ...]) -> List[List[Point]]:
+def _dashify_polyline(points: list[Point],
+                      dash: tuple[float, ...]) -> list[list[Point]]:
     """Split a polyline into dashed segments.
 
     Walks along `points`, toggling between "on" (visible) and "off" (gap)
@@ -128,8 +128,8 @@ def _dashify_polyline(points: List[Point],
 
     # Expand a single-value dash pattern to on/off pair
     cycle = dash if len(dash) >= 2 else (dash[0], dash[0])
-    segments: List[List[Point]] = []
-    current: List[Point] = []   # points in the current "on" segment
+    segments: list[list[Point]] = []
+    current: list[Point] = []   # points in the current "on" segment
     phase_idx = 0               # index into `cycle`
     phase_remaining = cycle[0]  # distance remaining in current on/off phase
 
@@ -177,13 +177,13 @@ def _dashify_polyline(points: List[Point],
     return segments
 
 
-def _render_text_shape(drawlist: Union[int, str],
+def _render_text_shape(drawlist: int | str,
                        shape: TextShape,
                        viewport: Viewport,
                        pen: Pen,
-                       text_compaction_cb: Optional[Callable] = None,
-                       graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
-                       element_fillcolor: Optional[Color] = None) -> None:
+                       text_compaction_cb: Callable | None = None,
+                       graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
+                       element_fillcolor: Color | None = None) -> None:
     """Render a text shape."""
     # Transform position
     sx, sy = viewport.graph_to_screen(shape.x, shape.y)
@@ -246,7 +246,7 @@ def _render_text_shape(drawlist: Union[int, str],
         dpg.bind_item_font(item, best_font)
 
 
-def _render_ellipse_shape(drawlist: Union[int, str],
+def _render_ellipse_shape(drawlist: int | str,
                           shape: EllipseShape,
                           viewport: Viewport,
                           pen: Pen) -> None:
@@ -276,7 +276,7 @@ def _render_ellipse_shape(drawlist: Union[int, str],
                          parent=drawlist)
 
 
-def _render_polygon_shape(drawlist: Union[int, str],
+def _render_polygon_shape(drawlist: int | str,
                           shape: PolygonShape,
                           viewport: Viewport,
                           pen: Pen) -> None:
@@ -318,7 +318,7 @@ def _render_polygon_shape(drawlist: Union[int, str],
                               thickness=thickness, parent=drawlist)
 
 
-def _render_line_shape(drawlist: Union[int, str],
+def _render_line_shape(drawlist: int | str,
                        shape: LineShape,
                        viewport: Viewport,
                        pen: Pen) -> None:
@@ -343,7 +343,7 @@ def _render_line_shape(drawlist: Union[int, str],
                           parent=drawlist)
 
 
-def _render_bezier_shape(drawlist: Union[int, str],
+def _render_bezier_shape(drawlist: int | str,
                          shape: BezierShape,
                          viewport: Viewport,
                          pen: Pen) -> None:
@@ -394,7 +394,7 @@ def _render_bezier_shape(drawlist: Union[int, str],
                 p0 = p1
 
 
-def _render_image_shape(drawlist: Union[int, str],
+def _render_image_shape(drawlist: int | str,
                         shape: ImageShape,
                         viewport: Viewport) -> None:
     """Render an image shape.
@@ -425,7 +425,7 @@ def _render_image_shape(drawlist: Union[int, str],
                    uv_min=(0.0, 0.0), uv_max=(1.0, 1.0), parent=drawlist)
 
 
-def _texture_for_screen_size(shape: ImageShape, w: float, h: float) -> Union[int, str]:
+def _texture_for_screen_size(shape: ImageShape, w: float, h: float) -> int | str:
     """Return the level of `shape`'s mip chain to draw at `w` x `h` screen pixels.
 
     The coarsest level that still covers the drawn size in both axes, since a level that has to be
@@ -449,7 +449,7 @@ def _texture_for_screen_size(shape: ImageShape, w: float, h: float) -> Union[int
     return chosen.texture
 
 
-def _get_element_fillcolor(element: Optional[Element]) -> Optional[Color]:
+def _get_element_fillcolor(element: Element | None) -> Color | None:
     """Extract the fill color from an element's filled shapes, if any.
 
     Returns the fillcolor of the first filled EllipseShape or PolygonShape
@@ -464,14 +464,14 @@ def _get_element_fillcolor(element: Optional[Element]) -> Optional[Color]:
     return None
 
 
-def _render_shape(drawlist: Union[int, str],
+def _render_shape(drawlist: int | str,
                   shape: Shape,
                   viewport: Viewport,
-                  element: Optional[Element],
-                  highlight_intensities: Dict[Element, float],
-                  text_compaction_cb: Optional[Callable],
-                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
-                  element_fillcolor: Optional[Color] = None) -> None:
+                  element: Element | None,
+                  highlight_intensities: dict[Element, float],
+                  text_compaction_cb: Callable | None,
+                  graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
+                  element_fillcolor: Color | None = None) -> None:
     """Render a single shape."""
     pen = _get_effective_pen(shape, element, highlight_intensities)
 
@@ -511,13 +511,13 @@ def _is_element_visible(element: Element, viewport: Viewport) -> bool:
     return viewport.is_visible(*bbox)
 
 
-def render_graph(drawlist: Union[int, str],
+def render_graph(drawlist: int | str,
                  graph: Graph,
                  viewport: Viewport,
-                 highlight_intensities: Optional[Dict[Element, float]] = None,
-                 text_compaction_cb: Optional[Callable] = None,
-                 graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
-                 background_color: Optional[DPGColor] = None) -> None:
+                 highlight_intensities: dict[Element, float] | None = None,
+                 text_compaction_cb: Callable | None = None,
+                 graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
+                 background_color: DPGColor | None = None) -> None:
     """Render a graph to a DPG drawlist.
 
     `drawlist`: DPG drawlist ID or tag.

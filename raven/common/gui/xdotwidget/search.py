@@ -6,8 +6,6 @@ similar to Emacs HELM's swoop search.
 
 __all__ = ["SearchState"]
 
-from typing import List, Optional
-
 from .graph import Graph, Element, Node
 
 
@@ -20,9 +18,9 @@ class SearchState:
 
     def __init__(self):
         self._query: str = ""
-        self._results: List[Element] = []
+        self._results: list[Element] = []
         self._current_index: int = -1
-        self._graph: Optional[Graph] = None
+        self._graph: Graph | None = None
 
     def set_graph(self, graph: Graph) -> None:
         """Set the graph to search in."""
@@ -32,7 +30,7 @@ class SearchState:
         if self._query:
             self._do_search()
 
-    def search(self, query: str) -> List[Element]:
+    def search(self, query: str) -> list[Element]:
         """Perform a search and return matching elements.
 
         `query`: Search string. Multiple space-separated words are treated
@@ -54,7 +52,7 @@ class SearchState:
 
         self._results = self._graph.filter_items_by_text(self._query)
 
-    def get_results(self) -> List[Element]:
+    def get_results(self) -> list[Element]:
         """Return the current search results."""
         return list(self._results)
 
@@ -66,7 +64,7 @@ class SearchState:
         """Return the current result index (-1 if no navigation yet)."""
         return self._current_index
 
-    def get_current(self) -> Optional[Element]:
+    def get_current(self) -> Element | None:
         """Return the currently selected search result, or None."""
         if not self._results or self._current_index < 0:
             return None
@@ -74,7 +72,7 @@ class SearchState:
             return None
         return self._results[self._current_index]
 
-    def next_match(self) -> Optional[Element]:
+    def next_match(self) -> Element | None:
         """Navigate to the next match, with wraparound.
 
         Returns the next Element, or None if no results.
@@ -88,7 +86,7 @@ class SearchState:
 
         return self._results[self._current_index]
 
-    def prev_match(self) -> Optional[Element]:
+    def prev_match(self) -> Element | None:
         """Navigate to the previous match, with wraparound.
 
         Returns the previous Element, or None if no results.
@@ -116,7 +114,7 @@ class SearchState:
         """Return True if there are search results."""
         return len(self._results) > 0
 
-    def get_result_ids(self) -> List[str]:
+    def get_result_ids(self) -> list[str]:
         """Return a list of node IDs from the search results.
 
         Only includes Nodes that have an internal_name.

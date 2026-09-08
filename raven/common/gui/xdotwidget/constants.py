@@ -8,15 +8,13 @@ The ColorBrewer palettes themselves are separately licensed by their authors; th
 `LICENSE_colorbrewer_color_schemes`.
 """
 
-from typing import Dict, List, Tuple
-
 # Type aliases
-Color = Tuple[float, float, float, float]  # RGBA, each in [0, 1]
-DPGColor = Tuple[int, int, int, int]  # RGBA, each in [0, 255]
-Point = Tuple[float, float]
+Color = tuple[float, float, float, float]  # RGBA, each in [0, 1]
+DPGColor = tuple[int, int, int, int]  # RGBA, each in [0, 255]
+Point = tuple[float, float]
 
 # X11/CSS color name lookup table (subset of common colors)
-X11_COLORS: Dict[str, Color] = {
+X11_COLORS: dict[str, Color] = {
     "aliceblue": (0.941, 0.973, 1.000, 1.0),
     "antiquewhite": (0.980, 0.922, 0.843, 1.0),
     "aqua": (0.000, 1.000, 1.000, 1.0),
@@ -171,7 +169,7 @@ X11_COLORS: Dict[str, Color] = {
 
 # ColorBrewer palettes (from http://colorbrewer.org/)
 # RGB tuples in [0, 255] range
-BREWER_COLORS: Dict[str, List[Tuple[int, int, int]]] = {
+BREWER_COLORS: dict[str, list[tuple[int, int, int]]] = {
     'accent3': [(127, 201, 127), (190, 174, 212), (253, 192, 134)],
     'accent4': [(127, 201, 127), (190, 174, 212), (253, 192, 134), (255, 255, 153)],
     'accent5': [(127, 201, 127), (190, 174, 212), (253, 192, 134), (255, 255, 153), (56, 108, 176)],
