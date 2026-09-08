@@ -105,16 +105,15 @@ item is already in the panel's hands, and none of it makes the shared widget kno
   session has accumulated.
 - **Mean rebuild time** — `DPGChatGraphPanel.refresh` timing itself. This is the expensive path and the one
   worth watching.
-- **Mean frame time / FPS** — the app owns its render loop, so it can time `render_dearpygui_frame`
-  directly. Time the render call rather than the loop body: Raven's idle throttle sleeps in there, and a
-  frame time that includes the sleep says nothing.
+- **Not app frame time** — DPG's own Metrics window already reports it, and is on this very chord for
+  that reason (Juha, 2026-09-08). Measuring it again here would be a second answer to a settled question.
 - **The widget's own render time** is the one item that is not free, and is worth its small cost: let
   `XDotWidget` time its `_render` and expose the last figure read-only. That is a thing a widget may
   legitimately know about itself, so it stays a property of the widget rather than a hole cut for this
   overlay — and it separates "the picture was rebuilt" from "the picture was drawn", which is the
   distinction a reader chasing a slow graph actually needs.
 
-Sliding averages for the three times, as `DPGAvatarRenderer` does for its FPS: a per-frame number is
+Sliding averages for the two times, as `DPGAvatarRenderer` does for its FPS: a per-frame number is
 unreadable. Format with `unpythonic.si_prefix`, which is what the avatar's overlay uses.
 
 **Why it is wanted, which is worth keeping so a later pass does not trim it as decoration.** Judging a
@@ -122,7 +121,7 @@ design choice against the graph currently means computing a number offline: `att
 set to a value that ran out at a zoom readers reach, and the reason nobody noticed is that nothing on
 screen says what the zoom is. A readout is what makes that judgeable while looking at the thing.
 
-**Cost: M**, a few hours — an overlay, a sampler with sliding averages on three paths, a toggle, and one
+**Cost: M**, a few hours — an overlay, a sampler with sliding averages on two paths, a toggle, and one
 small addition to the widget. Wants a fresh session: it is a new GUI surface rather than a change to an
 existing one.
 
