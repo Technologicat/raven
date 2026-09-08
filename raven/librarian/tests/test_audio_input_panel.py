@@ -21,6 +21,7 @@ dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed
 
 from raven.common.audio import recorder as audio_recorder  # noqa: E402 -- after importorskip by design
 from raven.common.audio import silencegate  # noqa: E402 -- ditto
+from raven.common.gui import animation as gui_animation  # noqa: E402 -- ditto
 from raven.common.gui import utils as guiutils  # noqa: E402 -- ditto
 from raven.librarian import audio_input_panel as aip  # noqa: E402 -- ditto
 
@@ -146,8 +147,7 @@ def panel(dpg_context, themes_and_fonts, monkeypatch):
     thepanel._build_window()
     thepanel.recorder = stub  # for the tests to reach; the panel itself goes through `require()`
     yield thepanel
-    with guiutils.nonexistent_ok():
-        dpg.delete_item(thepanel.window_id)
+    thepanel.destroy()
 
 
 class TestTheStubResemblesTheRealRecorder:
@@ -705,3 +705,45 @@ class TestMonitoring:
         panel._on_threshold_slider(THRESHOLD_SLIDER,-47.0)
         panel.close()
         assert saved and saved[-1]["stt_silence_threshold"] == -47.0
+
+
+class TestDestroyingThePanelLetsGoOfEverything:
+    """The focus follower is the one that outlives the panel, and it is invisible when it does.
+
+    It is registered with the process-wide animator, which survives the panel, its window, and the DPG
+    context all three — so a caller that builds a panel and drops it leaves an animation being ticked
+    against widgets that are gone. An app never notices, having one panel for its whole life; anything
+    that builds several does, and does so somewhere else entirely.
+    """
+
+    def test_the_focus_follower_is_cancelled(self, panel):
+        panel.open()
+        assert panel._focus_follower is not None, \
+            "no follower was installed, so this fixture cannot tell a cancel from a no-op"
+        assert panel._focus_follower in gui_animation.animator._animations
+        follower = panel._focus_follower
+
+        panel.destroy()
+        assert follower not in gui_animation.animator._animations
+        assert panel._focus_follower is None
+
+    def test_the_window_goes(self, panel):
+        window_id = panel.window_id
+        assert dpg.does_item_exist(window_id), "there was no window to delete"  # tag
+        panel.destroy()
+        assert not dpg.does_item_exist(window_id)  # tag
+        assert panel.window_id is None
+
+    def test_destroying_an_unopened_panel_is_quiet(self, panel):
+        # The ordinary case for a caller that built one and changed its mind. `close` returns early, and
+        # there is no follower to cancel — but the window is already built and must still go.
+        assert not panel.is_open
+        panel.destroy()
+        assert panel.window_id is None
+
+    def test_it_can_be_destroyed_twice(self, panel):
+        # The fixture destroys too, so anything calling it explicitly does it twice; and a teardown that
+        # only works once is a teardown nobody can call defensively.
+        panel.open()
+        panel.destroy()
+        panel.destroy()

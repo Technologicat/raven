@@ -32,6 +32,7 @@ import dearpygui.dearpygui as dpg
 from ..common import numutils
 from ..common.audio import recorder as audio_recorder
 from ..common.audio import silencegate
+from ..common.gui import animation as gui_animation
 from ..common.gui import keyboardmark
 from ..common.gui import utils as guiutils
 from ..common.gui.vumeter import DPGVUMeter
@@ -197,6 +198,26 @@ class DPGAudioInputPanel:
             dpg.hide_item(self.window_id)  # tag
         if self.save_app_state is not None:
             self.save_app_state()
+
+    def destroy(self) -> None:
+        """Tear the panel down. Reverse of the order `open` set things up in.
+
+        An app never needs this — its one panel lives as long as it does — but a caller that builds a
+        panel and lets it go does: the focus follower installed on first open is registered with the
+        process-wide animator, which outlives the panel and every widget in it.
+
+        The follower is cancelled *before* the window goes, so the marks it detaches are still there to
+        detach from.
+        """
+        self.close()  # stops monitoring, disconnects the readout, persists what was tuned
+        if self._focus_follower is not None:
+            gui_animation.animator.cancel(self._focus_follower)  # which detaches its marks
+            self._focus_follower = None
+        self.meter = None
+        with guiutils.nonexistent_ok():
+            if self.window_id is not None:
+                dpg.delete_item(self.window_id)  # tag
+        self.window_id = None
 
     # ------------------------------------------------------------------------------
     # Keyboard
