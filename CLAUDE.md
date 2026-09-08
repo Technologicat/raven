@@ -606,6 +606,13 @@ Visible-but-unfocused windows are still asked, after the focused one: a window j
 taken focus yet, and its keys should work from the moment it is on screen. Raven-librarian reaches the same
 place from the other end — its non-modal panes answer `has_keyboard()` before `handle_key()`.
 
+**The rest of the constellation was audited on 2026-09-08 and needs nothing**, which is worth recording so
+the sweep is not repeated: the Visualizer was the only app with two non-modal key-binding windows able to
+be on screen together. Librarian already asks the right question — its non-modal panes answer
+`has_keyboard()` before `handle_key()`, and focus is exclusive, so its `elif` chain is sound. Every other
+app has one main window, and the other windows in the constellation are either modal (the cleanup dialog,
+the help card) or bind no keys (the annotation tooltip, the jump-to-latest overlay).
+
 **The live instance this came from** (fixed 2026-09-08): the Visualizer's word cloud and importer windows
 are both non-modal, neither hides the other, and the word cloud was tested first — so with both open, the
 importer's `Ctrl+S`, `Ctrl+O` and `Ctrl+Enter` were shadowed. Note also that a cross-*app* collision is a different and
