@@ -107,6 +107,8 @@ item is already in the panel's hands, and none of it makes the shared widget kno
   worth watching.
 - **Not app frame time** — DPG's own Metrics window already reports it, and is on this very chord for
   that reason (Juha, 2026-09-08). Measuring it again here would be a second answer to a settled question.
+  Checked against the window itself the same day: it carries the application average and per-frame plots,
+  and nothing about any particular view — so neither of the two times above is a duplicate of it.
 - **The widget's own render time** is the one item that is not free, and is worth its small cost: let
   `XDotWidget` time its `_render` and expose the last figure read-only. That is a thing a widget may
   legitimately know about itself, so it stays a property of the widget rather than a hole cut for this

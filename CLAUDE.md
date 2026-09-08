@@ -627,8 +627,11 @@ graph costs to rebuild and draw.
 
 **And do not duplicate what DPG's own Metrics window already shows** — it is on the same `Ctrl+Shift+M` for
 exactly that reason, so a second reading of the same quantity is a second answer that will eventually
-disagree with the first. Live frame rate is the one we know it carries; check the window rather than
-assuming what else, since the list is DPG's and changes with it.
+disagree with the first. What it carries, looked at 2026-09-08 on DPG 2.3.1: the DearPyGui and ImGui
+versions; application average ms/frame with the FPS; vertex, index and triangle counts; the number of
+active and visible windows; and two plots over a settable history window — frame and presentation time
+against 60/30/low-FPS bands, and a breakdown of input routing, rendering and tool rendering. Plus an Input
+tab. The list is DPG's, so look rather than trust this paragraph if the answer matters.
 
 The practical test when choosing what to show: **would this number differ if the overlay were on a
 different view?** If not, it is the app's rather than this view's, and is where Metrics would look.
