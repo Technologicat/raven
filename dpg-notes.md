@@ -718,6 +718,35 @@ sets a primary window — Librarian and Visualizer both do. The rule still binds
 between two ordinary windows.
 `investigations/dpg-autosize/probe_zorder.py` re-runs it in a few seconds.
 
+## `add_image` covers in-window drawlists, whatever the child order says
+
+Drawing on top of a `dpg.add_image` — an overlay on a video frame, a marker on a picture — cannot be done
+with an ordinary drawlist in the same window. **The image renders in a pass that covers in-window
+drawlists regardless of their position in the child list**, so the usual z-order levers do nothing: neither
+`before=` at creation nor `move_item` to the end of the parent changes it.
+
+**The mechanism that works is a viewport drawlist**, `dpg.add_viewport_drawlist(front=True)` — DPG's
+canonical "always on top": it draws at the viewport level, above the whole window hierarchy. Where two of
+them overlap, the later-created one draws on top of the earlier.
+
+**It is a big hammer, and the costs are the reason to reach for it only when the above applies:**
+
+- **Coordinates are viewport-absolute.** Anything positioned relative to a widget has to offset by that
+  widget's own position — `guiutils.get_widget_pos(parent)` — and re-offset whenever the layout moves.
+- **It draws over *everything*, including properly-modal windows.** Input is blocked as it should be; the
+  drawing is not. So a file dialog or a help card gets an overlay painted across it.
+- **And over whatever replaces its parent.** Hiding the parent does not hide it, because it was never a
+  child of the parent — so a pane that takes the parent's place on screen gets the overlay too.
+
+**Which means anything drawn this way needs an app-driven "suppress" switch**, fed by whatever the app
+knows about what is currently in front: modals, and panes that take the parent's panel. There is no way to
+hide it from the DPG side, because from DPG's point of view nothing is wrong.
+
+**Give one switch to all of them rather than one each.** Live case 2026-09-08, Raven's avatar renderer: the
+crop overlay had such a switch and the FPS counter did not, so the counter drew over Librarian's chat graph
+and over every modal in two apps — the second half unnoticed for as long as the first. They share one flag
+now, because a caller fixing one had no reason to think of the other.
+
 ## A modal window does not stack over another modal window
 
 `show_item` on a second modal while one is already up does nothing visible. The call succeeds, no error

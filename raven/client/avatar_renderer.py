@@ -194,13 +194,21 @@ class DPGAvatarRenderer:
         # wire `crop_bbox` for overlay drawing only — widget positioning still follows the actual wire
         # state. When `None`, the overlay uses the wire bbox.
         self.show_crop_overlay = False
-        # Independent of `show_crop_overlay` — toggled by callers when a modal window
-        # (fdialog, helpcard, messagebox) is on top of the avatar. The crop overlay lives
-        # in a `front=True` viewport drawlist that DPG renders above all windows, including
-        # modals — so even though those windows are properly modal at the input layer
-        # (clicks outside them are blocked), the overlay still draws over them visually.
-        # Suppressing it from the renderer side is the only way to hide it.
-        self._overlay_suppressed = False
+        # Independent of `show_crop_overlay` and of `configure_fps_counter` — toggled by callers when
+        # something else is in front of the avatar: a modal window (fdialog, helpcard, messagebox), or
+        # another pane occupying the avatar's panel. **Everything this renderer draws in a `front=True`
+        # viewport drawlist needs it**, which is the crop overlay and the FPS counter both: DPG renders
+        # those above all windows, including properly-modal ones, so although input is blocked the
+        # drawing is not. Suppressing from the renderer side is the only way to hide them.
+        #
+        # One flag for both, deliberately. They had one each in effect — the crop overlay had this and
+        # the counter had nothing — and the counter went on being drawn over Librarian's chat graph and
+        # over every modal in both apps, because a caller fixing one had no reason to think of the other.
+        self._overlays_suppressed = False
+        # What `configure_fps_counter` was last told to want, as against whether it is drawn: a counter
+        # switched on and then covered must come back when the cover goes away, without the user asking
+        # for it again.
+        self._fps_counter_wanted = False
         self.overlay_bbox_preview: Optional[Mapping[str, Any]] = None
         # The viewport drawlist stays permanently `show=True` at the DPG level; visibility is
         # controlled by whether we populate it with draw items. An empty viewport drawlist is a
@@ -228,13 +236,21 @@ class DPGAvatarRenderer:
         """Show or hide the FPS counter.
 
         If `show is None`, toggle the state.
+
+        What this sets is whether the counter is *wanted*; whether it is drawn is that and
+        `set_overlays_suppressed` together. Toggling therefore reads the wish rather than the draw
+        item — asking the item would make the key a no-op whenever something was covering the avatar.
         """
+        if show is None:
+            show = not self._fps_counter_wanted
+        self._fps_counter_wanted = show
+        self._apply_fps_counter_visibility()
+
+    def _apply_fps_counter_visibility(self) -> None:
+        """Draw the counter if it is both wanted and not suppressed."""
         try:
             with guiutils.nonexistent_ok():
-                if show is None:
-                    show = not dpg.get_item_configuration(self.fps_text_draw_item)["show"]
-
-                if show:
+                if self._fps_counter_wanted and not self._overlays_suppressed:
                     dpg.show_item(self.fps_text_draw_item)
                 else:
                     dpg.hide_item(self.fps_text_draw_item)
@@ -270,19 +286,26 @@ class DPGAvatarRenderer:
         self.overlay_bbox_preview = bbox
         self._redraw_crop_overlay()
 
-    def set_overlay_suppressed(self, suppressed: bool) -> None:
-        """When True, hide the crop overlay regardless of `show_crop_overlay`.
+    def set_overlays_suppressed(self, suppressed: bool) -> None:
+        """When True, draw nothing that would sit in front of the avatar: crop overlay, FPS counter.
 
-        Used by the host app when a modal window (fdialog, helpcard, messagebox) is on top
-        of the avatar — DPG's `front=True` viewport drawlist draws over modals visually,
-        even though input is properly blocked. Callers typically poll their app's
-        "any modal visible" state each frame and call this when the state flips; the
-        renderer no-ops when the value is unchanged.
+        Used by the host app when something else is on top of the avatar — a modal window (fdialog,
+        helpcard, messagebox), or another pane occupying the avatar's panel. Both of those things are
+        drawn in `front=True` viewport drawlists, which DPG renders above all windows including
+        properly-modal ones: input is blocked but the drawing is not, so suppressing from this side is
+        the only way to hide them.
+
+        Neither `show_crop_overlay` nor `configure_fps_counter` is disturbed — this says what may be
+        *drawn*, they say what is *wanted*, and each comes back by itself when the cover goes away.
+
+        Callers typically poll their app's "is anything covering the avatar" state each frame and call
+        this when it flips; the renderer no-ops when the value is unchanged.
         """
-        if suppressed == self._overlay_suppressed:
+        if suppressed == self._overlays_suppressed:
             return
-        self._overlay_suppressed = suppressed
+        self._overlays_suppressed = suppressed
         self._redraw_crop_overlay()
+        self._apply_fps_counter_visibility()
 
     def _redraw_crop_overlay(self) -> None:
         """Redraw the crop-region overlay. Call whenever layout, wire `crop_bbox`, or overlay preview changes.
@@ -296,7 +319,7 @@ class DPGAvatarRenderer:
             dpg.delete_item(self.crop_overlay_drawlist_gui_widget, children_only=True)
 
             effective = self.overlay_bbox_preview if self.overlay_bbox_preview is not None else self.crop_bbox
-            if not self.show_crop_overlay or self._overlay_suppressed or self.full_w is None or not self.first_frame_received:
+            if not self.show_crop_overlay or self._overlays_suppressed or self.full_w is None or not self.first_frame_received:
                 # Leave the drawlist empty — no hide_item needed since an empty viewport drawlist renders nothing.
                 return
 

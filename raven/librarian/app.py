@@ -3108,8 +3108,18 @@ logger.info("App render loop starting.")
 exitcode = 0
 try:
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
+    # The avatar's crop overlay and FPS counter live in `front=True` viewport drawlists, which DPG draws
+    # above the whole window hierarchy — over a modal, whose input it correctly blocks but whose pixels it
+    # does not, and over whatever else is occupying the avatar's panel. Neither is something DPG can be
+    # asked to stop; the app has to say when the avatar is covered. See
+    # `DPGAvatarRenderer.set_overlays_suppressed`.
+    _avatar_was_covered = False
     while dpg.is_dearpygui_running():
         update_animations()
+        avatar_covered = is_any_modal_window_visible() or chat_graph_panel.is_shown
+        if avatar_covered != _avatar_was_covered:
+            dpg_avatar_renderer.set_overlays_suppressed(avatar_covered)
+            _avatar_was_covered = avatar_covered
         dpg.render_dearpygui_frame()
 
         # Idle throttle: sleep when nothing needs updating (avatar paused, no LLM streaming, no RAG indexing, no recent input).
