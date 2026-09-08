@@ -1015,3 +1015,100 @@ class TestClearing:
             assert ambient.frames == 1
         finally:
             animation.animator.clear()
+
+
+class TestAnAnimationWhoseWidgetsAreGoneIsDropped:
+    """The registry outlives any one widget in it, so a dead animation is everyone else's problem.
+
+    Left registered, it draws into nothing every frame — and because the error escapes the tick loop, the
+    app's render loop catches it and exits, naming whichever animation happened to be *next* in the list.
+    That is three places: the failing assertion, the module it fails in, and the fault. Dropping it here
+    with a line saying which one it was collapses those into one.
+
+    Live case (2026-09-08): a test built a `DPGChatGraphPanel` and never destroyed it, and the crash
+    landed in `test_animation.py` — this module — as a flash test failing with `Item not found`.
+    """
+
+    class Doomed(animation.Animation):
+        """Draws into a widget that has been deleted, the way a widget outliving its window does."""
+        def __init__(self, widget):
+            super().__init__()
+            self.widget = widget
+            self.frames = 0
+
+        def render_frame(self, t: int):
+            self.frames += 1
+            dpg.get_item_rect_min(self.widget)  # the item is gone; DPG raises
+            return animation.action_continue
+
+    class Healthy(animation.Animation):
+        def __init__(self):
+            super().__init__()
+            self.frames = 0
+
+        def render_frame(self, t: int):
+            self.frames += 1
+            return animation.action_continue
+
+    @staticmethod
+    def _deleted_widget(dpg_context):
+        """A widget id that DPG no longer knows, obtained the honest way rather than invented."""
+        with dpg.window() as window:
+            text = dpg.add_text("about to go away")
+        dpg.delete_item(window)
+        return text
+
+    def test_it_is_dropped_and_the_others_go_on(self, dpg_context):
+        doomed = self.Doomed(self._deleted_widget(dpg_context))
+        healthy = self.Healthy()
+        animation.animator.add(doomed)
+        animation.animator.add(healthy)
+        try:
+            animation.animator.render_frame()
+            assert doomed.frames == 1, "it never ran, so this fixture cannot tell a drop from a no-op"
+            assert animation.animator.active_count == 1
+            animation.animator.render_frame()
+            assert doomed.frames == 1, "the dead animation is still registered"
+            assert healthy.frames == 2, "the survivor stopped getting frames"
+        finally:
+            animation.animator.clear()
+
+    def test_it_says_which_animation_it_dropped_and_which_widget(self, dpg_context, caplog):
+        """The whole value is in the naming: without it the next reader is back to three places.
+
+        Captured at INFO, which is what Raven is run at — so the DEBUG line `nonexistent_ok` writes with
+        the same identifying detail is excluded, exactly as it would be in the field. A message that
+        pointed at that line instead of carrying its content would look complete under a DEBUG capture
+        and be useless to the person actually reading the log.
+        """
+        doomed = self.Doomed(self._deleted_widget(dpg_context))
+        animation.animator.add(doomed)
+        try:
+            with caplog.at_level("INFO"):
+                animation.animator.render_frame()
+            assert "nonexistent_ok:" not in caplog.text, \
+                ("this capture is letting DEBUG records through, so it cannot tell a self-sufficient "
+                 "ERROR line from one that leans on the DEBUG line beside it")  # <- the negative control
+            assert "Doomed" in caplog.text, "the dropped animation is not named"
+            assert "Item not found" in caplog.text, \
+                "the ERROR line does not say which widget; that half is only in the DEBUG line, which is off"
+        finally:
+            animation.animator.clear()
+
+    def test_an_ordinary_bug_still_propagates(self, dpg_context):
+        """The negative control, and the point of using `nonexistent_ok` rather than a bare `except`.
+
+        Only a deleted item is an expected way for an animation to die. Swallowing anything else would
+        turn every exception inside a `render_frame` into a silently vanishing animation — which is the
+        same three-places problem again, with nothing logged at all.
+        """
+        class Buggy(animation.Animation):
+            def render_frame(self, t: int):
+                raise ZeroDivisionError("an ordinary mistake in animation code")
+
+        animation.animator.add(Buggy())
+        try:
+            with pytest.raises(ZeroDivisionError):
+                animation.animator.render_frame()
+        finally:
+            animation.animator.clear()

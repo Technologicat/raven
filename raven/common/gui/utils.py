@@ -436,12 +436,14 @@ def _is_dpg_parent_gone(exc):
     """Check exception chain for DPG's 'parent could not be deduced' error (code 1011)."""
     return _exception_chain_mentions(exc, "Parent could not be deduced")
 
-def _log_suppressed_dpg_error(what: str, excvalue, traceback) -> None:
-    """Say, at DEBUG, what was swallowed, which line of ours asked for it, and — where knowable — on what."""
+def _describe_suppressed_dpg_error(what: str, excvalue, traceback) -> str:
+    """Say what was swallowed, which line of ours asked for it, and — where knowable — on what.
+
+    Returned rather than only logged, so that a caller inspecting `nonexistent_ok.errored` can put it in
+    a message of its own. Debug logging is usually off, so a caller that reports the failure at a level
+    people actually see must carry the identifying half with it or lose it.
+    """
     # Because a suppressed exception that leaves no trace is a debugging session nobody can start.
-    #
-    # DEBUG rather than WARNING: on the render path this is the expected outcome of a view rebuild landing
-    # mid-draw, and at WARNING it would be a wall of noise on every branch switch.
     #
     # The identity is the awkward half, and it is worth knowing why the line reads as it does. For a
     # `[1005]` DPG names the item itself, so its own message is the answer. For a `[1011]` it names the item
@@ -466,7 +468,7 @@ def _log_suppressed_dpg_error(what: str, excvalue, traceback) -> None:
         on_what = f", parent={describe_item(maybe_parent)}" if maybe_parent is not None else ""
 
     detail = " | ".join(str(exc).strip().replace("\n", " ") for exc in _causes(excvalue) if "Error:" in str(exc))
-    logger.debug(f"nonexistent_ok: suppressed DPG '{what}' at {where}{on_what} -- {detail or excvalue}")
+    return f"suppressed DPG '{what}' at {where}{on_what} -- {detail or excvalue}"
 
 def _causes(exc):
     """Yield `exc` and every exception along its `__cause__` chain."""
@@ -490,6 +492,11 @@ class nonexistent_ok:
         with nonexistent_ok() as nok:
             dpg.show_item(x)
         print(nok.errored)  # whether the context exited due to an exception
+        print(nok.detail)   # ...and what it was: which item, and the line of ours that asked
+
+    `detail` is `None` while nothing has been suppressed. It exists because the same description is
+    logged at DEBUG, which is normally off — so a caller reporting the failure at a level people see has
+    to carry the identifying half itself or lose it.
     """
     # Why `parent_gone_ok` is opt-in rather than simply part of the default answer:
     #
@@ -509,18 +516,28 @@ class nonexistent_ok:
     def __init__(self, parent_gone_ok: bool = False):
         self.parent_gone_ok = parent_gone_ok
         self.errored = False
+        self.detail: str | None = None
     def __enter__(self):
         return self
     def __exit__(self, exctype, excvalue, traceback):
         if exctype is not None:
             self.errored = True
             if _is_dpg_item_not_found(excvalue):
-                _log_suppressed_dpg_error("item not found", excvalue, traceback)
+                self._record("item not found", excvalue, traceback)
                 return True  # suppress
             if self.parent_gone_ok and _is_dpg_parent_gone(excvalue):  # noqa: SIM103 -- True/False are the context-manager protocol's suppress/reraise signals, not a generic boolean return
-                _log_suppressed_dpg_error("parent gone", excvalue, traceback)
+                self._record("parent gone", excvalue, traceback)
                 return True  # suppress
             return False  # reraise
+    def _record(self, what: str, excvalue, traceback) -> None:
+        """Keep the description for the caller, and log it.
+
+        DEBUG rather than WARNING: on the render path this is the expected outcome of a view rebuild
+        landing mid-draw, and at WARNING it would be a wall of noise on every branch switch. A caller for
+        whom it is *not* routine reads `detail` and says so at its own level.
+        """
+        self.detail = _describe_suppressed_dpg_error(what, excvalue, traceback)
+        logger.debug(f"nonexistent_ok: {self.detail}")
 
 def maybe_delete_item(item: str | int) -> None:
     """Delete `item` (DPG ID or tag), if it exists. If not, the error is ignored."""

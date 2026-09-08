@@ -104,7 +104,29 @@ class Animator:
             time_now = time.monotonic_ns()
             running_animations = []
             for animation in self._animations:
-                action = animation.render_frame(t=time_now)
+                # An animation whose widgets have been deleted draws into nothing, every frame, for as
+                # long as it stays registered. Today that is fatal — the error leaves this loop, the app's
+                # render loop catches it, and the app exits — and it names the animation that happened to
+                # be next in the list rather than the one at fault, since the list outlives any one of the
+                # widgets in it.
+                #
+                # So: drop it, and say which one. Dropping without `finish` is `action_cancel`'s meaning
+                # and is the only safe choice here, `finish` being the method most likely to touch the
+                # very widgets that just turned out to be gone.
+                #
+                # This catches *unguarded* escapes only. An animation that expects its widget to come and
+                # go — a view rebuilt mid-draw — guards its own drawing and never reaches here, which is
+                # what keeps this an error rather than a routine event.
+                with guiutils.nonexistent_ok() as nok:
+                    action = animation.render_frame(t=time_now)
+                if nok.errored:
+                    # `nok.detail` names the widget and the line that asked for it. Carried here rather
+                    # than left to the DEBUG line `nonexistent_ok` also writes, because debug logging is
+                    # normally off — and the identity is the whole value of the message.
+                    logger.error(f"Animator.render_frame: {type(animation).__name__}@0x{id(animation):x} "
+                                 f"drew into a widget that no longer exists; dropping it. Something built "
+                                 f"it and deleted its widgets without cancelling it. {nok.detail}")
+                    continue
                 if action is action_continue:
                     running_animations.append(animation)
                 elif action is action_finish:
