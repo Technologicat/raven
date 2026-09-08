@@ -2703,43 +2703,53 @@ decision goes, since wrapping is needed under every shape.
 
 ### The shape: pages, as a game's controls screen has them
 
-Proposed by Juha (2026-09-08). Page 1 is the hotkey reference, being what a reader opens F1 for most often;
-the prose help becomes page 2, and more pages if wanted. Left and Right change the page, with `<` and `>`
-buttons at the card's edges for the pointer; Home and End go to the first and last; a `1 / 3` counter sits
-in the upper right.
+Proposed by Juha (2026-09-08), and settled with him the same day.
+
+**The first cut is not a paged hotkey table — it is prose on one page and hotkeys on another.** Splitting
+the *table* across pages is available later if it ever needs it, and is not the go-to. What Librarian wants
+first is page 1 dedicated to the hotkeys, with all the prose moved to page 2. If the keys then fit on one
+screen the card becomes **a reference card you can keep**: printable as-is, or screenshotted and left open
+in an image viewer on a second monitor while you learn them. That is the payoff, and it is lost the moment
+prose shares the page.
 
 **Why this is the right minimal answer rather than merely a workable one: it converts the constraint from
 hard to soft.** Everything above is a consequence of a table that must fit one fixed-height window — the
 rebalancing that hit its floor, the separator row spent to buy a line, the attachments that have nowhere to
-be described, and the keys that are missing from the card for want of rows rather than for any reason of
-their own. A table that may run onto a second page has none of those, and the ones already lost come back.
+be described, and the keys missing from the card for want of rows rather than for any reason of their own.
 
-**It needs no new vocabulary from the nine apps that build cards.** `hotkey_info` already carries in-band
-sentinels — `helpcard.hotkey_new_column`, `helpcard.hotkey_blank_entry` — so a `hotkey_new_page` sibling is
-the same mechanism one level up. An app that never uses it gets a single page and behaves exactly as now,
-which is what lets this land without touching the eight other cards.
+**A toolbar across the top**, carrying the controls, the page's name and the counter:
 
-**The counter is house vocabulary already**: `N / M` is the chat message sibling counter, Cherrypick's
-`[13 / 133]` and the chat graph's `3 / 12`.
+```
+|<  <  >  >|      Some random topic                    1 / 3
+```
 
-**And the keys are free.** The card owns the keyboard while it is up — the app handlers return early when a
-modal is visible, and the card has its own handler — so Left, Right, Home and End collide with nothing.
-Home and End also keep the meaning they have everywhere else, being the ends of a run.
+- **Four buttons: first, previous, next, last.** The last two exist as much for *signage* as for the
+  pointer: they are what the `Home` and `End` hotkeys hang their tooltips on. A help card that needs a help
+  card to explain its own navigation would be a delicious recursion and a bad card.
+- **The glyphs are the chat graph's sibling-navigation ones**, taken from `chatgraph_panel`:
+  `fa.ICON_BACKWARD_FAST`, `fa.ICON_CARET_LEFT`, `fa.ICON_CARET_RIGHT`, `fa.ICON_FORWARD_FAST`. Its ±10
+  pair has no counterpart here. Same verbs, so a reader should not have to learn them twice.
+- **Buttons stop at the ends rather than wrapping, and are enabled exactly when pressing them would do
+  something.** That is the Raven way and is already honoured by the chat graph, the chat log and the
+  Visualizer.
+- **`N / M` is house vocabulary already**: the chat message sibling counter, Cherrypick's `[13 / 133]`, the
+  graph's `3 / 12`.
 
-Three decisions it should make rather than discover:
+**A page name is required, not optional**, so that nobody building a card skips it. It goes in the toolbar
+beside the counter; the window title is the other candidate and is where a reader is less likely to look.
 
-- **The `<` and `>` buttons stop at the ends rather than wrapping.** The chat graph's sibling steppers are
-  specified as enabled exactly when pressing them would do something, and wrapping through two or three
-  pages is disorienting where wrapping through a hundred siblings is not.
-- **A page carries a name as well as a number** — "Hotkeys 1 / 3" — or a reader who lands on page 2 has to
-  work out what they are looking at. The page-break sentinel is the natural place to put it.
-- **The card's height is the largest page's, fixed for the session, not each page's own.** A window that
-  resizes under the arrow keys is unpleasant to read, and the alternative costs only some empty space on
-  the shorter pages.
+**The keys are free because the card is always modal** — it owns the keyboard outright while it is up — so
+`Left`, `Right`, `Home` and `End` collide with nothing, and the arrows are the more intuitive binding for
+turning a page. `Home` and `End` keep the meaning they have everywhere else, the ends of a run.
+
+**The card's height is the largest page's, fixed for the session, not each page's own.** A window that
+resizes under the arrow keys is unpleasant to read, and the alternative costs only some empty space on the
+shorter pages.
 
 **Cost: M.** It is in `raven/common/gui/helpcard.py`, which nine apps share, so it is held to the
-foundation bar — but the change is additive and opt-in, and the horizontal `wrap=` fix above is wanted
-under this shape as much as under any other.
+foundation bar — but the change is additive: an app that declares no pages gets one page and behaves as it
+does now, which is what lets this land without touching the other eight cards. The horizontal `wrap=` fix
+above is wanted under this shape as much as any other.
 
 ## Modernize the Librarian system prompt / character card
 

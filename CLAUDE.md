@@ -623,12 +623,15 @@ and it ends the day Librarian grows something saveable.
 ### A debug overlay reports on the thing it is drawn on
 
 Not on the app. The avatar's counter says what the avatar's video is doing; the chat graph's says what the
-graph costs to rebuild and draw. Anything app-wide is already answered by DPG's own Metrics window, which
-is on the same `Ctrl+Shift+M` for exactly that reason — so a per-view overlay repeating it is a second
-answer to a settled question, and the two will eventually disagree.
+graph costs to rebuild and draw.
+
+**And do not duplicate what DPG's own Metrics window already shows** — it is on the same `Ctrl+Shift+M` for
+exactly that reason, so a second reading of the same quantity is a second answer that will eventually
+disagree with the first. Live frame rate is the one we know it carries; check the window rather than
+assuming what else, since the list is DPG's and changes with it.
 
 The practical test when choosing what to show: **would this number differ if the overlay were on a
-different view?** If not, it belongs to the app and is already covered.
+different view?** If not, it is the app's rather than this view's, and is where Metrics would look.
 
 `Ctrl+Shift+M` is therefore one state — *show me the numbers* — rather than a toggle per overlay: it turns
 on whatever is relevant to what is currently on screen.
