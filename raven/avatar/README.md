@@ -37,7 +37,7 @@
 - **Lipsynced speech**. The character can lipsync to the speech synthesizer of the `tts` module in Raven-server.
 - **Animefx**. Optional anime-style cel effects, e.g. notice lines, sweatdrops, anger veins, ...
 - **Upscaling**. Animation is 512×512, but can be upscaled to e.g. 1024×1024.
-  - Anime4K (highest quality), or plain bicubic (default) or bilinear interpolation (fastest).
+  - Anime4K (highest quality), or Lanczos, bicubic (default) or bilinear interpolation (fastest).
   - Bicubic is ~25% faster than Anime4K with no observable quality difference once the postprocessor is enabled.
 - **Postprocessing**. Visual effects such as [bloom](https://en.wikipedia.org/wiki/Bloom_(shader_effect)), [chromatic aberration](https://en.wikipedia.org/wiki/Chromatic_aberration), [scanlines](https://en.wikipedia.org/wiki/Scan_line), ...
 - **Web API**: Integrate the avatar into your own apps. We provide Python bindings (see [`raven.client.api`](../client/api.py) and [`raven.client.avatar_renderer`](../client/avatar_renderer.py)).
@@ -157,13 +157,17 @@ Assets include character images (512x512 PNG RGBA), extra cels (512x512 PNG RGBA
 
 Backdrops are applied at the client side in [`raven.client.avatar_renderer`](../client/avatar_renderer.py). This works by rendering and optionally postprocessing a background texture, then blitting the video texture on top of it. See [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py) for a usage example.
 
-The upscaler supports four quality modes, selected via the `quality` parameter (see [`raven.common.video.upscaler`](../common/video/upscaler.py)):
+The upscaler supports five quality modes, selected via the `quality` parameter (see [`raven.common.video.upscaler`](../common/video/upscaler.py)):
 
 - `"high"` and `"low"`: Anime4K models (PyTorch port), with rudimentary RGBA support added; see the [vendored code](../vendor/anime4k/anime4k.py).
+- `"lanczos"`: [Lanczos resampling](https://en.wikipedia.org/wiki/Lanczos_resampling), the sharpest of the three that bypass Anime4K, and still cheaper than Anime4K's `"low"`. The same resampler Raven uses for still images (see [`raven.common.image.lanczos`](../common/image/lanczos.py)). Bypasses Anime4K entirely.
 - `"bicubic"` (default): plain bicubic interpolation via `torch.nn.functional.interpolate`. Much faster than Anime4K; visually indistinguishable when the postprocessor is enabled. Bypasses Anime4K entirely.
 - `"bilinear"`: even faster, but in practice the result is too blurry to be usable. Included for completeness. Bypasses Anime4K entirely.
 
-For the bypass modes, the alpha channel always uses bilinear interpolation, because bicubic's negative lobes can produce out-of-range alpha values on edges.
+For the bypass modes, the alpha channel always uses bilinear interpolation, unless the whole image already
+does. Bicubic and Lanczos both have negative lobes, which overshoot at a step edge — in colour that is the
+sharpening they are chosen for, but in alpha it produces out-of-range values, which is a halo around the
+silhouette rather than a soft edge.
 
 The [video postprocessor](../common/video/postprocessor.py) is a set of custom pixel shaders implemented in PyTorch.
 

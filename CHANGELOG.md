@@ -114,6 +114,8 @@
 
 - **the settings editor says where the keyboard is, and Ctrl+Space reaches the text-to-speak field.** The emotion chooser, the voice chooser and that field now carry the blue pulse the rest of the constellation uses for the same thing — DPG draws nothing of its own on any of the three, so until now a focused control was indistinguishable from an unfocused one. The field was also the one keyboard-reachable control with no hotkey to reach it; Ctrl+Space is what Raven-librarian uses for its composer.
 
+- **`lanczos` as an upscaler quality**, alongside `bilinear` and `bicubic`. The sharpest of the three that skip Anime4K, and still under half the cost of Anime4K's `low` — so it is worth trying if bicubic looks soft to you but the neural upscaler is more than your GPU has to spare. It is the same resampler Raven uses for still images everywhere else. As with bicubic, the character's silhouette is scaled bilinearly, since a ringing alpha reads as a halo.
+
 *Raven-fixbib*
 
 - **records naming the same field twice are now repaired too**, which is how a database export arrives: a ProQuest record carries a separate `annote` for its copyright statement, its last-updated date and its subject terms, and BibTeX has no way to say that, so the parser rejects the entry whole — title, authors and all. The repeats are merged into one field, values kept and joined by newlines, and everything else in the record is left character for character as it was.

@@ -10,6 +10,8 @@ import threading
 import torch
 import torch.nn.functional
 
+from ..image import lanczos
+
 from ...vendor.anime4k import anime4k
 
 class Upscaler:
@@ -30,11 +32,16 @@ class Upscaler:
                    "high": slow, with good quality (Anime4K larger models)
                    "bilinear": very fast, basic bilinear interpolation (no Anime4K)
                    "bicubic": very fast, bicubic interpolation (no Anime4K, slightly sharper than bilinear)
+                   "lanczos": fast, Lanczos interpolation (no Anime4K, sharper than bicubic)
+
+        The bypass modes are ordered by cost as listed: bilinear is nearly free, bicubic a few times
+        that, and Lanczos a few times again — still well under half of what Anime4K's "low" costs, so
+        it is the sharpest option that does not go near a neural net.
         """
         if preset not in ("A", "B", "C"):
             raise ValueError(f"Unknown preset '{preset}'; valid: 'A', 'B', 'C'.")
-        if quality not in ("low", "high", "bilinear", "bicubic"):
-            raise ValueError(f"Unknown quality '{quality}'; valid: 'low', 'high', 'bilinear', 'bicubic'.")
+        if quality not in ("low", "high", "bilinear", "bicubic", "lanczos"):
+            raise ValueError(f"Unknown quality '{quality}'; valid: 'low', 'high', 'bilinear', 'bicubic', 'lanczos'.")
 
         self.device = device
         self.dtype = dtype
@@ -49,8 +56,8 @@ class Upscaler:
         # cropped-then-upscaled size); the lock serializes those against an in-flight `upscale` call.
         self._lock = threading.Lock()
 
-        if quality in ("bilinear", "bicubic"):
-            self.pipeline = None  # bypass Anime4K; use torch.nn.functional.interpolate
+        if quality in ("bilinear", "bicubic", "lanczos"):
+            self.pipeline = None  # bypass Anime4K; resample directly
             return
 
         # For the models, see `anime4k` for explanation, and `anime4k.model_dict` for available choices.
@@ -104,7 +111,8 @@ class Upscaler:
     def upscale(self, image_tensor: torch.Tensor) -> torch.Tensor:
         """Upscale `image_tensor` to `(upscaled_height, upscaled_width)`.
 
-        The RGB data is upscaled using Anime4K, and the alpha channel is upscaled bilinearly.
+        The colour channels go through whichever resampler `quality` selected; the alpha channel is
+        upscaled bilinearly unless that resampler was bilinear too.
 
         `image_tensor`: [c, h, w], where c = 3 (RGB) or c = 4 (RGBA).
         """
@@ -117,18 +125,29 @@ class Upscaler:
             target_size = (self.upscaled_height, self.upscaled_width)
 
             if self.pipeline is None:
-                # Bypass mode: bilinear or bicubic interpolation, no Anime4K.
-                # Alpha always uses bilinear — bicubic's negative lobes cause
-                # ringing at silhouette edges (Gibbs phenomenon).
-                if c == 3 or self.quality == "bilinear":
+                # Bypass mode: a plain resampler, no Anime4K.
+                #
+                # Bilinear is the one that needs no care: its kernel is non-negative, so it cannot
+                # overshoot and the whole RGBA image goes through in one call.
+                if self.quality == "bilinear":
                     return torch.nn.functional.interpolate(image_tensor.unsqueeze(0),
                                                            target_size,
-                                                           mode=self.quality,
+                                                           mode="bilinear",
                                                            align_corners=False)[0]
-                upscaled_rgb = torch.nn.functional.interpolate(image_tensor[:3, :, :].unsqueeze(0),
-                                                               target_size,
-                                                               mode="bicubic",
-                                                               align_corners=False)[0]
+
+                # The other two have negative lobes, which overshoot at a step edge (Gibbs phenomenon).
+                # In colour that reads as the sharpening people choose these for; in alpha it is a halo,
+                # so the silhouette gets bilinear whatever the colour got.
+                rgb = image_tensor[:3, :, :] if c == 4 else image_tensor
+                if self.quality == "lanczos":
+                    upscaled_rgb = lanczos.resize(rgb.unsqueeze(0), *target_size)[0]
+                else:  # "bicubic"
+                    upscaled_rgb = torch.nn.functional.interpolate(rgb.unsqueeze(0),
+                                                                   target_size,
+                                                                   mode="bicubic",
+                                                                   align_corners=False)[0]
+                if c == 3:
+                    return upscaled_rgb
                 upscaled_alpha = torch.nn.functional.interpolate(image_tensor[3:4, :, :].unsqueeze(0),
                                                                  target_size,
                                                                  mode="bilinear")[0]

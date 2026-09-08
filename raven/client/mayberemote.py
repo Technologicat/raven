@@ -731,7 +731,7 @@ class Upscaler(MaybeRemoteService):
                  allow_local: bool,
                  device_string: Optional[str] = None,
                  dtype: Optional[Union[str, torch.dtype]] = None):
-        """Image upscaler (Anime4K-PyTorch, plus bilinear / bicubic fast paths).
+        """Image upscaler (Anime4K-PyTorch, plus bilinear / bicubic / Lanczos fast paths).
 
         Mirrors the `imagefx` upscale endpoint: target resolution, preset, and quality
         travel with each call. In local mode, `_LocalUpscaler` instances are cached by
@@ -739,7 +739,7 @@ class Upscaler(MaybeRemoteService):
         repeat calls with the same config reuse the cached pipeline.
 
         `allow_local`: See `MaybeRemoteService`. Anime4K is small and loads fast; the
-                       `bilinear` / `bicubic` quality settings skip Anime4K entirely.
+                       `bilinear` / `bicubic` / `lanczos` quality settings skip Anime4K entirely.
 
         `device_string`, `dtype`: Required if `allow_local=True`. Same semantics as `Postprocessor`.
         """
@@ -775,7 +775,7 @@ class Upscaler(MaybeRemoteService):
         `preset`: one of `"A"`, `"B"`, `"C"` (Anime4K-style pipeline selection).
 
         `quality`: one of `"low"`, `"high"` (Anime4K model sizes), or `"bilinear"` /
-                   `"bicubic"` (fast bypass — no Anime4K).
+                   `"bicubic"` / `"lanczos"` (fast bypass — no Anime4K), in that order of cost.
 
         Returns the upscaled image as float32 `np.ndarray` in [0, 1], shape `(upscaled_height, upscaled_width, 4)`.
         """

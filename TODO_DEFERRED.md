@@ -58,25 +58,6 @@ symmetric check would report the good direction as a failure.
 `hotkey_info` being the most thorough of the nine. The remaining apps' READMEs do not exist yet, and
 writing them is not mid-sprint work.
 
-## Lanczos as an avatar upscaling option
-
-*Cluster: avatar · Cost: S · Gate: none · Filed: 2026-09-08*
-
-`raven.common.video.upscaler` offers `low` / `high` (Anime4K model sizes) and `bilinear` / `bicubic` (fast
-bypass, no Anime4K). Raven resamples with Lanczos nearly everywhere else, and it is missing from the one
-place a user picks a scaler by name.
-
-**Decided: Lanczos for RGB, bilinear for alpha** (Juha, 2026-09-08). The existing bypass already treats
-alpha separately, because bicubic's negative lobes ring along the silhouette edge; Lanczos has the same
-lobes, so it inherits the same answer rather than the same code path.
-
-Mostly wiring: a branch in `upscaler.py`'s bypass calling `lanczos.resize`, the string added to its
-validation tuple, and the option named in `client.mayberemote`'s two docstrings, `librarian/config.py`'s
-comment, and the settings editor's dropdown. What makes it an afternoon rather than an hour is checking
-whether the server module validates the name independently, and measuring where it sits for speed — the
-existing options are described by speed ("lightning-fast", "very fast"), so a new one is expected to say,
-and `raven/common/video/tests/bench_postprocessor.py` is the instrument.
-
 ## A metrics readout for the chat graph, and a placement bug in the avatar's
 
 *Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-08*
@@ -1889,43 +1870,6 @@ Worth doing because these are exactly the sites a future refactor moves between 
 were done first because an unknown future caller is the live risk there; app code has a known call graph today,
 and the classification is the slow part.
 
-## The avatar upscaler offers bilinear and bicubic, but not Lanczos
-
-*Cluster: ? · Cost: ? · Gate: 0.2.9, early · Filed: 2026-07-29 · See also: "Move the avatar backdrop onto `image.utils.fit_cover`"*
-
-`raven.common.video.upscaler.Upscaler`'s `quality` parameter takes `"low"` / `"high"` (Anime4K model sizes)
-or `"bilinear"` / `"bicubic"` (bypass Anime4K entirely, straight to `torch.nn.functional.interpolate`).
-`raven.common.image.lanczos` belongs in that second group and is missing from it — it is GPU-enabled, already
-a Raven dependency, and takes `(B, C, H, W)` in and out, which is exactly the shape the bypass branch already
-juggles with its `.unsqueeze(0)` / `[0]`. Its docstring states it works for both directions, so nothing about
-the upscaling use is out of scope for it.
-
-Two things to get right in the bypass branch (`Upscaler.upscale`):
-
-- **Alpha stays bilinear.** The branch already splits RGB from alpha for bicubic, because bicubic's negative
-  lobes ring at silhouette edges. Lanczos is a windowed sinc with *several* lobes, so it has more negative
-  lobe than bicubic, not less — the same reasoning applies with more force. What changes is that the split's
-  hardcoded `mode="bicubic"` has to become the selected filter, and the `c == 3 or quality == "bilinear"`
-  fast path stays as it is.
-- **`order` stays at `DEFAULT_ORDER`** (decided by Juha, 2026-07-29). `lanczos.resize` takes an `order`
-  (kernel size / ringing trade-off) that `F.interpolate` has no equivalent for, so the question came up of
-  whether to surface it. It should not be: `quality` is a short list of named presets rather than a knob
-  panel, and the bypass filters it would sit beside take no parameters either. Pass the default and leave
-  the parameter alone.
-
-The real cost is not the code but the **duplicated option list**: the valid values appear in `Upscaler`'s
-validation and docstring, `raven/avatar/settings_editor/app.py:625` (hardcoded list) and `:477`,
-`raven/server/config.py:278`, `raven/librarian/config.py:470`, and `raven.client.mayberemote`'s docstring —
-several of them carrying the same hand-maintained "what each value means" comment. Adding one entry means
-editing all of them, and the next addition will too. Worth considering whether the list should have a single
-source of truth while touching them anyway.
-
-Note also that `quality` already mixes two different axes — model size for Anime4K, filter choice for the
-bypass. Lanczos joins the second axis, so it fits the existing shape; it does make the conflation more
-visible, but untangling it is a separate (and API-breaking) question.
-
-Raised by Juha (2026-07-29).
-
 ## GUI: hardcoded stand-ins for values DPG has no getter for
 
 *Cluster: ? · Cost: ? · Gate: — · Filed: 2026-07-30*
@@ -2239,7 +2183,7 @@ Raised by Juha (2026-07-29), right after the cleanup dialog landed.
 
 ## Move the avatar backdrop onto `image.utils.fit_cover`
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9, early · Filed: 2026-07-29 · See also: "The avatar upscaler offers bilinear and bicubic, but not Lanczos", "Consolidate remaining numpy/tensor/DPG image conversions"*
+*Cluster: ? · Cost: ? · Gate: 0.2.9, early · Filed: 2026-07-29 · See also: "Consolidate remaining numpy/tensor/DPG image conversions"*
 
 `DPGAvatarRenderer.configure_backdrop` (`raven/client/avatar_renderer.py`) scales its backdrop with PIL —
 `scale = max(...)`, resize, crop — which is exactly what `raven.common.image.utils.fit_cover` now does. Porting
@@ -2272,9 +2216,10 @@ small ones back.
 
 None of this is urgent: the resize fires on a window resize, never in a hot loop.
 
-**One session should close this and the Lanczos item together**, and the numpy/tensor/DPG conversion item
-if it fits. All three are the same shape: the constellation grew a shared implementation and a call site
-predates it, so each is a small port that leaves one fewer resampler or converter behind.
+**The third of this shape has now closed** — the avatar upscaler gained a Lanczos mode on 2026-09-08 — so
+what is left is this and the numpy/tensor/DPG conversion item, which should go together if they fit. Both
+are the same shape: the constellation grew a shared implementation and a call site predates it, so each is
+a small port that leaves one fewer resampler or converter behind.
 
 Noticed while extracting `fit_contain` / `fit_cover` for the cleanup preview's thumbnail grid (2026-07-29).
 
@@ -2976,7 +2921,7 @@ Discovered during raven-cherrypick loader pipeline design.
 
 ## Consolidate remaining numpy/tensor/DPG image conversions
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 if it fits · Filed: 2026-03-20 · See also: "The avatar upscaler offers bilinear and bicubic, but not Lanczos", "Move the avatar backdrop onto `image.utils.fit_cover`"*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 if it fits · Filed: 2026-03-20 · See also: "Move the avatar backdrop onto `image.utils.fit_cover`"*
 
 `raven/common/image/utils.py` provides canonical `np_to_tensor`, `tensor_to_np`, `tensor_to_dpg_flat`. The `imagefx.py` conversions have been migrated. Remaining sites have intentional differences that make direct replacement impractical:
 

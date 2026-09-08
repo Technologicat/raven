@@ -35,6 +35,10 @@ class TestUpscalerValidation:
         u = Upscaler("cpu", torch.float32, 64, 64, quality="bicubic")
         assert u.pipeline is None
 
+    def test_lanczos_bypass_has_no_pipeline(self):
+        u = Upscaler("cpu", torch.float32, 64, 64, quality="lanczos")
+        assert u.pipeline is None
+
     def test_anime4k_has_pipeline(self):
         u = Upscaler("cpu", torch.float32, 64, 64, preset="C", quality="low")
         assert u.pipeline is not None
@@ -101,6 +105,22 @@ class TestUpscalerShapeBypass:
         u = Upscaler("cpu", torch.float32, 64, 48, quality="bicubic")
         result = u.upscale(torch.rand(4, 16, 16))
         assert result.shape == (4, 48, 64)
+
+    def test_lanczos_rgb_shape(self):
+        u = Upscaler("cpu", torch.float32, 64, 48, quality="lanczos")
+        result = u.upscale(torch.rand(3, 16, 16))
+        assert result.shape == (3, 48, 64)
+
+    def test_lanczos_rgba_shape(self):
+        u = Upscaler("cpu", torch.float32, 64, 48, quality="lanczos")
+        result = u.upscale(torch.rand(4, 16, 16))
+        assert result.shape == (4, 48, 64)
+
+    def test_lanczos_downscale_shape(self):
+        """The resampler halves in stages past 2x, which is a path the other two do not have."""
+        u = Upscaler("cpu", torch.float32, 16, 12, quality="lanczos")
+        result = u.upscale(torch.rand(4, 96, 128))
+        assert result.shape == (4, 12, 16)
 
     def test_non_square_input(self):
         u = Upscaler("cpu", torch.float32, 64, 48, quality="bilinear")
@@ -190,6 +210,22 @@ class TestUpscalerAlphaBypass:
         image[3, :, 8:] = 1.0
         result = u.upscale(image)
         # Bilinear alpha should stay in [0, 1] — no Gibbs ringing
+        assert result[3].min() >= -1e-5
+        assert result[3].max() <= 1.0 + 1e-5
+
+    def test_lanczos_alpha_uses_bilinear(self):
+        """Lanczos has negative lobes like bicubic, so the silhouette gets the same protection.
+
+        The control is in the test: the *same* step edge is asserted to overshoot in colour. Without
+        it, a clean alpha would be equally consistent with a resampler that never rings at all, and
+        this would pass whatever the alpha path did.
+        """
+        u = Upscaler("cpu", torch.float32, 128, 128, quality="lanczos")
+        image = torch.zeros(4, 16, 16)
+        image[:, :, 8:] = 1.0  # one sharp edge, in every channel including alpha
+        result = u.upscale(image)
+        assert result[:3].min() < -1e-3 or result[:3].max() > 1.0 + 1e-3, \
+            "colour did not ring on this edge, so a clean alpha says nothing about which resampler it took"
         assert result[3].min() >= -1e-5
         assert result[3].max() <= 1.0 + 1e-5
 

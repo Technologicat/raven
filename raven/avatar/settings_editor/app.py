@@ -466,7 +466,7 @@ class PostprocessorSettingsEditorGUI:
 
         self.upscale = 2.0  # ...but the animator has a realtime super-resolution filter (anime4k). E.g. upscale=1.5 -> 768x768; upscale=2.0 -> 1024x1024.
         self.upscale_preset = "C"  # "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
-        self.upscale_quality = "bicubic"  # "low": anime4k fast, acceptable image quality; "high": anime4k slow, good image quality; "bilinear": lightning-fast, bad quality; "bicubic": very fast, often acceptable quality.
+        self.upscale_quality = "bicubic"  # "low": anime4k fast, acceptable image quality; "high": anime4k slow, good image quality; "bilinear": lightning-fast, bad quality; "bicubic": very fast, often acceptable quality; "lanczos": fast, sharper than bicubic.
 
         self.postprocessor_enabled = True
 
@@ -614,14 +614,14 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_text("Choose Anime4K preset\n    A = optimized to remove blur, resampling artifacts, smearing\n    B = optimized to remove ringing/aliasing\n    C = optimized for images with no degradation\nAnime4K is used when quality is 'low' or 'high'.", parent="upscale_preset_tooltip")  # tag
                         dpg.add_text("Preset")
                     with dpg.group(horizontal=True):
-                        self.upscale_qualities = ["low", "high", "bilinear", "bicubic"]
+                        self.upscale_qualities = ["low", "high", "bilinear", "bicubic", "lanczos"]
                         dpg.add_combo(items=self.upscale_qualities,
                                       default_value=self.upscale_quality,
                                       width=self.button_width - 64,
                                       callback=self.on_upscaler_settings_change,
                                       tag="upscale_quality_choice")
                         dpg.add_tooltip("upscale_quality_choice", tag="upscale_quality_tooltip")  # tag
-                        dpg.add_text("Choose upscale quality/speed tradeoff.\n    low = Anime4K with chosen preset, low quality mode [recommended]\n    high = Anime4K with chosen preset, high quality mode\n    bilinear = simple bilinear scaling\n    bicubic = bicubic scaling [recommended, low-cost option]", parent="upscale_quality_tooltip")  # tag
+                        dpg.add_text("Choose upscale quality/speed tradeoff.\n    low = Anime4K with chosen preset, low quality mode [recommended]\n    high = Anime4K with chosen preset, high quality mode\n    bilinear = simple bilinear scaling\n    bicubic = bicubic scaling [recommended, low-cost option]\n    lanczos = Lanczos scaling, sharper than bicubic and still cheaper than Anime4K", parent="upscale_quality_tooltip")  # tag
                         dpg.add_text("Quality")
                     dpg.add_text("[Presets as in Anime4K.]", color=(140, 140, 140))
 
