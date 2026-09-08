@@ -1776,6 +1776,8 @@ class TestAttachmentThumbnails:
         app_state["HEAD"] = root
         built.refresh()
         assert built._awaited_thumbnails == set()
+        built.destroy()
+        dpg.delete_item(holder)
 
     def test_no_provider_means_no_waiting(self, panel):
         """The default. Every other test in this module builds a panel without one."""
