@@ -13,6 +13,23 @@ exhibit-critical, and this one is smaller than 16 by some margin.
 Origin: `investigations/todo-sweep-2026-08-10/`, batch 6, with `markdown_block_probe.py` establishing the
 mechanism.
 
+## Why the rest of this waits until after Researchers' Night
+
+Recorded 2026-09-08, because it has been reasoned through in conversation more than once and had reached no
+file.
+
+**The exhibit does not need it.** The message composer, this renderer and the chat log's presentation are
+all in a much better state than they were a year ago, and nobody complained then. So the remaining steps
+are slack: worth doing if the sprint leaves time, and costing the exhibit nothing if it does not.
+
+**What is actually wanted is bigger than the sprint.** Fenced code blocks, and LaTeX equation rendering —
+that is a multi-week build, not a corner to be cut into the fortnight before an exhibit.
+
+**And Librarian is a long-term build rather than an annual demo.** Once a year at Researchers' Night is not
+what it is for, so the polish has the rest of the year to happen in. The usual caveat applies — other
+priorities may take over, which is development as usual. Worth knowing that the queued Visualizer work is
+largely independent of this, so two tracks could run at once.
+
 ## The finding
 
 **The chat view puts two independent barriers in front of block-level Markdown, and the vendored renderer is

@@ -32,7 +32,28 @@ lose their claim on the next four weeks.
 6. **The fleet lint policy** — `~/.claude/TODO_DEFERRED.md`, "Whitespace checking fell out of the fleet when
    it moved to ruff". Not this repo's file, and not this repo's decision alone.
 
-## Next session, from 2026-08-31
+## Next session, from 2026-09-08
+
+**The sprint's build order, decided by Juha 2026-09-08**, with the exhibit 18 days out. The first three are
+meant to be done inside a day or two — **by end of Thursday 2026-09-10 at the latest** — which is what
+leaves the one large item a safe margin rather than a hopeful one.
+
+1. **The two hammerspace items**, both specced in `TODO_DEFERRED.md` and neither needing a decision first:
+   the chat graph's metrics readout, and the help card's paging. Small-ish, and each improves the product
+   rather than merely repairing it.
+2. **Per-character role icons for stored messages** — `TODO_DEFERRED.md`. Small-ish, and it fixes a defect
+   the chat graph made conspicuous: a whole branch of messages wearing the currently configured
+   character's face.
+3. **Band-2 item 11, the avatar's expression following the spoken words** — open, and at this point it is a
+   *prototype and a decision* rather than a build. See the gate in `briefs/researchers-night/README.md`.
+4. **Brief 16 item 8, search in both halves.** The large one: nontrivial GUI and UX work, probably at least
+   a week. Everything above is sized to leave room for it.
+5. **The Markdown renderer's remaining steps — slack**, if time is left over. The reasoning is in
+   `briefs/researchers-night/markdown-block-rendering-brief.md`.
+
+Then item 10 of brief 16, the look check, once the thumbnails and role glyphs are all in place.
+
+## Superseded: next session, from 2026-08-31
 
 **Band-2 item 10 is done** — designed, built, live-tested and closed on 2026-08-28, as
 `briefs/researchers-night/done/stt-audio-input-panel.md`.
