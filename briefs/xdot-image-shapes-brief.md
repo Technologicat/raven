@@ -91,19 +91,60 @@ local viewer does with a local file, and it is worth having said out loud rather
 ### 3. Mip selection, which is the half that applies to both — **done, 2026-09-07**
 
 **What was built**, and what a reader of pieces 1 and 2 needs to know about it: option (a). `ImageShape`
-takes `mips`, a sequence of `MipLevel(width, height, texture)` holding the chain *below* its `texture`,
-coarsest last; the renderer walks it for the coarsest level that still covers the drawn size in both axes,
-and falls back to `texture` when none does. The levels below the finest are what `mips` holds, so the
-renderer needs no native dimensions to know it has run out.
+takes `levels`, a sequence of `MipLevel(width, height, texture)` finest first; the renderer walks it for
+the coarsest level that still covers the drawn size in both axes, and falls back to the finest when none
+does. An empty sequence is the placeholder — what a `None` texture used to be.
+
+It held the finest level in a separate `texture` field at first, which let the renderer know it had run
+out without being told any native size. That was rewritten on 2026-09-08 to one uniform chain: every other
+place Raven spells a chain holds all its levels in one list (`raven.cherrypick.imageview`), and the price
+of matching that — callers state the finest level's size, which the renderer never reads — is smaller than
+the price of one shape being the odd one out.
 
 The chat graph prepares its chain in `DPGChatController._prepare_graph_thumbnail`, at
-`LayoutConfig.attachment_native_size` = 512 with `lanczos.mipchain(min_size=16)`, and hands it through
-`chatgraph.Thumbnail.mips`. **The cache split the sizing note below wanted collapsed is still there** —
-the chat log holds its own 480x220 texture — and collapsing it is a change to the log's path as well, so
-it was left alone.
+`gui_config.chat_graph_attachment_native_size` — a setting, defaulting to 256 — with
+`lanczos.mipchain(min_size=4)`, and hands it through `chatgraph.Thumbnail.levels`.
 
 The rest of this section is the reasoning that produced that shape, kept because pieces 1 and 2 will hand
-`mips` the same way.
+the chain the same way.
+
+### The cache split: examined 2026-09-08, and deliberately not collapsed
+
+The sizing note below proposed collapsing it, on the premise that both views want the same prepared size.
+**That premise did not survive being measured.** The chat log draws its inline images at 1:1 and never
+scales them — `dpg.add_image(tag, width=texture.w, height=texture.h)` — which is why they never alias; the
+graph draws at an arbitrary zoom and picks a level. So the log wants exactly one texture at exactly its
+display size (385x220 for a typical screenshot), and the graph wants a chain from 256. Handing the log a
+chain level instead would give it 512x292, changing every inline image's size on screen and making
+`chat_inline_image_w/h` stop meaning what it says.
+
+**What could still be shared is the decode, not a texture.** A texture is already target-specific; the
+`(H, W, 4)` uint8 array out of `codec.decode` is not, and both consumers resize from it. Measured: 58 ms
+for a 1.5 MB, 1344x768 sidecar.
+
+**And the seam for it is clean, which is worth recording because it is the first thing that looks wrong.**
+Neither view would reach into the other: `DPGChatController` already holds both caches as fields, so one
+private "prepare this sidecar" step that decodes once and fills both is the controller doing what it
+already does. `chatgraph` never learns the log's size, and vice versa. It would work in both directions —
+whoever asks first pays.
+
+**It is still not worth building, for two reasons that are about the payoff rather than the shape.**
+
+- **Caching the decode is out on memory.** That array is 4.1 MB for the sidecar above, 16.5 MB as a
+  float32 tensor, and a chat multiverse accumulates images without bound: 500 of them is 2.1 GB as uint8,
+  and a hundred 4-megapixel images 1.6 GB. So only a *transient* share is affordable — the decode living
+  for one preparation, both products coming out of it.
+- **The 58 ms it would save is invisible.** Both paths already run off the render thread — the log's
+  `get_inline_image_texture` on a message-build worker, the graph's as a background task — so saving it
+  changes no frame time and no interaction, only how soon a thumbnail appears. Meanwhile the cheap
+  implementation does one of the two jobs speculatively: preparing a chain for a graph that is never
+  opened spends about 0.9 MB an image on textures nobody sees, which is the resource the size setting
+  exists to economise. Avoiding *that* means having a second request join an in-flight preparation, which
+  is more machinery than 58 ms of background time earns.
+
+**What would change the answer**: a profile showing the background preparation queue as a bottleneck —
+attachments growing large enough, or a view preparing many at once — rather than a saving reasoned about
+in the abstract.
 
 
 **The rule, and it is not the obvious one**: what decides the level is the image's size **in screen
