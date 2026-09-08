@@ -876,18 +876,56 @@ The AI's voice is configured in the AI avatar configuration.
 
 ## System prompt, AI character personality, communication style
 
-- [`raven.librarian.config`](config.py)
-- technically, just a system prompt - this goes to the beginning of every chat
-- but in practice, useful to think of it as *system prompt + AI character card* (the default out-of-the-box configuration does this)
+The prose is in Markdown files, not in code: **[`prompts/README.md`](prompts/README.md) is the document to
+read**, and it covers what each file is for, the template variables you may use in one, and how to override
+any of them from `~/.config/raven/librarian/prompts/` without editing the installed copy.
+
+- Technically all of this is just a system prompt — it goes to the beginning of every chat.
+- In practice it is useful to think of it as *system prompt + AI character card*, which is what the
+  out-of-the-box configuration does.
+- A **character's own personality** is not in that folder: it travels with the character. See below.
 
 ## AI avatar
 
-- character choice in [`raven.librarian.config`](config.py)
-  - the AI avatar and the AI character name/personality are set up separately
-  - to avoid surprises, make sure these match
-- AI voice (TTS) is also configured in [`raven.librarian.config`](config.py)
-- avatar video inactivity timeout is also enabled/disabled/configured in [`raven.librarian.config`](config.py)
-- Use the GUI app `raven-avatar-settings-editor` to create or edit the `animator.json` configuration file (avatar video postprocessor settings)
+### How a character is put together
+
+**An avatar image carries its own sidecars.** Beside `aria1.png` sit two more files:
+
+| File | What it holds |
+|---|---|
+| `aria1.json` | what the character is **called** — `{"name": "Aria"}` — and the TTS voice it speaks in |
+| `aria1_card.md` | its **personality**: the character card the AI is set up with |
+| `aria1_icon.png` | optional: the small glyph shown beside its messages in the chat |
+
+**You then choose a character by that name.** Set `llm_char_name` in
+[`raven.librarian.config`](config.py) to `"Aria"`, and the face, the voice and the personality all follow
+from it. The match is on the string inside the `.json`, **not** on the filename — so a character's files
+can be called anything, and a name with spaces or punctuation in it is fine.
+
+To write a character of your own, see [`raven.avatar.characters`](../avatar/characters.py), which documents
+the files in full.
+
+- **Switching character is one edit.** Up to 0.2.8 it was four settings that had to be edited into
+  agreement — the name, the image, the voice, and which card the code picked — and a mismatch showed as
+  the new face answering in the old voice, or as the previous character.
+- **A character need not have a face.** Declare one with no `.png` beside it and you get its name, voice
+  and personality with no avatar of its own — which is what a terminal frontend such as `raven-minichat`
+  wants anyway.
+- **A declared character wins over the fallbacks.** `avatar_config.image_path` and `avatar_config.voice`
+  still hold values, but they apply only when `llm_char_name` names nobody. To give a declared character a
+  face or a voice other than its own, change them in its `.json` — or edit the derivation in
+  [`config.py`](config.py), which is two lines and says so.
+- **A character with no declaration animates exactly as before.** The avatar system loads an image by path
+  and never asks for a name, so this changes nothing for the pose editor, the settings editor, or a
+  Librarian pointed at an undeclared image. What such a character cannot do is supply a card, a voice or a
+  chat glyph *by name* — and a `llm_char_name` matching no declaration gets an empty card, with a warning
+  in the log saying so.
+- **A chat glyph is optional**: a character with no `..._icon.png` beside its image draws with the generic
+  AI glyph.
+- Avatar video inactivity timeout is configured in [`raven.librarian.config`](config.py), being a
+  system-side setting rather than anything an individual character owns.
+- Use the GUI app `raven-avatar-settings-editor` to create or edit the `animator.json` configuration file
+  (avatar video postprocessor settings).
 
 # Future vision
 

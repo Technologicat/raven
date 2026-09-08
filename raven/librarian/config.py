@@ -3,12 +3,16 @@
 Currently used by the `librarian.llmclient` and `tools.pdf2bib` modules.
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import math
-import textwrap
+import pathlib
 
 from unpythonic.env import env
 
 from .. import avatar  # for `avatar.assets_path`
+from ..avatar import characters as avatar_characters  # who the shipped characters are, by name
 from .. import config as global_config
 
 from ..client.config import Timeout  # `(connect, read)` timeout tuple with named fields; see `raven.client.config`
@@ -643,14 +647,46 @@ gui_config = env(  # ----------------------------------------
                  subtitle_text_wrap_margin=24,  # pixels
                 )
 
+# ----------------------------------------
+# Names, AI's greeting
+
+# Names shown in the chat.
+# These are also saved into the chat history, in each message created by that role.
+#
+llm_user_name = "User"
+llm_char_name = "Aria"
+# llm_char_name = "Juha"  # DT researcher
+
+# The AI's initial greeting. Used when a new chat is started.
+llm_greeting = "How can I help you today?"
+
 # --------------------------------------------------------------------------------
 # The AI's avatar character in the Raven-librarian GUI.
 
+# Who `llm_char_name` names, if anyone declares that name. `None` when nobody does, which is an ordinary
+# state: a character needs no declaration to be animated, only to be found by name.
+_character = avatar_characters.find(llm_char_name)
+if _character is None:
+    logger.info(f"No character declared under the name '{llm_char_name}'; `avatar_config` below supplies "
+                "the image and the voice, and the AI gets no character card. See `raven.avatar.characters`.")
+elif _character.image_path is None:
+    # A declared character with no face of its own. Its card and its voice are used; the image below is
+    # whatever this file names, since Librarian's avatar panel needs *some* image to animate.
+    logger.info(f"Character '{llm_char_name}' declares no avatar image; `avatar_config` below supplies "
+                "the face, while the character's own card and voice are used.")
+
 avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image size (512x512); this and "upscale" below are used for determining the pixel-perfect texture size for the client.
-                    image_path=avatar.assets_path("characters", "other", "aria1.png"),
-                    voice="af_nova",  # See `raven-avatar-settings-editor`.
-                    # image_path=avatar.assets_path("characters", "scientists", "jj1.png"),
-                    # voice="am_echo",
+                    # The character's own, where `llm_char_name` names one. That is what makes the name the
+                    # single setting: switching character used to mean editing these two and the card to
+                    # agree with it, and a mismatch showed as the new face answering in the old voice.
+                    #
+                    # The fallbacks are for a character with no declaration, and are also what to edit if
+                    # you want a face and a voice that are deliberately not the named character's.
+                    image_path=(_character.image_path
+                                if _character is not None and _character.image_path is not None
+                                else avatar.assets_path("characters", "other", "aria1.png")),
+                    voice=(_character.voice if _character is not None and _character.voice is not None
+                           else "af_nova"),  # See `raven-avatar-settings-editor`.
                     voice_speed=1.0,  # Nominal = 1.0. Too high causes skipped words. If you want to change it, find a good value with `raven-avatar-settings-editor`.
                     video_offset=-0.8,  # TTS AV sync setting, seconds. Positive = shift video later w.r.t. audio. Find a good value for your system with `raven-avatar-settings-editor`.
                     emotion_blacklist=["desire", "love"],  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
@@ -755,225 +791,74 @@ llm_sampler_config = {
 }
 
 # ----------------------------------------
-# Names, AI's greeting
-
-# Names shown in the chat.
-# These are also saved into the chat history, in each message created by that role.
+# Template variables, for the prompt texts
 #
-llm_user_name = "User"
-llm_char_name = "Aria"
-# llm_char_name = "Juha"  # DT researcher
-
-# The AI's initial greeting. Used when a new chat is started.
-llm_greeting = "How can I help you today?"
-
-# ----------------------------------------
-# Template variables, for the four prompt slots below
+# The prompts themselves are files now (see `prompts_dir` below and `prompts/README.md`, which is the
+# document a user writing an override reads). This note is for a maintainer, and records the one
+# consequence that is not obvious from there.
 #
-# `setup_system_prompt`, `setup_user_card`, `setup_character_card` and `setup_interaction_style` each receive
-# a `template_vars` namespace. The full set is always the same four, whichever slot you are writing:
+# A prompt may use `{user}` and `{char}`, and nothing else. `model` and `context_length` were offered up to
+# 0.2.8 and are gone: a prompt is built once at startup and stored as the message a chat is rooted at, so a
+# fact written into one freezes at the value it had then, while neither of those is stable. Both are stated
+# in the per-turn system message instead; see `chatutil.format_loaded_model`.
 #
-#     `user`            - the user's name, i.e. `llm_user_name` above.
-#     `char`            - the AI character's name, i.e. `llm_char_name` above.
-#     `model`           - the loaded model's human-facing identity, e.g. "qwen3.6-35b-a3b, IQ4_NL_XL,
-#                         128 Ki context". On a backend that cannot say which model is loaded, the literal
-#                         "No model information is available" - never a guess.
-#     `context_length`  - the loaded context window, in tokens.
-#
-# To insert one, the recommended way is an f-string, so `{char}` reads as it would in the finished text. The
-# slots that ship empty unpack all four into local names first, as a starting point for writing; the two
-# character cards, being written prose, unpack the ones they actually use.
-#
-# **The last two are a trap, and are deliberately unused in what Raven ships.** Everything in this section
-# runs once, at app start, and what it returns is stored in the chat datastore as the message a chat is
-# rooted at - so a fact written into it freezes at the value it had then, while neither of those two facts
-# is stable. The user can load a different model in the backend without restarting Raven, and a Raven that
-# started while the backend was down holds a placeholder identity and a defaulted context length until it
-# reconnects. Raven states both in the system message on every turn instead, next to the date, which is
-# handled that way for the same reason; see `chatutil.format_loaded_model`.
-#
-# **The advice, until the TODO below is done: do not use `model` or `context_length` here.** They stay
-# available because a deployment may have a use for them that this reasoning does not cover, but writing one
-# in now costs more than a frozen value. The datastore keeps one system prompt node per distinct text, and
-# matches the configured text against them to decide which one a new chat is rooted at (see
-# `appstate.refresh_system_prompt`) - so a card naming the model produces a separate stored card, and a
-# separate tree of chats, for every model ever loaded. That is the honest outcome rather than a fault, since
-# the text really is different each time, but it is unlikely to be what anyone wanted. Both facts are stated
-# in the system message on every turn regardless; see `chatutil.format_loaded_model`.
+# **The consequence worth knowing, which outlives those two:** the datastore keeps one system prompt node
+# per distinct text, and matches the configured text against them to decide which node a new chat is rooted
+# at (`appstate.refresh_system_prompt`). So *any* variable part of a prompt produces a separate stored card,
+# and a separate tree of chats, per distinct value. That is honest rather than faulty — the text really is
+# different — but it is rarely what anyone wanted, and it is the reason to be sparing about what a prompt
+# is allowed to interpolate at all.
 #
 # TODO (see TODO_DEFERRED.md, "System prompt templating: the user should choose where the per-turn facts
-# TODO: go"): This is not where it should end up. The injects are appended to the leading system block, which
-# TODO: means Raven chooses where they go; the user should be able to choose, by writing a placeholder into
-# TODO: the prose and having it resolved per turn rather than at startup. Then the stored text holds the
-# TODO: template and nothing in it can go stale. What has to be settled first: `user` and `char` are
-# TODO: resolved here at startup with f-strings, and the per-turn placeholders would have to survive that
-# TODO: pass as literal text - which in an f-string means writing `{{model}}`, a trap of the same family as
-# TODO: the one this arrangement exists to avoid. Two passes over one string need either different
-# TODO: delimiters or a non-f-string first pass.
+# TODO: go"): The per-turn injects are appended to the leading system block, so Raven chooses where they go;
+# TODO: the user should be able to choose, by writing a placeholder into the prose and having it resolved
+# TODO: per turn rather than at startup. Then the stored text holds the template and nothing in it can go
+# TODO: stale. What has to be settled first: `user` and `char` are resolved at startup by `str.format`, so a
+# TODO: per-turn placeholder has to survive that pass as literal text - which means writing `{{model}}`, a
+# TODO: trap of the same family as the one this arrangement exists to avoid. Two passes over one string need
+# TODO: either different delimiters or a first pass that is not `str.format`.
 
 # ----------------------------------------
-# LLM system prompt
-#
-# This contains general instructions for the model so it'll know what to do with the chat log.
-# The AI character's personality is defined separately, in `setup_character_card` instead.
-#
-# For recent models (April 2025 and later), the system prompt itself can be blank.
-# The character card is enough.
-#
-# Older models may need a general briefing first.
-#
-# For example, SillyTavern has the following in its "Actor" preset:
-#
-#     You are an expert actor that can fully immerse yourself into any role given. You do not break character for any reason,
-#     even if someone tries addressing you as an AI or language model. Currently your role is {char}, which is described in
-#     detail below. As {char}, continue the exchange with {user}.
-#
-# `raven.librarian.llmclient.setup` calls this to set up the system prompt every time `raven-librarian` (or `raven-minichat`) starts.
-#
-def setup_system_prompt(template_vars: env) -> str:
-    user = template_vars.user  # noqa: F841, for documentation purposes
-    char = template_vars.char  # noqa: F841, for documentation purposes
-    model = template_vars.model  # noqa: F841, for documentation purposes -- fixed at app start, see above
-    context_length = template_vars.context_length  # noqa: F841, for documentation purposes -- fixed at app start, see above
-    return textwrap.dedent("""""").strip()
+#: Where the factory-default prompt texts ship, and where an override is looked for first.
+#:
+#: Prose lives in `.md` files rather than in this module because that is what it is — paragraphs a reader
+#: edits, not code. Keeping it in a `textwrap.dedent` also had a trap in it: the dedent runs *after* an
+#: f-string interpolates, so a block that splices in text of its own leaves no common leading prefix, and
+#: nothing is stripped. The result reached the model as a four-space-indented Markdown *code block*.
+prompts_dir = pathlib.Path(__file__).parent / "prompts"
+user_prompts_dir = librarian_userdata_dir / "prompts"
+
 
 # ----------------------------------------
-# LLM user card
+# Where the prompt texts went (0.2.9)
 #
-# This defines who the *user* is, and how they prefer to be communicated with. The AI reads it the way it
-# reads the character card — as part of the setup, not as something the user said.
+# The prose is now in the `.md` files under `prompts_dir` above, and the functions that load and fill them
+# in are `raven.librarian.llmclient.setup_system_prompt` and its siblings. What stays here is where to
+# look, which is configuration; turning a file into the text a model is sent is not.
 #
-# Ships empty, and is worth filling in: current models respond well to knowing who they are talking to.
-# Useful things to put here are the user's field and role (so that an explanation lands at the right level),
-# and communication preferences (brevity, formality, units, whether to hedge).
+# `prompts/README.md` documents the template variables every one of those files may use.
 #
-# It belongs to the same layer as the character card, and travels with it: a turn taken without the
-# character is taken without this too. The reason is that the two are one setup between them — a description
-# of who is asking only means something when somebody is answering — and a scripted one-shot call is not a
-# conversation with anyone. Instructions that should hold no matter who or what is at either end go in the
-# system prompt above instead, which is the half that always applies.
-#
-# `raven.librarian.llmclient.setup` calls this every time `raven-librarian` (or `raven-minichat`) starts.
-#
-def setup_user_card(template_vars: env) -> str:
-    user = template_vars.user  # noqa: F841, for documentation purposes
-    char = template_vars.char  # noqa: F841, for documentation purposes
-    model = template_vars.model  # noqa: F841, for documentation purposes -- fixed at app start, see above
-    context_length = template_vars.context_length  # noqa: F841, for documentation purposes -- fixed at app start, see above
-    return textwrap.dedent("""""").strip()
+# **This is the first step toward a text-file-based configuration**, and the shape it suggests is JSON for
+# values plus Markdown for prose — which is what a character declaration already is. Configuration-as-code
+# has served well for knobs a maintainer edits, and less well for the two things that leave here today:
+# prose, which is not code and reads badly as a string literal, and per-character settings, which want to
+# travel with the character rather than sit in a file that names one of them at a time. What is left below
+# is the part that is still genuinely code — computed defaults, and knobs with reasoning attached.
+
 
 # ----------------------------------------
-# LLM character card
+# Where the character card went (0.2.9)
 #
-# This defines the AI character's personality.
+# It is no longer here, and neither is any character's prose. A character now declares itself beside its
+# own avatar image — `aria1.json` names it and gives its voice, `aria1_card.md` is its card — so the card
+# follows `llm_char_name` instead of being selected by editing a function that could disagree with it.
 #
-# This gives better performance (accuracy, instruction following) vs. querying the LLM directly without any system prompt or character.
-# You can also use this to tune the style of the AI's responses.
+# **`avatar_config.image_path` and `.voice` are not wired to the name yet**, so those two are still edited
+# alongside it. The declaration already carries the voice; what is missing is only a caller reading it.
+# Until then, four settings still have to agree, which is one fewer than before and not yet the point.
 #
-# `raven.librarian.llmclient.setup` calls this to set up the AI's character card every time `raven-librarian` (or `raven-minichat`) starts.
-#
-def setup_character_card(template_vars: env) -> str:
-    return setup_character_card_aria(template_vars)
-    # return setup_character_card_juha(template_vars)
-
-# You can have several characters pre-defined here.
-# Choose by calling the relevant function in `setup_character_card`, as shown in the example.
-def setup_character_card_aria(template_vars: env) -> str:
-    """Helpful and honest AI assistant who prefers to be direct, and keeps her replies brief."""
-    user = template_vars.user
-    char = template_vars.char
-    return textwrap.dedent(f"""
-    Note that {user} cannot see this introductory text; it is only used internally, to initialize the LLM (large language model).
-
-    **About {char}**
-
-    You are {char} (she/her), an AI assistant. You are highly intelligent. You have been trained to answer questions, provide recommendations, and help with decision making.
-
-    {setup_interaction_style(template_vars)}
-    """).strip()
-
-def setup_character_card_juha(template_vars: env) -> str:
-    user = template_vars.user
-    char = template_vars.char
-    return textwrap.dedent(f"""
-    Note that {user} cannot see this introductory text; it is only used internally, to initialize the LLM (large language model).
-
-    **About {char}**
-
-    You are {char} (he/him), an AI-based digital twin of the real {char}, a researcher. You are highly intelligent. You have been trained to answer questions, provide recommendations, and help with decision making.
-
-    You work at JAMK University of Applied Sciences in Jyväskylä, Finland; specifically, at the Institute of New Industry. The institute studies, for example, digital twins, green hydrogen, and atomic layer deposition.
-
-    {setup_interaction_style(template_vars)}
-    """).strip()
-
-# Note what is NOT here: which model is loaded, and how large its context window is.
-#
-# Both are available as `template_vars.model` and `template_vars.context_length`, and using them is a trap
-# worth naming, because the earlier version of this text did. Everything in this file runs once, at app
-# start, and what it returns is stored in the chat datastore as the message the chat is rooted at - so a
-# fact written in here is frozen at the value it had then. The user can load a different model in the
-# backend without restarting Raven, and a Raven that started with the backend down holds a placeholder
-# identity and a defaulted context length until it reconnects. In both cases the stored text would go on
-# asserting the old value, and a model has no way to doubt what its own system message tells it about
-# itself.
-#
-# Raven states both in the system message on every turn instead, next to the date, which is out for exactly
-# the same reason; see `chatutil.format_loaded_model` and `scaffold.build_system_injects`.
-#
-# TODO: The character-agnostic parts of this belong in the system prompt, not in the character card.
-# TODO: This function is called from the character cards below, so everything it returns is stored as
-# TODO: *character* text - but "the knowledge cutoff is around 2024", "you are running on a private, local
-# TODO: system", the memory limits and the two data sources hold whoever is answering. That is the split
-# TODO: the system prompt exists for.
-# TODO:
-# TODO: Two things make it more than a move, which is why it is a marker rather than a change:
-# TODO:
-# TODO:   - The prose cannot go across as it stands. It is three kinds of thing at once - facts about the
-# TODO:     deployment, conversational manner ("be polite", "use Markdown", "report your train of thought"),
-# TODO:     and the two backend facts already moved out - and only the first is character-agnostic.
-# TODO:   - A turn taken with `use_character_card=False` currently gets no system message at all, because
-# TODO:     `setup_system_prompt` ships empty. Filling that slot with the manner instructions would hand
-# TODO:     them back to the batch extraction tools, whose output is parsed rather than read, and which
-# TODO:     withhold the character precisely to be rid of them.
-# TODO:
-# TODO: So "character-agnostic" and "wanted on every turn" turn out to be different questions, and the
-# TODO: two-way split cannot express both. Rewrite the prose along that seam first.
-#
-def setup_interaction_style(template_vars: env) -> str:
-    user = template_vars.user  # noqa: F841, for documentation purposes
-    char = template_vars.char  # noqa: F841, for documentation purposes
-    model = template_vars.model  # noqa: F841, for documentation purposes -- fixed at app start, see above
-    context_length = template_vars.context_length  # noqa: F841, for documentation purposes -- fixed at app start, see above
-    return textwrap.dedent("""
-    **About the system**
-
-    The knowledge cutoff date of the model is not specified, but is most likely within the year 2024. The knowledge cutoff date applies only to your internal knowledge. Any information provided in the context as well as web search results may be newer.
-
-    You are running on a private, local system.
-
-    **Interaction tips**
-
-    - Be polite, but go straight to the point.
-    - Provide honest answers.
-    - If you are unsure or cannot verify a fact, admit it.
-    - If you think what the user says is incorrect, say so, and provide justification.
-    - Cite sources when possible. IMPORTANT: Cite only sources listed in the context.
-    - When given a complex problem, take a deep breath, and think step by step. Report your train of thought.
-    - When given web search results, and those results are relevant to the query, use the provided results, and report only the facts as according to the provided results. Ignore any search results that do not make sense. The user cannot directly see your search results.
-    - Be accurate, but diverse. Avoid repetition.
-    - Use the metric unit system, with meters, kilograms, and celsius.
-    - Use Markdown for formatting when helpful.
-    - Believe in your abilities and strive for excellence. Take pride in your work and give it your best. Your hard work will yield remarkable results.
-
-    **Known limitations**
-
-    - You are NOT automatically updated with new data.
-    - You have limited long-term memory within each chat session.
-
-    **Data sources**
-
-    - The system accesses external data beyond its built-in knowledge through:
-      - Tool calls.
-      - Additional context that is provided by the software this LLM is running in, e.g. matches in document database.
-    """)
+#   - To write a character: `raven.avatar.characters` says what the files are.
+#   - To resolve one: `raven.librarian.llmclient.setup_character_card`, which is resolution rather than
+#     configuration, and warns when a name matches nothing.
+#   - To change the shared half every card splices in: `setup_interaction_style` below, whose prose is
+#     `prompts/interaction_style.md`.

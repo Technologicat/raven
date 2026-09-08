@@ -71,6 +71,7 @@ from unpythonic import si_prefix, sym, timer
 from unpythonic.env import env
 
 
+from ..avatar import characters as avatar_characters  # who the shipped characters are, by name
 from ..common import netutil
 from ..common import utils
 
@@ -552,6 +553,132 @@ def reconnect(settings: env, quiet: bool = True) -> sym:
     return backend_status(settings)
 
 
+# --------------------------------------------------------------------------------
+# The prompt texts, and turning them into what a model is sent.
+#
+# The prose itself lives in `raven/librarian/prompts/`, whose `README.md` documents the template
+# variables every one of those files may use. `librarian_config` says where to look; the loading and
+# filling-in is here, being resolution rather than configuration.
+# --------------------------------------------------------------------------------
+
+def load_prompt(name: str) -> str:
+    """Return the text of prompt `name`, the user's copy if they have one and the shipped one otherwise.
+
+    `name`: The stem of the file, e.g. `"interaction_style"` for `interaction_style.md`.
+
+    An override goes in `~/.config/raven/librarian/prompts/`, same filename. It replaces the shipped text
+    rather than adding to it, so a copy of the original is the place to start from.
+
+    The text is a *template*: `{user}`, `{char}`, `{model}` and `{context_length}` in it are filled in by
+    whichever `setup_*` function loads it. A literal brace therefore has to be doubled, as `str.format`
+    requires.
+    """
+    override = librarian_config.user_prompts_dir / f"{name}.md"
+    if override.exists():
+        logger.info(f"load_prompt: '{name}' from the user's override at '{override}'")
+        return override.read_text(encoding="utf-8").strip()
+    return (librarian_config.prompts_dir / f"{name}.md").read_text(encoding="utf-8").strip()
+
+
+def _format_prompt(name: str, template_vars: env) -> str:
+    """Load prompt `name` and fill in the template variables every prompt may use.
+
+    `{user}` and `{char}` are the whole list, deliberately. `template_vars` also carries `model` and
+    `context_length`, and they are *not* offered here: see the note below `setup_interaction_style` for
+    why a fact about the backend must not be frozen into this text. Leaving them out makes that a
+    `KeyError` at startup naming the key, rather than a stale sentence nobody can see is stale.
+    """
+    return load_prompt(name).format(user=template_vars.user,
+                                    char=template_vars.char)
+
+
+def setup_system_prompt(template_vars: env) -> str:
+    return _format_prompt("system", template_vars)
+
+# ----------------------------------------
+# LLM user card
+#
+# This defines who the *user* is, and how they prefer to be communicated with. The AI reads it the way it
+# reads the character card — as part of the setup, not as something the user said.
+#
+# Ships empty, and is worth filling in: current models respond well to knowing who they are talking to.
+# Useful things to put here are the user's field and role (so that an explanation lands at the right level),
+# and communication preferences (brevity, formality, units, whether to hedge).
+#
+# It belongs to the same layer as the character card, and travels with it: a turn taken without the
+# character is taken without this too. The reason is that the two are one setup between them — a description
+# of who is asking only means something when somebody is answering — and a scripted one-shot call is not a
+# conversation with anyone. Instructions that should hold no matter who or what is at either end go in the
+# system prompt above instead, which is the half that always applies.
+#
+# `raven.librarian.llmclient.setup` calls this every time `raven-librarian` (or `raven-minichat`) starts.
+#
+def setup_user_card(template_vars: env) -> str:
+    return _format_prompt("user_card", template_vars)
+
+
+# Note what is NOT here: which model is loaded, and how large its context window is.
+#
+# Neither is offered to a prompt template at all — see `template_vars` in `configure`, which carries the
+# two names a prompt may use and no others. What a prompt is built into is stored as the message a chat is
+# rooted at, so a fact written into it freezes at the value it had then, and a model has no way to doubt
+# what its own system message tells it about itself.
+#
+# Raven states both in the system message on every turn instead, next to the date, which is out for exactly
+# the same reason; see `chatutil.format_loaded_model` and `scaffold.build_system_injects`.
+#
+# TODO: The character-agnostic parts of this belong in the system prompt, not in the character card.
+# TODO: This function is called from the character cards below, so everything it returns is stored as
+# TODO: *character* text - but "the knowledge cutoff is around 2024", "you are running on a private, local
+# TODO: system", the memory limits and the two data sources hold whoever is answering. That is the split
+# TODO: the system prompt exists for.
+# TODO:
+# TODO: Two things make it more than a move, which is why it is a marker rather than a change:
+# TODO:
+# TODO:   - The prose cannot go across as it stands. It is three kinds of thing at once - facts about the
+# TODO:     deployment, conversational manner ("be polite", "use Markdown", "report your train of thought"),
+# TODO:     and the two backend facts already moved out - and only the first is character-agnostic.
+# TODO:   - A turn taken with `use_character_card=False` currently gets no system message at all, because
+# TODO:     `setup_system_prompt` ships empty. Filling that slot with the manner instructions would hand
+# TODO:     them back to the batch extraction tools, whose output is parsed rather than read, and which
+# TODO:     withhold the character precisely to be rid of them.
+# TODO:
+# TODO: So "character-agnostic" and "wanted on every turn" turn out to be different questions, and the
+# TODO: two-way split cannot express both. Rewrite the prose along that seam first.
+#
+def setup_interaction_style(template_vars: env) -> str:
+    return _format_prompt("interaction_style", template_vars)
+
+
+def setup_character_card(template_vars: env) -> str:
+    """Return the character card for whoever `template_vars.char` names, or `""` if nobody answers to it.
+
+    The card comes from the character's own files: `aria1_card.md` beside `aria1.png`, found by the name in
+    `aria1.json`. That is what makes `llm_char_name` one setting instead of four that had to be edited into
+    agreement — the name picks the card, and the voice and the icon with it.
+
+    A name no character claims gets an empty card, which is a working state rather than a failure: the AI
+    then has the system prompt and no personality, exactly as `use_character_card=False` gives the batch
+    tools. It is nonetheless almost certainly a typo or a missing declaration, so it is logged as a
+    warning; a character silently losing its personality is otherwise very hard to notice from the replies.
+
+    Lives here rather than in `librarian_config` because it is resolution rather than configuration —
+    what config still owns is the prose, in `raven/librarian/prompts/`.
+    """
+    character = avatar_characters.find(template_vars.char)
+    card_template = character.read_card() if character is not None else None
+    if card_template is None:
+        logger.warning(f"setup_character_card: no character card for '{template_vars.char}'; the AI will "
+                       "have no personality beyond the system prompt. Declare the character in a JSON file "
+                       "beside its avatar image file -- see `raven.avatar.characters`.")
+        return ""
+    # `{interaction_style}` is supplied here rather than written into each card: it is the same block for
+    # every character, and a copy per card is a copy to forget when it changes.
+    return card_template.format(user=template_vars.user,
+                                char=template_vars.char,
+                                interaction_style=setup_interaction_style(template_vars)).strip()
+
+
 def configure(model_info: env,
               backend_flavor: str,
               backend_url: str,
@@ -614,13 +741,20 @@ def configure(model_info: env,
     # weaker: they are stable within a session rather than within a day, and not even that if the user loads
     # a different model or the app reconnects to a backend that was down. They are stated per turn as well.
     # The config file says so at the slots that receive them, which is where someone writing prose looks.
+    # Two names, and it used to be four. `model` and `context_length` were the other two, and offering them
+    # was a trap: this text is built once and stored as the message a chat is rooted at, so a fact written
+    # into it freezes at the value it had then, while neither of those is stable — the user can load a
+    # different model without restarting, and a Raven that started while the backend was down holds a
+    # placeholder identity until it reconnects. Both are stated in the per-turn system message instead,
+    # which is re-read every turn; see `chatutil.format_loaded_model` and `scaffold.build_system_injects`.
+    #
+    # They are absent rather than documented-as-unwise, so that a prompt reaching for one fails at startup
+    # with a `KeyError` naming it, instead of quietly freezing a sentence nobody can see is stale.
     template_vars = env(user=user,
-                        char=char,
-                        model=model,
-                        context_length=context_length)
-    system_prompt = librarian_config.setup_system_prompt(template_vars)
-    character_card = librarian_config.setup_character_card(template_vars)
-    user_card = librarian_config.setup_user_card(template_vars)
+                        char=char)
+    system_prompt = setup_system_prompt(template_vars)
+    character_card = setup_character_card(template_vars)
+    user_card = setup_user_card(template_vars)
     greeting = librarian_config.llm_greeting
 
     # Set up the chat completion request metadata template. Tool-calling instructions are NOT injected

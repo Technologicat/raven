@@ -197,6 +197,24 @@
 
 *Raven-librarian*
 
+- **a character now declares itself, and switching character is one setting.** An avatar image such as
+  `aria1.png` carries its own sidecars: `aria1.json` states what the character is *called* — `"name":
+  "Aria"` — along with its voice, and `aria1_card.md` holds its personality.
+  - **`llm_char_name` then selects a character by that name.** Set it to `"Aria"` and the face, the voice
+    and the card all follow; the two match on the string in the JSON, so a character's filename need not
+    resemble its name.
+  - It used to be four settings that had to be edited into agreement, and a mismatch showed as the new
+    face answering in the old voice, or as the previous character.
+  - A character with no declaration animates exactly as before — it simply cannot be selected by name.
+
+- **the prompt texts are Markdown files now**, under `raven/librarian/prompts/`, and any of them can be
+  overridden from `~/.config/raven/librarian/prompts/` without touching the installed copy. That folder's
+  `README.md` documents the template variables and what each file is for.
+  - **`{model}` and `{context_length}` are gone from prompts.** A prompt is built once at startup and
+    stored as the message a chat is rooted at, so either would freeze at the value it had then while
+    neither fact is stable. Both are stated automatically in the per-turn system message instead, so you
+    lose nothing by not writing them. A prompt still using one now fails at startup, naming it.
+
 - **the user data folder is now `~/.config/raven/librarian/`**, where it was `~/.config/raven/llmclient/` — named after the app you run rather than after the module that first wrote there. It holds your chat history, your attachments, your document drop folder and its RAG index, so it is a folder people look at.
   - **Move it by hand if you have one**: `mv ~/.config/raven/llmclient ~/.config/raven/librarian`. Nothing migrates it for you, and a Librarian that finds neither starts a fresh chat history rather than saying anything is wrong. Done now, while Librarian has no outside users, precisely so the migration code never has to exist.
 
@@ -307,6 +325,11 @@
 - **`bloom` now decides what is bright by the light a pixel emits rather than by the colour it carries.** In a straight-alpha frame those differ wherever a pixel is not fully opaque: the colour alone is what the pixel *would* look like if it were, which for a nearly transparent one can be a large number attached to almost no light. The old reading called such pixels highlights and then blurred that colour outward, so the avatar's antialiased outline picked up light from the empty space around it. The character itself is unaffected — the two readings agree wherever alpha is 1.
 
 *Raven-librarian*
+
+- **the AI character's own paragraphs no longer reach the model as a code block.** The character card is
+  Markdown, and the two paragraphs naming the character were indented four spaces — which is what a code
+  block *is* — while the rest of the card was not. The model was therefore shown the sentence establishing
+  who it is as if it were a listing.
 
 - **a stored message now wears the face of the character that wrote it, not the one loaded right now.**
   Every AI message was drawn with the currently configured character's icon, so a chat with turns by
