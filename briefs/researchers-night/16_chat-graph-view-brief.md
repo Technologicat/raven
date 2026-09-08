@@ -143,6 +143,45 @@ and no way to search the conversation actually in front of them — an asymmetry
 immediately and could not explain. So brief 14 is not merely first in a queue: it is what makes this one
 shippable, and the two want treating as one piece of work with two halves.
 
+### Two additions, 2026-09-08
+
+**One is a pony and one is load-bearing** (Juha), and the second changes what item 8 *is*.
+
+**The pony: the chat log should paint its matches red**, as the Visualizer's info panel already does for a
+title search. It is much faster to scan visually than a highlighted message with the matching words left to
+be found inside it, and it costs a reader nothing to learn, the constellation already doing it elsewhere.
+Brief 14's half, since the chat log is where it lands.
+
+**The load-bearing one: a search changes which nodes the graph must show.** The paragraph above says a
+match outside the current window is *absent from the built `Graph`* rather than merely off-screen. The
+consequence is sharper than "move the window and rebuild": searching means the built picture is a different
+selection of nodes — the matches, wherever they are — with a ceiling on how many, because the first
+keystroke of a fragment search is a single letter and `e` matches nearly everything. That ceiling is not a
+nicety; without it every fragment search starts by trying to draw the whole forest.
+
+**And a match inside a collapsed run has to be fished out of it.** A gap box stands for a run of hidden
+siblings; if one of them matches, the box must split around it. So a level that reads
+
+```
+[a] [b] [23 more] [z]
+```
+
+with `a`, `n` and `p` matching becomes
+
+```
+[a] [12 more] [n] [1 more] [p] [9 more]
+```
+
+— the counts recomputed for each surviving run, and the existing `_MIN_HIDDEN_FOR_GAP` rule still deciding
+whether a run of one is worth a box at all.
+
+**There is probably a general algorithm here, and a second caller for it.** The Visualizer's author search
+wants the same shape: highlight `Korhonen` inside `Aaltonen et al.` where the *et al.* is two hundred
+names. Both are *given an ordered run, a set of matching positions and a budget, produce the sequence of
+shown items and elided-count boxes between them* — no GUI in it, so it belongs in `raven.common` and is
+testable on its own. Worth extracting rather than writing twice, but worth writing once first: the second
+caller is what proves the shape, and this brief's is the one with the deadline.
+
 **The graph half copies `raven-xdot-viewer`'s search UX** rather than inventing one, for the reason the
 toolbar already follows it: the two show the same widget, and the machinery
 (`search` / `highlight_search_results` / `next_match` / `prev_match`) is the widget's own.
