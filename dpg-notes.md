@@ -356,6 +356,24 @@ found keyboard and mouse handlers unaffected, while `on_llm_progress` runs on a
 background task thread. Not the same dispatch context, so the match is
 suggestive and unconfirmed.
 
+## Texture memory is not necessarily VRAM, and `nvidia-smi` will not find it
+
+DPG draws through GLFW/OpenGL, and on a laptop the GL context usually lands on the **integrated** GPU
+even when a discrete card is present and PyTorch is using it. Measured here 2026-09-08: `glxinfo` reports
+`Mesa Intel(R) Graphics (RPL-S)` while `torch.cuda` has the discrete card to itself.
+
+Two consequences, and the second is a trap for anyone measuring:
+
+- **A texture's memory competes with the LLM only when the GL context is on the same card as the models.**
+  Where it is not, textures are ordinary process memory. Worth knowing before sizing a texture budget
+  against VRAM — on this machine `~16 bytes per pixel` of process RSS is the figure, DPG keeping the
+  float32 data it was handed.
+- **`nvidia-smi` reports nothing for them**, whether merely registered or actually drawn — twelve
+  1024×1024 textures moved the device total by 0 MB, both ways. That reads exactly like "the upload never
+  happened", which is the wrong conclusion and an expensive one to chase. Confirm the instrument first: a
+  1 GiB torch tensor moves the same figure by exactly 1024 MB, so the zero is real and means the memory
+  is somewhere else. `/proc/self/status`'s `VmRSS` is what answers this question.
+
 ## Texture upload ordering
 
 `set_value` on a dynamic texture and `add_dynamic_texture` are both deferred —

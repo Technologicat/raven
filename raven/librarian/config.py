@@ -593,6 +593,31 @@ gui_config = env(  # ----------------------------------------
                  # inner half being a gutter the text starts past. A matter of taste rather than of
                  # legibility, which is why it is a setting.
                  chat_graph_role_icons=True,
+                 #
+                 # The largest size, in pixels, an attachment thumbnail is prepared at for the chat graph.
+                 # Coarser levels are prepared alongside it as a mip chain and the renderer draws whichever
+                 # suits the card's size on screen, so this is not the size a card is *drawn* at -- it is
+                 # the size past which zooming in stops getting sharper and the picture goes blocky.
+                 #
+                 # A card is about 55 graph units across, so this buys sharpness up to a zoom of roughly
+                 # `size / 55`. Against that, each prepared image is held in memory for the session, at
+                 # about 16 bytes per pixel, chain included:
+                 #
+                 #     size    sharp to    per image    20 images
+                 #     1024      18.8x        14 MB       280 MB
+                 #      512       9.4x       3.5 MB        70 MB
+                 #      256       4.7x       0.9 MB        18 MB
+                 #      128       2.3x       0.2 MB         4 MB
+                 #
+                 # 256 by default, which is a card at a third of the panel's height -- a good look at a
+                 # picture, and well past where anyone reading a graph normally stops. Raise it if you do
+                 # zoom in on attachments; a card fills the panel at about 14x, so 1024 is the setting that
+                 # covers everything the widget can do.
+                 #
+                 # This is *not* NVIDIA VRAM on a machine whose OpenGL runs on integrated graphics, which
+                 # is the common laptop case -- measured here as ordinary process memory. It competes with
+                 # the LLM for VRAM only where the GL context lives on the same card as the models.
+                 chat_graph_attachment_native_size=256.0,
                  # ----------------------------------------
                  # Avatar TTS speech subtitling / closed-captioning
                  #
@@ -636,6 +661,7 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
                                                  "target_fps": 20,
                                                  "upscale": 1.5,
                                                  "upscale_preset": "C",  # "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
+                                                 # `UPSCALE_QUALITIES` in `raven/common/video/upscaler.py` is the definitive list; this summary is here so the file reads on its own.
                                                  "upscale_quality": "bicubic",  # "low": anime4k fast, acceptable image quality; "high": anime4k slow, good image quality; "bilinear": lightning-fast, bad quality; "bicubic": very fast, often acceptable quality; "lanczos": fast, sharper than bicubic.
                                                  "backdrop_path": str(avatar.assets_path("backdrops", "cyberspace.png")),
                                                  "backdrop_blur": True,  # The blur is applied once, when the backdrop is loaded, so it doesn't affect rendering performance.

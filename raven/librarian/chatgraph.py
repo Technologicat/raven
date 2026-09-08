@@ -605,12 +605,9 @@ class LayoutConfig:
     # Coarser levels are prepared alongside it as a mip chain, and the renderer draws whichever suits the
     # card's size on screen, so this being far larger than a card at 1:1 costs nothing in sharpness.
     #
-    # Sized from the zoom a reader actually reaches, which is "the card fills the panel": a card is
-    # `attachment_fraction * node_h` graph units across -- some 55 -- so a 780 px panel is 14x, and a
-    # maximized one more. 1024 covers that; 512 did not, and came out visibly soft at the zoom someone
-    # goes to when they want to look at the picture. Past this DPG upsamples and the card goes blocky,
-    # which happens at *some* magnification whatever this says -- the widget zooms to 100x, and
-    # preparing for that would be a hundred megabytes a card.
+    # The finest level an attachment thumbnail is prepared at. A user-facing setting, because it trades
+    # how far a card can be zoomed into against how much memory the session holds -- the table of what
+    # each value buys and costs is where a reader would look for it, beside the setting itself.
     #
     # Costs nothing for a small attachment: the preparation never upscales, so a source below this size
     # is prepared at its own and the chain simply starts lower.
@@ -624,7 +621,7 @@ class LayoutConfig:
     # A cap is right for the role glyph, whose asset is shipped at its display size and has nothing better
     # to show. An attachment's source image is large, so the answer to "the card is bigger now" is a finer
     # level, not a smaller picture.
-    attachment_native_size: float = 1024.0
+    attachment_native_size: float = librarian_config.gui_config.chat_graph_attachment_native_size
     arrowhead_length: float = 10.0
     arrowhead_halfwidth: float = 4.5
     margin: float = 20.0
