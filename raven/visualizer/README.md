@@ -528,9 +528,21 @@ Live whenever the search field does not hold the caret.
 
 ### Word cloud window
 
+Live only while that window is open, which is what leaves `Ctrl+S` free everywhere else.
+
 | Key | Action |
 |---|---|
 | `Ctrl+S` | Save the word cloud as a PNG |
+
+### BibTeX importer window
+
+Likewise live only while the importer window is open.
+
+| Key | Action |
+|---|---|
+| `Ctrl+O` | Choose the input BibTeX files |
+| `Ctrl+S` | Choose where to save the dataset |
+| `Ctrl+Enter` | Start the import, or stop one in progress |
 
 ### Hidden debug keys
 

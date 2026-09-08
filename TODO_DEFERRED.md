@@ -2631,6 +2631,46 @@ boundary the eye was using, and that the *next* row will exhaust again. What is 
 So the shape decision is still the item. The horizontal clipping is worth doing first regardless of how that
 decision goes, since wrapping is needed under every shape.
 
+### The shape: pages, as a game's controls screen has them
+
+Proposed by Juha (2026-09-08). Page 1 is the hotkey reference, being what a reader opens F1 for most often;
+the prose help becomes page 2, and more pages if wanted. Left and Right change the page, with `<` and `>`
+buttons at the card's edges for the pointer; Home and End go to the first and last; a `1 / 3` counter sits
+in the upper right.
+
+**Why this is the right minimal answer rather than merely a workable one: it converts the constraint from
+hard to soft.** Everything above is a consequence of a table that must fit one fixed-height window — the
+rebalancing that hit its floor, the separator row spent to buy a line, the attachments that have nowhere to
+be described, and the keys that are missing from the card for want of rows rather than for any reason of
+their own. A table that may run onto a second page has none of those, and the ones already lost come back.
+
+**It needs no new vocabulary from the nine apps that build cards.** `hotkey_info` already carries in-band
+sentinels — `helpcard.hotkey_new_column`, `helpcard.hotkey_blank_entry` — so a `hotkey_new_page` sibling is
+the same mechanism one level up. An app that never uses it gets a single page and behaves exactly as now,
+which is what lets this land without touching the eight other cards.
+
+**The counter is house vocabulary already**: `N / M` is the chat message sibling counter, Cherrypick's
+`[13 / 133]` and the chat graph's `3 / 12`.
+
+**And the keys are free.** The card owns the keyboard while it is up — the app handlers return early when a
+modal is visible, and the card has its own handler — so Left, Right, Home and End collide with nothing.
+Home and End also keep the meaning they have everywhere else, being the ends of a run.
+
+Three decisions it should make rather than discover:
+
+- **The `<` and `>` buttons stop at the ends rather than wrapping.** The chat graph's sibling steppers are
+  specified as enabled exactly when pressing them would do something, and wrapping through two or three
+  pages is disorienting where wrapping through a hundred siblings is not.
+- **A page carries a name as well as a number** — "Hotkeys 1 / 3" — or a reader who lands on page 2 has to
+  work out what they are looking at. The page-break sentinel is the natural place to put it.
+- **The card's height is the largest page's, fixed for the session, not each page's own.** A window that
+  resizes under the arrow keys is unpleasant to read, and the alternative costs only some empty space on
+  the shorter pages.
+
+**Cost: M.** It is in `raven/common/gui/helpcard.py`, which nine apps share, so it is held to the
+foundation bar — but the change is additive and opt-in, and the horizontal `wrap=` fix above is wanted
+under this shape as much as under any other.
+
 ## Modernize the Librarian system prompt / character card
 
 *Cluster: ? · Cost: ? · Gate: post-0.2.9 · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*

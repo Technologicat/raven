@@ -26,6 +26,11 @@ Three lists are checked today:
   card omits is the expected state, and the note exists to say *which* — so that when the card is
   redesigned, what has been waiting for the room is already written down rather than rediscovered.
 
+**The reverse direction matches by key name, so it undercounts.** A key that means different things in
+different scopes -- the Visualizer's `Ctrl+O` opens a dataset in the main window and chooses input files in
+the importer -- is one name, so a card carrying either one satisfies it. The note is a floor on what is
+missing, not a census.
+
 **The reverse direction reads the first column of the section's tables**, rather than every delimited run
 in it. A keyboard section says plenty of other things in backticks — a config setting, a module path — and
 the alternative to reading the table structurally is a guess about what looks like a key, tuned on the two
