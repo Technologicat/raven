@@ -17,6 +17,31 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## A stored message wears the *current* character's face, not the one that wrote it
+
+*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-08*
+
+Noticed by Juha (2026-09-07): a "Juha" character card in the chat datastore is drawn with Aria's icon,
+which looks as odd as it sounds. Not specific to that card — every stored assistant message is drawn with
+whatever character is configured *now*.
+
+**Why**: `DPGChatController.gui_role_icons` is a `{role: texture}` mapping — one entry for `"assistant"`,
+built at startup from the configured character — and both surfaces read that one table: the chat log draws
+from it directly, and the chat graph is handed it through `app.py`'s `role_icons=` callable. Role is the
+only key, so there is nowhere for a second character's face to go.
+
+**The datum is already stored.** Every message payload carries `general_metadata["persona"]`, the character
+name that wrote it. So this is a resolution problem rather than a data problem: the icon should be looked up
+per *stored* persona, in both views, regardless of who is configured.
+
+**And the fallback already works** — a character with no icon of its own gets the generic AI glyph, the
+HAL 9000 eye, which is what happens today when such a character is the configured one. What is missing is
+that path being reachable for a character that is merely *mentioned* by a stored message.
+
+What it needs: per-character icon loading with that fallback, a cache keyed by character rather than by
+role (textures are per-character now, so they accumulate with the cast rather than being a fixed three),
+and the two call sites asking with a persona instead of with a role alone.
+
 ## A metrics readout for the chat graph, and a placement bug in the avatar's
 
 *Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-08*
@@ -31,10 +56,38 @@ sliding averages as the avatar does them.
 as the avatar's, `Ctrl+Shift+M` being already spent on exactly this question — "Mr. T Lite", the hidden debug
 group in `librarian/app.py`.
 
-**And the avatar's own counter is shown while the avatar panel is hidden, which is a bug** (Juha,
-2026-09-08). The graph and the avatar take turns at that panel, so with the graph up the counter is drawn
-over something else's picture. Worth fixing alongside, the two being one question about where a metrics
-overlay belongs.
+**The avatar counter half is fixed** (2026-09-08): everything the avatar renderer draws in a `front=True`
+viewport drawlist now shares one suppression switch, and Librarian drives it from "is anything covering the
+avatar". So what is left here is the readout itself.
+
+### Spec
+
+**Where.** Top left of the graph area, inside the panel — *not* over the toolbar, and **not** a `front=True`
+viewport drawlist. That morning's bug is the argument: a viewport drawlist would draw over modals and over
+whatever replaces the panel, and would then need the same suppression the avatar's overlays just grew. The
+graph is drawn into an ordinary drawlist with no `add_image` over it, so nothing forces the big hammer here.
+See `dpg-notes.md`, "`add_image` covers in-window drawlists".
+
+**How it is reached.** `Ctrl+Shift+M`, with the avatar's counter — that chord is already "show me the
+numbers", and the hidden debug group it belongs to is spelled out in `librarian/app.py` ("Mr. T Lite").
+Same wanted-versus-drawn split the avatar counter now has, so the key still answers while the graph is
+hidden.
+
+**What it shows.** Zoom; node and edge counts; texture count; frame time; mean rebuild time. The last two
+as sliding averages, as `DPGAvatarRenderer` does its FPS — a per-frame number is unreadable.
+
+**Where the numbers come from, which is the part with a decision in it.** The two times have different
+owners: a rebuild is `DPGChatGraphPanel.refresh`, and a frame is the widget's own `_render`. So the sampler
+belongs to the panel, with the widget reporting its render time upward rather than the panel reaching into
+the widget — the widget is shared code and does not know it is in a chat.
+
+**Why it is wanted, which is worth keeping so a later pass does not trim it as decoration.** Judging a
+design choice against the graph currently means computing a number offline: `attachment_native_size` was
+set to a value that ran out at a zoom readers reach, and the reason nobody noticed is that nothing on
+screen says what the zoom is. A readout is what makes that judgeable while looking at the thing.
+
+**Cost: M**, a few hours — an overlay, a sampler with sliding averages on two paths, and a toggle. Wants a
+fresh session: it is a new GUI surface rather than a change to an existing one.
 
 ## Tell a wedged reply from a hard one, instead of capping both
 
