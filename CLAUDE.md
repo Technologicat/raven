@@ -574,6 +574,29 @@ down*. The reference itself is **`dpg-notes.md`** (project root) — read the se
    See `dpg-notes.md` "Keyboard input", and `investigations/dpg-focus/` for the probes.
 8. **Keyboard input has two non-obvious traps.** (a) *Stale key constants*: some `dpg.mvKey_*` values are pre-2.0 codes that no longer match what a handler receives in `app_data` — Page Up arrives as `517` not `mvKey_Prior` (266), Page Down `518` not `mvKey_Next` (267), plus LWin/RWin and Quote/Colon/Plus/Tilde. Comparing against the constant silently never matches; compare against the literal code. (b) *Same-frame dispatch is by keycode, not press order*: a keyless key-press handler fires once per key pressed that frame in ascending keycode order, so two near-simultaneous keys — where one handler mutates state another reads — interact as if the lower-keycode key came first (e.g. cherrypick's fast `C`+`Right` tagged the *next* image until navigation was deferred a frame). See `dpg-notes.md` "Keyboard input"; full table + reproduction in `briefs/reference/dpg-keycodes.md`.
 
+### Hotkeys: one meaning per key, per set of scopes that can be on screen together
+
+A collision between two scopes is a defect by default, and the exception is narrow.
+
+- **Two non-modal windows that can be displayed simultaneously must not share a mapping.** The handler is a
+  priority chain, so whichever branch is tested first wins and the other's key is silently dead — the user
+  presses it, something else happens or nothing does, and the window they were looking at is not the one
+  that answered. A modal is exempt: it owns the keyboard, so it may bind anything.
+- **The exception is a key whose conventional meaning both scopes share.** `Ctrl+S` for save is the standing
+  example: a reader reaching for it expects saving and does not care which thing gets saved, so the same
+  key doing "save what is in front of me" in several places reads as one verb rather than as a collision.
+  `Ctrl+O` for open is the same argument one step weaker, the object being less obvious than the verb.
+- **A non-modal window wants a hotkey that closes it, and preferably the one that opened it.** `Esc` is
+  ambiguous while several things are open, where a toggle is not: `F10` for the Visualizer's word cloud and
+  `Ctrl+I` for its importer both close what they opened, which is the shape to copy.
+
+**A live instance, unfixed as of 2026-09-08**: the Visualizer's word cloud and importer windows are both
+non-modal, neither hides the other, and the word cloud is tested first — so with both open, the importer's
+`Ctrl+S`, `Ctrl+O` and `Ctrl+Enter` are shadowed. Note also that a cross-*app* collision is a different and
+milder thing: `Ctrl+S` is save in the Visualizer and speak in Librarian, which holds only because Librarian
+has nothing to save, its datastore being autosaved. That is a deliberate vacancy rather than an oversight,
+and it ends the day Librarian grows something saveable.
+
 ## Architecture
 
 ### Server/Client Split
