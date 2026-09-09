@@ -19,7 +19,7 @@ backlog. The recurring moment to ask is the triage step in the release procedure
 
 ## The chat graph's "other cards" box is inert, and says so only in the log
 
-*Cluster: chat-graph · Cost: S for the honesty, M for the capability · Gate: none · Filed: 2026-09-09*
+*Cluster: chat-graph · Cost: S for the honesty, S for navigation, M to switch the avatar too · Gate: none · Filed: 2026-09-09*
 
 Clicking the `...N more cards` box does nothing visible. That it does nothing is **deliberate and
 recorded** — `_activate`'s `RootGapRef` branch explains that reaching a chat written under an older
@@ -33,11 +33,18 @@ So it reads as a bug, which is how it was reported (Juha, 2026-09-09, live-testi
   not invite it. Either give it the feedback the other gaps give — a flash, or the messagebox pattern —
   or draw it as visibly inert so the click is never offered. The second is better if the capability is
   far off, and the first if it is near, since a dead-looking box that later works is its own confusion.
-- **Make it work**, which is the real fix and is no longer blocked in principle: switching card now means
-  switching *character*, and a character declares its own avatar, voice and card (`raven.avatar.characters`,
-  0.2.9). So this is the same capability as *"Switch the AI character and the user profile at runtime"*
-  below, seen from the graph — and that item's avatar-reload problem is this one's too. Whichever is built
-  should make the other nearly free.
+- **Make it work**, and **the recorded reason not to is overstated** (Juha, 2026-09-09). It says an
+  avatar and voice mismatched against the system prompt is unacceptable. Weigh that against what the
+  refusal actually costs: **chats under another card are unreachable altogether.** A mismatched face is
+  cosmetic and visible; unreachable history is data the user cannot get to. The trade only points one way.
+  - **So the cheap version is available now**: navigate to the other root and leave the avatar and voice
+    as configured. That is the graph's ordinary focus change, which already works for every other gap.
+  - It is also less mismatched than it was: stored messages now draw with the face of whoever wrote them
+    (0.2.9), so an old chat *reads* correctly in the log even while the live avatar shows whoever is
+    configured.
+  - Switching the avatar and voice along with it is the better version, and is the same capability as
+    *"Switch the AI character and the user profile at runtime"* below — but it is an improvement on a
+    working feature rather than a precondition for one.
 
 **Note it became visible on 2026-09-09 rather than having been missed.** Most datastores had one root, so
 the box never appeared. Today's prompt changes altered the system prompt *text*, and roots are matched by
