@@ -196,6 +196,15 @@ class DPGAudioInputPanel:
 
         self.start_monitoring()
 
+    def _on_window_close(self) -> None:
+        """The window's own close button. Wired as the window's `on_close`.
+
+        A named callback rather than a lambda so that the log can say whether DPG ever called it — which
+        is the one question that separates "the X is not wired" from "the click never reached the X".
+        """
+        logger.debug("DPGAudioInputPanel._on_window_close: the window's close button was pressed.")
+        self.close()
+
     def close(self) -> None:
         """Hide the panel, stop metering, and persist what was tuned."""
         if not self.is_open:
@@ -593,7 +602,7 @@ class DPGAudioInputPanel:
                                    no_collapse=True,
                                    autosize=True,
                                    tag="audio_input_panel_window",  # tag
-                                   on_close=lambda: self.close())
+                                   on_close=self._on_window_close)
         self.window_id = window_id
 
         device_row = dpg.add_group(horizontal=True, parent=window_id)
