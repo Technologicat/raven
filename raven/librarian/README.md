@@ -33,6 +33,7 @@
     - [Server connections](#server-connections)
     - [Voice mode](#voice-mode)
     - [System prompt, AI character personality, communication style](#system-prompt-ai-character-personality-communication-style)
+    - [Telling the AI who *you* are](#telling-the-ai-who-you-are)
     - [AI avatar](#ai-avatar)
 - [Future vision](#future-vision)
 - [Troubleshooting](#troubleshooting)
@@ -884,6 +885,33 @@ any of them from `~/.config/raven/librarian/prompts/` without editing the instal
 - In practice it is useful to think of it as *system prompt + AI character card*, which is what the
   out-of-the-box configuration does.
 - A **character's own personality** is not in that folder: it travels with the character. See below.
+- **Neither is yours.** See the next section.
+
+## Telling the AI who *you* are
+
+**Optional, and worth doing** — current models respond well to knowing who they are talking to, and the
+field you work in or how you prefer to be answered is the kind of thing that otherwise has to be repeated
+in every conversation.
+
+Nothing ships here: Raven has no sensible default for somebody it has never met, so the whole thing is
+yours to create. Make `~/.config/raven/librarian/users/` and put two files in it:
+
+| File | What it holds | |
+|---|---|---|
+| `juha.json` | what you are **called** — `{"user_profile_version": 1, "name": "Juha"}` | required |
+| `juha.md` | your **user card**: who you are, and how you prefer to be answered | optional |
+| `juha_icon.png` | the **glyph** shown beside your messages in the chat | optional |
+
+`llm_user_name` then selects a profile by that name, exactly as `llm_char_name` selects a character — so
+the setting that names you in the chat log brings your card and your icon with it, and the two cannot
+disagree. Filenames need not resemble the name; the match is on the string inside the JSON.
+
+It is a directory rather than one file so that a name can select from several — a machine shared between
+people, or one person keeping a work profile and a personal one, is then a matter of changing
+`llm_user_name` rather than editing prose.
+
+Without a profile you have a name and nothing else, which is how Raven behaved before 0.2.9. See
+[`raven.librarian.userprofile`](userprofile.py).
 
 ## AI avatar
 

@@ -342,17 +342,23 @@ revisions are immutable "like the revisions of a GitHub issue comment" — and i
   thing that has to be added to the message itself. **Raven already has it**: the grey metadata line
   carries `R{revision}`, read from the datastore rather than assumed. Most messages read `R1` because
   there has never been an editing GUI, but the number is real — a datastore from before 0.2.8 has a
-  system prompt node in the hundreds, from when the prompt was regenerated into a new revision at every
-  app start. (It no longer is: `refresh_system_prompt` matches the configured text against the roots and
-  makes a *new node* when none matches, so nothing accumulates any more.)
+  system prompt node in the hundreds, from when the prompt was regenerated at every app start.
+  - **That node still holds one revision, not hundreds**: the regeneration created a new one and deleted
+    the old, so nothing accumulated. The *id* is high because `add_revision` takes it from the node's
+    `next_free_revision`, a counter that does not go back when a revision is deleted — which is the right
+    design, since reusing an id would make two different texts answer to one name.
+  - It no longer happens at all: `refresh_system_prompt` matches the configured text against the roots
+    and makes a *new node* when none matches.
 - **The `R` marker is the way in** (Juha, 2026-09-09): make it clickable and it opens the history, which
   costs no new control in the button row — the affordance is already on screen and merely inert. **It has
   to become visually obvious that it is clickable**, which is the actual work in this bullet; a grey
   number in a metadata line reads as a label, and nobody clicks a label.
 - **The history is a deliberate second view**, opened that way. So the revision picker is not a permanent
   control competing for space in every message's button row.
-- **And that old system prompt node is the first customer for per-revision delete** — a few hundred
-  revisions nobody wants, holding whatever they reference, in every datastore that predates 0.2.8.
+- **A high `R` number is therefore not a pile of revisions**, which is worth knowing before the history
+  view is built: it says how many times this node has *ever* been revised, not how many versions are
+  there to look through. The view lists what `get_revisions` returns, and for that node it is one entry
+  numbered in the hundreds.
 - **Deleting a revision belongs in that history view**, per revision, which is the shape of the affordance
   wanted here.
 

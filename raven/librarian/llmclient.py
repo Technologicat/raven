@@ -78,6 +78,7 @@ from ..common import utils
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
+from . import userprofile
 # The tool subsystem lives in its own module; re-exported here because `llmclient.TOOLS` and
 # `llmclient.perform_tool_calls` are what `scaffold`, `agent`, `chat_controller` and the tests have
 # always called, and where the tools live is not their business.
@@ -638,7 +639,33 @@ def setup_system_prompt(template_vars: env) -> str:
 # `raven.librarian.llmclient.setup` calls this every time `raven-librarian` (or `raven-minichat`) starts.
 #
 def setup_user_card(template_vars: env) -> str:
-    return _format_prompt("user", template_vars)
+    """Return the user card for whoever `template_vars.user` names, or `""` if nobody answers to it.
+
+    The card is that user's own `juha.md`, found by the name in `juha.json` under
+    `~/.config/raven/librarian/users/` — so `llm_user_name` brings the card with it, the same way
+    `llm_char_name` brings a character's.
+
+    **An empty card is the ordinary state here**, unlike on the character side. Nothing ships a profile,
+    a user who has not written one simply has a name, and that is exactly what Raven did before 0.2.9. So
+    this is logged at INFO rather than warned about — the AI is told who it is talking to only when the
+    user has said.
+    """
+    profile = userprofile.find(template_vars.user)
+    if profile is None:
+        logger.info(f"setup_user_card: no user profile for '{template_vars.user}'; the AI will know your "
+                    "name and nothing else about you. Writing one is optional and worth it -- see "
+                    "`raven.librarian.userprofile`.")
+        return ""
+    card_template = profile.read_card()
+    if card_template is None:
+        logger.info(f"setup_user_card: user profile '{profile.name}' has no card "
+                    f"('{profile.card_path.name if profile.card_path else profile.name + '.md'}'); the AI "
+                    "will know your name and nothing else about you.")
+        return ""
+    logger.info(f"setup_user_card: user card for '{profile.name}' from '{profile.card_path}'")
+    return _fill_in(card_template, f"the user card for '{profile.name}'",
+                    user=template_vars.user,
+                    char=template_vars.char).strip()
 
 
 # Note what is NOT here: which model is loaded, and how large its context window is.

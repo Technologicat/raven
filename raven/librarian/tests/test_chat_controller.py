@@ -493,23 +493,29 @@ class TestTheSpeakerGlyphFollowsTheStoredCharacter:
     """
 
     @staticmethod
-    def _controller(monkeypatch, configured="Aria", character_icon=None):
+    def _controller(monkeypatch, configured="Aria", character_icon=None,
+                    configured_user="Juha", user_icon=None):
         """A controller with just the fields the resolver reads.
 
-        `character_icon`: what `_load_instance_textures` would have set for a character that ships an icon
-                          of its own, as an *instance* attribute shadowing the class's generic one.
-                          `None` leaves the generic showing, which is a character without one.
+        `character_icon`, `user_icon`: what `_load_instance_textures` would have set for a character or a
+                                       user that ships an icon of its own, as an *instance* attribute
+                                       shadowing the class's generic one. `None` leaves the generic
+                                       showing, which is the case for somebody without one.
         """
         controller = chat_controller.DPGChatController.__new__(chat_controller.DPGChatController)
-        # On the class, because that is where `_load_class_textures` puts it and where the fallback reads
-        # it from. `monkeypatch` puts it back, so no other test inherits it.
-        monkeypatch.setattr(chat_controller.DPGChatController, "icon_ai_texture", "tex_generic_ai",
-                            raising=False)
-        controller._role_icon_textures = {"system": "tex_system", "tool": "tex_tool", "user": "tex_user"}
-        controller.llm_settings = env(personas={"assistant": configured, "user": "Juha",
+        # On the class, because that is where `_load_class_textures` puts them and where the fallback
+        # reads them from. `monkeypatch` puts them back, so no other test inherits them.
+        for attribute, value in (("icon_ai_texture", "tex_generic_ai"),
+                                 ("icon_user_texture", "tex_generic_user")):
+            monkeypatch.setattr(chat_controller.DPGChatController, attribute, value, raising=False)
+        # Only the two roles that have no speaker; the other two are resolved per persona.
+        controller._role_icon_textures = {"system": "tex_system", "tool": "tex_tool"}
+        controller.llm_settings = env(personas={"assistant": configured, "user": configured_user,
                                                 "system": None, "tool": None})
         if character_icon is not None:
             controller.icon_ai_texture = character_icon
+        if user_icon is not None:
+            controller.icon_user_texture = user_icon
         return controller
 
     def test_the_configured_character_wears_its_own_face(self, monkeypatch):
@@ -539,18 +545,39 @@ class TestTheSpeakerGlyphFollowsTheStoredCharacter:
         controller = self._controller(monkeypatch, configured="Aria", character_icon=None)
         assert controller.icon_texture_for("assistant", "Aria") == "tex_generic_ai"
 
-    def test_the_other_roles_answer_from_the_role_alone(self, monkeypatch):
-        """A user going by a different name is still a user, and there is one glyph for that.
+    def test_the_configured_user_wears_their_own_face(self, monkeypatch):
+        """The user side, resolved exactly as the character side is — a conversation has two participants.
 
-        The realistic case rather than a contrived one: the configured user name can change between
-        sessions exactly as the character's can, so stored user turns carry whatever it was then. Only
-        the assistant role has a per-character face to get wrong.
+        Before 0.2.9 the user always got the generic glyph, there being nowhere to declare another; a
+        profile can now carry a `_icon.png` the way a character does.
         """
-        controller = self._controller(monkeypatch, character_icon="tex_aria")
-        for role, expected in (("user", "tex_user"), ("system", "tex_system"), ("tool", "tex_tool")):
+        controller = self._controller(monkeypatch, configured_user="Juha", user_icon="tex_juha")
+        assert controller.icon_texture_for("user", "Juha") == "tex_juha"
+
+    def test_another_user_name_does_not_wear_it(self, monkeypatch):
+        # Same reasoning as for a character, and the same control beside it: the configured user's turns
+        # are theirs, and a turn stored under another name is somebody else's.
+        controller = self._controller(monkeypatch, configured_user="Juha", user_icon="tex_juha")
+        assert controller.icon_texture_for("user", "Juha") == "tex_juha", \
+            "the configured user has no icon of their own here, so borrowing it cannot be detected"
+        assert controller.icon_texture_for("user", "somebody else entirely") == "tex_generic_user"
+
+    def test_a_user_without_a_profile_icon_gets_the_generic_one(self, monkeypatch):
+        """Which is what every user got before 0.2.9, and what one without a profile still gets."""
+        controller = self._controller(monkeypatch, configured_user="Juha", user_icon=None)
+        assert controller.icon_texture_for("user", "Juha") == "tex_generic_user"
+
+    def test_the_roles_with_no_speaker_answer_from_the_role_alone(self, monkeypatch):
+        """A system prompt and a tool result are nobody's, so one glyph each is the whole answer.
+
+        Two of the four roles have a speaker and two do not, and this is the half that does not: a persona
+        must not change what is drawn for them.
+        """
+        controller = self._controller(monkeypatch, character_icon="tex_aria", user_icon="tex_juha")
+        for role, expected in (("system", "tex_system"), ("tool", "tex_tool")):
             assert controller.icon_texture_for(role, None) == expected
             assert controller.icon_texture_for(role, "somebody else entirely") == expected, \
-                f"an unplaceable persona changed the glyph for role '{role}'"
+                f"a persona changed the glyph for role '{role}'"
 
     def test_an_unknown_role_draws_nothing(self, monkeypatch):
         controller = self._controller(monkeypatch)

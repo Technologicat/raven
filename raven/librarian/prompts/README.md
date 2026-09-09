@@ -11,11 +11,17 @@ copy of the original. Raven logs which one it loaded, at INFO.
 | File | What it is |
 |---|---|
 | `system.md` | Instructions that hold regardless of who or what is at either end of the conversation. Ships **empty** — see below. |
-| `user.md` | Who the *user* is, and how they prefer to be addressed. Ships **empty**, and is worth filling in — current models respond well to knowing who they are talking to. |
 | `interaction.md` | The shared half of every character card: the facts about the deployment, and how to behave. Spliced into a character's own card wherever it writes `{interaction}`. |
 
-A character's own card is **not** here. It travels with the character, as `aria1.md` beside `aria1.json`,
-so that a character carries its own personality. See `raven/avatar/characters.py`.
+**Neither participant's own card is here**, because each travels with whoever it describes:
+
+- The **AI character's** card is `aria1.md` beside `aria1.json`, among the avatar assets. See
+  `raven/avatar/characters.py`.
+- **Yours** is `juha.md` beside `juha.json` in `~/.config/raven/librarian/users/`, which nothing ships —
+  it is yours to write. See `raven/librarian/userprofile.py`.
+
+What is left here is what belongs to neither: instructions that hold whoever is answering and whoever is
+asking.
 
 ## Why `system.md` ships empty
 
@@ -41,6 +47,8 @@ goes through Python's `str.format`, which replaces each `{name}` below with the 
 | `{user}` | The user's name, `llm_user_name`. | every file |
 | `{char}` | The AI character's name, `llm_char_name`. | every file |
 | `{interaction}` | The whole of `interaction.md`, filled in. | a character's own `.md` only |
+
+The same `{user}` and `{char}` work in a character's card and in your own profile's card.
 
 That is the entire list.
 

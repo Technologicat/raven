@@ -832,6 +832,14 @@ llm_sampler_config = {
 prompts_dir = pathlib.Path(__file__).parent / "prompts"
 user_prompts_dir = librarian_userdata_dir / "prompts"
 
+#: Where the user's own profiles live: `juha.json` naming them, `juha.md` their user card.
+#:
+#: Nothing ships here and the directory need not exist. A *character* is one of Raven's assets and is
+#: declared among them; a user is not, so there is no sensible default for somebody we have never met, and
+#: the whole directory is the user's to create. `llm_user_name` selects from it by name, exactly as
+#: `llm_char_name` selects a character. See `raven.librarian.userprofile`.
+user_profiles_dir = librarian_userdata_dir / "users"
+
 
 # ----------------------------------------
 # Where the prompt texts went (0.2.9)

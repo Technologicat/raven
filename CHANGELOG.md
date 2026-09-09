@@ -217,6 +217,17 @@
     while Librarian shows its system prompt on purpose. It now says what was actually wanted: the setup is
     the AI's own ground, to be spoken *from* rather than quoted back or pointed at.
 
+- **you can tell the AI who *you* are, the same way a character says who it is.** Make
+  `~/.config/raven/librarian/users/` and put a `juha.json` in it naming you, with an optional `juha.md`
+  describing you and an optional `juha_icon.png` for your messages in the chat; `llm_user_name` then
+  selects it by that name. Nothing ships — Raven has no sensible default for somebody it has never met —
+  and without a profile you have a name and nothing else, exactly as before.
+  - **Your messages can carry your own icon.** Until now the user always got the generic glyph, there
+    being nowhere to declare another.
+  - It is a directory rather than one file, so a name can select from several: a shared machine, or a work
+    profile and a personal one, is then a matter of changing `llm_user_name`.
+  - `prompts/user.md` is gone, replaced by this. It shipped empty, so nothing is lost.
+
 - **the prompt texts are Markdown files now**, under `raven/librarian/prompts/`, and any of them can be
   overridden from `~/.config/raven/librarian/prompts/` without touching the installed copy. That folder's
   `README.md` documents the template variables and what each file is for.

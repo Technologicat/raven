@@ -92,6 +92,7 @@ from . import chatutil
 from . import config as librarian_config
 from . import hybridir
 from . import llmclient
+from . import userprofile
 from . import scaffold
 from . import sidecarstore
 from . import textfilestore
@@ -3768,14 +3769,23 @@ class DPGChatController:
             cls._class_initialized = True
 
     def _load_instance_textures(self,
-                                avatar_image_path: str | pathlib.Path | None):
-        """Load instance-specific textures.
+                                avatar_image_path: str | pathlib.Path | None,
+                                user_name: str | None):
+        """Load instance-specific textures: the chat glyphs the configured pair speak under.
 
         `avatar_image_path`: Path to the main character image of the AI's avatar.
                              Used for detecting the presence of a per-character icon.
 
                              If no per-character icon exists for this character,
                              a generic AI icon is used.
+
+        `user_name`: The configured user's name, i.e. `llm_user_name`. Used for finding their profile's
+                     icon, if they declared one. Without a profile, or without an icon in it, the generic
+                     user glyph is used.
+
+        **Both sides, symmetrically.** The AI's face and the user's are found the same way — an `_icon.png`
+        beside the thing that declares them — because a conversation has two participants and decorating
+        only one of them is a distinction the chat log has no reason to draw.
         """
         # Prefer per-character icon, if available. This intentionally shadows `type(self).icon_ai_texture`.
         character_dir = avatar_image_path.parent
@@ -3786,13 +3796,19 @@ class DPGChatController:
             w, h, c, data = dpg.load_image(str(character_icon_path))
             self.icon_ai_texture = dpg.add_static_texture(w, h, data, tag=f"icon_ai_texture_0x{id(self):x}", parent="librarian_chat_controller_textures")  # tag
 
-        # The glyphs for the roles that have no character behind them. Private, and deliberately no longer
-        # holding an "assistant" entry: a table keyed by role has exactly one slot for the AI's face, so
-        # every stored message drawn from it wears whichever character is configured now. Ask
-        # `icon_texture_for`, which takes the message's own persona as well.
+        # Prefer the configured user's own icon, if their profile declares one. Shadows the class
+        # attribute exactly as the character's icon does above.
+        profile = userprofile.find(user_name)
+        if profile is not None and profile.icon_path is not None:
+            w, h, c, data = dpg.load_image(str(profile.icon_path))
+            self.icon_user_texture = dpg.add_static_texture(w, h, data, tag=f"icon_user_texture_0x{id(self):x}", parent="librarian_chat_controller_textures")  # tag
+
+        # The glyphs for the roles whose speaker cannot vary. Private, and deliberately holding neither an
+        # "assistant" nor a "user" entry: a table keyed by role has exactly one slot per role, so every
+        # stored message drawn from it wears whoever is configured now. Ask `icon_texture_for`, which
+        # takes the message's own persona as well.
         self._role_icon_textures = {"system": self.icon_system_texture,
                                     "tool": self.icon_tool_texture,
-                                    "user": self.icon_user_texture,
                                     }
 
     def icon_texture_for(self,
@@ -3801,25 +3817,35 @@ class DPGChatController:
         """Return the speaker glyph for a message written by `persona` in `role`. `None` draws no glyph.
 
         `role`: One of "assistant", "system", "tool", "user".
-        `persona`: The character name *stored with that message*, or `None` where the role has none.
-                   Not the configured character: a chat may hold turns by several, and the one configured
-                   now is not who wrote the older ones.
+        `persona`: The name *stored with that message*, or `None` where the role has none. Not the
+                   configured one: a chat may hold turns by several characters, and by a user under
+                   another name, and whoever is configured now is not who wrote the older messages.
 
         Satisfies `chatgraph.IconFor`, and is what both views ask — the chat log draws one message's glyph,
         the graph draws a branch of them at once, and a rule applied in only one of them would be visible
         as a disagreement between the two.
+
+        **Two of the four roles have a speaker and two do not.** A system prompt and a tool result are
+        nobody's, so one glyph each is the whole answer; an assistant message and a user message are
+        somebody's, and are resolved the same way below.
         """
-        if role != "assistant":
+        if role not in ("assistant", "user"):
             return self._role_icon_textures.get(role)
-        # An AI character gets its own icon where we can place it, and the generic glyph otherwise. Only
-        # the configured character can be placed: a persona is stored as a bare name, and nothing maps a
-        # name to an image — `llm_char_name` and `avatar_config.image_path` are separate settings that a
-        # user changes together. So a chat's other characters fall back, which is the honest answer and
-        # the one thing that must not happen is drawing them as *this* one.
-        configured = self.llm_settings.personas.get("assistant")
-        if persona is not None and persona == configured:
-            return self.icon_ai_texture  # per-character where one exists; `_load_instance_textures` shadows the generic
-        return type(self).icon_ai_texture  # the generic AI glyph, never an instance's character icon
+
+        # Whoever is *configured* gets their own icon where they have declared one; everybody else gets
+        # the generic glyph for their role. Only the configured pair can be placed, because their icons
+        # are loaded once at construction — and drawing a stored message as somebody it was not written
+        # by is the one outcome that must not happen, which is what the fallback is for.
+        if role == "assistant":
+            configured, own, generic = (self.llm_settings.personas.get("assistant"),
+                                        self.icon_ai_texture, type(self).icon_ai_texture)
+        else:
+            configured, own, generic = (self.llm_settings.personas.get("user"),
+                                        self.icon_user_texture, type(self).icon_user_texture)
+        # `own` is the instance attribute, which `_load_instance_textures` shadows over the class one when
+        # a per-character or per-user icon was found; where it did not, the two are the same object and
+        # this comes out as the generic glyph either way.
+        return own if (persona is not None and persona == configured) else generic
 
     def __init__(self,
                  llm_settings: env,
@@ -3936,7 +3962,7 @@ class DPGChatController:
         `executor`: A `ThreadPoolExecutor` or something duck-compatible with it. Used for background tasks.
         """
         type(self)._load_class_textures()
-        self._load_instance_textures(avatar_image_path)
+        self._load_instance_textures(avatar_image_path, llm_settings.personas.get("user"))
 
         # Inline chat-image thumbnails get their own texture registry, separate from the role-icon textures
         # (`librarian_chat_controller_textures`). Cached by sidecar filename so an image referenced by several

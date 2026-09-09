@@ -17,6 +17,37 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Switch the AI character and the user profile at runtime
+
+*Cluster: ? · Cost: M · Gate: pairs with the "server suddenly went down" robustness work · Filed: 2026-09-09*
+
+Both are now selected by a name — `llm_char_name` picks a character that brings its card, voice, face and
+glyph, and `llm_user_name` picks a user profile that brings its card and glyph. Each is one setting, and
+each takes effect at app start. **Being switchable at all is what makes switching them at runtime worth
+asking for** (Juha, 2026-09-09): before 0.2.9 there was nothing to select, so a selector would have had
+nothing to offer.
+
+What it needs, and why it is not a combo box:
+
+- **A character switch reloads the avatar.** The image goes to Raven-server (`api.avatar_load`), the
+  voice goes to the TTS, and both are set up once at start today. So the app has to be able to tear that
+  down and bring it back with the current session still running.
+- **The card is stored, not just configured.** A new chat is rooted at a system prompt node matched by
+  its *text* (`appstate.refresh_system_prompt`), so switching character mid-session raises the question
+  of which root the next message belongs under — an existing conversation cannot retroactively have been
+  held with somebody else.
+- **The user profile is the easier half**: its card is text and its glyph is a texture, with nothing on
+  the server to reload. It may be worth doing on its own first for that reason.
+
+**Why it pairs with the robustness work** (Juha's suggestion): reloading the avatar mid-session is the
+same capability as recovering from the server going away and coming back — tear down a live avatar
+instance, build another, and keep the chat intact across it. Whichever is built first should leave that
+seam usable by the other.
+
+Note the *scan* side is already there and needs nothing: `raven.avatar.characters` and
+`raven.librarian.userprofile` both offer `rescan`, so a selector can list what is on disk now rather than
+what was there at start.
+
 ## Let the system prompt be hidden
 
 *Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-09*
