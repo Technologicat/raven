@@ -2761,9 +2761,64 @@ clusters, as of 2026-07-27:
   own terms: figure- and equation-heavy literature extracts to prose that omits the argument, in exactly the
   corpus Raven exists to read.
 
+## Three display shorteners in `librarian/`, and the shape agreed for merging them
+
+*Cluster: ? · Cost: S · Gate: none — design settled, just needs writing · Filed: 2026-09-09*
+
+`librarian/` grew three ways to shorten a string for display, differing on two axes — where the cut goes,
+and what the budget is measured in:
+
+| | cut | budget | caller |
+|---|---|---|---|
+| `cleanup._ellipsize` | middle | characters | `cleanup_dialog`, for filenames — the middle goes so the extension survives |
+| `chatutil._shorten` | end | characters | display labels; also collapses whitespace |
+| `chatgraph._with_ellipsis` | end | **measured width**, via a `width_of` callable | graph box labels |
+
+**`llmclient.truncate_middle` is deliberately not on that list** (Juha, 2026-09-09). It elides the middle
+too, but its marker states *how many characters were dropped*, and it exists so a model is not handed
+silent truncation and left unable to tell a cut document from one that ends there. That is a different
+contract from a cosmetic label, and folding it in would destroy it.
+
+**Agreed shape: two functions, not one** (Juha, 2026-09-09). A single function taking `width_of=None` to
+select the unit would make `budget` mean characters or pixels depending on another argument, which is a
+parameter meaning two things. So:
+
+    ellipsize(text, max_chars, *, middle=False)
+    ellipsize_to_width(text, max_width, width_of, *, middle=False)
+
+in `raven/common/text/`, with the three private helpers deleted and their call sites and tests moved over.
+A GUI label in a proportional font wants the measured one; character budgets are for text that is not being
+laid out.
+
+**Found while asking whether a device name could overflow a help-card cell.** It could not, in the end —
+the answer there was to stop putting live state on the card at all — so this is standalone cleanup with
+nothing waiting on it.
+
 ## Librarian's help card: the room exists now, and is not all spent
 
 *Cluster: discoverability · Cost: S per remaining piece · Gate: none · Filed: 2026-08-05 · Updated: 2026-09-09 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
+
+**Librarian's card is finished and signed off (2026-09-09), and the remaining work is the other eight.**
+The standard it now sets is written down rather than left to be inferred — `raven-style-guide.md`, *User-facing
+text*: grammatical labels with their articles, sentence case, `"Same, but …"` for a row that varies its
+neighbour, and **nothing in a hotkey table may wrap**, that last one because the two column-groups share
+table rows, so one wrapped cell pushes both down and destroys the blank-row grouping. Measured on this
+font, a cell holds about 35 characters; the only real test is looking.
+
+What a sweep of another card should check for, all of which this one had:
+
+- **Rows that lean on prose the reader has not reached.** The table sits above the explanation, so
+  *"Do what clicking the box does"* explained nothing.
+- **Claims that were true when written.** Ctrl+T/S/R and the sibling steps said *"the last message"* and
+  act on the **marked** one; the device name in the mic row was interpolated at import and froze at
+  startup while the F9 panel could change it. Anything a card states about live state is a staleness bug
+  unless something rebuilds the table, and nothing does.
+- **Constraints that make a key silently do nothing.** Ctrl+U is dispatched to the marked message and
+  returns early unless it is the last, so pressing it elsewhere is a no-op with no feedback. Disabling the
+  *button* does not cover the hotkey — `fire_event_if_exists` calls the stashed callable directly.
+- **Duplicated action text**, which hides which rows are variants. Still outstanding in three other cards:
+  `visualizer`'s *"Copy report to clipboard"*, `xdot_viewer`'s *"Pan view"*, `cherrypick`'s *"...all
+  selected"*.
 
 **The shape decision is built and shipped (2026-09-09).** `HelpWindow` takes `pages`, and Librarian's card
 is two: the keys on one, everything the card says *about* Librarian on the other. What is left is content
@@ -4208,7 +4263,22 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 ## Fleet audit: every hotkey discoverable in a tooltip + help card
 
-*Cluster: discoverability · Cost: ? · Gate: post-0.2.10 · Filed: 2026-06-07 · See also: "Librarian's help card has no room to describe attachments"*
+*Cluster: discoverability · Cost: ? · Gate: post-0.2.10 · Filed: 2026-06-07 · Updated: 2026-09-09 · See also: "Librarian's help card: the room exists now, and is not all spent"*
+
+**Narrower than when filed, in two ways** (2026-09-09):
+
+- **Half of it is now mechanized.** `scripts/check_option_lists.py` compares each README's documented keys
+  against the app's `hotkey_info` and prints the difference on every run, which is the card half of the
+  audit for the keys a README lists. As of today it reports exactly one real gap — the Visualizer's
+  `Ctrl+S` for saving a word cloud — plus Librarian's `Ctrl+Enter`, which *is* on the card under a computed
+  name (`_send_key_label`) the script cannot read. So the card half is close to done and its remainder is
+  visible without anyone auditing by hand.
+- **Librarian's card was gone through key by key and signed off** (2026-09-09), which is one of seven apps
+  done to a standard now written in `raven-style-guide.md`.
+
+**What is genuinely left is the tooltip half**, and it is the larger one: for every bound key in each app,
+confirm the control it triggers names it in brackets. Nothing checks that, and filling a gap is a behaviour
+change rather than a doc edit — so it stays its own focused pass, as this item has always said.
 
 Policy (now in `raven-style-guide.md`, "Hotkey discoverability"): every hotkey must be surfaced both in the `F1` help card *and* in the tooltip of the GUI control it triggers (bracketed, e.g. `"Open folder [Ctrl+O]"`). Most apps in the wild miss the tooltip half; Raven apps shouldn't.
 
@@ -5090,10 +5160,10 @@ the loop, and therefore the one whose requirements do not follow from the other 
   that: "one mechanism with a swappable panel" is about the right-hand rect. The chat log's presence is a
   second axis, and avatar-first is the mode that moves both at once.
 
-**The view itself is not tracked here** — it is `TODO.md`'s "Nonlinear chat view / chat graph editor", which
-already carries the mechanism (generate the layout ourselves, no GraphViz) and the constraints (limit visible
-depth; the full tree will not render at interactive FPS). This item is only about the *mode*, and about the
-observation that the two want designing together: the view needs a panel, and the mode is what frees one.
+**The view itself is not tracked here** — it is `TODO.md`'s "Multiversal chat view / chat graph editor",
+which shipped in 2026-09 and now carries only what is left of it (finding things: jump-to-node, search).
+This item is only about the *mode*, and about the observation that the two want designing together: the view
+needs a panel, and the mode is what frees one.
 
 What the mode adds on top of that view: not loading the avatar at all. That is where the VRAM and the battery
 saving come from, and it is a startup-path decision rather than a hide/show toggle — worth being explicit
