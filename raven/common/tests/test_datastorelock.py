@@ -84,18 +84,18 @@ class TestNamingTheHolder:
 
     Acquiring twice in one process is how a refusal is provoked here — `flock` is per open file
     description, so that is refused exactly as another process would be. But it reaches the *same-process*
-    message, not the cross-process one, so a test about the cross-process wording has to make the lock file
-    name somebody else first.
+    message, not the cross-process one, so a test about the cross-process wording has to make the holder
+    sidecar name somebody else first.
     """
 
     def _hold_as_another_process(self, target, holder="raven-indexer (PID 999999)"):
-        """Take the lock, then overwrite what it says about its holder with somebody else's name.
+        """Take the lock, then overwrite the holder sidecar with somebody else's name.
 
         Simpler than faking `getpid` around the acquire, and it exercises the same thing: what the
-        refusing process reads out of the lock file is what decides which message it gets.
+        refusing process reads out of the sidecar is what decides which message it gets.
         """
         held = datastorelock.acquire(target, what="The document index")
-        datastorelock.lock_path_for(target).write_text(holder, encoding="utf-8")
+        datastorelock._holder_path_for(datastorelock.lock_path_for(target)).write_text(holder, encoding="utf-8")
         return held
 
     def test_the_refusal_names_the_holding_process(self, tmp_path, monkeypatch):
@@ -163,6 +163,24 @@ class TestNamingTheHolder:
     def test_a_lock_file_that_says_nothing_is_not_an_error(self, tmp_path):
         """The holder truncates on winning and writes its name a moment later; a refusal can land between."""
         lock_path = datastorelock.lock_path_for(tmp_path / "index")
-        lock_path.write_text("", encoding="utf-8")
+        datastorelock._holder_path_for(lock_path).write_text("", encoding="utf-8")
         assert datastorelock._read_holder(lock_path) == datastorelock._UNKNOWN_HOLDER
         assert datastorelock._read_holder(tmp_path / "no-such-lock") == datastorelock._UNKNOWN_HOLDER
+
+    def test_the_holder_is_recorded_beside_the_lock_and_not_inside_it(self, tmp_path, released):
+        """Windows locks a byte range of the lock file itself, mandatorily, so writing there is refused.
+
+        Unix would not care -- `flock` is advisory and the contents are nobody's business -- which is
+        precisely why this needs pinning: putting the name back inside the lock file would pass every test
+        run on this machine and silently disable the feature on the one platform none of us runs.
+        """
+        target = tmp_path / "index"
+        released.append(datastorelock.acquire(target, what="The document index"))
+        lock_path = datastorelock.lock_path_for(target)
+        holder_path = datastorelock._holder_path_for(lock_path)
+
+        assert holder_path != lock_path, "the holder must not be written into the locked file"
+        assert holder_path.read_text(encoding="utf-8").strip(), "the holder should have recorded itself"
+        # The control: the lock file being empty is what makes the assertion above meaningful. Were the
+        # name written into it, both files would carry it and the inequality alone would prove nothing.
+        assert lock_path.read_text(encoding="utf-8") == "", "nothing should have been written into the lock"

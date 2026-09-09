@@ -49,15 +49,22 @@ def _describe_self() -> str:
     return f"{name} (PID {os.getpid()})"
 
 
-def _write_holder(lock_path: pathlib.Path) -> None:
-    """Record who holds the lock, for the benefit of whoever is refused next. Call this holding it.
+def _holder_path_for(lock_path: pathlib.Path) -> pathlib.Path:
+    """Return the file naming `lock_path`'s holder — a sidecar, deliberately not the lock file itself.
 
-    Safe to write into the lock file itself: the lock is the `flock`, not the file's contents. `filelock`
-    opens without `O_TRUNC` and truncates only after winning, so a process that loses the race cannot
-    blank out the winner's identity on its way past.
+    Writing the identity into the lock file works on Unix, where `flock` is advisory and the contents are
+    nobody's business, and does not work on Windows, where `filelock` takes a mandatory `LockFileEx` range
+    over the file's first byte. Opening it separately to write there is then a sharing violation, so the
+    holder would fail to record itself and every refusal would fall back to the generic phrase — on the one
+    platform none of us runs, which is exactly the kind of difference a CI matrix is for.
     """
+    return lock_path.with_name(lock_path.name + ".holder")
+
+
+def _write_holder(lock_path: pathlib.Path) -> None:
+    """Record who holds the lock, for the benefit of whoever is refused next. Call this holding it."""
     try:
-        lock_path.write_text(_describe_self(), encoding="utf-8")
+        _holder_path_for(lock_path).write_text(_describe_self(), encoding="utf-8")
     except OSError:  # noqa: S110 -- see below
         # Never fatal. This is a nicety for an error message that may never be printed, and the lock is
         # held and valid whether or not it succeeds. A caller that failed to start because it could not
@@ -69,12 +76,16 @@ def _write_holder(lock_path: pathlib.Path) -> None:
 def _read_holder(lock_path: pathlib.Path) -> str:
     """Return a description of the process holding `lock_path`, or `_UNKNOWN_HOLDER` if it does not say.
 
-    Blank is a normal answer rather than an error: the holder truncates the file when it wins and writes
-    its name a moment later, so a refusal landing in that window reads nothing. An older `filelock` that
-    truncates on open gets the same result for a different reason.
+    Not knowing is a normal answer rather than an error, and there are two ordinary ways to get it: nobody
+    has held this lock since the sidecar's directory was last cleared, or a holder has just won the lock and
+    not yet written its name — a refusal can land in that gap.
+
+    The sidecar outlives the lock, since a released lock has nothing to clean it up. That is harmless
+    because it is only ever read *while somebody holds the lock*, and that somebody overwrites it on the way
+    in; the stale name can only be read in the microseconds before it does.
     """
     try:
-        holder = lock_path.read_text(encoding="utf-8").strip()
+        holder = _holder_path_for(lock_path).read_text(encoding="utf-8").strip()
     except OSError:
         return _UNKNOWN_HOLDER
     return holder or _UNKNOWN_HOLDER
