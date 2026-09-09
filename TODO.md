@@ -84,7 +84,13 @@ leaves the one large item a safe margin rather than a hopeful one.
    settles why it does not hold.
 5. **Brief 16 item 8, search in both halves.** The large one: nontrivial GUI and UX work, probably at least
    a week. Everything above is sized to leave room for it.
-6. **The Markdown renderer's remaining steps — slack**, if time is left over. The reasoning is in
+6. **Message editing — slack**, ahead of the Markdown remainder. Promised in the user-facing manual since
+   Librarian's first version, and the backend has always supported it: `chattree` is revisioned and
+   nothing in the GUI has ever created a second revision. `briefs/researchers-night/README.md` gathers the
+   material, which was scattered across four files, and records the three decisions taken 2026-09-09 — an
+   edit adds a revision, old revisions keep their attachments alive, and the user needs a way to delete
+   one permanently — a button beside the revision picker, not a sweep and not automatic.
+7. **The Markdown renderer's remaining steps — slack**, if time is left over. The reasoning is in
    `briefs/researchers-night/markdown-block-rendering-brief.md`.
 
 Then item 10 of brief 16, the look check, once the thumbnails and role glyphs are all in place.

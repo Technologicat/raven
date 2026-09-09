@@ -317,8 +317,14 @@ not show at all. An earlier draft of this brief suggested a badge.
 (Juha, 2026-08-05). Exposing them here would be a dead affordance, and a view that ignores them is
 *consistent* with the rest of the app rather than lying about the datastore.
 
-They become visible when message editing lands — fixing a typo, continuing a prematurely sent user message —
-and the badge becomes right at that moment. Park it there rather than here.
+They become visible when message editing lands — fixing a typo, continuing a prematurely sent user message.
+
+**Revisited 2026-09-09, and the badge is now doubtful even then** (Juha): the chat log already prints the
+revision on every message, in its grey metadata line (`R{revision}`, `format_message_metadata_line`), and
+that asymmetry is probably correct rather than a gap. A graph box carries an abbreviated *preview* — a
+label cut to about forty characters, with the speaker's glyph and an attachment fan in its margins — and
+a revision number is the kind of detail a reader goes to the message itself for. So the default is now
+"no badge here", and putting one in would want a reason beyond symmetry with the log.
 
 ## Look and colour
 
@@ -508,10 +514,11 @@ Three things are in this family, and they are not independent:
   what it does today.
 - **The camera's pan and zoom**, which is **not currently an option at all** (checked 2026-09-09):
   `animate` is a per-call argument defaulting to `True`, and neither `XDotWidget` nor `DPGChatGraphPanel`
-  reads any configuration. The widget is in `raven/common/gui/` and app-agnostic on purpose, so the option
-  wants to be an *instance* default on the widget — `XDotWidget(..., animate_view=...)`, with the per-call
-  `animate` overriding it where a caller has a reason. That way `raven-xdot-viewer` gets the same switch,
-  and each app maps its own config onto it rather than the widget learning about config.
+  reads any configuration. **A switch on the instance** (Juha, 2026-09-09): `XDotWidget(..., animate_view=...)`,
+  with the per-call `animate` overriding it where a caller has a reason. The widget is in
+  `raven/common/gui/` and app-agnostic on purpose, so this is what lets `raven-xdot-viewer` have the same
+  switch while each app maps its own config onto it — rather than the widget learning about config, or the
+  panel spelling the setting out at each of its eight call sites.
 - **The two together.** A rebuild moves the anchor, so the camera follows it; if one of these is animated
   and the other is not, the picture jumps and the camera then chases it — which was a live bug, fixed
   2026-09-09 by making the follow instant to match the instant rebuild. So the camera's motion during a

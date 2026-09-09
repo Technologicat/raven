@@ -282,6 +282,70 @@ So the brief's caution is about a *layout* that moves boxes, and neither of sear
 something in the search work turns out to move boxes after all, that is the signal to re-open this
 ordering rather than push through it.
 
+### Message editing joins the slack, 2026-09-09
+
+**Ahead of the Markdown remainder, behind everything else** (Juha, 2026-09-09). Both are slack; this is the
+first of the two to be reached if there is time.
+
+**It has been promised in the user-facing manual since Librarian's first version**, and the manual states
+its scope as well — `raven/librarian/README.md`: *"The nodes are versioned, for an upcoming editing feature
+for fixing typos and making similar small edits that don't change the flow of the chat (i.e. meant for use
+in cases where any messages downstream of the edit still make sense as-is)."* So the feature is bounded by
+its own promise: small corrections, not rewrites that invalidate what follows.
+
+**The backend has always supported it, and "supported" is an understatement.** Checked against `chattree`
+on 2026-09-09: every operation the GUI would need is already there and already tested — `add_revision`,
+`get_revisions`, `get_revision`, `set_revision`, `set_revision_name`, and `delete_revision`, the last
+including the two fiddly parts (choosing a new active revision when the deleted one was active, and
+refusing to delete the only one). A node carries an `active_revision` field, and **the chat renders that
+revision transparently** — which is the whole mechanism: editing adds a revision and makes it active, and
+a picker sets it back.
+
+So this item is entirely front end. Nothing below the GUI needs designing, and nothing in the datastore
+needs a migration; what has never existed is the affordance.
+
+**The material exists but is scattered**, which is why it reads as thinner than it is. Gathered here so it
+is not re-derived:
+
+- `TODO.md`, *Librarian → Chat UI*: the item itself, one line — *"Message editing: use chattree's revision
+  system."*
+- **Brief 16** parked the revision badge on this, and 2026-09-09 revisited it: the chat log *already*
+  prints the revision on every message (`R{revision}`, in the grey metadata line), and the graph probably
+  should not — a box is an abbreviated preview, and a revision number is what a reader opens the message
+  for. So the graph likely gains nothing here, which is a smaller scope than the parking implied.
+- **`chat_controller.py`** carries a standing marker at the render site: *"later (chat editing): this
+  needs to be switchable without regenerating the whole view"*. That is the one performance constraint the
+  GUI work inherits — switching revision must repaint one message, not rebuild the log.
+- **`briefs/librarian-extension/done/03_librarian-content-parts-brief.md`** carries the interaction that
+  makes this more than a text field: an edit creates a revision, and the **old revision still references
+  the old attachments** — which is why the sidecar GC is mark-and-sweep rather than refcounting.
+- **`TODO_DEFERRED.md`**, the attachment-browser item, hits the same edge from the other side: an
+  attachment may be referenced only by a *superseded* revision, so a browser has to say which scope it is
+  showing.
+
+**The design questions those two raise are already answered**, and checked against the code on 2026-09-09
+rather than assumed:
+
+- **An edit adds a revision** (Juha). Revisions are immutable, and the attachment work did *not* overrule
+  that — `chattree.add_revision` is "the ordinary way to change a node's content", and its docstring gives
+  the reason: a thread does not record which revision of each ancestor it was written against, so a typo
+  fix reaching every thread is the point, while *replacing* content would leave descendants answering a
+  question nobody now asks. `_set_payload` exists, says it "breaks the immutability guarantee revisions
+  are built on", and is not what editing should use.
+- **Old revisions keep their attachments alive.** The rule is *reachable from at least one revision of at
+  least one message* (Juha), and that is already what ships: `_referenced_sidecars` unions "every revision
+  of every node".
+
+**What is missing is a way to delete an old revision** (Juha, 2026-09-09) — **a delete button, or
+something like one: the user saying "this version, gone permanently".** Not a sweep, and not automatic. A
+superseded revision is kept on purpose, being what the message said before; only its author can know when
+it has stopped being worth keeping, and guessing that with a policy would throw away the record the
+revision exists to be.
+
+It belongs with this item rather than after it, because editing is what creates the revisions that then
+need discarding, and because the affordance goes wherever the revision picker does — the same piece of
+message UI, not a separate maintenance screen.
+
 ### Where the reorder stands, 2026-09-07 — and the item that fell out of view
 
 19 days out. Recorded because taking stock produced no diff, and because one of the four items had
