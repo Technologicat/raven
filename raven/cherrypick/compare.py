@@ -15,6 +15,8 @@ import time
 from collections.abc import Sequence
 from typing import Callable, Optional
 
+import dearpygui.dearpygui as dpg  # for the key constants only; this module owns no DPG items
+
 from ..common.gui import animation as gui_animation
 from . import config
 
@@ -39,7 +41,8 @@ class CompareMode:
                  load_image_fn: Callable[[int], None],
                  set_status_fn: Callable[[str], None],
                  update_status_fn: Callable[[], None],
-                 update_title_fn: Optional[Callable[[], None]] = None):
+                 update_title_fn: Optional[Callable[[], None]] = None,
+                 on_exit_fn: Optional[Callable[[], None]] = None):
         """
         All ``get_*`` parameters are zero-argument callables returning
         the current component (or ``None``). This avoids holding stale
@@ -51,6 +54,11 @@ class CompareMode:
         *update_title_fn*: ``f()`` — rebuild the window title, called once per displayed frame so a title
             naming the image on screen keeps up with the cycle. Optional: a caller whose title does not
             name the image has nothing to refresh.
+        *on_exit_fn*: ``f()`` — the mode has left; put back whatever entering it changed (a toolbar, the
+            grid's input). Called from `exit` on every route out, which is what makes it safe: it used to
+            be a second call each caller had to remember beside `exit`, and `select_frame` made it on a
+            digit that was out of range — restoring the toolbar while the mode was still running.
+            Not called on the shutdown path (`redraw=False`), where the widgets it would touch are going.
         """
         self._get_iv = get_image_view
         self._get_grid = get_grid
@@ -60,6 +68,7 @@ class CompareMode:
         self._set_status = set_status_fn
         self._update_status = update_status_fn
         self._update_title = update_title_fn
+        self._on_exit = on_exit_fn
 
         # State.
         self.active: bool = False
@@ -158,6 +167,44 @@ class CompareMode:
             self._load_image(self.saved_current)
 
         self._update_status()
+
+        # Last, and only where the widgets still exist: this hands the toolbar and the grid back, and on
+        # the shutdown path they are already being torn down.
+        if redraw and self._on_exit is not None:
+            self._on_exit()
+
+    def handle_key(self, key: int, ctrl: bool = False, shift: bool = False) -> bool:
+        """Act on `key` if this mode is running. Return whether it was taken.
+
+        **Everything is taken while the mode is active**, acted on or not: compare mode owns the keyboard
+        for as long as it runs, so a key it does not recognise is swallowed rather than falling through to
+        the grid underneath. Cycling images while the grid quietly moves its cursor is what that would be.
+
+        Here rather than in `app.py` for the reason every other component's keys are in its own module —
+        beside what they do, and reachable by a test. `app.py` parses the command line at import, so
+        nothing in it can be imported under pytest; a key handler there is untestable by construction.
+        `chatgraph_panel`, `audio_input_panel`, `word_cloud` and `importer_gui` each carry their own.
+
+        Picking a winner is `Shift`+digit. The bare digit was it until 2026-09-09, which cost `1` its
+        constellation-wide meaning of zoom-to-1:1 — and made reaching for that zoom throw the reader out
+        of the mode instead. `1` is handled before this, with the other zoom keys, so it works here too.
+        """
+        if not self.active:
+            return False
+
+        if key == dpg.mvKey_Escape:
+            self.exit(restore=True)
+        elif key == dpg.mvKey_Spacebar:
+            self.toggle_pause()
+        elif key == dpg.mvKey_Comma:
+            self.adjust_fps(-config.COMPARE_FPS_STEP)
+        elif key == dpg.mvKey_Period:
+            self.adjust_fps(config.COMPARE_FPS_STEP)
+        elif key == dpg.mvKey_M and not ctrl and not shift:
+            self.reset_fps()
+        elif dpg.mvKey_1 <= key <= dpg.mvKey_9 and shift and not ctrl:
+            self.select_frame(key - dpg.mvKey_1 + 1)
+        return True
 
     def select_frame(self, n: int) -> None:
         """Digit key handler: exit compare mode and navigate to frame *n*.

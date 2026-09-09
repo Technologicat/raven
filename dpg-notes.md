@@ -1707,6 +1707,28 @@ So slot 1 is the right guess for almost everything, which is exactly why the dra
 knowing: it is one of the few places the reflex is wrong, and being wrong there is silent. Slot 0 is a
 collection of special cases rather than a category — table columns and font range hints share it.
 
+## "Is this mouse event mine?" is `is_item_hovered`, and a rectangle cannot answer it
+
+Measured 2026-09-09. `dpg.is_item_hovered` works on a **drawlist** and on a **child window**, and it
+accounts for occlusion: it is false where another window is drawn over the point, which is exactly what
+"was this event mine" needs to know. Confirmed live on the chat graph, whose pan and zoom go through a
+drawlist — the case worth checking, since a drawlist is not an ordinary interactive widget.
+
+**Rect arithmetic cannot substitute for it**, and the substitution is easy to make because the two agree
+almost always. `get_widget_pos` + `get_widget_size` + `get_mouse_pos` says whether a *point* is inside a
+*rectangle*, which stays true when a floating window covers that rectangle. A global mouse handler built
+on it therefore claims events aimed at whatever is drawn on top.
+
+The failure is the shape of the guard people reach for instead: *"is a modal up?"*. Modality has nothing
+to do with occlusion — a modal is merely the case that gets noticed, because it is the window most often
+drawn over something. Every ordinary floating window goes straight through such a guard. The bug that
+found it: Raven's audio input panel is non-modal and sits over the chat graph, so a click on its **close
+button** ran the graph's handler, which took the keyboard and focused a widget in the main window — the
+panel lost focus mid-press and its X did nothing, with `on_close` never firing.
+
+`raven.common.gui.utils.is_mouse_on_widget` is the wrapper, and it is named for the question rather than
+for the geometry. It was `is_mouse_inside_widget` and rect-based through v0.2.8.
+
 ## A drawlist cannot carry a tooltip — wrap it in a group
 
 Measured 2026-09-09. `dpg.add_tooltip(<a drawlist>)` fails: a drawlist accepts **only draw items** as

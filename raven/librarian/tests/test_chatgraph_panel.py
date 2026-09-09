@@ -1346,11 +1346,11 @@ class TestClickToFocus:
     def test_a_click_on_a_window_above_the_graph_is_not_ours(self, panel, monkeypatch):
         """The fault this class did not catch: a rectangle knows nothing about what is drawn over it.
 
-        The test used to be `is_mouse_inside_widget`, which asks whether a point lies inside the canvas —
-        true of a canvas with a floating window on top of it. So a click aimed at that window came here
-        as well, and this handler gave the keyboard to the graph and focused a widget in the main window,
-        which took the focus away from the window that was clicked. The audio input panel's close button
-        stopped working, because the panel greyed mid-click and the button never completed.
+        The test used to be a rectangle: whether a point lies inside the canvas, which is true of a canvas
+        with a floating window on top of it. So a click aimed at that window came here as well, and this
+        handler gave the keyboard to the graph and focused a widget in the main window, which took the
+        focus away from the window that was clicked. The audio input panel's close button stopped working,
+        because the panel greyed mid-click and the button never completed.
 
         `is_item_hovered` is ImGui's own answer to "is the pointer on this", and it accounts for stacking.
         Only `input_blocked` used to stand between this and every non-modal window Raven has.
@@ -1358,8 +1358,8 @@ class TestClickToFocus:
         built, forest, app_state, ids, calls = panel
         asked = []
         built._on_focus_requested = lambda: asked.append(True)
-        # Inside the canvas rect, and not hovered — which is exactly what a window drawn over it produces.
-        monkeypatch.setattr(guiutils, "is_mouse_inside_widget", lambda widget: True)
+        # Not hovered — which is exactly what a window drawn over the canvas produces, and what the old
+        # rectangle test could not report.
         monkeypatch.setattr(dpg, "is_item_hovered", lambda widget: False)
         built._on_click_anywhere(None, None)
         assert asked == [], "a click on a window above the graph was claimed by the graph"

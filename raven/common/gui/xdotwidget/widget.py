@@ -895,7 +895,7 @@ class XDotWidget(gui_animation.Animation):
 
     def _is_mouse_inside(self) -> bool:
         """Check if the mouse is inside this widget."""
-        return guiutils.is_mouse_inside_widget(self.drawlist)
+        return guiutils.is_mouse_on_widget(self.drawlist)
 
     def _get_local_mouse_pos(self) -> tuple:
         """Get mouse position relative to this widget."""

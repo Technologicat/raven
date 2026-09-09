@@ -1007,7 +1007,7 @@ class ThumbnailGrid:
 
     def _hit_test(self) -> Optional[int]:
         """O(1) hit test: return the entry index under the mouse, or None."""
-        if not guiutils.is_mouse_inside_widget(self._child_window_tag):
+        if not guiutils.is_mouse_on_widget(self._child_window_tag):
             return None
 
         local_x, local_y = guiutils.get_mouse_relative_pos(self._child_window_tag)
@@ -1068,7 +1068,7 @@ class ThumbnailGrid:
                 # Logged whatever the outcome, and with the outcome in it: a click that selects the wrong
                 # tile and one that selects nothing have entirely different causes, and a line that only
                 # appears on success cannot tell them apart.
-                inside = guiutils.is_mouse_inside_widget(self._child_window_tag)
+                inside = guiutils.is_mouse_on_widget(self._child_window_tag)
                 local_x, local_y = guiutils.get_mouse_relative_pos(self._child_window_tag)
                 content_y = local_y + dpg.get_y_scroll(self._child_window_tag)
                 logger.info(f"ThumbnailGrid._on_click: inside={inside} local=({local_x:.0f},{local_y:.0f}) "
@@ -1121,7 +1121,7 @@ class ThumbnailGrid:
         with self._lock:
             if not self.input_enabled or self._scroll_end_flasher is None:
                 return
-            if not guiutils.is_mouse_inside_widget(self._child_window_tag):  # tag
+            if not guiutils.is_mouse_on_widget(self._child_window_tag):  # tag
                 return
             self._scroll_end_flasher.note_wheel_scroll()
 

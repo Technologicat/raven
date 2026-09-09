@@ -1361,7 +1361,7 @@ class ImageView:
 
         if not self._dragging:
             # Drag starts — check if we're over the drawlist.
-            if not guiutils.is_mouse_inside_widget(self._drawlist_tag):
+            if not guiutils.is_mouse_on_widget(self._drawlist_tag):
                 return
             self._dragging = True
             self._drag_cumulative = (dx, dy)
@@ -1383,7 +1383,7 @@ class ImageView:
         """Handle mouse wheel for zooming."""
         if not self.input_enabled:
             return
-        if not guiutils.is_mouse_inside_widget(self._drawlist_tag):
+        if not guiutils.is_mouse_on_widget(self._drawlist_tag):
             return
 
         delta = app_data  # positive = scroll up = zoom in

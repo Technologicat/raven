@@ -910,12 +910,12 @@ dpg.set_viewport_resize_callback(_resize_gui)
 
 def mouse_inside_plot_widget():
     """Return whether the mouse cursor is inside the plot widget."""
-    return guiutils.is_mouse_inside_widget("plot")  # tag
+    return guiutils.is_mouse_on_widget("plot")  # tag
 app_state.mouse_inside_plot_widget = mouse_inside_plot_widget  # so submodules (e.g. `annotation`) can reach it
 
 def mouse_inside_info_panel():
     """Return whether the mouse cursor is inside the info panel."""
-    return guiutils.is_mouse_inside_widget("item_information_panel")  # tag
+    return guiutils.is_mouse_on_widget("item_information_panel")  # tag
 
 def mouse_wheel_callback(sender, app_data):
     """Update the plotter data tooltip when the user zooms with the mouse wheel.

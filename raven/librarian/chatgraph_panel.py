@@ -1165,10 +1165,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
         given, and for the same reason -- the click that dismisses a modal must not also land on what the
         modal was covering.
 
-        **"Where did it land" is a question for ImGui, not for arithmetic.** `is_mouse_inside_widget` asks
-        whether a point is inside a rectangle, which is true of a rectangle with another window drawn over
-        it -- so this claimed clicks aimed at anything floating above the graph, and `input_blocked` caught
-        only the modal case. `is_item_hovered` is ImGui's own answer and accounts for what is on top.
+        **"Where did it land" is a question for ImGui, not for arithmetic.** This used to ask whether a
+        point was inside a rectangle, which is true of a rectangle with another window drawn over it -- so
+        it claimed clicks aimed at anything floating above the graph, and `input_blocked` caught only the
+        modal case. `is_item_hovered` is ImGui's own answer and accounts for what is on top; the helper
+        that made the geometric test is now `guiutils.is_mouse_on_widget` and asks the same thing.
 
         The bug that found it: clicking the *close button* of the audio input panel, which is non-modal and
         sits over the graph. This ran, gave the keyboard to the graph, and focused a widget in the main

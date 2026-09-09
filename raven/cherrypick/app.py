@@ -730,9 +730,8 @@ def _enter_compare_mode(*_args) -> None:
     if compare is None or grid is None:
         return
     if compare.active:
-        # Button is in stop mode — exit.
+        # Button is in stop mode — exit. `exit` calls `_on_compare_exit` itself, on every route out.
         compare.exit(restore=True)
-        _on_compare_exit()
         return
     if not dpg.is_item_enabled("cherrypick_compare_btn"):
         return
@@ -1056,30 +1055,8 @@ def _on_key(sender, app_data) -> None:
                 _redo()
         return
 
-    # --- Compare mode active: intercept most keys ---
-    if compare is not None and compare.active:
-        if key == dpg.mvKey_Escape:
-            compare.exit(restore=True)
-            _on_compare_exit()
-        elif key == dpg.mvKey_Spacebar:
-            compare.toggle_pause()
-        elif key == dpg.mvKey_Comma:
-            compare.adjust_fps(-config.COMPARE_FPS_STEP)
-        elif key == dpg.mvKey_Period:
-            compare.adjust_fps(config.COMPARE_FPS_STEP)
-        elif key == dpg.mvKey_M and not ctrl and not shift:
-            compare.reset_fps()
-        # Shift+1..9: select frame and exit.
-        #
-        # Shifted, so that bare "1" can mean 1:1 zoom here as it does everywhere else in the constellation.
-        # The trade is real and goes the other way on frequency — picking is the hot path in this mode,
-        # and it is the one that gained a modifier. What decides it is that one key must not mean two
-        # unrelated things: reaching for 1:1 and being thrown out of compare mode instead is the collision
-        # that a bare digit made possible, and a zoom is the cheaper mistake of the two.
-        elif dpg.mvKey_1 <= key <= dpg.mvKey_9 and shift and not ctrl:
-            compare.select_frame(key - dpg.mvKey_1 + 1)
-            _on_compare_exit()
-        # All other keys suppressed.
+    # --- Compare mode active: it owns the keyboard, and says so by taking every key ---
+    if compare is not None and compare.handle_key(key, ctrl=ctrl, shift=shift):
         return
 
     # --- Ctrl: app commands ---
@@ -1707,6 +1684,7 @@ def main() -> int:
         set_status_fn=_set_status,
         update_status_fn=_update_status,
         update_title_fn=_update_title,
+        on_exit_fn=_on_compare_exit,
     )
 
     # --- Input handlers ---

@@ -353,7 +353,7 @@ def _on_mouse_wheel(*args) -> None:
     animation exists to notice that the end was reached.
     """
     _on_any_input(*args)
-    if "chat_controller" in globals() and guiutils.is_mouse_inside_widget(chat_controller.view.gui_parent):
+    if "chat_controller" in globals() and guiutils.is_mouse_on_widget(chat_controller.view.gui_parent):
         chat_controller.view.note_wheel_scroll()
 
 # --------------------------------------------------------------------------------

@@ -23,7 +23,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y", "DPG_SCROLLBAR_SIZE",  # default-theme metrics Raven has to know
 
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
-           "get_mouse_relative_pos", "is_mouse_inside_widget",
+           "get_mouse_relative_pos", "is_mouse_on_widget",
 
            "is_render_thread", "split_frame",  # frame waiting, guarded against deadlock
            "wait_for_resize",
@@ -742,12 +742,27 @@ def get_mouse_relative_pos(widget: str | int) -> tuple[int, int]:
     m = dpg.get_mouse_pos(local=False)  # in viewport coordinates
     return (m[0] - x0, m[1] - y0)
 
-def is_mouse_inside_widget(widget: str | int) -> bool:
-    """Return whether the mouse cursor is inside `widget` (DPG ID or tag)."""
-    x0, y0 = get_widget_pos(widget)
-    w, h = get_widget_size(widget)
-    m = dpg.get_mouse_pos(local=False)  # in viewport coordinates
-    return not (m[0] < x0 or m[0] >= x0 + w or m[1] < y0 or m[1] >= y0 + h)
+def is_mouse_on_widget(widget: str | int) -> bool:
+    """Return whether the mouse cursor is on `widget` (DPG ID or tag), with nothing else on top of it.
+
+    Every caller asks this in order to decide whether a mouse event was *theirs*: a wheel over the chat
+    log, a click in the graph, a drag on an image. So the answer has to account for what is drawn over the
+    widget, and ImGui's own hover test is what does.
+
+    **Changed in v0.2.9.** Up to v0.2.8 this was `is_mouse_inside_widget`, and it was rectangle
+    arithmetic — which knows nothing about what covers the rectangle. Every global mouse handler built on
+    it therefore claimed events aimed at windows above it, with only an "is a modal up?" guard in the way;
+    modality has nothing to do with occlusion, so every non-modal window went straight through. The bug
+    that surfaced it: the audio input panel's close button did nothing, because the chat graph beneath
+    claimed the click and moved the keyboard, taking the focus from the panel mid-press. See
+    `chatgraph_panel._on_click_anywhere`.
+
+    Renamed with the change, rather than left saying "inside": a point can be inside a widget's rect while
+    the pointer is on a window in front of it, so the old name now describes a different question from the
+    one this answers. Nothing asks the geometric one any more; a caller that genuinely wants a rect test
+    should say so in its own name rather than borrowing this one.
+    """
+    return dpg.is_item_hovered(widget)
 
 # ---------------------------------------------------------------------------
 # Layout helpers
