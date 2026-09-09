@@ -304,6 +304,26 @@ a picker sets it back.
 So this item is entirely front end. Nothing below the GUI needs designing, and nothing in the datastore
 needs a migration; what has never existed is the affordance.
 
+**And the reading side is already correct**, which is the part that could have made this large. The worry
+is the reasonable one — *"there is a lot of code that gets the latest revision, and all of it may need
+revising to pick the active one"* — so it was surveyed rather than assumed (2026-09-09):
+
+- **34 non-test `get_payload` call sites, and every one takes the default** — which *is* the active
+  revision, `get_payload(node_id, revision_id=None)` reading `node["active_revision"]`. The default was
+  chosen right at the start, so there is no sweep to do.
+- **Nothing selects "latest" anywhere**: no `get_revisions()[-1]`, no `max(...)` over revision ids.
+- **Nothing reaches past the accessor.** The only direct `node["data"]` reads outside `chattree` are in
+  `chatutil.upgrade_datastore`, which walks every revision because migrating is what it is for.
+
+**What the eight `TODO: later (chat editing)` markers actually mark** is therefore narrower than "may need
+revising": they are the sites where a *reader* might want to see a revision other than the active one, so
+each has to accept a revision chosen by the view rather than taking the default. Five are in
+`chat_controller`, two in `minichat`, one in `chatutil`. That is a bounded job — thread a choice through
+eight places — rather than an audit of everything that touches a payload.
+
+The ninth marker is the constraint, not a call site: switching revision must repaint one message rather
+than rebuild the log.
+
 **The material exists but is scattered**, which is why it reads as thinner than it is. Gathered here so it
 is not re-derived:
 
