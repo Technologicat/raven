@@ -14,6 +14,7 @@ import argparse
 
 from ... import __version__
 from ... import avatar  # for `avatar.assets_path`; the package root, not this app
+from ...common import replserver
 
 parser = argparse.ArgumentParser(description="""Raven-avatar settings editor — standalone renderer for the AI avatar character with live postprocessor settings editing.""",
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -28,6 +29,7 @@ parser.add_argument('--log-level', default='INFO',
                     help='root logger level (default: INFO)')
 parser.add_argument('--qr', action='store_true',
                     help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
+replserver.add_argument(parser)
 opts = parser.parse_args()
 
 import logging
@@ -1879,6 +1881,9 @@ def update_animations():
     #     else:
     #         dpg.disable_item(gui_instance.voice_choice)
     #         dpg.disable_item("speak_button")
+
+# Last, so a session opens onto a fully built app; this module's globals are what it gets.
+replserver.maybe_start(opts.repl, globals(), f"Raven-avatar-settings-editor {__version__}")
 
 logger.info("App render loop starting.")
 

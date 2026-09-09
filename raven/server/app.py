@@ -13,6 +13,7 @@ The `tts` module is new, based on Kokoro-82M. All old TTS options are gone. This
 import argparse
 
 from .. import __version__
+from ..common import replserver
 
 parser = argparse.ArgumentParser(prog="Raven-server", description="Server for specialized local AI models, based on the discontinued SillyTavern-extras")
 parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
@@ -28,6 +29,7 @@ parser.add_argument('--log', metavar='PATH', default=None,
 parser.add_argument('--log-level', default='INFO',
                     choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                     help='root logger level (default: INFO)')
+replserver.add_argument(parser)
 args = parser.parse_args()
 
 import logging
@@ -1785,6 +1787,11 @@ init_server_modules()
 
 # ----------------------------------------
 # Start serving
+
+# Last, so a session opens onto loaded models rather than onto a half-initialized process. This is the
+# app the REPL is most obviously for: it runs unattended for hours with several GB of model state that
+# nothing else can be asked about, and restarting it to investigate costs a full model reload.
+replserver.maybe_start(args.repl, globals(), f"Raven-server {__version__}")
 
 print(f"{Fore.GREEN}{Style.BRIGHT}Starting server{Style.RESET_ALL}")
 where = "all IPv4 addresses" if args.listen else "localhost"

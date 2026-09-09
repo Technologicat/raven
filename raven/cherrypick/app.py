@@ -14,6 +14,7 @@ if platform.system().upper() == "LINUX":
 import argparse
 
 from .. import __version__
+from ..common import replserver
 
 # Argparse runs before heavy imports so logging is configured early. Config-derived
 # defaults (DEFAULT_WIDTH etc.) resolve inside `main()` because `cherrypick.config`
@@ -40,6 +41,7 @@ parser.add_argument('--log-level', default='INFO',
                     help='root logger level (default: INFO)')
 parser.add_argument('--qr', action='store_true',
                     help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
+replserver.add_argument(parser)
 args = parser.parse_args()
 
 import logging
@@ -1819,6 +1821,10 @@ def main() -> int:
         if iv is not None and iv.has_image:
             iv.zoom_to_fit()
     dpg.set_frame_callback(10, _initial_resize)
+
+    # This app builds its state in `main`, so a session is handed the locals as well as the globals —
+    # without them it would open onto a namespace holding almost nothing this app is made of.
+    replserver.maybe_start(args.repl, {**globals(), **locals()}, f"Raven-cherrypick {__version__}")
 
     # --- Render loop ---
     logger.info("App render loop starting.")

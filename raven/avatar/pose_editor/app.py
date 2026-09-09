@@ -43,6 +43,7 @@ import argparse
 
 from ... import __version__
 from ... import avatar  # for `avatar.assets_path`; the package root, not this app
+from ...common import replserver
 
 parser = argparse.ArgumentParser(description="THA 3 Manual Poser. Pose a character image manually. Useful for generating static expression images and for editing the emotion templates.")
 parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
@@ -62,6 +63,7 @@ parser.add_argument('--log-level', default='INFO',
                     help='root logger level (default: INFO)')
 parser.add_argument('--qr', action='store_true',
                     help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
+replserver.add_argument(parser)
 args = parser.parse_args()
 
 import logging
@@ -1560,6 +1562,9 @@ dpg.set_frame_callback(10, tune_viewport)
 
 def update_animations():
     gui_animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
+
+# Last, so a session opens onto a fully built app; this module's globals are what it gets.
+replserver.maybe_start(args.repl, globals(), f"Raven-avatar-pose-editor {__version__}")
 
 logger.info("App render loop starting.")
 exitcode = 0

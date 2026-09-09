@@ -5,6 +5,7 @@ import argparse
 
 from .. import __version__
 from .. import avatar  # for `avatar.assets_path`
+from ..common import replserver
 
 parser = argparse.ArgumentParser(description="""GUI LLM client with auto-persisted branching chat history and RAG.""",
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -22,6 +23,7 @@ parser.add_argument('--server-url', metavar='URL', default=None,
                          'The other endpoint this app depends on, and the other one worth pointing elsewhere.')
 parser.add_argument('--qr', action='store_true',
                     help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
+replserver.add_argument(parser)
 opts = parser.parse_args()
 
 import logging
@@ -43,6 +45,7 @@ with timer() as tim:
     import platform
     import requests
     import sys
+    import textwrap
     import threading
     import time
     from collections.abc import Callable
@@ -2217,20 +2220,18 @@ def render_chat_graph_help(self: helpcard.HelpWindow,
     Called by `HelpWindow` when the help card is first rendered.
     """
     # Two columns, as page three is: a card this wide gives a single column lines too long to track back
-    # to the start of. See `render_help_extras` for the halving.
-    column_width = self.content_width // 2
-    g = dpg.add_group(horizontal=True, parent=gui_parent)
-    g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f"{self.c_txt}The graph draws the **whole chat tree**: the branch you are on runs down the middle, with a few of its siblings either side at each level. One of those levels is every chat ever started under the current character card, which is as close as this format comes to a list of recent chats.{self.c_end}",
-                          parent=g1, wrap=column_width)
-    dpg_markdown.add_text(f"{self.c_txt}**Clicking is two steps, and the first changes nothing.** Click a message to look at it — the graph redraws around it if it is on another branch — and click it again to move the conversation there. Colour says where you *are* rather than what you are looking at, so the point where a branch you are considering left the one you are on stays visible.{self.c_end}",
-                          parent=g1, wrap=column_width)
-    g2 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f'{self.c_txt}Anything left out is drawn as a dashed {self.c_end}{self.c_hig}**...N more**{self.c_end}{self.c_txt} box, so a box with no visible links means the tree really does end there. Clicking one navigates: between siblings it jumps to the middle of what it hides, under an off-branch message it opens what continues below, and a round of three or more tool results opens into its own boxes.{self.c_end}',
-                          parent=g2, wrap=column_width)
-    dpg_markdown.add_text(f'{self.c_txt}The one at the very top walks through the *other* character cards — the only route to chats you held under an earlier system prompt. It wears the {self.c_end}{self.c_hig}**HEAD**{self.c_end}{self.c_txt} pill while the chat you are actually in is behind it.{self.c_end}',
-                          parent=g2, wrap=column_width)
-    dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
+    # to the start of. One section per column, so the reader crosses over once, at the bottom.
+    self.prose_columns(
+        gui_parent,
+        [helpcard.section(
+            None,
+            "The graph draws the **whole chat tree**: the branch you are on runs down the middle, with a few of its siblings either side at each level. One of those levels is every chat ever started under the current character card, which is as close as this format comes to a list of recent chats.",
+            "**Clicking is two steps, and the first changes nothing.** Click a message to look at it — the graph redraws around it if it is on another branch — and click it again to move the conversation there. Colour says where you *are* rather than what you are looking at, so the point where a branch you are considering left the one you are on stays visible.")],
+        [helpcard.section(
+            None,
+            f'Anything left out is drawn as a dashed {self.c_hig}**...N more**{self.c_end} box, so a box with no visible links means the tree really does end there. Clicking one navigates: between siblings it jumps to the middle of what it hides, under an off-branch message it opens what continues below, and a round of three or more tool results opens into its own boxes.',
+            f'The one at the very top walks through the *other* character cards — the only route to chats you held under an earlier system prompt. It wears the {self.c_hig}**HEAD**{self.c_end} pill while the chat you are actually in is behind it.')])
+    dpg.add_spacer(height=themes_and_fonts.font_size, parent=gui_parent)
 
 def render_help_extras(self: helpcard.HelpWindow,
                        gui_parent: str | int) -> None:
@@ -2238,58 +2239,59 @@ def render_help_extras(self: helpcard.HelpWindow,
 
     Called by `HelpWindow` when the help card is first rendered.
     """
-    # Two columns, as the Visualizer's terminology section is: a card this wide gives a single column
-    # lines too long to track back to the start of. Halved before the gap between them is taken off, which
-    # errs narrow — the safe direction, wrapping a word early where the other way runs text under the
-    # column beside it.
-    column_width = self.content_width // 2
+    # Two newspaper columns, as page two is: a card this wide gives a single column lines too long to track
+    # back to the start of, and a section split into a pair either side would be read out of order — the
+    # eye runs a column to its end before it crosses over. So the left column is finished before the right
+    # one starts, and the split is by eye, there being no way to measure a column before it is drawn.
+    #
+    # No locator for the Chat graph switch, deliberately. "Below the avatar" is where it is today and
+    # nowhere in a no-avatar mode, which has no avatar to be below and no toggle either, the graph being
+    # permanently up. A label is findable; a direction that is wrong in one mode is worse than none. That
+    # mode will want that sentence to say something else entirely, which is its own work.
+    self.prose_columns(
+        gui_parent,
+        [helpcard.section(
+            "**Chat history**",
+            "The chat history is **natively nonlinear**. Messages are stored as nodes in a tree. The current chat is the HEAD, plus its ancestor chain up to the system prompt. Continuing the chat adds a new child node below the latest message displayed.",
+            "Rerolling creates a new sibling and sets the HEAD pointer to that. Previous siblings remain stored in the tree. Starting a new chat, or branching the chat, only resets the HEAD pointer.",
+            "Nothing is ever discarded. Where a message has siblings, its arrow buttons step between them, so a rerolled reply can be compared against the one it replaced. To reach a *different* old chat, switch on **Chat graph** — which has a page of its own on this card."),
+         helpcard.section(
+            f"**Document database** {self.c_txt}(retrieval-augmented generation, RAG){self.c_end}",
+            f'You can put documents for the AI to access in {self.c_hig}{librarian_config.llm_docs_dir}{self.c_end}.',
+            f'Plain text, Markdown, BibTeX, LaTeX, PDF, Word, PowerPoint, OpenDocument and saved web pages are read - the text layer only, so a scanned PDF needs OCR (e.g. **ocrmypdf**) before it can be indexed. Recognition is by file extension, listed as {self.c_hig}llm_docs_exts{self.c_end} in {self.c_hig}raven/librarian/config.py{self.c_end} — add to it if you keep notes in a plain-text format that is not there. That file sets the folder above, too.',
+            f'The documents are search-indexed automatically, and the index is kept up to date. It is stored in {self.c_hig}{librarian_config.llm_database_dir}{self.c_end}. If you ever need to clear it manually, just delete that directory.',
+            f'Indexing runs in the app as it goes, but {self.c_hig}raven-indexer{self.c_end} does the same from a terminal and then exits - for a folder you have just filled with hundreds of documents, or a machine you reach over SSH with no display to start a GUI on.',
+            f'When the {self.c_hig}**Documents**{self.c_end} checkbox in the app is **ON**, the document database is automatically searched, using your latest message to the AI as the search query. The AI can also search it again itself, with a better query, once it has read those results.',
+            f'A reply that had nothing to stand on - no document matches, no attachments, no tool results - is marked {self.c_hig}**[no sources retrieved]**{self.c_end}. The AI still answers; the marker reports what was **retrieved**, not whether it was used. With {self.c_hig}**Documents**{self.c_end} off it does not appear at all, since it would only be reporting what you just switched off.',
+            'To improve search result quality, Raven-librarian uses a hybrid method: Okapi BM25 for keywords, and vector embeddings for semantic search. Results are combined with RRF (reciprocal rank fusion).')],
+        [helpcard.section(
+            "**Message attachments**",
+            'The document database answers *what do my documents say about this*. An attachment answers *read this one, now*: a search hands the AI the snippets that matched, an attachment hands it the whole thing.',
+            textwrap.dedent(f"""
+                Attach one or several with the paperclip button, with {self.c_hig}**Ctrl+Shift+O**{self.c_end}, or by dropping files on the window. Two kinds, asking different things of the model:
 
-    # Chat history
-    dpg_markdown.add_text(f"{self.c_hed}**Chat history**{self.c_end}", parent=gui_parent, wrap=self.content_width)
-    g = dpg.add_group(horizontal=True, parent=gui_parent)
-    g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f"{self.c_txt}The chat history is **natively nonlinear**. Messages are stored as nodes in a tree. The current chat is the HEAD, plus its ancestor chain up to the system prompt. Continuing the chat adds a new child node below the latest message displayed.{self.c_end}",
-                          parent=g1, wrap=column_width)
-    dpg_markdown.add_text(f"{self.c_txt}Rerolling creates a new sibling and sets the HEAD pointer to that. Previous siblings remain stored in the tree. Starting a new chat, or branching the chat, only resets the HEAD pointer.{self.c_end}",
-                          parent=g1, wrap=column_width)
-    g2 = dpg.add_group(horizontal=False, parent=g)
-    # No locator for the switch, deliberately. "Below the avatar" is where it is today and nowhere in a
-    # no-avatar mode, which has no avatar to be below and no toggle either, the graph being permanently
-    # up. A label is findable; a direction that is wrong in one mode is worse than none. That mode will
-    # want this sentence to say something else entirely, which is its own work.
-    dpg_markdown.add_text(f"{self.c_txt}Nothing is ever discarded. Where a message has siblings, its arrow buttons step between them, so a rerolled reply can be compared against the one it replaced. To reach a *different* old chat, switch on **Chat graph** — which has a page of its own on this card.{self.c_end}",
-                          parent=g2, wrap=column_width)
-    dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
+                - **Documents** — anything the database accepts. Any model can read one.
+                - **Images** — seen only by a vision-capable model (a VLM).
+            """).strip(),
+            'Both ride along with the message you attached them to, so they stay in the branch where you asked about them.',
+            '**The AI produces attachments too.** A web page it fetches is filed as one rather than pasted into the conversation: the chat log shows the opening and a chip to click, while the model reads the whole thing.',
+            f'Attachments are stored beside the chat, **content-addressed** - identical bytes are kept once however many messages point at them. Anything no longer referenced by any message can be cleaned up with the broom button on the {self.c_hig}**Maintenance**{self.c_end} row, which shows what it would delete before deleting anything, and offers to rescue a copy first.'),
+         helpcard.section(
+            "**Tool use** (tool-calling)",
+            textwrap.dedent("""
+                The AI has these tools, and decides for itself which to use, if any:
 
-    # Docs database
-    dpg_markdown.add_text(f"{self.c_hed}**Document database**{self.c_end} (retrieval-augmented generation, RAG)", parent=gui_parent, wrap=self.content_width)
-    g = dpg.add_group(horizontal=True, parent=gui_parent)
-    g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f'{self.c_txt}You can put documents for the AI to access in {self.c_end}{self.c_hig}{librarian_config.llm_docs_dir}{self.c_end}{self.c_txt}. The path and the accepted file types are configured in **raven/librarian/config.py**.{self.c_end}',
-                          parent=g1, wrap=column_width)
-    dpg_markdown.add_text(f'{self.c_txt}Plain text, Markdown, BibTeX, LaTeX, PDF, Word, PowerPoint, OpenDocument and saved web pages are read - the text layer only, so a scanned PDF needs OCR (e.g. **ocrmypdf**) before it can be indexed.{self.c_end}',
-                          parent=g1, wrap=column_width)
-    dpg_markdown.add_text(f'{self.c_txt}The documents are search-indexed automatically, and the index is kept up to date. It is stored in {self.c_end}{self.c_hig}{librarian_config.llm_database_dir}{self.c_end}{self.c_txt}. If you ever need to clear it manually, just delete that directory.{self.c_end}',
-                          parent=g1, wrap=column_width)
-    g2 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f'{self.c_txt}When the {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt} checkbox in the app is **ON**, the document database is automatically searched, using your latest message to the AI as the search query. The AI can also search it again itself, with a better query, once it has read those results.{self.c_end}',
-                          parent=g2, wrap=column_width)
-    dpg_markdown.add_text(f'{self.c_txt}If {self.c_end}{self.c_hig}**Speculation**{self.c_end}{self.c_txt} is **OFF**, any reply for which nothing was retrieved - no document matches, no attachments, no tool results - is marked {self.c_end}{self.c_hig}**[no sources retrieved]**{self.c_end}{self.c_txt}. The AI still answers; the marker reports what was **retrieved**, not whether it was used.{self.c_end}',
-                          parent=g2, wrap=column_width)
-    dpg_markdown.add_text(f'{self.c_txt}To improve search result quality, Raven-librarian uses a hybrid method: Okapi BM25 for keywords, and vector embeddings for semantic search. Results are combined with RRF (reciprocal rank fusion).{self.c_end}',
-                          parent=g2, wrap=column_width)
-
-    # Tool use (tool-calling)
-    dpg_markdown.add_text(f"{self.c_hed}**Tool use** (tool-calling){self.c_end}", parent=gui_parent, wrap=self.content_width)
-    g = dpg.add_group(horizontal=True, parent=gui_parent)
-    g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f'{self.c_txt}The AI can search the web (**websearch**), read a page it found (**webfetch**), search your document database (**search_documents**), read one of those in full (**fetch_document**), list what this chat has consulted (**list_consulted_documents**), ask what time it is (**get_current_time**), and do arithmetic (**calculate**).{self.c_end}',
-                          parent=g1, wrap=column_width)
-    g2 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f'{self.c_txt}It decides for itself which to use, if any. The first two need {self.c_end}{self.c_hig}**Internet**{self.c_end}{self.c_txt}, the next three need {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt}, and the last two are always available, reaching nothing outside this process. Each checkbox governs its own group, so switching one off never takes the other away.{self.c_end}',
-                          parent=g2, wrap=column_width)
-    dpg_markdown.add_text(f'{self.c_txt}One reply may take several rounds of tool calls, up to a configurable ceiling. A long page the AI fetches is filed as an attachment, so reading it does not bury the conversation.{self.c_end}',
-                          parent=g2, wrap=column_width)
+                - **websearch** — search the web
+                - **webfetch** — read a page it found
+                - **search_documents** — search your document database
+                - **fetch_document** — read one of those in full
+                - **list_consulted_documents** — list what this chat has consulted
+                - **get_current_time** — ask what time it is
+                - **calculate** — do arithmetic
+            """).strip(),
+            f'The first two need {self.c_hig}**Internet**{self.c_end}, the next three need {self.c_hig}**Documents**{self.c_end}, and the last two are always available, reaching nothing outside this process. Each checkbox governs its own group, so switching one off never takes the other away.',
+            'One reply may take several rounds of tool calls, up to a configurable ceiling. A long page the AI fetches is filed as an attachment, so reading it does not bury the conversation.',
+            'Either switch changes which tools are declared to the AI, and the declarations travel at the top of the conversation - so the reply after you flip one has to re-read the whole chat before it can start. Nothing is lost; on a long chat it is a pause.')])
 # Three pages, split by scope rather than to find room. Page one is the app's keyboard and nothing else,
 # so it is a reference a reader can screenshot and keep open on a second monitor while they learn it —
 # which is what the card's header has been inviting all along, and what prose sharing the page took away.
@@ -3265,6 +3267,10 @@ dpg.set_frame_callback(4, _apply_saved_panel_choice)
 # Installed here, after everything that initializes SDL: see `raven.common.quitsignal` for why that
 # matters and what was swallowing the signal before.
 quitsignal.install(dpg.stop_dearpygui)
+
+# Started here, last, so that a session opens onto a fully built app: this module's globals are what it
+# gets, and by this point they are every widget, controller and panel the app has, plus `dpg` itself.
+replserver.maybe_start(opts.repl, globals(), f"Raven-librarian {__version__}")
 
 logger.info("App render loop starting.")
 

@@ -14,6 +14,7 @@
 import argparse
 
 from .. import __version__
+from ..common import replserver
 
 parser = argparse.ArgumentParser(description="""Visualize BibTeX data.""",
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -31,6 +32,7 @@ parser.add_argument('--server-url', metavar='URL', default=None,
                          'answers — so pointing this at nothing is how to exercise that fallback.')
 parser.add_argument('--qr', action='store_true',
                     help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
+replserver.add_argument(parser)
 opts = parser.parse_args()
 
 import logging
@@ -832,9 +834,8 @@ def render_help_extras(self: helpcard.HelpWindow,
     # Legend for table
     dpg_markdown.add_text(f"{self.c_hed}**Terminology**{self.c_end}", parent=gui_parent, wrap=self.content_width)
     # The terminology section is two columns side by side, so its text wraps at half the card rather than
-    # at all of it. Halved before the spacer between them is subtracted, which errs narrow - and narrow is
-    # the safe direction here, wrapping a word early where the other way runs text under the next column.
-    column_width = self.content_width // 2
+    # at all of it.
+    column_width = self.column_width
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
     dpg_markdown.add_text(f"- {self.c_txt}**Current item**: The topmost item **fully** visible in the info panel. A pulsating blue dot marks it.{self.c_end}",
@@ -1319,6 +1320,9 @@ initialize_filedialogs(_default_path)
 # HACK: Create the dimmer as soon as possible (some time after the first frame so that other GUI elements initialize their sizes).
 # The window for the "scroll ends here" animation is also created at frame 10, but via another mechanism (trying to create it each frame, but the implementation blocks it until frame 10).
 dpg.set_frame_callback(10, info_panel.create_dimmer_overlay)
+
+# Last, so a session opens onto a fully built app; this module's globals are what it gets.
+replserver.maybe_start(opts.repl, globals(), f"Raven-visualizer {__version__}")
 
 logger.info("App render loop starting.")
 

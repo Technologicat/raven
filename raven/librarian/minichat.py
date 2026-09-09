@@ -10,6 +10,7 @@ This module demonstrates how to build an LLM client using `raven.librarian.llmcl
 import argparse
 
 from .. import __version__
+from ..common import replserver
 
 # Argparse runs at module top so logging is configured before heavy imports.
 # `librarian_config` isn't loaded yet (it's a heavy import), so the default for
@@ -29,6 +30,7 @@ parser.add_argument('--server-url', metavar='URL', default=None,
                     help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
                          'Used for websearch, webfetch and the document database; this app asks for no local '
                          'model fallback, so all three need a server.')
+replserver.add_argument(parser)
 opts = parser.parse_args()
 
 import logging
@@ -649,8 +651,9 @@ def minimal_chat_client(backend_url) -> None:
                 dt = generation_metadata["dt"]
                 speed = n_tokens / dt
                 print(colorizer.colorize(f"[{n_tokens}t, {dt:0.2f}s, {speed:0.2f}t/s]", colorizer.Style.DIM))
-                # Say when nothing was retrieved for this reply. The field is present only when the user
-                # asked to be told (speculation off); absent means there is nothing to say. The wording
+                # Say when nothing was retrieved for this reply. The field is present only when the
+                # documents were in play, or an attachment was present; absent means there is nothing
+                # to say. The wording
                 # states what was retrieved, not what the model did with it - see the GUI's counterpart in
                 # `chat_controller` for why the stronger claim is not ours to make yet.
                 if generation_metadata.get("grounded") is False:
@@ -699,6 +702,11 @@ def minimal_chat_client(backend_url) -> None:
                                                 on_tools_done=None)
             app_state["HEAD"] = new_head_node_id
             return Values(action=action_proceed)
+
+        # This client builds its state in this function, so a session is handed the locals as well as the
+        # globals. A REPL beside a REPL sounds redundant and is not: this one drives the chat, that one
+        # inspects the machinery underneath it while a turn is in flight.
+        replserver.maybe_start(opts.repl, {**globals(), **locals()}, f"Raven-minichat {__version__}")
 
         # Show initial history (loaded from datastore, or blank upon first start)
         chat_print_history(datastore.linearize_up(app_state["HEAD"]))

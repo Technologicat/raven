@@ -13,6 +13,7 @@ import argparse
 
 from .. import __version__
 from . import config
+from ..common import replserver
 
 parser = argparse.ArgumentParser(description="Raven XDot Viewer - View xdot/dot graph files")
 parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
@@ -28,6 +29,7 @@ parser.add_argument('--log-level', default='INFO',
                     help='root logger level (default: INFO)')
 parser.add_argument('--qr', action='store_true',
                     help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
+replserver.add_argument(parser)
 args = parser.parse_args()
 
 import logging
@@ -902,6 +904,10 @@ def main() -> int:
         if widget is not None and _app_state["current_file"] is not None:
             widget.zoom_to_fit(animate=False)
     dpg.set_frame_callback(10, _initial_startup)
+
+    # This app builds its state in `main`, so a session is handed the locals as well as the globals —
+    # without them it would open onto a namespace holding almost nothing this app is made of.
+    replserver.maybe_start(args.repl, {**globals(), **locals()}, f"Raven-xdot-viewer {__version__}")
 
     # --- Render loop ---
     logger.info("App render loop starting.")
