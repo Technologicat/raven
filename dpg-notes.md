@@ -1707,6 +1707,27 @@ So slot 1 is the right guess for almost everything, which is exactly why the dra
 knowing: it is one of the few places the reflex is wrong, and being wrong there is silent. Slot 0 is a
 collection of special cases rather than a category — table columns and font range hints share it.
 
+## A drawlist cannot carry a tooltip — wrap it in a group
+
+Measured 2026-09-09. `dpg.add_tooltip(<a drawlist>)` fails: a drawlist accepts **only draw items** as
+children (`mvDrawLine`, `mvDrawImage`, `mvDrawNode`, …), and a tooltip is not one. Same slot-2 fact as the
+section above, seen from the writing side.
+
+The failure is unhelpfully shaped, which is why it is worth a section. What reaches Python is
+`SystemError: <built-in function add_tooltip> returned a result with an exception set` — no mention of
+drawlists, tooltips or parenthood. DPG's own error, with the readable *"Incompatible child. Acceptable
+children include: …"* list, goes to the DPG error handler rather than into the exception, so it surfaces in
+the app's log and not in the traceback. Read the log before believing the `SystemError`.
+
+The fix is a container that does accept one: a plain `dpg.add_group` holding the drawlist, with the tooltip
+on the group. Probed the same day: a group accepts a tooltip, a text item accepts one, a drawlist refuses.
+**A group also reports itself hovered**, so the tooltip actually shows — confirmed live rather than
+headlessly, hover needing a real pointer over a mapped window. A group holding only the drawlist occupies
+the same space, so nothing moves.
+
+Raven's chat message icons are the worked example: `chat_controller.DPGChatMessage.build` puts the role
+glyph's drawlist in `chat_icon_group_*` so that hovering it can name the speaker.
+
 ## A drawlist ignores `pos`, and reports back the position it was asked for
 
 Measured 2026-08-21, while looking for a way to draw a mark around an arbitrary widget. `dpg.add_drawlist`

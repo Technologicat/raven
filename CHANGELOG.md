@@ -235,6 +235,11 @@
     profile and a personal one, is then a matter of changing `llm_user_name`.
   - `prompts/user.md` is gone, replaced by this. It shipped empty, so nothing is lost.
 
+- **hovering a message's role icon in the chat log names who wrote it.** The log carries a timestamp and
+  the text but no name, so the icon was the only indication of the speaker — and a message by a character
+  or a user profile other than the configured one draws the generic glyph, where the name was not on
+  screen at all.
+
 - **the prompt texts are Markdown files now**, under `raven/librarian/prompts/`, and any of them can be
   overridden from `~/.config/raven/librarian/prompts/` without touching the installed copy. That folder's
   `README.md` documents the template variables and what each file is for.

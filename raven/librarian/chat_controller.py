@@ -690,10 +690,15 @@ class DPGChatMessage:
         # ----------------------------------------
         # role icon
 
+        # The drawlist sits inside a group so that it can have a tooltip: DPG accepts only draw items as a
+        # drawlist's children, and refuses a tooltip there. The group holds nothing else, so it occupies
+        # exactly the space the drawlist did.
+        icon_group = dpg.add_group(tag=f"chat_icon_group_{self.gui_uuid}",
+                                   parent=icon_and_text_container_group)
         icon_drawlist = dpg.add_drawlist(width=(2 * gui_config.margin + gui_config.chat_icon_size),
                                          height=(2 * gui_config.margin + gui_config.chat_icon_size),
                                          tag=f"chat_icon_drawlist_{self.gui_uuid}",
-                                         parent=icon_and_text_container_group)  # empty drawlist acts as placeholder if no icon
+                                         parent=icon_group)  # empty drawlist acts as placeholder if no icon
         icon_texture = self.parent_view.chat_controller.icon_texture_for(role, persona)
         if icon_texture is not None:
             dpg.draw_image(icon_texture,
@@ -702,6 +707,17 @@ class DPGChatMessage:
                            uv_min=(0, 0),
                            uv_max=(1, 1),
                            parent=icon_drawlist)
+
+        # Who wrote this, named. The log shows a timestamp and the text, so the glyph is its only speaker
+        # indicator — and a message by anyone but the configured pair draws the *generic* glyph, which is
+        # where the stored persona would otherwise be unrecoverable from the screen. Plain `dpg.add_tooltip`
+        # rather than `_add_tooltip`: the name is fixed for the life of the widget, and a caption written
+        # once cannot show the autosize glitch the `Tooltip` class exists to hide.
+        #
+        # Only the two roles that have a speaker. A system prompt and a tool result are nobody's, and a
+        # caption explaining what their glyph *means* is a different feature from naming who is talking.
+        if persona is not None:
+            dpg.add_text(persona, parent=dpg.add_tooltip(icon_group))
 
         # ----------------------------------------
         # text content
