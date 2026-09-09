@@ -17,6 +17,33 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## The setup framing notice is unlabelled, so it reads as configured prose
+
+*Cluster: discoverability · Cost: S · Gate: none · Filed: 2026-09-09*
+
+Librarian shows its system prompt on purpose, for the pedagogic value — so a reader should be able to tell
+what came from where. The displayed prompt currently distinguishes two kinds of text and there are three:
+
+| | Where it comes from | Stored? | Marked? |
+|---|---|---|---|
+| System prompt, character card, user card | configuration files | yes | — (it is what a reader expects) |
+| **`chatutil.SETUP_FRAMING_NOTICE`** | **Raven itself** | **yes** | **no** |
+| Per-turn injects | Raven itself | no | *"Added to every request, not stored:"* |
+
+The notice reads as something the user wrote, or could edit, and it is neither (raised by Juha,
+2026-09-09, live-testing).
+
+**The wording needs care, because the obvious label is wrong.** It cannot borrow the injects' line: that
+one says *not stored*, and this notice **is** stored — it is part of the system prompt node. What the two
+share is being Raven's own rather than the user's, and that is what a marker has to say, without implying
+either that it is configurable or that it is transient.
+
+**And the marker must be presentation-only**, in the chat log renderer beside the inject label — never in
+`SETUP_FRAMING_NOTICE` itself. Putting it in the text would send it to the model, and would change the
+system prompt's text, which is what roots are matched by: every user would get a fresh root node and their
+existing chats would appear under an older card. (That happened for real on 2026-09-09 when the notice was
+introduced, which is how the effect is known rather than guessed.)
+
 ## The chat graph's "other cards" box is inert, and says so only in the log
 
 *Cluster: chat-graph · Cost: S for the honesty, S for navigation, M to switch the avatar too · Gate: none · Filed: 2026-09-09*
