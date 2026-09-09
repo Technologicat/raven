@@ -4280,6 +4280,22 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 confirm the control it triggers names it in brackets. Nothing checks that, and filling a gap is a behaviour
 change rather than a doc edit — so it stays its own focused pass, as this item has always said.
 
+**Do not try to size this by grepping for brackets** (attempted and abandoned, 2026-09-09). Neither side of
+the ratio survives contact:
+
+- A pattern narrow enough to mean "a key" — modifiers, F-keys, `Esc` — **misses every bare-letter hint**,
+  and `audio_input_panel`'s controls are driven entirely by bare letters. It reported that panel as having
+  zero of five tooltips naming a key; it names all of them, `[A]` `[D]` `[M]` `[R]` `[S]`.
+- A pattern wide enough to catch those then counts `[Callable]`, `[float]`, `[str]` out of docstring type
+  hints, and `[index]`, and prose.
+- The denominator is wrong too: `chatgraph_panel` names its keys in button **captions** rather than
+  tooltips, deliberately, so a tooltip count understates its coverage to nothing.
+
+So the audit is a *reading* job — per key, find the control it triggers and look at what that control says —
+and the estimate for Librarian should come from someone doing a first pass, not from a count. What can be
+said without one: `app.py` and `audio_input_panel` both look well covered, and the per-message buttons in
+`chat_controller` are where the unknowns are, most of them having no hotkey at all.
+
 Policy (now in `raven-style-guide.md`, "Hotkey discoverability"): every hotkey must be surfaced both in the `F1` help card *and* in the tooltip of the GUI control it triggers (bracketed, e.g. `"Open folder [Ctrl+O]"`). Most apps in the wild miss the tooltip half; Raven apps shouldn't.
 
 Two prerequisites are already done as of the 2026-06-07 doc sweep, so this item is narrower than it looks:
