@@ -124,6 +124,28 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # unit, but not something the name should claim.
 _SCROLL_FONT_HEIGHTS_PER_ARROW = 5
 
+#: What `librarian_config.send_message_key` may say. Two and only two, because ImGui's multiline
+#: `InputText` knows exactly two chords and whichever does not commit is the one that inserts the newline.
+_SEND_MESSAGE_KEYS = ("enter", "ctrl+enter")
+
+# Refuse to start on a value that is neither, rather than falling back to a default.
+#
+# The setting is read by string equality in five places — the two labels below, the composer widget's
+# `ctrl_enter_for_new_line`, and the two global key handlers — and a value matching none of them does not
+# degrade into a default. It degrades into *nothing*: both handlers test for a specific string, so neither
+# fires, and the help card meanwhile names a chord with complete confidence. Sending stops working and the
+# app says nothing about why.
+#
+# A silent fallback would be worse than it sounds, too. Nothing in the UI displays this setting, so a user
+# who typed `"Enter"` and got Ctrl+Enter has nowhere to notice the difference; they would conclude the
+# setting does not work. Failing here costs one restart and names the typo.
+if librarian_config.send_message_key not in _SEND_MESSAGE_KEYS:
+    expected = ", ".join(repr(key) for key in _SEND_MESSAGE_KEYS)
+    print(colorizer.colorize(f"raven-librarian: config.send_message_key is {librarian_config.send_message_key!r}, "
+                             f"which is not one of {expected}. Fix it in raven/librarian/config.py.",
+                             colorizer.Style.BRIGHT, colorizer.Fore.RED))
+    sys.exit(255)
+
 def _send_key_label() -> str:
     """How to name the send chord in a tooltip, per `config.send_message_key`."""
     return "Enter" if librarian_config.send_message_key == "enter" else "Ctrl+Enter"
@@ -1175,7 +1197,7 @@ def _attach_filter_list() -> list:
             ("Images", _attachable_image_extensions),
             ".*"]
 
-_filedialog_attach = FileDialog(title="Attach file(s) [Ctrl+click to multi-select]",
+_filedialog_attach = FileDialog(title="Attach one or more files [Ctrl+click to multi-select]",
                                 tag="attach_file_dialog",
                                 callback=_attach_callback,
                                 filter_list=_attach_filter_list(),
@@ -2001,7 +2023,7 @@ with timer() as tim:
                                    tag="help_button")
                     dpg.bind_item_font("help_button", themes_and_fonts.icon_font_regular)  # tag
                     with dpg.tooltip("help_button", tag="help_tooltip"):  # tag
-                        dpg.add_text("Open the Help card [F1]",
+                        dpg.add_text("Open the help card [F1]",
                                      tag="help_tooltip_text")
 
                     add_separator(line=False)
@@ -2117,55 +2139,63 @@ def update_animations():
 # Built-in help window
 
 hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus the message composer", notes=""),
-               env(key_indent=0, key=_send_key_label(), action_indent=0, action="Send message to AI", notes="Empty message = let the AI continue"),
+               env(key_indent=0, key=_send_key_label(), action_indent=0, action="Send the message to the AI", notes="Empty message = the AI adds a reply"),
                env(key_indent=1, key=_newline_keys_label(), action_indent=0, action="Insert a new line", notes="While writing a message"),
-               env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="While writing a message"),
-               env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak to AI using your mic", notes=f"Device: {audio_recorder.require().device_name}"),
-               env(key_indent=1, key="F9", action_indent=0, action="Set up the microphone", notes="Input level and auto-off"),
-               env(key_indent=2, key="D", action_indent=1, action="Choose the microphone", notes="Then Up, Down, Home, End"),
+               env(key_indent=1, key="Esc", action_indent=0, action="Clear the text and cancel", notes="While writing a message"),
+               # No device name here, deliberately. This tuple is built once at import and `helpcard` renders
+               # its table once, so anything interpolated into it freezes at startup — and the microphone
+               # *can* change later, from the F9 panel. A card confidently naming the wrong device is worse
+               # than one naming none, and the panel shows the current one live, a row below.
+               env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak to the AI using your mic", notes=""),
+               env(key_indent=1, key="F9", action_indent=0, action="Set up the microphone", notes="Device, input level and auto-off"),
+               env(key_indent=2, key="D", action_indent=1, action="Choose the microphone", notes="Then Up, Down, Home, End, Esc"),
                env(key_indent=2, key="M", action_indent=1, action="Measure the room", notes=""),
                env(key_indent=2, key="A", action_indent=1, action="Measure at each recording", notes=""),
                env(key_indent=2, key="S", action_indent=1, action="Toggle stop on silence", notes=""),
                env(key_indent=2, key="R", action_indent=1, action="Reset to defaults", notes=""),
                env(key_indent=2, key="Esc", action_indent=1, action="Close the panel", notes="Twice if chooser focused"),
-               env(key_indent=0, key="Ctrl+Shift+O", action_indent=0, action="Attach file(s) to your message", notes="Documents; and images on a VLM"),
+               env(key_indent=0, key="Ctrl+Shift+O", action_indent=0, action="Attach one or more files", notes="Documents; and images on a VLM"),
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="Ctrl+T", action_indent=0, action="Show/hide last thinking trace", notes="For thinking models"),
-               env(key_indent=0, key="Ctrl+S", action_indent=0, action="Speak last AI message / stop speaking", notes=""),
-               env(key_indent=0, key="Ctrl+Right", action_indent=0, action="Next sibling of last message", notes=""),
+               env(key_indent=0, key="Ctrl+T", action_indent=0, action="Thinking trace of marked message", notes="For thinking models"),
+               env(key_indent=0, key="Ctrl+S", action_indent=0, action="Start/stop AI speaking", notes="The blue mark shows which message"),
+               env(key_indent=0, key="Ctrl+Right", action_indent=0, action="Next sibling of marked message", notes=""),
                env(key_indent=1, key="Ctrl+Shift+Right", action_indent=1, action="Same, but jump 10", notes=""),
                env(key_indent=1, key="Ctrl+End", action_indent=1, action="Same, but to the last", notes=""),
-               env(key_indent=0, key="Ctrl+Left", action_indent=0, action="Previous sibling of last message", notes=""),
+               env(key_indent=0, key="Ctrl+Left", action_indent=0, action="Previous sibling of marked message", notes=""),
                env(key_indent=1, key="Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
                env(key_indent=1, key="Ctrl+Home", action_indent=1, action="Same, but to the first", notes=""),
-               env(key_indent=0, key="Ctrl+Down", action_indent=0, action="Show chat continuation", notes="If any exists in chat datastore"),
+               env(key_indent=0, key="Ctrl+Down", action_indent=0, action="Show the chat continuation", notes="If any exists in chat datastore"),
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start new chat", notes=""),
+               env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start a new chat", notes=""),
                helpcard.hotkey_new_column,
                # One row for a keyboard that has a dozen keys. Tab is the row that pays: it is the way
                # *into* the graph, and from inside it the arrows, Enter and Esc are what a reader tries
                # first. The rest are in the Chat graph section of the README.
                env(key_indent=0, key="Tab", action_indent=0, action="Move the keyboard between panes", notes="Composer, chat log, chat graph"),
                env(key_indent=1, key="Shift+Tab", action_indent=1, action="Same, but backwards", notes=""),
-               env(key_indent=0, key="Page Up", action_indent=0, action="Scroll chat up one page", notes="Also while typing"),
-               env(key_indent=0, key="Page Down", action_indent=0, action="Scroll chat down one page", notes="Also while typing"),
+               env(key_indent=0, key="Page Up", action_indent=0, action="Scroll the chat up one page", notes="Also while typing"),
+               env(key_indent=0, key="Page Down", action_indent=0, action="Scroll the chat down one page", notes="Also while typing"),
                env(key_indent=1, key="Up", action_indent=1, action="Same, but five lines", notes="Not while typing"),
                env(key_indent=1, key="Down", action_indent=1, action="Same, but five lines", notes="Not while typing"),
-               env(key_indent=0, key="Home", action_indent=0, action="Jump to start of chat", notes="Not while typing"),
-               env(key_indent=0, key="End", action_indent=0, action="Jump to latest message", notes="Not while typing"),
+               env(key_indent=0, key="Home", action_indent=0, action="Jump to the start of the chat", notes="Not while typing"),
+               env(key_indent=0, key="End", action_indent=0, action="Jump to the latest message", notes="Not while typing"),
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="Ctrl+G", action_indent=0, action="Stop AI text generation", notes="While the AI is writing"),
-               env(key_indent=0, key="Ctrl+U", action_indent=0, action="Continue last AI message", notes="Creates new revision of same node"),
-               env(key_indent=0, key="Ctrl+R", action_indent=0, action="Reroll last AI message", notes="Creates new sibling"),
+               env(key_indent=0, key="Ctrl+G", action_indent=0, action="Stop the AI's text generation", notes="While the AI is writing"),
+               # These three notes are a set, and are worded to be read as one: sending an empty message
+               # *adds* a reply, continuing *extends* the one that is there, rerolling makes an
+               # *alternative* to it. Each says what happens to the chat before naming the tree operation,
+               # because the table is met before the prose that explains the tree.
+               env(key_indent=0, key="Ctrl+U", action_indent=0, action="Continue the marked AI message", notes="The last one only (new revision)"),
+               env(key_indent=0, key="Ctrl+R", action_indent=0, action="Reroll the marked AI message", notes="An alternative to it (new sibling)"),
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="F8", action_indent=0, action="Copy chatlog to clipboard", notes="As-is"),
-               env(key_indent=1, key="Shift+F8", action_indent=0, action="Copy chatlog to clipboard", notes="With chat node IDs"),
+               env(key_indent=0, key="F8", action_indent=0, action="Copy the chatlog to the clipboard", notes="As-is"),
+               env(key_indent=1, key="Shift+F8", action_indent=0, action="Same, but with chat node IDs", notes=""),
                helpcard.hotkey_blank_entry,
                # The mode switches, which had been left off for want of rows. Each is also written into
                # its own checkbox's tooltip, which is where a reader looking at the row finds it; what
                # that cannot do is answer "what can I switch?" before you know what to look at.
                env(key_indent=0, key="Alt+T", action_indent=0, action="Thinking", notes="AI reasoning mode on/off"),
-               env(key_indent=1, key="Alt+Shift+T", action_indent=1, action="Show thinking", notes="Whether traces arrive open"),
+               env(key_indent=1, key="Alt+Shift+T", action_indent=1, action="Show thinking", notes="Whether thinking traces arrive open"),
                env(key_indent=0, key="Alt+I", action_indent=0, action="Internet", notes="websearch, webfetch"),
                env(key_indent=0, key="Alt+D", action_indent=0, action="Documents", notes="Your document database"),
                env(key_indent=0, key="Alt+G", action_indent=0, action="Chat graph", notes="Graph or avatar in the side panel"),
@@ -2173,7 +2203,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key="Alt+C", action_indent=1, action="Subtitles", notes="Used when Speech is on"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
-               env(key_indent=0, key="F1", action_indent=0, action="Open this Help card", notes=""),
+               env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
                )
 
 # The graph is a keyboard of its own — nineteen keys against the main page's forty — so it gets a page
@@ -2189,7 +2219,7 @@ chat_graph_hotkey_info = (env(key_indent=0, key="Tab", action_indent=0, action="
                           env(key_indent=1, key="Down", action_indent=1, action="Same, the other way", notes=""),
                           env(key_indent=1, key="Left", action_indent=1, action="Move it along the siblings", notes="Left and right stay on one level"),
                           env(key_indent=1, key="Right", action_indent=1, action="Same, the other way", notes=""),
-                          env(key_indent=0, key="Enter", action_indent=0, action="Do what clicking the box does", notes="A message: switch to it. A gap: open it"),
+                          env(key_indent=0, key="Enter", action_indent=0, action="Look at it", notes="Again to switch to it. A gap opens what it hides"),
                           env(key_indent=0, key="Esc", action_indent=0, action="Put the ring away", notes="Without going anywhere"),
                           env(key_indent=0, key="Backspace", action_indent=0, action="Fold an opened tool round back up", notes="From anywhere inside the round"),
                           helpcard.hotkey_blank_entry,
@@ -2211,9 +2241,13 @@ chat_graph_hotkey_info = (env(key_indent=0, key="Tab", action_indent=0, action="
                           env(key_indent=0, key="Numpad +", action_indent=0, action="Zoom in", notes=""),
                           env(key_indent=0, key="Numpad -", action_indent=0, action="Zoom out", notes=""),
                           helpcard.hotkey_blank_entry,
-                          env(key_indent=0, key="Home", action_indent=0, action="Back to where you are (HEAD)", notes=""),
+                          env(key_indent=0, key="Home", action_indent=0, action="Back to where you are", notes="Takes you to HEAD"),
                           env(key_indent=0, key="Alt+Left", action_indent=0, action="Back to the previous view", notes=""),
                           env(key_indent=0, key="Alt+Right", action_indent=0, action="Forward again", notes=""),
+                          # The app's own key, listed here because from this view it is another way of moving:
+                          # it takes you to the box wearing the NEW pill. The graph does not bind it — an
+                          # unhandled key falls through to the app — so this is a signpost, not a second binding.
+                          env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start a new chat", notes="Takes you to NEW"),
                           )
 def render_chat_graph_help(self: helpcard.HelpWindow,
                            gui_parent: str | int) -> None:
@@ -2254,12 +2288,13 @@ def render_help_extras(self: helpcard.HelpWindow,
         gui_parent,
         [helpcard.section(
             "**Chat history**",
-            "The chat history is **natively nonlinear**. Messages are stored as nodes in a tree. The current chat is the HEAD, plus its ancestor chain up to the system prompt. Continuing the chat adds a new child node below the latest message displayed.",
+            "The chat history is **natively multiversal**. Messages are stored as nodes in a tree. The current chat is the HEAD, plus its ancestor chain up to the system prompt. Continuing the chat adds a new child node below the latest message displayed.",
             "Rerolling creates a new sibling and sets the HEAD pointer to that. Previous siblings remain stored in the tree. Starting a new chat, or branching the chat, only resets the HEAD pointer.",
-            "Nothing is ever discarded. Where a message has siblings, its arrow buttons step between them, so a rerolled reply can be compared against the one it replaced. To reach a *different* old chat, switch on **Chat graph** — which has a page of its own on this card."),
+            "Nothing is discarded on its own. Where a message has siblings, its arrow buttons step between them, so a rerolled reply can be compared against the one it replaced. To reach a *different* old chat, switch on **Chat graph** — which has a page of its own on this card.",
+            "Deleting is the exception, and the only one: a message's trash button removes that message and everything below it, for good. It asks for a second click first, because there is no undo."),
          helpcard.section(
             f"**Document database** {self.c_txt}(retrieval-augmented generation, RAG){self.c_end}",
-            f'You can put documents for the AI to access in {self.c_hig}{librarian_config.llm_docs_dir}{self.c_end}.',
+            f'You can put documents for the AI to access in {self.c_hig}{librarian_config.llm_docs_dir}{self.c_end}. The folder button on the {self.c_hig}**Open folder:**{self.c_end} row opens it in your file manager.',
             f'Plain text, Markdown, BibTeX, LaTeX, PDF, Word, PowerPoint, OpenDocument and saved web pages are read - the text layer only, so a scanned PDF needs OCR (e.g. **ocrmypdf**) before it can be indexed. Recognition is by file extension, listed as {self.c_hig}llm_docs_exts{self.c_end} in {self.c_hig}raven/librarian/config.py{self.c_end} — add to it if you keep notes in a plain-text format that is not there. That file sets the folder above, too.',
             f'The documents are search-indexed automatically, and the index is kept up to date. It is stored in {self.c_hig}{librarian_config.llm_database_dir}{self.c_end}. If you ever need to clear it manually, just delete that directory.',
             f'Indexing runs in the app as it goes, but {self.c_hig}raven-indexer{self.c_end} does the same from a terminal and then exits - for a folder you have just filled with hundreds of documents, or a machine you reach over SSH with no display to start a GUI on.',
@@ -2285,7 +2320,7 @@ def render_help_extras(self: helpcard.HelpWindow,
                 The AI has these tools, and decides for itself which to use, if any:
 
                 - **websearch** — search the web
-                - **webfetch** — read a page it found
+                - **webfetch** — read a web page, one it found or one you linked
                 - **search_documents** — search your document database
                 - **fetch_document** — read one of those in full
                 - **list_consulted_documents** — list what this chat has consulted
