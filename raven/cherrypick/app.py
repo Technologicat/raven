@@ -1012,6 +1012,18 @@ def _on_key(sender, app_data) -> None:
         elif iv is not None:
             iv.zoom_to_fit()
         return
+    # "1" for 1:1, on the main row and the numpad both, and here with the other zoom keys rather than
+    # below with the grid's — so it works during compare mode too, which is what makes it mean one thing
+    # everywhere. The chat graph and the xdot viewer bind it the same way; a reader who learns it in one
+    # app should not find it doing something else in another.
+    #
+    # Both rows because the main one is where the key is on a US, Nordic or German layout, while on a
+    # French one the digits are shifted, so the physical key sends this code while its cap reads "&".
+    # The numpad is the layout-stable path.
+    if key in (dpg.mvKey_1, dpg.mvKey_NumPad1) and not ctrl and not shift:
+        if iv is not None:
+            iv.zoom_to_actual()
+        return
     # Ctrl+Shift: winner commit + debug keys.
     #
     # This block runs *before* the compare-mode interception below, so the entries that touch triage or
@@ -1057,8 +1069,14 @@ def _on_key(sender, app_data) -> None:
             compare.adjust_fps(config.COMPARE_FPS_STEP)
         elif key == dpg.mvKey_M and not ctrl and not shift:
             compare.reset_fps()
-        # Digit keys 1–9: select frame and exit.
-        elif dpg.mvKey_1 <= key <= dpg.mvKey_9 and not ctrl:
+        # Shift+1..9: select frame and exit.
+        #
+        # Shifted, so that bare "1" can mean 1:1 zoom here as it does everywhere else in the constellation.
+        # The trade is real and goes the other way on frequency — picking is the hot path in this mode,
+        # and it is the one that gained a modifier. What decides it is that one key must not mean two
+        # unrelated things: reaching for 1:1 and being thrown out of compare mode instead is the collision
+        # that a bare digit made possible, and a zoom is the cheaper mistake of the two.
+        elif dpg.mvKey_1 <= key <= dpg.mvKey_9 and shift and not ctrl:
             compare.select_frame(key - dpg.mvKey_1 + 1)
             _on_compare_exit()
         # All other keys suppressed.
@@ -1154,11 +1172,6 @@ def _on_key(sender, app_data) -> None:
             _cycle_filter(-1)
         else:
             _cycle_filter(1)
-
-    # Zoom (1:1 only — +/-/F/Shift+F handled in always-available section).
-    elif key == dpg.mvKey_1:
-        if iv is not None:
-            iv.zoom_to_actual()
 
     # Selection toggle for current image (keyboard equivalent of Ctrl+click).
     elif key == dpg.mvKey_Spacebar:
@@ -1760,12 +1773,12 @@ def main() -> int:
         env(key_indent=0, key="-  / Numpad -", action_indent=0, action="Zoom out", notes=""),
         env(key_indent=0, key="F", action_indent=0, action="Zoom to fit", notes=""),
         env(key_indent=0, key="Shift+F", action_indent=0, action="Toggle fit cap", notes="No upscale"),
-        env(key_indent=0, key="1", action_indent=0, action="Zoom to 1:1", notes=""),
+        env(key_indent=0, key="1  / Numpad 1", action_indent=0, action="Zoom to 1:1", notes="Also while comparing"),
         env(key_indent=0, key="Mouse wheel", action_indent=0, action="Zoom at cursor", notes=""),
         env(key_indent=0, key="Mouse drag", action_indent=0, action="Pan image", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="Enter", action_indent=0, action="Compare selected", notes="Need 2+ selected"),
-        env(key_indent=1, key="1\u20139", action_indent=0, action="Select frame, exit", notes=""),
+        env(key_indent=1, key="Shift+1\u20139", action_indent=0, action="Select frame, exit", notes=""),
         env(key_indent=1, key="Esc", action_indent=0, action="Exit, restore image", notes=""),
         env(key_indent=1, key=",  / .", action_indent=0, action="Slower / faster", notes=""),
         env(key_indent=1, key="M", action_indent=0, action="Reset FPS to default", notes=""),

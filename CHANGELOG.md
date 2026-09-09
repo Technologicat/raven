@@ -332,6 +332,10 @@
 - **"Open image folder" now shows you the pictures.** It opens in the thumbnail grid, listing a folder's images as you browse. Walk into a folder and press **Pick folder** to take the one you are looking at; clicking a folder and pressing the button still takes that one, and the line above the buttons names whichever it would be.
   - The images are there to be looked at, not picked — they are how you judge whether this is the right folder, instead of remembering what its name meant. So they are dimmed and do not respond to clicks, the answer this dialog gives being a folder.
 
+- **while comparing, picking the winner is now `Shift`+a digit** rather than the bare digit, and `1` means zoom to 1:1 everywhere — including inside compare mode, where it previously could not be reached from the keyboard at all. This is a change to a key you may have in your fingers, and the only one in this release.
+  - `1` is 1:1 in the chat graph and the graph viewer too, so it now means one thing across the constellation. A bare digit could not both do that and pick a winner; reaching for 1:1 while comparing would have thrown you out of compare mode instead.
+  - `Numpad 1` works as well, for keyboard layouts where the main-row digits are shifted.
+
 *Raven-pdf2bib*
 
 - the same for all eight extraction steps — authors, title, keywords, abstract and the rest — which now run without the character, on prompts that already tell the model its answer "will be sent to a computer program that cannot understand natural language". The per-step progress letters on stderr are unchanged.

@@ -746,9 +746,16 @@ class HelpWindow:
         guiutils.split_frame(operation="help card: laying the card out where it cannot be seen", required=False)
 
     def hide(self) -> None:
-        """Close the help window, if it is open.
+        """Take the help window off the screen, if it is up.
 
         If the window was open, and is being closed, the `on_hide` handler, if set, will be called.
+
+        **`hide` and not `close`, where Raven's other windows close.** The distinction is real and worth
+        keeping: this card is only made invisible — its widgets, its fitted height and the page it was
+        left on all survive, and `show` re-renders nothing. A window whose closing *settles* something (the
+        audio input panel stops metering and saves) or *releases* something (the cleanup dialog deletes its
+        widgets and textures) is the one that closes, because reopening has to undo it. Here there is
+        nothing to undo, so there is nothing for a close to mean.
         """
         global visible_help_window_instance
         if self._window is None:
