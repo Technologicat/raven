@@ -3397,9 +3397,21 @@ Discovered during the logsetup smoke test (2026-04-30).
 
 ## Hybridir: BM25 backend migration for larger corpora
 
-*Cluster: ? · Cost: ? · Gate: — (value at current scale, not effort) · Filed: 2026-04-27*
+*Cluster: rag-index-concurrency · Cost: ? · Gate: — (value at current scale, not effort) · Filed: 2026-04-27 · Updated: 2026-09-09*
 
 `bm25s` rebuilds the entire keyword index on every commit (full corpus → full reindex; IDF changes mean it can't be incremental in this design). Sub-second on ~1k small documents, so a non-issue today. Will start to pinch around the 10k–100k mark.
+
+**There is a second, independent reason to want this, and it is not about scale** (2026-09-09). Rebuilding
+from `self.documents` and saving wholesale is also what makes two processes writing the index destructive
+rather than merely slow: the last writer persists an index built from its own in-memory view, and the
+other's documents are gone. A segmented backend, whose on-disk state is the source of truth rather than a
+projection of one process's memory, removes that failure at the root instead of locking around it. So do
+not triage this item on "we are not at 10k documents yet" alone.
+
+**It does not remove the whole problem, though.** `_save_datastore` writes the fulldocs JSON and the
+embeddings the same whole-image way, from the same dict, and that store is ours rather than the library's.
+Worth checking, before costing a swap on this motive: how much of `self.documents` exists *to serve the
+rebuild*, and what of it survives a backend that does not need rebuilding.
 
 The standard fix is the **segmented index** model: each batch of writes lands in a small immutable segment with deletes-as-tombstones, IDF is computed across segments at query time (or partial-pre-aggregated), and a background merge thread occasionally consolidates segments to keep the count bounded. Writes become O(batch); reindex cost is amortized through merges. This is what Lucene / Elasticsearch / Solr / Tantivy all do.
 
@@ -4354,6 +4366,112 @@ the duplication is already present rather than predicted, and `WidgetFlash`'s ow
 in `flash_button` is the whole phenomenon in one line.
 
 Discovered during brief-03 Half-2 checkpoint C (2026-07-17, flagged by Juha while reviewing `flash_button`).
+
+## The RAG index's document store is written whole, at the end, and not atomically
+
+*Cluster: rag-index-concurrency · Cost: S–M · Gate: none · Filed: 2026-09-09 · See also: "Hybridir: BM25 backend migration for larger corpora"*
+
+Two gaps in how `_save_datastore` and the commit tail persist the fulldocs store, both about surviving an
+*uncontrolled* stop — a power cut or a `SIGKILL`, not a Ctrl+C, which is handled.
+
+**It is not an atomic swap.** `_save_datastore` opens the JSON with `"w"` — truncating in place — and hands
+`np.savez_compressed` the destination path directly. A crash partway through leaves a fragment where the
+whole document store used to be. `chattree.PersistentForest.save` was fixed for exactly this and is the
+pattern to copy: a `tempfile.NamedTemporaryFile` in the *destination directory* (`os.replace` is atomic only
+within a filesystem) and a rename over the top, with the failure path unlinking the stray temp file.
+
+Note the wrinkle that copying the pattern does not by itself solve: there are **two** files, written in
+sequence, so even with each made atomic they can disagree — a new JSON beside old embeddings. That wants
+either one file, or a stamp that lets a load detect the mismatch and fall back.
+
+**And it saves only at the end.** A commit applies every pending edit and then writes the keyword index and
+the document store once, at the tail, while ChromaDB is written *inside* the loop, per document. So an
+uncontrolled stop mid-commit leaves the vector index holding chunks for documents the store has never heard
+of, and loses the whole batch's embedding work — on a bulk import, an hour of it. Checkpointing every so
+often would bound both.
+
+**The interval is the design question, and it has a ceiling.** Both tail operations are O(the whole corpus)
+rather than O(the batch): the keyword index is rebuilt from scratch and the store is dumped in full. So
+checkpointing every N documents multiplies that cost by the number of checkpoints. Sub-second on ~1k small
+documents and therefore free today; at 10k it is the same wall the backend migration predicts, which argues
+for a time-based interval rather than a count.
+
+**Unlike the other two items in this cluster, this one is not dissolved by that migration** (Juha,
+2026-09-09). A segmented keyword backend would own its own on-disk state, but the fulldocs store is ours
+either way, so it needs atomicity and checkpointing whichever backend wins. Worth doing independently.
+
+## Librarian should keep reading the document index while a separate indexer writes it
+
+*Cluster: rag-index-concurrency · Cost: M · Gate: check ChromaDB's multi-process story first · Filed: 2026-09-09 · See also: "Hybridir: BM25 backend migration for larger corpora"*
+
+**Both items in this cluster may be dissolved rather than built** (Juha, 2026-09-09). The acute failure is
+substantially an artifact of `bm25s` having no incremental update, so a segmented backend whose disk state
+is authoritative could remove the need for a read-only mode and a handover alike. Decide the backend
+question before building either of these; what is worth having in the meantime is the cheap lock, which is
+small enough to throw away.
+
+**The defect underneath this, which the two items here are the ambitious answers to.** Nothing guards
+`llm_database_dir`. `datastorelock` covers the chat datastore and only that, at two call sites, so
+`raven-indexer` and Librarian will happily write the index at the same time — and Librarian writes at
+*startup*, not only when a file appears, since `hybridir.setup` reconciles the index against the directory
+on construction.
+
+What that costs is not a torn file but a silent loss, the same shape the chat datastore's lock exists for.
+`_rebuild_keyword_search_index` rebuilds the whole BM25 index from `self.documents`, the process's own
+in-memory dict, and saves it wholesale; the fulldocs JSON is written the same way. So two writers do not
+interleave badly — whoever saves last writes an index built only from *its own* view, and everything the
+other ingested is gone, with nothing to say so.
+
+**What this item wants:** with an indexer running, Librarian keeps working and the AI keeps reading the
+documents, rather than being refused. That needs a genuinely read-only mode in `hybridir` — skip the
+reconcile on construction, never start the watcher, never commit. Foundation-layer work, held to that bar.
+
+**The stale-reader question has a simple answer, checked 2026-09-09.** The reader watchdogs the index and
+reloads when it changes (Juha's suggestion), and the two things that would make that expensive turn out not
+to hold:
+
+- **It does not need to merge.** A strictly read-only reader holds no state of its own that is not on
+  disk, so it replaces its in-memory copy wholesale. Merging is only needed by a reader that is *also*
+  ahead of disk — which the lock invariant already forbids: only the lock holder may be ahead, and it
+  flushes before releasing. Order the handover and there is nothing to merge, in this item or the next.
+- **It need not reload often — but only if it watches the right file.** A commit is a loop over the whole
+  batch of pending edits, and the two halves of the index persist on different schedules:
+  - **ChromaDB is written inside the loop, per document.** Its directory therefore changes continuously
+    during a commit, and most of those states are mid-batch.
+  - **The bm25s index and the fulldocs JSON are written once, at the tail** (`_rebuild_keyword_search_index`
+    then `_save_datastore`, under the "Saving…" progress text).
+
+  So the reader should watch a file from the second group. That gives one event per commit rather than one
+  per document, and — the part that makes it the right choice rather than merely the cheap one — the event
+  arrives *after* the tail save, which is the point at which the whole index is consistent. Watching the
+  Chroma directory would wake the reader repeatedly on states no reader should load.
+
+What is left is the cost of a reload itself, which is O(corpus) — the whole fulldocs JSON, the embeddings,
+and the bm25s index — so it wants debouncing if the change signal ever does get chattier.
+
+**The reload itself is cheap, and that is checked**: `_load_datastore` is already a method returning the
+documents, and the other two loads are short inline blocks in `__init__` — the `bm25s.BM25.load` plus
+`_build_full_id_to_record_index`, and the Chroma `get_collection`. Extracting those two into methods and
+calling all three under `datastore_lock` is on the order of thirty lines, most of it moving code.
+
+**What has to be established first, and is not**: whether ChromaDB's `PersistentClient` tolerates a second
+process reading a directory another is writing. Believed not to be supported — unverified, and it decides
+whether this item is thirty lines or a storage-layer change, so check it before costing anything on the
+strength of the paragraph above.
+
+## Hand the index lock over between Librarian and a running indexer
+
+*Cluster: rag-index-concurrency · Cost: L · Gate: the read-only mode above comes first · Filed: 2026-09-09 · See also: "Librarian should keep reading the document index while a separate indexer writes it"*
+
+The behaviour a user would expect if they thought about it: start `raven-indexer` on a folder of several
+hundred documents, then open Librarian and work while it runs; when the indexer finishes, Librarian picks
+up the writing role, so closing Librarian later does not abandon the batch. And if an indexer is started
+afterwards, Librarian hands the role back.
+
+Needs a lock that can be watched and surrendered mid-session rather than held from startup to exit, the
+index reopened on each transition, and an answer for what happens to a commit already in flight when the
+lock is recalled. The interesting states are all transitions, which is what makes this the hardest of the
+three to test rather than merely the largest.
 
 ## Expose the docs-DB source files behind a reply's RAG citations
 
