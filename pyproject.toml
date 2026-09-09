@@ -57,7 +57,7 @@ dynamic = ["version"]
 dependencies = [
     "bibtexparser>=2.0.0b9",
     "dearpygui>=2.3.1",  # non-Latin text needs `add_font_range` before 2.3, which builds font atlas ranges automatically; we no longer call it
-    "filelock>=3.32.3",  # librarian: keeping two frontends off one chat datastore. Already in the tree via torch and huggingface_hub; declared because we import it.
+    "filelock>=3.32.4",  # librarian: keeping two frontends off one chat datastore. Already in the tree via torch and huggingface_hub; declared because we import it.
     # librarian: counting the served model's tokens exactly, offline. A llama.cpp-family backend serves a
     # `.gguf`, which carries the vocabulary and merges; `gguf` reads them and `tokenizers` assembles them.
     # Both are small, and the alternative is trusting a backend's `prompt_tokens`, which we have measured
@@ -73,7 +73,7 @@ dependencies = [
     "scikit-learn>=1.9.0",  # BibTeX importer: high-dimensional clustering (HDBSCAN)
     "scipy>=1.17.1",  # visualizer: KDTree
     "sentence_transformers>=6.0.0",  # BibTeX importer: vector embeddings for visualization and semantic search. Also many of the server's AI modules use this.
-    "spacy>=3.8.15",  # BibTeX importer: NLP analysis
+    "spacy>=3.8.16",  # BibTeX importer: NLP analysis
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",  # spaCy
     "sseclient-py>=1.9.0",  # librarian: streaming transport for receiving data from LLM
     # The torch trio is version-pinned (not floored) and sourced from the `pytorch-cu128` index declared under
@@ -129,7 +129,7 @@ dependencies = [
     "tqdm>=4.70.0",  # server.stt, papers (arXiv download)
     "trafilatura>=2.2.0",  # readability extraction (HTML -> clean text/markdown): server.webfetch for fetched pages, raven.common.docextract for saved ones. `html2txt`, which docextract needs to tell a truncated extraction from a clean one, arrived in 2.1
     "youtube-transcript-api>=1.2.4",  # server.webfetch; transcript extraction for YouTube URLs
-    "pypdf>=6.16.1",  # raven.common.docextract: PDF text layer
+    "pypdf>=6.16.2",  # raven.common.docextract: PDF text layer
     # The rest of `raven.common.docextract`'s backends. Office formats are all zipped XML, but each family needs
     # its own reader; `odfpy` covers both OpenDocument formats we accept. `python-docx` needs at least 1.1 for
     # `iter_inner_content`, which walks a body's paragraphs and tables in document order — without it, table
