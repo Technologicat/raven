@@ -113,6 +113,10 @@ class DPGCleanupDialog:
 
     def close(self) -> None:
         """Close the dialog and release its widgets and textures. Deletes nothing from the datastore."""
+        # Says the closer ran, which is the one thing that separates "the X is not wired" from "the click
+        # never reached it". Both look identical from outside, and the second is a real failure here — see
+        # `chatgraph_panel._on_click_anywhere`, which used to claim clicks aimed at windows above it.
+        logger.debug("CleanupDialog.close: closing.")
         self.is_open = False
         self.task_manager.clear(wait=False)  # a thumbnail load still in flight has nowhere to draw now
         if self.window_id is not None:

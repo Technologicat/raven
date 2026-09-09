@@ -1164,15 +1164,25 @@ class DPGChatGraphPanel(gui_animation.Animation):
         for itself which of the three it was. The `input_blocked` predicate is the same one the widget is
         given, and for the same reason -- the click that dismisses a modal must not also land on what the
         modal was covering.
+
+        **"Where did it land" is a question for ImGui, not for arithmetic.** `is_mouse_inside_widget` asks
+        whether a point is inside a rectangle, which is true of a rectangle with another window drawn over
+        it -- so this claimed clicks aimed at anything floating above the graph, and `input_blocked` caught
+        only the modal case. `is_item_hovered` is ImGui's own answer and accounts for what is on top.
+
+        The bug that found it: clicking the *close button* of the audio input panel, which is non-modal and
+        sits over the graph. This ran, gave the keyboard to the graph, and focused a widget in the main
+        window -- which took the focus from the panel mid-click, so the panel greyed and its close button
+        never completed. A window whose X does nothing, from a handler belonging to something behind it.
         """
         if not self._is_shown:
             return
         if self._input_blocked is not None and self._input_blocked():
             return
-        if guiutils.is_mouse_inside_widget(self._canvas):
+        if dpg.is_item_hovered(self._canvas):
             if self._on_focus_requested is not None:
                 self._on_focus_requested()
-        elif not guiutils.is_mouse_inside_widget(self._container):
+        elif not dpg.is_item_hovered(self._container):
             # Clicked somewhere else entirely, so the keys are no longer ours. Answered here because
             # nothing else can: the composer gives its caret up to ImGui on its own and the chat log has no
             # widget to hold one, so a click on the log left this panel the only pane still claiming the
