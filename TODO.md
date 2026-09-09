@@ -47,24 +47,33 @@ for a constellation carrying this much of an ML stack. Packaging wants looking a
 things. The distribution rename to `raven-lab` therefore keeps its hard gate — a name cannot be corrected
 after publishing — without that gate being on any release path.
 
-## Next session, from 2026-09-09
+## Next session, from 2026-09-10
 
-**First: review the character and prompt configuration changes** (commit `7e808613`), which landed late on
-2026-09-08 and have not been read yet. They are a larger change than the item that prompted them — a
-character declaring its own name, voice, card and glyph; the prompt prose moving out of `.py` into
-`raven/librarian/prompts/`; and `setup_character_card` and its siblings moving from `config` to
-`llmclient`. Reviewing before building on them is the cheaper order.
+**Start with the help card's paging** — the last of the two hammerspace items, specced in
+`TODO_DEFERRED.md`, and a look-at-it job: the card is a fixed-height window whose whole problem is what
+fits, so it wants the maintainer at the keyboard rather than being built blind and measured afterwards.
 
-**Then the help card's paging**, which is where 2026-09-08 stopped: it is specced in `TODO_DEFERRED.md`
-and it is a look-at-it job, so it wants the maintainer at the keyboard rather than being built blind and
-measured afterwards.
+**2026-09-09 was the review of the character and prompt work, and it grew.** All of it is landed and CI
+green; nothing is half-finished in the tree. What changed beyond the review itself:
 
-**What 2026-09-08 closed**, so the build order below picks up from the right place: the chat graph's
-metrics readout (item 1a), and the per-character speaker icons (item 2) — the latter grown into a
-character-declaration mechanism, so a character now carries its own name, voice, card and glyph, and
-`llm_char_name` selects it. Also five things found along the way: an animation-leak crash that named the
-wrong module, a missing panel teardown, the audio panel's missing `destroy`, the card reaching the model as
-a Markdown code block, and the prompt prose moving out of `.py` into `raven/librarian/prompts/`.
+- **A character is its JSON**, not its picture — `aria1.json` required, `aria1.md`, `aria1.png` and
+  `aria1_icon.png` optional beside it. `character_definition_version` is what marks a JSON as a character,
+  which also fixed a real misdetection: anything carrying a `name` used to qualify.
+- **`user.json` is the same idea for the user**, in `~/.config/raven/librarian/users/`, nothing shipped.
+  It brings a card and an icon, so the user has their own face for the first time — and that made
+  `icon_texture_for` symmetric, two roles with a speaker and two without.
+- **The framing notice** moved out of the character cards and stopped claiming the user cannot see the
+  setup, which was false: Librarian shows its system prompt on purpose.
+- **The camera stops chasing the graph's rebuild** — it glides only when nothing moves relative to the
+  anchor, which is exact and needs no threshold.
+- **Three things went onto the RN plan**: the graph's transition animation (before search, and brief 16
+  cannot close without it), message editing as slack ahead of the Markdown remainder, and — filed, not
+  scheduled — a hidable system prompt and runtime character/user selectors.
+
+**Two open questions, neither blocking**: whether the graph's pan/zoom animation switch lands with the
+transition animation (agreed as an instance switch on `XDotWidget`, unscheduled), and how many of the
+eight `TODO: ... revision` markers actually change when message editing is built — a design question,
+since the reading side is already active-revision-correct throughout.
 
 **The sprint's build order, decided by Juha 2026-09-08**, with the exhibit 18 days out. The first three
 were meant to be done inside a day or two — **by end of Thursday 2026-09-10 at the latest** — which is what
