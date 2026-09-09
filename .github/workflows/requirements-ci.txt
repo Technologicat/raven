@@ -65,21 +65,23 @@ python-pptx==1.0.2
 PyYAML==6.0.3
 qoi==0.7.2
 requests==2.34.2
-# `visualizer.plotter` imports it at module level for its KDTree, so without it `test_plotter.py`
-# `importorskip`s away — 38 tests reporting a skip that reads as a pass.
-scipy==1.17.1
 sseclient-py==1.9.0  # llmclient's SSE transport; needed since test_llmclient/test_scaffold started running here
 tqdm==4.70.0
 trafilatura==2.2.0
 unpythonic==2.4.0
-# Same story as `scipy` above, for `test_word_cloud.py`'s 28 tests. It brings matplotlib with it, which is
+# Same story as `scipy`, for `test_word_cloud.py`'s 28 tests. It brings matplotlib with it, which is
 # why that is not listed here: only direct dependencies are pinned (see the scope note above).
 wordcloud==1.9.6
 wosfile==0.7.0
 
-# numpy 2.5.0 raised its floor to Python 3.12 (2.4.6 is >=3.11), so the matrix legitimately
-# resolves two versions and pip is doing the right thing. Pinning one flat would break the 3.11
-# entry; these markers reproduce what each entry already installs. Worth keeping rather than
-# collapsing — it means the suite runs against both numpy majors.
+# Both of these raised their Python floor to 3.12 partway through our supported range — numpy at
+# 2.5.0, scipy at 1.18.0 — so the matrix legitimately resolves two versions of each and pip is
+# doing the right thing. Pinning one flat would break the 3.11 entry; these markers reproduce what
+# each entry already installs. Worth keeping rather than collapsing — it means the suite runs
+# against both majors of each.
 numpy==2.4.6 ; python_version < "3.12"
 numpy==2.5.2 ; python_version >= "3.12"
+# `visualizer.plotter` imports it at module level for its KDTree, so without it `test_plotter.py`
+# `importorskip`s away — 38 tests reporting a skip that reads as a pass.
+scipy==1.17.1 ; python_version < "3.12"
+scipy==1.18.1 ; python_version >= "3.12"
