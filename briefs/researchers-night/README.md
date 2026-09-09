@@ -253,6 +253,35 @@ That inverts the cut order recorded on 08-26, which named the Markdown remainder
 give up. The dust is at the front with `crt` now rather than being the slack, and the Markdown remainder is
 the declared slack in its place.
 
+### The graph's transition animation is on the plan, 2026-09-09
+
+17 days out. **Brief 16 cannot close without it**, and it was not in the remainder the 2026-09-07 section
+below names — which lists search, item 11 and the look pass. It had been filed as a v2 item inside the
+brief, with its design settled on 2026-09-02, and being filed *inside* the brief is how it stayed out of
+the plan the brief is tracked by. Same shape as item 11 dropping out of the spoken plan two days earlier.
+
+**Order: before the search machinery** (Juha, 2026-09-09).
+
+**Note that the brief argues the opposite**, and the disagreement is worth settling here rather than being
+rediscovered: *"Worth doing after the view has stopped changing shape — an animation between two layouts
+has to be rewritten every time either layout does."* Search does change the shape — it **filters the node
+selection**, and its match highlighting is *"a layout change, not a colour change"*, since a `TextShape`
+carries one `Pen` and a highlighted label becomes three shapes.
+
+**Why the order still holds.** The two things search changes are the two the animation is built to absorb:
+
+- **Filtering the node selection is a topology change**, which is precisely what this animates. So search
+  is a *consumer* of the animation, not merely something that disturbs it — a filtered graph appearing
+  between two frames is the same discontinuity, arriving by a different route. Built afterwards, the
+  animation would have to be retrofitted onto it; built first, search gets the transition for free.
+- **Splitting a label into three shapes does not disturb the correspondence**, which is by
+  `Node.internal_name` — unchanged by how the label is drawn. The design tweens node *positions* and fades
+  the appearing and leaving sets; it does not interpolate a node's internal shape list.
+
+So the brief's caution is about a *layout* that moves boxes, and neither of search's changes does. If
+something in the search work turns out to move boxes after all, that is the signal to re-open this
+ordering rather than push through it.
+
 ### Where the reorder stands, 2026-09-07 — and the item that fell out of view
 
 19 days out. Recorded because taking stock produced no diff, and because one of the four items had

@@ -489,9 +489,34 @@ tree sizes with windowed siblings. Revisit only if measurement says otherwise.
 - **Revisions**, per above — they belong with message editing.
 - **A forest view across all roots.** The windowed wide level covers what the demo needs. Reopened when
   roots became first-class on 2026-08-12, and closed again on 2026-09-01 — see decision 7 below.
-- **Animated transitions when the topology changes** — filed for v2 on 2026-09-02, see below.
+- ~~**Animated transitions when the topology changes**~~ — **no longer deferred.** Filed for v2 on
+  2026-09-02, and put back on the Researchers' Night plan on 2026-09-09: **this brief cannot close without
+  it**, and it runs *before* the search machinery. Being filed here, under a heading of things this
+  version does not do, is how it stayed out of the plan this brief is tracked by. See below, and the
+  dated section in `briefs/researchers-night/README.md` for the ordering and why it survives the caution
+  this item itself records.
 
-### Animating a change of topology (v2, filed 2026-09-02)
+### Animating a change of topology (scheduled 2026-09-09; design settled 2026-09-02)
+
+**It is an option, and so is the camera** (Juha, 2026-09-09). Some readers will prefer the view not to
+move, for the same reasons `gui_config.smooth_scrolling` exists — and that setting is the precedent to
+copy, including having a rate parameter beside it.
+
+Three things are in this family, and they are not independent:
+
+- **The topology transition** — this section. Off means the rebuild swaps the picture instantly, which is
+  what it does today.
+- **The camera's pan and zoom**, which is **not currently an option at all** (checked 2026-09-09):
+  `animate` is a per-call argument defaulting to `True`, and neither `XDotWidget` nor `DPGChatGraphPanel`
+  reads any configuration. The widget is in `raven/common/gui/` and app-agnostic on purpose, so the option
+  wants to be an *instance* default on the widget — `XDotWidget(..., animate_view=...)`, with the per-call
+  `animate` overriding it where a caller has a reason. That way `raven-xdot-viewer` gets the same switch,
+  and each app maps its own config onto it rather than the widget learning about config.
+- **The two together.** A rebuild moves the anchor, so the camera follows it; if one of these is animated
+  and the other is not, the picture jumps and the camera then chases it — which was a live bug, fixed
+  2026-09-09 by making the follow instant to match the instant rebuild. So the camera's motion during a
+  *rebuild* is part of the transition animation rather than a separate choice, and only the camera's
+  motion during deliberate *navigation* (clicking a box, stepping a sibling) is the second switch.
 
 **Raven animates every GUI transition, so that nothing ever jumps discontinuously** — the house reason
 being that a pair working at one screen can follow what just happened without either of them narrating it.

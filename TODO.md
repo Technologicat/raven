@@ -76,9 +76,15 @@ leaves the one large item a safe margin rather than a hopeful one.
    above. What is left of that item is the design decision it uncovered, which is now its whole content.
 3. **Band-2 item 11, the avatar's expression following the spoken words** — open, and at this point it is a
    *prototype and a decision* rather than a build. See the gate in `briefs/researchers-night/README.md`.
-4. **Brief 16 item 8, search in both halves.** The large one: nontrivial GUI and UX work, probably at least
+4. **The chat graph's transition animation** — brief 16, "Animating a change of topology", whose design was
+   settled 2026-09-02. **Brief 16 cannot close without it**, and it was missing from the plan until
+   2026-09-09 because it was filed inside the brief under the things v1 does not do. Runs **before** search:
+   search filters the node selection, which is itself a topology change, so it is a consumer of this rather
+   than merely a disturbance to it. The brief argues the opposite order and `briefs/researchers-night/README.md`
+   settles why it does not hold.
+5. **Brief 16 item 8, search in both halves.** The large one: nontrivial GUI and UX work, probably at least
    a week. Everything above is sized to leave room for it.
-5. **The Markdown renderer's remaining steps — slack**, if time is left over. The reasoning is in
+6. **The Markdown renderer's remaining steps — slack**, if time is left over. The reasoning is in
    `briefs/researchers-night/markdown-block-rendering-brief.md`.
 
 Then item 10 of brief 16, the look check, once the thumbnails and role glyphs are all in place.
