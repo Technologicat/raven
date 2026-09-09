@@ -296,7 +296,7 @@ def turn(llm_settings: env,
                                          librarian_config.llm_datastore_file,
                                          librarian_config.llm_state_file,
                                          autosave=False)
-        retriever, _scanner = hybridir.setup(...)  # over the configured docs dir and index; see its docstring
+        retriever, _scanner = hybridir.open_document_store()  # the configured docs dir and index; see its docstring
         for question in questions:
             record = agent.turn(llm_settings, question, datastore=datastore,
                                 head_node_id=state["new_chat_HEAD"], retriever=retriever)

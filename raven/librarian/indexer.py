@@ -12,28 +12,25 @@ the index against the directory — adding what is new, re-chunking what changed
 the part that is genuinely missing from a library used only by long-lived apps: a way to *wait* for the
 work to finish and then exit.
 
-`open_document_store` is the other half, and is the more reusable one: the frontends each carry their own
-copy of the same six-argument `hybridir.setup` call, and a third copy is how the three drift apart. It is
-public so `app` and `minichat` can adopt it.
+The configured-defaults opener that goes with it, `hybridir.open_document_store`, lives beside `setup` in
+`hybridir` rather than here: every frontend needs it, and a CLI module is a strange place for the other
+three to import it from.
 
 Note what "refresh" means: this reconciles, it does not rebuild. A corrupt index is not repaired by running
 this again — delete the index directory and re-run to get a clean build.
 """
 
-__all__ = ["open_document_store", "wait_for_indexing", "main"]
+__all__ = ["wait_for_indexing", "main"]
 
 from .. import __version__
 
 import argparse
-import concurrent.futures
-import pathlib
 import sys
 import time
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, Optional
 
 from ..client import api as client_api
 from ..client import config as client_config
-from ..common import docextract
 from . import config as librarian_config
 from . import hybridir
 
@@ -45,43 +42,6 @@ POLL_SECONDS = 0.5
 # background task, so there is a window at startup where nothing is indexing *yet*; requiring several
 # quiet samples in a row rides over that without needing to observe the busy edge at all.
 SETTLED_POLLS = 6
-
-
-def open_document_store(docs_dir: Union[pathlib.Path, str, None] = None,
-                        db_dir: Union[pathlib.Path, str, None] = None,
-                        recursive: Optional[bool] = None,
-                        executor: Optional[concurrent.futures.Executor] = None) -> Tuple[hybridir.HybridIR, hybridir.HybridIRFileSystemEventHandler]:
-    """Open Librarian's RAG document store, applying the configured defaults. Rescans on construction.
-
-    Every argument defaults to the corresponding `raven.librarian.config` setting, so calling this with no
-    arguments opens exactly the store the chat clients open. Pass one to point elsewhere — which is what
-    an indexing run over a corpus that is not the configured one needs.
-
-    `docs_dir`: Directory holding the documents. Defaults to `llm_docs_dir`.
-    `db_dir`: Directory holding the search indices. Defaults to `llm_database_dir`.
-    `recursive`: Whether to descend into subdirectories. Defaults to `llm_docs_dir_recursive`.
-    `executor`: Passed to `hybridir.setup`, which see.
-
-    Returns `(retriever, scanner)`, as `hybridir.setup` does.
-
-    The extractor is `docextract.ALL_FORMATS` narrowed to `llm_docs_exts`, so this ingests what Librarian
-    ingests. Widening it here would build an index the chat clients would then disagree with.
-
-    `local_model_loader_fallback` is off: Librarian requires Raven-server for other reasons anyway, and a
-    silent fall back to loading the embedding model in-process turns a server-down misconfiguration into a
-    slow run that quietly used a different device.
-    """
-    docs_dir = pathlib.Path(docs_dir if docs_dir is not None else librarian_config.llm_docs_dir).expanduser().resolve()
-    db_dir = pathlib.Path(db_dir if db_dir is not None else librarian_config.llm_database_dir).expanduser().resolve()
-    if recursive is None:
-        recursive = librarian_config.llm_docs_dir_recursive
-    return hybridir.setup(docs_dir=docs_dir,
-                          recursive=recursive,
-                          db_dir=db_dir,
-                          extractor=docextract.ALL_FORMATS.restricted_to(librarian_config.llm_docs_exts),
-                          embedding_model_name=librarian_config.qa_embedding_model,
-                          local_model_loader_fallback=False,
-                          executor=executor)
 
 
 def wait_for_indexing(retriever: hybridir.HybridIR,
@@ -131,9 +91,9 @@ def main() -> None:
                           raven_api_key_file=client_config.raven_api_key_file)
 
     try:
-        retriever, scanner = open_document_store(docs_dir=opts.docs_dir,
-                                                 db_dir=opts.db_dir,
-                                                 recursive=opts.recursive)
+        retriever, scanner = hybridir.open_document_store(docs_dir=opts.docs_dir,
+                                                         db_dir=opts.db_dir,
+                                                         recursive=opts.recursive)
     except Exception as exc:  # noqa: BLE001 -- the CLI's job is to report, not to add a traceback
         print(f"raven-indexer: could not open the document store: {type(exc)}: {exc}", file=sys.stderr)
         sys.exit(1)
@@ -149,16 +109,29 @@ def main() -> None:
             print(text, flush=True)
 
     started = time.monotonic()
+    interrupted = False
     try:
         wait_for_indexing(retriever, on_progress=None if opts.quiet else report)
     except KeyboardInterrupt:
-        # The commit is per-document and the index auto-persists, so an interrupted run leaves a valid,
-        # partial index rather than a corrupt one. Re-running resumes: the documents already in the index
-        # are reconciled as unchanged.
-        print("\nraven-indexer: interrupted; the partial index is valid, re-run to continue.", file=sys.stderr)
-        sys.exit(130)
+        interrupted = True
+        print("\nraven-indexer: interrupted; finishing the current document and saving the partial index…",
+              file=sys.stderr)
     finally:
+        # Stop the watcher first, so nothing new is queued while we drain; then wait for the in-flight
+        # commit to leave its per-document loop and run its partial-save tail.
+        #
+        # The second call is what makes an interrupted run resumable, and leaving it out is not a small
+        # loss. The vector index is written *inside* the loop, per document, while the keyword index and
+        # the document store are written *once*, at the tail — so a commit abandoned before that tail
+        # leaves the two halves disagreeing, with the vector index holding chunks for documents the store
+        # has never heard of. Re-running then re-ingests the whole batch rather than resuming, which on a
+        # bulk import is an hour of embedding thrown away.
         scanner.shutdown()
+        hybridir.shutdown()
+
+    if interrupted:
+        print("raven-indexer: partial index saved; re-run to continue from here.", file=sys.stderr)
+        sys.exit(130)
 
     if interactive and not opts.quiet:
         print()
