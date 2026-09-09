@@ -1696,7 +1696,7 @@ with timer() as tim:
 
                         dpg.add_checkbox(label="Internet", default_value=app_state["internet_enabled"], callback=toggle_internet_enabled, tag="internet_enabled_checkbox")
                         dpg.add_tooltip("internet_enabled_checkbox", tag="internet_enabled_tooltip")  # tag
-                        dpg.add_text("Let the AI reach the internet: web search, and fetching a page it finds\nor that you link to. [Alt+I]\n\nThis is the only switch that lets anything leave this machine on the AI's\ninitiative, so it is the one to turn off when the conversation should stay\nlocal. Your messages still go to whichever LLM backend you configured;\nthat is set in the config file, not here.\n\nWith this off, the AI can still read your document database (see next\ntoggle) and can still ask what time it is.", parent="internet_enabled_tooltip")  # tag
+                        dpg.add_text("Let the AI reach the internet: web search, and fetching a page it finds\nor that you link to. [Alt+I]\n\nThis is the only switch that sends anything to a site the AI picked, so it\nis the one to turn off when the conversation should stay between you and\nthe machines you run. Your messages always go to the LLM backend you\nconfigured, and searching your documents may reach the Raven-server you\nconfigured; either of those can sit elsewhere on your network. Both are\nset in the config file, not here.\n\nWith this off, the AI can still read your document database (see next\ntoggle), do arithmetic, and ask what time it is.", parent="internet_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
@@ -1711,7 +1711,7 @@ with timer() as tim:
 
                         dpg.add_checkbox(label="Show thinking", default_value=app_state["show_thinking"], callback=toggle_show_thinking, tag="show_thinking_checkbox")
                         dpg.add_tooltip("show_thinking_checkbox", tag="show_thinking_tooltip")  # tag
-                        dpg.add_text("Start a thinking model's reasoning trace open instead of collapsed. [Alt+Shift+T]\n\nThis is about what you *see*. Whether the AI reasons at all is the\n*Thinking* switch, at the left of this row.\n\nTakes effect from the AI's next chat message onward. For a reply already\non screen, the cloud beside it opens its trace - or press Ctrl+T.", parent="show_thinking_tooltip")  # tag
+                        dpg.add_text("Start a thinking model's reasoning trace open instead of collapsed. [Alt+Shift+T]\n\nThis is about what you see, not about whether the AI reasons at all -\nthat is the Thinking switch, at the left of this row.\n\nTakes effect from the AI's next chat message onward. For a reply already\non screen, the cloud beside it opens its trace - or press Ctrl+T.", parent="show_thinking_tooltip")  # tag
 
                         # No line, matching the toolbar below the chat, which separates its sections by
                         # spacing alone at every one of its call sites.

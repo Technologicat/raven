@@ -753,8 +753,8 @@ def maybe_tool_names_for_turn(settings: env,
     `internet_available`: whether the network-reaching tools are in play this turn. Gates
                           `settings.network_tool_names`.
 
-    With both `False` the ungated tools are still on offer — `get_current_time` today — so the result is
-    that group rather than the empty tuple. (An empty tuple would be handled: `invoke` drops an emptied
+    With both `False` the ungated tools are still on offer — `get_current_time` and `calculate` today — so
+    the result is that group rather than the empty tuple. (An empty tuple would be handled: `invoke` drops an emptied
     `tools` field rather than sending one, since some backends reject an empty list.)
 
     Shared so that the two callers cannot disagree. `scaffold.ai_turn` uses it to build the real request,

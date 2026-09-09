@@ -638,11 +638,11 @@ Each has a hotkey, mnemonic on its label, and they work while you are typing —
 
 *Show thinking* is `Alt+Shift+T` rather than a letter of its own because the pair is the point: `Alt+T` is what the AI does, `Alt+Shift+T` is what you see of it.
 
-The first two each govern one group of tools (see [Tools](#tools) above), and neither overrides the other — all four combinations mean something. A tool belonging to neither group answers to no switch and is always offered; `get_current_time` is the one, because the current time is injected into every turn regardless of either switch.
+The first two each govern one group of tools (see [Tools](#tools) above), and neither overrides the other — all four combinations mean something. A tool belonging to neither group answers to no switch and is always offered; `get_current_time` and `calculate` are those, the first because the current time is injected into every turn regardless of either switch, and the second because arithmetic reaches nothing outside this process.
 
 - **Internet**
   - Whether the AI may reach the network: `websearch` and `webfetch`.
-  - This is the only switch that lets anything leave your machine on the AI's initiative, so it is the one to turn off when the conversation should stay local. Your messages still go to whichever LLM backend you configured — that is a matter of where the backend runs, not of this toggle.
+  - This is the only switch that sends anything to a site the AI picked, so it is the one to turn off when the conversation should stay between you and the machines you run. It is not the only thing that can leave this particular machine: your messages always go to whichever LLM backend you configured, and searching your documents may reach whichever Raven-server you configured, either of which can sit elsewhere on your network. Those are a matter of where you point Librarian, not of this toggle.
   - If **OFF**, the two network tools are not offered to the LLM at all, so it cannot reach around the switch.
 - **Documents**
   - This one switch governs *everything* to do with the document database: the automatic search, the AI's own document tools, the grounding reminder, and the `[no sources retrieved]` marker. With it **OFF**, the document tools are not offered to the AI at all — so it cannot reach around the switch, and a model that tries anyway gets a refusal rather than a search.
