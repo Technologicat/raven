@@ -49,9 +49,21 @@ after publishing — without that gate being on any release path.
 
 ## Next session, from 2026-09-10
 
-**Start with the help card's paging** — the last of the two hammerspace items, specced in
-`TODO_DEFERRED.md`, and a look-at-it job: the card is a fixed-height window whose whole problem is what
-fits, so it wants the maintainer at the keyboard rather than being built blind and measured afterwards.
+**Start with the three fixes a live test found on 2026-09-09**, all filed in `TODO_DEFERRED.md`, all
+small, and all in what 0.2.9 just changed — so they are cheapest while the work is fresh:
+
+1. **The framing notice is unlabelled**, so Librarian's displayed system prompt reads as if Raven's own
+   sentence came from a config file. Note the two traps recorded with it: the injects' *"not stored"*
+   label cannot be borrowed (this one **is** stored), and the marker must be presentation-only — in the
+   text it would reach the model *and* spawn a fresh root node for every user.
+2. **The "...N more cards" box does nothing when clicked**, with only an INFO line to show for it. Two
+   pieces: saying so on screen (S), and actually navigating there (also S — the refusal's stated reason
+   is outweighed by old chats being unreachable at all, so the cheap version is the graph's ordinary
+   focus change with the avatar and voice left alone).
+
+**Then the help card's paging** — the last of the two hammerspace items, specced in `TODO_DEFERRED.md`,
+and a look-at-it job: the card is a fixed-height window whose whole problem is what fits, so it wants the
+maintainer at the keyboard rather than being built blind and measured afterwards.
 
 **2026-09-09 was the review of the character and prompt work, and it grew.** All of it is landed and CI
 green; nothing is half-finished in the tree. What changed beyond the review itself:
