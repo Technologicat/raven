@@ -671,6 +671,7 @@ In the documentation as well as in the source code docstrings and comments, we r
       - There is usually no need to edit the emotion templates. But if you really want to, you can use the GUI app `raven-avatar-pose-editor`.
     - Avatar image assets are loaded from [`raven/avatar/assets/characters/`](raven/avatar/assets/characters/).
       - The default character (*Aria*, main image [`aria1.png`](raven/avatar/assets/characters/other/aria1.png)), contains an example of the additional cels needed to support all optional features of the animator, as well as the optional chat icon for *Raven-librarian*.
+      - **A character declares itself** in a JSON file beside its image, [`aria1.json`](raven/avatar/assets/characters/other/aria1.json), giving the name that `llm_char_name` selects it by — and with it the voice, the personality ([`aria1.md`](raven/avatar/assets/characters/other/aria1.md)) and the chat glyph ([`aria1_icon.png`](raven/avatar/assets/characters/other/aria1_icon.png)). An image with no such file still animates everywhere, but is not a character *Raven-librarian* can pick by name. See [`raven.avatar.characters`](raven/avatar/characters.py).
     - The backdrop image is loaded from [`raven/avatar/assets/backdrops/`](raven/avatar/assets/backdrops).
 - `raven.server.config` → [`raven/server/config.py`](raven/server/config.py)
   - AI model settings, except LLM.

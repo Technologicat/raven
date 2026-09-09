@@ -195,6 +195,21 @@ The [video postprocessor](../common/video/postprocessor.py) is a set of custom p
 
 # Quick tips for character creation
 
+**A picture on its own is enough for the avatar, and not enough for Raven-librarian.** The pose editor and
+the settings editor take an image path, so anything you produce by following this section animates. But
+from v0.2.9 a *Librarian* character is declared by a JSON file beside the image — `aria1.json` next to
+`aria1.png` — giving the character a name, and with it a voice, a personality and a chat glyph:
+
+    aria1.json        the character: its name, and its voice.      Required, to be a Librarian character.
+    aria1.md          its character card, as the LLM is told it.   Optional.
+    aria1.png         the image this section is about.             Optional — a character may have no face.
+    aria1_icon.png    the glyph beside its messages in the chat.   Optional.
+
+Without the JSON, Librarian cannot find the character by name, so its face, voice and personality would
+each have to be set separately in the configuration — which is the arrangement the declaration replaces.
+See [`raven.avatar.characters`](characters.py) for the format, and Raven-librarian's
+[README](../librarian/README.md#ai-avatar) for how one is selected.
+
 AI animation quality depends on the input image. Sometimes the engine can be finicky about its input.
 
 - Glasses, moustaches, and older characters may confuse the face parts detector.
