@@ -451,9 +451,8 @@ Three lists say what Raven depends on, and each answers a different question:
    its own invocation. Both groups exist because CI cannot run them: `ml` needs the multi-gigabyte model
    stack, `gui` needs a display and a window that takes focus. A local run that skips them covers no
    more than the matrix already did.
-   - **`--run-gui` takes the keyboard and can crash** (a resource-allocation fault on the deferred list),
-     so warn before starting it and run it *after* the main suite — separately, so a crash cannot cost
-     the results of everything else.
+   - **`--run-gui` takes the keyboard**, so warn before starting it and run it *after* the main suite, as
+     its own invocation.
    - **A `dearpygui` bump is not green without it.** The GUI group is where a toolkit change actually
      lands: focus semantics, layout geometry, the file dialog's keyboard. The rest of the suite drives
      DPG with an unmapped viewport and would not notice.
