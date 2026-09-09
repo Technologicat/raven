@@ -265,3 +265,81 @@ class TestTeardown:
         tip._on_hover(None, None, None)
         tip.destroy()
         assert tip not in tooltip_module._visible
+
+
+class TestSweeperLifetime:
+    """The sweeper runs exactly while `_visible` or `_pending` has something in it.
+
+    These pin the two halves of the hand-off separately, which is what a test can reach: that a sweeper
+    starts when work appears and stops when it runs out, and that a stopped one cannot evict its
+    replacement. The *interleaving* of those halves is argued from the single critical section in
+    `tooltip.py` rather than measured here — a scheduler cannot be asked to reproduce a chosen ordering,
+    so a test that appeared to check it would only be reporting which one it happened to get.
+    """
+
+    @pytest.fixture(autouse=True)
+    def clean_slate(self):
+        """No sweeper before or after, so a test neither inherits one nor leaves one for the next."""
+        animation.animator.clear()
+        assert tooltip_module._sweeper is None, "clearing the animator left a sweeper in the slot"
+        yield
+        animation.animator.clear()
+
+    def test_work_appearing_starts_a_sweeper(self, target):
+        tip = Tooltip(target, "hello")
+        assert tooltip_module._sweeper is None, "building a tooltip is not itself work to sweep"
+        tip._on_hover(None, None, None)
+        assert tooltip_module._sweeper is not None
+        assert animation.animator.active_count == 1
+
+    def test_a_second_enrolment_does_not_start_a_second_sweeper(self, target):
+        """Two sweepers would call `_advance` twice per frame, draining `_settle_countdown` in one frame
+        and reinstating the mis-sized frame the module exists to prevent."""
+        tip = Tooltip(target, "hello")
+        tip._on_hover(None, None, None)
+        first = tooltip_module._sweeper
+        tip.text = "a change, which enrols it in the other queue as well"
+        assert tooltip_module._sweeper is first
+        assert animation.animator.active_count == 1
+
+    def test_the_sweeper_stops_once_both_queues_are_empty(self, target):
+        tip = Tooltip(target, "hello")
+        tip._on_hover(None, None, None)
+        sweeper = tooltip_module._sweeper
+
+        # The control. Without it the assertions below would hold just as well for a sweeper that stops
+        # unconditionally, and this fixture could not tell that from one that stops when out of work.
+        assert sweeper.render_frame(t=0) is animation.action_continue, \
+            "a sweeper with a tooltip on screen stopped anyway, so the emptiness test is not what decided"
+        assert tooltip_module._sweeper is sweeper
+
+        tip._hide()
+        assert not tooltip_module._visible and not tooltip_module._pending
+        assert sweeper.render_frame(t=0) is animation.action_finish
+        assert tooltip_module._sweeper is None, "the slot must be free for the next tooltip to fill"
+
+    def test_work_after_a_stop_starts_a_fresh_sweeper(self, target):
+        tip = Tooltip(target, "hello")
+        tip._on_hover(None, None, None)
+        first = tooltip_module._sweeper
+        tip._hide()
+        first.render_frame(t=0)  # out of work: stops, vacating the slot
+
+        tip._on_hover(None, None, None)
+        assert tooltip_module._sweeper is not None, "work appeared and nothing was started to carry it out"
+        assert tooltip_module._sweeper is not first
+
+    def test_a_superseded_sweeper_does_not_evict_its_replacement(self, target):
+        """`Animator.clear` finalizes everything it holds, so a stale `finish` can land after a successor
+        has taken the slot. Unguarded, it would leave work in the queues and nobody sweeping them."""
+        tip = Tooltip(target, "hello")
+        tip._on_hover(None, None, None)
+        first = tooltip_module._sweeper
+        tip._hide()
+        first.render_frame(t=0)  # stops
+        tip._on_hover(None, None, None)
+        second = tooltip_module._sweeper
+        assert second is not first, "the fixture never produced a successor, so there is nothing to evict"
+
+        first.finish()  # arriving late, after the replacement is already in the slot
+        assert tooltip_module._sweeper is second, "a stopped sweeper evicted the one running now"
