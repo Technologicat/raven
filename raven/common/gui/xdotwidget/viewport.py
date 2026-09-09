@@ -16,6 +16,13 @@ from .. import layout_math
 from .constants import Point
 from .graph import Graph
 
+#: Pixels left around the graph by a "fit the whole thing" zoom, per side.
+#:
+#: One constant because two things must agree about it: what `zoom_to_fit` aims at, and how far `zoom_by`
+#: will let you zoom *out*. Written twice they would not agree, and the disagreement is silent — zoom-out
+#: simply stops a little short of where the fit key lands, which reads as the wheel losing its nerve.
+FIT_MARGIN = 12
+
 
 def _clamp_axis(pan: float, extent: float, half_view: float) -> float:
     """Return `pan` moved as little as possible so that (pan ± half_view) stays inside (0, extent).
@@ -108,7 +115,7 @@ class Viewport:
                                              self.zoom.current,
                                              self.width, self.height)
 
-    def zoom_to_fit(self, graph: Graph, margin: int = 12, animate: bool = True) -> None:
+    def zoom_to_fit(self, graph: Graph, margin: int = FIT_MARGIN, animate: bool = True) -> None:
         """Adjust pan and zoom to fit the entire graph in the viewport.
 
         `graph`: The Graph to fit.
@@ -254,12 +261,19 @@ class Viewport:
         self.zoom_to(new_zoom, center_sx, center_sy)
 
     def _fit_zoom(self) -> float:
-        """Return the zoom at which the whole graph just fits the viewport.
+        """Return the zoom this widget's zoom-out will not go below.
 
-        The floor for zooming out under `clamp_pan`, and the point at which that clamp runs out of
-        purchase: below this the graph is smaller than the view on *both* axes, so `_clamp_axis` centres
-        both and there is nothing left for it to hold on to. Everything further out only makes the graph
-        smaller in the middle of a growing nothing.
+        **The floor is the furthest out that any of the fit keys can legitimately put you**, so that
+        zooming out by hand can reach where they land instead of stopping short of it. Two of them:
+
+          - *Fit the whole graph*, which leaves `FIT_MARGIN` pixels per side. A floor computed without
+            that margin sits `2 * FIT_MARGIN` pixels tighter than the fit key, on every graph.
+          - *Actual size*, 1:1. A graph smaller than the view fits at a zoom **above** 1, so the fit
+            floor alone would sit above 1:1 and refuse to let anyone zoom out to it.
+
+        Below this the clamp also runs out of purchase: the graph is smaller than the view on *both* axes,
+        so `_clamp_axis` centres both and there is nothing left for it to hold on to. Everything further
+        out only makes the graph smaller in the middle of a growing nothing.
 
         **The zoom that makes the graph *fill* the view is a different and larger number** — the `max` of
         these two ratios rather than the `min` — and it is the wrong floor. A graph whose proportions are
@@ -272,7 +286,13 @@ class Viewport:
         """
         if self._graph_width <= 0.0 or self._graph_height <= 0.0:
             return self.min_zoom
-        return min(self.width / self._graph_width, self.height / self._graph_height)
+        # The same numbers `zoom_to_bbox` works from, so that "fit" and "as far out as you may zoom" are
+        # one value rather than two that nearly agree. Guarded against a viewport narrower than its own
+        # margins, which would otherwise make the floor zero or negative.
+        available_w = max(1.0, self.width - 2 * FIT_MARGIN)
+        available_h = max(1.0, self.height - 2 * FIT_MARGIN)
+        fit = min(available_w / self._graph_width, available_h / self._graph_height)
+        return min(fit, 1.0)
 
     def pan_by(self, dx: float, dy: float) -> None:
         """Pan by a screen offset.

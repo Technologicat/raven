@@ -2,6 +2,7 @@
 
 from raven.common.tests import approx
 
+from .. import viewport  # for `FIT_MARGIN`, which the fit-floor tests compute against
 from ..viewport import Viewport
 from ..graph import Graph
 
@@ -353,14 +354,20 @@ class TestPanClamping:
     # The other half of the same promise. `clamp_pan` says the view holds no empty space beyond the graph,
     # and below the fill zoom the space appears whatever the pan does.
 
-    def test_zooming_out_stops_where_the_whole_graph_fits(self):
-        # 400x300 over 600x2000: the height is the binding dimension, so the graph is whole at 300/2000
-        # and no smaller. Note this is the *smaller* of the two ratios — the larger one, 400/600, is
-        # where the graph stops filling the view, and a floor there would make this graph impossible to
-        # look at whole.
+    def test_zooming_out_stops_where_the_fit_key_would_land(self):
+        # 400x300 over 600x2000: the height is the binding dimension, so the graph is whole at
+        # (300 - 2*FIT_MARGIN)/2000 and no smaller. Note this is the *smaller* of the two ratios — the
+        # larger one is where the graph stops filling the view, and a floor there would make this graph
+        # impossible to look at whole.
+        #
+        # The margin is the point: the floor has to be where `zoom_to_fit` lands, not where the graph
+        # would touch the edges. A floor without it stops short of the fit key by `2 * FIT_MARGIN` pixels
+        # — on every graph, and silently.
         vp = self._over_a_tall_graph()
-        floor = 300.0 / 2000.0
-        assert floor < 400.0 / 600.0, "this graph's proportions match the view's, so the two floors agree"
+        floor = (300.0 - 2 * viewport.FIT_MARGIN) / 2000.0
+        assert floor < (400.0 - 2 * viewport.FIT_MARGIN) / 600.0, \
+            "this graph's proportions match the view's, so the two floors agree"
+        assert floor < 300.0 / 2000.0, "no margin is being applied, so this fixture cannot see it at all"
         vp.zoom.set_immediate(floor * 1.05)  # just above it, so one step must overshoot
         vp.zoom_by(0.5)
         assert approx(vp.zoom.target, floor)
@@ -388,16 +395,21 @@ class TestPanClamping:
         vp.zoom_by(0.5)
         assert approx(vp.zoom.target, 0.1)
 
-    def test_a_graph_smaller_than_the_view_cannot_be_zoomed_further_out(self):
-        # The floor is above 1:1 here — there is no zoom at which this graph fills the view, so every
-        # step out only adds more of what the clamp exists to prevent. Holding still is the answer.
+    def test_a_graph_smaller_than_the_view_stops_at_actual_size(self):
+        # Fitting this graph means zooming *in* — it is 100x100 in a 400x300 view — so the fit zoom is
+        # above 1:1, and a floor there would refuse to let anyone zoom out to actual size. The floor is
+        # the furthest out any fit key can put you, and 1:1 is one of them.
         vp = Viewport(width=400, height=300)
         vp.set_graph_bounds(100.0, 100.0)
         vp.clamp_pan = True
-        vp.zoom.set_immediate(1.0)
-        assert vp._fit_zoom() > 1.0, "this graph is bigger than the view, so it poses a different question"
-        vp.zoom_by(0.5)
+        vp.zoom.set_immediate(2.0)
+        fitted = min((400.0 - 2 * viewport.FIT_MARGIN) / 100.0, (300.0 - 2 * viewport.FIT_MARGIN) / 100.0)
+        assert fitted > 1.0, "this graph does not fit at a zoom above 1:1, so it poses a different question"
+        assert approx(vp._fit_zoom(), 1.0), "the floor is the fit zoom, so 1:1 is out of reach"
+        vp.zoom_by(0.25)  # one step, far enough to overshoot 1:1
         assert approx(vp.zoom.target, 1.0)
+        vp.zoom_by(0.5)
+        assert approx(vp.zoom.target, 1.0), "zooming out past actual size did not hold"
 
     # --- Zooming about a point ---
 

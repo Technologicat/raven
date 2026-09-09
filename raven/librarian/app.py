@@ -1514,7 +1514,9 @@ with timer() as tim:
                             audio_recorder.require().connect_vu_readout(mic_vu_meter.update)
 
                             dpg.add_button(label=fa.ICON_SLIDERS,
-                                           callback=lambda: audio_input_panel.toggle(),
+                                           # Resolved when clicked, so the definition further down is in
+                                           # place by then, as it is for the other toolbar callbacks.
+                                           callback=lambda: _toggle_audio_input_panel(),
                                            width=gui_config.toolbutton_w,
                                            tag="audio_input_panel_button")  # tag
                             dpg.bind_item_font("audio_input_panel_button", themes_and_fonts.icon_font_solid)  # tag
@@ -2456,6 +2458,26 @@ def _give_keyboard_to_graph() -> None:
     chat_graph_panel.has_keyboard = True
 
 
+def _toggle_audio_input_panel() -> None:
+    """Open or close the audio input panel, releasing the graph's claim on the keyboard as it opens.
+
+    The panel is a window of its own and parks the keyboard inside itself, so from the moment it opens the
+    keys are no longer the graph's. Nothing else says so: `_cycle_keyboard_home` derives the home from
+    ImGui's caret plus the graph's one stored bit, and that bit stays set until something clears it — so
+    without this the graph goes on claiming the keyboard, and stays lit, while the panel has it.
+
+    It used to be corrected by accident, on the first click landing outside the graph, which could be the
+    click that closed the panel again. That is the right answer arriving at the wrong moment, and looks
+    like the close doing something to the focus.
+
+    Here rather than on the panel, which owns none of this: the keyboard model lives in this module, and a
+    panel that had to know about the chat graph would be the wrong shape for the next panel too.
+    """
+    if not audio_input_panel.is_open:
+        chat_graph_panel.has_keyboard = False
+    audio_input_panel.toggle()
+
+
 def _cycle_keyboard_home(backwards: bool = False) -> None:
     """Move the keyboard to the next pane, or the previous one. What Tab and Shift+Tab do.
 
@@ -2588,7 +2610,7 @@ def librarian_hotkeys_callback(sender, app_data):
 
     # Hotkeys for main window, while no modal window is shown
     elif key == dpg.mvKey_F9:  # a bare key, because it is reached with a microphone in one hand
-        audio_input_panel.toggle()
+        _toggle_audio_input_panel()
     elif key == dpg.mvKey_F8:  # NOTE: Shift is a modifier here
         copy_chatlog_to_clipboard_as_markdown_callback()
     # Ctrl+Shift+...
