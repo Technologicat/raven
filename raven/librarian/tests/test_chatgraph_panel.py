@@ -284,23 +284,23 @@ class TestCommit:
 # Framing
 # ---------------------------------------------------------------------------
 
-class TestTheCameraDoesNotChaseAnInstantRebuild:
-    """A rebuild swaps the whole picture between two frames, so the camera has to arrive in the same one.
+class TestTheCameraGlidesOnlyWhenNothingJumped:
+    """The camera may animate exactly when the reader cannot see the picture change.
 
-    `set_graph` replaces every node object at once. If the camera then *glides* to where the anchor has
-    already moved to, it spends the glide pointing at the wrong place — and what a reader sees is the graph
-    jumping and then being chased, which is the opposite of what following an anchor is for.
+    `set_graph` replaces every node object at once. Where that swap is *visible* — a box appeared or
+    vanished — a camera gliding to where the anchor already is spends the glide pointing at the wrong
+    place, and what a reader sees is the graph jumping and then being chased. Where the drawn set is
+    unchanged, nothing jumped, and a glide reads as following rather than chasing.
 
-    The two are one decision: when the topology transition becomes animated (brief 16, planned as an option
-    like `gui_config.smooth_scrolling`), the camera becomes a motion inside it. What must not happen is one
-    animated and the other not.
+    That is the difference between acting on a box on the current branch and one off it: the first changes
+    which box is marked, the second re-lays the tree out around a different branch.
     """
 
-    def test_a_rebuild_leaves_the_camera_where_it_belongs_immediately(self, panel):
+    def test_a_visible_change_moves_the_camera_in_the_same_frame(self, panel):
         built, forest, app_state, ids, calls = panel
         viewport = built._widget._viewport
 
-        # Move the anchor: a new sibling under the root widens a level, which shifts the layout.
+        # New siblings widen a level, so boxes appear and the layout shifts.
         for i in range(4):
             forest.create_node(payload("assistant", f"another branch {i}"), parent_id=ids["user"])
         built.refresh()
@@ -311,11 +311,42 @@ class TestTheCameraDoesNotChaseAnInstantRebuild:
         assert viewport.pan_x.current == pytest.approx(viewport.pan_x.target)
         assert viewport.pan_y.current == pytest.approx(viewport.pan_y.target)
 
+    def test_marking_a_box_on_the_spine_may_glide(self, panel):
+        """The other half of the rule, and the reason it is a rule rather than "never animate".
+
+        Marking a box widens it, which slides every box after it by the *same* vector. The camera cancels
+        exactly that by following the anchor, so once it has, the picture is pixel-identical — nothing
+        jumped, and the camera is free to travel. That is what makes acting on a box feel like moving
+        rather than teleporting.
+        """
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["taken"])  # on the current branch, so the tree is not re-laid out around it
+        assert built._widget.is_animating(), \
+            "the camera snapped even though the picture is unchanged once it follows"
+
+    def test_relaying_the_tree_out_snaps_even_though_the_same_boxes_are_drawn(self, panel):
+        """Why the test is relative motion rather than the set of drawn boxes.
+
+        Acting on a box *off* the spine redraws the tree around a different branch. In a tree small enough
+        to be drawn whole — this fixture — that adds and removes nothing, so "did the drawn set change?"
+        answers no, and a camera trusting that would glide through a re-layout. Measured on this fixture:
+        the boxes move 108 graph units on average and 324 at most, against 5.0 for the case above.
+        """
+        built, forest, app_state, ids, calls = panel
+        before = set(built._drawn_layout())
+
+        click(built, ids["not_taken"])
+
+        assert set(built._drawn_layout()) == before, \
+            "the drawn set changed, so this fixture cannot show that an unchanged set is not enough"
+        assert not built._widget.is_animating(), \
+            "the camera glided through a re-layout, which is the picture jumping and then being chased"
+
     def test_the_fixture_can_tell_a_glide_from_a_snap(self, panel):
         """The negative control: an animated move on this same widget *does* leave it animating.
 
-        Without this, a panel whose camera never moves at all would satisfy the assertion above for the
-        wrong reason, and would go on satisfying it if the follow were removed entirely.
+        Without this, a panel whose camera never moves at all would satisfy the first assertion above for
+        the wrong reason, and would go on satisfying it if the follow were removed entirely.
         """
         built, forest, app_state, ids, calls = panel
         built._widget.pan_to_point(500.0, 500.0, animate=True)

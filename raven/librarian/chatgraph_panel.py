@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 import dearpygui.dearpygui as dpg
 
-from unpythonic import env, si_prefix, sym, timer
+from unpythonic import almosteq, env, si_prefix, sym, timer
 
 from ..common import navhistory
 from ..common.running_average import RunningAverage
@@ -882,6 +882,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
     def _rebuild(self) -> None:
         """The rebuild itself. Split from `refresh` only so that the timing there wraps all of it."""
         with self._lock:
+            # What is on screen right now, to compare against what this build produces. See the camera
+            # note further down: whether the reader sees the picture *change* is what decides whether the
+            # camera may glide, and the set of drawn boxes is that question.
+            layout_before = self._drawn_layout()
+
             self._view_state.head_node_id = self.app_state["HEAD"]
             self._view_state.new_chat_node_id = self.app_state.get("new_chat_HEAD")
             generation = self.datastore.generation
@@ -935,25 +940,33 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # while a reply is arriving and the tree gains a node per round -- a re-frame on every rebuild
         # would make it lurch once per turn.
         #
-        # **The follow is instant, because the rebuild is.** `set_graph` replaces the whole picture between
-        # one frame and the next, so the anchor is at its new coordinates immediately; a camera gliding
-        # there over the following second is a camera pointed at the wrong place for that second, and what
-        # a reader sees is the graph jumping and *then* being chased. Moving the camera in the same frame
-        # is what holds the anchor still across the swap, which is the entire point of following it.
+        # **The camera glides only when the picture did not visibly change.**
         #
-        # **The two are one decision, and must stay one.** When the topology transition is animated (brief
-        # 16, "Animating a change of topology" — planned as an option, like `gui_config.smooth_scrolling`),
-        # the camera becomes a motion *inside* that animation rather than a separate one racing it. With
-        # the option off, the rebuild is instant and this stays as it is. What must never happen again is
-        # one of the two animated and the other not, which is the bug this comment replaced.
+        # `set_graph` replaces the whole picture between one frame and the next. Where that swap is
+        # *visible* — a box appeared or vanished — the anchor is at its new coordinates immediately, and a
+        # camera gliding there over the following second is a camera pointed at the wrong place for that
+        # second: what a reader sees is the graph jumping and *then* being chased. Arriving in the same
+        # frame is what holds the anchor still across the swap, which is the entire point of following it.
+        #
+        # Where the drawn set is unchanged, nothing jumped, and a glide reads as the camera following
+        # rather than chasing. That is the difference between clicking a box on the current branch —
+        # which changes no boxes, only which one is marked — and clicking one off it, which re-lays the
+        # tree out around a different branch.
+        #
+        # **The rebuild and the camera are one decision, and must stay one.** When the topology transition
+        # is animated (brief 16, "Animating a change of topology" — planned as an option, like
+        # `gui_config.smooth_scrolling`), a visible change becomes a motion the camera is *part of* rather
+        # than one it races. What must never happen again is the picture jumping while the camera glides,
+        # which is the bug this comment replaced.
+        looks_unchanged = self._looks_unchanged(layout_before, self._drawn_layout(), anchor)
         if not self._framed:
             self._framed = True
             self._frame_on_head(chat_graph, animate=False)
             self._remember_view()  # the view opened on is the one Back should eventually reach
         elif chat_graph.graph.get_node_by_name(anchor) is not None:
-            self._widget.pan_to_node(anchor, animate=False)
+            self._widget.pan_to_node(anchor, animate=looks_unchanged)
         else:
-            self._widget.zoom_to_fit(animate=False)
+            self._widget.zoom_to_fit(animate=looks_unchanged)
 
         # Last, and here rather than at each caller, so that the buttons cannot be left answering a
         # picture that no longer exists. Most rebuilds are nobody's doing -- the poll notices a reply
@@ -963,6 +976,46 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # It reads the datastore on the render thread, which the rebuild above already does (through
         # `chatgraph.build`), so this takes no lock that thread was not taking anyway.
         self._update_cursor_buttons()
+
+    def _drawn_layout(self) -> dict:
+        """Return `{box name: (x, y)}` for the picture on screen, or `{}` if there is none yet.
+
+        Names rather than objects: a rebuild makes all new `Node`s, so identity says nothing, while a name
+        is stable across builds — the chat node's id for a message, and for a gap box a name synthesised
+        from what it hides. That is the same correspondence the topology animation will pair two builds by.
+        """
+        if self._chat_graph is None:
+            return {}
+        return {node.internal_name: (node.x, node.y) for node in self._chat_graph.graph.nodes}
+
+    @staticmethod
+    def _looks_unchanged(before: dict, after: dict, anchor: Optional[str]) -> bool:
+        """Return whether the reader would see no change, once the camera has followed `anchor`.
+
+        `before`, `after`: `_drawn_layout` results, from either side of a rebuild.
+        `anchor`: The box the camera follows, or `None` if there is none to follow.
+
+        **Exact rather than a tolerance**, which is what makes this worth doing at all. The question is not
+        "did the layout move a little or a lot" — that would need a number chosen by looking at examples —
+        but "does anything move *relative to the anchor*". The camera cancels the anchor's own motion by
+        construction, so a picture where every box shifted by the same vector comes out pixel-identical,
+        and one where they did not has genuinely changed.
+
+        Both cases occur, and they are not distinguishable by how many boxes moved. Marking a box widens
+        it, which slides every box after it by a constant — measured 5.0 graph units, all six boxes, on
+        acting on a box already on the spine. Acting on one off the spine re-lays the tree out around a
+        different branch: same boxes again, and they move by 108 units on average and by 324 at most.
+        Counting movers says "all of them" for both; the relative test separates them without a threshold.
+        """
+        if before.keys() != after.keys():
+            return False  # a box appeared or vanished, which is a change however anything moved
+        if anchor is None or anchor not in before or anchor not in after:
+            return before == after  # nothing cancels the motion, so it has to be still by itself
+        shift_x = after[anchor][0] - before[anchor][0]
+        shift_y = after[anchor][1] - before[anchor][1]
+        return all(almosteq(after[name][0] - before[name][0], shift_x)
+                   and almosteq(after[name][1] - before[name][1], shift_y)
+                   for name in before)
 
     def _try_build(self) -> Optional[chatgraph.ChatGraph]:
         """Build the picture, or return `None` if the node it would be drawn around is gone."""
