@@ -25,7 +25,8 @@ __all__ = ["format_chunk_full_id",
            "has_pending_work",
            "shutdown",
            "HybridIRFileSystemEventHandler",
-           "setup"]
+           "setup",
+           "open_document_store"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ from ..client import config as client_config
 from ..client import mayberemote
 
 from ..common import bgtask
+from ..common import datastorelock
 from ..common import docextract
 from ..common import nlptools
 from ..common import utils as common_utils
@@ -432,6 +434,12 @@ class HybridIR:
                             text -> larger index -> slower search, uses more disk space for storage).
         """
         self.datastore_lock = threading.RLock()  # self.documents, and the keyword and vector search indices
+
+        # The cross-*process* lock on this index directory, when there is one. Declared here and filled in
+        # by `setup`, which is where it is taken; constructing a `HybridIR` directly takes no such lock, so
+        # a test or a script can open as many stores as it likes. Held for the object's lifetime rather
+        # than around each write — see `setup` for why serializing the writes alone would not be enough.
+        self._process_lock = None
         self._pending_edits_lock = threading.RLock()  # self._pending_edits
 
         self.datastore_base_dir = datastore_base_dir
@@ -1852,11 +1860,28 @@ def setup(docs_dir: Union[pathlib.Path, str],
     init(executor=executor)
 
     # `HybridIR` also autoloads and auto-persists its search indices.
+    # One writer at a time, across processes, raising `datastorelock.DatastoreBusyError` if another Raven
+    # app already has this index open.
+    #
+    # Both writers here hold the whole document store in memory and write it back wholesale —
+    # `_rebuild_keyword_search_index` rebuilds from `self.documents`, and `_save_datastore` dumps it — so
+    # two of them do not interleave badly: the second to save persists an index built from its own view
+    # alone, and every document the other ingested is gone, with nothing on screen or in the log to say so.
+    # Exactly the chat datastore's failure, and the same remedy.
+    #
+    # Taken before the constructor rather than after, because `HybridIR.__init__` loads the whole store and
+    # may rebuild an index from it — minutes of work on a large corpus, and all of it wasted on a refusal.
+    index_lock = datastorelock.acquire(db_dir, what="The document index")
+
     retriever = HybridIR(datastore_base_dir=db_dir,
                          embedding_model_name=embedding_model_name,
                          local_model_loader_fallback=local_model_loader_fallback,
                          chunk_size=chunk_size,
                          overlap_fraction=overlap_fraction)
+    # The lock's lifetime is the store's, so it is bound to the store rather than returned. A lock that is
+    # garbage collected releases, and asking four call sites to each keep a third return value alive is a
+    # contract three of them would eventually get wrong.
+    retriever._process_lock = index_lock
 
     # The watchdog observer can't watch a non-existent directory; without this, a fresh-install or
     # docs-dir-moved-aside startup raises FileNotFoundError from `inotify_add_watch` during `bootup()`.
@@ -1871,3 +1896,40 @@ def setup(docs_dir: Union[pathlib.Path, str],
                                              extractor=extractor)
 
     return retriever, scanner
+
+
+def open_document_store(docs_dir: Union[pathlib.Path, str, None] = None,
+                        db_dir: Union[pathlib.Path, str, None] = None,
+                        recursive: Optional[bool] = None,
+                        executor: Optional[concurrent.futures.Executor] = None) -> Tuple[HybridIR, HybridIRFileSystemEventHandler]:
+    """Open Librarian's RAG document store, applying the configured defaults. Rescans on construction.
+
+    Every argument defaults to the corresponding `raven.librarian.config` setting, so calling this with no
+    arguments opens exactly the store the chat clients open. Pass one to point elsewhere — which is what
+    an indexing run over a corpus that is not the configured one needs.
+
+    `docs_dir`: Directory holding the documents. Defaults to `llm_docs_dir`.
+    `db_dir`: Directory holding the search indices. Defaults to `llm_database_dir`.
+    `recursive`: Whether to descend into subdirectories. Defaults to `llm_docs_dir_recursive`.
+    `executor`: Passed to `setup`, which see.
+
+    Returns `(retriever, scanner)`, as `setup` does.
+
+    The extractor is `docextract.ALL_FORMATS` narrowed to `llm_docs_exts`, so this ingests what Librarian
+    ingests. Widening it here would build an index the chat clients would then disagree with.
+
+    `local_model_loader_fallback` is off: Librarian requires Raven-server for other reasons anyway, and a
+    silent fall back to loading the embedding model in-process turns a server-down misconfiguration into a
+    slow run that quietly used a different device.
+    """
+    docs_dir = pathlib.Path(docs_dir if docs_dir is not None else librarian_config.llm_docs_dir).expanduser().resolve()
+    db_dir = pathlib.Path(db_dir if db_dir is not None else librarian_config.llm_database_dir).expanduser().resolve()
+    if recursive is None:
+        recursive = librarian_config.llm_docs_dir_recursive
+    return setup(docs_dir=docs_dir,
+                          recursive=recursive,
+                          db_dir=db_dir,
+                          extractor=docextract.ALL_FORMATS.restricted_to(librarian_config.llm_docs_exts),
+                          embedding_model_name=librarian_config.qa_embedding_model,
+                          local_model_loader_fallback=False,
+                          executor=executor)

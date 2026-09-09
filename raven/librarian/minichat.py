@@ -58,7 +58,6 @@ with timer() as tim:
     from .. import __version__
 
     from ..common import datastorelock
-    from ..common import docextract
 
     from ..client import api
     from ..client import config as client_config
@@ -203,12 +202,14 @@ def minimal_chat_client(backend_url) -> None:
         chat_show_flag_status("!internet")
 
         # Load RAG database (it will auto-persist at app exit).
-        retriever, _unused_scanner = hybridir.setup(docs_dir=docs_dir,
-                                                    recursive=librarian_config.llm_docs_dir_recursive,
-                                                    db_dir=db_dir,
-                                                    extractor=docextract.ALL_FORMATS.restricted_to(librarian_config.llm_docs_exts),
-                                                    embedding_model_name=librarian_config.qa_embedding_model,
-                                                    local_model_loader_fallback=False)  # Minichat requires Raven-server for other reasons, too
+        #
+        # `setup` takes a cross-process lock on the index, so this refuses rather than starting beside a
+        # running `raven-indexer` and silently undoing its work. Same handling as the chat datastore above.
+        try:
+            retriever, _unused_scanner = hybridir.open_document_store()  # the configured store, with the configured defaults
+        except datastorelock.DatastoreBusyError as exc:
+            print(colorizer.colorize(str(exc), colorizer.Style.BRIGHT, colorizer.Fore.RED))
+            sys.exit(255)
         chat_show_flag_status("!docs")
         print(f"    Its document store is at '{str(librarian_config.llm_docs_dir)}' (put your text or PDF documents here).")
         # The retriever's `documents` attribute must be locked before accessing.

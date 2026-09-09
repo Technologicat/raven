@@ -824,3 +824,60 @@ class TestScoreSharpness:
         scores = [30.0, 6.0, 3.0, 1.0]
         assert (hybridir.score_sharpness(scores, min_ratio=0.15) ==
                 hybridir.score_sharpness(list(reversed(scores)), min_ratio=0.15))
+
+
+# ---------------------------------------------------------------------------
+# The cross-process lock on the index
+# ---------------------------------------------------------------------------
+
+class TestIndexLock:
+    """`setup` refuses to open an index another Raven process already has.
+
+    Both writers rebuild the whole index from their own in-memory `documents` and save it wholesale, so
+    two of them do not interleave badly — the second to save drops everything the first ingested. These
+    pin the seam rather than the failure, since reproducing the failure means two real processes and a
+    corpus.
+    """
+
+    def _stub_out_the_store(self, monkeypatch):
+        """Replace the expensive parts of `setup`, and record whether they ran."""
+        built = []
+
+        class FakeRetriever:
+            def __init__(self, **kwargs):
+                built.append(kwargs)
+
+        monkeypatch.setattr(hybridir, "HybridIR", FakeRetriever)
+        monkeypatch.setattr(hybridir, "HybridIRFileSystemEventHandler",
+                            lambda **kwargs: types.SimpleNamespace(**kwargs))
+        return built
+
+    def test_the_lock_is_taken_on_the_index_and_outlives_the_call(self, tmp_path, monkeypatch):
+        self._stub_out_the_store(monkeypatch)
+        taken = []
+        sentinel = object()
+
+        def fake_acquire(target, what):
+            taken.append((pathlib.Path(target), what))
+            return sentinel
+        monkeypatch.setattr(hybridir.datastorelock, "acquire", fake_acquire)
+
+        db_dir = tmp_path / "index"
+        retriever, _scanner = hybridir.setup(docs_dir=tmp_path / "docs", recursive=False, db_dir=db_dir)
+
+        assert [target for target, _what in taken] == [db_dir], "the lock must guard the index directory"
+        assert retriever._process_lock is sentinel, (
+            "the lock has to be reachable from the store, or it is garbage collected -- and a collected "
+            "lock releases, which would leave the index unguarded while it looked guarded")
+
+    def test_a_busy_index_is_refused_before_the_store_is_opened(self, tmp_path, monkeypatch):
+        """Opening costs minutes on a large corpus, so the refusal must come first, not after."""
+        built = self._stub_out_the_store(monkeypatch)
+
+        def busy(target, what):
+            raise hybridir.datastorelock.DatastoreBusyError(f"{what} is already open")
+        monkeypatch.setattr(hybridir.datastorelock, "acquire", busy)
+
+        with pytest.raises(hybridir.datastorelock.DatastoreBusyError):
+            hybridir.setup(docs_dir=tmp_path / "docs", recursive=False, db_dir=tmp_path / "index")
+        assert built == [], "the store was opened before the lock was checked, wasting the expensive load"
