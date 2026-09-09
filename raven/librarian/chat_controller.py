@@ -819,9 +819,9 @@ class DPGChatMessage:
                             dpg.add_spacer(height=gui_config.margin, parent=stats_tooltip)
                             dpg_markdown.add_text(_PHASE_BREAKDOWN_TOOL_CALL_NOTE, wrap=_PHASE_TOOLTIP_WRAP_W, parent=stats_tooltip)
 
-                # Say when nothing was retrieved for this reply. Present only when the user asked to be told
-                # (speculation off); absent means there is nothing to say, which is why this tests `is False`
-                # rather than falsiness.
+                # Say when nothing was retrieved for this reply. Recorded only when the documents were in
+                # play, or an attachment was present; absent means there is nothing to say, which is why
+                # this tests `is False` rather than falsiness.
                 #
                 # The wording states what was *retrieved*, not what the model did with it, because that is
                 # all we can observe: retrieval reporting matches does not mean the reply used them, and
