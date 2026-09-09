@@ -1227,10 +1227,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         elif isinstance(ref, chatgraph.SubtreeGapRef):
             self._look_inside(ref)
         elif isinstance(ref, chatgraph.RootGapRef):
-            # Inert in v1, deliberately: switching to a chat written under an older character card would
-            # leave the configured avatar and voice running against a different system prompt.
-            logger.info(f"DPGChatGraphPanel._activate: {ref.hidden_count} chat(s) under other cards; "
-                        "reaching them is not implemented")
+            self._show_other_root(ref)
 
         # Once, here, rather than in each of the four branches above. A commit that changes nothing is a
         # no-op, so the ones that only scrolled the chat log cost nothing and need no special case.
@@ -1293,6 +1290,27 @@ class DPGChatGraphPanel(gui_animation.Animation):
         with self._lock:
             self._view_state.focus_node_id = ref.node_id
         self._set_cursor(ref.node_id)
+
+    def _show_other_root(self, ref: chatgraph.RootGapRef) -> None:
+        """Draw the picture around the chats held under the next character card.
+
+        Activating this repeatedly visits every other card in turn and comes back around, the gap listing
+        them from the one after the card on screen. It is the only route to those chats: neither view
+        names a node under another root, so without it they cannot be reached at all.
+
+        The avatar and the voice stay as configured, and that is the trade rather than an oversight. A
+        face mismatched against an older card's system prompt is cosmetic and on screen; history nobody
+        can navigate to is not. It is also less of a mismatch than it looks: a stored message draws with
+        the face of whoever wrote it, so the log reads correctly while the live avatar shows whoever is
+        configured now. Switching those along with the card is the better version and a feature of its
+        own — an improvement on something that works, rather than a precondition for it.
+        """
+        if not ref.hidden_node_ids:  # a gap standing for nothing is not drawn, but do not trust that here
+            return
+        next_root_id = ref.hidden_node_ids[0]
+        with self._lock:
+            self._view_state.focus_node_id = next_root_id
+        self._set_cursor(next_root_id)  # redraws, so the branch change above lands with it
 
     def _set_round_expanded(self, owner_node_id: str, expanded: bool) -> None:
         """Draw one tool round's results as boxes of their own, or fold them back behind a gap box.

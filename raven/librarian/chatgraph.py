@@ -465,11 +465,11 @@ class SubtreeGapRef(Ref):
 class RootGapRef(Ref):
     """Other roots — that is, chats written under other versions of the character card.
 
-    Inert in v1, and shown anyway: the alternative is a root that looks like the only one there has ever
-    been. Clicking through to another card would leave the configured avatar and voice running against a
-    different system prompt, which wants a decision of its own.
+    Activating it draws the picture around the next of them, which is the only route to a chat held under
+    an older card: nothing else in either view names one.
 
-    `hidden_node_ids`: The other roots, in datastore order.
+    `hidden_node_ids`: The other roots, starting from the one after the card on screen and wrapping, so
+                       that the first is always the next one. See `_rows_for`, which orders them.
     """
 
     def __init__(self, name: str, hidden_node_ids: Tuple[str, ...]):
@@ -2294,8 +2294,11 @@ def build(datastore: chattree.Forest,
                         # Sideways rather than downward, so this one counts *siblings*: they are all on
                         # one level, and how many levels they are is not a question about them.
                         label = _more_label(len(slot.hidden))
-                    # A hidden sibling that is on HEAD's branch is either HEAD or its ancestor, so HEAD
-                    # is behind this gap either way.
+                    # Anything hidden that is on HEAD's branch is HEAD itself or an ancestor of it, so
+                    # HEAD is behind this gap either way. True of a hidden sibling, and — once the
+                    # picture is showing another character card — of the roots gap too, which is then
+                    # hiding the card HEAD is under. Reading it there is what tells a reader browsing an
+                    # older card that the live chat is somewhere else.
                     gap_pills = ("HEAD",) if (set(slot.hidden) & current_branch) else ()
                     shapes = _box_shapes(x, y, width, config, [label], fill=None, dashed=True,
                                          pills=gap_pills, measure_text=measure_text,
@@ -2500,10 +2503,20 @@ def _rows_for(datastore: chattree.Forest,
 
     for depth, node_id in enumerate(visible_spine):
         if depth == 0:
-            # The root level. v1 shows HEAD's own root and a count of the others: a root is a version of
-            # the character card, and clicking through to another one would leave the configured avatar
-            # and voice running against a different system prompt.
-            other_roots = tuple(root_id for root_id in datastore.get_all_root_nodes() if root_id != node_id)
+            # The root level: the card this branch is held under, and a gap standing for the others. A
+            # root is a version of the character card, and the gap is how the chats written under an
+            # older one are reached at all.
+            #
+            # Listed starting from the one *after* the card on screen, wrapping, so that the first entry
+            # is always "the next card" — which is what makes activating the gap repeatedly visit every
+            # card in turn instead of alternating between two. Order is not read anywhere else: what
+            # `ref_for` does with `hidden_node_ids` is a membership test.
+            roots = datastore.get_all_root_nodes()
+            if node_id in roots:
+                index = roots.index(node_id)
+                other_roots = tuple(roots[index + 1:] + roots[:index])
+            else:  # a spine not starting at a root — a broken link; then every root is an "other"
+                other_roots = tuple(roots)
             slots = [_Slot(node_id=node_id)]
             anchor_index = 0
             if other_roots:

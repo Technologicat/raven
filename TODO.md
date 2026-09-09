@@ -49,21 +49,13 @@ after publishing — without that gate being on any release path.
 
 ## Next session, from 2026-09-10
 
-**Start with the three fixes a live test found on 2026-09-09**, all filed in `TODO_DEFERRED.md`, all
-small, and all in what 0.2.9 just changed — so they are cheapest while the work is fresh:
+~~**Start with the three fixes a live test found on 2026-09-09.**~~ **Both are done, live-tested and
+pushed on 2026-09-09** — the framing notice is an inject with a preamble slot of its own, and the
+`...N more cards` box walks the older character cards. Two things landed alongside them, from the same
+live test: a rule now separates every section of the setup, and hovering a message's role icon names who
+wrote it.
 
-1. **The framing notice is stored when it should be injected.** It reads as configured prose in the
-   displayed system prompt, and worse, editing its wording forks every user's datastore — roots are
-   matched by text. Sent per turn at the *start* of the system block instead, it keeps its position, the
-   existing *"Added to every request, not stored"* label becomes true of it, and it can be reworded
-   freely. Needs a preamble slot in the inject mechanism; the item explains why that is not the general
-   "move injects to the front" question argued against on 2026-09-09.
-2. **The "...N more cards" box does nothing when clicked**, with only an INFO line to show for it. Two
-   pieces: saying so on screen (S), and actually navigating there (also S — the refusal's stated reason
-   is outweighed by old chats being unreachable at all, so the cheap version is the graph's ordinary
-   focus change with the avatar and voice left alone).
-
-**Then the help card's paging** — the last of the two hammerspace items, specced in `TODO_DEFERRED.md`,
+**So the help card's paging** — the last of the two hammerspace items, specced in `TODO_DEFERRED.md`,
 and a look-at-it job: the card is a fixed-height window whose whole problem is what fits, so it wants the
 maintainer at the keyboard rather than being built blind and measured afterwards.
 

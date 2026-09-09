@@ -619,6 +619,81 @@ def wide(dpg_context):
     dpg.delete_item(holder)
 
 
+class TestOtherCards:
+    """Reaching the chats held under another version of the character card.
+
+    A new card appears whenever the configured prompt text changes, and the chats written under the old
+    one stay where they were. Nothing else in either view names them — the log shows HEAD's branch, and
+    the graph draws one root — so the `...N more cards` gap is the only route to them, and while it was
+    inert those chats could not be reached at all.
+    """
+
+    def _several_cards(self, dpg_context, on_commit=None):
+        themes_and_fonts = dpg_context
+        forest = Forest()
+        roots, tips = [], []
+        for k in range(3):
+            root = forest.create_node(payload("system", f"card {k}"), parent_id=None)
+            greeting = forest.create_node(payload("assistant", f"hello from card {k}"), parent_id=root)
+            tips.append(forest.create_node(payload("user", f"a chat under card {k}"), parent_id=greeting))
+            roots.append(root)
+        app_state = {"HEAD": tips[0], "new_chat_HEAD": roots[0]}
+        with dpg.window() as holder:
+            built = chatgraph_panel.DPGChatGraphPanel(
+                gui_parent=holder, datastore=forest, app_state=app_state,
+                themes_and_fonts=themes_and_fonts, width=400, height=300, show=True,
+                on_commit=on_commit)
+        built.refresh()
+        return built, forest, roots, tips, holder
+
+    def test_activating_the_gap_walks_every_card_and_comes_back(self, dpg_context):
+        built, forest, roots, tips, holder = self._several_cards(dpg_context)
+        try:
+            assert roots[1] not in built._chat_graph.refs, \
+                "the fixture already draws the other card, so activating the gap would prove nothing"
+
+            built._activate("gap:roots")
+            assert built._cursor_name == roots[1]
+            assert roots[1] in built._chat_graph.refs, "the picture did not move to the other card"
+
+            built._activate("gap:roots")
+            assert built._cursor_name == roots[2]
+
+            built._activate("gap:roots")
+            assert built._cursor_name == roots[0], "the walk did not come back around to the first card"
+        finally:
+            built.destroy()
+            dpg.delete_item(holder)
+
+    def test_looking_at_another_card_does_not_move_head(self, dpg_context):
+        # Same rule as every other gap: activating one changes what is drawn, and only a commit moves
+        # HEAD. A reader looking at what is under an older card has not said they want to go there.
+        committed = []
+        built, forest, roots, tips, holder = self._several_cards(dpg_context, on_commit=committed.append)
+        try:
+            built._activate("gap:roots")
+            assert built._cursor_name == roots[1], "nothing was activated, so this proves nothing"
+            assert committed == []
+        finally:
+            built.destroy()
+            dpg.delete_item(holder)
+
+    def test_a_chat_under_another_card_can_be_committed_to(self, dpg_context):
+        # The whole point: get to the other card, then take the ordinary two clicks onto one of its
+        # messages. Without the first step there is no way to put the cursor on that message at all.
+        committed = []
+        built, forest, roots, tips, holder = self._several_cards(dpg_context, on_commit=committed.append)
+        try:
+            built._activate("gap:roots")
+            assert tips[1] in built._chat_graph.refs, "the other card's branch was not drawn"
+            built._activate(tips[1])  # preview
+            built._activate(tips[1])  # ...and commit, the cursor already being on it
+            assert committed == [tips[1]]
+        finally:
+            built.destroy()
+            dpg.delete_item(holder)
+
+
 class TestSiblingButtons:
     """The toolbar's second surface onto the sibling verbs: the six the chat log has as buttons, which
     this view had only as keys.

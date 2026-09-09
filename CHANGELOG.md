@@ -24,6 +24,10 @@
     type's icon, so a message that is nothing but attachments no longer reads as an empty one. Both
     decorations hang outside the box, so neither costs the message's own words any room. A long stack is
     abbreviated to the first two, the last two, and a count.
+  - **The `...N more cards` box walks through the chats held under older character cards.** Changing the
+    system prompt starts a new card and the earlier chats stay under the old one, where nothing else in
+    either view names them — so until now they could not be opened at all. Your avatar and voice stay as
+    configured while you look, and the box wears the *HEAD* pill while you are away from your live chat.
   - <!-- TODO: fill this in when the view settles. Still to come: search. Details worth a reader's time:
       preview-then-commit clicking, the gap boxes and what clicking each one does (the tool round
       included, with Backspace to close it again), the three marks (hover, HEAD, previewed), the

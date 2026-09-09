@@ -1850,7 +1850,7 @@ class TestTruncation:
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=taken))
         assert refs_of_type(built, chatgraph.SubtreeGapRef) == []
 
-    def test_other_roots_are_declared_even_though_v1_cannot_visit_them(self):
+    def test_other_roots_are_declared(self):
         forest = Forest()
         current = forest.create_node(payload("system", "the card in use"), parent_id=None)
         head = forest.create_node(payload("user", "hello"), parent_id=current)
@@ -1859,6 +1859,49 @@ class TestTruncation:
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head))
         gaps = refs_of_type(built, chatgraph.RootGapRef)
         assert len(gaps) == 1 and gaps[0].hidden_node_ids == (older,)
+
+    def test_the_others_are_listed_from_the_one_after_the_card_on_screen(self):
+        # What makes activating the gap repeatedly reach every card: its first entry is always "the next
+        # one". Listed in plain datastore order instead, a reader starting at the second card would be
+        # sent back to the first, and from there to the second again, with the third unreachable.
+        forest = Forest()
+        roots = [forest.create_node(payload("system", f"card {i}"), parent_id=None) for i in range(3)]
+        heads = [forest.create_node(payload("user", f"hello {i}"), parent_id=root) for i, root in enumerate(roots)]
+
+        seen = []
+        for head in heads:
+            built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head))
+            gaps = refs_of_type(built, chatgraph.RootGapRef)
+            assert len(gaps) == 1
+            seen.append(gaps[0].hidden_node_ids)
+
+        assert seen == [(roots[1], roots[2]),
+                        (roots[2], roots[0]),
+                        (roots[0], roots[1])]
+        # Following the first entry each time walks all three and comes back, which plain datastore order
+        # would not: from `roots[1]` it would offer `roots[0]` first, and the walk would never reach the
+        # third card.
+        assert [gap[0] for gap in seen] == [roots[1], roots[2], roots[0]]
+
+    def test_the_roots_gap_says_head_is_behind_it_while_another_card_is_on_screen(self):
+        # Inherited from the rule the pill encodes — anything hidden that is on HEAD's branch is HEAD or
+        # an ancestor of it — rather than written for this case, which could not arise while the gap was
+        # inert: the picture always started at HEAD's own root, so the hidden roots never held it. Now it
+        # is what tells a reader looking at an older card that the live chat is somewhere else.
+        forest = Forest()
+        current = forest.create_node(payload("system", "the card in use"), parent_id=None)
+        head = forest.create_node(payload("user", "hello"), parent_id=current)
+        older = forest.create_node(payload("system", "an older version of the card"), parent_id=None)
+
+        at_home = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head))
+        assert "HEAD" not in texts_on(at_home, "gap:roots"), \
+            "the gap claims HEAD is behind it while HEAD's own card is the one drawn"
+
+        elsewhere = chatgraph.build(forest, chatgraph.ViewState(head_node_id=head, focus_node_id=older))
+        assert current not in elsewhere.refs, \
+            "HEAD's card is drawn after all, so this fixture cannot check what the gap says when it is not"
+        assert "HEAD" in texts_on(elsewhere, "gap:roots"), \
+            "HEAD's card went behind the gap without comment"
 
     def test_a_lone_root_declares_nothing(self, conversation):
         forest, system, greeting, user, reply = conversation
