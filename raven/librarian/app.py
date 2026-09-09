@@ -2433,9 +2433,25 @@ def is_attach_file_dialog_visible() -> bool:
     return _filedialog_attach.is_visible()
 
 def is_any_modal_window_visible() -> bool:
-    """Return whether *some* modal window is open.
+    """Return whether some window that owns the keyboard is open: the help card, the attach-file dialog,
+    the cleanup dialog, or the messagebox.
 
-    Currently the help card, the attach-file dialog, the cleanup dialog, and the messagebox.
+    **It enumerates rather than asks, and the name overstates what it checks.** There is no modality test
+    here — each of the four is asked whether it is *visible*, and the four are named. That is on purpose,
+    DPG offering no way to enumerate the modals on its popup stack, but it has two consequences worth
+    knowing before adding a window:
+
+      - **A new window is not covered until it is added here**, whether or not it is modal. The symptom is
+        chat hotkeys staying live behind it: `Enter` sending a message while the reader believes they are
+        confirming a deletion.
+      - **A window in this list stays covered if it is made non-modal.** `FileDialog` takes `modal` as a
+        parameter and every Raven call site currently leaves it `True`; flipping one would not break this
+        gate, because the gate never depended on the flag.
+
+    A window that takes the keys only while the focus is on one of its own controls does *not* belong here
+    — it answers for itself, and this gate would silence the whole app while it was merely on screen. The
+    audio input panel is that shape, and so is the chat graph; both appear as their own branches in the key
+    dispatcher, tested by "does it hold the keyboard?" rather than by "is it open?".
     """
     return (help_window.is_visible() or
             is_attach_file_dialog_visible() or

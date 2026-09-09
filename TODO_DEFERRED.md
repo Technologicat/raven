@@ -72,8 +72,32 @@ does not, which is the whole reason the flag exists. Two things that look like t
   which is why the panel was this bug's victim rather than a second instance of it.
 - `FileDialog._caret_home` is stored, and is immune because the dialog is modal and every Raven call site
   takes the `modal=True` default — nothing else can take the keyboard while it is up, so only its own
-  navigation writes it. Worth knowing that this is the same default whose flipping would expose the
-  occlusion bug, so the immunity is one argument away from mattering.
+  navigation writes it.
+
+**What a non-modal `FileDialog` would actually cost, checked 2026-09-09** rather than left as a worry, the
+`modal` flag being a parameter somebody may flip years from now:
+
+- **Occlusion: already fixed.** Its clicks would have been claimed by whatever it covered; `is_item_hovered`
+  closed that for every window, modal or not.
+- **The app's hotkey gate: already safe, though its name says otherwise.**
+  `is_any_modal_window_visible` performs no modality test — it names four windows and asks each whether it
+  is *visible*. So flipping the flag would not break it. Its docstring now says so, since the name is the
+  part that would mislead whoever adds the fifth window.
+- **What would break is the dialog's own keyboard mark**: with the dialog non-modal, a click into the
+  composer leaves `_caret_home` saying the caret is in the dialog, so its mark stays lit while the keys
+  have gone elsewhere.
+
+  **Both halves of the fix already exist, and the missing piece is the trigger.** `_darken_home_marks`
+  takes every mark off without disturbing `_caret_home` — written for a dialog going off screen, and
+  exactly the primitive wanted here — and `_repaint_home_mark` puts them back. The predicate is one call:
+  `dpg.is_item_focused(self.tag)`, which answers for a top-level window (`dpg-notes.md`). What is absent is
+  any *event*: the marks are repainted only when the dialog's own `_caret_home` changes, and a focus change
+  from outside does not touch it. So this needs a per-frame poll that fdialog does not have — a small
+  animation on `gui_animation.animator`, started and stopped with the dialog.
+
+  **Not built, and deliberately**: the case cannot occur while every call site is modal, so the work could
+  not be exercised without first creating the non-modal call site it is for. Whoever makes one should build
+  this in the same pass, where it can be seen to work.
 
 ## Switch the AI character and the user profile at runtime
 
