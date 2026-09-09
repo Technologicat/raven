@@ -16,7 +16,8 @@ scheme *from* `crt-display.md` §0, so the dependency runs dust → crt. Nothing
 dropping it leaves both `crt` and this brief intact — which is what makes it a sound last item rather than an
 overcommitted one. (Both have since landed and live in `done/`, so the ordering argument is history.)
 
-**Closes on landing**: `TODO.md`, *"Nonlinear chat view / chat graph editor"* (`TODO.md:658`), the
+**Closes on landing**: `TODO.md`, *"Multiversal chat view / chat graph editor"* (retitled 2026-09-09; it
+now carries only the finding-things half, which this brief does not close), the
 placeholder button at `app.py:1700–1708` — *deleted*, the control being a mode-toggle checkbox instead
 (see below) — the recent-chats wish at `raven/librarian/README.md:776–777`, the right-panel occupant note
 at `README.md:415`, and the help card's "not built yet" sentence at `app.py:1906`.
@@ -252,9 +253,9 @@ Navigation between windows: clicking a sibling re-centres, with the rebuild happ
 finishes. Whether custom controls are needed to jump by several siblings at once, or whether click-to-recentre
 covers it, is open.
 
-**That wide level is also the recent-chats list.** `raven/librarian/README.md:776–777` wants one, and notes that
-"recent chat" is ill-defined in a nonlinear format, guessing that the user's first message is a good enough
-splitting point. The fan-out shape says the guess is right, and this view already renders that level. So the
+**That wide level is also the recent-chats list.** `raven/librarian/README.md` wants one — see its
+*Multiversal history* section, which observes that with no linear history the concept of "a chat" is not
+even defined — guessing that the user's first message is a good enough splitting point. The fan-out shape says the guess is right, and this view already renders that level. So the
 level deserves special treatment — recency ordering, possibly timestamps — and this brief closes that item
 too.
 

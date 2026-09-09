@@ -93,7 +93,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
     - For the command-line `raven-minichat`, we recommend having `raven-server` running; this allows the LLM to search the web.
 - **Features**:
   - 100% local when using a locally hosted LLM
-  - Natively nonlinear branching chat history - think *Loom* ([original](https://github.com/socketteer/loom); [obsidian](https://github.com/cosmicoptima/loom)) or *[SillyTavern-Timelines](https://github.com/SillyTavern/SillyTavern-Timelines)*.
+  - Natively multiversal branching chat history - think *Loom* ([original](https://github.com/socketteer/loom); [obsidian](https://github.com/cosmicoptima/loom)) or *[SillyTavern-Timelines](https://github.com/SillyTavern/SillyTavern-Timelines)*.
     - Chat messages are stored as nodes in a tree.
     - Branching is cheap. A chat branch is just its HEAD pointer.
     - The chain of `parent` nodes uniquely determines the linear history for that branch, up to and including the system prompt.

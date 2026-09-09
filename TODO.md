@@ -789,7 +789,16 @@ every tier, chosen on measurements rather than reputation.
   - Filter by persona names, tags; tag autocomplete; mass tag editing
   - HybridIR search (since chats will be indexed for memory); show matching snippet
 
-- **[Medium]** Nonlinear chat view / chat graph editor: XDot DPG viewer now exists. Librarian needs to generate `.xdot` code; manual layout (no GraphViz needed for simple chat trees). Limit visible depth (full chat tree at interactive FPS is not feasible). "Jump to chat node by ID" feature needed.
+- **[Medium]** Multiversal chat view / chat graph editor: **mostly built, 2026-09** — `chatgraph.py` and
+  `chatgraph_panel.py`, wired into Librarian behind the *Chat graph* toggle. Done: the view itself, the
+  visible-depth limit (as gap boxes), placement in the avatar panel's rect, and pausing the avatar while it
+  is covered. **What is left is finding things: "jump to chat node by ID", and search.**
+  - **The "emit xdot" decision below was superseded by what shipped**, and the note is kept because it
+    argued two things that did not happen. The panel builds an `xdotwidget.graph.Graph` directly — no xdot
+    text, no parser in the path — so the parser is *not* being kept alive by the everyday path, and a
+    layout bug cannot be dumped to a file and opened in the XDot viewer. Both were real arguments; if
+    either still matters, it needs a deliberate answer rather than the assumption that this route provided
+    it.
   - The renderer takes a `Graph` of `Node`/`Edge` elements built from `Shape` primitives; `xdotwidget.parser` (xdot text → `Graph`) is one front-end among possible others. So emitting `.xdot` and building the `Graph` directly are both possible, and neither needs the `dot` binary. **Decided 2026-07-29: emit xdot**, provided the parse cost is negligible at chat-tree sizes (check before committing to it — parsing runs on tree change, not per frame, so the bar is low).
     - Two independent reasons, either of which would do. **Keeping the parser alive:** code exercised only by the XDot viewer — a peripheral app someone opens occasionally — can break and stay broken until a user trips over it, whereas the same code on the everyday path fails loudly, immediately, in front of a developer. More shared code on the hot path is buying maintenance, at the cost of a round-trip we can afford. **Debuggability:** a layout bug can be dumped to a file and opened in the XDot viewer, which is worth real time for a view whose entire difficulty is positions.
   - **Placement: the chat tree occupies the avatar panel's rect exactly.** In the classic mode it is toggleable and overlays that panel when open; in a no-avatar mode it simply lives there. So this is *one rect with alternative occupants*, not three layouts — the simplest DPG shape being two child windows sharing the rect the resize handler already computes, shown and hidden, rather than a true overlay with its own z-order.
