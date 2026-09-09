@@ -330,6 +330,26 @@ drives, with the other seven correct as they stand.
 the failure mode of guessing wrong here is quiet: a view that shows a stale revision looks like a view
 showing a message.
 
+**The model to design against is GitHub's issue comments** (Juha, 2026-09-09). The analogy is already in
+the docs for the *data* — `raven/librarian/README.md` and this package's `CLAUDE.md` both say the
+revisions are immutable "like the revisions of a GitHub issue comment" — and it carries over to the
+*interface*, which is where the open questions are. What it settles, and it settles most of them:
+
+- **The current version shows inline, and the history does not.** Which is what Raven already does by
+  reading the active revision transparently, and is why "few of the eight change" is the plausible answer:
+  a reader is looking at the comment, not at its history, almost all of the time.
+- **An "edited" marker is the discoverability affordance** — small, next to the message, and the only
+  thing that has to be added to the message itself. Raven has somewhere obvious to put it: the grey
+  metadata line already carries `R{revision}`, which is that marker in embryo and currently always reads
+  `R1`.
+- **The history is a deliberate second view**, opened from that marker. So the revision picker is not a
+  permanent control competing for space in every message's button row.
+- **Deleting a revision belongs in that history view**, per revision, which is the shape of the affordance
+  wanted here.
+
+Worth confirming against the real thing before copying any specific behaviour — this is a recollection of
+GitHub's interface rather than a reading of it.
+
 The ninth marker is a constraint rather than a call site: switching revision must repaint one message
 rather than rebuild the log.
 
