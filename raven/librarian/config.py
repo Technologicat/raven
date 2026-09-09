@@ -653,6 +653,10 @@ gui_config = env(  # ----------------------------------------
 # Names shown in the chat.
 # These are also saved into the chat history, in each message created by that role.
 #
+# **`llm_char_name` selects a character**, and must match the `name` in some character's own JSON — see
+# `raven.avatar.characters`. That one name is what brings the character's card, voice, face and chat glyph
+# with it; a name nothing declares gets no card, and says so in the log.
+#
 llm_user_name = "User"
 llm_char_name = "Aria"
 # llm_char_name = "Juha"  # DT researcher
@@ -791,11 +795,11 @@ llm_sampler_config = {
 }
 
 # ----------------------------------------
-# Template variables, for the prompt texts
+# One prompt per distinct text, which is what limits what a prompt may interpolate
 #
-# The prompts themselves are files now (see `prompts_dir` below and `prompts/README.md`, which is the
-# document a user writing an override reads). This note is for a maintainer, and records the one
-# consequence that is not obvious from there.
+# The prompts themselves are files (see `prompts_dir` below and `prompts/README.md`, which is the document
+# a user writing an override reads). This note is for a maintainer, and records the one consequence that is
+# not obvious from there.
 #
 # A prompt may use `{user}` and `{char}`, and nothing else. `model` and `context_length` were offered up to
 # 0.2.8 and are gone: a prompt is built once at startup and stored as the message a chat is rooted at, so a
@@ -849,16 +853,12 @@ user_prompts_dir = librarian_userdata_dir / "prompts"
 # ----------------------------------------
 # Where the character card went (0.2.9)
 #
-# It is no longer here, and neither is any character's prose. A character now declares itself beside its
-# own avatar image — `aria1.json` names it and gives its voice, `aria1_card.md` is its card — so the card
-# follows `llm_char_name` instead of being selected by editing a function that could disagree with it.
-#
-# **`avatar_config.image_path` and `.voice` are not wired to the name yet**, so those two are still edited
-# alongside it. The declaration already carries the voice; what is missing is only a caller reading it.
-# Until then, four settings still have to agree, which is one fewer than before and not yet the point.
+# It is no longer here, and neither is any character's prose. A character declares itself: `aria1.json`
+# names it and gives its voice, `aria1.md` is its card, and `aria1.png` and `aria1_icon.png` are its face
+# and its chat glyph. So `llm_char_name` picks all of them at once, rather than each being selected
+# somewhere that could disagree with the others.
 #
 #   - To write a character: `raven.avatar.characters` says what the files are.
 #   - To resolve one: `raven.librarian.llmclient.setup_character_card`, which is resolution rather than
 #     configuration, and warns when a name matches nothing.
-#   - To change the shared half every card splices in: `setup_interaction_style` below, whose prose is
-#     `prompts/interaction_style.md`.
+#   - To change the shared half every card splices in as `{interaction}`: `prompts/interaction.md`.
