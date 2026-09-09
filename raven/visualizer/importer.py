@@ -459,7 +459,12 @@ def _cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
     logger.info(f"        Full dataset has {len(all_vectors)} data points.")
     with timer() as tim:
         # The semantic vectors represent directions in the latent space, so we can compare them using the cosine metric.
-        clusterer = HDBSCAN(min_cluster_size=5, min_samples=1, cluster_selection_method="leaf", metric="cosine", store_centers="medoid")
+        #
+        # `copy` guards the caller's array against in-place modification, which sklearn only ever does to a
+        # precomputed distance matrix — never to the raw vectors we pass — so the value cannot change our
+        # result. Passed explicitly because sklearn warns until it is: the default flips False -> True in 1.10,
+        # and we may as well already be on the far side of that.
+        clusterer = HDBSCAN(min_cluster_size=5, min_samples=1, cluster_selection_method="leaf", metric="cosine", store_centers="medoid", copy=True)
         # clusterer = HDBSCAN(min_cluster_size=5, min_samples=1, cluster_selection_method="leaf", metric="euclidean", store_centers="medoid", algorithm="kd_tree")
         # clusterer = HDBSCAN(min_cluster_size=20, min_samples=5, metric="cosine", store_centers="medoid")  # n_jobs=6,  # n_jobs=-1,
         if len(all_vectors) <= max_n:
@@ -635,7 +640,8 @@ def _cluster_lowdim_data(input_data, lowdim_data):
     vis_data = list(itertools.chain.from_iterable(input_data.parsed_data_by_filename.values()))
 
     with timer() as tim:
-        vis_clusterer = HDBSCAN(min_cluster_size=10, min_samples=2, cluster_selection_method="leaf", metric="euclidean", store_centers="medoid")
+        # On `copy`, see the semantic clustering pass; same reasoning, and the same no-op.
+        vis_clusterer = HDBSCAN(min_cluster_size=10, min_samples=2, cluster_selection_method="leaf", metric="euclidean", store_centers="medoid", copy=True)
         vis_clusterer.fit(lowdim_data)
         n_vis_clusters = np.shape(vis_clusterer.medoids_)[0]
         n_vis_outliers = sum(vis_clusterer.labels_ == -1)
