@@ -224,6 +224,60 @@ of looking, and the useful residue is the moment to look rather than a procedure
   think about; it exists so that greps for a literal find it. (The omission of this line let the tree drift
   to roughly a third single-quoted; a sweep is filed in `TODO_DEFERRED.md`.)
 
+## User-facing text
+
+Labels, tooltips, help-card rows, status lines — the words a user reads on screen. Different audience from
+docstrings and comments, so the rules are their own.
+
+- **Write grammatical English, articles included.** *"Start a new chat"*, not *"Start new chat"*; *"Copy
+  the chatlog to the clipboard"*, not *"Copy chatlog to clipboard"*.
+
+  Instrument panels and help cards do often drop articles, and that telegraphic register is a real
+  convention — but it exists to **buy horizontal space**. It is a concession, so make it only where space
+  actually demands one. Cramping prose that had room to be correct pays the cost and buys nothing.
+
+- **A UI element's *name* is a name, not a sentence.** The mode toggles read *Thinking*, *Internet*,
+  *Documents*, *Chat graph* — no articles, because that is what the checkbox is called. The rule above is
+  about labels that describe *an action*.
+
+- **Sentence case, never Title Case.** *"Open this help card"*, *"Chat graph"*, *"Message attachments"* —
+  capitalize the first word and whatever is a proper noun, and nothing else. This is what the tree already
+  does, near enough universally: an audit on 2026-09-09 across Librarian's page names, section headings and
+  every hotkey action found one exception, *"Open this Help card"*, since fixed. Recorded so it stays that
+  way rather than because it was in doubt.
+
+- **A row must be readable in the order the reader meets it.** A hotkey table sits above the prose that
+  explains the view, so an entry that forward-references it explains nothing: *"Do what clicking the box
+  does"* asks the reader to already know what clicking does. Say the thing.
+
+- **The same key described twice must read the same both times.** Where a key appears on more than one
+  help-card page, the *Action* is one string; only the *Notes* differ, carrying whatever is specific to
+  that page. Two spellings of one action read as two features.
+
+- **Nothing in a hotkey table may wrap**, and this one is a hard constraint rather than a preference.
+  The card lays the keys out as two column-groups side by side in *one* table, so a row is shared between
+  them: a cell that wraps makes that row taller and pushes **both** groups down from there on. The blank
+  rows that group related keys then stop lining up, and the grouping is the thing the layout is spending
+  its space to achieve.
+
+  So an action or note that does not fit gets **shortened**, not wrapped — and this is the case where
+  telegraphic phrasing is bought fairly, since the space really is short. `"Start/stop AI speaking"`
+  rather than `"Speak the marked AI message / stop speaking"`. Check it on screen: the column is wide
+  enough for roughly thirty-five characters, but that depends on the font, so the only real test is
+  looking.
+
+- **A row that varies its neighbour says `"Same, but …"`**, never the full action text again. The
+  differentiator goes in the *Action* — `"Same, but backwards"`, `"Same, but jump 10"`, `"Same, the other
+  way"` — and *Notes* is left for conditions orthogonal to it (`"Not while typing"`, `"When search field
+  focused"`). Both cards already do this throughout; the point of writing it down is that two identical
+  Action strings are the failure it prevents. A reader scans that column to see which keys are variants of
+  one another, and repeating the text hides exactly the relationship the indentation is asserting.
+
+- **Parallel rows want parallel shape.** Within a group, keep the split between columns consistent —
+  `Home` / *"Back to where you are"* / *"Takes you to HEAD"* beside `Ctrl+N` / *"Start a new chat"* /
+  *"Takes you to NEW"*, rather than folding one row's destination into its action and the other's into
+  its notes.
+
 ## Docstrings
 
 reStructuredText format. Extensive for public API, pragmatic for internals:
