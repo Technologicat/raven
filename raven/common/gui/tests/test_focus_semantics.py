@@ -84,6 +84,14 @@ def widgets(mapped_gui_context, request):
 
     yield tags
 
+    # Torn down before the widgets they point at. A `Tooltip` built on one of these registers the shared
+    # ambient sweeper with the process-wide animator and itself with the module's registries, and none of
+    # that is owned by the tooltip's target — so deleting the window first would leave the sweeper ticking
+    # `_follow` and `_hide` against widgets that no longer exist, in whichever module runs next.
+    gui_animation.animator.clear()
+    tooltip._visible.clear()
+    tooltip._pending.clear()
+
     # Released before the window goes: "primary" is context-wide state, and leaving it pointing at an item
     # about to be deleted outlives this test in a way a per-test context used to hide.
     dpg.set_primary_window(tags.main, False)
