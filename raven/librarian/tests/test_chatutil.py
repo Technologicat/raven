@@ -956,15 +956,28 @@ class TestCreateInitialSystemMessage:
         assert "Answer in metric units." in bare
         assert "Name: Bot" not in bare and "materials scientist" not in bare
 
+    def test_a_rule_separates_every_section(self):
+        # Three separately authored pieces run together read as one: the user card would begin mid-flow,
+        # right after whatever sentence the character card happened to end on.
+        settings = env(user="User", char="Bot",
+                       personas={},
+                       system_prompt="Answer in metric units.",
+                       character_card="Name: Bot",
+                       user_card="The user is a materials scientist.",
+                       greeting="Hello!")
+        content = chatutil.content_to_text(chatutil.create_initial_system_message(settings)["content"])
+        assert [piece.strip() for piece in content.split("-----")] == ["Answer in metric units.",
+                                                                      "Name: Bot",
+                                                                      "The user is a materials scientist.",
+                                                                      ""]
+
 
 class TestTheSetupSaysWhatItIs:
     """The line framing the block that follows as the model's setup rather than as conversation.
 
-    It earns its place: without it, a model asked something the setup already covers answers by referring
-    the user to the system prompt — a breach of the convention that the setup is the model's own ground,
-    spoken *from* rather than pointed at. It lives here rather than in any character's card because it is
-    not about the character; every card carrying its own copy meant every author of one had to know to
-    include it.
+    Only the wording is chatutil's; where it goes and when it is sent belong to the turn prompt, and are
+    pinned in `test_scaffold.TestTheSetupSaysWhatItIs`. What matters here is that nothing *else* carries a
+    copy — not the stored system message, and not the shipped character cards.
 
     Note what it does **not** claim: that the user cannot see this. Librarian shows its system prompt on
     purpose, so that would be false — and a model told something untrue about its own situation has been
@@ -979,39 +992,21 @@ class TestTheSetupSaysWhatItIs:
         base.update(over)
         return env(**base)
 
-    def test_it_comes_before_everything_else(self):
-        # First, because it says what the whole block *is* — a model that meets it after the character
-        # card has already read the card as something addressed to it.
-        content = chatutil.content_to_text(
-            chatutil.create_initial_system_message(self._settings())["content"])
-        assert content.startswith("What follows, up to the horizontal rule, is your setup")
-        assert content.index("is your setup") < content.index("Answer in metric units.")
-
     def test_it_names_the_user(self):
         # So the model knows whose turns in the transcript are the other party's, rather than having to
         # infer it from a description of somebody it has not been told the name of.
-        content = chatutil.content_to_text(
-            chatutil.create_initial_system_message(self._settings(user="Ada"))["content"])
-        assert "Ada did not say any of it" in content
+        assert "Ada did not say any of it" in chatutil.format_setup_framing_notice("Ada")
 
-    def test_a_turn_without_the_character_does_not_get_it(self):
-        """Where the sentence would be false: there is no introductory block to be unable to see."""
+    def test_the_stored_system_message_does_not_carry_it(self):
+        # It is an inject, not configuration. Stored, it read as prose somebody had written — and roots
+        # are matched by their text, so every rewording forked every existing datastore.
         content = chatutil.content_to_text(
-            chatutil.create_initial_system_message(self._settings(),
-                                                   use_character_card=False)["content"])
-        assert "is your setup" not in content
+            chatutil.create_initial_system_message(self._settings())["content"])
         assert "Answer in metric units." in content, "nothing was assembled at all, so this proves nothing"
-
-    def test_it_does_not_make_an_empty_configuration_look_furnished(self):
-        # The negative control. The notice is never empty, so adding it before the emptiness check would
-        # silently turn "nothing is configured" — a misconfiguration worth refusing — into a system
-        # message containing only this sentence.
-        with pytest.raises(ValueError, match="need at least"):
-            chatutil.create_initial_system_message(self._settings(system_prompt="", character_card="",
-                                                                  user_card=""))
+        assert "is your setup" not in content
 
     def test_the_shipped_cards_do_not_repeat_it(self):
-        """They each carried their own copy until 0.2.9, which is what moving it here replaced."""
+        """They each carried their own copy until 0.2.9, which is what hoisting it out of them replaced."""
         for character in ("Aria", "Juha"):
             card = avatar_characters.find(character).read_card()
             assert "is your setup" not in card and "cannot see" not in card, \

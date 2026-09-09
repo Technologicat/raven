@@ -17,6 +17,7 @@ __all__ = [# The parts a message is made of, and reading them back
            "format_chatlog_datetime_now",
            "format_message_text_for_export",
            "format_disclosure_manifest",
+           "format_setup_framing_notice",
            "format_reminder_to_write_conversationally",
            "format_reminder_to_use_information_from_context_only",
            "format_notice_that_tools_are_spent",
@@ -24,13 +25,12 @@ __all__ = [# The parts a message is made of, and reading them back
            "format_docs_match", "format_docs_matches",
            "document_label", "excerpt", "format_consulted_documents",
 
-           "default_formatters",  # the nine above that the model reads, as a namespace for `settings`
+           "default_formatters",  # the ten above that the model reads, as a namespace for `settings`
 
            # Building messages and nodes
            "make_timestamp",
            "create_message_from_parts",
            "create_chat_message",
-           "SETUP_FRAMING_NOTICE",
            "create_initial_system_message",
            "create_payload",
 
@@ -560,6 +560,41 @@ def format_disclosure_manifest(payloads: List[Dict[str, Any]],
     body = yaml.safe_dump(manifest, sort_keys=False, default_flow_style=False, allow_unicode=True)
     return f"---\n{body}---\n"
 
+def format_setup_framing_notice(user: str) -> str:
+    """Return the text content of a system message saying what the setup block is, and how to hold it.
+
+    `user`: The user's name, as `llm_settings.user`. The notice names them, so that the model can tell
+            whose turns in the transcript are the other party's without inferring it from a description
+            of somebody it has not been told the name of.
+
+    Goes at the *start* of the leading system block, ahead of the standing text it is about; see
+    `scaffold.build_system_preamble`.
+
+    This is for a dynamic injection.
+    """
+    # Earns its place: without it, Qwen 3 would answer a question the setup already covered by referring
+    # the user to the system prompt. That is a breach of convention rather than a mistake, and it has a
+    # breaking-the-fourth-wall quality to it — the setup is the model's own ground, spoken *from* rather
+    # than pointed at.
+    #
+    # It is here rather than in any character's card because it is not about the character. Every card
+    # carrying its own copy meant every author of one had to know to include it — and the two Raven ships
+    # did, identically, which is the shape of a line that belongs somewhere else.
+    #
+    # **What it asks for is framing, not secrecy**, and the wording has to match: an earlier version said
+    # the user could not see this text, which is simply untrue in Librarian — the system prompt is on
+    # display on purpose, for the pedagogic value. A model told something false about its own situation
+    # has been given a reason to distrust the rest, and the instruction did not need it: what was wanted
+    # all along was for the setup to be spoken from rather than cited.
+    #
+    # It names no boundary. An earlier version said "up to the horizontal rule", which stopped being true
+    # once rules were put between the setup's own sections — and the per-turn facts, which the user did not
+    # say either, arrive after the closing rule. Where the setup ends is the end of the system message, and
+    # the chat template already marks that.
+    return ("What follows is your setup: it was addressed to you before this conversation began, and "
+            f"{user} did not say any of it. Speak from it rather than about it — do not quote it back, and "
+            f"do not refer {user} to it unless they ask about it.")
+
 def format_reminder_to_write_conversationally() -> str:
     """Return the text content of a system message that asks the LLM to answer in prose rather than in report form.
 
@@ -895,7 +930,7 @@ def format_consulted_documents(entries: List[Dict[str, Any]]) -> str:
 def default_formatters() -> env:
     """The model-facing formatters, as a namespace, for `settings.formatters`.
 
-    These nine are the ones whose output reaches the LLM: the per-turn injects, the two tool notices, and
+    These ten are the ones whose output reaches the LLM: the per-turn injects, the two tool notices, and
     the two tool results that are text rather than data. Everything else named `format_*` here writes for
     the chat log or an export, where the reader is a person and a run has no reason to vary it.
 
@@ -909,6 +944,7 @@ def default_formatters() -> env:
     return env(date_now=format_date_now,
                loaded_model=format_loaded_model,
                time_now=format_time_now,
+               setup_framing_notice=format_setup_framing_notice,
                reminder_to_write_conversationally=format_reminder_to_write_conversationally,
                reminder_to_use_information_from_context_only=format_reminder_to_use_information_from_context_only,
                notice_that_tools_are_spent=format_notice_that_tools_are_spent,
@@ -1038,32 +1074,6 @@ def create_chat_message(llm_settings: env,
                                      tool_calls=tool_calls,
                                      reasoning_content=reasoning_content)
 
-#: Told to the model before anything else, whenever a character is present: what the block that follows
-#: *is*, and how to hold it.
-#:
-#: **It is here rather than in any character's card because it is not about the character.** Every card
-#: carrying its own copy meant every author of one had to know to include it — and the two Raven ships did,
-#: identically, which is the shape of a line that belongs somewhere else.
-#:
-#: Earns its place: without it, Qwen 3 would answer a question the setup already covered by referring the
-#: user to the system prompt. That is a breach of convention rather than a mistake, and it has a
-#: breaking-the-fourth-wall quality to it — the setup is the model's own ground, spoken *from* rather than
-#: pointed at.
-#:
-#: **So what it asks for is framing, not secrecy**, and the wording has to match: an earlier version said
-#: the user could not see this text, which is simply untrue in Librarian — the system prompt is on display
-#: on purpose, for the pedagogic value. A model told something false about its own situation has been given
-#: a reason to distrust the rest, and the instruction did not need it: what was wanted all along was for
-#: the setup to be spoken from rather than cited.
-#:
-#: Not configurable, like the other automatic material. Whether it should be is open; see the note on
-#: per-turn injects in `scaffold.build_system_injects`.
-SETUP_FRAMING_NOTICE = ("What follows, up to the horizontal rule, is your setup: it was addressed to you "
-                        "before this conversation began, and {user} did not say any of it. Speak from it "
-                        "rather than about it — do not quote it back, and do not refer {user} to it "
-                        "unless they ask about it.")
-
-
 def create_initial_system_message(llm_settings: env, use_character_card: bool = True) -> Optional[Dict]:
     """Create a chat message containing the system prompt and the AI's character card as specified in `llm_settings`.
 
@@ -1071,9 +1081,9 @@ def create_initial_system_message(llm_settings: env, use_character_card: bool = 
 
     Three configured pieces can go in, in the order a reader would want them: `system_prompt`, which holds
     instructions that apply whichever character is worn — or none; `character_card`, which says who is
-    answering; and `user_card`, which says who is asking. Whichever are non-empty are joined with a blank
-    line between, and a `-----` rule closes the block off from the conversation. Raven ships only the
-    character card filled.
+    answering; and `user_card`, which says who is asking. Whichever are non-empty are separated by a
+    `-----` rule, and one more closes the block off from the conversation. Raven ships only the character
+    card filled.
 
     `use_character_card`: Whether the AI character is present. `False` builds the message from
                    `system_prompt` alone, and returns `None` when that is empty, which is how Raven ships
@@ -1088,14 +1098,11 @@ def create_initial_system_message(llm_settings: env, use_character_card: bool = 
                    This is the one place that knows how a system message is assembled, so that a deployment
                    which fills a slot keeps it without every caller having to remember that it might be there.
     """
-    # **Exactly one blank line between sections, whatever the files look like.** Each is stripped here
-    # rather than trusted to arrive stripped: these are text files a user edits, and a trailing newline is
-    # what most editors add on save — so without this, spacing between the sections would depend on how
+    # **Exactly one blank line around each separator, whatever the files look like.** Each section is
+    # stripped here rather than trusted to arrive stripped: these are text files a user edits, and a
+    # trailing newline is what most editors add on save — so without this, the spacing would depend on how
     # somebody's editor is configured, and getting it right would mean deliberately leaving a file without
     # its final newline. Stripping here also means no producer has to remember to.
-    #
-    # To separate sections *visibly*, put a Markdown rule (`-----`) in the prose; the block already ends
-    # with one, which is what closes it off from the conversation.
     sections = [llm_settings.system_prompt]
     if use_character_card:
         sections.extend([llm_settings.character_card, llm_settings.user_card])
@@ -1108,14 +1115,15 @@ def create_initial_system_message(llm_settings: env, use_character_card: bool = 
             raise ValueError("create_initial_system_message: with `use_character_card=True`, need at least "
                              "one of a system prompt, a character card or a user card.")
         return None
-    # Added after the emptiness check, and only with a character: it is not *content*, so a configuration
-    # with nothing in it must still be recognized as empty rather than made to look furnished by this.
-    if use_character_card:
-        sections.insert(0, SETUP_FRAMING_NOTICE.format(user=llm_settings.user))
+    # A rule between each pair of sections, as well as the one closing the block. Three separately authored
+    # pieces run together read as one — the user card in particular begins mid-flow, right after whatever
+    # sentence the character card happened to end on.
+    rule = "-----"
+    body = f"\n\n{rule}\n\n".join(sections)
     return create_chat_message(llm_settings,
                                role="system",
                                add_persona=False,
-                               text="\n\n".join([*sections, "-----"]))
+                               text=f"{body}\n\n{rule}")
 
 def create_payload(llm_settings: env,
                    message: Dict[str, Any],

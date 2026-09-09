@@ -1163,6 +1163,96 @@ class TestPerformInjects:
             assert chatutil.content_to_text(message["content"]).startswith("[System information:")
 
 
+class TestTheSetupSaysWhatItIs:
+    """The line framing the leading system block as the model's setup rather than as conversation.
+
+    It earns its place: without it, a model asked something the setup already covers answers by referring
+    the user to the system prompt — a breach of the convention that the setup is the model's own ground,
+    spoken *from* rather than pointed at.
+
+    It is sent per turn rather than stored, which is what these tests are mostly about. Stored, it read in
+    Librarian's system-prompt display as configured prose somebody had written — and roots are matched by
+    their text, so every rewording forked every existing datastore, giving each user a fresh root and
+    filing their chats under an older card. That happened for real when the notice was introduced.
+
+    Note what it does **not** claim: that the user cannot see this. Librarian shows its system prompt on
+    purpose, so that would be false — and a model told something untrue about its own situation has been
+    given a reason to doubt the rest.
+    """
+
+    @staticmethod
+    def _system_text(llm_settings, history, **kwargs):
+        prompt = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                            docs_query=None, docs_matches=[],
+                                            tool_context=grounding_context(), **kwargs)
+        return chatutil.content_to_text(prompt[0]["content"])
+
+    def test_it_leads_the_system_block(self, llm_settings):
+        # First, because it says what the block *is* — a model that meets it after the character card has
+        # already read the card as something addressed to it.
+        system_text = self._system_text(llm_settings, make_conversation(llm_settings))
+        assert system_text.startswith("What follows is your setup")
+        assert system_text.index("is your setup") < system_text.index("You are a helpful assistant.")
+
+    def test_a_rule_closes_it_off_from_the_setup(self, llm_settings):
+        # Otherwise the notice runs straight into the prompt it is about, and the reader has nothing
+        # marking where Raven's framing stops and the configured prose starts.
+        system_text = self._system_text(llm_settings, make_conversation(llm_settings))
+        between = system_text[system_text.index("is your setup"):system_text.index("You are a helpful assistant.")]
+        assert "-----" in between
+
+    def test_the_derived_material_stays_behind_the_standing_prompt(self, llm_settings):
+        # The distinction the preamble slot exists to draw, and the reason this is not the general "move
+        # the injects to the front" change: framing about the standing text goes ahead of it, while
+        # material derived at send time goes after, so that what the model reads as its identity comes
+        # first.
+        system_text = self._system_text(llm_settings, make_conversation(llm_settings))
+        assert system_text.index("is your setup") < system_text.index("You are a helpful assistant.")
+        assert system_text.index("You are a helpful assistant.") < system_text.index(chatutil.format_date_now())
+
+    def test_it_names_the_user(self, llm_settings):
+        # So the model knows whose turns in the transcript are the other party's, rather than having to
+        # infer it from a description of somebody it has not been told the name of.
+        system_text = self._system_text(llm_settings, make_conversation(llm_settings))
+        assert f"{llm_settings.user} did not say any of it" in system_text
+
+    def test_it_is_never_written_into_the_stored_prompt(self, llm_settings):
+        # The whole point of the move. `chatutil.linearize_chat` hands out the datastore's own message
+        # dicts, so a notice folded in place would be stored permanently, once per turn.
+        history = make_conversation(llm_settings)
+        stored_system_message = history[0]
+        stored_text = chatutil.content_to_text(stored_system_message["content"])
+        assert "is your setup" in self._system_text(llm_settings, history), \
+            "the notice never reached the prompt, so this fixture cannot tell a stored one from an injected one"
+        assert chatutil.content_to_text(stored_system_message["content"]) == stored_text
+
+    def test_a_turn_without_the_character_does_not_get_it(self, llm_settings):
+        """Where the sentence would be false: a bare-model call has no setup block to announce."""
+        system_text = self._system_text(llm_settings, make_conversation(llm_settings),
+                                        use_character_card=False)
+        assert "is your setup" not in system_text
+        assert "You are a helpful assistant." in system_text, "nothing was assembled at all, so this proves nothing"
+
+    def test_a_history_with_no_system_message_does_not_get_it_either(self, llm_settings):
+        # `_add_to_system_message` *inserts* a leading system message when the history has none, and there
+        # the notice would name a horizontal rule that nothing put in. The postamble still lands, which is
+        # what says the insertion happened at all.
+        history = [chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="What is X?")]
+        system_text = self._system_text(llm_settings, history)
+        assert chatutil.format_reminder_to_write_conversationally() in system_text, \
+            "no system message was inserted, so this fixture cannot tell a dropped preamble from an unrun inject"
+        assert "is your setup" not in system_text
+
+    def test_a_run_can_reword_it_without_touching_the_module(self, llm_settings):
+        # The reason it is a formatter and not a constant: it is a sentence whose whole job is to be
+        # phrased well, so an A/B of the wording should cost one assignment on the settings object.
+        llm_settings.formatters.setup_framing_notice = lambda user: "SENTINEL-FRAMING"
+        system_text = self._system_text(llm_settings, make_conversation(llm_settings))
+        assert system_text.startswith("SENTINEL-FRAMING")
+        assert "is your setup" not in system_text
+        assert chatutil.default_formatters().setup_framing_notice("Ada") != "SENTINEL-FRAMING"
+
+
 # ---------------------------------------------------------------------------
 # Grounding accumulation (the per-turn tool context)
 # ---------------------------------------------------------------------------
@@ -1966,8 +2056,8 @@ class TestPromptAssemblyFromOutside:
         assert notice not in chatutil.content_to_text(without[0]["content"])
 
     def test_the_injects_the_view_shows_are_the_ones_the_prompt_carries(self, monkeypatch):
-        # The point of `build_system_injects` existing separately: the chat view renders its result, and the
-        # prompt is built from the same call. Re-deriving the wording in the GUI would be two sources of
+        # The point of the two builders existing separately: the chat view renders their results, and the
+        # prompt is built from the same calls. Re-deriving the wording in the GUI would be two sources of
         # truth for text the model actually reads, and they would drift silently — the log claiming one
         # thing while the wire carried another is precisely the gap this closes.
         settings = self._settings(monkeypatch)
@@ -1978,18 +2068,19 @@ class TestPromptAssemblyFromOutside:
                                             docs_query=None, docs_matches=[], tool_context=tool_context)
 
         system_text = chatutil.content_to_text(prompt[0]["content"])
-        shown = scaffold.build_system_injects(llm_settings=settings, grounding_material_exists=False)
+        shown = (scaffold.build_system_preamble(llm_settings=settings) +
+                 scaffold.build_system_postamble(llm_settings=settings, grounding_material_exists=False))
         assert shown  # the view has something to show at all
         for inject_text in shown:
             assert inject_text in system_text
-        assert "STORED PROMPT" in system_text  # the injects are appended to the stored prompt, not instead of it
+        assert "STORED PROMPT" in system_text  # the injects wrap the stored prompt, they do not replace it
 
     def test_which_injects_are_conditional(self, monkeypatch):
         settings = self._settings(monkeypatch)
-        plain = scaffold.build_system_injects(llm_settings=settings, grounding_material_exists=False)
-        grounded = scaffold.build_system_injects(llm_settings=settings, grounding_material_exists=True)
-        spent = scaffold.build_system_injects(llm_settings=settings, grounding_material_exists=False,
-                                              tools_are_spent=True)
+        plain = scaffold.build_system_postamble(llm_settings=settings, grounding_material_exists=False)
+        grounded = scaffold.build_system_postamble(llm_settings=settings, grounding_material_exists=True)
+        spent = scaffold.build_system_postamble(llm_settings=settings, grounding_material_exists=False,
+                                                tools_are_spent=True)
 
         # The unconditional ones are what the chat view draws, so they must not become conditional without
         # the view's docstring being revisited.

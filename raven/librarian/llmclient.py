@@ -676,7 +676,7 @@ def setup_user_card(template_vars: env) -> str:
 # what its own system message tells it about itself.
 #
 # Raven states both in the system message on every turn instead, next to the date, which is out for exactly
-# the same reason; see `chatutil.format_loaded_model` and `scaffold.build_system_injects`.
+# the same reason; see `chatutil.format_loaded_model` and `scaffold.build_system_postamble`.
 #
 # TODO: The character-agnostic parts of this belong in the system prompt, not in the character card.
 # TODO: This function is called from the character cards below, so everything it returns is stored as
@@ -797,7 +797,7 @@ def configure(model_info: env,
     # into it freezes at the value it had then, while neither of those is stable — the user can load a
     # different model without restarting, and a Raven that started while the backend was down holds a
     # placeholder identity until it reconnects. Both are stated in the per-turn system message instead,
-    # which is re-read every turn; see `chatutil.format_loaded_model` and `scaffold.build_system_injects`.
+    # which is re-read every turn; see `chatutil.format_loaded_model` and `scaffold.build_system_postamble`.
     #
     # They are absent rather than documented-as-unwise, so that a prompt reaching for one fails at startup
     # with a `KeyError` naming it, instead of quietly freezing a sentence nobody can see is stale.

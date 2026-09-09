@@ -4,7 +4,9 @@ __all__ = ["action_ack", "action_stop",  # re-exported from `llmclient`
            "user_turn",
 
            # For scripting: the prompt a turn would send, without sending it
-           "build_system_injects",  # also what the chat view shows, so the log matches what is sent
+           # The two system injects, in the order they reach the model. Also what the chat view shows, so
+           # the log matches what is sent.
+           "build_system_preamble", "build_system_postamble",
            "build_turn_prompt", "make_tool_context",
 
            "ai_turn", "retry_tool_calls"]
@@ -314,31 +316,44 @@ def _attachment_is_present(history: list[dict]) -> bool:
 
 def _add_to_system_message(llm_settings: env,
                            history: list[dict],  # mutated!
-                           texts: list[str]) -> None:
-    """Append `texts` to the text content of the leading system message of `history`.
+                           preamble: list[str],
+                           postamble: list[str]) -> None:
+    """Wrap the text content of the leading system message of `history`, between `preamble` and `postamble`.
 
     Injects that are *instruction-like* go here rather than into a message of their own. Measured across
     the supported model families, the leading system block was the cheapest placement in deliberation
     tokens and the only one that never provoked the model into remarking on the inject as if the user had
-    typed it. That is affordable only because these injects are constant within a session (or within a
-    day, for the date), so hoisting them costs the backend's prompt-prefix cache nothing.
+    typed it. That is affordable only because most of these are constant within a session (or within a day,
+    for the date), so hoisting them costs the backend's prompt-prefix cache nothing.
+
+    The two conditional ones in `build_system_postamble` are the exception, and the cost is not small: they
+    sit at the front of the prompt, so a turn where one comes or goes invalidates the cached prefix for the
+    whole conversation behind it.
 
     Material that is *data* - retrieval results, the clock - does not belong here; see
     `_synthetic_tool_exchange` for that, and note that the strictest chat templates permit exactly one
     system message anyway, so a second one is not available to us even if we wanted it.
 
+    `preamble` is for text that is *about* the standing prompt rather than an addition to it, which is the
+    only thing that has a reason to precede it; see `build_system_preamble`. The derived material stays in
+    `postamble`, behind the text the model reads as its identity; see `build_system_postamble`.
+
     NOTE: `chatutil.linearize_chat` hands out the datastore's own message dicts, not copies. Hence the
     system message is *replaced* with a modified copy rather than edited in place - editing in place
     would write the injects into the stored system prompt, permanently, once per turn.
     """
-    if not texts:
+    if not preamble and not postamble:
         return
     has_system_message = bool(history) and history[0]["role"] == "system"
-    old_texts = [chatutil.content_to_text(history[0]["content"])] if has_system_message else []
+    standing_texts = [chatutil.content_to_text(history[0]["content"])] if has_system_message else []
+    # With no standing text, a preamble has nothing to introduce - and the framing notice would then name a
+    # horizontal rule that only `chatutil.create_initial_system_message` puts there. So it is dropped
+    # rather than carried into the message this inserts.
+    leading_texts = preamble if has_system_message else []
     system_message = chatutil.create_chat_message(llm_settings=llm_settings,
                                                   role="system",
                                                   add_persona=False,
-                                                  text="\n\n".join([*old_texts, *texts]))
+                                                  text="\n\n".join([*leading_texts, *standing_texts, *postamble]))
     if has_system_message:
         history[0] = system_message
     else:  # no system prompt in this chat (unusual, but a client may build a history without one)
@@ -378,10 +393,39 @@ def _synthetic_tool_exchange(llm_settings: env,
     result_message["tool_call_id"] = call_id  # OAI spec: the linkage lives on the tool-response message
     return [call_message, result_message]
 
-def build_system_injects(llm_settings: env,
-                         grounding_material_exists: bool,
-                         tools_are_spent: bool = False) -> list[str]:
-    """The instruction-like texts this turn appends to the leading system message.
+def build_system_preamble(llm_settings: env) -> list[str]:
+    """The system injects this turn puts *before* the standing system prompt: the first of the two kinds.
+
+    Split out for the same reason as `build_system_postamble`, the other kind: the chat view shows these
+    too, and re-deriving the wording there would be two sources of truth for text the model actually reads.
+
+    Currently one — the notice saying that what follows is the model's setup rather than something the user
+    said. It goes first because that is the only position where it means anything: a model that meets it
+    after the character card has already read the card as something addressed to it.
+
+    Sent per turn rather than stored, which is what keeps its wording free to change. Roots are matched by
+    their text, so a stored notice would fork every user's datastore on every edit to a sentence whose
+    whole job is to be phrased well. It is also then covered by the display's existing *"Added to every
+    request, not stored"* label, which is true of it and was not while it sat in the stored prompt.
+
+    Note what does *not* belong here, and the distinction is not a stylistic one: the derived material —
+    the date, the loaded model, retrieval results — stays behind the standing text, so that what the model
+    reads as its identity comes first. This slot is for framing *about* that text.
+    """
+    # The rule travels with the notice rather than being placed by `_add_to_system_message`, so that the
+    # chat view draws the same separator without having to know to add one — and so that a history with no
+    # standing text, which drops the preamble, does not open with a bare rule.
+    return [llm_settings.formatters.setup_framing_notice(llm_settings.user), "-----"]
+
+def build_system_postamble(llm_settings: env,
+                           grounding_material_exists: bool,
+                           tools_are_spent: bool = False) -> list[str]:
+    """The system injects this turn appends *after* the standing system prompt: the second of the two kinds.
+
+    The date, the loaded model, and the standing reminders: material Raven derives at send time rather than
+    text anybody authored. It goes behind the standing prompt, so that what the model reads as its identity
+    comes first; `build_system_preamble` is the other end, for the framing that only means anything ahead
+    of it.
 
     Split out of `build_turn_prompt` so that the chat view can show them. The log's promise is that it shows
     what was said, and these are said every turn while appearing nowhere in it - so the view needs the same
@@ -403,14 +447,14 @@ def build_system_injects(llm_settings: env,
                        it already has rather than reaching for another call it will not get.
     """
     formatters = llm_settings.formatters
-    injects = [formatters.date_now(),
-               formatters.loaded_model(llm_settings.model, llm_settings.context_length),
-               formatters.reminder_to_write_conversationally()]
+    postamble = [formatters.date_now(),
+                 formatters.loaded_model(llm_settings.model, llm_settings.context_length),
+                 formatters.reminder_to_write_conversationally()]
     if grounding_material_exists:
-        injects.append(formatters.reminder_to_use_information_from_context_only())
+        postamble.append(formatters.reminder_to_use_information_from_context_only())
     if tools_are_spent:
-        injects.append(formatters.notice_that_tools_are_spent())
-    return injects
+        postamble.append(formatters.notice_that_tools_are_spent())
+    return postamble
 
 def build_turn_prompt(llm_settings: env,
                       history: list[dict],
@@ -434,6 +478,16 @@ def build_turn_prompt(llm_settings: env,
     things. Instructions - the reminders, and the date - want to be obeyed, so they join the leading
     system message. Data - the clock time, the document-database matches - wants to be read but not
     obeyed, so it arrives as the answer to a tool call Raven makes on the model's behalf.
+
+    One inject goes *ahead* of the standing system prompt rather than after it: the notice saying what that
+    prompt is (`build_system_preamble`). It is framing about the text rather than an addition to it, which
+    is what makes preceding it the only position it means anything from.
+
+    So the three slots fall in order of how fast their contents change, and that is not a coincidence: what
+    changes late costs nothing to reprocess. The framing is fixed, and leads. The material derived at send
+    time - today's date, the loaded model, the reminders - is stable within a session and follows the
+    standing prompt. The wall clock, which is different on every request, rides down with the data injects
+    just ahead of the user's latest message, where it invalidates nothing behind it.
 
     All of it lands *before* the user's latest message. That position is what keeps the model answering
     the user instead of continuing the agent loop: with a tool result as the very last message, Qwen 3.6
@@ -482,12 +536,16 @@ def build_turn_prompt(llm_settings: env,
     # content being the character card), and `_add_to_system_message` *inserts* one when the history has
     # none — so leaving these on would hand a deliberately bare model a system message containing nothing
     # but today's date.
+    #
+    # The preamble goes with them for a reason of its own: a bare-model call has no setup block, so a
+    # notice announcing one would describe something that is not there.
     if use_character_card:
         _add_to_system_message(llm_settings=llm_settings,
                                history=history,
-                               texts=build_system_injects(llm_settings=llm_settings,
-                                                          grounding_material_exists=grounding_material_exists,
-                                                          tools_are_spent=tools_are_spent))
+                               preamble=build_system_preamble(llm_settings=llm_settings),
+                               postamble=build_system_postamble(llm_settings=llm_settings,
+                                                                grounding_material_exists=grounding_material_exists,
+                                                                tools_are_spent=tools_are_spent))
 
     # The data-like injects below go into synthetic tool exchanges of their own, not into the system
     # message; see `_add_to_system_message` for why the split is not a stylistic one.

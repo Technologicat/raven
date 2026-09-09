@@ -216,6 +216,13 @@
   - **Its wording changed, because the old one was untrue.** It used to say you could not see the text —
     while Librarian shows its system prompt on purpose. It now says what was actually wanted: the setup is
     the AI's own ground, to be spoken *from* rather than quoted back or pointed at.
+  - **It is added to each request rather than kept in the chat**, so the system prompt display shows it
+    under *Added to every request, not stored*, alongside the date and the loaded model, instead of it
+    reading as prose you had written and could edit.
+  - **A horizontal rule now separates every part of the setup** — the notice, the system prompt, the
+    character card, the user card — where previously only the end of the block was marked. Three
+    separately authored pieces run together read as one, and the user card in particular used to begin
+    mid-flow, right after whatever sentence the character card ended on.
 
 - **you can tell the AI who *you* are, the same way a character says who it is.** Make
   `~/.config/raven/librarian/users/` and put a `juha.json` in it naming you, with an optional `juha.md`

@@ -17,47 +17,6 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
-## The setup framing notice is stored when it should be injected
-
-*Cluster: discoverability · Cost: S, plus a preamble slot in the inject mechanism · Gate: none · Filed: 2026-09-09*
-
-Librarian shows its system prompt on purpose, for the pedagogic value — so a reader should be able to tell
-what came from where. The displayed prompt currently distinguishes two kinds of text and there are three:
-
-| | Where it comes from | Stored? | Marked? |
-|---|---|---|---|
-| System prompt, character card, user card | configuration files | yes | — (it is what a reader expects) |
-| **`chatutil.SETUP_FRAMING_NOTICE`** | **Raven itself** | **yes** | **no** |
-| Per-turn injects | Raven itself | no | *"Added to every request, not stored:"* |
-
-The notice reads as something the user wrote, or could edit, and it is neither (raised by Juha,
-2026-09-09, live-testing).
-
-**Make it an inject, and the problem dissolves rather than needing a marker** (Juha, 2026-09-09). The
-notice is stored today only because `create_initial_system_message` is where it was easiest to put it, not
-because anything wants it there. Sent per turn at the *start* of the leading system block instead, it
-occupies the same position on screen and in the prompt, and:
-
-- **The existing label becomes literally true of it** — *"Added to every request, not stored"* — so the
-  display needs no new vocabulary, and the third category above collapses into the second.
-- **Changing its wording stops forking the datastore.** Roots are matched by their text, so every edit to
-  a stored notice gives every user a fresh root and files their existing chats under an older card. That
-  happened for real on 2026-09-09 when the notice was introduced, which is how the effect is known rather
-  than guessed. As an inject it can be reworded freely, which matters for a sentence whose whole job is to
-  be phrased well.
-- **It says what it is by construction**: Raven's own framing rather than the user's prose, in the slot
-  reserved for exactly that.
-
-**What it needs: injects that can go before the standing text as well as after.** Today they are appended.
-Note this is *not* the general "move the injects to the front" question raised earlier the same day and
-argued against — the objection there was that volatile facts (the date, the loaded model, retrieval
-results) must not precede the text the model reads as its identity. This notice is not a volatile fact; it
-is framing *about* that text, so preceding it is the only place it means anything. So: a preamble slot for
-framing, with the per-turn facts staying where they are.
-
-**This supersedes labelling the stored version**, which was the original shape of this item — do not do
-both.
-
 ## The chat graph's "other cards" box is inert, and says so only in the log
 
 *Cluster: chat-graph · Cost: S for the honesty, S for navigation, M to switch the avatar too · Gate: none · Filed: 2026-09-09*

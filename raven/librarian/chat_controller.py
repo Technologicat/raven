@@ -545,7 +545,9 @@ class DPGChatMessage:
         self.persona = None  # populated by `build`
         self.paragraphs = []  # [{"text": ..., "rendered": True}, ...]
         self.paragraphs_lock = threading.RLock()
-        self.rendered_system_injects = None  # system message only: the per-turn injects as last drawn
+        # System message only: the two kinds of per-turn system inject, as last drawn.
+        self.rendered_system_preamble = None
+        self.rendered_system_postamble = None
         self.node_id = None  # populated by `build`
         self.gui_text_group = None  # populated by `build`
         # The thought bubble, built on demand by `_thought_bubble` when a thinking paragraph first arrives:
@@ -2130,6 +2132,10 @@ class DPGCompleteChatMessage(DPGChatMessage):
                       persona=persona,
                       node_id=self.node_id)
 
+        # Before the stored text, because that is where the wire puts it — see `_render_system_preamble`.
+        if role == "system":
+            self._render_system_preamble()
+
         # Reasoning (thinking) trace lives in the message's `reasoning_content` sibling field, not in `content`.
         # Render it first, as a single collapsible thought paragraph. Migration (`upgrade_datastore`, at load)
         # and the live stream parser both move thinking into `reasoning_content` before it ever reaches here, so
@@ -2193,7 +2199,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
             self._render_gutter_and_body(texts=[], document_body=None, answered_call_id=answered_call_id)
 
         if role == "system":
-            self._render_system_injects()
+            self._render_system_postamble()
 
         # A document the AI fetched from the local knowledge base gets the same handles as an attached one.
         # It is *not* an attachment — the file is already the user's, sitting in the documents folder, and
@@ -2305,8 +2311,39 @@ class DPGCompleteChatMessage(DPGChatMessage):
                 self.gui_text_group = outer_group
                 self.text_indent_w = outer_indent
 
-    def _render_system_injects(self) -> None:
-        """Append the per-turn system injects to a rendered system message, so the log shows what is sent.
+    def _render_injected_texts(self, texts: list[str]) -> None:
+        """Render one block of per-turn texts, under the label saying they are added rather than stored.
+
+        Both blocks a system message shows — the preamble ahead of the stored prompt, and the postamble
+        after it — carry the same words, because they are the same category of thing. Saying it twice is
+        what keeps each block legible where it sits, with stored prose between them.
+        """
+        self.add_paragraph("*Added to every request, not stored:*", is_thought=False)
+        for text in texts:
+            self.add_paragraph(text, is_thought=False)
+
+    def _render_system_preamble(self) -> None:
+        """Draw the per-turn texts that precede the stored prompt, ahead of a rendered system message.
+
+        The mirror of `_render_system_postamble`, which see for why these are shown live rather than
+        stored, and for what the display leaves out. Currently one text: the notice saying that the block
+        below it is the model's setup rather than something the user said.
+
+        It is drawn first because that is where the wire carries it (`scaffold.build_system_preamble`) —
+        and a notice announcing what follows, printed after the thing it announces, would be describing
+        the conversation instead.
+        """
+        llm_settings = self.parent_view.chat_controller.llm_settings
+        if llm_settings is None:  # no backend connected yet; there is no settings object to ask
+            return
+        preamble = scaffold.build_system_preamble(llm_settings=llm_settings)
+        if not preamble:
+            return
+        self.rendered_system_preamble = list(preamble)
+        self._render_injected_texts(preamble)
+
+    def _render_system_postamble(self) -> None:
+        """Append the per-turn facts to a rendered system message, so the log shows what is sent.
 
         The chat log's promise is that it shows what was said, and these are said on every turn while
         appearing nowhere in it: the date, and the standing reminder about how to write.
@@ -2331,18 +2368,16 @@ class DPGCompleteChatMessage(DPGChatMessage):
         llm_settings = self.parent_view.chat_controller.llm_settings
         if llm_settings is None:  # no backend connected yet; there is no settings object to ask
             return
-        # `grounding_material_exists=False` selects exactly the unconditional injects; see above.
-        injects = scaffold.build_system_injects(llm_settings=llm_settings,
-                                                grounding_material_exists=False)
-        if not injects:
+        # `grounding_material_exists=False` selects exactly the unconditional ones; see above.
+        postamble = scaffold.build_system_postamble(llm_settings=llm_settings,
+                                                    grounding_material_exists=False)
+        if not postamble:
             return
         # What was drawn, so `DPGChatController.refresh_system_injects_if_stale` can tell whether it still
         # matches what a request would carry. Comparing the texts rather than just the date also catches an
         # experiment that swapped a formatter mid-session.
-        self.rendered_system_injects = list(injects)
-        self.add_paragraph("*Added to every request, not stored:*", is_thought=False)
-        for inject_text in injects:
-            self.add_paragraph(inject_text, is_thought=False)
+        self.rendered_system_postamble = list(postamble)
+        self._render_injected_texts(postamble)
 
 
     def _render_image_part(self, part: dict[str, Any], sidecars_meta: dict[str, Any]) -> None:
@@ -4544,10 +4579,11 @@ class DPGChatController:
     def refresh_system_injects_if_stale(self) -> None:
         """Redraw the system message if the injects it shows no longer match what a request would carry.
 
-        The system message displays the per-turn injects live (see
-        `DPGCompleteChatMessage._render_system_injects`), and one of them is the date. A session left open
-        across midnight would otherwise send the new date on the wire while the log still showed the old
-        one - the exact divergence that displaying them at all is meant to remove.
+        The system message displays both kinds of system inject live — the preamble ahead of the stored
+        prompt and the postamble after it (see `DPGCompleteChatMessage._render_system_preamble` and
+        `_render_system_postamble`) — and one of the postamble's is the date. A session left open across
+        midnight would otherwise send the new date on the wire while the log still showed the old one -
+        the exact divergence that displaying them at all is meant to remove.
 
         Called at the start of a turn, which is when the wire value is recomputed, so the two change
         together. Between turns the display can lag a rollover; nothing is being sent then, and the next
@@ -4559,11 +4595,13 @@ class DPGChatController:
             if not self.current_chat_history:
                 return
             message = self.current_chat_history[0]  # the system prompt is the branch root
-            if message.rendered_system_injects is None:  # not a system message, or drawn before connecting
+            if message.rendered_system_postamble is None:  # not a system message, or drawn before connecting
                 return
-            current = scaffold.build_system_injects(llm_settings=self.llm_settings,
-                                                    grounding_material_exists=False)
-            if current == message.rendered_system_injects:
+            current_preamble = scaffold.build_system_preamble(llm_settings=self.llm_settings)
+            current_postamble = scaffold.build_system_postamble(llm_settings=self.llm_settings,
+                                                                grounding_material_exists=False)
+            if (current_preamble == message.rendered_system_preamble and
+                    current_postamble == message.rendered_system_postamble):
                 return
             logger.info("DPGChatController.refresh_system_injects_if_stale: system injects changed since they were drawn (most likely the date rolled over); redrawing the system message.")
             message.rebuild_in_place()
