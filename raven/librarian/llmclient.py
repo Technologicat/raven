@@ -564,20 +564,24 @@ def reconnect(settings: env, quiet: bool = True) -> sym:
 def load_prompt(name: str) -> str:
     """Return the text of prompt `name`, the user's copy if they have one and the shipped one otherwise.
 
-    `name`: The stem of the file, e.g. `"interaction_style"` for `interaction_style.md`.
+    `name`: The stem of the file, e.g. `"interaction"` for `interaction.md`.
 
     An override goes in `~/.config/raven/librarian/prompts/`, same filename. It replaces the shipped text
     rather than adding to it, so a copy of the original is the place to start from.
 
-    The text is a *template*: `{user}`, `{char}`, `{model}` and `{context_length}` in it are filled in by
-    whichever `setup_*` function loads it. A literal brace therefore has to be doubled, as `str.format`
-    requires.
+    Which of the two was used is logged either way, at INFO: a prompt is the text the AI is set up with, so
+    "which file is Raven actually reading" has to be answerable from the log rather than by reasoning about
+    what exists on disk.
+
+    The text is a *template*; `_format_prompt` is what fills it in, and says which names may appear.
     """
     override = librarian_config.user_prompts_dir / f"{name}.md"
     if override.exists():
         logger.info(f"load_prompt: '{name}' from the user's override at '{override}'")
         return override.read_text(encoding="utf-8").strip()
-    return (librarian_config.prompts_dir / f"{name}.md").read_text(encoding="utf-8").strip()
+    shipped = librarian_config.prompts_dir / f"{name}.md"
+    logger.info(f"load_prompt: '{name}' from the shipped default at '{shipped}'")
+    return shipped.read_text(encoding="utf-8").strip()
 
 
 def _format_prompt(name: str, template_vars: env) -> str:
@@ -585,11 +589,31 @@ def _format_prompt(name: str, template_vars: env) -> str:
 
     `{user}` and `{char}` are the whole list, deliberately. `template_vars` also carries `model` and
     `context_length`, and they are *not* offered here: see the note below `setup_interaction_style` for
-    why a fact about the backend must not be frozen into this text. Leaving them out makes that a
-    `KeyError` at startup naming the key, rather than a stale sentence nobody can see is stale.
+    why a fact about the backend must not be frozen into this text.
     """
-    return load_prompt(name).format(user=template_vars.user,
-                                    char=template_vars.char)
+    return _fill_in(load_prompt(name), name, user=template_vars.user, char=template_vars.char)
+
+
+def _fill_in(template: str, what: str, **values) -> str:
+    """`template.format(**values)`, with a failure a person editing prose can act on.
+
+    `what`: What is being filled in, for the message — a prompt's name, or a character's.
+
+    A prompt is written by a *user*, in a text editor, and the two ways to get it wrong are both easy: a
+    stray `{` (Markdown around JSON or code, most often) and a placeholder that does not exist. Raw, those
+    surface as `KeyError: 'foo'` or `ValueError: Single '}'`, which read as Raven having a bug and get
+    reported as one. This says whose file it is, which placeholder, and what to do.
+    """
+    try:
+        return template.format(**values)
+    except KeyError as exc:
+        raise ValueError(f"{what}: no such template variable {exc}. The ones available here are "
+                         f"{', '.join('{' + key + '}' for key in sorted(values))}. If you meant a literal "
+                         "brace, double it: '{{' and '}}'. See raven/librarian/prompts/README.md.") from exc
+    except (IndexError, ValueError) as exc:
+        raise ValueError(f"{what}: cannot fill in the template ({type(exc).__name__}: {exc}). Usually an "
+                         "unmatched brace — a literal one has to be doubled, as '{{' and '}}'. See "
+                         "raven/librarian/prompts/README.md.") from exc
 
 
 def setup_system_prompt(template_vars: env) -> str:
@@ -614,7 +638,7 @@ def setup_system_prompt(template_vars: env) -> str:
 # `raven.librarian.llmclient.setup` calls this every time `raven-librarian` (or `raven-minichat`) starts.
 #
 def setup_user_card(template_vars: env) -> str:
-    return _format_prompt("user_card", template_vars)
+    return _format_prompt("user", template_vars)
 
 
 # Note what is NOT here: which model is loaded, and how large its context window is.
@@ -647,15 +671,14 @@ def setup_user_card(template_vars: env) -> str:
 # TODO: two-way split cannot express both. Rewrite the prose along that seam first.
 #
 def setup_interaction_style(template_vars: env) -> str:
-    return _format_prompt("interaction_style", template_vars)
+    return _format_prompt("interaction", template_vars)
 
 
 def setup_character_card(template_vars: env) -> str:
     """Return the character card for whoever `template_vars.char` names, or `""` if nobody answers to it.
 
-    The card comes from the character's own files: `aria1_card.md` beside `aria1.png`, found by the name in
-    `aria1.json`. That is what makes `llm_char_name` one setting instead of four that had to be edited into
-    agreement — the name picks the card, and the voice and the icon with it.
+    The card is the character's own `aria1.md`, found by the name in `aria1.json` — so the card follows
+    whoever `llm_char_name` names, rather than being selected separately.
 
     A name no character claims gets an empty card, which is a working state rather than a failure: the AI
     then has the system prompt and no personality, exactly as `use_character_card=False` gives the batch
@@ -663,7 +686,7 @@ def setup_character_card(template_vars: env) -> str:
     warning; a character silently losing its personality is otherwise very hard to notice from the replies.
 
     Lives here rather than in `librarian_config` because it is resolution rather than configuration —
-    what config still owns is the prose, in `raven/librarian/prompts/`.
+    what config still owns is where to look.
     """
     character = avatar_characters.find(template_vars.char)
     card_template = character.read_card() if character is not None else None
@@ -672,11 +695,12 @@ def setup_character_card(template_vars: env) -> str:
                        "have no personality beyond the system prompt. Declare the character in a JSON file "
                        "beside its avatar image file -- see `raven.avatar.characters`.")
         return ""
-    # `{interaction_style}` is supplied here rather than written into each card: it is the same block for
-    # every character, and a copy per card is a copy to forget when it changes.
-    return card_template.format(user=template_vars.user,
-                                char=template_vars.char,
-                                interaction_style=setup_interaction_style(template_vars)).strip()
+    # `{interaction}` is supplied here rather than written into each card: it is the same block for every
+    # character, and a copy per card is a copy to forget when it changes.
+    return _fill_in(card_template, f"the character card for '{template_vars.char}'",
+                    user=template_vars.user,
+                    char=template_vars.char,
+                    interaction=setup_interaction_style(template_vars)).strip()
 
 
 def configure(model_info: env,

@@ -197,15 +197,18 @@
 
 *Raven-librarian*
 
-- **a character now declares itself, and switching character is one setting.** An avatar image such as
-  `aria1.png` carries its own sidecars: `aria1.json` states what the character is *called* — `"name":
-  "Aria"` — along with its voice, and `aria1_card.md` holds its personality.
-  - **`llm_char_name` then selects a character by that name.** Set it to `"Aria"` and the face, the voice
-    and the card all follow; the two match on the string in the JSON, so a character's filename need not
-    resemble its name.
+- **a character now declares itself, and switching character is one setting.** A character is a JSON file
+  — `aria1.json` — stating what it is *called* and which voice it speaks in. Everything else sits beside
+  it under the same stem and is optional: `aria1.md` is its personality, `aria1.png` its avatar image, and
+  `aria1_icon.png` the glyph beside its chat messages.
+  - **`llm_char_name` then selects a character by that name.** Set it to `"Aria"` and the card, the voice
+    and the face all follow; the two match on the string inside the JSON, so a character's filenames need
+    not resemble its name.
   - It used to be four settings that had to be edited into agreement, and a mismatch showed as the new
     face answering in the old voice, or as the previous character.
-  - A character with no declaration animates exactly as before — it simply cannot be selected by name.
+  - **A character need not have a face.** One with a card and no image is an ordinary character, which is
+    what a terminal frontend such as `raven-minichat` wants anyway. An image with no JSON still animates
+    everywhere it did before, but cannot be selected by name.
 
 - **the prompt texts are Markdown files now**, under `raven/librarian/prompts/`, and any of them can be
   overridden from `~/.config/raven/librarian/prompts/` without touching the installed copy. That folder's

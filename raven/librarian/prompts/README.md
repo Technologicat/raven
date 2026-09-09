@@ -11,11 +11,11 @@ copy of the original. Raven logs which one it loaded, at INFO.
 | File | What it is |
 |---|---|
 | `system.md` | Instructions that hold regardless of who or what is at either end of the conversation. Ships **empty** — see below. |
-| `user_card.md` | Who the *user* is, and how they prefer to be addressed. Ships **empty**, and is worth filling in — current models respond well to knowing who they are talking to. |
-| `interaction_style.md` | The shared half of every character card: the facts about the deployment, and how to behave. Spliced into a character's own card wherever it writes `{interaction_style}`. |
+| `user.md` | Who the *user* is, and how they prefer to be addressed. Ships **empty**, and is worth filling in — current models respond well to knowing who they are talking to. |
+| `interaction.md` | The shared half of every character card: the facts about the deployment, and how to behave. Spliced into a character's own card wherever it writes `{interaction}`. |
 
-A character's own card is **not** here. It lives beside that character's avatar image file — `aria1_card.md`
-next to `aria1.png` — so that a character carries its own personality. See `raven/avatar/characters.py`.
+A character's own card is **not** here. It travels with the character, as `aria1.md` beside `aria1.json`,
+so that a character carries its own personality. See `raven/avatar/characters.py`.
 
 ## Why `system.md` ships empty
 
@@ -40,13 +40,14 @@ goes through Python's `str.format`, which replaces each `{name}` below with the 
 |---|---|---|
 | `{user}` | The user's name, `llm_user_name`. | every file |
 | `{char}` | The AI character's name, `llm_char_name`. | every file |
-| `{interaction_style}` | The whole of `interaction_style.md`, filled in. | a character's `*_card.md` only |
+| `{interaction}` | The whole of `interaction.md`, filled in. | a character's own `.md` only |
 
 That is the entire list.
 
-**A literal brace has to be doubled.** `{{` gives you `{`, and `}}` gives you `}`. An unescaped `{` that is
-not one of the names above raises `KeyError` when Raven starts, and a lone `}` raises too. That is the
-usual way an override goes wrong, and it happens most often when a prompt includes JSON or code.
+**A literal brace has to be doubled.** `{{` gives you `{`, and `}}` gives you `}`. An unescaped `{` that
+is not one of the names above stops Raven at startup, and so does a lone `}`. That is the usual way an
+override goes wrong, and it happens most often when a prompt includes JSON or code — the error names your
+file, the placeholder it did not recognize, and the ones it does.
 
 ## `{model}` and `{context_length}` are gone, on purpose
 
@@ -58,8 +59,17 @@ way to doubt what its own system message tells it about itself.
 Raven states both in the per-turn system message instead, next to the date, where they are re-read every
 turn. The date is out of these files for exactly the same reason.
 
-So an override that still uses one now fails at startup with a `KeyError` naming it, which is the intended
-outcome: a loud failure you can fix, rather than a quiet sentence that is wrong in a way nobody can see.
+So an override that still uses one now stops Raven at startup, naming it. That is the intended outcome: a
+loud failure you can fix, rather than a quiet sentence that is wrong in a way nobody can see.
+
+## Spacing between the parts
+
+**You do not need to leave blank lines at the start or end of a file.** Raven strips each part and joins
+them with exactly one blank line between, so the spacing is the same however your editor saves the file —
+and a trailing newline, which most editors add, changes nothing.
+
+To separate parts *visibly*, put a Markdown horizontal rule (`-----`) in the prose. The whole block already
+ends with one, which is what closes it off from the conversation.
 
 ## The four-space trap
 

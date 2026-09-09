@@ -889,18 +889,35 @@ any of them from `~/.config/raven/librarian/prompts/` without editing the instal
 
 ### How a character is put together
 
-**An avatar image carries its own sidecars.** Beside `aria1.png` sit two more files:
+**A character is a JSON file**, and everything else about it is optional and sits beside that file under
+the same stem:
 
-| File | What it holds |
-|---|---|
-| `aria1.json` | what the character is **called** — `{"name": "Aria"}` — and the TTS voice it speaks in |
-| `aria1_card.md` | its **personality**: the character card the AI is set up with |
-| `aria1_icon.png` | optional: the small glyph shown beside its messages in the chat |
+| File | What it holds | |
+|---|---|---|
+| `aria1.json` | what the character is **called**, and the TTS voice it speaks in | required |
+| `aria1.md` | its **personality**: the character card the AI is set up with | optional |
+| `aria1.png` | its **avatar image**, which the avatar animates | optional |
+| `aria1_icon.png` | the small **glyph** shown beside its messages in the chat | optional |
+
+The JSON is short:
+
+```json
+{
+    "character_definition_version": 1,
+    "name": "Aria",
+    "voice": "af_nova"
+}
+```
 
 **You then choose a character by that name.** Set `llm_char_name` in
 [`raven.librarian.config`](config.py) to `"Aria"`, and the face, the voice and the personality all follow
 from it. The match is on the string inside the `.json`, **not** on the filename — so a character's files
 can be called anything, and a name with spaces or punctuation in it is fine.
+
+The face is genuinely optional: a character with a card and no `.png` is an ordinary character, which is
+what a terminal frontend such as `raven-minichat` wants anyway. An image with **no** JSON is the case that
+loses something — it cannot be selected by name, so its face, voice and card would each have to be set
+separately in the configuration, which is the arrangement all of this exists to replace.
 
 To write a character of your own, see [`raven.avatar.characters`](../avatar/characters.py), which documents
 the files in full.
@@ -908,9 +925,6 @@ the files in full.
 - **Switching character is one edit.** Up to 0.2.8 it was four settings that had to be edited into
   agreement — the name, the image, the voice, and which card the code picked — and a mismatch showed as
   the new face answering in the old voice, or as the previous character.
-- **A character need not have a face.** Declare one with no `.png` beside it and you get its name, voice
-  and personality with no avatar of its own — which is what a terminal frontend such as `raven-minichat`
-  wants anyway.
 - **A declared character wins over the fallbacks.** `avatar_config.image_path` and `avatar_config.voice`
   still hold values, but they apply only when `llm_char_name` names nobody. To give a declared character a
   face or a voice other than its own, change them in its `.json` — or edit the derivation in

@@ -2,32 +2,48 @@
 
 The avatar system never needs this — it is handed an image path and animates it. What needs it is anything
 holding only a name, which is Raven-librarian: a chat message records the character that wrote it as a bare
-name, and drawing that message's speaker glyph means getting from "Aria" back to `aria1.png`.
+name, and drawing that message's speaker glyph means getting from "Aria" back to the files that depict it.
 
-**A character is declared by a JSON file beside its image**, `aria1.json` next to `aria1.png`::
+**A character is a JSON file.** That file is what makes a character exist under a name; everything else is
+optional, and is found beside it under the same stem::
+
+    aria1.json        the character itself: its name, and its voice.    Required.
+    aria1.md          its character card, as the LLM is told it.        Optional.
+    aria1.png         its avatar image, which the avatar animates.      Optional.
+    aria1_icon.png    the glyph beside its messages in the chat.        Optional.
+
+::
 
     {
+        "character_definition_version": 1,
         "name": "Aria",
         "voice": "af_nova"
     }
 
-`name` is the only required key, and the file is optional: a character without one still works everywhere
-it worked before, it simply cannot be found by name. That keeps the system's "plonk in some suitably
-formatted files and go" property.
+Every part but the JSON is optional, including the face: `raven-minichat` is a terminal REPL that shows no
+avatar at all, and a Librarian may be run without one. A character with a card and no image is an ordinary
+character. That keeps the system's "plonk in some suitably formatted files and go" property.
 
-**The declaration holds only what a filename cannot.** Everything that is a *file* is found by the
-convention the tree already uses — `aria1_icon.png` for the chat glyph, `aria1_card.md` for the character
-card — rather than being named in the JSON, so there is one way to find a character's files and it is the
-same way the avatar loader finds its cels.
+**An image with no JSON is not a character**, and in Raven-librarian that is a real loss rather than a
+lesser mode: it cannot be selected by name, so its face, voice and card have to be set separately in the
+configuration — which is the arrangement this file exists to replace. The image still animates, so the
+pose editor and the settings editor are unaffected; they are handed a path and never ask who it is.
 
-**The settings a character brings with it are settings the caller then does not have to keep in step.**
-Switching character used to mean editing four things that had to agree — the name, the image, the voice,
-and which card function got called — and getting it wrong meant the new face speaking in the old voice, or
-answering as the previous character.
+**The declaration holds only what a filename cannot.** Everything that is a *file* is found by the stem
+rather than named in the JSON, so there is one way to find a character's files and it is the same way the
+avatar loader finds its cels. The card in particular is a file because it is paragraphs of prose, and JSON
+is a poor place to edit those: every line break becomes a `\\n` and the whole card becomes one unreadable
+line.
 
-**The card is a file rather than a string in the JSON**, because it is paragraphs of prose and JSON is a
-poor place to edit those: every line break becomes a `\\n` and the whole card becomes one unreadable line.
-A sidecar keeps it editable, and keeps the declaration small enough to read at a glance.
+**`character_definition_version` is what says this JSON is a character**, rather than the presence of a
+`name` — the assets tree holds other JSON, and anything at all might have a `name`. A file without the key
+is quietly not a character; a file with it is one, and anything wrong with it is worth complaining about.
+The number is there so the format can change later and say so.
+
+**Reading happens in two phases, and the split is deliberate.** `scan` walks the tree and reads each JSON,
+which is small; `Character.read_card` reads one card, on demand. A card is a page of prose per character,
+and only the character actually being spoken as is ever wanted — so folding the cards into the scan would
+read the whole cast every time anything asked a question about any of them.
 
 **Why not derive the name from the filename**, which is the obvious cheaper idea: filenames are not names.
 Measured against the shipped tree: "strip a trailing number and capitalize" gets ten of thirteen and fails
@@ -38,7 +54,8 @@ recoverable by any rule, being an abbreviation.
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["METADATA_EXT", "IMAGE_EXT", "ICON_SUFFIX", "CARD_SUFFIX", "CARD_EXT",
+__all__ = ["METADATA_EXT", "IMAGE_EXT", "CARD_EXT", "ICON_SUFFIX",
+           "VERSION_KEY", "FORMAT_VERSION",
            "Character",
            "scan", "characters", "find", "rescan"]
 
@@ -46,17 +63,19 @@ import dataclasses
 import json
 import logging
 import pathlib
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 from . import assets_path
 
-METADATA_EXT = ".json"  # `aria1.json`, beside `aria1.png`
-IMAGE_EXT = ".png"      # every shipped character image
+METADATA_EXT = ".json"  # `aria1.json`, the character itself
+CARD_EXT = ".md"        # `aria1.md`, its card; Markdown, which is what the LLM is shown elsewhere too
+IMAGE_EXT = ".png"      # `aria1.png`, its avatar image
 ICON_SUFFIX = "_icon"   # `aria1_icon.png`, the chat glyph; see `raven.server.modules.avatarutil`
-CARD_SUFFIX = "_card"   # `aria1_card.md`, the character card
-CARD_EXT = ".md"        # cards are Markdown, which is what the LLM is shown elsewhere too
+
+# What marks a JSON file as a character rather than as any other object that happens to carry a `name`.
+VERSION_KEY = "character_definition_version"
+FORMAT_VERSION = 1
 
 
 @dataclasses.dataclass(frozen=True)
@@ -65,14 +84,10 @@ class Character:
 
     Attributes:
         name: What the character is called, as a chat message records it.
-        image_path: The main character image, which the avatar system animates, or `None` if this character
-                    has no face. Optional because a character is a name, a personality and a voice, and a
-                    face is one thing it may additionally have: `raven-minichat` is a terminal REPL that
-                    shows no avatar at all, and a Librarian may be run without one. Requiring an image
-                    would mean a faceless character could not be declared, and an undeclared character
-                    loses its card and its voice too — so the coupling would cost far more than the face.
-        icon_path: The chat glyph, or `None` if this character has none — an ordinary state, and callers
-                   fall back to a generic glyph.
+        image_path: The avatar image, which the avatar system animates, or `None` if this character has no
+                    face — an ordinary state rather than an incomplete one.
+        icon_path: The chat glyph, or `None` if this character has none — also ordinary, and callers fall
+                   back to a generic glyph.
         voice: The TTS voice this character speaks in, or `None` to leave the caller's own default alone.
                Not validated here: which voices exist is the speech server's answer, and it may not be
                running when a character is read.
@@ -81,72 +96,89 @@ class Character:
     """
 
     name: str
-    image_path: Optional[pathlib.Path]
-    icon_path: Optional[pathlib.Path]
-    voice: Optional[str]
-    card_path: Optional[pathlib.Path]
+    image_path: pathlib.Path | None
+    icon_path: pathlib.Path | None
+    voice: str | None
+    card_path: pathlib.Path | None
 
-    def read_card(self) -> Optional[str]:
+    def read_card(self) -> str | None:
         """Return the character card's text, or `None` if this character has none.
 
-        The text is a *template*, not the finished card: it is written with `{char}` and `{user}` in it,
-        and whoever knows what those are — `raven.librarian.config` — fills them in. Returned raw for that
-        reason, this module knowing nothing about a chat.
+        Returned as written, with `{char}` and `{user}` still in it, because **`{user}` cannot be resolved
+        here**: who the user is comes from the running app's configuration, and this module knows nothing
+        about a chat. Whoever does — `raven.librarian.llmclient` — fills both in.
 
-        Read on demand rather than at scan time. A card is a page of prose per character and only the one
-        being spoken as is ever wanted, so reading every card to answer a question about icons would be
-        the whole cast's worth of file I/O for nothing.
+        `{char}` is a convenience rather than a necessity, a character's name being right there in its own
+        JSON. It earns its place where a passage is shared between characters, or copied from one to start
+        another, and it costs nothing to leave available.
         """
         if self.card_path is None:
             return None
         try:
             return self.card_path.read_text(encoding="utf-8").strip()
         except OSError as exc:
-            # Between the scan and now, so it existed a moment ago. Worth a complaint rather than a
-            # crash: the caller's fallback is the card it would have used before this file appeared.
+            # The file was there when the tree was scanned, so this is a disappearance rather than an
+            # absence. Worth a complaint rather than a crash: the caller's fallback is whatever it would
+            # have used for a character that ships no card at all.
             logger.warning(f"read_card: cannot read '{self.card_path}' for '{self.name}': "
                            f"{type(exc)}: {exc}")
             return None
 
 
-def _read_declaration(metadata_path: pathlib.Path) -> Optional[Character]:
-    """Turn one `*.json` into a `Character`, or `None` if it is not one (or names files that are absent)."""
+def _read_declaration(metadata_path: pathlib.Path) -> Character | None:
+    """Turn one `*.json` into a `Character`, or `None` if it is not a character declaration.
+
+    Silent about JSON that does not claim to be one — the assets tree holds other kinds — and vocal about
+    anything that does and is then unusable, which is a file somebody meant to work.
+    """
     try:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        name = metadata["name"]
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        # Not fatal: the assets tree holds JSON that is nobody's character declaration — emotion presets,
-        # for one — and a malformed file should cost that character rather than every character after it.
-        logger.warning(f"_read_declaration: ignoring '{metadata_path}': {type(exc)}: {exc}")
+    except (OSError, ValueError) as exc:
+        logger.warning(f"_read_declaration: cannot read '{metadata_path}': {type(exc)}: {exc}")
         return None
 
-    def sidecar(suffix: str, ext: str) -> Optional[pathlib.Path]:
-        """`aria1.json` -> `aria1_icon.png`, if it is there.
+    if not isinstance(metadata, dict) or VERSION_KEY not in metadata:
+        return None  # not a character declaration; nothing to say about it
 
-        Keyed off the declaration's own stem rather than the image's, which are the same string — and has
-        to be, since a faceless character has no image to key off.
-        """
-        path = metadata_path.with_name(f"{metadata_path.stem}{suffix}{ext}")
+    version = metadata[VERSION_KEY]
+    if version != FORMAT_VERSION:
+        logger.warning(f"_read_declaration: '{metadata_path}' says {VERSION_KEY} is {version!r}, and this "
+                       f"Raven reads {FORMAT_VERSION}; ignoring it.")
+        return None
+
+    name = metadata.get("name")
+    if not isinstance(name, str) or not name:
+        logger.warning(f"_read_declaration: '{metadata_path}' is a character declaration with no usable "
+                       f"'name' ({name!r}); ignoring it.")
+        return None
+
+    def beside(filename: str) -> pathlib.Path | None:
+        """The named file next to the declaration, if it is there."""
+        path = metadata_path.with_name(filename)
         return path if path.exists() else None
 
-    # A face is optional. A character with none is a perfectly good character everywhere the face is not
-    # what is wanted — a terminal frontend, or a Librarian run without an avatar — and rejecting the
-    # declaration would cost it its card and its voice as well, which is far more than the face.
-    image_path = metadata_path.with_suffix(IMAGE_EXT)
-    if not image_path.exists():
+    stem = metadata_path.stem
+    # A face is optional. A character with none is a perfectly good character wherever the face is not what
+    # is wanted — a terminal frontend, or a Librarian run without an avatar — and rejecting the declaration
+    # would cost it its card and its voice as well.
+    image_path = beside(f"{stem}{IMAGE_EXT}")
+    if image_path is None:
         logger.info(f"_read_declaration: character '{name}' has no avatar image of its own "
-                    f"('{image_path.name}' is not there); it will have no face.")
-        image_path = None
+                    f"('{stem}{IMAGE_EXT}' is not there); it will have no face.")
 
     return Character(name=name,
                      image_path=image_path,
-                     icon_path=sidecar(ICON_SUFFIX, IMAGE_EXT),
+                     icon_path=beside(f"{stem}{ICON_SUFFIX}{IMAGE_EXT}"),
                      voice=metadata.get("voice"),
-                     card_path=sidecar(CARD_SUFFIX, CARD_EXT))
+                     card_path=beside(f"{stem}{CARD_EXT}"))
 
 
-def scan(directory: Optional[pathlib.Path] = None) -> Dict[str, Character]:
-    """Read every character declared under `directory`, returning `{name: Character}`.
+def scan(directory: pathlib.Path | None = None) -> dict[str, Character]:
+    """Return `{name: Character}` for every character declared under `directory`.
+
+    **Exactly the characters that have a JSON declaration**, and nothing else: an image with no JSON beside
+    it is not here, and cannot be found by name at all. Every other file a character may have is optional
+    and does not affect whether it appears.
 
     `directory`: Where to look, searched recursively. Defaults to the shipped
                  `raven/avatar/assets/characters/`.
@@ -158,25 +190,28 @@ def scan(directory: Optional[pathlib.Path] = None) -> Dict[str, Character]:
     """
     if directory is None:
         directory = assets_path("characters")
-    found: Dict[str, Character] = {}
+    found: dict[str, Character] = {}
+    declared_by: dict[str, pathlib.Path] = {}  # only to name both files in the duplicate-name warning
     for metadata_path in sorted(pathlib.Path(directory).rglob(f"*{METADATA_EXT}")):
         character = _read_declaration(metadata_path)
         if character is None:
             continue
         if character.name in found:
+            # Both named by their declaration rather than by their image: a character need not have one,
+            # so reaching for `image_path.name` here would crash on exactly the case being reported.
             logger.warning(f"scan: '{character.name}' is declared twice, by "
-                           f"'{found[character.name].image_path.name}' and by "
-                           f"'{character.image_path.name}'; keeping the first, so the second cannot be "
-                           "found by name")
+                           f"'{declared_by[character.name].name}' and by '{metadata_path.name}'; keeping "
+                           "the first, so the second cannot be found by name")
             continue
         found[character.name] = character
+        declared_by[character.name] = metadata_path
     return found
 
 
-_cache: Optional[Dict[str, Character]] = None
+_cache: dict[str, Character] | None = None
 
 
-def characters() -> Dict[str, Character]:
+def characters() -> dict[str, Character]:
     """Return `{name: Character}` for the shipped characters, scanning the first time and caching after.
 
     Cached because the callers ask per drawn message: a chat graph resolves a glyph for every box in the
@@ -190,14 +225,14 @@ def characters() -> Dict[str, Character]:
     return _cache
 
 
-def rescan() -> Dict[str, Character]:
+def rescan() -> dict[str, Character]:
     """Forget the cached scan and read the tree again. Returns the new mapping."""
     global _cache
     _cache = None
     return characters()
 
 
-def find(name: Optional[str]) -> Optional[Character]:
+def find(name: str | None) -> Character | None:
     """Return the character called `name`, or `None` if no declaration claims that name.
 
     `None` in and `None` out, so a caller holding a message's recorded persona — which is `None` for the

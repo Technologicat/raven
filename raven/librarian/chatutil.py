@@ -1061,11 +1061,18 @@ def create_initial_system_message(llm_settings: env, use_character_card: bool = 
                    This is the one place that knows how a system message is assembled, so that a deployment
                    which fills a slot keeps it without every caller having to remember that it might be there.
     """
-    # The system prompt is stripped, so the sections are joined with two linefeeds to leave one blank line.
+    # **Exactly one blank line between sections, whatever the files look like.** Each is stripped here
+    # rather than trusted to arrive stripped: these are text files a user edits, and a trailing newline is
+    # what most editors add on save — so without this, spacing between the sections would depend on how
+    # somebody's editor is configured, and getting it right would mean deliberately leaving a file without
+    # its final newline. Stripping here also means no producer has to remember to.
+    #
+    # To separate sections *visibly*, put a Markdown rule (`-----`) in the prose; the block already ends
+    # with one, which is what closes it off from the conversation.
     sections = [llm_settings.system_prompt]
     if use_character_card:
         sections.extend([llm_settings.character_card, llm_settings.user_card])
-    sections = [section for section in sections if section]
+    sections = [stripped for section in sections if section and (stripped := section.strip())]
     if not sections:
         if use_character_card:
             # Only with `use_character_card=True`: a chat is being set up, and there is nothing at all to

@@ -13,7 +13,11 @@ from raven.avatar import characters
 
 
 def declare(directory, stem, metadata, *, image=True, icon=False, card=None):
-    """Write one character declaration, plus whichever of its sidecars the test wants."""
+    """Write one character declaration, plus whichever of its optional files the test wants.
+
+    `metadata` is written as given, so a test can leave the version key out to check that such a file is
+    not taken for a character; `declared` below is the shorthand for the ordinary case.
+    """
     if metadata is not None:
         (directory / f"{stem}.json").write_text(json.dumps(metadata), encoding="utf-8")
     if image:
@@ -21,63 +25,68 @@ def declare(directory, stem, metadata, *, image=True, icon=False, card=None):
     if icon:
         (directory / f"{stem}_icon.png").write_bytes(b"nor this")
     if card is not None:
-        (directory / f"{stem}_card.md").write_text(card, encoding="utf-8")
+        (directory / f"{stem}.md").write_text(card, encoding="utf-8")
+
+
+def declared(**fields):
+    """A character declaration's metadata: the version key, plus whatever the test is about."""
+    return {characters.VERSION_KEY: characters.FORMAT_VERSION, **fields}
 
 
 class TestFindingACharacter:
     def test_a_declaration_is_found_by_the_name_inside_it(self, tmp_path):
         # Not by its filename: `jj1.png` is the character *Juha*, which is the case the whole module
         # exists for and the one no filename rule recovers.
-        declare(tmp_path, "jj1", {"name": "Juha"})
+        declare(tmp_path, "jj1", declared(name="Juha"))
         found = characters.scan(tmp_path)
         assert list(found) == ["Juha"]
         assert found["Juha"].image_path.name == "jj1.png"
 
     def test_the_voice_comes_along(self, tmp_path):
-        declare(tmp_path, "aria1", {"name": "Aria", "voice": "af_nova"})
+        declare(tmp_path, "aria1", declared(name="Aria", voice="af_nova"))
         assert characters.scan(tmp_path)["Aria"].voice == "af_nova"
 
     def test_a_declaration_without_a_voice_says_so(self, tmp_path):
         """`None` rather than a guess: the caller's own default is the right answer, not ours."""
-        declare(tmp_path, "aria1", {"name": "Aria"})
+        declare(tmp_path, "aria1", declared(name="Aria"))
         assert characters.scan(tmp_path)["Aria"].voice is None
 
     def test_it_searches_recursively(self, tmp_path):
         # The shipped tree sorts characters into `other/`, `scientists/`, `tropes/` and so on.
         nested = tmp_path / "scientists"
         nested.mkdir()
-        declare(nested, "jj1", {"name": "Juha"})
+        declare(nested, "jj1", declared(name="Juha"))
         assert list(characters.scan(tmp_path)) == ["Juha"]
 
 
 class TestTheSidecarsAreFoundByConvention:
-    """`aria1.png` -> `aria1_icon.png` and `aria1_card.md`, which is how the avatar loader finds its cels.
+    """`aria1.json` -> `aria1.md`, `aria1.png` and `aria1_icon.png`, all found by the same stem.
 
     Not named in the JSON, deliberately: one way to find a character's files rather than two.
     """
 
     def test_the_icon_is_found_when_it_is_there(self, tmp_path):
-        declare(tmp_path, "aria1", {"name": "Aria"}, icon=True)
+        declare(tmp_path, "aria1", declared(name="Aria"), icon=True)
         assert characters.scan(tmp_path)["Aria"].icon_path.name == "aria1_icon.png"
 
     def test_a_character_without_an_icon_says_so(self, tmp_path):
         # An ordinary state, and the caller draws a generic glyph. `jj1` in the shipped tree is one.
-        declare(tmp_path, "aria1", {"name": "Aria"}, icon=False)
+        declare(tmp_path, "aria1", declared(name="Aria"), icon=False)
         assert characters.scan(tmp_path)["Aria"].icon_path is None
 
     def test_the_card_is_read_on_demand(self, tmp_path):
-        declare(tmp_path, "aria1", {"name": "Aria"}, card="You are {char}, and you talk to {user}.")
+        declare(tmp_path, "aria1", declared(name="Aria"), card="You are {char}, and you talk to {user}.")
         character = characters.scan(tmp_path)["Aria"]
-        assert character.card_path.name == "aria1_card.md"
+        assert character.card_path.name == "aria1.md"
         assert character.read_card() == "You are {char}, and you talk to {user}."
 
     def test_the_card_is_returned_as_a_template(self, tmp_path):
         """Unfilled. This module knows nothing about a chat, so who `{char}` is is not its question."""
-        declare(tmp_path, "aria1", {"name": "Aria"}, card="I am {char}.")
+        declare(tmp_path, "aria1", declared(name="Aria"), card="I am {char}.")
         assert "{char}" in characters.scan(tmp_path)["Aria"].read_card()
 
     def test_a_character_without_a_card_says_so(self, tmp_path):
-        declare(tmp_path, "aria1", {"name": "Aria"})
+        declare(tmp_path, "aria1", declared(name="Aria"))
         character = characters.scan(tmp_path)["Aria"]
         assert character.card_path is None
         assert character.read_card() is None
@@ -86,15 +95,42 @@ class TestTheSidecarsAreFoundByConvention:
 class TestWhatIsNotACharacter:
     """The tree is shared with other files, and a bad one must cost its own character and no others."""
 
-    def test_json_without_a_name_is_ignored(self, tmp_path):
-        (tmp_path / "emotions.json").write_text('{"happy": {"eyebrow": 1.0}}', encoding="utf-8")
-        declare(tmp_path, "aria1", {"name": "Aria"})
+    def test_json_without_the_version_key_is_not_a_character(self, tmp_path):
+        """What makes a file a character is the version key, not the presence of a `name`.
+
+        The tree holds other JSON, and anything at all might carry a `name` — so going by that would take
+        a stranger's object for a character, and name it whatever its unrelated `name` field said.
+        """
+        (tmp_path / "somebody_else.json").write_text('{"name": "Not a character"}', encoding="utf-8")
+        declare(tmp_path, "aria1", declared(name="Aria"))
         assert list(characters.scan(tmp_path)) == ["Aria"], \
             "the stray file was taken for a character, or it took the real one down with it"
 
+    def test_a_declaration_with_no_usable_name_is_ignored(self, tmp_path):
+        # It says it is a character, so it is one somebody meant to work — unlike the file above, this
+        # is worth complaining about, and `_read_declaration` does.
+        declare(tmp_path, "nameless", {characters.VERSION_KEY: characters.FORMAT_VERSION})
+        declare(tmp_path, "aria1", declared(name="Aria"))
+        assert list(characters.scan(tmp_path)) == ["Aria"]
+
+    def test_a_declaration_from_a_newer_raven_is_ignored(self, tmp_path):
+        """What the version number is for: a format that changes can say so rather than half-working."""
+        declare(tmp_path, "future", {characters.VERSION_KEY: characters.FORMAT_VERSION + 1,
+                                     "name": "From The Future"})
+        declare(tmp_path, "aria1", declared(name="Aria"))
+        assert list(characters.scan(tmp_path)) == ["Aria"]
+
     def test_malformed_json_is_ignored(self, tmp_path):
         (tmp_path / "broken.json").write_text("{ this is not json", encoding="utf-8")
-        declare(tmp_path, "aria1", {"name": "Aria"})
+        declare(tmp_path, "aria1", declared(name="Aria"))
+        assert list(characters.scan(tmp_path)) == ["Aria"]
+
+    def test_json_that_is_not_an_object_is_ignored(self, tmp_path):
+        # Valid JSON, and `VERSION_KEY in metadata` would raise on some of these rather than answer.
+        for filename, content in (("a_list.json", "[1, 2, 3]"), ("a_string.json", '"hello"'),
+                                  ("a_number.json", "42"), ("null.json", "null")):
+            (tmp_path / filename).write_text(content, encoding="utf-8")
+        declare(tmp_path, "aria1", declared(name="Aria"))
         assert list(characters.scan(tmp_path)) == ["Aria"]
 
     def test_a_character_with_no_face_is_still_a_character(self, tmp_path):
@@ -102,9 +138,9 @@ class TestWhatIsNotACharacter:
 
         `raven-minichat` shows no avatar at all, and a Librarian may be run without one, so requiring an
         image would mean a faceless character could not be declared — and an undeclared character loses
-        its card and its voice too, which is far more than the face.
+        its card and its voice as well.
         """
-        declare(tmp_path, "sage", {"name": "Sage", "voice": "af_nova"}, image=False,
+        declare(tmp_path, "sage", declared(name="Sage", voice="af_nova"), image=False,
                 card="You are {char}.")
         found = characters.scan(tmp_path)
         assert list(found) == ["Sage"]
@@ -114,14 +150,14 @@ class TestWhatIsNotACharacter:
 
     def test_a_faceless_character_still_finds_its_sidecars(self, tmp_path):
         # They are keyed off the declaration's stem rather than the image's, which is what makes this work.
-        declare(tmp_path, "sage", {"name": "Sage"}, image=False, icon=True, card="hello")
+        declare(tmp_path, "sage", declared(name="Sage"), image=False, icon=True, card="hello")
         sage = characters.scan(tmp_path)["Sage"]
         assert sage.icon_path.name == "sage_icon.png"
-        assert sage.card_path.name == "sage_card.md"
+        assert sage.card_path.name == "sage.md"
 
     def test_one_name_declared_twice_keeps_the_first(self, tmp_path):
-        declare(tmp_path, "aria1", {"name": "Aria"})
-        declare(tmp_path, "aria2", {"name": "Aria"})
+        declare(tmp_path, "aria1", declared(name="Aria"))
+        declare(tmp_path, "aria2", declared(name="Aria"))
         found = characters.scan(tmp_path)
         assert list(found) == ["Aria"]
         assert found["Aria"].image_path.name == "aria1.png", "resolved in path order, so it is the first"
@@ -139,7 +175,7 @@ class TestTheShippedTree:
         assert aria.image_path.name == "aria1.png"
         assert aria.voice is not None
         assert aria.icon_path is not None
-        assert "{interaction_style}" in aria.read_card(), \
+        assert "{interaction}" in aria.read_card(), \
             "the card does not splice in the shared block, so every character would carry its own copy"
 
     def test_the_undeclared_characters_stay_undeclared(self):
@@ -160,12 +196,12 @@ class TestFind:
 class TestTheScanIsCached:
     def test_rescan_picks_up_a_change(self, monkeypatch, tmp_path):
         """The cache is what makes a per-drawn-message lookup cheap; `rescan` is the way out of it."""
-        declare(tmp_path, "aria1", {"name": "Aria"})
+        declare(tmp_path, "aria1", declared(name="Aria"))
         monkeypatch.setattr(characters, "_cache", None)
         monkeypatch.setattr(characters, "assets_path", lambda *parts: tmp_path)
         assert list(characters.characters()) == ["Aria"]
 
-        declare(tmp_path, "jj1", {"name": "Juha"})
+        declare(tmp_path, "jj1", declared(name="Juha"))
         assert list(characters.characters()) == ["Aria"], "the scan was not cached at all"
         assert sorted(characters.rescan()) == ["Aria", "Juha"]
         monkeypatch.setattr(characters, "_cache", None)  # leave no test's tree in the process-wide cache
