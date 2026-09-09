@@ -17,6 +17,41 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Let the system prompt be hidden
+
+*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-09*
+
+Librarian shows the system prompt, on purpose — it is a teaching tool as much as a chat client, and seeing
+what the model was actually set up with is a large part of what there is to learn. But it is not always
+what a reader wants on screen: it is long, it is the same on every branch, and someone using Raven to get
+work done is looking at the conversation rather than at its scaffolding.
+
+So: **a way to hide it.** Either a configuration option or a runtime toggle; the toggle is the better one
+if the cost is close, since the reason to look at it is occasional rather than permanent.
+
+**The chat log is the easy half.** The system prompt is a node like any other, drawn by the same code path
+with its own colours (`gui_config.chat_color_system_front`), so not drawing it is a filter.
+
+**The chat graph is what makes this more than a filter**, and is why this is not a quick change:
+
+- **The system node is the root**, and the root is where every branch meets. Hidden, the tree loses the
+  vertex that explains why those branches are one conversation — a forest of unrelated spines rather than
+  one chat with alternatives in it.
+- **`chatgraph` already draws *other* roots as a gap box**, deliberately: "the alternative is a root that
+  looks like the only one there has ever been". Hiding the current root would reintroduce exactly the
+  confusion that gap exists to prevent, one level down.
+- So the graph needs an answer of its own — draw the root as an unlabelled joint, collapse it into the
+  first real message, or keep showing it while the log hides it. That is a design question about what the
+  picture is *for*, not a flag.
+
+**Note the interaction with what the AI is told**, which is the other reason it is filed rather than done:
+`chatutil.SETUP_FRAMING_NOTICE` says the setup is the model's own ground, to be spoken from rather than
+pointed at. That stays true whether or not the user can see it — it was rewritten in 0.2.9 precisely so it
+would not claim invisibility — so hiding the prompt needs no change there. Worth stating, since the
+obvious guess is that the two are coupled.
+
+Raised while rewriting that notice (2026-09-09).
+
 ## Nothing maps a character's name to its picture, so only the configured one can wear its own face
 
 *Cluster: chat-graph · Cost: M · Gate: needs a design decision — see the three shapes below · Filed: 2026-09-08 · Narrowed: 2026-09-08*
