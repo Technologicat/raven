@@ -55,6 +55,30 @@ not settled, and the two sensible axes disagree — closure rate (smallest first
 they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
 deadline actually binds; everything else could slip past September without anything breaking.
 
+### Tomorrow morning, filed 2026-09-09 — two hammerspace items from the help card pass
+
+Both are *hammerspace*: real, unplanned, and the schedule pays. They are written here rather than only in
+`TODO_DEFERRED.md` because this is the list we read when picking the next item, and an item that lives only
+in the deferred file is one we would walk past.
+
+1. **Finish the help card sweep** — the other eight cards, to the standard Librarian's now sets. That
+   standard is written down (`raven-style-guide.md`, *User-facing text*: grammatical labels, sentence case,
+   `"Same, but …"`, and no wrapping in a hotkey table), and `TODO_DEFERRED.md`'s help-card item carries a
+   checklist of what Librarian's turned out to have wrong, which is what to look for in the rest.
+   - **Start with the Visualizer.** It is the one with a known missing key — `check_option_lists.py` reports
+     its `Ctrl+S` for saving a word cloud — and the one most likely to want the paging feature.
+   - **Then Librarian's tooltip half**, the other side of "Fleet audit: every hotkey discoverable in a
+     tooltip + help card". Do it as a first pass to get a real estimate: an attempt to size it by grep on
+     2026-09-09 produced confidently wrong numbers in both directions, and that failure is recorded in the
+     item so nobody repeats it.
+
+2. **Merge the three display shorteners** into `raven/common/text/`, per the shape agreed on 2026-09-09 and
+   filed under *"Three display shorteners in `librarian/`"*. Sized that day at six files plus tests, 30–45
+   minutes; the two wrinkles found while sizing it are in the item, and neither is a blocker.
+
+Neither is on any brief, and neither blocks the exhibit. They are here so that the next stock-take sees
+them and decides, rather than skipping them by never seeing them.
+
 ### Loose ends, filed 2026-09-02 — the chat graph's palette, and a first-press bug
 
 Two loose ends from the chat-graph run, neither of them a brief. They are here rather than in

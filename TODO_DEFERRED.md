@@ -2790,6 +2790,23 @@ in `raven/common/text/`, with the three private helpers deleted and their call s
 A GUI label in a proportional font wants the measured one; character budgets are for text that is not being
 laid out.
 
+**Sized 2026-09-09: six files plus tests, 30–45 minutes.** New module, then `cleanup.py` and its two tests,
+`cleanup_dialog.py`, `chatutil.py` (four call sites) and `chatgraph.py` (two). Two wrinkles found while
+sizing it, neither a blocker, both worth knowing before starting:
+
+- **`_with_ellipsis` is not standalone.** It rests on `chatgraph._longest_prefix_that_fits`, which the
+  graph *also* uses directly for word-wrapping — so that helper is layout machinery, not merely part of the
+  shortener. It should move too (a longest-prefix-fitting-a-measured-width is general), and `chatgraph`
+  then imports both back.
+- **`chatutil._shorten` also collapses whitespace**, which the other callers must not inherit. Keep a
+  two-line `_shorten` in `chatutil` that collapses and delegates, rather than pushing the collapse into the
+  shared function or repeating it at four call sites.
+
+**And one deviation from the agreed shape, for a decision:** `middle=` on the *width* variant has no
+caller. Middle-elide by measurement needs two binary searches rather than one, and nothing would exercise
+it, so the plan is to leave it out and say so in the docstring — an end-elide-only
+`ellipsize_to_width`. Change that if a caller appears, or if the symmetry is wanted for its own sake.
+
 **Found while asking whether a device name could overflow a help-card cell.** It could not, in the end —
 the answer there was to stop putting live state on the card at all — so this is standalone cleanup with
 nothing waiting on it.
