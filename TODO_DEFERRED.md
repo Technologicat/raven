@@ -2743,15 +2743,25 @@ there and the values want tuning:
 
 - **Prose paragraphs want a little vertical space between them.** Possibly the chat log's amount, possibly
   not — it is a question for the eye rather than for a shared constant.
-- **The two-column wrap wants trimming** so the columns look right rather than merely fit. `column_width`
-  is `content_width // 2` with nothing taken off for the gap between them, which errs narrow on purpose;
-  what is unmeasured is whether narrow-on-purpose looks like it was meant.
+- **The two-column wrap is too wide**, and the right column hugs the window edge (Juha, 2026-09-09,
+  looking at it). `column_width` is `content_width // 2`, so the two columns together are the whole
+  content width and the gap between them is *added* on top — an overflow of one item spacing, landing on
+  the right-hand column.
+  - **Note the existing comment says the opposite**, and it is the one this was copied from:
+    `visualizer/app.py`, at the *Terminology* section, reads "Halved before the spacer between them is
+    subtracted, which errs narrow — and narrow is the safe direction here". Nothing is subtracted, so it
+    errs wide. Which of the comment and the code is the wrong one is the question to settle first: the
+    comment describes an arrangement that would be right, and may record an intent the code never
+    acquired. Do not just edit the sentence.
 - **The columns are not the same width from section to section.** *Tool use* on Librarian's page three
   divides at a different x than the sections above it, and a reader expects one boundary down the page.
   Suspected cause, unverified: a group sizes itself to its widest *rendered* line, not to the `wrap` its
   text was given — so a column holding one paragraph comes out narrower than one holding three, and *Tool
-  use* is the section split 1/2 where the others are split more evenly. If that is it, pinning the group's
-  width fixes every section at once. Check it before building on it.
+  use* is the section split 1/2 where the others are split more evenly. Check it before building on it.
+  - **Raven pins a container's width with an explicitly sized spacer** (Juha, 2026-09-09), as
+    `visualizer/importer_gui.py` does — `dpg.add_spacer(width=gui_config.importer_w)  # ensure window
+    width`. One of those at the head of each column group would fix every section at once, and is the
+    same fix as the overflow above if the width put in it is the corrected one.
 
 **The other eight cards are untouched and stay that way for now** (Juha, 2026-09-09): Librarian's is the
 prototype, and the rest conform if and when their own content calls for it. Nothing forces them to — a
