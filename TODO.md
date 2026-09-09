@@ -89,7 +89,10 @@ leaves the one large item a safe margin rather than a hopeful one.
    nothing in the GUI has ever created a second revision. `briefs/researchers-night/README.md` gathers the
    material, which was scattered across four files, and records the three decisions taken 2026-09-09 — an
    edit adds a revision, old revisions keep their attachments alive, and the user needs a way to delete
-   one permanently — a button beside the revision picker, not a sweep and not automatic.
+   one permanently — a button beside the revision picker, not a sweep and not automatic. The reading side
+   is already active-revision-correct throughout (surveyed, not assumed); what is open is how many of the
+   eight `TODO: ... revision` markers actually need a change, which is a design question rather than a
+   sweep.
 7. **The Markdown renderer's remaining steps — slack**, if time is left over. The reasoning is in
    `briefs/researchers-night/markdown-block-rendering-brief.md`.
 

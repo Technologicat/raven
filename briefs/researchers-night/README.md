@@ -315,14 +315,23 @@ revising to pick the active one"* — so it was surveyed rather than assumed (20
 - **Nothing reaches past the accessor.** The only direct `node["data"]` reads outside `chattree` are in
   `chatutil.upgrade_datastore`, which walks every revision because migrating is what it is for.
 
-**What the eight `TODO: later (chat editing)` markers actually mark** is therefore narrower than "may need
-revising": they are the sites where a *reader* might want to see a revision other than the active one, so
-each has to accept a revision chosen by the view rather than taking the default. Five are in
-`chat_controller`, two in `minichat`, one in `chatutil`. That is a bounded job — thread a choice through
-eight places — rather than an audit of everything that touches a payload.
+**So the eight `TODO: later (chat editing)` markers are a list of places to look at, not a list of changes
+to make** — and how many of them actually change is the open question rather than a known quantity (Juha,
+2026-09-09). Five are in `chat_controller`, two in `minichat`, one in `chatutil`.
 
-The ninth marker is the constraint, not a call site: switching revision must repaint one message rather
-than rebuild the log.
+The plausible answer is *few*: outside the switcher itself, it is not clear that anything ever wants a
+revision other than the explicitly active one. Every consumer — what the LLM is sent, what the chat log
+shows, what a copy produces, what the graph draws — wants "the version this message currently is", which
+is what active means. A non-active revision is wanted by exactly one thing: the switcher, while you are
+looking through the history to choose. So the change may be confined to the render path the switcher
+drives, with the other seven correct as they stand.
+
+**That is worth settling by design rather than by editing eight call sites and seeing what breaks**, since
+the failure mode of guessing wrong here is quiet: a view that shows a stale revision looks like a view
+showing a message.
+
+The ninth marker is a constraint rather than a call site: switching revision must repaint one message
+rather than rebuild the log.
 
 **The material exists but is scattered**, which is why it reads as thinner than it is. Gathered here so it
 is not re-derived:
