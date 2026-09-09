@@ -49,13 +49,37 @@ after publishing — without that gate being on any release path.
 
 ## Next session, from 2026-09-10
 
-~~**Start with the three fixes a live test found on 2026-09-09.**~~ **Both are done, live-tested and
-pushed on 2026-09-09** — the framing notice is an inject with a preamble slot of its own, and the
-`...N more cards` box walks the older character cards. Two things landed alongside them, from the same
-live test: a rule now separates every section of the setup, and hovering a message's role icon names who
-wrote it.
+**Everything the 2026-09-09 session set out to do is done, live-tested, pushed and CI-green**: the framing
+notice is an inject with a preamble slot of its own, the `...N more cards` box walks the older character
+cards, and the help card has pages. Sixteen commits; nothing is half-finished in the tree, and the only
+working-tree changes are the usual three `config.py` overrides.
 
-**So the help card's paging** — the last of the two hammerspace items, specced in `TODO_DEFERRED.md`,
+**What the day mostly produced was bugfixes, and they were not on any list.** A dead close button led to a
+rectangle standing in for a hit test in eight places across five apps, guarded everywhere by "is a modal
+up?" — a question with nothing to do with occlusion. `is_mouse_on_widget` asks ImGui now. Alongside: the
+zoom-out floor could not reach the fit key it was supposed to agree with, Cherrypick's `1` means 1:1
+across the constellation with picking on `Shift`+digit, `FileDialog`'s advertised non-modal mode works
+rather than merely being offered, and Cherrypick's compare-mode keys moved into `CompareMode` where they
+can be tested.
+
+**The sprint stands at item 3.** Items 1 and 2 of the build order below are closed. What remains before
+the exhibit:
+
+- **Band-2 item 11, the avatar's expression following the spoken words** — a prototype and a decision
+  rather than a build. The last of the three that were meant to be done by 2026-09-10.
+- **The chat graph's transition animation** (brief 16), which must precede search.
+- **Brief 16 item 8, search in both halves** — the large one, at least a week, and the reason the three
+  above were sized to finish early.
+
+**The quick wins, if a session wants one before the large item**: the help card's visual pass (three
+values — paragraph spacing, a two-column wrap that is too wide, and a column boundary that shifts between
+sections), the two-column sweep for the other eight cards, attachments still undescribed on Librarian's
+card, and the Visualizer's `Ctrl+S` missing from its own card. All small, all in `TODO_DEFERRED.md`, and
+the first of them wants the maintainer at the keyboard.
+
+## Superseded: next session, from 2026-09-10 (the plan that was)
+
+**The help card's paging** — the last of the two hammerspace items, specced in `TODO_DEFERRED.md`,
 and a look-at-it job: the card is a fixed-height window whose whole problem is what fits, so it wants the
 maintainer at the keyboard rather than being built blind and measured afterwards.
 
@@ -85,8 +109,10 @@ since the reading side is already active-revision-correct throughout.
 were meant to be done inside a day or two — **by end of Thursday 2026-09-10 at the latest** — which is what
 leaves the one large item a safe margin rather than a hopeful one.
 
-1. ~~**The two hammerspace items.**~~ The chat graph's metrics readout is **done 2026-09-08**; the help
-   card's paging is what tomorrow starts on.
+1. ~~**The two hammerspace items.**~~ Both **done** — the chat graph's metrics readout 2026-09-08, the help
+   card's paging 2026-09-09. The card is three pages now (Keyboard, Chat graph, About Librarian) and
+   `HelpWindow` takes `pages`, additively, so the other eight cards are untouched. What is left of that
+   item is a visual pass and the two-column sweep; see `TODO_DEFERRED.md`.
 2. ~~**Per-character role icons for stored messages.**~~ **Done 2026-09-08**, and wider than filed — see
    above. What is left of that item is the design decision it uncovered, which is now its whole content.
 3. **Band-2 item 11, the avatar's expression following the spoken words** — open, and at this point it is a
