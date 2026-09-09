@@ -821,7 +821,7 @@ def main() -> int:
         env(key_indent=0, key="Mouse wheel", action_indent=0, action="Zoom at cursor", notes=""),
         env(key_indent=0, key="Mouse drag", action_indent=0, action="Pan view", notes=""),
         helpcard.hotkey_blank_entry,
-        env(key_indent=0, key="F1", action_indent=0, action="Open this Help card", notes=""),
+        env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
         env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen", notes=""),
         env(key_indent=0, key="F12", action_indent=0, action="Toggle dark mode", notes=""),
     )

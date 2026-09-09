@@ -657,7 +657,7 @@ with timer() as tim:
                                width=gui_config.toolbutton_w)
                 dpg.bind_item_font("help_button", app_state.themes_and_fonts.icon_font_regular)  # tag
                 with dpg.tooltip("help_button", tag="help_tooltip"):  # tag
-                    dpg.add_text("Open the Help card [F1]",
+                    dpg.add_text("Open the help card [F1]",
                                  tag="help_tooltip_text")
 
             # Search and plotter
@@ -820,7 +820,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=0, key="Ctrl+Shift+Y", action_indent=0, action="Redo last selection change", notes=""),
                env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Reset plotter zoom", notes=""),
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
-               env(key_indent=0, key="F1", action_indent=0, action="Open this Help card", notes=""),
+               env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
                )
 def render_help_extras(self: helpcard.HelpWindow,
                        gui_parent: Union[str, int]) -> None:
