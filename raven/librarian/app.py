@@ -2454,14 +2454,38 @@ def _give_keyboard_to_graph() -> None:
     -- DPG leaves ImGui's keyboard-navigation activation off, so it ignores Space and Enter rather than
     pressing itself.
 
-    TODO: **Nothing owns "which pane has the keyboard", so every claimant must clear the others by hand.**
-    TODO: Anything new that takes the keyboard has to release `chat_graph_panel.has_keyboard`, and nothing
-    TODO: will remind it -- the audio input panel forgot, and the graph stayed lit while the panel had the
-    TODO: keys. See `TODO_DEFERRED.md`, "Nothing owns 'which pane has the keyboard'". Do not reach for a
-    TODO: single stored owner without reading it first: the derived design is right about the hard part.
+    Release everything, then claim: the shape every claimant here uses, so that adding a pane with a flag
+    of its own means editing `_release_manual_keyboard_claims` and nothing else.
     """
     dpg.focus_item("chat_send_button")  # tag
+    _release_manual_keyboard_claims()
     chat_graph_panel.has_keyboard = True
+
+
+def _release_manual_keyboard_claims() -> None:
+    """Clear every "this pane has the keyboard" flag Raven maintains by hand. Grep for callers.
+
+    **The list of such flags is here and nowhere else, which is the whole point of the function.** Most of
+    the keyboard home is derived — `_cycle_keyboard_home` reads ImGui's caret and works the rest out — and
+    what cannot be derived is kept in one flag per pane, because DPG cannot answer for a pane that has no
+    widget to hold a caret. Those flags go stale the moment something *else* takes the keyboard, and
+    nothing tells them so.
+
+    So anything that takes the keyboard calls this first and then claims what it wants. A new pane with a
+    flag of its own adds one line here, and every existing claimant releases it without being edited; a
+    new *claimant* calls this and inherits the whole list. Written out at each opener instead, the two
+    would drift the first time one of them was added without the other in view — which is exactly how the
+    audio input panel came to leave the chat graph lit while it had the keys.
+
+    Not a general "give the keyboard up": it clears the manual flags only, and leaves ImGui's caret alone.
+    A caller that also needs the composer deactivated parks focus on a button, as `_give_keyboard_to_graph`
+    does — that is DPG's half, and DPG owns it.
+
+    TODO: See `TODO_DEFERRED.md`, "Nothing owns 'which pane has the keyboard'". This makes the obligation
+    TODO: greppable rather than removing it; a single owner would be better and is not obviously reachable
+    TODO: given what DPG reports. Read that item before replacing this with stored state.
+    """
+    chat_graph_panel.has_keyboard = False
 
 
 def _toggle_audio_input_panel() -> None:
@@ -2478,14 +2502,9 @@ def _toggle_audio_input_panel() -> None:
 
     Here rather than on the panel, which owns none of this: the keyboard model lives in this module, and a
     panel that had to know about the chat graph would be the wrong shape for the next panel too.
-
-    TODO: **This is one claimant releasing one other by name, which is the pattern that does not scale.**
-    TODO: A third non-modal pane means this line has to grow, or the next panel repeats the bug. See
-    TODO: `TODO_DEFERRED.md`, "Nothing owns 'which pane has the keyboard'", for why the obvious fix --
-    TODO: storing a single owner -- is not obviously better than what is here.
     """
     if not audio_input_panel.is_open:
-        chat_graph_panel.has_keyboard = False
+        _release_manual_keyboard_claims()
     audio_input_panel.toggle()
 
 
@@ -2505,7 +2524,8 @@ def _cycle_keyboard_home(backwards: bool = False) -> None:
     TODO: **them.** With the audio input panel up, this still answers "log" or "graph" — true of where the
     TODO: keys would go were the panel dismissed, and false about where they are. Harmless today, since
     TODO: nothing asks while a panel is up; a fourth pane, or anything that asks at the wrong moment,
-    TODO: would find it. See `TODO_DEFERRED.md`, "Nothing owns 'which pane has the keyboard'".
+    TODO: would find it. The flags this reads are listed in `_release_manual_keyboard_claims`; see
+    TODO: `TODO_DEFERRED.md`, "Nothing owns 'which pane has the keyboard'".
     """
     graph_available = chat_graph_panel.is_shown
     homes = ["composer", "log"] + (["graph"] if graph_available else [])

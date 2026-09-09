@@ -36,10 +36,24 @@ panel again, making the close look like it did something to the focus. Fixed 202
 
 **The general fix is not obvious, and DPG is the reason** (Juha, 2026-09-09). A single owner would have to
 be authoritative over things DPG owns and does not report — ImGui's caret moves on a click nobody told us
-about — so "store who has it" reintroduces exactly the staleness the derived design avoids. Possibly the
-answer is that the derivation should consult more sources rather than that the state should be stored;
-possibly there is no better arrangement available. **Do not start building until there is a design that
-beats what is there**, since the current one is right about the hard part.
+about — so "store who has it" reintroduces exactly the staleness the derived design avoids. **Do not start
+building until there is a design that beats what is there**, since the current one is right about the hard
+part.
+
+**The lead worth trying first: make "nobody" representable** (from Juha's question, 2026-09-09, whether
+the flag belongs on the chat log rather than on the graph). Moving it does not help — ImGui answers
+exactly one of the three questions, *is the composer active*, and the remaining bit distinguishes log from
+graph, so storing it either way round is the same bit with the sign flipped and goes stale identically.
+Note also that the graph cannot be derived even in principle as things stand: `_give_keyboard_to_graph`
+parks ImGui's focus on `chat_send_button` to deactivate the composer, so while the graph holds the keys
+ImGui's answer is "a button in the main window".
+
+What the question does expose is that `_cycle_keyboard_home` ends in `else: current = "log"` and therefore
+*always* names one of the three. "None of these has the keyboard" cannot be said — and that is exactly the
+app's state while the audio input panel is up. The stale flag is a symptom of the missing state rather than
+of the bit sitting on the wrong pane. If "none" were expressible, a window taking the keys would set it,
+every mark would go out honestly, and no claimant would need to know about any other — which is the
+property `_release_manual_keyboard_claims` currently buys by enumeration.
 
 What is cheap and worth doing meanwhile is what has been done: a marker at each site that participates, so
 the next person adding a claimant meets the obligation rather than discovering it. See the `TODO` comments
@@ -48,6 +62,18 @@ at `_give_keyboard_to_graph`, `_toggle_audio_input_panel` and `_cycle_keyboard_h
 Note the modal windows are safe here by accident rather than by design: the help card and `FileDialog`
 block through `input_blocked`, so the graph's handler returns early and its stale bit does no harm. The
 non-modals have no such shield, which is why the audio panel is where this surfaced.
+
+**Librarian only — surveyed 2026-09-09, so it need not be surveyed again.** `chatgraph_panel._has_keyboard`
+is the constellation's only hand-kept "this pane has the keys" flag. Every other app can ask ImGui, because
+every pane of theirs that can hold the keyboard has a widget that can hold a caret; Librarian's chat log
+does not, which is the whole reason the flag exists. Two things that look like the same shape and are not:
+
+- `audio_input_panel.has_keyboard` is a *method* deriving from `dpg.get_focused_item()`, not stored state,
+  which is why the panel was this bug's victim rather than a second instance of it.
+- `FileDialog._caret_home` is stored, and is immune because the dialog is modal and every Raven call site
+  takes the `modal=True` default — nothing else can take the keyboard while it is up, so only its own
+  navigation writes it. Worth knowing that this is the same default whose flipping would expose the
+  occlusion bug, so the immunity is one argument away from mattering.
 
 ## Switch the AI character and the user profile at runtime
 
