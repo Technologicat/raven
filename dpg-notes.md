@@ -549,7 +549,7 @@ something else that resizes itself, or if you need to know what the component is
 **For a caption written once and never touched, use `dpg.add_tooltip`.** The glitch cannot reach it — see
 the second table below: a window ImGui has not laid out before is withheld for a frame and appears already
 fitted, which is why a static tooltip has never been seen to flash on first hover. `Tooltip` there costs a
-registration and a sweeper visit and buys nothing. The trigger for reaching for the class is *the text
+registration and a updater visit and buys nothing. The trigger for reaching for the class is *the text
 changes*, and most sharply *the number of lines changes*, since that is what moves the window's edges.
 
 So, at a call site: `record_audio_message_tooltip` says what a click does *now* and changes each time

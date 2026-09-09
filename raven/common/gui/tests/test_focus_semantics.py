@@ -85,8 +85,8 @@ def widgets(mapped_gui_context, request):
     yield tags
 
     # Torn down before the widgets they point at. A `Tooltip` built on one of these registers the shared
-    # ambient sweeper with the process-wide animator and itself with the module's registries, and none of
-    # that is owned by the tooltip's target — so deleting the window first would leave the sweeper ticking
+    # ambient updater with the process-wide animator and itself with the module's registries, and none of
+    # that is owned by the tooltip's target — so deleting the window first would leave the updater ticking
     # `_follow` and `_hide` against widgets that no longer exist, in whichever module runs next.
     gui_animation.animator.clear()
     tooltip._visible.clear()
@@ -232,7 +232,7 @@ def test_a_focused_button_ignores_the_keys_that_would_press_it(widgets, keysym):
 def render_with_animations(n_frames: int = _SETTLE_FRAMES) -> None:
     """Render frames the way an app does: ticking the animator before each one.
 
-    `Tooltip` resizes itself from a sweeper registered with the animator, so a bare `render` leaves its
+    `Tooltip` resizes itself from a updater registered with the animator, so a bare `render` leaves its
     queued text un-applied and a test built on that would exercise nothing.
     """
     for _ in range(n_frames):

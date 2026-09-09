@@ -1,7 +1,7 @@
 """Tests for `raven.common.gui.tooltip`.
 
 What these can reach is the tooltip's *bookkeeping*: that it builds a hidden window and binds a hover
-handler, that "on screen" and enrolment in the sweeper's set cannot disagree, that a target deleted under a
+handler, that "on screen" and enrolment in the updater's set cannot disagree, that a target deleted under a
 showing tooltip takes it down, and that `destroy` releases what it took.
 
 What they cannot reach is the resize itself, and the reason is worth stating so nobody adds a test that
@@ -91,7 +91,7 @@ class TestText:
         thread, which is the render thread by Raven's convention, so getting here at all exercises it.
         """
         tip = Tooltip(target, "before")
-        tip.text = "after"  # returns immediately; the sweeper carries it
+        tip.text = "after"  # returns immediately; the updater carries it
 
     def test_a_queued_change_lands_over_the_next_three_frames(self, target):
         """One tick to apply it offscreen, `_SETTLE_FRAMES` more there, and it is placed on the last of them.
@@ -157,7 +157,7 @@ class TestText:
 
 class TestVisibility:
     def test_showing_enrols_and_hiding_removes(self, target):
-        """The sweeper's set means exactly "currently on screen"; the two must not be able to disagree."""
+        """The updater's set means exactly "currently on screen"; the two must not be able to disagree."""
         tip = Tooltip(target, "hi")
         tip._on_hover(None, None, None)
         assert tip._shown and tip in tooltip_module._visible
@@ -166,11 +166,11 @@ class TestVisibility:
         assert not tip._shown and tip not in tooltip_module._visible
         assert not dpg.is_item_shown(tip.window)
 
-    def test_the_sweeper_takes_down_a_tooltip_whose_target_vanished(self, target):
+    def test_the_updater_takes_down_a_tooltip_whose_target_vanished(self, target):
         """The case with no un-hover event to rely on: nothing will ever report the mouse leaving.
 
-        A deleted target reports as not hovered, so the same sweep that handles an ordinary mouse-out
-        handles this too — which is the reason the sweep is by state rather than by event.
+        A deleted target reports as not hovered, so the same pass that handles an ordinary mouse-out
+        handles this too — which is the reason the update is driven by state rather than by event.
         """
         tip = Tooltip(target, "hi")
         tip._on_hover(None, None, None)
@@ -260,17 +260,17 @@ class TestTeardown:
         assert not dpg.does_item_exist(registry)
 
     def test_destroy_while_showing_leaves_nothing_enrolled(self, target):
-        """Otherwise the sweeper would keep a dead tooltip alive by holding the only reference to it."""
+        """Otherwise the updater would keep a dead tooltip alive by holding the only reference to it."""
         tip = Tooltip(target, "bye")
         tip._on_hover(None, None, None)
         tip.destroy()
         assert tip not in tooltip_module._visible
 
 
-class TestSweeperLifetime:
-    """The sweeper runs exactly while `_visible` or `_pending` has something in it.
+class TestUpdaterLifetime:
+    """The updater runs exactly while `_visible` or `_pending` has something in it.
 
-    These pin the two halves of the hand-off separately, which is what a test can reach: that a sweeper
+    These pin the two halves of the hand-off separately, which is what a test can reach: that a updater
     starts when work appears and stops when it runs out, and that a stopped one cannot evict its
     replacement. The *interleaving* of those halves is argued from the single critical section in
     `tooltip.py` rather than measured here — a scheduler cannot be asked to reproduce a chosen ordering,
@@ -279,67 +279,67 @@ class TestSweeperLifetime:
 
     @pytest.fixture(autouse=True)
     def clean_slate(self):
-        """No sweeper before or after, so a test neither inherits one nor leaves one for the next."""
+        """No updater before or after, so a test neither inherits one nor leaves one for the next."""
         animation.animator.clear()
-        assert tooltip_module._sweeper is None, "clearing the animator left a sweeper in the slot"
+        assert tooltip_module._updater is None, "clearing the animator left a updater in the slot"
         yield
         animation.animator.clear()
 
-    def test_work_appearing_starts_a_sweeper(self, target):
+    def test_work_appearing_starts_a_updater(self, target):
         tip = Tooltip(target, "hello")
-        assert tooltip_module._sweeper is None, "building a tooltip is not itself work to sweep"
+        assert tooltip_module._updater is None, "building a tooltip is not itself work to do"
         tip._on_hover(None, None, None)
-        assert tooltip_module._sweeper is not None
+        assert tooltip_module._updater is not None
         assert animation.animator.active_count == 1
 
-    def test_a_second_enrolment_does_not_start_a_second_sweeper(self, target):
-        """Two sweepers would call `_advance` twice per frame, draining `_settle_countdown` in one frame
+    def test_a_second_enrolment_does_not_start_a_second_updater(self, target):
+        """Two updaters would call `_advance` twice per frame, draining `_settle_countdown` in one frame
         and reinstating the mis-sized frame the module exists to prevent."""
         tip = Tooltip(target, "hello")
         tip._on_hover(None, None, None)
-        first = tooltip_module._sweeper
+        first = tooltip_module._updater
         tip.text = "a change, which enrols it in the other queue as well"
-        assert tooltip_module._sweeper is first
+        assert tooltip_module._updater is first
         assert animation.animator.active_count == 1
 
-    def test_the_sweeper_stops_once_both_queues_are_empty(self, target):
+    def test_the_updater_stops_once_both_queues_are_empty(self, target):
         tip = Tooltip(target, "hello")
         tip._on_hover(None, None, None)
-        sweeper = tooltip_module._sweeper
+        updater = tooltip_module._updater
 
-        # The control. Without it the assertions below would hold just as well for a sweeper that stops
+        # The control. Without it the assertions below would hold just as well for a updater that stops
         # unconditionally, and this fixture could not tell that from one that stops when out of work.
-        assert sweeper.render_frame(t=0) is animation.action_continue, \
-            "a sweeper with a tooltip on screen stopped anyway, so the emptiness test is not what decided"
-        assert tooltip_module._sweeper is sweeper
+        assert updater.render_frame(t=0) is animation.action_continue, \
+            "a updater with a tooltip on screen stopped anyway, so the emptiness test is not what decided"
+        assert tooltip_module._updater is updater
 
         tip._hide()
         assert not tooltip_module._visible and not tooltip_module._pending
-        assert sweeper.render_frame(t=0) is animation.action_finish
-        assert tooltip_module._sweeper is None, "the slot must be free for the next tooltip to fill"
+        assert updater.render_frame(t=0) is animation.action_finish
+        assert tooltip_module._updater is None, "the slot must be free for the next tooltip to fill"
 
-    def test_work_after_a_stop_starts_a_fresh_sweeper(self, target):
+    def test_work_after_a_stop_starts_a_fresh_updater(self, target):
         tip = Tooltip(target, "hello")
         tip._on_hover(None, None, None)
-        first = tooltip_module._sweeper
+        first = tooltip_module._updater
         tip._hide()
         first.render_frame(t=0)  # out of work: stops, vacating the slot
 
         tip._on_hover(None, None, None)
-        assert tooltip_module._sweeper is not None, "work appeared and nothing was started to carry it out"
-        assert tooltip_module._sweeper is not first
+        assert tooltip_module._updater is not None, "work appeared and nothing was started to carry it out"
+        assert tooltip_module._updater is not first
 
-    def test_a_superseded_sweeper_does_not_evict_its_replacement(self, target):
+    def test_a_superseded_updater_does_not_evict_its_replacement(self, target):
         """`Animator.clear` finalizes everything it holds, so a stale `finish` can land after a successor
-        has taken the slot. Unguarded, it would leave work in the queues and nobody sweeping them."""
+        has taken the slot. Unguarded, it would leave work in the queues and nobody to carry it out."""
         tip = Tooltip(target, "hello")
         tip._on_hover(None, None, None)
-        first = tooltip_module._sweeper
+        first = tooltip_module._updater
         tip._hide()
         first.render_frame(t=0)  # stops
         tip._on_hover(None, None, None)
-        second = tooltip_module._sweeper
+        second = tooltip_module._updater
         assert second is not first, "the fixture never produced a successor, so there is nothing to evict"
 
         first.finish()  # arriving late, after the replacement is already in the slot
-        assert tooltip_module._sweeper is second, "a stopped sweeper evicted the one running now"
+        assert tooltip_module._updater is second, "a stopped updater evicted the one running now"

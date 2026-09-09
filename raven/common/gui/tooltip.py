@@ -9,7 +9,7 @@ says what a click does *now*, or one carrying a flashed acknowledgment.
 **For a caption that is written once and never touched again, `dpg.add_tooltip` is the right call.**
 The glitch cannot reach it: a window ImGui has not laid out before is withheld for a frame and appears
 already fitted, so a static tooltip has never been seen to flash on first hover. Using this class for
-one costs a registration and a sweeper visit and buys nothing.
+one costs a registration and a updater visit and buys nothing.
 
 **Inside a modal, `dpg.add_tooltip` is the only option regardless.** A modal cannot spawn a window,
 and being a window is exactly what makes this class work — so a modal's tooltips keep the glitch, and
@@ -35,12 +35,12 @@ from unpythonic import sym
 from . import animation as gui_animation
 from . import utils as guiutils
 
-# Every tooltip that is currently on screen — membership means exactly `tooltip._shown`. The sweeper walks
+# Every tooltip that is currently on screen — membership means exactly `tooltip._shown`. The updater walks
 # this rather than every tooltip in the app, because DPG has a hover handler but no un-hover handler:
 # something has to notice that the mouse left, and the only tooltips that can need hiding are the ones
 # already up. So a busy app pays for the one tooltip under the cursor, not for the two hundred it defines.
 #
-# `_on_hover` enrols and `_hide` removes, and `_hide` is the only way out: the sweeper calls it when the
+# `_on_hover` enrols and `_hide` removes, and `_hide` is the only way out: the updater calls it when the
 # mouse leaves — which covers a *deleted* target too, since a missing item reports as not hovered — and
 # `destroy` calls it for a tooltip being dismantled while the app keeps running.
 _visible = set()
@@ -50,19 +50,19 @@ _visible = set()
 # which is the same glitch by a slower route.
 _pending = set()
 
-# Guards `_visible`, `_pending` and `_sweeper` — all three, and always together. The sweeper's lifetime is
+# Guards `_visible`, `_pending` and `_updater` — all three, and always together. The updater's lifetime is
 # a property of the two queues (it exists exactly while there is something in them), so a decision about it
 # read from one lock and the queues from another could never be made atomically.
 #
 # **The rule this module runs on: never call into the animator while holding this lock.** The render thread
 # already takes them the other way round — `Animator.render_frame` holds the animator's lock across the
 # whole pass, including its calls to our `render_frame` and `finish`, both of which take this one. So the
-# order is `animator._lock` -> `_sweep_lock`, in that direction only. A site that took this lock and then
+# order is `animator._lock` -> `_update_lock`, in that direction only. A site that took this lock and then
 # asked the animator for anything would complete the cycle, and the thread it deadlocks is the one drawing
 # the frames: the app comes up blank and never finishes starting.
 #
-# It is why `_note_work` builds the sweeper inside the lock but registers it outside.
-_sweep_lock = threading.Lock()
+# It is why `_note_work` builds the updater inside the lock but registers it outside.
+_update_lock = threading.Lock()
 
 # How many frames a text change is carried offscreen before the window is placed. Two, and both are needed
 # for different reasons: the first is where autosize fits the window to its new content, out of sight, and
@@ -75,7 +75,7 @@ _sweep_lock = threading.Lock()
 # the reported size frame by frame.
 _SETTLE_FRAMES = 2
 
-class _Sweeper(gui_animation.Animation):
+class _Updater(gui_animation.Animation):
     def __init__(self):
         """Carries each tooltip's pending text change forward, keeps the shown ones under the cursor, and
         hides the ones the mouse has left.
@@ -91,27 +91,27 @@ class _Sweeper(gui_animation.Animation):
         every Raven app already ticks something.
 
         A fresh instance per registration, rather than one built at import and re-registered, and that is
-        load-bearing: identity is what lets a stopping sweeper tell itself apart from the successor that
+        load-bearing: identity is what lets a stopping updater tell itself apart from the successor that
         may already have replaced it. One reused instance would make the two indistinguishable and cost a
         generation counter to get back.
         """
         super().__init__(ambient=True)
 
     def render_frame(self, t: int) -> sym:
-        global _sweeper
-        with _sweep_lock:
-            # Nothing to sweep, so stop rather than visit two empty sets forever. Vacating the slot here,
+        global _updater
+        with _update_lock:
+            # Nothing to update, so stop rather than visit two empty sets forever. Vacating the slot here,
             # in the same critical section that observed the queues empty, is what makes the hand-off
             # safe: a thread that enqueues work takes this lock too, and so either it goes first — and we
-            # then see its entry and keep running — or we go first, and its `_sweeper is None` test sees
+            # then see its entry and keep running — or we go first, and its `_updater is None` test sees
             # the slot we just vacated and it starts a replacement. There is no third ordering, which is
             # why the enqueue and that test have to be one critical section rather than two.
             #
             # `is self` because the replacement may already be in the slot by the time the animator gets
-            # around to calling our `finish`, and evicting it would leave the queues with no sweeper at all.
+            # around to calling our `finish`, and evicting it would leave the queues with no updater at all.
             if not _pending and not _visible:
-                if _sweeper is self:
-                    _sweeper = None
+                if _updater is self:
+                    _updater = None
                 return gui_animation.action_finish
             advancing = list(_pending)
             visible = list(_visible)
@@ -125,46 +125,46 @@ class _Sweeper(gui_animation.Animation):
         return gui_animation.action_continue
 
     def finish(self) -> None:
-        # Vacate the slot, so the next tooltip that appears starts a fresh sweeper instead of waiting
+        # Vacate the slot, so the next tooltip that appears starts a fresh updater instead of waiting
         # forever for one that is no longer running. Reached two ways: after our own `action_finish`
         # above, where the slot is already clear and this does nothing, and from `Animator.clear`, which
         # finalizes everything it holds at app teardown and in the tests that call it.
         #
         # `is self` for the same reason as above, and it is the whole of what makes the stale call safe:
-        # an unguarded assignment here would let a sweeper that stopped seconds ago evict the one running
+        # an unguarded assignment here would let a updater that stopped seconds ago evict the one running
         # now, leaving work in the queues and nobody to do it.
-        global _sweeper
-        with _sweep_lock:
-            if _sweeper is self:
-                _sweeper = None
+        global _updater
+        with _update_lock:
+            if _updater is self:
+                _updater = None
 
-_sweeper = None  # the running instance, or `None` if there is nothing to sweep just now
+_updater = None  # the running instance, or `None` if there is nothing to update just now
 
 def _note_work(queue: set, tooltip: "Tooltip") -> None:
-    """Enrol `tooltip` in `queue` (`_visible` or `_pending`), starting the sweeper if none is running.
+    """Enrol `tooltip` in `queue` (`_visible` or `_pending`), starting the updater if none is running.
 
-    The two steps are one critical section on purpose. Split, they leave a window in which the sweeper
+    The two steps are one critical section on purpose. Split, they leave a window in which the updater
     observes both queues empty and stops while this thread, seeing the slot still occupied, declines to
     start one — and the work sits in the queue with nothing to carry it out. Under one lock that ordering
-    cannot arise: see the note on `_Sweeper.render_frame`.
+    cannot arise: see the note on `_Updater.render_frame`.
 
-    At most one sweeper is ever registered. The slot goes `None` -> instance only here, only when it was
+    At most one updater is ever registered. The slot goes `None` -> instance only here, only when it was
     `None`, and only under the lock; it goes back to `None` only behind an `is self` check. The one
-    interleaving that looks dangerous is closed by the animator rather than by us: when a sweeper decides
+    interleaving that looks dangerous is closed by the animator rather than by us: when a updater decides
     to stop it is still inside `Animator.render_frame`, which holds the animator's lock for the rest of
     the pass — so the `add` below blocks until that pass has finished rebuilding its list without the
-    stopping sweeper in it, and the replacement is appended after. Never two at once, which matters
+    stopping updater in it, and the replacement is appended after. Never two at once, which matters
     because two would call `_advance` twice per frame and drain `_settle_countdown` in a single frame,
     reinstating the mis-sized frame this whole module exists to prevent.
     """
-    global _sweeper
-    with _sweep_lock:
+    global _updater
+    with _update_lock:
         queue.add(tooltip)
-        if _sweeper is not None:  # someone is already sweeping, or is a moment away from being registered
+        if _updater is not None:  # one is already running, or is a moment away from being registered
             return
-        _sweeper = _Sweeper()
-        sweeper = _sweeper
-    gui_animation.animator.add(sweeper)  # outside the lock, per the lock-order rule where it is declared
+        _updater = _Updater()
+        updater = _updater
+    gui_animation.animator.add(updater)  # outside the lock, per the lock-order rule where it is declared
 
 class Tooltip:
     def __init__(self,
@@ -288,7 +288,7 @@ class Tooltip:
         """Set the text, keeping the window's size correct on every frame that reaches the screen.
 
         Callable from any thread, including the render loop. The change is queued and applied over the next
-        two frames by the sweeper, so this returns before the new text is on screen.
+        two frames by the updater, so this returns before the new text is on screen.
         """
         with self._text_lock:
             self._pending_text = text
@@ -302,7 +302,7 @@ class Tooltip:
                         back, takes a frame each, so the change is applied over the next three.""")
 
     def _advance(self) -> None:
-        """Carry a queued text change one frame further. Called by the sweeper, on the render thread.
+        """Carry a queued text change one frame further. Called by the updater, on the render thread.
 
         Autosize fits a window to the content it measured on the *previous* frame, so a window whose text
         just changed is drawn once at the old size — clipped when the text grew, skirted when it shrank.
@@ -353,13 +353,13 @@ class Tooltip:
         with self._text_lock:
             at_rest = self._pending_text is None and not self._settle_countdown
         if at_rest:
-            with _sweep_lock:
+            with _update_lock:
                 _pending.discard(self)
 
     def _follow(self) -> None:
         """Keep the tooltip at its offset from the cursor as the mouse moves, the way DPG's own do.
 
-        Called by the sweeper on every frame a tooltip is on screen.
+        Called by the updater on every frame a tooltip is on screen.
 
         A tooltip with a text change in flight is left alone: it is parked offscreen on purpose until the
         frames that resize it have been drawn, and bringing it to the cursor before then is exactly the
@@ -401,11 +401,11 @@ class Tooltip:
         _note_work(_visible, self)
 
     def _hide(self) -> None:
-        """Take the tooltip off screen. Called by the sweeper once the mouse has left `target`."""
+        """Take the tooltip off screen. Called by the updater once the mouse has left `target`."""
         with guiutils.nonexistent_ok():
             dpg.hide_item(self.window)
         self._shown = False
-        with _sweep_lock:
+        with _update_lock:
             _visible.discard(self)
 
     def destroy(self) -> None:
@@ -418,7 +418,7 @@ class Tooltip:
         with self._text_lock:  # a change still in flight has nowhere to land now
             self._pending_text = None
             self._settle_countdown = 0
-        with _sweep_lock:
+        with _update_lock:
             _pending.discard(self)
         with guiutils.nonexistent_ok():
             dpg.bind_item_handler_registry(self.target, 0)
