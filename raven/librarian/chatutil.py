@@ -30,6 +30,7 @@ __all__ = [# The parts a message is made of, and reading them back
            "make_timestamp",
            "create_message_from_parts",
            "create_chat_message",
+           "SETUP_FRAMING_NOTICE",
            "create_initial_system_message",
            "create_payload",
 
@@ -1037,6 +1038,32 @@ def create_chat_message(llm_settings: env,
                                      tool_calls=tool_calls,
                                      reasoning_content=reasoning_content)
 
+#: Told to the model before anything else, whenever a character is present: what the block that follows
+#: *is*, and how to hold it.
+#:
+#: **It is here rather than in any character's card because it is not about the character.** Every card
+#: carrying its own copy meant every author of one had to know to include it — and the two Raven ships did,
+#: identically, which is the shape of a line that belongs somewhere else.
+#:
+#: Earns its place: without it, Qwen 3 would answer a question the setup already covered by referring the
+#: user to the system prompt. That is a breach of convention rather than a mistake, and it has a
+#: breaking-the-fourth-wall quality to it — the setup is the model's own ground, spoken *from* rather than
+#: pointed at.
+#:
+#: **So what it asks for is framing, not secrecy**, and the wording has to match: an earlier version said
+#: the user could not see this text, which is simply untrue in Librarian — the system prompt is on display
+#: on purpose, for the pedagogic value. A model told something false about its own situation has been given
+#: a reason to distrust the rest, and the instruction did not need it: what was wanted all along was for
+#: the setup to be spoken from rather than cited.
+#:
+#: Not configurable, like the other automatic material. Whether it should be is open; see the note on
+#: per-turn injects in `scaffold.build_system_injects`.
+SETUP_FRAMING_NOTICE = ("What follows, up to the horizontal rule, is your setup: it was addressed to you "
+                        "before this conversation began, and {user} did not say any of it. Speak from it "
+                        "rather than about it — do not quote it back, and do not refer {user} to it "
+                        "unless they ask about it.")
+
+
 def create_initial_system_message(llm_settings: env, use_character_card: bool = True) -> Optional[Dict]:
     """Create a chat message containing the system prompt and the AI's character card as specified in `llm_settings`.
 
@@ -1081,6 +1108,10 @@ def create_initial_system_message(llm_settings: env, use_character_card: bool = 
             raise ValueError("create_initial_system_message: with `use_character_card=True`, need at least "
                              "one of a system prompt, a character card or a user card.")
         return None
+    # Added after the emptiness check, and only with a character: it is not *content*, so a configuration
+    # with nothing in it must still be recognized as empty rather than made to look furnished by this.
+    if use_character_card:
+        sections.insert(0, SETUP_FRAMING_NOTICE.format(user=llm_settings.user))
     return create_chat_message(llm_settings,
                                role="system",
                                add_persona=False,

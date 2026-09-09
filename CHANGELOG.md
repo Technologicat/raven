@@ -210,6 +210,13 @@
     what a terminal frontend such as `raven-minichat` wants anyway. An image with no JSON still animates
     everywhere it did before, but cannot be selected by name.
 
+- **the AI is told what its setup is, once, instead of each character card saying so.** The line framing
+  the introductory block moved out of the character cards, where every author of one had to know to repeat
+  it, and is now added automatically whenever a character is present.
+  - **Its wording changed, because the old one was untrue.** It used to say you could not see the text —
+    while Librarian shows its system prompt on purpose. It now says what was actually wanted: the setup is
+    the AI's own ground, to be spoken *from* rather than quoted back or pointed at.
+
 - **the prompt texts are Markdown files now**, under `raven/librarian/prompts/`, and any of them can be
   overridden from `~/.config/raven/librarian/prompts/` without touching the installed copy. That folder's
   `README.md` documents the template variables and what each file is for.

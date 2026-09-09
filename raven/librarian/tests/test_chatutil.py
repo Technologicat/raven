@@ -12,6 +12,7 @@ import yaml
 from unpythonic.env import env
 
 import raven
+from raven.avatar import characters as avatar_characters
 from raven.librarian import chattree, chatutil
 
 
@@ -21,8 +22,13 @@ from raven.librarian import chattree, chatutil
 
 @pytest.fixture
 def llm_settings():
-    """A lightweight mock of the llm_settings env returned by llmclient.setup."""
-    return env(personas={"user": "User", "assistant": "Aria"},
+    """A lightweight mock of the llm_settings env returned by llmclient.setup.
+
+    `user` and `char` are here because the real object always carries them — `configure` builds it that
+    way — and the message assembly reads `user`. A fixture without them tests a shape that never ships.
+    """
+    return env(user="User", char="Aria",
+               personas={"user": "User", "assistant": "Aria"},
                system_prompt="You are a helpful assistant.",
                character_card="Name: Aria",
                user_card="",
@@ -889,7 +895,8 @@ class TestCreateInitialSystemMessage:
         assert "-----" in content
 
     def test_system_prompt_only(self):
-        settings = env(personas={},
+        settings = env(user="User", char="Bot",
+                       personas={},
                        system_prompt="Be helpful.",
                        character_card="",
                        user_card="",
@@ -900,7 +907,8 @@ class TestCreateInitialSystemMessage:
         assert "-----" in content
 
     def test_character_card_only(self):
-        settings = env(personas={},
+        settings = env(user="User", char="Bot",
+                       personas={},
                        system_prompt="",
                        character_card="Name: Bot",
                        user_card="",
@@ -909,7 +917,8 @@ class TestCreateInitialSystemMessage:
         assert "Name: Bot" in chatutil.content_to_text(msg["content"])
 
     def test_neither_raises(self):
-        settings = env(personas={},
+        settings = env(user="User", char="Bot",
+                       personas={},
                        system_prompt="",
                        character_card="",
                        user_card="",
@@ -921,7 +930,8 @@ class TestCreateInitialSystemMessage:
         # The mirror of the case above, and the distinction is the point: setting up a chat with nothing to
         # introduce it with is a misconfiguration, while a bare-model call having no character-independent
         # instructions is the ordinary case. Raven ships exactly that way.
-        settings = env(personas={},
+        settings = env(user="User", char="Bot",
+                       personas={},
                        system_prompt="",
                        character_card="Name: Bot",
                        user_card="Name: User",
@@ -929,7 +939,8 @@ class TestCreateInitialSystemMessage:
         assert chatutil.create_initial_system_message(settings, use_character_card=False) is None
 
     def test_the_user_card_travels_with_the_character(self):
-        settings = env(personas={},
+        settings = env(user="User", char="Bot",
+                       personas={},
                        system_prompt="Answer in metric units.",
                        character_card="Name: Bot",
                        user_card="The user is a materials scientist.",
@@ -944,6 +955,67 @@ class TestCreateInitialSystemMessage:
                                                                                use_character_card=False)["content"])
         assert "Answer in metric units." in bare
         assert "Name: Bot" not in bare and "materials scientist" not in bare
+
+
+class TestTheSetupSaysWhatItIs:
+    """The line framing the block that follows as the model's setup rather than as conversation.
+
+    It earns its place: without it, a model asked something the setup already covers answers by referring
+    the user to the system prompt — a breach of the convention that the setup is the model's own ground,
+    spoken *from* rather than pointed at. It lives here rather than in any character's card because it is
+    not about the character; every card carrying its own copy meant every author of one had to know to
+    include it.
+
+    Note what it does **not** claim: that the user cannot see this. Librarian shows its system prompt on
+    purpose, so that would be false — and a model told something untrue about its own situation has been
+    given a reason to doubt the rest.
+    """
+
+    @staticmethod
+    def _settings(**over):
+        base = dict(user="Juha", char="Bot", personas={},
+                    system_prompt="Answer in metric units.",
+                    character_card="Name: Bot", user_card="", greeting="Hello!")
+        base.update(over)
+        return env(**base)
+
+    def test_it_comes_before_everything_else(self):
+        # First, because it says what the whole block *is* — a model that meets it after the character
+        # card has already read the card as something addressed to it.
+        content = chatutil.content_to_text(
+            chatutil.create_initial_system_message(self._settings())["content"])
+        assert content.startswith("What follows, up to the horizontal rule, is your setup")
+        assert content.index("is your setup") < content.index("Answer in metric units.")
+
+    def test_it_names_the_user(self):
+        # So the model knows whose turns in the transcript are the other party's, rather than having to
+        # infer it from a description of somebody it has not been told the name of.
+        content = chatutil.content_to_text(
+            chatutil.create_initial_system_message(self._settings(user="Ada"))["content"])
+        assert "Ada did not say any of it" in content
+
+    def test_a_turn_without_the_character_does_not_get_it(self):
+        """Where the sentence would be false: there is no introductory block to be unable to see."""
+        content = chatutil.content_to_text(
+            chatutil.create_initial_system_message(self._settings(),
+                                                   use_character_card=False)["content"])
+        assert "is your setup" not in content
+        assert "Answer in metric units." in content, "nothing was assembled at all, so this proves nothing"
+
+    def test_it_does_not_make_an_empty_configuration_look_furnished(self):
+        # The negative control. The notice is never empty, so adding it before the emptiness check would
+        # silently turn "nothing is configured" — a misconfiguration worth refusing — into a system
+        # message containing only this sentence.
+        with pytest.raises(ValueError, match="need at least"):
+            chatutil.create_initial_system_message(self._settings(system_prompt="", character_card="",
+                                                                  user_card=""))
+
+    def test_the_shipped_cards_do_not_repeat_it(self):
+        """They each carried their own copy until 0.2.9, which is what moving it here replaced."""
+        for character in ("Aria", "Juha"):
+            card = avatar_characters.find(character).read_card()
+            assert "is your setup" not in card and "cannot see" not in card, \
+                f"{character}'s card still carries the framing notice, so it would appear twice"
 
 
 # ---------------------------------------------------------------------------
