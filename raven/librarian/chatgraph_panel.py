@@ -931,17 +931,29 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # node font is sized for.
         #
         # And only the first, because `set_graph` leaves pan and zoom alone: an anchor that kept its place
-        # then needs nothing done, and one that moved is followed smoothly. That is what keeps the picture
-        # still while a reply is arriving and the tree gains a node per round -- a re-frame on every
-        # rebuild would make it lurch once per turn.
+        # then needs nothing done, and one that moved is followed. That is what keeps the picture still
+        # while a reply is arriving and the tree gains a node per round -- a re-frame on every rebuild
+        # would make it lurch once per turn.
+        #
+        # **The follow is instant, because the rebuild is.** `set_graph` replaces the whole picture between
+        # one frame and the next, so the anchor is at its new coordinates immediately; a camera gliding
+        # there over the following second is a camera pointed at the wrong place for that second, and what
+        # a reader sees is the graph jumping and *then* being chased. Moving the camera in the same frame
+        # is what holds the anchor still across the swap, which is the entire point of following it.
+        #
+        # **The two are one decision, and must stay one.** When the topology transition is animated (brief
+        # 16, "Animating a change of topology" — planned as an option, like `gui_config.smooth_scrolling`),
+        # the camera becomes a motion *inside* that animation rather than a separate one racing it. With
+        # the option off, the rebuild is instant and this stays as it is. What must never happen again is
+        # one of the two animated and the other not, which is the bug this comment replaced.
         if not self._framed:
             self._framed = True
             self._frame_on_head(chat_graph, animate=False)
             self._remember_view()  # the view opened on is the one Back should eventually reach
         elif chat_graph.graph.get_node_by_name(anchor) is not None:
-            self._widget.pan_to_node(anchor, animate=True)
+            self._widget.pan_to_node(anchor, animate=False)
         else:
-            self._widget.zoom_to_fit(animate=True)
+            self._widget.zoom_to_fit(animate=False)
 
         # Last, and here rather than at each caller, so that the buttons cannot be left answering a
         # picture that no longer exists. Most rebuilds are nobody's doing -- the poll notices a reply

@@ -284,6 +284,45 @@ class TestCommit:
 # Framing
 # ---------------------------------------------------------------------------
 
+class TestTheCameraDoesNotChaseAnInstantRebuild:
+    """A rebuild swaps the whole picture between two frames, so the camera has to arrive in the same one.
+
+    `set_graph` replaces every node object at once. If the camera then *glides* to where the anchor has
+    already moved to, it spends the glide pointing at the wrong place — and what a reader sees is the graph
+    jumping and then being chased, which is the opposite of what following an anchor is for.
+
+    The two are one decision: when the topology transition becomes animated (brief 16, planned as an option
+    like `gui_config.smooth_scrolling`), the camera becomes a motion inside it. What must not happen is one
+    animated and the other not.
+    """
+
+    def test_a_rebuild_leaves_the_camera_where_it_belongs_immediately(self, panel):
+        built, forest, app_state, ids, calls = panel
+        viewport = built._widget._viewport
+
+        # Move the anchor: a new sibling under the root widens a level, which shifts the layout.
+        for i in range(4):
+            forest.create_node(payload("assistant", f"another branch {i}"), parent_id=ids["user"])
+        built.refresh()
+
+        assert not built._widget.is_animating(), \
+            "the camera is still travelling after the picture has already been replaced"
+        # `current` rather than `target`: the point is that the two agree *now*, with no frames in between.
+        assert viewport.pan_x.current == pytest.approx(viewport.pan_x.target)
+        assert viewport.pan_y.current == pytest.approx(viewport.pan_y.target)
+
+    def test_the_fixture_can_tell_a_glide_from_a_snap(self, panel):
+        """The negative control: an animated move on this same widget *does* leave it animating.
+
+        Without this, a panel whose camera never moves at all would satisfy the assertion above for the
+        wrong reason, and would go on satisfying it if the follow were removed entirely.
+        """
+        built, forest, app_state, ids, calls = panel
+        built._widget.pan_to_point(500.0, 500.0, animate=True)
+        assert built._widget.is_animating(), \
+            "an explicitly animated pan did not animate, so 'not animating' above means nothing"
+
+
 class TestFraming:
     def test_the_first_build_opens_at_full_size(self, panel):
         built, forest, app_state, ids, calls = panel  # the fixture already refreshed once
