@@ -2776,58 +2776,42 @@ the keyboard page — so what it reports now is the Visualizer's `Ctrl+S` for sa
 Librarian's `Ctrl+Enter`, which is on the card under a computed name the script cannot read
 (`_send_key_label`).
 
-**Attachments are still not described**, though they were 0.2.8's headline feature. That was blocked on
-room and no longer is; the prose page has space.
+**The visual pass and the attachments content are done (2026-09-09)**, in the session that asked for them.
+What landed, so a later reader does not re-do it: paragraph and section spacing; `HelpWindow.column_width`,
+which takes the inter-column gap *and* a gutter off before halving, so a line filling its wrap no longer
+runs into the next column or up to the card's edge; `HelpWindow.prose_columns`, which pins each column with
+an explicitly sized spacer so the divide holds all the way down a page; newspaper column order, a section
+belonging wholly to one column because the eye finishes a column before it crosses; the *Message
+attachments* section; and a bullet list for the tool inventory, which had been a wall of text.
 
-**A visual pass is still owed** (Juha, 2026-09-09, looking at the shipped card). The functionality is
-there and the values want tuning:
-
-- **Prose paragraphs want a little vertical space between them.** Possibly the chat log's amount, possibly
-  not — it is a question for the eye rather than for a shared constant.
-- **The two-column wrap is too wide**, and the right column hugs the window edge (Juha, 2026-09-09,
-  looking at it). `column_width` is `content_width // 2`, so the two columns together are the whole
-  content width and the gap between them is *added* on top — an overflow of one item spacing, landing on
-  the right-hand column.
-  - **Note the existing comment says the opposite**, and it is the one this was copied from:
-    `visualizer/app.py`, at the *Terminology* section, reads "Halved before the spacer between them is
-    subtracted, which errs narrow — and narrow is the safe direction here". Nothing is subtracted, so it
-    errs wide. Which of the comment and the code is the wrong one is the question to settle first: the
-    comment describes an arrangement that would be right, and may record an intent the code never
-    acquired. Do not just edit the sentence.
-- **The columns are not the same width from section to section.** *Tool use* on Librarian's page three
-  divides at a different x than the sections above it, and a reader expects one boundary down the page.
-  Suspected cause, unverified: a group sizes itself to its widest *rendered* line, not to the `wrap` its
-  text was given — so a column holding one paragraph comes out narrower than one holding three, and *Tool
-  use* is the section split 1/2 where the others are split more evenly. Check it before building on it.
-  - **Raven pins a container's width with an explicitly sized spacer** (Juha, 2026-09-09), as
-    `visualizer/importer_gui.py` does — `dpg.add_spacer(width=gui_config.importer_w)  # ensure window
-    width`. One of those at the head of each column group would fix every section at once, and is the
-    same fix as the overflow above if the width put in it is the corrected one.
+- **The suspected cause was right**: a group takes its widest *rendered* line rather than the `wrap` its
+  text was given. Confirmed by the divide sitting at three different x positions on one page before the
+  pin and at one after it.
+- **The `visualizer/app.py` comment that contradicted its own code is settled.** The comment was the
+  correct half — narrow is the safe direction — and the code had never done it. The arithmetic moved onto
+  `column_width`, which both cards now use.
+- **`color=` on `dpg_markdown.add_text` replaced the `c_txt` spans**, which were a workaround from before
+  the renderer had it. A span opened on a paragraph's first line makes the whole string one CommonMark
+  paragraph, so a bullet list inside one renders as literal text — which is what forced the change.
 
 **The other eight cards are untouched and stay that way for now** (Juha, 2026-09-09): Librarian's is the
 prototype, and the rest conform if and when their own content calls for it. Nothing forces them to — a
 card that declares no pages behaves exactly as it did.
 
 **Two-column prose is the part they all want, pages or no** (Juha, 2026-09-09). A card is wide enough that
-a single column gives lines too long to track back to the start of, and Librarian's three sections read
-much better split. Only one section in the constellation had it before today — the Visualizer's
+a single column gives lines too long to track back to the start of, and Librarian's sections read much
+better split. Only one section in the constellation had it before this work — the Visualizer's
 *Terminology* — so the rest of that card's prose and `xdot_viewer`'s eleven calls are the sweep. It is
-independent of paging: `column_width = self.content_width // 2`, and a second vertical group inside the
-horizontal one that most sections already have.
+independent of paging, and it is now one `HelpWindow.prose_columns` call per page rather than a hand-built
+pair of groups per section.
 
 One thing learned while fitting the text, worth knowing before touching it again:
 
 - **Long paths and identifiers should go in the highlight colour, not italics** (`self.c_hig`, as the
-  section already does for **Documents** / **Speculation**). They read better against the body text.
+  section already does for **Documents** and the retrieval marker). They read better against the body text.
 
 **Do the remaining pieces in one pass with the hotkey-discoverability audit**, which rewrites the same card
 from the other direction.
-
-**Where the graph's fourteen keys go is the one open design question**, and it is a scope question rather
-than a fitting one: the graph is a keyboard of its own, and the main page has room for perhaps two more
-rows, not fourteen. The spec that produced the pages said splitting the *table* across pages is available
-but is not the go-to — which was about splitting one keyboard arbitrarily, where this would give a
-distinct one its own page.
 
 ## Modernize the Librarian system prompt / character card
 
@@ -3682,7 +3666,15 @@ its own fix, and lives in "Emoji support in the Markdown renderer" below.
 
 ## The Markdown renderer drops text — one character, or most of a section
 
-*Cluster: markdown-renderer · Cost: ? · Gate: RN2026 · Filed: 2026-07-19*
+*Cluster: markdown-renderer · Cost: ? · Gate: none — deprioritized past RN2026 unless time appears · Filed: 2026-07-19 · Updated: 2026-09-09*
+
+**Not scheduled before the exhibit, though not ruled out either** (Juha, 2026-09-09): two and a half weeks
+left and a queue ahead of it, so it goes if there is time and not otherwise. The atlas hypothesis below predicts the outcome
+is settled per *launch* — a run whose fonts packed correctly keeps drawing correctly — so the operator's
+remedy is to restart until the card comes up clean, and that session then serves the whole evening. Every
+sighting is consistent with that, though nothing has tested it directly: each one is a fresh run, and a help
+card's prose is built once per launch, so no sighting has yet had the chance to disagree. Cheap to live with
+for one night, and the fix starts at the font atlas, which is not the place to be on the day.
 
 **On the demo path as of 2026-08-19** (Juha), where it had been explicitly kept off for want of anything to
 test a fix against.
@@ -3710,6 +3702,33 @@ text was drawn from a different font item and was unaffected.
 
 So this is no longer "sometimes a letter goes missing" but "sometimes a whole face comes up mostly empty,
 and a one-character loss is the small end of it". Start at the atlas.
+
+**2026-09-09, and it narrows the atlas theory by one turn while correcting the bullet above.** Librarian's
+help card, page three, drew *"To reach a di&nbsp;&nbsp;erent old chat"* — the word is *different*, in
+italics, and **both** its `f`s were blank with their advance widths kept. Three earlier launches that
+afternoon, of the same binary against the same string, drew it correctly.
+
+- **An italic run lost glyphs**, where the 2026-08-19 sighting recorded that every styled run survived. So
+  "the regular face is the one that fails" is not a property of the defect; it was true of that run.
+- **Only the `f`s went, and every one of them in the affected run**, the rest of the word being intact. That
+  is a *per-glyph* failure within a face rather than a face coming up empty — the small end of the same
+  scale, and the cleanest instance of it yet: one glyph, one face, everything else on the page correct.
+- **Not a ligature**, though it looks like one: ImGui does no glyph substitution, so `ff` is two `f`s in the
+  atlas, and losing both is losing one glyph twice rather than one ligature once.
+
+Worth having because it is the cheapest reproduction so far — one app, one page, a string that is in the
+source rather than in a model's output, and a rate of roughly one launch in four.
+
+**Where to start looking, and how to look at a *live* bad instance** (2026-09-09). Every Raven app now takes
+`--repl`, which opens an in-process REPL (`raven.common.replserver`); so a launch that comes up damaged can
+be interrogated instead of killed, which is what this bug most needed and never had — it is not
+reproducible on demand, and the evidence dies with the process.
+
+What to ask it: `dpg_markdown`'s faces are `FontAttribute` subclasses (`Default`, `Bold`, `Italic`,
+`BoldItalic`, `H1`…`H6`) in `raven/vendor/DearPyGui_Markdown/attribute_types.py`, and each keeps its own
+`_fonts` dict mapping *size* to the DPG font id built lazily by `add_font` at that size. So a session can
+enumerate which (face, size) pairs a damaged run actually built, and compare against a good one — the first
+question being whether a face that renders blank is even in there, or is there and empty.
 
 **Absorbs "`dpg_markdown` intermittently drops a single letter from rendered text"** (merged 2026-08-12).
 That was the same defect reported from the renderer's end rather than the chat view's, and its sighting is
@@ -3804,6 +3823,25 @@ that highlight sat **one character off** from its correct position, which matche
 above.
 
 Discovered while committing the chat-template fix (2026-07-19).
+
+## A wrapped line in the Markdown renderer sometimes keeps the space it wrapped at
+
+*Cluster: markdown-renderer · Cost: ? · Gate: none · Filed: 2026-09-09*
+
+Where a wrapped paragraph breaks at a space, the continuation line occasionally begins with that space, so
+its first character sits one space-width right of the lines above and below it. Purely cosmetic — no text
+is lost, and the line is otherwise correct — but it is visible wherever a column of prose is narrow enough
+to wrap often.
+
+Seen in Librarian's help card, page three, on the *"Nothing is ever discarded…"* and *"The path and the
+accepted file types…"* paragraphs, among others. It is not specific to the card: any `dpg_markdown.add_text`
+with a `wrap` can show it, and the same ragged left edge is visible in the chat log.
+
+Whether it belongs with the segmentation faults already in this cluster is unknown. It shares their shape —
+something going wrong at a run boundary — but it keeps a character where those lose one, so it may be a
+separate fault in how a run is split at the wrap point rather than another face of the same one.
+
+Noticed while polishing the help card's two-column prose (2026-09-09).
 
 ## webfetch local (client-side) mode
 

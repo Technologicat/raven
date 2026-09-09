@@ -177,6 +177,22 @@
   - **Deterministic and offline.** No model, no network: the same bibliography and the same flags produce the same two files on any machine. Whether a record is *about* the right subject is a judgement rather than a test, and belongs to a different tool.
   - `--dry-run` reports what would go and writes nothing; the input file is never modified.
 
+- **the help card (F1) now turns pages.** Librarian's has three: the app's keyboard, the chat graph's own
+  keyboard with the prose that explains it, and *About Librarian*. Arrow keys, `Home` and `End` turn them,
+  or the buttons at the top. The keyboard page is a reference you can screenshot and keep beside you, which
+  is what prose sharing the page had been taking away.
+  - **The prose pages read as two newspaper columns**, the left one finished before the right one starts —
+    a card this wide gives a single column lines too long to track back to the start of, and a section
+    split into a pair either side would have the eye crossing back and forth once per section.
+  - **Message attachments are described**, having been the previous release's headline feature and absent
+    from the card until now: what an attachment is for as against the document database, the two kinds and
+    what each asks of the model, the three ways to attach one, and where to clean up the ones nothing
+    refers to any more.
+  - **Flipping *Internet* or *Documents* is noted as costing a pause** on the next reply, the tool
+    declarations riding at the top of the conversation, so the whole chat has to be re-read.
+  - The card sizes itself to its tallest page and keeps that height, so turning a page does not resize the
+    window under you.
+
 *Constellation-wide*
 
 - **`--qr`**, which puts a scannable "Get Raven" code in the corner of any of the seven GUI apps. For running Raven where people are watching: a visitor sees a demo for a minute and walks off, and nobody writes down a URL. Off unless asked for.
@@ -192,6 +208,14 @@
   - *Raven-avatar-settings-editor*: an image with transparency loads as the character, any other image as the backdrop, and a `.json` as animator settings. It has two image slots and a drag cannot be aimed at either — the drop only reports itself on release — so the image decides: a character is a cutout, a backdrop is a full frame.
   - Drop something an app cannot use and it says so, naming what you dropped and what would have worked, rather than doing nothing. A drop that arrives while a dialog is open is ignored, so it cannot answer a question you are in the middle of.
   - Works wherever the GUI toolkit's own windowing layer does: X11, macOS and Windows. Wayland is untested — please report if it does not work there.
+
+- **`--repl`**, on every app and on the server: an in-process REPL for inspecting a running instance, off
+  unless asked for. `python -m unpythonic.net.client localhost` connects, and the app's own namespace is
+  in scope. For the case nothing else covers — an instance that came up *wrong* and is still running,
+  where the next launch will be fine and killing this one destroys the evidence.
+  - **It is unauthenticated, unencrypted, arbitrary code execution inside the app, as you.** Bound to
+    localhost. A debugging aid: do not leave it running, and forward a port over SSH rather than exposing
+    one.
 
 **Changed**:
 
@@ -375,6 +399,8 @@
 - **`bloom` now decides what is bright by the light a pixel emits rather than by the colour it carries.** In a straight-alpha frame those differ wherever a pixel is not fully opaque: the colour alone is what the pixel *would* look like if it were, which for a nearly transparent one can be a large number attached to almost no light. The old reading called such pixels highlights and then blurred that colour outward, so the avatar's antialiased outline picked up light from the empty space around it. The character itself is unaffected — the two readings agree wherever alpha is 1.
 
 *Raven-librarian*
+
+- **the help card no longer describes the *Speculation* toggle**, which was removed earlier in this release. What it said about when a reply is marked *[no sources retrieved]* now matches what the app does: the marker follows *Documents*.
 
 - **the AI character's own paragraphs no longer reach the model as a code block.** The character card is
   Markdown, and the two paragraphs naming the character were indented four spaces — which is what a code
