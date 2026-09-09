@@ -2453,6 +2453,12 @@ def _give_keyboard_to_graph() -> None:
     Parking on a button is what deactivates an ImGui text field from outside, and a focused button is safe
     -- DPG leaves ImGui's keyboard-navigation activation off, so it ignores Space and Enter rather than
     pressing itself.
+
+    TODO: **Nothing owns "which pane has the keyboard", so every claimant must clear the others by hand.**
+    TODO: Anything new that takes the keyboard has to release `chat_graph_panel.has_keyboard`, and nothing
+    TODO: will remind it -- the audio input panel forgot, and the graph stayed lit while the panel had the
+    TODO: keys. See `TODO_DEFERRED.md`, "Nothing owns 'which pane has the keyboard'". Do not reach for a
+    TODO: single stored owner without reading it first: the derived design is right about the hard part.
     """
     dpg.focus_item("chat_send_button")  # tag
     chat_graph_panel.has_keyboard = True
@@ -2472,6 +2478,11 @@ def _toggle_audio_input_panel() -> None:
 
     Here rather than on the panel, which owns none of this: the keyboard model lives in this module, and a
     panel that had to know about the chat graph would be the wrong shape for the next panel too.
+
+    TODO: **This is one claimant releasing one other by name, which is the pattern that does not scale.**
+    TODO: A third non-modal pane means this line has to grow, or the next panel repeats the bug. See
+    TODO: `TODO_DEFERRED.md`, "Nothing owns 'which pane has the keyboard'", for why the obvious fix --
+    TODO: storing a single owner -- is not obviously better than what is here.
     """
     if not audio_input_panel.is_open:
         chat_graph_panel.has_keyboard = False
@@ -2489,6 +2500,12 @@ def _cycle_keyboard_home(backwards: bool = False) -> None:
     clicking it or with Ctrl+Space, neither of which goes through here, so a stored answer would be wrong
     whenever it was not the last thing to have set it. What is stored is only the bit that DPG cannot
     answer — whether the graph has the keys — and that is meaningful only while the composer does not.
+
+    TODO: **The derivation knows about three panes, and a window that takes the keyboard is not one of**
+    TODO: **them.** With the audio input panel up, this still answers "log" or "graph" — true of where the
+    TODO: keys would go were the panel dismissed, and false about where they are. Harmless today, since
+    TODO: nothing asks while a panel is up; a fourth pane, or anything that asks at the wrong moment,
+    TODO: would find it. See `TODO_DEFERRED.md`, "Nothing owns 'which pane has the keyboard'".
     """
     graph_available = chat_graph_panel.is_shown
     homes = ["composer", "log"] + (["graph"] if graph_available else [])

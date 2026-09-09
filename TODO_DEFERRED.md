@@ -17,6 +17,38 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Nothing owns "which pane has the keyboard", so each new claimant must remember all the others
+
+*Cluster: librarian-keyboard · Cost: ? — no clear design yet · Gate: needs a design that beats what DPG allows · Filed: 2026-09-09*
+
+Librarian's keyboard home is **derived, not stored**, and deliberately so: the composer can be entered by
+clicking it or with `Ctrl+Space`, neither of which goes through the cycler, so a stored answer would be
+wrong whenever it was not the last thing to have set it. `_cycle_keyboard_home` therefore reads ImGui's
+caret (`is_item_active("chat_field")`) and *one* stored bit — `chat_graph_panel.has_keyboard` — which is
+the part DPG cannot answer, the chat log having no widget to hold a caret.
+
+**That works for three panes and breaks at the fourth.** Anything else that takes the keyboard has to
+clear the graph's bit by hand, because nothing else will. The audio input panel is the first such thing,
+and it did not: opening it left the graph lit and claiming keys that were going to the panel, until the
+next click landing outside the graph corrected it by accident — which could be the click that closed the
+panel again, making the close look like it did something to the focus. Fixed 2026-09-09 in
+`_toggle_audio_input_panel`, one claimant at a time.
+
+**The general fix is not obvious, and DPG is the reason** (Juha, 2026-09-09). A single owner would have to
+be authoritative over things DPG owns and does not report — ImGui's caret moves on a click nobody told us
+about — so "store who has it" reintroduces exactly the staleness the derived design avoids. Possibly the
+answer is that the derivation should consult more sources rather than that the state should be stored;
+possibly there is no better arrangement available. **Do not start building until there is a design that
+beats what is there**, since the current one is right about the hard part.
+
+What is cheap and worth doing meanwhile is what has been done: a marker at each site that participates, so
+the next person adding a claimant meets the obligation rather than discovering it. See the `TODO` comments
+at `_give_keyboard_to_graph`, `_toggle_audio_input_panel` and `_cycle_keyboard_home`.
+
+Note the modal windows are safe here by accident rather than by design: the help card and `FileDialog`
+block through `input_blocked`, so the graph's handler returns early and its stale bit does no harm. The
+non-modals have no such shield, which is why the audio panel is where this surfaced.
+
 ## Switch the AI character and the user profile at runtime
 
 *Cluster: ? · Cost: M · Gate: pairs with the "server suddenly went down" robustness work · Filed: 2026-09-09*
@@ -2697,14 +2729,29 @@ is two: the keys on one, everything the card says *about* Librarian on the other
 — filling the room rather than finding it. The pieces below are separable and each is small.
 
 **What is still missing is printed on every run** by `scripts/check_option_lists.py`, as the keys each
-README documents that the app's `hotkey_info` does not offer. As of 2026-09-09 that is the chat graph's
-fourteen (`Left`, `Right`, `Backspace`, `Shift`+arrows, `Alt+Left`/`Alt+Right`, `F`, `B`, `1`, numpad
-`+`/`-`) and the Visualizer's `Ctrl+S` for saving a word cloud. Two more it reports — `Enter` and
-`Ctrl+Enter` — are on the card already, under names it cannot read because they are computed
-(`_send_key_label`, `_newline_keys_label`).
+README documents that the app's `hotkey_info` does not offer. Librarian's card is complete as of
+2026-09-09 — the graph's nineteen keys went onto a page of their own, and the seven mode switches onto
+the keyboard page — so what it reports now is the Visualizer's `Ctrl+S` for saving a word cloud, plus
+Librarian's `Ctrl+Enter`, which is on the card under a computed name the script cannot read
+(`_send_key_label`).
 
 **Attachments are still not described**, though they were 0.2.8's headline feature. That was blocked on
 room and no longer is; the prose page has space.
+
+**A visual pass is still owed** (Juha, 2026-09-09, looking at the shipped card). The functionality is
+there and the values want tuning:
+
+- **Prose paragraphs want a little vertical space between them.** Possibly the chat log's amount, possibly
+  not — it is a question for the eye rather than for a shared constant.
+- **The two-column wrap wants trimming** so the columns look right rather than merely fit. `column_width`
+  is `content_width // 2` with nothing taken off for the gap between them, which errs narrow on purpose;
+  what is unmeasured is whether narrow-on-purpose looks like it was meant.
+- **The columns are not the same width from section to section.** *Tool use* on Librarian's page three
+  divides at a different x than the sections above it, and a reader expects one boundary down the page.
+  Suspected cause, unverified: a group sizes itself to its widest *rendered* line, not to the `wrap` its
+  text was given — so a column holding one paragraph comes out narrower than one holding three, and *Tool
+  use* is the section split 1/2 where the others are split more evenly. If that is it, pinning the group's
+  width fixes every section at once. Check it before building on it.
 
 **The other eight cards are untouched and stay that way for now** (Juha, 2026-09-09): Librarian's is the
 prototype, and the rest conform if and when their own content calls for it. Nothing forces them to — a
