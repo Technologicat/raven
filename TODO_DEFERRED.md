@@ -17,6 +17,32 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## The chat graph's "other cards" box is inert, and says so only in the log
+
+*Cluster: chat-graph · Cost: S for the honesty, M for the capability · Gate: none · Filed: 2026-09-09*
+
+Clicking the `...N more cards` box does nothing visible. That it does nothing is **deliberate and
+recorded** — `_activate`'s `RootGapRef` branch explains that reaching a chat written under an older
+character card would leave the configured avatar and voice running against a different system prompt — but
+the only trace is an INFO log line, and the box is drawn exactly like the four gap kinds that *do* work.
+So it reads as a bug, which is how it was reported (Juha, 2026-09-09, live-testing).
+
+**Two separable pieces**, and the first is cheap:
+
+- **Say so on screen.** A box that invites a click and answers with silence is worse than one that does
+  not invite it. Either give it the feedback the other gaps give — a flash, or the messagebox pattern —
+  or draw it as visibly inert so the click is never offered. The second is better if the capability is
+  far off, and the first if it is near, since a dead-looking box that later works is its own confusion.
+- **Make it work**, which is the real fix and is no longer blocked in principle: switching card now means
+  switching *character*, and a character declares its own avatar, voice and card (`raven.avatar.characters`,
+  0.2.9). So this is the same capability as *"Switch the AI character and the user profile at runtime"*
+  below, seen from the graph — and that item's avatar-reload problem is this one's too. Whichever is built
+  should make the other nearly free.
+
+**Note it became visible on 2026-09-09 rather than having been missed.** Most datastores had one root, so
+the box never appeared. Today's prompt changes altered the system prompt *text*, and roots are matched by
+text — so a second root appeared, and with it this box.
+
 ## Switch the AI character and the user profile at runtime
 
 *Cluster: ? · Cost: M · Gate: pairs with the "server suddenly went down" robustness work · Filed: 2026-09-09*
