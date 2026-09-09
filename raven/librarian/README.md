@@ -469,7 +469,7 @@ Voice input is still young; voice message editing is missing, for example. We in
 
 How quiet counts as "finished speaking" depends on the room, so it is a control rather than a setting you are expected to get right in advance. Click the **sliders button** (next to the mic) or press **F9** to open the **Audio input** panel.
 
-Everything in the panel but the sliders can be driven from the keyboard, and the blue mark shows where the keys are going. Opening it puts them on the microphone chooser: **Up**, **Down**, **Home** and **End** step through the microphones, and **D** returns there from anywhere. **M** measures the room, **A** and **S** flip the two checkboxes, **R** resets, and **Esc** closes the panel. The keys apply only while one of the panel's own controls has the focus, so they do not disturb what you are typing in the chat.
+Everything in the panel but the sliders can be driven from the keyboard, each control by its own letter. Opening it puts the keys on **Measure the room**, which is usually what you came for — the microphone you chose last time is still chosen. **M** measures the room, **A** and **S** flip the two checkboxes, **R** resets to the configured defaults, and **Esc** closes the panel. **D** goes to the microphone chooser, which wears a blue mark while it has the arrow keys: **Up**, **Down**, **Home** and **End** then step through the microphones, and **Esc** comes back out of it. The keys apply only while one of the panel's own controls has the focus, so they do not disturb what you are typing in the chat.
 
 While the panel is open, *Librarian* listens to the mic without recording anything and without sending anything to the AI, so you can watch the input level with the room as it actually is. The status line above the meter says which it is doing, and both meters stay live through an actual recording too — the panel is a second view of the same input, not a separate one.
 
@@ -771,9 +771,9 @@ the keys only while the focus is on one of its own controls, and passes everythi
 | `D` | Choose the microphone — then `Up` / `Down` / `Home` / `End` |
 | `M` | Measure the room |
 | `A` | Measure at each recording |
-| `S` | Stop on silence |
-| `R` | Reset to configured |
-| `Esc` | Close the panel |
+| `S` | Toggle stop on silence |
+| `R` | Reset to defaults |
+| `Esc` | Close the panel — from the microphone chooser, step back to the panel first |
 
 ### Chat graph
 

@@ -164,14 +164,23 @@ class DPGAudioInputPanel:
         self._sync_widgets_from_recorder()
         self.is_open = True
 
-        # Say where the keyboard is, over the same set the keys are routed by — one animation for the
-        # panel's whole life, since the marks it holds are cheap and it only lights the focused one.
+        # The chooser only, though the keys are routed over the whole of `_FOCUSABLE`. The mark says "the
+        # arrow keys are going here", which is a question a combo raises and a button does not: DPG draws
+        # nothing on a focused combo of its own, where a marked *button* promises what most GUIs mean by a
+        # focused button — Space to press it, Tab to the next — and this panel offers neither. Every
+        # button here has a letter key instead, named on the button and on the help card.
         if self._focus_follower is None:
-            self._focus_follower = keyboardmark.install_focus_follower(self._FOCUSABLE)
-        # Park the keyboard on the microphone chooser, so the keys work without a click first. A combo
-        # is a safe home: `dpg.focus_item` moves focus to it without activating it, unlike a child
-        # window, and DPG leaves ImGui's keyboard-nav activation off so it cannot open itself.
-        dpg.focus_item("audio_input_device_combo")  # tag
+            self._focus_follower = keyboardmark.install_focus_follower(["audio_input_device_combo"])  # tag
+        # Park the keyboard on *Measure the room*, so the keys work without a click first. A button is a
+        # safe home: `dpg.focus_item` moves focus to it without activating it, unlike a child window, and
+        # DPG leaves ImGui's keyboard-nav activation off, so it ignores Space and Enter.
+        #
+        # The chooser was the home until 2026-09-09, and it is the better button for two reasons. Measuring
+        # the room is what the panel is opened *for*, where the chooser keeps its value between sessions
+        # and so is rarely the thing being changed. And a combo that holds the keyboard from the moment the
+        # panel opens leaves Escape nowhere to step back to — so it closed the panel outright, where
+        # everywhere else in the constellation the first Escape leaves the combo and the second closes.
+        dpg.focus_item("audio_input_measure_button")  # tag
 
         # The readout is connected for as long as the panel is on screen, whatever the device is doing —
         # the panel is a view onto the recorder, so its meter follows the same stream the toolbar's does,
@@ -251,7 +260,14 @@ class DPGAudioInputPanel:
         Only ever called while `has_keyboard`, so a bare letter here cannot reach the chat composer.
         """
         if key == dpg.mvKey_Escape:
-            self.close()
+            # From the chooser, Escape steps back to the panel's home rather than closing; from the home,
+            # it closes. The constellation's rule for a focused combo, and the shape `fdialog` uses for
+            # its type filter: leaving the combo and leaving the dialog are two different intentions, and
+            # one key can serve both as long as it takes them in that order.
+            if dpg.is_item_focused("audio_input_device_combo"):  # tag
+                dpg.focus_item("audio_input_measure_button")  # tag
+            else:
+                self.close()
         elif key == dpg.mvKey_M:
             self._measure_the_room()
         elif key == dpg.mvKey_R:

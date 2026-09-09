@@ -2120,7 +2120,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=2, key="A", action_indent=1, action="Measure at each recording", notes=""),
                env(key_indent=2, key="S", action_indent=1, action="Toggle stop on silence", notes=""),
                env(key_indent=2, key="R", action_indent=1, action="Reset to defaults", notes=""),
-               env(key_indent=2, key="Esc", action_indent=1, action="Close the panel", notes="While the panel has the keyboard"),
+               env(key_indent=2, key="Esc", action_indent=1, action="Close the panel", notes="Twice if chooser focused"),
                env(key_indent=0, key="Ctrl+Shift+O", action_indent=0, action="Attach file(s) to your message", notes="Documents; and images on a VLM"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+T", action_indent=0, action="Show/hide last thinking trace", notes="For thinking models"),

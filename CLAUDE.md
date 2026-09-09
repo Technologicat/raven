@@ -511,7 +511,13 @@ changelog rule above to this one.
 
 Raven's apps are DPG, so verifying GUI work means running them — and the agent and the human are on the *same X session*. Keyboard focus is therefore a shared, single-holder resource: a window that maps or gets activated takes focus away from wherever the human is typing, and their next keystrokes land in the app instead of their editor or terminal. (Observed the obvious way: a launched Librarian window swallowed a half-typed message and its Enter, which sent an empty chat turn.)
 
-**The recipes are in the `live-gui-testing` skill** (fleet-wide): finding the window, aiming a click at a widget, sending synthetic keys that behave like real ones, confirming an action landed, closing the app again, driving one from inside its own process, and putting a TCP relay in front of a dependency so its appearance is an event you time. Load it when you are about to do any of that.
+**The recipes are in the `live-gui-testing` skill** (fleet-wide): finding the window, aiming a click at a widget, sending synthetic keys that behave like real ones, confirming an action landed, closing the app again, driving one from inside its own process, and putting a TCP relay in front of a dependency so its appearance is an event you time.
+
+**Load it before the session's first launch, and treat having launched without it as the error** — not as a missed optimisation. The list below is what must fire *earlier* than a skill can load; it is not a summary of the skill, and acting on it is not a substitute for loading one.
+
+The reason it needs saying is that nothing will feel missing. The recipes in there are the ones whose absence is silent: a fixed `sleep` in place of the skill's wait-on-the-ready-line loop appears to work every time. So the moment that would prompt you to go and look never arrives, and the six bullets below — which *are* here in full — read as the whole of what the job needs.
+
+**What it costs is a stall, every launch.** The guessed number comes out at 15 to 30 seconds against an app that is up in under ten (Juha, across sessions; and 12 s and 14 s on 2026-09-09, against Librarian's measured 6.8–7.1 s). Not a race, in practice — the guess overshoots rather than undershoots, which is precisely why it never announces itself. (Live case 2026-09-09: an afternoon of launches on `sleep`, with the loop sitting unread in the skill the entire time.)
 
 What stays here is the short list that has to fire **before** the decision to launch — which is earlier than a skill can load, because the decision is usually incidental ("let me just check this renders"):
 

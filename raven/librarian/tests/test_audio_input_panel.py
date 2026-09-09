@@ -747,3 +747,49 @@ class TestDestroyingThePanelLetsGoOfEverything:
         panel.open()
         panel.destroy()
         panel.destroy()
+
+
+class TestEscapeLeavesTheChooserBeforeItLeavesThePanel:
+    """The constellation's rule for a focused combo: the first Escape steps out of it, the second closes.
+
+    The first half never used to happen. The panel parked the keyboard on the chooser when it opened, so
+    the combo held focus from the start and there was nowhere for Escape to step back *to* — it closed the
+    panel outright, from a focused combo, which is what no other app here does. Its home is *Measure the
+    room* now: that is what the panel is opened for, where the microphone keeps its value between sessions
+    and so is rarely the thing being changed.
+
+    Asserted against the branch rather than against DPG's own focus state, which settles only once frames
+    are rendering, and this suite renders none. What is being pinned is the decision, which is what the
+    code reads `is_item_focused` for.
+    """
+
+    def test_escape_in_the_chooser_steps_back_to_the_panels_home(self, panel, monkeypatch):
+        monkeypatch.setattr(aip.dpg, "is_item_focused", lambda item: item == "audio_input_device_combo")
+        went_to = []
+        monkeypatch.setattr(aip.dpg, "focus_item", went_to.append)
+        closed = []
+        monkeypatch.setattr(panel, "close", lambda: closed.append(True))
+
+        assert panel.handle_key(dpg.mvKey_Escape) is True
+        assert went_to == ["audio_input_measure_button"]
+        assert not closed, "Escape closed the panel from the chooser, without stepping back to anything"
+
+    def test_escape_anywhere_else_closes(self, panel, monkeypatch):
+        # The control. A panel that only ever stepped back could not be closed from the keyboard at all,
+        # and would satisfy the test above just as well.
+        monkeypatch.setattr(aip.dpg, "is_item_focused", lambda item: False)
+        monkeypatch.setattr(aip.dpg, "focus_item", lambda item: None)
+        closed = []
+        monkeypatch.setattr(panel, "close", lambda: closed.append(True))
+
+        assert panel.handle_key(dpg.mvKey_Escape) is True
+        assert closed == [True]
+
+    def test_the_panel_opens_with_the_keyboard_on_measure(self, panel, monkeypatch):
+        # The other half of the same change: with the home on the chooser, the step-back above has nowhere
+        # to go and the two-step collapses back into one.
+        went_to = []
+        monkeypatch.setattr(aip.dpg, "focus_item", went_to.append)
+        panel.open()
+        assert "audio_input_measure_button" in went_to
+        assert "audio_input_device_combo" not in went_to
