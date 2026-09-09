@@ -75,6 +75,18 @@ _update_lock = threading.Lock()
 # the reported size frame by frame.
 _SETTLE_FRAMES = 2
 
+# Deliberately not an `unpythonic.Singleton`, though the shape invites it. That class guarantees at most
+# one instance *by reachability* — its registry holds weak references, so a replacement becomes
+# constructible only once the old instance is actually collected. What this module needs is at most one
+# *registered with the animator*, and the two come apart during exactly the hand-off the code below is
+# built around: `Animator.render_frame` iterates `for animation in self._animations:` and calls `finish`
+# inside that loop, so its loop variable still holds a strong reference to the stopped updater for the rest
+# of the pass. `Singleton` would therefore refuse to construct the replacement, and refuse by raising
+# `TypeError` on the hover thread, turning a benign race into a crash. Fail-fast is right for a programming
+# error; this is not one.
+#
+# It would not have saved any of the locking either. `Singleton` guards *construction*, where the argument
+# below turns on the enqueue and the liveness test being one critical section.
 class _Updater(gui_animation.Animation):
     def __init__(self):
         """Carries each tooltip's pending text change forward, keeps the shown ones under the cursor, and
