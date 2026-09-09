@@ -496,11 +496,11 @@
 
 *Raven-visualizer*
 
-- **the mouse wheel no longer reaches the plot through a window sitting over it.** The word cloud and the
-  BibTeX importer float above the main window, and scrolling over either was read as scrolling what lay
-  beneath — the plot, or the info panel, whichever the pointer happened to be above on the way past. The
-  app now asks what the pointer is actually on rather than whether it is within a given rectangle, which
-  stays true of a rectangle with something drawn over it.
+- **the wheel over the word cloud or the importer no longer disturbs what is behind them.** Both float
+  above the main window, and a wheel over either was taken as one over whatever its rectangle covered: the
+  info panel would flash its end-of-scroll marker, or the plot would refresh the tooltip under a pointer
+  that was not on it. The app now asks what the pointer is actually on rather than whether it lies within
+  a rectangle, which stays true of a rectangle with something drawn over it.
 
 - **the LLM cluster-keyword step no longer builds a prompt too large to send.** Every entry of a cluster went into one prompt, which holds while the clusters are small and does not in general — on a corpus whose search aimed at one topic, the largest cluster can carry hundreds of entries, and with abstracts attached that is a prompt of a few hundred thousand tokens. The backend then either refuses it or silently drops the far end, and neither is a keyword list; the cluster it happened to was the largest one, whose label matters most.
   - An oversized cluster is now described from an even sample of it, spread from its centre outwards, so the label reflects the whole cluster rather than only its densest part. Which entries those are is worked out from the embeddings rather than from anything the clustering algorithm reports about its own members, so it reads the same whichever algorithm produced the clusters.
