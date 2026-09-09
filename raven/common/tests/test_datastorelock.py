@@ -183,4 +183,10 @@ class TestNamingTheHolder:
         assert holder_path.read_text(encoding="utf-8").strip(), "the holder should have recorded itself"
         # The control: the lock file being empty is what makes the assertion above meaningful. Were the
         # name written into it, both files would carry it and the inequality alone would prove nothing.
-        assert lock_path.read_text(encoding="utf-8") == "", "nothing should have been written into the lock"
+        #
+        # By size rather than by reading it, because on Windows reading it is refused — the same mandatory
+        # byte-range lock this test exists to document. The first version of this assertion called
+        # `read_text` and failed on Windows with `PermissionError`, which is a tidy demonstration of the
+        # constraint and a useless way to check it. `stat` asks the filesystem for metadata and never
+        # touches the locked range.
+        assert lock_path.stat().st_size == 0, "nothing should have been written into the lock file itself"

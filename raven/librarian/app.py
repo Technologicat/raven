@@ -2268,7 +2268,7 @@ def render_help_extras(self: helpcard.HelpWindow,
             'To improve search result quality, Raven-librarian uses a hybrid method: Okapi BM25 for keywords, and vector embeddings for semantic search. Results are combined with RRF (reciprocal rank fusion).')],
         [helpcard.section(
             "**Message attachments**",
-            'The document database answers *what do my documents say about this*. An attachment answers *read this one, now*: a search hands the AI the snippets that matched, an attachment hands it the whole thing.',
+            'The document database answers *what do my documents say about this*; an attachment answers *read this one, now* - the whole thing, rather than the snippets that matched.',
             textwrap.dedent(f"""
                 Attach one or several with the paperclip button, with {self.c_hig}**Ctrl+Shift+O**{self.c_end}, or by dropping files on the window. Two kinds, asking different things of the model:
 
@@ -2277,7 +2277,8 @@ def render_help_extras(self: helpcard.HelpWindow,
             """).strip(),
             'Both ride along with the message you attached them to, so they stay in the branch where you asked about them.',
             '**The AI produces attachments too.** A web page it fetches is filed as one rather than pasted into the conversation: the chat log shows the opening and a chip to click, while the model reads the whole thing.',
-            f'Attachments are stored beside the chat, **content-addressed** - identical bytes are kept once however many messages point at them. Anything no longer referenced by any message can be cleaned up with the broom button on the {self.c_hig}**Maintenance**{self.c_end} row, which shows what it would delete before deleting anything, and offers to rescue a copy first.'),
+            'Attachments are sized against the context window along with everything else, so several large ones share the room that is left rather than crowding each other out. One too big for its share is cut in the **middle**, keeping the beginning and the end with a marker saying how much went - the chip still opens the whole stored copy, whatever the AI saw.',
+            f'They are stored beside the chat, **content-addressed** - identical bytes are kept once however many messages point at them. Anything no longer referenced by any message can be cleaned up with the broom button on the {self.c_hig}**Maintenance**{self.c_end} row, which shows what it would delete before deleting anything, and offers to rescue a copy first.'),
          helpcard.section(
             "**Tool use** (tool-calling)",
             textwrap.dedent("""
@@ -2292,13 +2293,16 @@ def render_help_extras(self: helpcard.HelpWindow,
                 - **calculate** — do arithmetic
             """).strip(),
             f'The first two need {self.c_hig}**Internet**{self.c_end}, the next three need {self.c_hig}**Documents**{self.c_end}, and the last two are always available, reaching nothing outside this process. Each checkbox governs its own group, so switching one off never takes the other away.',
-            'One reply may take several rounds of tool calls, up to a configurable ceiling. A long page the AI fetches is filed as an attachment, so reading it does not bury the conversation.',
+            'One reply may take several rounds of tool calls, up to a configurable ceiling.',
             'Either switch changes which tools are declared to the AI, and the declarations travel at the top of the conversation - so the reply after you flip one has to re-read the whole chat before it can start. Nothing is lost; on a long chat it is a pause.')])
 # Three pages, split by scope rather than to find room. Page one is the app's keyboard and nothing else,
 # so it is a reference a reader can screenshot and keep open on a second monitor while they learn it —
 # which is what the card's header has been inviting all along, and what prose sharing the page took away.
 # The graph is a keyboard of its own and gets page two, with the prose that explains it directly under its
-# keys. Page three is everything else the card says about Librarian, which is read once rather than kept.
+# keys. Page three is what the app *does* — read once, where the keyboard pages are kept open — and is
+# called Features rather than anything with "About" in it, which promises a version number and a credits
+# list. If it outgrows one screen, the answer is a fourth page rather than shorter prose: the card has no
+# scrollbar by design, and paging is what was built to replace one.
 help_window = helpcard.HelpWindow(width=gui_config.help_window_w,
                                   height=gui_config.help_window_h,
                                   reference_window=main_window,
@@ -2307,7 +2311,7 @@ help_window = helpcard.HelpWindow(width=gui_config.help_window_w,
                                          helpcard.page("Chat graph",
                                                        hotkey_info=chat_graph_hotkey_info,
                                                        on_render_extras=render_chat_graph_help),
-                                         helpcard.page("About Librarian", on_render_extras=render_help_extras)],
+                                         helpcard.page("Features", on_render_extras=render_help_extras)],
                                   on_show=None,
                                   on_hide=None)
 dpg.set_item_callback("help_button", help_window.show)  # tag

@@ -264,6 +264,31 @@ one file class this repo is most careful about, so a flag is worth having for th
 backend takes `--backend-url`** — same spelling everywhere, no exceptions to look up. `raven-minichat` and
 `raven-pdf2bib` took the backend as a positional `url` until 2026-08-20; it is a flag on both now.
 
+### `--repl`: ask a running instance what it thinks
+
+**Every GUI app, `raven-minichat` and `raven-server` take `--repl`** (added 2026-09-09,
+`raven.common.replserver`). It opens an in-process REPL — Swank for Python, via `unpythonic.net` — and
+`python -m unpythonic.net.client localhost` connects to it. The app's own namespace is in scope, so the
+session can reach every widget, controller and panel it has, plus `dpg` itself.
+
+**Reach for it when an instance came up *wrong* and is still running**, which is the case nothing else
+covers: `py-spy dump` says where the threads are, a log says what was logged, and neither can be asked a
+new question about an object. Restarting to investigate destroys the evidence, and for an intermittent
+fault the next launch will not reproduce it.
+
+**The standing example is the intermittent Markdown-renderer glyph drop** (`TODO_DEFERRED.md`, "The
+Markdown renderer drops text"). It is per-launch — roughly one run in four — so a damaged instance is the
+only specimen there will be until the next one happens. What to ask it: `dpg_markdown`'s faces are
+`FontAttribute` subclasses in `raven/vendor/DearPyGui_Markdown/attribute_types.py`, each keeping its own
+`_fonts` dict of size → DPG font id, so a session can enumerate which (face, size) pairs a bad run actually
+built and compare against a good one.
+
+Two practical notes. `--repl` with no port is `1337` with its control channel on `8128`, which is what the
+client defaults to, so both ends need telling nothing; `--repl PORT` takes PORT and PORT+1, and the client
+then wants `localhost PORT PORT+1` as *separate arguments* rather than `host:port`. And it is
+unauthenticated, unencrypted arbitrary code execution bound to localhost — a debugging aid, never something
+to leave running at an exhibit.
+
 ### Running Tests
 
 ```bash

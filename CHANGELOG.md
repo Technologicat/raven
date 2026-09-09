@@ -178,7 +178,7 @@
   - `--dry-run` reports what would go and writes nothing; the input file is never modified.
 
 - **the help card (F1) now turns pages.** Librarian's has three: the app's keyboard, the chat graph's own
-  keyboard with the prose that explains it, and *About Librarian*. Arrow keys, `Home` and `End` turn them,
+  keyboard with the prose that explains it, and *Features*. Arrow keys, `Home` and `End` turn them,
   or the buttons at the top. The keyboard page is a reference you can screenshot and keep beside you, which
   is what prose sharing the page had been taking away.
   - **The prose pages read as two newspaper columns**, the left one finished before the right one starts —
