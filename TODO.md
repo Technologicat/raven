@@ -52,10 +52,12 @@ after publishing — without that gate being on any release path.
 **Start with the three fixes a live test found on 2026-09-09**, all filed in `TODO_DEFERRED.md`, all
 small, and all in what 0.2.9 just changed — so they are cheapest while the work is fresh:
 
-1. **The framing notice is unlabelled**, so Librarian's displayed system prompt reads as if Raven's own
-   sentence came from a config file. Note the two traps recorded with it: the injects' *"not stored"*
-   label cannot be borrowed (this one **is** stored), and the marker must be presentation-only — in the
-   text it would reach the model *and* spawn a fresh root node for every user.
+1. **The framing notice is stored when it should be injected.** It reads as configured prose in the
+   displayed system prompt, and worse, editing its wording forks every user's datastore — roots are
+   matched by text. Sent per turn at the *start* of the system block instead, it keeps its position, the
+   existing *"Added to every request, not stored"* label becomes true of it, and it can be reworded
+   freely. Needs a preamble slot in the inject mechanism; the item explains why that is not the general
+   "move injects to the front" question argued against on 2026-09-09.
 2. **The "...N more cards" box does nothing when clicked**, with only an INFO line to show for it. Two
    pieces: saying so on screen (S), and actually navigating there (also S — the refusal's stated reason
    is outweighed by old chats being unreachable at all, so the cheap version is the graph's ordinary
