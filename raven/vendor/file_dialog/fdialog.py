@@ -17,7 +17,7 @@ from typing import Iterable, Optional, Union
 
 import dearpygui.dearpygui as dpg
 
-from unpythonic import timer
+from unpythonic import sym, timer
 from unpythonic.env import env
 
 from ...common import filelisting
@@ -668,6 +668,10 @@ class FileDialog:
         self._restore_pending = False
         # The cursor's pulsation, which runs only while this dialog is on screen. See `_start_cursor_pulse`.
         self._cursor_pulse = None
+        # Reconciles the caret marks against the focus, which can leave a *non-modal* dialog at any time.
+        # Runs only while this dialog is on screen. See `_start_focus_watch`.
+        self._focus_watch = None
+        self._had_keyboard = False
         self.selec_height = 16
         # The listing's order, held as data rather than as the table's row order. A rebuild reproduces it,
         # which is what lets the listing be re-rendered — re-filtered, or shown a different way — without
@@ -2904,9 +2908,16 @@ class FileDialog:
                            doc="Where this dialog is taking keys. See `CaretHome`.")
 
     def _repaint_home_mark(self) -> None:
-        """Light the mark on the home that has the keys, and darken the rest."""
+        """Light the mark on the home that has the keys, and darken the rest.
+
+        Nothing is lit while the dialog does not have the keyboard, which only a **non-modal** one can
+        fail to have. The condition lives here rather than at the callers because `_caret_home`'s setter
+        is one of them: a caret home changing while the focus is away would otherwise relight a mark that
+        `_sync_home_marks_to_focus` had just put out, and the paths that move the caret home are the ones
+        least likely to be thinking about focus.
+        """
         for home, mark in self._home_marks.items():
-            mark.lit = (home is self._caret_home_now)
+            mark.lit = self._had_keyboard and (home is self._caret_home_now)
 
     def _darken_home_marks(self) -> None:
         """Take every caret mark off, whatever `_caret_home` says.
@@ -2917,6 +2928,69 @@ class FileDialog:
         """
         for mark in self._home_marks.values():
             mark.lit = False
+
+    def has_keyboard(self) -> bool:
+        """Whether this dialog is where typing would go.
+
+        `_caret_home` says which of the dialog's own areas the caret belongs to; it does not say whether
+        the dialog has the caret at all. A **modal** dialog always does, which is why the two questions
+        were one until this dialog could be opened non-modally.
+
+        Asked of the window rather than of a widget: `is_item_focused` answers for a top-level window, and
+        it is true while any of its children holds the focus — which is what "typing goes here" means.
+        """
+        with guiutils.nonexistent_ok():
+            return bool(dpg.is_item_focused(self.tag))  # tag
+        return False
+
+    def _sync_home_marks_to_focus(self) -> None:
+        """Light the caret mark only while this dialog actually has the keyboard.
+
+        **Non-modal is the case this exists for.** A modal dialog cannot lose the focus, so its mark and
+        its `_caret_home` never disagree; a non-modal one loses it to any click outside, and then goes on
+        claiming — in blue, pulsing — that `Enter` would act on its listing. `modal` is a constructor
+        parameter this dialog documents and supports, so that mode has to work rather than merely be
+        offered.
+
+        Cheap enough to run per frame: one `is_item_focused` call, and the repaint happens only on a
+        change. The marks are `Mark` objects, whose `lit` setter is itself idempotent, but the comparison
+        here is what keeps this from asking them every frame.
+        """
+        has_keyboard = self.has_keyboard()
+        if has_keyboard == self._had_keyboard:
+            return
+        self._had_keyboard = has_keyboard
+        self._repaint_home_mark()  # which reads the flag just set, and lights nothing while it is False
+
+    def _start_focus_watch(self) -> None:
+        """Begin reconciling the caret marks against the focus, once per frame while the dialog is up."""
+        if self._focus_watch is not None:
+            return
+
+        dialog = self
+
+        class _FocusWatch(gui_animation.Animation):
+            def __init__(self):
+                # Ambient, as `keyboardmark.install_focus_follower` is and for the same reason: this says
+                # where the keyboard is rather than that anything is happening, so it must not hold the
+                # frame rate up for as long as a dialog is open.
+                super().__init__(ambient=True)
+
+            def render_frame(self, t: int) -> sym:
+                dialog._sync_home_marks_to_focus()
+                return gui_animation.action_continue
+
+        self._focus_watch = gui_animation.animator.add(_FocusWatch())
+
+    def _stop_focus_watch(self) -> None:
+        """Stop reconciling. The marks are darkened separately, by the caller going off screen."""
+        if self._focus_watch is None:
+            return
+        gui_animation.animator.cancel(self._focus_watch)
+        self._focus_watch = None
+        # So that the next opening repaints rather than believing the marks are already right: `hide`
+        # darkens them, which would otherwise leave this flag disagreeing with what is on screen.
+        self._had_keyboard = False
 
     def _focus_field(self) -> None:
         """Put the caret back in the find field, where typing filters the listing."""
@@ -3085,7 +3159,12 @@ class FileDialog:
         self._focus_field()
         # Unconditionally, where `_focus_field` repaints only on a change: a dialog reopening in the home it
         # closed in leaves the flag untouched, and the mark would come back dark.
+        # Before the repaint, which reads it: a dialog just shown is where the typing goes, and a non-modal
+        # one is not focused until DPG has drawn it — so asking instead of asserting would open dark and
+        # wait a frame to light up.
+        self._had_keyboard = True
         self._repaint_home_mark()
+        self._start_focus_watch()
 
     def _stop_grid_ticker(self):
         """Stop the grid's tick thread and wait for it to notice.
@@ -3186,6 +3265,7 @@ class FileDialog:
         self.selected_files.clear()
         self.shown_items.clear()
         # Released in the reverse of the order `show_file_dialog` acquires them.
+        self._stop_focus_watch()
         self._darken_home_marks()
         self._stop_cursor_pulse()
         self._stop_grid_ticker()

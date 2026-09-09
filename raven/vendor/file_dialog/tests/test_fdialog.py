@@ -2599,3 +2599,72 @@ def test_the_help_card_is_as_tall_as_the_keys_this_dialog_has(mapped_make_dialog
         for dialog in (fullest, leanest):
             dpg.hide_item(dialog.tag)  # tag
         dpg.bind_font(0)  # the module's other tests are not measuring, but leave them as they were found
+
+
+class TestTheCaretMarkFollowsTheFocus:
+    """The caret mark says "typing goes here", so it has to go out when typing goes somewhere else.
+
+    `_caret_home` says which of the dialog's *own* areas the caret belongs to; it never said whether the
+    dialog has the caret at all, and it did not need to while every dialog was modal — a modal cannot lose
+    the focus. `modal` is a constructor parameter this dialog documents and supports, so the non-modal case
+    has to work rather than merely be offered: without this, a click into the app behind leaves the dialog
+    pulsing blue and claiming `Enter` would act on its listing.
+
+    Driven by calling the reconciler, which is what the per-frame watch calls. Real focus needs a mapped
+    window and a pointer; what is being pinned is the decision, and the decision is what `has_keyboard`
+    is read for.
+    """
+
+    @staticmethod
+    def _lit(built):
+        return [home for home, mark in built._home_marks.items() if mark.lit]
+
+    def test_losing_the_focus_darkens_the_mark(self, make_dialog, monkeypatch):
+        built = make_dialog(modal=False)
+        built._caret_home = fdialog.CaretHome.FIELD
+        # The flag before the repaint, as `show_file_dialog` sets it: the repaint reads it, and lights
+        # nothing while it is False.
+        built._had_keyboard = True
+        built._repaint_home_mark()
+        assert self._lit(built), "nothing was lit, so this fixture cannot tell a darkening from a no-op"
+
+        monkeypatch.setattr(built, "has_keyboard", lambda: False)
+        built._sync_home_marks_to_focus()
+        assert self._lit(built) == []
+
+    def test_getting_it_back_lights_the_home_it_left_in(self, make_dialog, monkeypatch):
+        # `_caret_home` is deliberately untouched while the focus is away — the dialog resumes where it
+        # was rather than jumping to the find field, which is also what `_darken_home_marks` promises.
+        built = make_dialog(modal=False)
+        built._caret_home = fdialog.CaretHome.PATH
+        monkeypatch.setattr(built, "has_keyboard", lambda: False)
+        built._sync_home_marks_to_focus()
+        assert self._lit(built) == []
+
+        monkeypatch.setattr(built, "has_keyboard", lambda: True)
+        built._sync_home_marks_to_focus()
+        assert self._lit(built) == [fdialog.CaretHome.PATH]
+
+    def test_it_repaints_only_on_a_change(self, make_dialog, monkeypatch):
+        # Runs every frame for as long as a dialog is open, so the common case has to be one predicate
+        # call and nothing else.
+        built = make_dialog(modal=False)
+        built._had_keyboard = True
+        monkeypatch.setattr(built, "has_keyboard", lambda: True)
+        repaints = []
+        monkeypatch.setattr(built, "_repaint_home_mark", lambda: repaints.append(True))
+        for _ in range(5):
+            built._sync_home_marks_to_focus()
+        assert repaints == []
+
+    def test_a_modal_dialog_is_unaffected(self, make_dialog, monkeypatch):
+        # The control. A modal cannot lose the focus, so the reconciler must be a no-op there rather than
+        # a second opinion about a mark that was already right — and the test above would pass just as
+        # well if it darkened everything unconditionally.
+        built = make_dialog(modal=True)
+        built._caret_home = fdialog.CaretHome.FIELD
+        built._had_keyboard = True
+        built._repaint_home_mark()
+        monkeypatch.setattr(built, "has_keyboard", lambda: True)
+        built._sync_home_marks_to_focus()
+        assert self._lit(built) == [fdialog.CaretHome.FIELD]

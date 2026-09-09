@@ -83,21 +83,12 @@ does not, which is the whole reason the flag exists. Two things that look like t
   `is_any_modal_window_visible` performs no modality test — it names four windows and asks each whether it
   is *visible*. So flipping the flag would not break it. Its docstring now says so, since the name is the
   part that would mislead whoever adds the fifth window.
-- **What would break is the dialog's own keyboard mark**: with the dialog non-modal, a click into the
-  composer leaves `_caret_home` saying the caret is in the dialog, so its mark stays lit while the keys
-  have gone elsewhere.
-
-  **Both halves of the fix already exist, and the missing piece is the trigger.** `_darken_home_marks`
-  takes every mark off without disturbing `_caret_home` — written for a dialog going off screen, and
-  exactly the primitive wanted here — and `_repaint_home_mark` puts them back. The predicate is one call:
-  `dpg.is_item_focused(self.tag)`, which answers for a top-level window (`dpg-notes.md`). What is absent is
-  any *event*: the marks are repainted only when the dialog's own `_caret_home` changes, and a focus change
-  from outside does not touch it. So this needs a per-frame poll that fdialog does not have — a small
-  animation on `gui_animation.animator`, started and stopped with the dialog.
-
-  **Not built, and deliberately**: the case cannot occur while every call site is modal, so the work could
-  not be exercised without first creating the non-modal call site it is for. Whoever makes one should build
-  this in the same pass, where it can be seen to work.
+- **The dialog's own keyboard mark: fixed 2026-09-09.** Non-modal, a click into the app behind used to
+  leave `_caret_home` saying the caret was in the dialog, so its mark went on pulsing blue and claiming
+  `Enter` would act on its listing. `has_keyboard` now asks `is_item_focused` of the window,
+  `_repaint_home_mark` lights nothing while that is false, and a per-frame watch reconciles the two for
+  as long as the dialog is up. Done rather than filed because `modal` is a *documented parameter*: a mode
+  the dialog advertises has to work, and no call site using it today is luck rather than a reason.
 
 ## Switch the AI character and the user profile at runtime
 
