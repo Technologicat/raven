@@ -397,3 +397,74 @@ class TestWhatAPagedCardBuilds:
         assert card.show() is True
         assert card._toolbar is None
         assert len(card._page_groups) == 1
+
+
+class TestProseColumns:
+    """That a section stays in one column, and that a heading is drawn as one."""
+
+    def _card(self, request):
+        with dpg.window(tag=f"reference_{request.node.name}"):  # tag
+            pass
+        return helpcard.HelpWindow(width=1700, height=200, reference_window=f"reference_{request.node.name}",  # tag
+                                   themes_and_fonts=env(font_size=20), hotkey_info=[])
+
+    def test_a_section_with_nothing_in_it_is_refused(self):
+        # A blank section would draw as a gap the caller cannot see the cause of, and the likeliest way to
+        # write one is to forget the paragraphs after the heading.
+        with pytest.raises(ValueError, match="blank"):
+            helpcard.section(None)
+
+    def test_each_column_gets_its_own_sections_whole_and_in_order(self, request, monkeypatch, dpg_context):
+        """Newspaper columns: the eye finishes a column before crossing, so a section may not be split."""
+        drawn = []
+        monkeypatch.setattr(helpcard.dpg_markdown, "add_text",
+                            lambda text, **kwargs: drawn.append((kwargs["parent"], text, kwargs["color"])))
+        card = self._card(request)
+        with dpg.window(tag=f"host_{request.node.name}"):  # tag
+            pass
+        card.prose_columns(f"host_{request.node.name}",  # tag
+                           [helpcard.section("**Left heading**", "left one", "left two")],
+                           [helpcard.section("**Right heading**", "right one")])
+
+        columns = list(dict.fromkeys(parent for parent, _, _ in drawn))  # in first-drawn order
+        assert len(columns) == 2, f"expected one group per column, got {len(columns)}"
+        by_column = {column: [text for parent, text, _ in drawn if parent == column] for column in columns}
+        assert by_column[columns[0]] == ["**Left heading**", "left one", "left two"]
+        assert by_column[columns[1]] == ["**Right heading**", "right one"]
+
+        colors = {text: color for _, text, color in drawn}
+        assert colors["**Left heading**"] == card.heading_color
+        assert colors["left one"] == card.text_color
+        # The control: with both colours equal this fixture could not tell a heading from a paragraph, and
+        # the two assertions above would hold however `prose_columns` coloured them.
+        assert card.heading_color != card.text_color, "this card cannot tell the two colours apart"
+
+
+class TestContentGeometry:
+    """What the card tells a renderer about how wide its text may be."""
+
+    def test_two_columns_and_the_gaps_around_them_fit_the_content_width(self, dpg_context):
+        """The card has no scrollbar, so a column pair one gap too wide is text under the window edge."""
+        for width in (400, 1700, 1701):  # a small card, Librarian's own, and an odd one for the rounding
+            card = helpcard.HelpWindow(width=width, height=200, reference_window="nonexistent",
+                                       themes_and_fonts=env(font_size=20), hotkey_info=[])
+
+            # The control: at a width where halving the content also fits, this fixture cannot tell the
+            # two formulas apart, and the assertions below would pass against the arithmetic they reject.
+            naive = 2 * (card.content_width // 2) + guiutils.DPG_ITEM_SPACING_X
+            assert naive > card.content_width, f"width {width} cannot tell the two halvings apart"
+
+            # What `prose_columns` lays out: each column pinned to its width plus a gutter, with DPG's own
+            # item spacing between the two groups.
+            pitch = card.column_width + helpcard._COLUMN_GUTTER
+            used = 2 * pitch + guiutils.DPG_ITEM_SPACING_X
+            assert used <= card.content_width, f"width {width}: the columns overflow by {used - card.content_width}"
+            assert used >= card.content_width - 1, (f"width {width}: the columns leave {card.content_width - used} "
+                                                    "px unclaimed, which is more than the rounding")
+
+            # And the gutter is white space rather than arithmetic: a line filling its wrap in the right
+            # column must still stop short of the card's edge, which is what makes the second column read
+            # as a column rather than as text pushed against the frame.
+            rightmost_text = pitch + guiutils.DPG_ITEM_SPACING_X + card.column_width
+            assert card.content_width - rightmost_text >= helpcard._COLUMN_GUTTER, (
+                f"width {width}: the right column runs to within {card.content_width - rightmost_text} px of the edge")

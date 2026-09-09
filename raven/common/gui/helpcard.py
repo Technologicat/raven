@@ -1,7 +1,7 @@
 """Generic GUI help window for DPG apps, intended mainly as a hotkey reference. One screen, or several."""
 
 __all__ = ["hotkey_new_column", "hotkey_blank_entry",
-           "page",
+           "page", "section",
            "helpcard_hotkeys_callback", "HelpWindow"]
 
 import logging
@@ -32,6 +32,12 @@ _PAGE_FIT_PASSES = 4
 #: costs no line of its own; otherwise it has one, above the content.
 _ESC_HINT = "[Press Esc to close. For a handy reference, screenshot this!]"
 
+#: White space kept to the right of each column of prose - between the two columns, and between the second
+#: one and the card's edge. This is on top of the item spacing DPG already puts between two groups: with
+#: that alone, a line long enough to fill its wrap ends one space short of the next column, and the break
+#: stops reading as a break.
+_COLUMN_GUTTER = 8
+
 hotkey_new_column = sym("next_column")
 hotkey_blank_entry = env(key_indent=0, key="", action_indent=0, action="", notes="")
 
@@ -58,6 +64,24 @@ def page(name: str,
     if hotkey_info is None and on_render_extras is None:
         raise ValueError(f"helpcard.page: page '{name}' would be blank; pass `hotkey_info`, `on_render_extras`, or both.")
     return env(name=name, hotkey_info=hotkey_info, on_render_extras=on_render_extras)
+
+
+def section(heading: Optional[str], *paragraphs: str) -> env:
+    """One headed block of prose, for `HelpWindow.prose_columns`.
+
+    `heading`: The section's title, as Markdown, or `None` for a block that has none. Drawn in the card's
+               heading colour; a run that should not be — a parenthetical gloss, say — can say so with a
+               `c_txt` span.
+    `paragraphs`: The body, top to bottom, as Markdown.
+
+                  A paragraph may be a block of several lines — a bullet list, say — in which case
+                  `textwrap.dedent(...).strip()` is how to write one legibly in indented source. Note the
+                  order: `strip` first would take the indentation off the opening line only, leaving
+                  `dedent` no common prefix to find.
+    """
+    if heading is None and not paragraphs:
+        raise ValueError("helpcard.section: a section with neither heading nor paragraphs would be blank.")
+    return env(heading=heading, paragraphs=list(paragraphs))
 
 # Hotkey support
 visible_help_window_instance = None  # fdialog is modal so There Can Be Only One (TM). If needed, could use a list, and check which one has keyboard focus, but that might not always work.
@@ -346,6 +370,80 @@ class HelpWindow:
                                  "Pass this as `wrap` when rendering into the card - `dpg_markdown.add_text` "
                                  "and `dpg.add_text` both leave text unwrapped unless told a width, and the "
                                  "card has no scrollbar, so an unwrapped line is simply cut off at the edge.")
+
+    def _get_column_width(self) -> int:
+        # Across the content width sit: column, gutter, the item spacing a horizontal group puts between
+        # its two children, column, gutter. Everything but the columns comes off before the halving —
+        # a horizontal group *adds* its spacing to whatever its children asked for, so halving the whole
+        # width overflows the card by exactly that. Rounding down leaves the odd pixel unclaimed, which is
+        # the harmless direction.
+        return (self.content_width - 2 * _COLUMN_GUTTER - guiutils.DPG_ITEM_SPACING_X) // 2
+    column_width = property(fget=_get_column_width,
+                            doc="How wide text may be in one of two side-by-side columns, in pixels. Read-only.\n\n"
+                                "`content_width` for prose that runs the width of the card; this for prose "
+                                "split into two columns, which a card this wide usually wants - a single "
+                                "column gives lines too long to track back to the start of. Pass it as `wrap`, "
+                                "and put the two column groups in one horizontal group - or let "
+                                "`prose_columns` do both. The gap between them "
+                                "is already accounted for here.")
+
+    def prose_columns(self,
+                      gui_parent: Union[str, int],
+                      left: List[env],
+                      right: List[env],
+                      paragraph_gap: Optional[int] = None,
+                      section_gap: Optional[int] = None,
+                      color: Optional[Tuple[int]] = None) -> Union[str, int]:
+        """Render a page of prose as two newspaper columns. Returns the group holding them.
+
+        `gui_parent`: Where to put them - the parent an extras renderer is handed.
+        `left`, `right`: The sections of each column, top to bottom, each built by `helpcard.section`.
+                         Either may be empty.
+
+                         **Newspaper columns, not a pair per section**: a reader scans one column to its
+                         end before crossing to the other, so a section belongs wholly to one of them.
+                         Which sections go where is the caller's to balance — a column cannot be measured
+                         before it is drawn, so nothing here can do it.
+        `paragraph_gap`: Vertical space between two paragraphs of the same section, in pixels. `None`, the
+                         default, is half a line.
+        `section_gap`: Vertical space between two sections of the same column, in pixels. `None`, the
+                       default, is a full line.
+        `color`: Colour for text the Markdown does not colour itself, as `dpg_markdown.add_text` takes it.
+                 `None`, the default, is the card's `text_color`.
+
+                 Prefer this to opening a `c_txt` span at the head of a paragraph: an open `<font>` tag on
+                 the same line as the content makes the whole string one CommonMark paragraph, so a list
+                 inside it is read as literal text. The `c_hig` / `c_hed` / `c_dim` shorthands remain the
+                 way to colour a run *within* a paragraph.
+
+        Each column is pinned to `column_width` plus a gutter whatever it holds, so the divide between
+        them falls at the same place all the way down the page.
+        """
+        if paragraph_gap is None:
+            paragraph_gap = self.themes_and_fonts.font_size // 2
+        if section_gap is None:
+            section_gap = self.themes_and_fonts.font_size
+        if color is None:
+            color = self.text_color
+        columns_group = dpg.add_group(horizontal=True, parent=gui_parent)
+        for sections in (left, right):
+            column_group = dpg.add_group(horizontal=False, parent=columns_group)
+            # A group comes out as wide as its widest *rendered* line rather than as wide as the `wrap` its
+            # text was given, so a column holding one short paragraph is narrower than one holding three
+            # and the divide wanders down the page. An explicitly sized spacer states the width instead,
+            # which is how Raven pins a container's width elsewhere.
+            dpg.add_spacer(width=self.column_width + _COLUMN_GUTTER, parent=column_group)
+            for section_index, one_section in enumerate(sections):
+                if section_index:
+                    dpg.add_spacer(height=section_gap, parent=column_group)
+                if one_section.heading is not None:
+                    dpg_markdown.add_text(one_section.heading, parent=column_group,
+                                          wrap=self.column_width, color=self.heading_color)
+                for index, paragraph in enumerate(one_section.paragraphs):
+                    if index:
+                        dpg.add_spacer(height=paragraph_gap, parent=column_group)
+                    dpg_markdown.add_text(paragraph, parent=column_group, wrap=self.column_width, color=color)
+        return columns_group
 
     def _get_page_count(self) -> int:
         """Return how many pages this card holds. One for a single-screen card."""
