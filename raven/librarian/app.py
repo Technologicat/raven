@@ -2114,12 +2114,12 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key=_newline_keys_label(), action_indent=0, action="Insert a new line", notes="While writing a message"),
                env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="While writing a message"),
                env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak to AI using your mic", notes=f"Device: {audio_recorder.require().device_name}"),
-               env(key_indent=1, key="F9", action_indent=0, action="Set up the microphone", notes="Input level, and when quiet means finished"),
+               env(key_indent=1, key="F9", action_indent=0, action="Set up the microphone", notes="Input level and auto-off"),
                env(key_indent=2, key="D", action_indent=1, action="Choose the microphone", notes="Then Up, Down, Home, End"),
                env(key_indent=2, key="M", action_indent=1, action="Measure the room", notes=""),
                env(key_indent=2, key="A", action_indent=1, action="Measure at each recording", notes=""),
-               env(key_indent=2, key="S", action_indent=1, action="Stop on silence", notes=""),
-               env(key_indent=2, key="R", action_indent=1, action="Reset to configured", notes=""),
+               env(key_indent=2, key="S", action_indent=1, action="Toggle stop on silence", notes=""),
+               env(key_indent=2, key="R", action_indent=1, action="Reset to defaults", notes=""),
                env(key_indent=2, key="Esc", action_indent=1, action="Close the panel", notes="While the panel has the keyboard"),
                env(key_indent=0, key="Ctrl+Shift+O", action_indent=0, action="Attach file(s) to your message", notes="Documents; and images on a VLM"),
                helpcard.hotkey_blank_entry,
@@ -2135,18 +2135,11 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start new chat", notes=""),
                helpcard.hotkey_new_column,
-               # One row for a keyboard that has a dozen keys, because this card has no room for the dozen
-               # and no scrollbar to find them behind — an overflowing column is silently cut off, so the
-               # cost of listing them here is losing whatever sits at the bottom of this one. Tab is the
-               # row that pays: it is the way *in*, and from inside the graph the arrows, Enter and Esc
-               # are what a reader tries first. The rest are in the Chat graph section of the README, and
-               # belong on this card once it is redesigned (`TODO_DEFERRED.md`).
-               #
-               # The seven `Alt+` switch keys are left off for the same reason and are owed the same
-               # redesign. They cost the least by being absent: each is written into its own switch's
-               # tooltip, which is where a reader who is looking at the row will find it, and they are
-               # tabulated in the Mode toggles section of the README.
+               # One row for a keyboard that has a dozen keys. Tab is the row that pays: it is the way
+               # *into* the graph, and from inside it the arrows, Enter and Esc are what a reader tries
+               # first. The rest are in the Chat graph section of the README.
                env(key_indent=0, key="Tab", action_indent=0, action="Move the keyboard between panes", notes="Composer, chat log, chat graph"),
+               env(key_indent=1, key="Shift+Tab", action_indent=1, action="Same, but backwards", notes=""),
                env(key_indent=0, key="Page Up", action_indent=0, action="Scroll chat up one page", notes="Also while typing"),
                env(key_indent=0, key="Page Down", action_indent=0, action="Scroll chat down one page", notes="Also while typing"),
                env(key_indent=1, key="Up", action_indent=1, action="Same, but five lines", notes="Not while typing"),
@@ -2161,33 +2154,109 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="F8", action_indent=0, action="Copy chatlog to clipboard", notes="As-is"),
                env(key_indent=1, key="Shift+F8", action_indent=0, action="Copy chatlog to clipboard", notes="With chat node IDs"),
                helpcard.hotkey_blank_entry,
+               # The mode switches, which had been left off for want of rows. Each is also written into
+               # its own checkbox's tooltip, which is where a reader looking at the row finds it; what
+               # that cannot do is answer "what can I switch?" before you know what to look at.
+               env(key_indent=0, key="Alt+T", action_indent=0, action="Thinking", notes="AI reasoning mode on/off"),
+               env(key_indent=1, key="Alt+Shift+T", action_indent=1, action="Show thinking", notes="Whether traces arrive open"),
+               env(key_indent=0, key="Alt+I", action_indent=0, action="Internet", notes="websearch, webfetch"),
+               env(key_indent=0, key="Alt+D", action_indent=0, action="Documents", notes="Your document database"),
+               env(key_indent=0, key="Alt+G", action_indent=0, action="Chat graph", notes="Graph or avatar in the side panel"),
+               env(key_indent=0, key="Alt+S", action_indent=0, action="Speech", notes="Whether the avatar speaks replies"),
+               env(key_indent=1, key="Alt+C", action_indent=1, action="Subtitles", notes="Used when Speech is on"),
+               helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
                env(key_indent=0, key="F1", action_indent=0, action="Open this Help card", notes=""),
                )
+
+# The graph is a keyboard of its own — nineteen keys against the main page's forty — so it gets a page
+# rather than a corner of one. Two-thirds of these are unreachable from anywhere else in the app, and
+# until the card had pages they lived only in the README, which is not open while you are using the graph.
+chat_graph_hotkey_info = (env(key_indent=0, key="Tab", action_indent=0, action="Move the keyboard to the graph", notes="Or click anywhere in it"),
+                          # The ring has to be conjured before it can be moved, and the first arrow press is
+                          # what does it — planting it on HEAD rather than stepping. Its own row, because a
+                          # reader whose first press "did nothing" is looking straight at the key that
+                          # worked, and the rows below would have them pressing it again to no effect.
+                          env(key_indent=0, key="Any arrow", action_indent=0, action="Show the ring, on HEAD", notes="The first press only"),
+                          env(key_indent=1, key="Up", action_indent=1, action="Then: move it up the conversation", notes="Up and down follow the branch"),
+                          env(key_indent=1, key="Down", action_indent=1, action="Same, the other way", notes=""),
+                          env(key_indent=1, key="Left", action_indent=1, action="Move it along the siblings", notes="Left and right stay on one level"),
+                          env(key_indent=1, key="Right", action_indent=1, action="Same, the other way", notes=""),
+                          env(key_indent=0, key="Enter", action_indent=0, action="Do what clicking the box does", notes="A message: switch to it. A gap: open it"),
+                          env(key_indent=0, key="Esc", action_indent=0, action="Put the ring away", notes="Without going anywhere"),
+                          env(key_indent=0, key="Backspace", action_indent=0, action="Fold an opened tool round back up", notes="From anywhere inside the round"),
+                          helpcard.hotkey_blank_entry,
+                          env(key_indent=0, key="Ctrl+Right", action_indent=0, action="Next sibling, drawn or not", notes="Slides the window to follow"),
+                          env(key_indent=1, key="Ctrl+Shift+Right", action_indent=1, action="Same, but jump 10", notes=""),
+                          env(key_indent=1, key="Ctrl+End", action_indent=1, action="Same, but to the last", notes=""),
+                          env(key_indent=0, key="Ctrl+Left", action_indent=0, action="Previous sibling, drawn or not", notes=""),
+                          env(key_indent=1, key="Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
+                          env(key_indent=1, key="Ctrl+Home", action_indent=1, action="Same, but to the first", notes=""),
+                          helpcard.hotkey_new_column,
+                          env(key_indent=0, key="Shift+Up", action_indent=0, action="Pan the view", notes="The mouse drags; the wheel zooms"),
+                          env(key_indent=1, key="Shift+Down", action_indent=1, action="Same, the other way", notes=""),
+                          env(key_indent=0, key="Shift+Left", action_indent=0, action="Pan the view sideways", notes=""),
+                          env(key_indent=1, key="Shift+Right", action_indent=1, action="Same, the other way", notes=""),
+                          helpcard.hotkey_blank_entry,
+                          env(key_indent=0, key="F", action_indent=0, action="Zoom to fit the whole tree", notes=""),
+                          env(key_indent=0, key="B", action_indent=0, action="Fit the current branch", notes=""),
+                          env(key_indent=0, key="1", action_indent=0, action="Actual size (1:1)", notes="Main row or numpad"),
+                          env(key_indent=0, key="Numpad +", action_indent=0, action="Zoom in", notes=""),
+                          env(key_indent=0, key="Numpad -", action_indent=0, action="Zoom out", notes=""),
+                          helpcard.hotkey_blank_entry,
+                          env(key_indent=0, key="Home", action_indent=0, action="Back to where you are (HEAD)", notes=""),
+                          env(key_indent=0, key="Alt+Left", action_indent=0, action="Back to the previous view", notes=""),
+                          env(key_indent=0, key="Alt+Right", action_indent=0, action="Forward again", notes=""),
+                          )
+def render_chat_graph_help(self: helpcard.HelpWindow,
+                           gui_parent: str | int) -> None:
+    """Render the chat graph's explanation, below its hotkey table on the card's second page.
+
+    Called by `HelpWindow` when the help card is first rendered.
+    """
+    # Two columns, as page three is: a card this wide gives a single column lines too long to track back
+    # to the start of. See `render_help_extras` for the halving.
+    column_width = self.content_width // 2
+    g = dpg.add_group(horizontal=True, parent=gui_parent)
+    g1 = dpg.add_group(horizontal=False, parent=g)
+    dpg_markdown.add_text(f"{self.c_txt}The graph draws the **whole chat tree**: the branch you are on runs down the middle, with a few of its siblings either side at each level. One of those levels is every chat ever started under the current character card, which is as close as this format comes to a list of recent chats.{self.c_end}",
+                          parent=g1, wrap=column_width)
+    dpg_markdown.add_text(f"{self.c_txt}**Clicking is two steps, and the first changes nothing.** Click a message to look at it — the graph redraws around it if it is on another branch — and click it again to move the conversation there. Colour says where you *are* rather than what you are looking at, so the point where a branch you are considering left the one you are on stays visible.{self.c_end}",
+                          parent=g1, wrap=column_width)
+    g2 = dpg.add_group(horizontal=False, parent=g)
+    dpg_markdown.add_text(f'{self.c_txt}Anything left out is drawn as a dashed {self.c_end}{self.c_hig}**...N more**{self.c_end}{self.c_txt} box, so a box with no visible links means the tree really does end there. Clicking one navigates: between siblings it jumps to the middle of what it hides, under an off-branch message it opens what continues below, and a round of three or more tool results opens into its own boxes.{self.c_end}',
+                          parent=g2, wrap=column_width)
+    dpg_markdown.add_text(f'{self.c_txt}The one at the very top walks through the *other* character cards — the only route to chats you held under an earlier system prompt. It wears the {self.c_end}{self.c_hig}**HEAD**{self.c_end}{self.c_txt} pill while the chat you are actually in is behind it.{self.c_end}',
+                          parent=g2, wrap=column_width)
+    dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
+
 def render_help_extras(self: helpcard.HelpWindow,
                        gui_parent: str | int) -> None:
     """Render app-specific extra information into the help card.
 
     Called by `HelpWindow` when the help card is first rendered.
     """
+    # Two columns, as the Visualizer's terminology section is: a card this wide gives a single column
+    # lines too long to track back to the start of. Halved before the gap between them is taken off, which
+    # errs narrow — the safe direction, wrapping a word early where the other way runs text under the
+    # column beside it.
+    column_width = self.content_width // 2
+
     # Chat history
     dpg_markdown.add_text(f"{self.c_hed}**Chat history**{self.c_end}", parent=gui_parent, wrap=self.content_width)
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
     dpg_markdown.add_text(f"{self.c_txt}The chat history is **natively nonlinear**. Messages are stored as nodes in a tree. The current chat is the HEAD, plus its ancestor chain up to the system prompt. Continuing the chat adds a new child node below the latest message displayed.{self.c_end}",
-                          parent=g1, wrap=self.content_width)
+                          parent=g1, wrap=column_width)
     dpg_markdown.add_text(f"{self.c_txt}Rerolling creates a new sibling and sets the HEAD pointer to that. Previous siblings remain stored in the tree. Starting a new chat, or branching the chat, only resets the HEAD pointer.{self.c_end}",
-                          parent=g1, wrap=self.content_width)
-    # Kept to one clause because the card has no room to spare. When it does, what belongs after it is how
-    # the view is actually used: the whole tree is drawn there, and clicking a message twice moves the
-    # conversation to it.
-    #
+                          parent=g1, wrap=column_width)
+    g2 = dpg.add_group(horizontal=False, parent=g)
     # No locator for the switch, deliberately. "Below the avatar" is where it is today and nowhere in a
     # no-avatar mode, which has no avatar to be below and no toggle either, the graph being permanently
     # up. A label is findable; a direction that is wrong in one mode is worse than none. That mode will
     # want this sentence to say something else entirely, which is its own work.
-    dpg_markdown.add_text(f"{self.c_txt}Nothing is ever discarded. Where a message has siblings, its arrow buttons step between them, so a rerolled reply can be compared against the one it replaced. To reach a *different* old chat, switch on **Chat graph**.{self.c_end}",
-                          parent=g1, wrap=self.content_width)
+    dpg_markdown.add_text(f"{self.c_txt}Nothing is ever discarded. Where a message has siblings, its arrow buttons step between them, so a rerolled reply can be compared against the one it replaced. To reach a *different* old chat, switch on **Chat graph** — which has a page of its own on this card.{self.c_end}",
+                          parent=g2, wrap=column_width)
     dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
 
     # Docs database
@@ -2195,34 +2264,44 @@ def render_help_extras(self: helpcard.HelpWindow,
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
     dpg_markdown.add_text(f'{self.c_txt}You can put documents for the AI to access in {self.c_end}{self.c_hig}{librarian_config.llm_docs_dir}{self.c_end}{self.c_txt}. The path and the accepted file types are configured in **raven/librarian/config.py**.{self.c_end}',
-                          parent=g1, wrap=self.content_width)
+                          parent=g1, wrap=column_width)
     dpg_markdown.add_text(f'{self.c_txt}Plain text, Markdown, BibTeX, LaTeX, PDF, Word, PowerPoint, OpenDocument and saved web pages are read - the text layer only, so a scanned PDF needs OCR (e.g. **ocrmypdf**) before it can be indexed.{self.c_end}',
-                          parent=g1, wrap=self.content_width)
+                          parent=g1, wrap=column_width)
     dpg_markdown.add_text(f'{self.c_txt}The documents are search-indexed automatically, and the index is kept up to date. It is stored in {self.c_end}{self.c_hig}{librarian_config.llm_database_dir}{self.c_end}{self.c_txt}. If you ever need to clear it manually, just delete that directory.{self.c_end}',
-                          parent=g1, wrap=self.content_width)
+                          parent=g1, wrap=column_width)
+    g2 = dpg.add_group(horizontal=False, parent=g)
     dpg_markdown.add_text(f'{self.c_txt}When the {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt} checkbox in the app is **ON**, the document database is automatically searched, using your latest message to the AI as the search query. The AI can also search it again itself, with a better query, once it has read those results.{self.c_end}',
-                          parent=g1, wrap=self.content_width)
+                          parent=g2, wrap=column_width)
     dpg_markdown.add_text(f'{self.c_txt}If {self.c_end}{self.c_hig}**Speculation**{self.c_end}{self.c_txt} is **OFF**, any reply for which nothing was retrieved - no document matches, no attachments, no tool results - is marked {self.c_end}{self.c_hig}**[no sources retrieved]**{self.c_end}{self.c_txt}. The AI still answers; the marker reports what was **retrieved**, not whether it was used.{self.c_end}',
-                          parent=g1, wrap=self.content_width)
+                          parent=g2, wrap=column_width)
     dpg_markdown.add_text(f'{self.c_txt}To improve search result quality, Raven-librarian uses a hybrid method: Okapi BM25 for keywords, and vector embeddings for semantic search. Results are combined with RRF (reciprocal rank fusion).{self.c_end}',
-                          parent=g1, wrap=self.content_width)
+                          parent=g2, wrap=column_width)
 
     # Tool use (tool-calling)
     dpg_markdown.add_text(f"{self.c_hed}**Tool use** (tool-calling){self.c_end}", parent=gui_parent, wrap=self.content_width)
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f'{self.c_txt}The AI can search the web (**websearch**), read a page it found (**webfetch**), search your document database (**search_documents**), read one of those in full (**fetch_document**), list what this chat has consulted (**list_consulted_documents**), and ask what time it is (**get_current_time**).{self.c_end}',
-                          parent=g1, wrap=self.content_width)
-    dpg_markdown.add_text(f'{self.c_txt}It decides for itself which to use, if any. The first two need {self.c_end}{self.c_hig}**Internet**{self.c_end}{self.c_txt}, the next three need {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt}, and the clock is always available. Each checkbox governs its own group, so switching one off never takes the other away.{self.c_end}',
-                          parent=g1, wrap=self.content_width)
+    dpg_markdown.add_text(f'{self.c_txt}The AI can search the web (**websearch**), read a page it found (**webfetch**), search your document database (**search_documents**), read one of those in full (**fetch_document**), list what this chat has consulted (**list_consulted_documents**), ask what time it is (**get_current_time**), and do arithmetic (**calculate**).{self.c_end}',
+                          parent=g1, wrap=column_width)
+    g2 = dpg.add_group(horizontal=False, parent=g)
+    dpg_markdown.add_text(f'{self.c_txt}It decides for itself which to use, if any. The first two need {self.c_end}{self.c_hig}**Internet**{self.c_end}{self.c_txt}, the next three need {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt}, and the last two are always available, reaching nothing outside this process. Each checkbox governs its own group, so switching one off never takes the other away.{self.c_end}',
+                          parent=g2, wrap=column_width)
     dpg_markdown.add_text(f'{self.c_txt}One reply may take several rounds of tool calls, up to a configurable ceiling. A long page the AI fetches is filed as an attachment, so reading it does not bury the conversation.{self.c_end}',
-                          parent=g1, wrap=self.content_width)
-help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
-                                  width=gui_config.help_window_w,
+                          parent=g2, wrap=column_width)
+# Three pages, split by scope rather than to find room. Page one is the app's keyboard and nothing else,
+# so it is a reference a reader can screenshot and keep open on a second monitor while they learn it —
+# which is what the card's header has been inviting all along, and what prose sharing the page took away.
+# The graph is a keyboard of its own and gets page two, with the prose that explains it directly under its
+# keys. Page three is everything else the card says about Librarian, which is read once rather than kept.
+help_window = helpcard.HelpWindow(width=gui_config.help_window_w,
                                   height=gui_config.help_window_h,
                                   reference_window=main_window,
                                   themes_and_fonts=themes_and_fonts,
-                                  on_render_extras=render_help_extras,
+                                  pages=[helpcard.page("Keyboard", hotkey_info=hotkey_info),
+                                         helpcard.page("Chat graph",
+                                                       hotkey_info=chat_graph_hotkey_info,
+                                                       on_render_extras=render_chat_graph_help),
+                                         helpcard.page("About Librarian", on_render_extras=render_help_extras)],
                                   on_show=None,
                                   on_hide=None)
 dpg.set_item_callback("help_button", help_window.show)  # tag

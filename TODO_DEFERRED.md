@@ -2688,139 +2688,48 @@ clusters, as of 2026-07-27:
   own terms: figure- and equation-heavy literature extracts to prose that omits the argument, in exactly the
   corpus Raven exists to read.
 
-## Librarian's help card has no room to describe attachments
+## Librarian's help card: the room exists now, and is not all spent
 
-*Cluster: discoverability · Cost: ? · Gate: RN2026 · Filed: 2026-08-05 · Updated: 2026-08-25 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
+*Cluster: discoverability · Cost: S per remaining piece · Gate: none · Filed: 2026-08-05 · Updated: 2026-09-09 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
 
-**The horizontal clipping is fixed (2026-08-25); the shape decision below is what remains.** Every
-`dpg_markdown.add_text` in Librarian's `render_help_extras` now passes `wrap=self.content_width`, a new
-read-only property on `HelpWindow` that answers "how wide may text be before it runs off the card". It
-exists on the component rather than in the app because the answer is the card's to give: `_width` is
-private, and every extras renderer would otherwise reach for it and guess the padding separately.
+**The shape decision is built and shipped (2026-09-09).** `HelpWindow` takes `pages`, and Librarian's card
+is two: the keys on one, everything the card says *about* Librarian on the other. What is left is content
+— filling the room rather than finding it. The pieces below are separable and each is small.
 
-**All three apps that render extras are wrapped now** (2026-08-25): Librarian's fifteen calls, and
-`xdot_viewer`'s and `visualizer`'s eleven each. Visualizer's terminology section is two columns side by
-side, so those wrap at half the card rather than all of it.
+**What is still missing is printed on every run** by `scripts/check_option_lists.py`, as the keys each
+README documents that the app's `hotkey_info` does not offer. As of 2026-09-09 that is the chat graph's
+fourteen (`Left`, `Right`, `Backspace`, `Shift`+arrows, `Alt+Left`/`Alt+Right`, `F`, `B`, `1`, numpad
+`+`/`-`) and the Visualizer's `Ctrl+S` for saving a word cloud. Two more it reports — `Enter` and
+`Ctrl+Enter` — are on the card already, under names it cannot read because they are computed
+(`_send_key_label`, `_newline_keys_label`).
 
-The prose was brought up to date 2026-08-04 — five tools instead of one, the real ingested file types, and
-the two "this is a tech demo" claims gone. **Attachments are still not mentioned at all**, though they are
-0.2.8's headline feature, and that omission is not an oversight: there is nowhere to put them.
+**Attachments are still not described**, though they were 0.2.8's headline feature. That was blocked on
+room and no longer is; the prose page has space.
 
-The card is a fixed-height window with `no_scrollbar=True`, so prose that grows is simply clipped, and the
-hotkey table can no longer be rebalanced to make room (already at the `ceil(total/2)` floor, 16 rows of 32).
+**The other eight cards are untouched and stay that way for now** (Juha, 2026-09-09): Librarian's is the
+prototype, and the rest conform if and when their own content calls for it. Nothing forces them to — a
+card that declares no pages behaves exactly as it did.
 
-**What is waiting for the room is no longer something to rediscover**: `scripts/check_option_lists.py`
-prints it on every run, as the keys each README documents that the app's `hotkey_info` does not offer. As
-of 2026-09-08 that is Librarian's seven `Alt+` mode toggles, `Shift+Tab`, the chat graph's fourteen, and
-the Visualizer's `Ctrl+S` for saving a word cloud.
-
-**The chat graph's own keys are the second thing this has cost** (2026-09-08). The graph binds some
-nineteen — the four arrows, `Enter`, `Esc`, `Backspace`, `Shift`+arrows, four `Ctrl` sibling steps,
-`Alt+Left`/`Alt+Right`, `F`, `B`, `1`, numpad `+`/`-` and `Home` — and none of them is on the card, for
-want of the rows. So the card is now knowingly *incomplete* rather than merely cramped, and the complete
-inventory lives in `raven/librarian/README.md` under "Keyboard reference".
-The update above had to buy each new sentence by cutting another, and it now sits one line under the
-ceiling: every remaining line was measured, and the widest is within ~50 px of the right edge. So the next
-addition of any size needs the shape decision first.
-
-**The card is now visibly over its height, and that is a decision rather than a discovery** (2026-09-04).
-Two rows went in for the chat log's `Ctrl+Home` / `Ctrl+End`, which completed a block that was already
-there and missing exactly those two. The card was opened and looked at afterwards: the **hotkey table is
-intact** — `Ctrl+N` still closes the first column and `F1` the second — and what the two rows cost is two
-more lines of the closing prose, which was already running past the bottom edge. Juha's call: fix it as
-end-of-sprint polish or after the sprint, and let the chat graph's own keys go on during that redesign
-rather than before it. So the shape decision below is now blocking something concrete rather than
-anticipated.
-
-**That last line has since been spent, and the fit is unmeasured** (2026-09-03). The chat graph gained a
-keyboard — a dozen keys — and one row went in for `Tab`, the way *into* the graph, on the grounds that a
-reader who gets there finds the arrows, `Enter` and `Esc` by trying them. The other eleven are documented
-only in `raven/librarian/README.md`. Nothing was measured after the addition, so **check this card renders
-whole before adding anything at all to it**, and treat the graph's remaining keys as waiting on the shape
-decision below rather than as an omission to fix in passing.
-
-**The real question is not how to fit more into one screen — it is whether one screen is still the right
-format.** The single-glance reference card was chosen deliberately, and it suited a tech demo; the app has
-since grown into a tool with RAG, five tools, attachments, branching history and speech, and it is now too
-large to describe that way. So the shape decision is the item, and the fitting is only its symptom. A
-scrollable layout is the obvious alternative.
+**Two-column prose is the part they all want, pages or no** (Juha, 2026-09-09). A card is wide enough that
+a single column gives lines too long to track back to the start of, and Librarian's three sections read
+much better split. Only one section in the constellation had it before today — the Visualizer's
+*Terminology* — so the rest of that card's prose and `xdot_viewer`'s eleven calls are the sweep. It is
+independent of paging: `column_width = self.content_width // 2`, and a second vertical group inside the
+horizontal one that most sections already have.
 
 One thing learned while fitting the text, worth knowing before touching it again:
 
 - **Long paths and identifiers should go in the highlight colour, not italics** (`self.c_hig`, as the
-  section already does for **Documents** / **Speculation**). They read better against the body text, and it
-  sidesteps the renderer fault below.
+  section already does for **Documents** / **Speculation**). They read better against the body text.
 
-Note that the clipping is *not* a `dpg_markdown` limitation: it wraps when passed `wrap=`, which is how the
-chatlog does it (`chat_controller.py`, `wrap=chat_text_w`). The help card simply never passes one, so each
-`add_text` is one unwrapped line. Whichever way the shape decision goes, wrapping is available.
+**Do the remaining pieces in one pass with the hotkey-discoverability audit**, which rewrites the same card
+from the other direction.
 
-**Do it in one pass with the hotkey-discoverability audit**, which rewrites the same card from the other
-direction. Note also that the chat graph view will want an entry here plus a hotkey-shaped gesture of its
-own, so the redesign should be able to take one more feature without another shape decision.
-
-**State as of 2026-08-14, after the prediction above came true.** Adding one hotkey row (Ctrl+Shift+O, for
-the attach dialog) pushed the card past its height, exactly as "the next addition of any size" was expected
-to. Bought back by deleting the separator row between Ctrl+S and Ctrl+Right — a stopgap that costs a group
-boundary the eye was using, and that the *next* row will exhaust again. What is left, checked by looking:
-
-- **Vertical fit is recovered but has no margin.** The last prose line sits against the bottom edge.
-- **The right edge now clips too**, which the height fix did not touch and cannot: "…and ask what time it
-  is" is cut mid-word. That is the missing `wrap=` described above, and it is the cheaper half — the
-  renderer wraps when told to.
-
-So the shape decision is still the item. The horizontal clipping is worth doing first regardless of how that
-decision goes, since wrapping is needed under every shape.
-
-### The shape: pages, as a game's controls screen has them
-
-Proposed by Juha (2026-09-08), and settled with him the same day.
-
-**The first cut is not a paged hotkey table — it is prose on one page and hotkeys on another.** Splitting
-the *table* across pages is available later if it ever needs it, and is not the go-to. What Librarian wants
-first is page 1 dedicated to the hotkeys, with all the prose moved to page 2. If the keys then fit on one
-screen the card becomes **a reference card you can keep**: printable as-is, or screenshotted and left open
-in an image viewer on a second monitor while you learn them. That is the payoff, and it is lost the moment
-prose shares the page.
-
-**Why this is the right minimal answer rather than merely a workable one: it converts the constraint from
-hard to soft.** Everything above is a consequence of a table that must fit one fixed-height window — the
-rebalancing that hit its floor, the separator row spent to buy a line, the attachments that have nowhere to
-be described, and the keys missing from the card for want of rows rather than for any reason of their own.
-
-**A toolbar across the top**, carrying the controls, the page's name and the counter:
-
-```
-|<  <  >  >|      Some random topic                    1 / 3
-```
-
-- **Four buttons: first, previous, next, last.** The last two exist as much for *signage* as for the
-  pointer: they are what the `Home` and `End` hotkeys hang their tooltips on. A help card that needs a help
-  card to explain its own navigation would be a delicious recursion and a bad card.
-- **The glyphs are the chat graph's sibling-navigation ones**, taken from `chatgraph_panel`:
-  `fa.ICON_BACKWARD_FAST`, `fa.ICON_CARET_LEFT`, `fa.ICON_CARET_RIGHT`, `fa.ICON_FORWARD_FAST`. Its ±10
-  pair has no counterpart here. Same verbs, so a reader should not have to learn them twice.
-- **Buttons stop at the ends rather than wrapping, and are enabled exactly when pressing them would do
-  something.** That is the Raven way and is already honoured by the chat graph, the chat log and the
-  Visualizer.
-- **`N / M` is house vocabulary already**: the chat message sibling counter, Cherrypick's `[13 / 133]`, the
-  graph's `3 / 12`.
-
-**A page name is required, not optional**, so that nobody building a card skips it. It goes in the toolbar
-beside the counter; the window title is the other candidate and is where a reader is less likely to look.
-
-**The keys are free because the card is always modal** — it owns the keyboard outright while it is up — so
-`Left`, `Right`, `Home` and `End` collide with nothing, and the arrows are the more intuitive binding for
-turning a page. `Home` and `End` keep the meaning they have everywhere else, the ends of a run.
-
-**The card's height is the largest page's, fixed for the session, not each page's own.** A window that
-resizes under the arrow keys is unpleasant to read, and the alternative costs only some empty space on the
-shorter pages.
-
-**Cost: M.** It is in `raven/common/gui/helpcard.py`, which nine apps share, so it is held to the
-foundation bar — but the change is additive: an app that declares no pages gets one page and behaves as it
-does now, which is what lets this land without touching the other eight cards. The horizontal `wrap=` fix
-above is wanted under this shape as much as any other.
+**Where the graph's fourteen keys go is the one open design question**, and it is a scope question rather
+than a fitting one: the graph is a keyboard of its own, and the main page has room for perhaps two more
+rows, not fourteen. The spec that produced the pages said splitting the *table* across pages is available
+but is not the go-to — which was about splitting one keyboard arbitrarily, where this would give a
+distinct one its own page.
 
 ## Modernize the Librarian system prompt / character card
 

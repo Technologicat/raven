@@ -56,7 +56,7 @@ import dataclasses
 import pathlib
 import re
 import sys
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -78,7 +78,10 @@ class Target:
 class Rule:
     what: str
     module: str
-    name: str
+    #: The module-level list holding the options, or several when one document is fed by more than one.
+    #: Librarian's help card is the case: its keyboard page and its chat-graph page carry a table each, and
+    #: the README tabulates both, so a rule naming only one reports the other's keys as undocumented.
+    name: Union[str, Tuple[str, ...]]
     shape: str
     targets: Tuple[Target, ...]
     # Also look the other way, and *note* what the prose documents that the code list omits. Only for a
@@ -98,7 +101,7 @@ RULES = (
 
     Rule(what="Raven-librarian's hotkeys",
          module="raven/librarian/app.py",
-         name="hotkey_info",
+         name=("hotkey_info", "chat_graph_hotkey_info"),  # the card's keyboard page, and its chat-graph page
          shape=ENV_KEY_KWARG,
          targets=(Target("raven/librarian/README.md", section="## Keyboard reference"),),
          note_reverse=True),
@@ -236,11 +239,18 @@ def check(rule: Rule) -> Tuple[List[str], List[str]]:
     """
     problems: List[str] = []
     module_path = REPO_ROOT / rule.module
-    names, unresolved = read_option_names(module_path, rule.name, rule.shape)
-    if not names:
-        return ([f"{rule.module}: `{rule.name}` yielded no names, so this rule checks nothing"], [])
+    list_names = (rule.name,) if isinstance(rule.name, str) else rule.name
+    label = " / ".join(f"`{one}`" for one in list_names)
+    names: List[str] = []
+    unresolved: List[str] = []
+    for one in list_names:
+        found, could_not_read = read_option_names(module_path, one, rule.shape)
+        if not found:
+            return ([f"{rule.module}: `{one}` yielded no names, so this rule checks nothing"], [])
+        names.extend(found)
+        unresolved.extend(could_not_read)
 
-    notes = [f"{rule.module}: `{rule.name}` has an entry this cannot read, so it is not checked: {entry}"
+    notes = [f"{rule.module}: {label} has an entry this cannot read, so it is not checked: {entry}"
              for entry in unresolved]
 
     wanted = [(name, normalize(name)) for name in names]
@@ -261,7 +271,7 @@ def check(rule: Rule) -> Tuple[List[str], List[str]]:
         if missing:
             listed = ", ".join(repr(name) for name in missing)
             problems.append(f"{where}: does not name {listed} — "
-                            f"defined in {rule.module} as part of `{rule.name}`")
+                            f"defined in {rule.module} as part of {label}")
 
         if rule.note_reverse:
             known = {key for _name, key in wanted}
@@ -271,7 +281,7 @@ def check(rule: Rule) -> Tuple[List[str], List[str]]:
                 listed = ", ".join(repr(name) for name in absent)
                 caveat = (" (some may be there under a computed name — see the unreadable entries above)"
                           if unresolved else "")
-                notes.append(f"{where}: documents {len(absent)} key(s) that `{rule.name}` does not "
+                notes.append(f"{where}: documents {len(absent)} key(s) that {label} does not "
                              f"offer, so they are missing from the F1 card{caveat}: {listed}")
     return problems, notes
 

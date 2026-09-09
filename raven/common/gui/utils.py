@@ -629,6 +629,7 @@ def describe_item(widget: str | int | None) -> str:
 # separated them. Same convention as `raven.xdot_viewer.config` and `raven.conference_timer.config`, which
 # named theirs first.
 DPG_WINDOW_PADDING = 8  # mvStyleVar_WindowPadding; both components are 8 in the default theme
+DPG_ITEM_SPACING_X = 8  # mvStyleVar_ItemSpacing[0]; the gap a horizontal group leaves between two items
 DPG_FRAME_PADDING_Y = 3  # mvStyleVar_FramePadding[1] (the x component is 4, and is not needed so far)
 DPG_SCROLLBAR_SIZE = 14  # mvStyleVar_ScrollbarSize; the width a vertical scrollbar takes off a scrollable region
 

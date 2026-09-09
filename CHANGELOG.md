@@ -244,6 +244,15 @@
   or a user profile other than the configured one draws the generic glyph, where the name was not on
   screen at all.
 
+- **the help card (`F1`) has pages.** The keys are on the first one, with nothing else, so it is now a
+  reference you can screenshot and keep open while you learn them; everything the card says *about*
+  Librarian moved to the second. Turn them with `Left` / `Right`, or `Home` / `End` for the ends, or the
+  buttons in the card's new toolbar.
+  - **The card had run out of room**, and every addition for months had been bought by cutting something
+    else: the hotkey table was at its rebalancing floor, a separator row was spent to win back a line, and
+    the chat graph's own keys never made it onto the card at all. One screen had stopped being the right
+    format for an app this size.
+
 - **the prompt texts are Markdown files now**, under `raven/librarian/prompts/`, and any of them can be
   overridden from `~/.config/raven/librarian/prompts/` without touching the installed copy. That folder's
   `README.md` documents the template variables and what each file is for.
