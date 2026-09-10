@@ -4280,7 +4280,7 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 ## Fleet audit: every hotkey discoverable in a tooltip + help card
 
-*Cluster: discoverability · Cost: ? · Gate: post-0.2.10 · Filed: 2026-06-07 · Updated: 2026-09-09 · See also: "Librarian's help card: the room exists now, and is not all spent"*
+*Cluster: discoverability · Cost: M per app · Gate: post-0.2.10 · Filed: 2026-06-07 · Updated: 2026-09-10 · See also: "Librarian's help card: the room exists now, and is not all spent"*
 
 **Narrower than when filed, in two ways** (2026-09-09):
 
@@ -4293,9 +4293,29 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 - **Librarian's card was gone through key by key and signed off** (2026-09-09), which is one of seven apps
   done to a standard now written in `raven-style-guide.md`.
 
-**What is genuinely left is the tooltip half**, and it is the larger one: for every bound key in each app,
-confirm the control it triggers names it in brackets. Nothing checks that, and filling a gap is a behaviour
-change rather than a doc edit — so it stays its own focused pass, as this item has always said.
+**Librarian's tooltip half is done as well** (2026-09-10), so that app is finished on both. Every key it
+binds is now named on the control that triggers it — the composer's `Esc` was the last gap — and the chat
+graph's cursor keys, which have no button of their own anywhere, went onto the sibling counter and the
+commit button. **Six apps are left**: `visualizer`, `xdot_viewer`, `conference_timer`,
+`avatar/pose_editor`, `avatar/settings_editor`, `cherrypick`. For each: every bound key, confirm the
+control it triggers names it in brackets. Nothing checks that.
+
+**The first pass produced the estimate this item was waiting for: a tooltip sweep is a behaviour-change
+pass, not a caption edit.** Five commits on Librarian, of which exactly one was captions alone. What the
+reading turned up:
+
+- **Three per-message buttons with no hotkey at all.** Copy, Branch and Delete are reachable from the
+  keyboard now (`Ctrl+C` / `Ctrl+Shift+C`, `Ctrl+B`, `Ctrl+Shift+Delete`). The paragraph below predicted
+  exactly this, and was right.
+- **A key that did not do what the card said it did.** `Esc` in the composer *reverted* the field to
+  whatever it held when the caret entered it, which is ImGui's default; the card had been promising
+  "clear" throughout.
+- **A key that never arrived.** The microphone panel is offered keys ahead of the app's own Ctrl and Alt
+  branches and did not look at the modifiers, so with the keyboard in it `Ctrl+S`, `Ctrl+R` and `Alt+D`
+  were being swallowed.
+
+So budget tests and a live check per app, not an afternoon of editing strings. Librarian is the largest of
+the seven, which is the one thing arguing the rest are cheaper.
 
 **Do not try to size this by grepping for brackets** (attempted and abandoned, 2026-09-09). Neither side of
 the ratio survives contact:

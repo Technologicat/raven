@@ -71,11 +71,18 @@ the exhibit:
 - **Brief 16 item 8, search in both halves** — the large one, at least a week, and the reason the three
   above were sized to finish early.
 
-**The quick wins, if a session wants one before the large item**: the help card's visual pass (three
-values — paragraph spacing, a two-column wrap that is too wide, and a column boundary that shifts between
-sections), the two-column sweep for the other eight cards, attachments still undescribed on Librarian's
-card, and the Visualizer's `Ctrl+S` missing from its own card. All small, all in `TODO_DEFERRED.md`, and
-the first of them wants the maintainer at the keyboard.
+**The quick wins, if a session wants one before the large item**: the two-column sweep for the other eight
+cards, and the Visualizer's `Ctrl+S` missing from its own card. Both small, both in `TODO_DEFERRED.md`, and
+both want the maintainer at the keyboard — a card is a fixed-height window whose whole problem is what fits.
+
+*This list was written at 15:44 on 2026-09-09 and three of its five items landed after it.* The help card's
+visual pass and the attachments section went in that evening; Librarian's tooltip half went in on the
+morning of 2026-09-10, which also closed that app's side of *"Fleet audit: every hotkey discoverable in a
+tooltip + help card"*. **What the tooltip half is not, now that one app has been through it, is a quick
+win**: five commits on Librarian, only one of them captions. The rest were three buttons with no hotkey at
+all, a composer whose `Esc` reverted the draft where the card promised it cleared it, a panel swallowing the
+app's chords, and the refactor that let the first of those be tested. Six apps to go, and the item carries
+what to expect.
 
 ## Superseded: next session, from 2026-09-10 (the plan that was)
 

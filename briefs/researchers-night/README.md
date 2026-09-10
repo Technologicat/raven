@@ -67,10 +67,12 @@ in the deferred file is one we would walk past.
    checklist of what Librarian's turned out to have wrong, which is what to look for in the rest.
    - **Start with the Visualizer.** It is the one with a known missing key — `check_option_lists.py` reports
      its `Ctrl+S` for saving a word cloud — and the one most likely to want the paging feature.
-   - **Then Librarian's tooltip half**, the other side of "Fleet audit: every hotkey discoverable in a
-     tooltip + help card". Do it as a first pass to get a real estimate: an attempt to size it by grep on
-     2026-09-09 produced confidently wrong numbers in both directions, and that failure is recorded in the
-     item so nobody repeats it.
+   - ~~**Then Librarian's tooltip half**~~ — **done first instead, on the morning of 2026-09-10**, and it
+     produced the estimate it was meant to. A tooltip sweep is a behaviour-change pass: of its five commits
+     only one was captions, and the others gave three per-message buttons the hotkeys they never had, made
+     `Esc` clear the composer as the card had always claimed, and stopped the microphone panel swallowing
+     the app's `Ctrl` and `Alt` chords. Librarian is now finished on both halves; the numbers and the six
+     remaining apps are in "Fleet audit: every hotkey discoverable in a tooltip + help card".
 
 2. **Merge the three display shorteners** into `raven/common/text/`, per the shape agreed on 2026-09-09 and
    filed under *"Three display shorteners in `librarian/`"*. Sized that day at six files plus tests, 30–45
