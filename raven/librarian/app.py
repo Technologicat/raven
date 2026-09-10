@@ -1449,6 +1449,13 @@ with timer() as tim:
                                            on_enter=True,  # fire the callback on whichever chord commits
                                            # `True` <=> Enter sends; `False` (default) <=> Ctrl+Enter sends
                                            ctrl_enter_for_new_line=(librarian_config.send_message_key == "enter"),
+                                           # ImGui's default for Escape is to *revert* the field to what it
+                                           # held when the caret entered it, which in a composer means the
+                                           # key clears or restores an older draft depending on where the
+                                           # caret was last clicked — a distinction the reader cannot see.
+                                           # Clearing is the one meaning worth having, and is what the help
+                                           # card and this field's own tooltip promise.
+                                           escape_clears_all=True,
                                            callback=lambda: _request_send(),
                                            width=_get_chat_field_base_width(),
                                            height=gui_config.chat_field_h)
@@ -1458,6 +1465,7 @@ with timer() as tim:
                             dpg.add_text("Compose messages to the AI here.\n"
                                          f"    [{_newline_keys_label()}]: insert a new line\n"
                                          f"    [{_send_key_label()}]: send to the AI\n"
+                                         "    [Esc]: clear the text and cancel\n"
                                          "    [Ctrl+Space]: focus this field")
 
                         # Staged-image thumbnail strip. Hidden until the user attaches an image; populated by the
@@ -2856,9 +2864,11 @@ def librarian_hotkeys_callback(sender, app_data):
             # Empty on purpose, and load-bearing: this branch exists to *withhold* the log-navigation keys
             # below while someone is typing. Every key it would claim belongs to the widget instead.
             #
-            # Escape is deliberately absent: ImGui's own `InputText` handles the cancel, reverting the field
-            # and deactivating it, which is the entire job. Nothing needs parking afterwards — an inactive
-            # field is what this branch tests for, so the navigation keys are live again on the next press.
+            # Escape is deliberately absent: ImGui's own `InputText` handles it. Under `escape_clears_all`
+            # — set where the field is built — a press on a field with text in it clears the text, and a
+            # press on an empty one deactivates the field. So Esc from a written message clears it, and Esc
+            # again leaves; nothing needs parking afterwards, and an inactive field is what this branch
+            # tests for, so the navigation keys are live from there.
             #
             # Up/Down/Home/End are likewise absent, and belong to the widget: in a multiline field
             # they move the caret between lines and to the ends of one, which is what a typist expects and
