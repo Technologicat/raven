@@ -136,6 +136,14 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # 2026-09-10): the glow is visibly not-perfectly-smooth at twelve frames a second, and that is accepted,
 # against a quiet fan and the electricity. Written down because the choppiness is the visible half and the
 # saving is not, so a later reader meeting the first without the second has every reason to "fix" it.
+#
+# **What that did not cover is a large selection**, say *select all* over ten thousand points, and there is
+# a reason to expect it to differ rather than merely to be more of the same: this sleeps for a fixed
+# interval on top of whatever the frame cost, rather than budgeting a frame time. So where a frame is
+# nearly free the result is the ~12 fps intended, and where a frame already costs 60 ms the result is
+# nearer 7 — the throttle taking its cut from a rate that was already low. If the glow ever looks wrong
+# somewhere this one did not, that is the first thing to measure, and sleeping `IDLE_SLEEP_S` minus the
+# elapsed frame time is the fix rather than abandoning the throttle.
 
 IDLE_SLEEP_S = 0.08   # ~12 fps when idle
 INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after the last user input
