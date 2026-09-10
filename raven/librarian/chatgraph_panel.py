@@ -371,11 +371,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
                        "Zoom to fit [F]", f"chat_graph_fit_button_{self.gui_uuid}",  # tag
                        solid=False)
             add_button(fa.ICON_MAGNIFYING_GLASS, self.zoom_1_to_1,
-                       "Actual size (1:1) [1 / numpad 1]", f"chat_graph_actual_size_button_{self.gui_uuid}")  # tag
+                       "Actual size (1:1) [1 / Numpad 1]", f"chat_graph_actual_size_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_MAGNIFYING_GLASS_PLUS, self.zoom_in,
-                       "Zoom in [numpad +]", f"chat_graph_zoom_in_button_{self.gui_uuid}")  # tag
+                       "Zoom in [Numpad +]", f"chat_graph_zoom_in_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_MAGNIFYING_GLASS_MINUS, self.zoom_out,
-                       "Zoom out [numpad -]", f"chat_graph_zoom_out_button_{self.gui_uuid}")  # tag
+                       "Zoom out [Numpad -]", f"chat_graph_zoom_out_button_{self.gui_uuid}")  # tag
             add_button(fa.ICON_SUN if dark_mode else fa.ICON_MOON, self.toggle_dark_mode,
                        "Switch to light mode" if dark_mode else "Switch to dark mode",
                        self._dark_mode_button_tag)

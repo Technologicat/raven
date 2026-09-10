@@ -17,6 +17,38 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## A multiline text control of our own
+
+*Cluster: text-input · Cost: L — two weeks (Juha, 2026-09-10), by Kolmogorov taming · Gate: none, and nothing waits on it · Filed: 2026-09-10 · See also: "Make the Librarian chat composer text field resizable"*
+
+DPG's multiline `InputText` is ImGui's, and it carries limitations Raven works around rather than uses.
+Two are known and neither is a bug we could report:
+
+- **No dynamic wrap.** Text does not reflow to the width of the box, which is the one thing a chat composer
+  most wants.
+- **Escape's meaning is not ours to choose.** ImGui's Escape does not *commit* a multiline field the way it
+  commits a single-line one, so making the key mean anything at all takes `escape_clears_all` — which
+  splits the gesture: a press on a field with text clears it and leaves it active, and only a press on an
+  empty field leaves the field. Librarian's composer therefore clears first and exits second. That order is
+  forced, and it has already cost something elsewhere: the Visualizer's search field is **single-line**,
+  where ImGui's Escape does cancel and deactivate, so a second Escape there would naturally have meant
+  *clear* — exits first, clears second, the opposite order. One key, two sequences, and the difference
+  visible to nobody. So the Visualizer took `Ctrl+Shift+F` instead (2026-09-10), and paid a focus dance for
+  it that the Escape spelling would not have needed.
+
+`dpg-notes.md` → *Keyboard input* holds what is measured about the widget, most of it learned by regression:
+which chord commits which kind of field, that the commit is switchable via `ctrl_enter_for_new_line`, that a
+write to a field holding the caret is reverted, and that releasing the caret takes two frames. A control of
+our own would retire most of that section rather than adding to it.
+
+**Two weeks, and the estimate is domain rather than scope** (Juha, 2026-09-10). This is text editing in an
+immediate-mode toolkit: caret, selection, wrapping, scrolling, clipboard, undo, IME, and every interaction
+between them — many independent details, none derivable from the others, each becoming visible only once the
+one before it is right. Not a fortnight of typing; a fortnight of finding out what is still wrong.
+
+**Much later.** Nothing is blocked on it, the workarounds hold, and it would subsume *"Make the Librarian
+chat composer text field resizable"* — so if that one is ever built standalone, note here that it was.
+
 ## Nothing owns "which pane has the keyboard", so each new claimant must remember all the others
 
 *Cluster: librarian-keyboard · Cost: ? — no clear design yet · Gate: needs a design that beats what DPG allows · Filed: 2026-09-09*
@@ -4383,7 +4415,7 @@ Discovered 2026-07-16 (noted by Juha during brief-03 Half-2 pause).
 
 ## Make the Librarian chat composer text field resizable
 
-*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-07-17*
+*Cluster: text-input · Cost: ? · Gate: — · Filed: 2026-07-17 · See also: "A multiline text control of our own", which would subsume this*
 
 The composer's multiline text field (`chat_field`, `app.py`) is a fixed height (`gui_config.chat_field_h`, ~5 rows). For essay-length prompts — common in scientific use — a fixed box is a toilet-paper-roll view of the input. Add a drag-to-resize affordance (or a fixed/expand toggle) so the user can grow the field when composing long messages. The composer's outer height is currently fixed on purpose (so the chat/avatar panels don't jump when the staged-image strip appears), so a resize handle would need to grow the whole composer and re-run the panel layout — reuse `_resize_panels`.
 
