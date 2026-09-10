@@ -117,6 +117,7 @@ def no_leaked_animations(request):
     """
     try:
         from raven.common.gui import animation
+        from raven.common import text as common_text
     except ImportError:  # no dearpygui here; nothing registers an animation either
         yield
         return
@@ -124,16 +125,43 @@ def no_leaked_animations(request):
     def registered():
         return list(animation.animator._animations)
 
+    def flash_registry():
+        """`WidgetFlash.instances`: the flashes that believe they are running, keyed by the widget they own."""
+        return dict(animation.WidgetFlash.instances)
+
     before = len(registered())
+    flashes_before = set(flash_registry())
     yield
     left = registered()
     if len(left) > before:
+        n_left = len(left) - before
         kinds = ", ".join(sorted(f"{type(a).__name__}@0x{id(a):x}" for a in left[before:]))
         raise AssertionError(
-            f"{request.node.name} finished with {len(left) - before} animation(s) still registered: "
-            f"{kinds}. Something built a GUI component and dropped it without tearing it down — the "
-            f"animator outlives this module's DPG context, so these go on being ticked against widgets "
-            f"that no longer exist, and the crash surfaces in an unrelated module later.")
+            f"{request.node.name} finished with {n_left} animation{common_text.plural_s(n_left)} still "
+            f"registered: {kinds}. Something built a GUI component and dropped it without tearing it down "
+            f"— the animator outlives this module's DPG context, so these go on being ticked against "
+            f"widgets that no longer exist, and the crash surfaces in an unrelated module later.")
+
+    # The mirror of the check above, and the failure it catches is the more insidious of the two.
+    # `WidgetFlash` keeps its own registry of which flash owns which widget, written when a flash reifies
+    # and cleared only by `finish`. So an instance that leaves the animator *without finishing* is invisible
+    # to the check above — nothing is left registered — while its entry lives on forever, and every later
+    # flash on that widget sees it, takes the de-duplication branch, and quietly declines to run. The widget
+    # is then stuck wearing the colour of the abandoned flash's last frame, and can never flash again.
+    #
+    # Tested as "registered with the animator" rather than "registry empty": a flash still legitimately
+    # running at module teardown is the *other* failure, and the check above already names it.
+    still_rendered = registered()
+    orphans = {target: flash for target, flash in flash_registry().items()
+               if target not in flashes_before and not any(flash is running for running in still_rendered)}
+    if orphans:
+        n_orphans = len(orphans)
+        where = ", ".join(sorted(f"{target!r} -> WidgetFlash@0x{id(flash):x}" for target, flash in orphans.items()))
+        raise AssertionError(
+            f"{request.node.name} finished with {n_orphans} orphaned flash "
+            f"registration{common_text.plural_s(n_orphans)}: {where}. Each names a widget whose "
+            f"`WidgetFlash` is no longer being rendered, so nothing will ever call its `finish`: the widget "
+            f"keeps the colour of that flash's last frame, and every later flash on it becomes a no-op.")
 
 
 GUI_VIEWPORT_TITLE = "raven gui tests"
