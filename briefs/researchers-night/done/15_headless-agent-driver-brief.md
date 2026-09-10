@@ -5,6 +5,11 @@
 > `chat_controller.py`) were among those being committed to that day. Treat every `file.py:NNN` below as a
 > pointer to a thing that exists, not as a coordinate.
 
+> **Five names below have since gained a leading underscore** (2026-09-10): each of `load_prompt`,
+> `setup_system_prompt`, `setup_user_card`, `setup_interaction_style` and `setup_character_card` is now
+> spelled with one. They were never called from outside `llmclient`, and `configure` is the one public way
+> into prompt setup. Nothing in the argument below changes; only the spelling of what it points at.
+
 **v0.2.9 work, and first in that queue — ahead of 05.** Written 2026-08-04, during the deferred-TODO triage.
 Not admitted to v0.2.8: it is not a defect, so the freeze covers it by the letter, and the argument that it
 would make 09's own validation easier is exactly the "one more thing" the freeze exists to stop. It goes first
