@@ -845,7 +845,7 @@ user_profiles_dir = librarian_userdata_dir / "users"
 # Where the prompt texts went (0.2.9)
 #
 # The prose is now in the `.md` files under `prompts_dir` above, and the functions that load and fill them
-# in are `raven.librarian.llmclient.setup_system_prompt` and its siblings. What stays here is where to
+# in are `raven.librarian.llmclient._setup_system_prompt` and its siblings. What stays here is where to
 # look, which is configuration; turning a file into the text a model is sent is not.
 #
 # `prompts/README.md` documents the template variables every one of those files may use.
@@ -867,6 +867,6 @@ user_profiles_dir = librarian_userdata_dir / "users"
 # somewhere that could disagree with the others.
 #
 #   - To write a character: `raven.avatar.characters` says what the files are.
-#   - To resolve one: `raven.librarian.llmclient.setup_character_card`, which is resolution rather than
+#   - To resolve one: `raven.librarian.llmclient._setup_character_card`, which is resolution rather than
 #     configuration, and warns when a name matches nothing.
 #   - To change the shared half every card splices in as `{interaction}`: `prompts/interaction.md`.

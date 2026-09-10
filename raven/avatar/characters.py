@@ -54,10 +54,10 @@ recoverable by any rule, being an abbreviation.
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["METADATA_EXT", "IMAGE_EXT", "CARD_EXT", "ICON_SUFFIX",
+__all__ = ["METADATA_EXT", "CARD_EXT", "IMAGE_EXT", "ICON_SUFFIX",
            "VERSION_KEY", "FORMAT_VERSION",
            "Character",
-           "scan", "characters", "find", "rescan"]
+           "scan", "characters", "rescan", "find"]
 
 import dataclasses
 import json

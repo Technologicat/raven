@@ -43,7 +43,7 @@ dialog's context. It also ends with an unbuilt piece re-homed rather than droppe
 `briefs/filedialog-navigation-history-brief.md`, unscheduled.
 
 It raised one question it did not settle, and the analysis is worth finding: **the character card carries
-character-independent text** (`setup_interaction_style` — deployment facts, conversational manner, and the
+character-independent text** (`_setup_interaction_style` — deployment facts, conversational manner, and the
 two backend facts, which are three different things sharing one block). The live queue entry for it is
 `TODO_DEFERRED.md`, "Modernize the Librarian system prompt / character card"; the argument for why the block
 cannot move as a unit is in the closed brief's last section.

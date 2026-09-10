@@ -563,7 +563,7 @@ def reconnect(settings: env, quiet: bool = True) -> sym:
 # filling-in is here, being resolution rather than configuration.
 # --------------------------------------------------------------------------------
 
-def load_prompt(name: str) -> str:
+def _load_prompt(name: str) -> str:
     """Return the text of prompt `name`, the user's copy if they have one and the shipped one otherwise.
 
     `name`: The stem of the file, e.g. `"interaction"` for `interaction.md`.
@@ -579,10 +579,10 @@ def load_prompt(name: str) -> str:
     """
     override = librarian_config.user_prompts_dir / f"{name}.md"
     if override.exists():
-        logger.info(f"load_prompt: '{name}' from the user's override at '{override}'")
+        logger.info(f"_load_prompt: '{name}' from the user's override at '{override}'")
         return override.read_text(encoding="utf-8").strip()
     shipped = librarian_config.prompts_dir / f"{name}.md"
-    logger.info(f"load_prompt: '{name}' from the shipped default at '{shipped}'")
+    logger.info(f"_load_prompt: '{name}' from the shipped default at '{shipped}'")
     return shipped.read_text(encoding="utf-8").strip()
 
 
@@ -590,10 +590,10 @@ def _format_prompt(name: str, template_vars: env) -> str:
     """Load prompt `name` and fill in the template variables every prompt may use.
 
     `{user}` and `{char}` are the whole list, deliberately. `template_vars` also carries `model` and
-    `context_length`, and they are *not* offered here: see the note below `setup_interaction_style` for
+    `context_length`, and they are *not* offered here: see the note below `_setup_interaction_style` for
     why a fact about the backend must not be frozen into this text.
     """
-    return _fill_in(load_prompt(name), name, user=template_vars.user, char=template_vars.char)
+    return _fill_in(_load_prompt(name), name, user=template_vars.user, char=template_vars.char)
 
 
 def _fill_in(template: str, what: str, **values) -> str:
@@ -618,7 +618,7 @@ def _fill_in(template: str, what: str, **values) -> str:
                          "raven/librarian/prompts/README.md.") from exc
 
 
-def setup_system_prompt(template_vars: env) -> str:
+def _setup_system_prompt(template_vars: env) -> str:
     return _format_prompt("system", template_vars)
 
 # ----------------------------------------
@@ -639,7 +639,7 @@ def setup_system_prompt(template_vars: env) -> str:
 #
 # `raven.librarian.llmclient.setup` calls this every time `raven-librarian` (or `raven-minichat`) starts.
 #
-def setup_user_card(template_vars: env) -> str:
+def _setup_user_card(template_vars: env) -> str:
     """Return the user card for whoever `template_vars.user` names, or `""` if nobody answers to it.
 
     The card is that user's own `juha.md`, found by the name in `juha.json` under
@@ -653,17 +653,17 @@ def setup_user_card(template_vars: env) -> str:
     """
     profile = userprofile.find(template_vars.user)
     if profile is None:
-        logger.info(f"setup_user_card: no user profile for '{template_vars.user}'; the AI will know your "
+        logger.info(f"_setup_user_card: no user profile for '{template_vars.user}'; the AI will know your "
                     "name and nothing else about you. Writing one is optional and worth it -- see "
                     "`raven.librarian.userprofile`.")
         return ""
     card_template = profile.read_card()
     if card_template is None:
-        logger.info(f"setup_user_card: user profile '{profile.name}' has no card "
+        logger.info(f"_setup_user_card: user profile '{profile.name}' has no card "
                     f"('{profile.card_path.name if profile.card_path else profile.name + '.md'}'); the AI "
                     "will know your name and nothing else about you.")
         return ""
-    logger.info(f"setup_user_card: user card for '{profile.name}' from '{profile.card_path}'")
+    logger.info(f"_setup_user_card: user card for '{profile.name}' from '{profile.card_path}'")
     return _fill_in(card_template, f"the user card for '{profile.name}'",
                     user=template_vars.user,
                     char=template_vars.char).strip()
@@ -691,18 +691,18 @@ def setup_user_card(template_vars: env) -> str:
 # TODO:     deployment, conversational manner ("be polite", "use Markdown", "report your train of thought"),
 # TODO:     and the two backend facts already moved out - and only the first is character-agnostic.
 # TODO:   - A turn taken with `use_character_card=False` currently gets no system message at all, because
-# TODO:     `setup_system_prompt` ships empty. Filling that slot with the manner instructions would hand
+# TODO:     `_setup_system_prompt` ships empty. Filling that slot with the manner instructions would hand
 # TODO:     them back to the batch extraction tools, whose output is parsed rather than read, and which
 # TODO:     withhold the character precisely to be rid of them.
 # TODO:
 # TODO: So "character-agnostic" and "wanted on every turn" turn out to be different questions, and the
 # TODO: two-way split cannot express both. Rewrite the prose along that seam first.
 #
-def setup_interaction_style(template_vars: env) -> str:
+def _setup_interaction_style(template_vars: env) -> str:
     return _format_prompt("interaction", template_vars)
 
 
-def setup_character_card(template_vars: env) -> str:
+def _setup_character_card(template_vars: env) -> str:
     """Return the character card for whoever `template_vars.char` names, or `""` if nobody answers to it.
 
     The card is the character's own `aria1.md`, found by the name in `aria1.json` — so the card follows
@@ -719,7 +719,7 @@ def setup_character_card(template_vars: env) -> str:
     character = avatar_characters.find(template_vars.char)
     card_template = character.read_card() if character is not None else None
     if card_template is None:
-        logger.warning(f"setup_character_card: no character card for '{template_vars.char}'; the AI will "
+        logger.warning(f"_setup_character_card: no character card for '{template_vars.char}'; the AI will "
                        "have no personality beyond the system prompt. Declare the character in a JSON file "
                        "beside its avatar image file -- see `raven.avatar.characters`.")
         return ""
@@ -728,7 +728,7 @@ def setup_character_card(template_vars: env) -> str:
     return _fill_in(card_template, f"the character card for '{template_vars.char}'",
                     user=template_vars.user,
                     char=template_vars.char,
-                    interaction=setup_interaction_style(template_vars)).strip()
+                    interaction=_setup_interaction_style(template_vars)).strip()
 
 
 def configure(model_info: env,
@@ -804,9 +804,9 @@ def configure(model_info: env,
     # with a `KeyError` naming it, instead of quietly freezing a sentence nobody can see is stale.
     template_vars = env(user=user,
                         char=char)
-    system_prompt = setup_system_prompt(template_vars)
-    character_card = setup_character_card(template_vars)
-    user_card = setup_user_card(template_vars)
+    system_prompt = _setup_system_prompt(template_vars)
+    character_card = _setup_character_card(template_vars)
+    user_card = _setup_user_card(template_vars)
     greeting = librarian_config.llm_greeting
 
     # Set up the chat completion request metadata template. Tool-calling instructions are NOT injected

@@ -1712,7 +1712,7 @@ use `{model}` or `{context_length}` in a card** — is documented at the `# TODO
 `raven/librarian/config.py`, and was accepted as good enough *if* an item existed to reopen it. It did not.
 This is that item; the config comment is the fuller statement and stays authoritative on mechanism.
 
-**The problem.** `setup_system_prompt` and friends resolve `template_vars` with f-strings **at startup**, so
+**The problem.** `_setup_system_prompt` and friends resolve `template_vars` with f-strings **at startup**, so
 `model` and `context_length` are baked into the stored card text. Two consequences, and the second is the
 one that shows:
 
@@ -2927,7 +2927,7 @@ Four things make this less obvious than it looks:
 - **Say how to attach, not just what.** "Yes, `.docx` works" is a dead end if the model cannot then point at
   the paperclip. The prompt should name the affordance alongside the formats.
 
-**Do not fold `setup_interaction_style` into the system prompt as a unit**, which is the obvious move and is
+**Do not fold `_setup_interaction_style` into the system prompt as a unit**, which is the obvious move and is
 wrong. Brief 15's final section works out why: it is three different kinds of thing wearing one name —
 deployment facts, conversational manner, and two backend facts that have since moved to per-turn injects
 because they change per turn. Each half wants a different home, so the rewrite has to take it apart first.
