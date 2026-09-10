@@ -254,6 +254,53 @@ class TestClipboardText:
         assert got == "what is the square root of 10?"
 
 
+class TestFormatForClipboard:
+    """What a single-message copy produces, with and without Shift.
+
+    Checkable at all because `_format_for_clipboard` takes `include_node_id` rather than reading the
+    keyboard: the button and the hotkey read the modifier and hand the answer down, which is the same
+    split the Visualizer's report copy uses.
+    """
+
+    def _message_for(self, forest, *, role, text, persona=None):
+        from raven.librarian import chatutil
+        payload = {"message": {"role": role, "content": [chatutil.text_content_part(text)], "tool_calls": []},
+                   "general_metadata": {"persona": persona, "timestamp": 0, "datetime": "2026-09-10 12:00:00"}}
+        message = message_over(forest)
+        message.node_id = forest.create_node(payload, parent_id=None)
+        message.role = role
+        message.persona = persona
+        return message
+
+    def test_a_plain_copy_carries_the_text_and_no_node_id(self, in_memory_forest):
+        message = self._message_for(in_memory_forest, role="user", text="what is the square root of 10?")
+
+        got = message._format_for_clipboard(include_node_id=False)
+
+        assert "what is the square root of 10?" in got
+        assert "Node ID" not in got
+
+    def test_shift_adds_the_node_id_and_the_revision(self, in_memory_forest):
+        message = self._message_for(in_memory_forest, role="user", text="what is the square root of 10?")
+
+        got = message._format_for_clipboard(include_node_id=True)
+
+        assert message.node_id in got, "the node ID is what Shift was held for"
+        assert "2026-09-10 12:00:00" in got
+        assert "R1" in got, "the active revision number is missing"  # revisions are numbered from one
+
+    def test_a_question_of_your_own_carries_no_disclosure_manifest(self, in_memory_forest):
+        # There is no AI generation to disclose on a human turn, and a YAML block on a copied question
+        # would only be something to delete before pasting it back into the composer.
+        user = self._message_for(in_memory_forest, role="user", text="what is the square root of 10?")
+        ai = self._message_for(in_memory_forest, role="assistant", text="About 3.1623.")
+
+        # The control is the AI message: without it, a `_format_for_clipboard` that never emitted a
+        # manifest at all would satisfy the assertion below.
+        assert "ai_generated" in ai._format_for_clipboard(include_node_id=False)
+        assert "ai_generated" not in user._format_for_clipboard(include_node_id=False)
+
+
 class TestExportText:
     """What a *whole-log* copy carries, which is deliberately not what a single-message copy carries.
 

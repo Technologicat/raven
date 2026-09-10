@@ -1568,54 +1568,62 @@ class DPGChatMessage:
             return stored_text
         return f"{stored_text}\n\n{format_excerpt_notice(node_payload, len(document_body))}"
 
+    def _format_for_clipboard(self, *, include_node_id: bool) -> str:
+        """Return exactly what copying this message puts on the clipboard.
+
+        `include_node_id`: also name the speaker, and prefix the message with its node ID, the timestamp
+                           of the active payload revision, and that revision's number. This is what
+                           holding Shift over the copy button asks for.
+        """
+        # The keyboard is read by the caller and arrives here as an argument, which is what lets the
+        # result be checked without one. Same split as the Visualizer's report copy, and for the same
+        # reason: a function that reads the modifier itself can only be exercised by faking `is_key_down`.
+        node_payload = self.parent_view.chat_controller.datastore.get_payload(self.node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+
+        # The speaker's name rides along with the node ID and not otherwise: omitting it makes a copied
+        # question convenient to paste back into the chat field and edit before re-submitting.
+        #
+        # Text from the stored payload rather than from `self.text`, so that this and the full-log export
+        # say the same thing about the same message. `self.text` is the *rendered* form: it joins the
+        # widget's paragraphs and drops their `is_thought` flag, so a thinking model's trace came out
+        # welded to its answer with nothing between them, and a reader could not tell where one ended.
+        formatted_message = format_chat_message_for_clipboard(message_number=None,  # a single message copied to clipboard does not need a sequential number
+                                                              role=self.role,
+                                                              persona=self.persona,
+                                                              text=self._clipboard_text(node_payload),
+                                                              add_heading=include_node_id,
+                                                              tool_name=chatutil.tool_name_of(node_payload))
+
+        # A lifted fragment travels without the document manifest the full-log export carries, so it needs
+        # its own - same format, because a one-message manifest and a fifty-message one should not need two
+        # parsers. Human turns get none: there is no AI generation to disclose, and a YAML block on a copied
+        # question would just be something to delete before pasting it back into the chat field.
+        if self.role != "user":
+            manifest = f"{chatutil.format_disclosure_manifest([node_payload])}\n"
+        else:
+            manifest = ""
+
+        if include_node_id:
+            payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active payload revision!
+            node_active_revision = self.parent_view.chat_controller.datastore.get_revision(self.node_id)
+            header = f"*Node ID*: `{self.node_id}` {payload_datetime} R{node_active_revision}\n\n"
+        else:
+            header = ""
+        return f"{manifest}{header}{formatted_message}\n"
+
     def _build_copy_button(self, g) -> None:
         """Build the button that copies this message to the clipboard.
 
         `g`: the horizontal group the buttons go into.
         """
-        role = self.role
-        persona = self.persona
-        node_id = self.node_id
-
         # dpg.add_spacer(tag=f"ai_message_buttons_spacer_{self.gui_uuid}",
         #                parent=g)
 
         def copy_message_to_clipboard_callback() -> None:
             shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
-            # Note we only add the role name when we include also the node ID.
-            # Omitting the speaker's name in regular mode improves convenience for copy-pasting an existing question into the chat field (to slightly modify it before re-submitting).
-            node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
-
-            # Text from the stored payload rather than from `self.text`, so that this and the full-log export
-            # say the same thing about the same message. `self.text` is the *rendered* form: it joins the
-            # widget's paragraphs and drops their `is_thought` flag, so a thinking model's trace came out
-            # welded to its answer with nothing between them, and a reader could not tell where one ended.
-            #
-            formatted_message = format_chat_message_for_clipboard(message_number=None,  # a single message copied to clipboard does not need a sequential number
-                                                                  role=role,
-                                                                  persona=persona,
-                                                                  text=self._clipboard_text(node_payload),
-                                                                  add_heading=shift_pressed,
-                                                                  tool_name=chatutil.tool_name_of(node_payload))
-
-            # A lifted fragment travels without the document manifest the full-log export carries, so it needs
-            # its own - same format, because a one-message manifest and a fifty-message one should not need two
-            # parsers. Human turns get none: there is no AI generation to disclose, and a YAML block on a copied
-            # question would just be something to delete before pasting it back into the chat field.
-            if role != "user":
-                manifest = f"{chatutil.format_disclosure_manifest([node_payload])}\n"
-            else:
-                manifest = ""
-
-            if shift_pressed:
-                payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active payload revision!
-                node_active_revision = self.parent_view.chat_controller.datastore.get_revision(node_id)
-                header = f"*Node ID*: `{node_id}` {payload_datetime} R{node_active_revision}\n\n"
-            else:
-                header = ""
-            mode = "with node ID" if shift_pressed else "as-is"
-            dpg.set_clipboard_text(f"{manifest}{header}{formatted_message}\n")
+            dpg.set_clipboard_text(self._format_for_clipboard(include_node_id=shift_pressed))
             # Acknowledge the action in the GUI.
+            mode = "with node ID" if shift_pressed else "as-is"
             gui_animation.flash_button(button=copy_message_button,
                                        message=f"Copied to clipboard! ({mode})",
                                        duration=gui_config.acknowledgment_duration,
