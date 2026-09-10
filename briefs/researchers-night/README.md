@@ -95,12 +95,22 @@ Two wrinkles found while sizing it, neither a blocker:
   rather than `transient_count`. It is the fiddly one again.
 - ~~**The constant lives in two different places**~~ — **settled 2026-09-10, before the sweep rather than
   during it.** `IDLE_SLEEP_S` and `INPUT_ACTIVE_S` are in `config.py` for five of the seven apps now.
-  - **The two avatar editors are the exception, and are an open question rather than an oversight**:
-    neither `avatar/pose_editor` nor `avatar/settings_editor` has a `config.py` at all — they read the
-    server's and the client's — so there is no relevant file to move into. Give each one (matches every
-    other app, but two new modules holding two constants apiece), give the pair a shared
-    `raven/avatar/config.py` (fewer files, but asserts a shared configuration they do not otherwise have),
-    or leave them at module scope and record that here so the next sweep stops rediscovering it.
+  - **The two avatar editors are the exception**: neither `avatar/pose_editor` nor
+    `avatar/settings_editor` has a `config.py` at all — they read the server's and the client's — so there
+    is no relevant file to move into.
+  - **Which raises the better question** (Juha, 2026-09-10): whether the fleet wants a *single*
+    `GUI_IDLE_FRAMERATE` somewhere, rather than the same two numbers copied into seven config files. All
+    seven currently say `0.08` and `0.5`, identically, meaning identically the same thing — so the
+    duplication buys nothing but the freedom to diverge, and nothing has diverged. Answering this decides
+    the avatar editors as a side effect, which is why it is worth asking first.
+  - **It looks exactly like the settle-wait question from the same day, which came out the other way**, and
+    the difference is worth having in view before deciding. There, `helpcard._PAGE_FIT_PASSES` (4),
+    `fdialog._HELP_CARD_FIT_PASSES` (3), `tooltip._SETTLE_FRAMES` (2) and
+    `chat_controller._SCROLL_SETTLE_FRAMES` (3) were left alone: four *different* quantities — column
+    widths, autosize reporting, scroll position, focus transfer — each measured for its own mechanism and
+    merely clustering near one another, so a shared constant would have asserted a sameness that is not
+    there and let a re-measurement of one silently move the rest. Here the values are not clustered, they
+    are equal, and they answer one question. Same shape, opposite content.
 
 ### Tomorrow morning, filed 2026-09-09 — two hammerspace items from the help card pass
 
