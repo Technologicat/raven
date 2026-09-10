@@ -103,6 +103,11 @@ Two wrinkles found while sizing it, neither a blocker:
     seven currently say `0.08` and `0.5`, identically, meaning identically the same thing — so the
     duplication buys nothing but the freedom to diverge, and nothing has diverged. Answering this decides
     the avatar editors as a side effect, which is why it is worth asking first.
+  - **Decide it together with where overridable config lives at all** — `TODO_DEFERRED.md`, *"Move the
+    overridable half of the config out of the tracked `config.py` files"*, filed the same evening after a
+    commit swept up the maintainer's local overrides. The two overlap: a fleet-wide idle value wants a home
+    outside the per-app configs, which is the same question that item is about, and answering them
+    separately means answering the second one twice.
   - **It looks exactly like the settle-wait question from the same day, which came out the other way**, and
     the difference is worth having in view before deciding. There, `helpcard._PAGE_FIT_PASSES` (4),
     `fdialog._HELP_CARD_FIT_PASSES` (3), `tooltip._SETTLE_FRAMES` (2) and
