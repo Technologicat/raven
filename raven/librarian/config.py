@@ -38,7 +38,8 @@ llm_state_file = librarian_userdata_dir / "state.json"  # important node IDs for
 # Its contents will be automatically set as the Authorization field of the HTTP headers when `llmclient` starts.
 #
 # llm_backend_url = "http://localhost:5000"  # oobabooga default OAI compatible port
-llm_backend_url = "http://localhost:1234"  # LM Studio default OAI compatible port
+llm_backend_url = "http://maia.local:1234"  # XXX testing
+# llm_backend_url = "http://localhost:1234"  # LM Studio default OAI compatible port
 llm_api_key_file = librarian_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
 
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.
@@ -657,7 +658,8 @@ gui_config = env(  # ----------------------------------------
 # `raven.avatar.characters`. That one name is what brings the character's card, voice, face and chat glyph
 # with it; a name nothing declares gets no card, and says so in the log.
 #
-llm_user_name = "User"
+# llm_user_name = "User"
+llm_user_name = "Juha"  # XXX local custom user profile
 llm_char_name = "Aria"
 # llm_char_name = "Juha"  # DT researcher
 
@@ -870,3 +872,11 @@ user_profiles_dir = librarian_userdata_dir / "users"
 #   - To resolve one: `raven.librarian.llmclient._setup_character_card`, which is resolution rather than
 #     configuration, and warns when a name matches nothing.
 #   - To change the shared half every card splices in as `{interaction}`: `prompts/interaction.md`.
+
+
+# ---------------------------------------------------------------------------
+# Idle throttle
+# ---------------------------------------------------------------------------
+
+IDLE_SLEEP_S = 0.08   # ~12 fps when idle
+INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after the last user input

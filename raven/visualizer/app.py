@@ -145,9 +145,6 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # somewhere this one did not, that is the first thing to measure, and sleeping `IDLE_SLEEP_S` minus the
 # elapsed frame time is the fix rather than abandoning the throttle.
 
-IDLE_SLEEP_S = 0.08   # ~12 fps when idle
-INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after the last user input
-
 _last_input_ns: int = 0  # monotonic_ns timestamp of the last user input
 
 def _on_any_input() -> None:
@@ -168,7 +165,7 @@ def _on_any_input() -> None:
 
 def _is_busy() -> bool:
     """True when the render loop should run at full frame rate."""
-    if (time.monotonic_ns() - _last_input_ns) < INPUT_ACTIVE_S * 1e9:
+    if (time.monotonic_ns() - _last_input_ns) < visualizer_config.INPUT_ACTIVE_S * 1e9:
         return True
     # A flash, a smooth scroll — something is *happening*, as opposed to the plotter's endless glow.
     #
@@ -1533,7 +1530,7 @@ try:
 
         # Idle throttle: sleep when nothing is happening. The plotter's glow keeps pulsing, at the idle rate.
         if not _is_busy():
-            time.sleep(IDLE_SLEEP_S)
+            time.sleep(visualizer_config.IDLE_SLEEP_S)
     # dpg.start_dearpygui()  # automatic render loop
 except Exception:
     exitcode = 1

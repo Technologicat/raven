@@ -339,9 +339,10 @@ print()
 # red for the DOCS indicator while indexing, red for the backend status pill) run for the
 # lifetime of the app, so they are *ambient* and `transient_count` leaves them out. Only a
 # button flash or a smooth scroll counts as being busy.
+#
+# The two numbers are `IDLE_SLEEP_S` and `INPUT_ACTIVE_S` in `config.py`, where every app in the
+# constellation now keeps them; `_is_busy` below is what reads them.
 
-IDLE_SLEEP_S = 0.08   # ~12 fps when idle
-INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input
 
 # The AI-disclosure notice shown below the avatar. Module-level because both the widget that renders it and
 # `_center_ai_warning`, which measures it to place it, need the exact same string.
@@ -358,7 +359,7 @@ _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
 def _is_busy() -> bool:
     """True when the render loop should run at full frame rate."""
-    if (time.monotonic_ns() - _last_input_ns) < INPUT_ACTIVE_S * 1e9:
+    if (time.monotonic_ns() - _last_input_ns) < librarian_config.INPUT_ACTIVE_S * 1e9:
         return True
     if "dpg_avatar_renderer" in globals() and dpg_avatar_renderer.animator_running:
         return True
@@ -3372,7 +3373,7 @@ try:
 
         # Idle throttle: sleep when nothing needs updating (avatar paused, no LLM streaming, no RAG indexing, no recent input).
         if not _is_busy():
-            time.sleep(IDLE_SLEEP_S)
+            time.sleep(librarian_config.IDLE_SLEEP_S)
     # dpg.start_dearpygui()  # automatic render loop
 except KeyboardInterrupt:
     pass  # cleanup will be handled by our DPG exit handler

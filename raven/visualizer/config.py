@@ -70,8 +70,8 @@ extract_keywords = True
 #                     the configured character will be asked to perform the task).
 #                    See `raven.librarian.config`.
 #
-clusters_keyword_method = "frequencies"
-# clusters_keyword_method = "llm"
+# clusters_keyword_method = "frequencies"
+clusters_keyword_method = "llm"
 
 clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
     **Instructions**
@@ -399,6 +399,8 @@ gui_config = env(  # ----------------------------------------
                  #
                  word_cloud_w=768, word_cloud_h=768,
                  word_cloud_background_color="black",
+                 # word_cloud_w=1024, word_cloud_h=1024,
+                 # word_cloud_background_color="white",
                  word_cloud_colormap="viridis",  # Matplotlib colormap (name as string)
                  # ----------------------------------------
                  # Plotter
@@ -432,3 +434,11 @@ gui_config = env(  # ----------------------------------------
                  # Approximate; we always show at least one item per cluster.
                  max_titles_in_tooltip=10,
                  max_items_in_info_panel=100)
+
+
+# ---------------------------------------------------------------------------
+# Idle throttle
+# ---------------------------------------------------------------------------
+
+IDLE_SLEEP_S = 0.08   # ~12 fps when idle
+INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after the last user input
