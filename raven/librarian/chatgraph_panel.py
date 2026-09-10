@@ -419,7 +419,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             # readout is nothing to hover.
             add_button(fa.ICON_REPLY, self._commit_cursor,
                        "Switch to the previewed branch [Enter]\n(or click its box a second time)\n\n"
-                       "To show a cursor, press an arrow key, which puts\nit on HEAD. Then the arrows move it from there.",
+                       "To show the cursor, press an arrow key, which puts\nit on HEAD. Then the arrows move it from there.",
                        self._commit_button_tag, enabled=False)
 
             guiutils.add_toolbar_separator(horizontal=True, toolbar_extent=_TOOLBAR_H,
