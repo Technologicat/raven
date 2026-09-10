@@ -246,6 +246,12 @@ docstrings and comments, so the rules are their own.
   every hotkey action found one exception, *"Open this Help card"*, since fixed. Recorded so it stays that
   way rather than because it was in doubt.
 
+- **A help-card page is named for what it holds**, not for the role it plays in the card. *Keyboard*,
+  *Chat graph*, *Concepts*, *Features* — each says what a reader will find by turning to it, which is the
+  only question a page name has to answer, the toolbar showing one name at a time. A name describing the
+  page's place in a sequence (*More*, *Reference*, *Page 2*) tells them nothing they did not already know
+  from the `2 / 3` beside it.
+
 - **A row must be readable in the order the reader meets it.** A hotkey table sits above the prose that
   explains the view, so an entry that forward-references it explains nothing: *"Do what clicking the box
   does"* asks the reader to already know what clicking does. Say the thing.

@@ -74,6 +74,7 @@ with timer() as tim:
     import os
     import pathlib
     import platform
+    import textwrap
     from typing import Union
 
     import numpy as np
@@ -779,49 +780,71 @@ app_state.update_info_panel = info_panel.update  # Published here so cross-modul
 # --------------------------------------------------------------------------------
 # Built-in help window
 
+# Nothing in a hotkey table may wrap: the two column-groups share table rows, so one wrapped cell makes
+# that row taller and pushes *both* groups down from there on, destroying the blank-row grouping this
+# layout spends its space to achieve. An action or note that does not fit gets shortened, not wrapped.
+# See `raven-style-guide.md`, "User-facing text".
+#
+# The debug keys (Ctrl+Shift+M/R/T/L) are deliberately absent: they are developer tools, `README.md`
+# documents them, and the card is what a visitor reads.
 hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a dataset", notes=""),
-               env(key_indent=0, key="Ctrl+I", action_indent=0, action="Import BibTeX files", notes="Use this to create a dataset"),
-               env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus search field", notes=""),
-               env(key_indent=1, key="Enter", action_indent=0, action="Select search matches, and unfocus", notes="When search field focused"),
-               env(key_indent=2, key="Shift+Enter", action_indent=1, action="Same, but add to selection", notes="When search field focused"),
-               env(key_indent=2, key="Ctrl+Enter", action_indent=1, action="Same, but subtract from selection", notes="When search field focused"),
-               env(key_indent=2, key="Ctrl+Shift+Enter", action_indent=1, action="Same, but intersect with selection", notes="When search field focused"),
-               env(key_indent=1, key="Esc", action_indent=0, action="Cancel search term edit, and unfocus", notes="When search field focused"),
-               env(key_indent=0, key="F3", action_indent=0, action="Scroll to next search match", notes="When matches shown in info panel"),
-               env(key_indent=0, key="Shift+F3", action_indent=0, action="Scroll to previous search match", notes="When matches shown in info panel"),
+               env(key_indent=0, key="Ctrl+I", action_indent=0, action="Import BibTeX files", notes="This is how a dataset is made"),
+               env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus the search field", notes=""),
+               env(key_indent=1, key="Enter", action_indent=0, action="Select the matches, and unfocus", notes="While typing in the search field"),
+               env(key_indent=2, key="Shift+Enter", action_indent=1, action="Same, but add to the selection", notes="While typing in the search field"),
+               env(key_indent=2, key="Ctrl+Enter", action_indent=1, action="Same, but subtract from it", notes="While typing in the search field"),
+               env(key_indent=2, key="Ctrl+Shift+Enter", action_indent=1, action="Same, but intersect with it", notes="While typing in the search field"),
+               env(key_indent=1, key="Esc", action_indent=0, action="Cancel the edit, and unfocus", notes="While typing in the search field"),
+               env(key_indent=0, key="F3", action_indent=0, action="Scroll to the next search match", notes="When matches shown in info panel"),
+               env(key_indent=0, key="Shift+F3", action_indent=0, action="Same, but the previous one", notes="When matches shown in info panel"),
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="Ctrl+U", action_indent=0, action="Scroll to start of current cluster", notes='"up"'),
-               env(key_indent=1, key="Ctrl+N", action_indent=0, action="Scroll to next cluster", notes=""),
-               env(key_indent=1, key="Ctrl+P", action_indent=0, action="Scroll to previous cluster", notes=""),
-               env(key_indent=0, key="Home", action_indent=0, action="Scroll to top", notes="When search field NOT focused"),
-               env(key_indent=1, key="End", action_indent=0, action="Scroll to bottom", notes="When search field NOT focused"),
-               env(key_indent=1, key="Page Up", action_indent=0, action="Scroll up", notes="When search field NOT focused"),
-               env(key_indent=1, key="Page Down", action_indent=0, action="Scroll down", notes="When search field NOT focused"),
-               env(key_indent=1, key="Up arrow", action_indent=0, action="Scroll up slightly", notes="When search field NOT focused"),
-               env(key_indent=1, key="Down arrow", action_indent=0, action="Scroll down slightly", notes="When search field NOT focused"),
+               env(key_indent=0, key="Ctrl+U", action_indent=0, action="Scroll to the cluster's start", notes='"up"'),
+               env(key_indent=1, key="Ctrl+N", action_indent=0, action="Scroll to the next cluster", notes=""),
+               env(key_indent=1, key="Ctrl+P", action_indent=0, action="Scroll to the previous cluster", notes=""),
+               env(key_indent=0, key="Home", action_indent=0, action="Scroll to the top", notes="Not while typing"),
+               env(key_indent=1, key="End", action_indent=0, action="Scroll to the bottom", notes="Not while typing"),
+               env(key_indent=1, key="Page Up", action_indent=0, action="Scroll up", notes="Not while typing"),
+               env(key_indent=1, key="Page Down", action_indent=0, action="Scroll down", notes="Not while typing"),
+               env(key_indent=1, key="Up arrow", action_indent=0, action="Scroll up slightly", notes="Not while typing"),
+               env(key_indent=1, key="Down arrow", action_indent=0, action="Scroll down slightly", notes="Not while typing"),
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="Ctrl+S", action_indent=0, action="Save the word cloud as a PNG", notes="Word cloud window"),
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="Ctrl+O", action_indent=0, action="Choose the BibTeX files to read", notes="Importer window"),
+               env(key_indent=1, key="Ctrl+S", action_indent=0, action="Choose where to save the dataset", notes="Importer window"),
+               env(key_indent=1, key="Ctrl+Enter", action_indent=0, action="Start the import, or stop it", notes="Importer window"),
 
                helpcard.hotkey_new_column,
-               env(key_indent=0, key="F6", action_indent=0, action="Search/unsearch current item", notes="Searching highlights it in the plotter"),
-               env(key_indent=1, key="Shift+F6", action_indent=0, action="Set selection to current item only", notes=""),
-               env(key_indent=1, key="Ctrl+F6", action_indent=0, action="Remove current item from selection", notes=""),
-               env(key_indent=0, key="F7", action_indent=0, action="Select current cluster", notes=""),
-               env(key_indent=1, key="Shift+F7", action_indent=1, action="Same, but add to selection", notes=""),
-               env(key_indent=1, key="Ctrl+F7", action_indent=1, action="Same, but subtract from selection", notes=""),
-               env(key_indent=1, key="Ctrl+Shift+F7", action_indent=1, action="Same, but intersect with selection", notes=""),
-               env(key_indent=0, key="F8", action_indent=0, action="Copy report to clipboard", notes="As plain text, .txt"),
-               env(key_indent=1, key="Shift+F8", action_indent=0, action="Copy report to clipboard", notes="As Markdown, .md"),
-               env(key_indent=0, key="F9", action_indent=0, action="Select all data currently visible in plotter", notes=""),
-               env(key_indent=1, key="Shift+F9", action_indent=1, action="Same, but add to selection", notes=""),
-               env(key_indent=1, key="Ctrl+F9", action_indent=1, action="Same, but subtract from selection", notes=""),
-               env(key_indent=1, key="Ctrl+Shift+F9", action_indent=1, action="Same, but intersect with selection", notes=""),
-               env(key_indent=0, key="F10", action_indent=0, action="Toggle word cloud window", notes="From keywords of selected items"),
-               env(key_indent=0, key="Ctrl+Shift+C", action_indent=0, action="Copy current item to clipboard", notes="As plain text, for web search"),
-               env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Undo last selection change", notes=""),
-               env(key_indent=0, key="Ctrl+Shift+Y", action_indent=0, action="Redo last selection change", notes=""),
-               env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Reset plotter zoom", notes=""),
+               env(key_indent=0, key="F6", action_indent=0, action="Search/unsearch the current item", notes="Searching highlights it in the plotter"),
+               env(key_indent=1, key="Shift+F6", action_indent=0, action="Set the selection to this item only", notes=""),
+               env(key_indent=1, key="Ctrl+F6", action_indent=0, action="Remove this item from the selection", notes=""),
+               env(key_indent=0, key="F7", action_indent=0, action="Select the current cluster", notes=""),
+               env(key_indent=1, key="Shift+F7", action_indent=1, action="Same, but add to the selection", notes=""),
+               env(key_indent=1, key="Ctrl+F7", action_indent=1, action="Same, but subtract from it", notes=""),
+               env(key_indent=1, key="Ctrl+Shift+F7", action_indent=1, action="Same, but intersect with it", notes=""),
+               env(key_indent=0, key="F9", action_indent=0, action="Select everything visible in the plotter", notes=""),
+               env(key_indent=1, key="Shift+F9", action_indent=1, action="Same, but add to the selection", notes=""),
+               env(key_indent=1, key="Ctrl+F9", action_indent=1, action="Same, but subtract from it", notes=""),
+               env(key_indent=1, key="Ctrl+Shift+F9", action_indent=1, action="Same, but intersect with it", notes=""),
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="F8", action_indent=0, action="Copy the report to the clipboard", notes="As plain text, .txt"),
+               env(key_indent=1, key="Shift+F8", action_indent=1, action="Same, but as Markdown", notes=".md"),
+               env(key_indent=0, key="Ctrl+Shift+C", action_indent=0, action="Copy the current item to the clipboard", notes="As plain text, for a web search"),
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Undo the last selection change", notes=""),
+               env(key_indent=1, key="Ctrl+Shift+Y", action_indent=0, action="Redo the last selection change", notes=""),
+               env(key_indent=0, key="F10", action_indent=0, action="Toggle the word cloud window", notes="From the keywords of the selection"),
+               env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Reset the plotter's zoom", notes=""),
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
                env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
                )
+#: What DPG's own text field gives us in the search box, named on the card so the reader does not have to
+#: discover them. Not bound by Raven, so they are absent from `hotkey_info` — which is the keys we bind.
+_SEARCH_FIELD_EDIT_KEYS = ("Enter", "Esc", "Home", "End", "Shift-select",
+                           "Ctrl+Left", "Ctrl+Right", "Ctrl+A",
+                           "Ctrl+C", "Ctrl+X", "Ctrl+V",
+                           "Ctrl+Z", "Ctrl+Y")
+
 def render_help_extras(self: helpcard.HelpWindow,
                        gui_parent: Union[str, int]) -> None:
     """Render app-specific extra information into the help card.
@@ -831,43 +854,62 @@ def render_help_extras(self: helpcard.HelpWindow,
     c_search = f'<font color="{gui_config.plotter_search_results_highlight_color}">'
     c_selection = f'<font color="{gui_config.plotter_selection_highlight_color}">'
 
-    # Legend for table
-    dpg_markdown.add_text(f"{self.c_hed}**Terminology**{self.c_end}", parent=gui_parent, wrap=self.content_width)
-    # The terminology section is two columns side by side, so its text wraps at half the card rather than
-    # at all of it.
-    column_width = self.column_width
-    g = dpg.add_group(horizontal=True, parent=gui_parent)
-    g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f"- {self.c_txt}**Current item**: The topmost item **fully** visible in the info panel. A pulsating blue dot marks it.{self.c_end}",
-                          parent=g1, wrap=column_width)
-    dpg_markdown.add_text(f"- {self.c_txt}**Current cluster**: The cluster the current item belongs to. Clusters are auto-detected by a linguistic analysis.{self.c_end}",
-                          parent=g1, wrap=column_width)
-    g2 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f"- {self.c_txt}**Selection set**: The selected items, {self.c_end}{c_selection}**glowing**{self.c_end}{self.c_txt} in the plotter. As many are loaded into the info panel as reasonably fit.{self.c_end}",
-                          parent=g2, wrap=column_width)
-    dpg_markdown.add_text(f"- {self.c_txt}**Search result set**: The items matching the current search, {self.c_end}{c_search}**glowing**{self.c_end}{self.c_txt} in the plotter.{self.c_end}",
-                          parent=g2, wrap=column_width)
-    dpg.add_spacer(width=1, height=app_state.themes_and_fonts.font_size, parent=g)
-
-    # Additional general help
-    dpg_markdown.add_text(f"{self.c_hed}**How search works**{self.c_end}",
-                          parent=gui_parent, wrap=self.content_width)
-    dpg_markdown.add_text(f"{self.c_txt}Each space-separated search term is a **fragment**. For a data point to match, **all** fragments must match. Ordering of fragments does **not** matter. The {self.c_end}{c_search}search result{self.c_end}{self.c_txt} and {self.c_end}{c_selection}selection{self.c_end}{self.c_txt} sets are **independent**. {self.c_end}{c_search}Search results{self.c_end}{self.c_txt} live-update as you type.{self.c_end}",
-                          parent=gui_parent, wrap=self.content_width)
-    dpg_markdown.add_text(f'- {self.c_txt}A **lowercase** fragment matches **that fragment {self.c_end}{self.c_hig}case-insensitively{self.c_end}{self.c_txt}**. E.g. *"hydrogen"* matches also *"Hydrogen"*.{self.c_end}',
-                          parent=gui_parent, wrap=self.content_width)
-    dpg_markdown.add_text(f'- {self.c_txt}A fragment with **at least one uppercase** letter matches **that fragment {self.c_end}{self.c_hig}case-sensitively{self.c_end}{self.c_txt}**. E.g. *"TiO"* matches only titanium oxide, not *"bastion"*.{self.c_end}',
-                          parent=gui_parent, wrap=self.content_width)
-    dpg_markdown.add_text(f'- {self.c_txt}You can use regular numbers in place of subscript/superscript numbers. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*. {self.c_end}',
-                          parent=gui_parent, wrap=self.content_width)
-    dpg_markdown.add_text(f"{self.c_txt}When the search field is focused, the usual text editing keys are available (*Enter, Esc, Home, End, Shift-select, Ctrl+Left, Ctrl+Right, Ctrl+A, Ctrl+Z, Ctrl+Y*).{self.c_end}",
-                          parent=gui_parent, wrap=self.content_width)
-help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
-                                  width=gui_config.help_window_w,
+    # Two newspaper columns: a card this wide gives a single column lines too long to track back to the
+    # start of, and a section split into a pair either side would be read out of order, the eye running a
+    # column to its end before it crosses. So a section belongs wholly to one column, and the split is by
+    # eye — nothing can measure a column before it is drawn.
+    #
+    # The colour comes from `prose_columns`' `color=` rather than from a `c_txt` span opened at the head of
+    # each paragraph: an open `<font>` tag on a paragraph's first line makes the whole string one CommonMark
+    # paragraph, so the bullet lists below would arrive as literal text.
+    self.prose_columns(
+        gui_parent,
+        [helpcard.section(
+            "**Terminology**",
+            textwrap.dedent(f"""
+                - **Current item**: the topmost item **fully** visible in the info panel. A pulsating blue dot marks it.
+                - **Current cluster**: the cluster the current item belongs to. Clusters are detected automatically, from the text itself rather than from any label in the data.
+                - **Selection set**: the selected items, {c_selection}**glowing**{self.c_end} in the plotter. As many are loaded into the info panel as reasonably fit.
+                - **Search result set**: the items matching the current search, {c_search}**glowing**{self.c_end} in the plotter.
+            """).strip()),
+         helpcard.section(
+            "**The semantic map**",
+            # Deliberately says what the pipeline *does* rather than which algorithms do it: no embedding
+            # model, no clusterer, no dimension reduction named, and no count of the passes. A reader at
+            # an exhibit is not choosing between algorithms, and this text then survives the engine
+            # underneath it changing.
+            "Each study's title and abstract is turned into a high-dimensional vector by an embedding model, so that texts about the same thing point in similar directions. Clusters are found among those vectors, and the whole set is flattened to the two dimensions you see — and that picture is the map.",
+            f"So **the axes mean nothing on their own**, and neither does a long distance across the map. What the picture does say is what lies {self.c_hig}**near**{self.c_end} what: a point's neighbours are the studies most like it."),
+         helpcard.section(
+            "**Editing the search term**",
+            "While the search field has the caret, the usual text editing keys are available: "
+            # Each key wears the highlight on its own, the commas staying body text — a run of ten names
+            # and their separators all in one colour reads as one long string rather than as a list.
+            f"{', '.join(f'{self.c_hig}{key}{self.c_end}' for key in _SEARCH_FIELD_EDIT_KEYS)}.")],
+        [helpcard.section(
+            "**How search works**",
+            f"Each space-separated search term is a **fragment**. For a data point to match, **all** fragments must match, and their ordering does **not** matter. The {c_search}search result{self.c_end} and {c_selection}selection{self.c_end} sets are **independent**, and {c_search}search results{self.c_end} live-update as you type.",
+            textwrap.dedent(f"""
+                - A **lowercase** fragment matches **{self.c_hig}case-insensitively{self.c_end}**. E.g. *"hydrogen"* matches also *"Hydrogen"*.
+                - A fragment with **at least one uppercase** letter matches **{self.c_hig}case-sensitively{self.c_end}**. E.g. *"TiO"* matches only titanium oxide, not *"bastion"*.
+                - You can use regular numbers in place of subscript/superscript ones. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*.
+            """).strip()),
+         helpcard.section(
+            "**The word cloud, and the importer**",
+            f'The word cloud is built from the auto-detected keywords of whatever is selected, each word sized by how often it occurs there. It redraws itself when the selection changes, and the colours and placement are picked at random, so the same selection gives a different-looking picture each time. {self.c_hig}**Ctrl+S**{self.c_end} saves it as a PNG.',
+            f'The importer turns BibTeX files into a dataset — several at once are combined into one. It is where a dataset comes from, and {self.c_hig}**Ctrl+I**{self.c_end} is how to reach it.',
+            f'Neither window is modal: you can keep working with the app while one is open, and {self.c_hig}**Esc**{self.c_end} does not close them. The key that opened one closes it again.')])
+# Two pages, split by scope rather than to find room — though it does find some, and the keys needed it.
+# Page one is the app's keyboard and nothing else, so it is a reference a reader can screenshot and keep
+# open beside the app, which is what the card's header has been inviting all along and what prose sharing
+# the page took away. Page two is what the app *does*, read once. If page two outgrows one screen, the
+# answer is a third page rather than shorter prose: the card has no scrollbar by design.
+help_window = helpcard.HelpWindow(width=gui_config.help_window_w,
                                   height=gui_config.help_window_h,
                                   reference_window=main_window,
                                   themes_and_fonts=app_state.themes_and_fonts,
-                                  on_render_extras=render_help_extras,
+                                  pages=[helpcard.page("Keyboard", hotkey_info=hotkey_info),
+                                         helpcard.page("Concepts", on_render_extras=render_help_extras)],
                                   on_show=app_state.enter_modal_mode,
                                   on_hide=app_state.exit_modal_mode)
 dpg.set_item_callback("help_button", help_window.show)  # tag
