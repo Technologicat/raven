@@ -131,6 +131,11 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # `PlotterPulsatingGlow` declares `ambient=True`, meaning it belongs to the resting state rather than
 # reporting that something is happening. So the throttle engages while the glow is pulsing, and the glow
 # runs at the idle rate — which is the trade this exists to make.
+#
+# **And the trade was looked at with a real dataset loaded, not argued from the number** (Juha,
+# 2026-09-10): the glow is visibly not-perfectly-smooth at twelve frames a second, and that is accepted,
+# against a quiet fan and the electricity. Written down because the choppiness is the visible half and the
+# saving is not, so a later reader meeting the first without the second has every reason to "fix" it.
 
 IDLE_SLEEP_S = 0.08   # ~12 fps when idle
 INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after the last user input
