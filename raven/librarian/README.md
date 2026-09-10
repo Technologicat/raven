@@ -721,7 +721,7 @@ the blue mark shows where it went.
 | `Ctrl+Shift+O` | Attach a file |
 | `Enter` *or* `Ctrl+Enter` | Send — whichever is not the newline key; see `send_message_key` in [`config.py`](config.py) |
 | `Ctrl+Enter` *or* `Enter` | ...the other one of the pair inserts a new line, while writing |
-| `Esc` | Clear the message and cancel, while writing |
+| `Esc` | Clear the message, while writing; press again to leave the field |
 
 ### Chat log
 

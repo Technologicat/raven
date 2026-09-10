@@ -2150,7 +2150,7 @@ def update_animations():
 hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus the message composer", notes=""),
                env(key_indent=0, key=_send_key_label(), action_indent=0, action="Send the message to the AI", notes="Empty message = the AI adds a reply"),
                env(key_indent=1, key=_newline_keys_label(), action_indent=0, action="Insert a new line", notes="While writing a message"),
-               env(key_indent=1, key="Esc", action_indent=0, action="Clear the text and cancel", notes="While writing a message"),
+               env(key_indent=1, key="Esc", action_indent=0, action="Clear the text", notes="While writing. Again to unfocus"),
                # No device name here, deliberately. This tuple is built once at import and `helpcard` renders
                # its table once, so anything interpolated into it freezes at startup — and the microphone
                # *can* change later, from the F9 panel. A card confidently naming the wrong device is worse
@@ -2174,7 +2174,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key="Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
                env(key_indent=1, key="Ctrl+Home", action_indent=1, action="Same, but to the first", notes=""),
                env(key_indent=0, key="Ctrl+Down", action_indent=0, action="Show the chat continuation", notes="If any exists in chat datastore"),
-               env(key_indent=0, key="Ctrl+B", action_indent=0, action="Branch the chat here", notes="Rolls back to the marked message"),
+               env(key_indent=0, key="Ctrl+B", action_indent=0, action="Branch the chat here", notes="Rolls back. Not while typing"),
                env(key_indent=0, key="Ctrl+Shift+Delete", action_indent=0, action="Delete it and all below it", notes="Twice to confirm. No undo"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start a new chat", notes=""),
