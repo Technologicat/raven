@@ -55,6 +55,45 @@ not settled, and the two sensible axes disagree — closure rate (smallest first
 they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
 deadline actually binds; everything else could slip past September without anything breaking.
 
+### Tomorrow morning, filed 2026-09-10 — make `IDLE_SLEEP_S` mean what it says
+
+*Hammerspace*, and of the low-density kind: the work is behind a fixed interface — one loop per app, one
+line each — and arrived out of a comment written while doing something else. It was in no plan and the
+schedule pays, but a deadline can absorb a tail like this one.
+
+**Every throttling app sleeps a fixed nap, where the name promises a frame interval.** Eight sleep sites
+across seven apps, all of them a bare `time.sleep(IDLE_SLEEP_S)` — so the fix is one shape repeated, not a
+design decision per app:
+
+```python
+t0 = time.perf_counter()
+...render the frame...
+if not _is_busy():
+    time.sleep(max(0.0, IDLE_SLEEP_S - (time.perf_counter() - t0)))
+```
+
+**Why it matters, and where it would show.** The sleep is added *on top of* whatever the frame cost rather
+than absorbing it, so the two agree only while frames are nearly free. Where a frame already costs 60 ms the
+app lands nearer 7 fps than the intended 12 — the throttle taking its cut from a rate that was already low.
+The Visualizer with a large selection is the case to measure: ~10k points after *select all*, where the
+glow is redrawn for every one of them. Juha checked the glow on an ordinary dataset on 2026-09-10 and
+accepted it; the heavy case is what that did not cover.
+
+**One thing to settle before writing it**, because it is a decision about what the throttle promises rather
+than about arithmetic: with a target interval, a frame that costs more than the budget gets no sleep at all,
+so the app quietly runs flat out whenever the work is heavy. That is almost certainly right — it is what
+"twelve frames a second unless you cannot" means — but it is worth taking deliberately rather than falling
+into, since it changes the throttle from a cap on effort into a cap on *rate*.
+
+Two wrinkles found while sizing it, neither a blocker:
+
+- **The conference timer has two sleep sites**, one per path through its loop, and its guard is app state
+  rather than `transient_count`. It is the fiddly one again.
+- **The constant lives in two different places**: module-level in `librarian`, `visualizer`,
+  `avatar/pose_editor` and `avatar/settings_editor`, and in `config.py` for `cherrypick`,
+  `conference_timer` and `xdot_viewer`. Worth aligning while touching all of them, or deciding not to —
+  but noticing it during the sweep and leaving it half-done is the outcome to avoid.
+
 ### Tomorrow morning, filed 2026-09-09 — two hammerspace items from the help card pass
 
 Both are *hammerspace*: real, unplanned, and the schedule pays. They are written here rather than only in
