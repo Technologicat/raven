@@ -429,20 +429,27 @@ def main() -> int:
     try:
         while dpg.is_dearpygui_running():
             # Idle throttle. The countdown reads whole seconds, so twelve frames a second is already far
-            # more than it needs; what needs the frames is the pulsation once the time is up, whose job is
-            # to be seen from across a room. Hence full rate for that state alone.
+            # more than it needs. What needs the frames is a pulsation, and this app has two — the expired
+            # glow, whose job is to be seen from across a room, and the paused one. Both are the thing the
+            # viewer is looking at while they run, so both get full rate and everything else is throttled.
             #
             # The animator cannot answer this one, unlike every other app's throttle: both glows are
-            # `PulsatingColor`, which is `ambient=True` by design, so `transient_count` is zero exactly
-            # when the glow is running. The state is the app's own, and `color_state` already carries it.
+            # `PulsatingColor`, which is `ambient=True` by design, so `transient_count` reads zero exactly
+            # when a glow is running. The state is the app's own, and it is already tracked.
             #
-            # Note the sleep has to appear in both paths: the branch below ends in `continue`, so a single
-            # sleep at the foot of the loop would never run while the timer was paused or unstarted.
+            # The test is written out at each of the two sleeps rather than computed once up here, because
+            # `color_state` is assigned *below* — on the frame the timer expires, a value read at the top
+            # of the loop is already stale by the time the sleep looks at it. One frame is nothing; a
+            # predicate whose inputs change between its computation and its use is a trap for whoever edits
+            # this next.
+            #
+            # Two sleeps rather than one at the foot of the loop, because the branch below ends in
+            # `continue`, so a single one would never run while the timer was unstarted or paused.
             if start_time is None or paused:
                 # Waiting for startup, or paused — just keep animations ticking.
                 gui_animation.animator.render_frame()
                 dpg.render_dearpygui_frame()
-                if color_state != "expired":
+                if not (paused or color_state == "expired"):  # i.e. unstarted, and nothing is pulsating
                     time.sleep(config.IDLE_SLEEP_S)
                 continue
 
@@ -468,7 +475,7 @@ def main() -> int:
             gui_animation.animator.render_frame()
             dpg.render_dearpygui_frame()
 
-            if color_state != "expired":
+            if color_state != "expired":  # `paused` is False on this path, so the glow is the only question
                 time.sleep(config.IDLE_SLEEP_S)
     except Exception:
         exitcode = 1
