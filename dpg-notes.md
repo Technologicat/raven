@@ -1155,6 +1155,10 @@ Stated generally, so it survives the next variation: **gate on `is_item_focused`
 
 **Escape is not a second exception.** It deactivates either kind, so a bare-key branch gated on `is_item_active` is live again on the next press and needs no handler of its own to "restore" focus. Measured on a multiline field; confirmed behaviourally on a single-line one (the Visualizer's navigation keys reach the info panel after `Ctrl+F`, `Esc`).
 
+**Unless the field sets `escape_clears_all`, which splits the key into two presses** — and the first of them does *not* deactivate. With the flag, a field **with text in it** is cleared and stays active; only a press on an already-empty field leaves it. So a bare-key branch gated on `is_item_active` comes back on the **second** press wherever the reader had typed something, and the paragraph above holds only for the unflagged default.
+
+`raven-librarian`'s composer sets it (2026-09-10). The default is to *revert* the field to the value it held when the caret entered it, which in a composer means one key either clears the box or restores an older draft depending on where the reader last clicked — a difference nothing on screen shows. Two presses with one meaning beat one press with two. DPG's own `add_input_text` docstring is where the flag's semantics are stated (`"clears content if not empty, and deactivate otherwise"`); the two-press feel was then confirmed by hand.
+
 ## `focus_item` cannot focus a child window — and does harm when asked to
 
 `dpg.focus_item` works on ordinary items (measured on a button: focus moves on the *next* frame, not the same one). On a **child window** it does not merely fail: focus lands on the first navigable item of the enclosing window and is **activated** — so if that item is a text field, the call *hands it the caret*.
