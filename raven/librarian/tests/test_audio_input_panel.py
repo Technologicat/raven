@@ -793,3 +793,35 @@ class TestEscapeLeavesTheChooserBeforeItLeavesThePanel:
         panel.open()
         assert "audio_input_measure_button" in went_to
         assert "audio_input_device_combo" not in went_to
+
+
+class TestAModifiedKeyIsNotThisPanelsToTake:
+    """Every key this panel binds is a bare one, so `Ctrl+S` belongs to the app rather than to *stop on silence*.
+
+    The panel is offered keys ahead of the app's own Ctrl and Alt branches, so a `handle_key` that ignored
+    modifiers swallowed them: with the keyboard in the panel, `Ctrl+S` toggled this checkbox instead of
+    speaking the marked message, and `Alt+D` grabbed the microphone chooser instead of toggling Documents.
+    """
+
+    def test_a_bare_letter_is_taken(self, panel, monkeypatch):
+        # The control. A `handle_key` that declined everything would satisfy both tests below, and this
+        # fixture could not tell that apart from one that declines only what is modified.
+        toggled = []
+        monkeypatch.setattr(aip.guiutils, "toggle_checkbox", toggled.append)
+
+        assert panel.handle_key(dpg.mvKey_S) is True
+        assert toggled == ["audio_input_autostop_checkbox"]
+
+    def test_the_same_letter_with_ctrl_is_declined(self, panel, monkeypatch):
+        toggled = []
+        monkeypatch.setattr(aip.guiutils, "toggle_checkbox", toggled.append)
+
+        assert panel.handle_key(dpg.mvKey_S, ctrl=True) is False
+        assert not toggled, "Ctrl+S toggled stop-on-silence; it is the app's key for speaking a message"
+
+    def test_the_same_letter_with_alt_is_declined(self, panel, monkeypatch):
+        toggled = []
+        monkeypatch.setattr(aip.guiutils, "toggle_checkbox", toggled.append)
+
+        assert panel.handle_key(dpg.mvKey_S, alt=True) is False
+        assert not toggled, "Alt+S toggled stop-on-silence; it is the app's key for the Speech switch"

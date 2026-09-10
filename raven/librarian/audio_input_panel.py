@@ -263,11 +263,17 @@ class DPGAudioInputPanel:
         focused = dpg.get_focused_item()
         return any(focused in guiutils.item_identifiers(widget) for widget in self._FOCUSABLE)
 
-    def handle_key(self, key: int) -> bool:
+    def handle_key(self, key: int, ctrl: bool = False, alt: bool = False) -> bool:
         """Act on `key` if it is one of ours. Return whether it was taken.
 
         Only ever called while `has_keyboard`, so a bare letter here cannot reach the chat composer.
+
+        Every key of this panel's is a bare one, so a modified press is not ours and is declined — which
+        is what lets the app's own chords go on working from inside the panel. Shift is not consulted:
+        nothing in the app binds Shift plus a letter, so a shifted press has nowhere else to go.
         """
+        if ctrl or alt:
+            return False
         if key == dpg.mvKey_Escape:
             # From the chooser, Escape steps back to the panel's home rather than closing; from the home,
             # it closes. The constellation's rule for a focused combo, and the shape `fdialog` uses for

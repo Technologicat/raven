@@ -2690,7 +2690,7 @@ def librarian_hotkeys_callback(sender, app_data):
     # The audio input panel is not modal, so it cannot claim the keyboard the way a dialog does — it
     # takes the keys only while the focus is on one of its own controls, and passes on anything else.
     # That is what lets it use bare letters without stealing them from the composer.
-    elif audio_input_panel.has_keyboard() and audio_input_panel.handle_key(key):
+    elif audio_input_panel.has_keyboard() and audio_input_panel.handle_key(key, ctrl=ctrl_pressed, alt=alt_pressed):
         pass
 
     # The chat graph, on the same terms as the audio panel above: it takes the keys only while it is the
