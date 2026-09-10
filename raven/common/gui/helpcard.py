@@ -173,6 +173,17 @@ class HelpWindow:
                   env(key_indent=2, key="Ctrl+Enter", action_indent=1, action="Same, but subtract from selection", notes="When search field focused"),
                   env(key_indent=2, key="Ctrl+Shift+Enter", action_indent=1, action="Same, but intersect with selection", notes="When search field focused"),
 
+            - **Nothing in a cell may wrap.** Both column-groups live in one table, so a row is shared
+              between them: a cell that wraps makes that row taller on *both* sides, and the blank rows
+              that group related keys stop lining up from there on — which is the thing the layout spends
+              its space to achieve. Shorten the text rather than letting it wrap. A note column fits
+              roughly 35 characters at the default font, which is a starting estimate and not a budget to
+              compute against; the only real test is looking at the card.
+
+              `raven-style-guide.md`, "User-facing text", carries the wording conventions that go with
+              this — sentence case, `"Same, but …"` for a row that varies its neighbour, and what a row
+              owes a reader who meets it before the prose.
+
             - To start a new column (other than the first one), use the constant `helpcard.hotkey_new_column` as an entry.
 
             - To leave an empty row in the current column, use the constant `helpcard.hotkey_blank_entry` as an entry.
