@@ -2783,9 +2783,9 @@ What a sweep of another card should check for, all of which this one had:
 - **Constraints that make a key silently do nothing.** Ctrl+U is dispatched to the marked message and
   returns early unless it is the last, so pressing it elsewhere is a no-op with no feedback. Disabling the
   *button* does not cover the hotkey — `fire_event_if_exists` calls the stashed callable directly.
-- **Duplicated action text**, which hides which rows are variants. Still outstanding in three other cards:
-  `visualizer`'s *"Copy report to clipboard"*, `xdot_viewer`'s *"Pan view"*, `cherrypick`'s *"...all
-  selected"*.
+- **Duplicated action text**, which hides which rows are variants. `visualizer`'s *"Copy report to
+  clipboard"* is fixed (2026-09-10, along with five more the note had not spotted); still outstanding in
+  `xdot_viewer`'s *"Pan view"* and `cherrypick`'s *"...all selected"*.
 
 **The shape decision is built and shipped (2026-09-09).** `HelpWindow` takes `pages`, and Librarian's card
 is two: the keys on one, everything the card says *about* Librarian on the other. What is left is content
@@ -2816,7 +2816,24 @@ attachments* section; and a bullet list for the tool inventory, which had been a
   the renderer had it. A span opened on a paragraph's first line makes the whole string one CommonMark
   paragraph, so a bullet list inside one renders as literal text — which is what forced the change.
 
-**The other eight cards are untouched and stay that way for now** (Juha, 2026-09-09): Librarian's is the
+**The Visualizer's is done too** (2026-09-10), and it is the case where content forced the issue rather
+than taste: the card was full to within twenty pixels, so the four keys it had never listed could not go on
+until the prose moved to a page of its own. Two pages now — *Keyboard*, and *Concepts* for the terminology,
+the search rules, what the map is and what the two auxiliary windows do. `check_option_lists.py` reports
+nothing for this app any more.
+
+Three things learned there that the remaining seven should expect:
+
+- **A card that is full is the signal to page it**, and it is worth measuring rather than eyeballing: the
+  prose was 230 px of a 1000 px card, which is eight rows of table.
+- **The variant rows were spelling their neighbour out in full** in six places, not the one the sweep
+  below records. Look for a repeated *Action* string, which is what hides the relationship the indentation
+  is asserting.
+- **A card can be quietly wrong about the app.** This one credited clustering to "a linguistic analysis",
+  which is what produces the *keywords*; the clusters are HDBSCAN over the embedding vectors. Nothing
+  checks a claim like that, and it had been there for years.
+
+**The other seven cards are untouched and stay that way for now** (Juha, 2026-09-09): Librarian's is the
 prototype, and the rest conform if and when their own content calls for it. Nothing forces them to — a
 card that declares no pages behaves exactly as it did.
 

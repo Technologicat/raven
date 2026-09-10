@@ -838,12 +838,27 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
                env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
                )
-#: What DPG's own text field gives us in the search box, named on the card so the reader does not have to
-#: discover them. Not bound by Raven, so they are absent from `hotkey_info` — which is the keys we bind.
-_SEARCH_FIELD_EDIT_KEYS = ("Enter", "Esc", "Home", "End", "Shift-select",
-                           "Ctrl+Left", "Ctrl+Right", "Ctrl+A",
-                           "Ctrl+C", "Ctrl+X", "Ctrl+V",
-                           "Ctrl+Z", "Ctrl+Y")
+#: What the search field does with a key while it holds the caret, named on the card so the reader does not
+#: have to discover them. All but the first two come from DPG's own text field rather than from anything
+#: Raven binds, which is why they are absent from `hotkey_info` — that is the keys *we* bind.
+#:
+#: `Enter` and `Esc` are on the keyboard page too, and their wording here is that page's, verbatim: a key
+#: described twice on one card must read the same both times, or the two spellings read as two features.
+#: `Home` and `End` are the opposite case and are spelled out for it — the keyboard page has them scrolling
+#: the info panel, which is what they do when the field does *not* hold the caret.
+_SEARCH_FIELD_EDIT_KEYS = (("Enter", "select the matches, and unfocus"),
+                           ("Esc", "cancel the edit, and unfocus"),
+                           ("Home", "to the beginning of the text"),
+                           ("End", "to the end of the text"),
+                           ("Ctrl+Left", "one word left"),
+                           ("Ctrl+Right", "one word right"),
+                           ("Shift-select", "extend the selection"),
+                           ("Ctrl+A", "select all the text"),
+                           ("Ctrl+C", "copy the selected text"),
+                           ("Ctrl+X", "cut the selected text"),
+                           ("Ctrl+V", "paste from the clipboard"),
+                           ("Ctrl+Z", "undo the last edit"),
+                           ("Ctrl+Y", "redo what you undid"))
 
 def render_help_extras(self: helpcard.HelpWindow,
                        gui_parent: Union[str, int]) -> None:
@@ -881,11 +896,10 @@ def render_help_extras(self: helpcard.HelpWindow,
             "Each study's title and abstract is turned into a high-dimensional vector by an embedding model, so that texts about the same thing point in similar directions. Clusters are found among those vectors, and the whole set is flattened to the two dimensions you see — and that picture is the map.",
             f"So **the axes mean nothing on their own**, and neither does a long distance across the map. What the picture does say is what lies {self.c_hig}**near**{self.c_end} what: a point's neighbours are the studies most like it."),
          helpcard.section(
-            "**Editing the search term**",
-            "While the search field has the caret, the usual text editing keys are available: "
-            # Each key wears the highlight on its own, the commas staying body text — a run of ten names
-            # and their separators all in one colour reads as one long string rather than as a list.
-            f"{', '.join(f'{self.c_hig}{key}{self.c_end}' for key in _SEARCH_FIELD_EDIT_KEYS)}.")],
+            "**The word cloud, and the importer**",
+            f'The word cloud is built from the auto-detected keywords of whatever is selected, each word sized by how often it occurs there. It redraws itself when the selection changes, and the colours and placement are picked at random, so the same selection gives a different-looking picture each time. {self.c_hig}**Ctrl+S**{self.c_end} saves it as a PNG.',
+            f'The importer turns BibTeX files into a dataset — several at once are combined into one. It is where a dataset comes from, and {self.c_hig}**Ctrl+I**{self.c_end} is how to reach it.',
+            f'Neither window is modal: you can keep working with the app while one is open, and {self.c_hig}**Esc**{self.c_end} does not close them. The key that opened one closes it again.')],
         [helpcard.section(
             "**How search works**",
             f"Each space-separated search term is a **fragment**. For a data point to match, **all** fragments must match, and their ordering does **not** matter. The {c_search}search result{self.c_end} and {c_selection}selection{self.c_end} sets are **independent**, and {c_search}search results{self.c_end} live-update as you type.",
@@ -895,10 +909,11 @@ def render_help_extras(self: helpcard.HelpWindow,
                 - You can use regular numbers in place of subscript/superscript ones. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*.
             """).strip()),
          helpcard.section(
-            "**The word cloud, and the importer**",
-            f'The word cloud is built from the auto-detected keywords of whatever is selected, each word sized by how often it occurs there. It redraws itself when the selection changes, and the colours and placement are picked at random, so the same selection gives a different-looking picture each time. {self.c_hig}**Ctrl+S**{self.c_end} saves it as a PNG.',
-            f'The importer turns BibTeX files into a dataset — several at once are combined into one. It is where a dataset comes from, and {self.c_hig}**Ctrl+I**{self.c_end} is how to reach it.',
-            f'Neither window is modal: you can keep working with the app while one is open, and {self.c_hig}**Esc**{self.c_end} does not close them. The key that opened one closes it again.')])
+            "**Editing the search term**",
+            "While the search field has the caret, the usual text editing keys are available.",
+            # The key wears the highlight and its gloss does not, so the column scans as a list of keys
+            # rather than as one long coloured string.
+            "\n".join(f"- {self.c_hig}**{key}**{self.c_end}: {what}" for key, what in _SEARCH_FIELD_EDIT_KEYS))])
 # Two pages, split by scope rather than to find room — though it does find some, and the keys needed it.
 # Page one is the app's keyboard and nothing else, so it is a reference a reader can screenshot and keep
 # open beside the app, which is what the card's header has been inviting all along and what prose sharing

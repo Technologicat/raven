@@ -71,9 +71,10 @@ the exhibit:
 - **Brief 16 item 8, search in both halves** — the large one, at least a week, and the reason the three
   above were sized to finish early.
 
-**The quick wins, if a session wants one before the large item**: the two-column sweep for the other eight
-cards, and the Visualizer's `Ctrl+S` missing from its own card. Both small, both in `TODO_DEFERRED.md`, and
-both want the maintainer at the keyboard — a card is a fixed-height window whose whole problem is what fits.
+**The quick wins, if a session wants one before the large item**: the two-column sweep for the seven cards
+that have not had it. Small, in `TODO_DEFERRED.md`, and wants the maintainer at the keyboard — a card is a
+fixed-height window whose whole problem is what fits. (The Visualizer's card is done, `Ctrl+S` included,
+2026-09-10.)
 
 *This list was written at 15:44 on 2026-09-09 and three of its five items landed after it.* The help card's
 visual pass and the attachments section went in that evening; Librarian's tooltip half went in on the
