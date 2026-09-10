@@ -412,8 +412,14 @@ class DPGChatGraphPanel(gui_animation.Animation):
             #
             # The return arrow, for the key the caption names. Not the arrow-into-bracket that FontAwesome
             # offers as "enter": this app already spends that one on sending a URL to the chat input.
+            #
+            # The last line of the caption is here because this is the button that is *disabled* while
+            # there is no cursor, so it is the one a reader asks that question of. The counter beside the
+            # steppers carries the same keys and cannot answer it: it is blank exactly then, and a blank
+            # readout is nothing to hover.
             add_button(fa.ICON_REPLY, self._commit_cursor,
-                       "Switch to the previewed branch [Enter]\n(or click its box a second time)",
+                       "Switch to the previewed branch [Enter]\n(or click its box a second time)\n"
+                       "The first arrow press puts the cursor on HEAD; the arrows move it from there.",
                        self._commit_button_tag, enabled=False)
 
             guiutils.add_toolbar_separator(horizontal=True, toolbar_extent=_TOOLBAR_H,
@@ -445,7 +451,17 @@ class DPGChatGraphPanel(gui_animation.Animation):
             # that are not on screen together, so reading a position off it means panning and counting.
             dpg.add_text("", tag=self._sibling_counter_tag)
             counter_tooltip = dpg.add_tooltip(self._sibling_counter_tag)  # tag
-            dpg.add_text("Which sibling the cursor is on, of how many at that level",
+            # The only place the cursor's own keys are named on screen. Every other key this panel binds
+            # sits on a button that names it; the arrows and Esc have no button, so without this they are
+            # on the help card and nowhere else. Here because this readout is the one widget that is about
+            # the *cursor* rather than about the view.
+            #
+            # Through `_toolbar_tooltip_text` for the same reason the buttons are: it now names keys, and
+            # those keys fire only while the panel holds the keyboard.
+            dpg.add_text(_toolbar_tooltip_text("Which sibling the cursor is on, of how many at that level\n\n"
+                                               "The arrows move it: [Up] and [Down] along the conversation,\n"
+                                               "[Left] and [Right] along the siblings. The first press puts\n"
+                                               "it on HEAD, and [Esc] puts it away."),
                          parent=counter_tooltip)
 
     def _make_step_sibling(self, direction: str, step: Optional[int]) -> Callable:

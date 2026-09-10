@@ -152,7 +152,9 @@ class DPGCleanupDialog:
             if preview.is_empty:
                 dpg.add_text("Nothing to clean up — no unreachable chat nodes, no unreferenced attachments.")
                 dpg.add_separator()
-                dpg.add_button(label="Close", width=self.button_w, callback=lambda: self.close())
+                close_id = dpg.add_button(label="Close", width=self.button_w, callback=lambda: self.close())
+                with dpg.tooltip(close_id):
+                    dpg.add_text("Close this dialog [Esc]")
                 return
 
             dpg.add_text(self._summary_text())
@@ -312,7 +314,7 @@ class DPGCleanupDialog:
                                          enabled=bool(preview.sidecars))
             dpg.bind_item_theme(save_all_id, "disablable_widget_theme")  # tag  # nothing to save -> inert
             with dpg.tooltip(save_all_id):
-                dpg.add_text(f"Copy all {len(preview.sidecars)} attachment(s) to\n"
+                dpg.add_text("Copy all attachments to\n"
                              f"{librarian_config.attachment_staging_dir}\n"
                              f"before deleting them")
             open_staging_id = dpg.add_button(label="Open staging folder", width=self.button_w,
@@ -324,7 +326,9 @@ class DPGCleanupDialog:
             commit_id = dpg.add_button(label="Clean up & save", width=self.button_w, callback=lambda: self._commit())
             with dpg.tooltip(commit_id):
                 dpg.add_text("Delete the items listed above, then save the chat data.\nThis cannot be undone.")
-            dpg.add_button(label="Cancel", width=self.button_w, callback=lambda: self.close())
+            cancel_id = dpg.add_button(label="Cancel", width=self.button_w, callback=lambda: self.close())
+            with dpg.tooltip(cancel_id):
+                dpg.add_text("Close without deleting anything [Esc]")
 
     def _open_staging_dir(self) -> None:
         """Reveal the staging directory, creating it first — it may not exist yet if nothing has been rescued."""

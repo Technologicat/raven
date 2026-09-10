@@ -2860,6 +2860,10 @@ class DPGLinearizedChatView:
                                                               font_basename=_JUMP_TO_LATEST_FONT_BASENAME,
                                                               variant=_JUMP_TO_LATEST_FONT_VARIANT)
             dpg.bind_item_font(self._jump_to_latest_button, jump_to_latest_font)
+            # The pill is the pointer's half of `End`, so it says so. Plain DPG rather than
+            # `gui_tooltip.Tooltip`: the *label* changes as the turn proceeds, but this caption does not.
+            dpg.add_text("Jump to the latest message [End]",
+                         parent=dpg.add_tooltip(self._jump_to_latest_button))
 
         self._scroll_end_flasher = gui_animation.ScrollEndFlasher(target=gui_parent,
                                                                   tag=f"chat_scroll_end_flasher_{self.gui_uuid}",  # tag
