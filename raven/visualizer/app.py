@@ -788,7 +788,6 @@ app_state.update_info_panel = info_panel.update  # Published here so cross-modul
 # The debug keys (Ctrl+Shift+M/R/T/L) are deliberately absent: they are developer tools, `README.md`
 # documents them, and the card is what a visitor reads.
 hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a dataset", notes=""),
-               env(key_indent=0, key="Ctrl+I", action_indent=0, action="Import BibTeX files", notes="This is how a dataset is made"),
                env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus the search field", notes=""),
                env(key_indent=1, key="Enter", action_indent=0, action="Select the matches, and unfocus", notes="While typing in the search field"),
                env(key_indent=2, key="Shift+Enter", action_indent=1, action="Same, but add to the selection", notes="While typing in the search field"),
@@ -807,10 +806,16 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=1, key="Page Down", action_indent=0, action="Scroll down", notes="Not while typing"),
                env(key_indent=1, key="Up arrow", action_indent=0, action="Scroll up slightly", notes="Not while typing"),
                env(key_indent=1, key="Down arrow", action_indent=0, action="Scroll down slightly", notes="Not while typing"),
+               # The two auxiliary windows, each led by the key that opens it. The rows under a leader are
+               # live only while that window is up, which is what their notes say — the leader itself works
+               # from the main window, so the distinction is worth keeping even though the grouping already
+               # names the window.
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="Ctrl+S", action_indent=0, action="Save the word cloud as a PNG", notes="Word cloud window"),
+               env(key_indent=0, key="F10", action_indent=0, action="Toggle the word cloud window", notes="From the keywords of the selection"),
+               env(key_indent=1, key="Ctrl+S", action_indent=0, action="Save the word cloud as a PNG", notes="Word cloud window"),
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="Ctrl+O", action_indent=0, action="Choose the BibTeX files to read", notes="Importer window"),
+               env(key_indent=0, key="Ctrl+I", action_indent=0, action="Toggle the importer window", notes="This is how a dataset is made"),
+               env(key_indent=1, key="Ctrl+O", action_indent=0, action="Choose the BibTeX files to read", notes="Importer window"),
                env(key_indent=1, key="Ctrl+S", action_indent=0, action="Choose where to save the dataset", notes="Importer window"),
                env(key_indent=1, key="Ctrl+Enter", action_indent=0, action="Start the import, or stop it", notes="Importer window"),
 
@@ -830,11 +835,13 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=0, key="F8", action_indent=0, action="Copy the report to the clipboard", notes="As plain text, .txt"),
                env(key_indent=1, key="Shift+F8", action_indent=1, action="Same, but as Markdown", notes=".md"),
                env(key_indent=0, key="Ctrl+Shift+C", action_indent=0, action="Copy the current item to the clipboard", notes="As plain text, for a web search"),
+               # The plotter itself: what it shows, and stepping back through what was selected in it.
                helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Reset the plotter's zoom", notes=""),
                env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Undo the last selection change", notes=""),
                env(key_indent=1, key="Ctrl+Shift+Y", action_indent=0, action="Redo the last selection change", notes=""),
-               env(key_indent=0, key="F10", action_indent=0, action="Toggle the word cloud window", notes="From the keywords of the selection"),
-               env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Reset the plotter's zoom", notes=""),
+               # The meta keys last: about the app rather than about anything in it.
+               helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
                env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
                )
