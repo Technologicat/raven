@@ -1629,7 +1629,7 @@ class DPGChatMessage:
         dpg.bind_item_font(copy_message_button, self.parent_view.themes_and_fonts.icon_font_solid)
         dpg.bind_item_theme(copy_message_button, "disablable_widget_theme")  # tag
         copy_message_tooltip = self._add_tooltip(copy_message_button,
-                                                 "Copy message to clipboard\n    no modifier: as-is\n    with Shift: include message node ID")
+                                                 "Copy message to clipboard [Ctrl+C]\n    without Shift: as-is\n    with Shift: include message node ID")
 
     def _build_regeneration_buttons(self, g, greeting_node_ids) -> None:
         """Build the three buttons that act on the AI's own output: run it again, continue it, speak it.
@@ -1783,6 +1783,9 @@ class DPGChatMessage:
 
         `g`: the horizontal group the buttons go into.
         """
+        # TODO: when revising is implemented, give it a hotkey as well — `Ctrl+E` is free and mnemonic.
+        # It is stashed in `gui_button_callbacks` like the others, bound beside the per-message keys in
+        # `app.py`, and named in the caption below.
         dpg.add_button(label=fa.ICON_PENCIL,
                        callback=lambda: None,  # TODO
                        enabled=False,
@@ -1817,6 +1820,8 @@ class DPGChatMessage:
         def branch_chat_callback():
             self.parent_view.chat_controller.app_state["HEAD"] = node_id
             self.parent_view.build()
+        if branch_enabled:
+            self.gui_button_callbacks["branch"] = branch_chat_callback  # stash it so we can call it from the hotkey handler
         dpg.add_button(label=fa.ICON_CODE_BRANCH,
                        callback=branch_chat_callback,
                        enabled=branch_enabled,
@@ -1826,7 +1831,7 @@ class DPGChatMessage:
         dpg.bind_item_font(f"message_new_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
         dpg.bind_item_theme(f"message_new_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
         new_branch_tooltip = dpg.add_tooltip(f"message_new_branch_button_{self.gui_uuid}")  # tag
-        dpg.add_text("Branch from this node", parent=new_branch_tooltip)
+        dpg.add_text("Branch from this node [Ctrl+B]", parent=new_branch_tooltip)
 
         # Delete subtree starting from this node (requires a confirmation click)
         #
@@ -1893,6 +1898,11 @@ class DPGChatMessage:
                                                                      message_target=delete_subtree_tooltip,
                                                                      flash_color=(255, 32, 32),  # red: this one destroys data
                                                                      text_color=(255, 255, 255)))
+        # The key goes through this same callable, so it inherits the two-press confirmation rather than
+        # having one of its own — and the flash that asks for the second press is on the button the key
+        # acts on, which is also the message the blue dot is beside.
+        if delete_enabled:
+            self.gui_button_callbacks["delete"] = delete_subtree_callback  # stash it so we can call it from the hotkey handler
         delete_subtree_button = dpg.add_button(label=fa.ICON_TRASH_CAN,
                                                callback=delete_subtree_callback,
                                                enabled=delete_enabled,
@@ -1902,7 +1912,7 @@ class DPGChatMessage:
         dpg.bind_item_font(f"message_delete_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
         dpg.bind_item_theme(f"message_delete_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
         delete_subtree_tooltip = self._add_tooltip(f"message_delete_branch_button_{self.gui_uuid}",  # tag
-                                                   "Delete branch (subtree starting from this node, ALL descendants!)")
+                                                   "Delete branch (subtree starting from this node, ALL descendants!) [Ctrl+Shift+Delete]")
 
         # # TODO: Meh, `raven.common.gui.animation.WidgetFlash` doesn't play together with `dpg_markdown`.
         # c_red = '<font color="(255, 96, 96)">'

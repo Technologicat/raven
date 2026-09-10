@@ -588,7 +588,9 @@ keyboard's position everywhere else in Raven, breathing at the same rate.
 
 Hover the dot and it says so.
 
-- Copy chat message to clipboard — in full, the whole of any fetched page included; see [Message attachments](#message-attachments)
+- Copy chat message to clipboard (Ctrl+C) — in full, the whole of any fetched page included; see [Message attachments](#message-attachments)
+  - Holding Shift (Ctrl+Shift+C) includes the message's node ID and metadata, as Shift+F8 does for the whole log.
+  - The hotkey is live whenever the message field does not hold the caret; while you are writing, Ctrl+C copies the selected text instead.
 - Reroll (AI messages only) (Ctrl+R)
 - Continue generating (Ctrl+U)
   - Last message of linearized view only; and only if it is an AI message.
@@ -600,13 +602,14 @@ Hover the dot and it says so.
   - If additionally **Subtitles** is enabled in the mode toggles, the avatar's speech is subtitled (or closed-captioned) in the language set in [`raven.librarian.config`](config.py).
   - See [AI avatar and voice mode](#ai-avatar-and-voice-mode).
 - Edit *(placeholder button; feature to be added later)*
-- Branch
+- Branch (Ctrl+B)
   - Set this message as the current **HEAD**.
     - Branching does not make any changes to the chat datastore - it only sets the **HEAD** pointer.
   - You can use this to roll back the conversation, while preserving the previous content in the chat datastore.
-- Delete
+- Delete (Ctrl+Shift+Delete)
   - Permanently destroy the subtree starting at this message (this message and all messages below it, in any branch).
-  - Requires two clicks to prevent accidental deletion.
+  - Requires two clicks — or two presses of the hotkey — to prevent accidental deletion.
+  - The hotkey is deliberately awkward: this is the only hotkey that destroys data.
 - Navigate chat tree
   - Switch to first sibling (Ctrl+Home)
     - Switch to the oldest sibling node at this position (numbered "1")
@@ -741,6 +744,10 @@ The blue dot says which message these act on: the bottommost one whose whole but
 | `Ctrl+U` | Continue generating (last message, AI only) |
 | `Ctrl+T` | Show/hide the thinking trace |
 | `Ctrl+S` | Speak it |
+| `Ctrl+C` | Copy it to the clipboard — while the message field does not hold the caret |
+| `Ctrl+Shift+C` | ...with its node ID and metadata included |
+| `Ctrl+B` | Branch the chat here — roll the conversation back to it |
+| `Ctrl+Shift+Delete` | Delete it and everything below it. Twice to confirm; there is no undo |
 | `Ctrl+Left` / `Ctrl+Right` | Previous / next sibling |
 | `Ctrl+Shift+Left` / `Ctrl+Shift+Right` | Ten siblings left / right |
 | `Ctrl+Home` / `Ctrl+End` | First / last sibling |

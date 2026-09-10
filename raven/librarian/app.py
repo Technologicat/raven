@@ -2174,6 +2174,8 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key="Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
                env(key_indent=1, key="Ctrl+Home", action_indent=1, action="Same, but to the first", notes=""),
                env(key_indent=0, key="Ctrl+Down", action_indent=0, action="Show the chat continuation", notes="If any exists in chat datastore"),
+               env(key_indent=0, key="Ctrl+B", action_indent=0, action="Branch the chat here", notes="Rolls back to the marked message"),
+               env(key_indent=0, key="Ctrl+Shift+Delete", action_indent=0, action="Delete it and all below it", notes="Twice to confirm. No undo"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start a new chat", notes=""),
                helpcard.hotkey_new_column,
@@ -2199,6 +2201,8 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F8", action_indent=0, action="Copy the chatlog to the clipboard", notes="As-is"),
                env(key_indent=1, key="Shift+F8", action_indent=0, action="Same, but with chat node IDs", notes=""),
+               env(key_indent=0, key="Ctrl+C", action_indent=0, action="Copy the marked message", notes="Not while typing"),
+               env(key_indent=1, key="Ctrl+Shift+C", action_indent=0, action="Same, but with its node ID", notes=""),
                helpcard.hotkey_blank_entry,
                # The mode switches, which had been left off for want of rows. Each is also written into
                # its own checkbox's tooltip, which is where a reader looking at the row finds it; what
@@ -2718,6 +2722,14 @@ def librarian_hotkeys_callback(sender, app_data):
         _toggle_audio_input_panel()
     elif key == dpg.mvKey_F8:  # NOTE: Shift is a modifier here
         copy_chatlog_to_clipboard_as_markdown_callback()
+    # Copying one message, the per-message counterpart of F8 above — and tested here, above the Ctrl+Shift
+    # branch, for the same reason F8 is: the callback reads Shift itself, so one binding serves both
+    # Ctrl+C and Ctrl+Shift+C, and Shift is what adds the node ID.
+    #
+    # Not while the composer holds the caret, where Ctrl+C is ImGui's own copy of the selected text. This
+    # is the only per-message key needing that guard; the rest are chords a text field does not claim.
+    elif ctrl_pressed and key == dpg.mvKey_C and not dpg.is_item_active("chat_field"):  # tag
+        fire_event_if_exists("copy")
     # Ctrl+Shift+...
     elif ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_Return:
@@ -2730,6 +2742,10 @@ def librarian_hotkeys_callback(sender, app_data):
             # Shift, so that plain Ctrl+O stays free for opening a chat datastore — a deferred item, and
             # the meaning a reader will expect of the unshifted chord.
             show_attach_dialog()
+        # Two modifiers and a key well away from the letters, so it cannot be hit by accident: this is the
+        # one hotkey in the app that destroys data. It still asks for the second press the button does.
+        elif key == dpg.mvKey_Delete:
+            fire_event_if_exists("delete")
 
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         elif key == dpg.mvKey_M:
@@ -2807,6 +2823,14 @@ def librarian_hotkeys_callback(sender, app_data):
             fire_event_if_exists("prevend")
         elif key == dpg.mvKey_End:
             fire_event_if_exists("nextend")
+        # Beside Ctrl+N rather than with the sibling steps above: branching and starting a new chat are the
+        # two keys that answer "where does the conversation go from here", and both only move HEAD.
+        #
+        # Guarded like Ctrl+C above, for a different reason: Ctrl+B is the bold reflex every rich-text
+        # editor has trained, and a plain-text field that ignores it should go on ignoring it rather than
+        # rolling the conversation back to some other message.
+        elif key == dpg.mvKey_B and not dpg.is_item_active("chat_field"):  # tag
+            fire_event_if_exists("branch")
         elif key == dpg.mvKey_N:
             start_new_chat_callback()
         elif key == dpg.mvKey_S:
