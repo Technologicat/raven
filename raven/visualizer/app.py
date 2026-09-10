@@ -896,10 +896,13 @@ def render_help_extras(self: helpcard.HelpWindow,
             "Each study's title and abstract is turned into a high-dimensional vector by an embedding model, so that texts about the same thing point in similar directions. Clusters are found among those vectors, and the whole set is flattened to the two dimensions you see — and that picture is the map.",
             f"So **the axes mean nothing on their own**, and neither does a long distance across the map. What the picture does say is what lies {self.c_hig}**near**{self.c_end} what: a point's neighbours are the studies most like it."),
          helpcard.section(
-            "**The word cloud, and the importer**",
-            f'The word cloud is built from the auto-detected keywords of whatever is selected, each word sized by how often it occurs there. It redraws itself when the selection changes, and the colours and placement are picked at random, so the same selection gives a different-looking picture each time. {self.c_hig}**Ctrl+S**{self.c_end} saves it as a PNG.',
-            f'The importer turns BibTeX files into a dataset — several at once are combined into one. It is where a dataset comes from, and {self.c_hig}**Ctrl+I**{self.c_end} is how to reach it.',
-            f'Neither window is modal: you can keep working with the app while one is open, and {self.c_hig}**Esc**{self.c_end} does not close them. The key that opened one closes it again.')],
+            "**The word cloud**",
+            'Built from the auto-detected keywords of whatever is selected, each word sized by how often it occurs there. It redraws itself when the selection changes, and the colours and placement are picked at random, so the same selection gives a different-looking picture each time.',
+            f'{self.c_hig}**F10**{self.c_end} opens and closes it, {self.c_hig}**Ctrl+S**{self.c_end} saves it as a PNG. The window is not modal, so you can keep working with the app while it is open — and {self.c_hig}**Esc**{self.c_end} does not close it.'),
+         helpcard.section(
+            "**The importer**",
+            'Turns BibTeX files into a dataset, combining several at once into one. It is where a dataset comes from in the first place.',
+            f'{self.c_hig}**Ctrl+I**{self.c_end} opens and closes it. Not modal either, and likewise not closed by {self.c_hig}**Esc**{self.c_end}.')],
         [helpcard.section(
             "**How search works**",
             f"Each space-separated search term is a **fragment**. For a data point to match, **all** fragments must match, and their ordering does **not** matter. The {c_search}search result{self.c_end} and {c_selection}selection{self.c_end} sets are **independent**, and {c_search}search results{self.c_end} live-update as you type.",
