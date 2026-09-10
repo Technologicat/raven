@@ -67,6 +67,7 @@ with timer() as tim:
 
     from ..common import deviceinfo
     from ..common import netutil
+    from ..common import text as common_text
     from ..common.video.postprocessor import Postprocessor  # available image filters
 
     from .modules import avatar
@@ -232,7 +233,7 @@ def api_avatar_load():
         cel_streams = {celname: request.files[celname].stream
                        for celname in request.files
                        if celname not in ("file", "json")}  # add-on cels the client also sent, if any
-        logger.debug(f"api_avatar_load: base image plus {len(cel_streams)} add-on cel(s): "
+        logger.debug(f"api_avatar_load: base image plus {len(cel_streams)} add-on cel{common_text.plural_s(len(cel_streams))}: "
                      f"{sorted(cel_streams)}")
         instance_id = avatar.load(stream=stream,
                                   cel_streams=cel_streams)
@@ -275,7 +276,7 @@ def api_avatar_reload():
                        if celname not in ("file", "json")}  # add-on cels the client also sent, if any
 
         logger.debug(f"api_avatar_reload: instance '{parameters['instance_id']}', base image plus "
-                     f"{len(cel_streams)} add-on cel(s): {sorted(cel_streams)}")
+                     f"{len(cel_streams)} add-on cel{common_text.plural_s(len(cel_streams))}: {sorted(cel_streams)}")
         avatar.reload(instance_id=parameters["instance_id"],
                       stream=stream,
                       cel_streams=cel_streams)
@@ -342,7 +343,7 @@ def api_avatar_load_emotion_templates():
     instance_id = data["instance_id"]
     emotions = data.get("emotions", {})
     logger.debug(f"api_avatar_load_emotion_templates: instance '{instance_id}', "
-                 f"{len(emotions)} template(s)" if emotions else
+                 f"{len(emotions)} template{common_text.plural_s(len(emotions))}" if emotions else
                  f"api_avatar_load_emotion_templates: instance '{instance_id}', resetting to defaults")
     avatar.load_emotion_templates(instance_id, emotions)
     return "OK"
@@ -376,7 +377,7 @@ def api_avatar_load_animator_settings():
     instance_id = data["instance_id"]
     animator_settings = data.get("animator_settings", {})
     logger.debug(f"api_avatar_load_animator_settings: instance '{instance_id}', "
-                 f"{len(animator_settings)} setting(s)" if animator_settings else
+                 f"{len(animator_settings)} setting{common_text.plural_s(len(animator_settings))}" if animator_settings else
                  f"api_avatar_load_animator_settings: instance '{instance_id}', resetting to defaults")
     avatar.load_animator_settings(instance_id, animator_settings)
     return "OK"
@@ -559,7 +560,7 @@ def api_avatar_set_overrides():
 
     instance_id = data["instance_id"]
     overrides = data.get("overrides", {})
-    logger.debug(f"api_avatar_set_overrides: instance '{instance_id}', {len(overrides)} morph(s)")
+    logger.debug(f"api_avatar_set_overrides: instance '{instance_id}', {len(overrides)} morph{common_text.plural_s(len(overrides))}")
     avatar.set_overrides(instance_id, overrides)
     return "OK"
 
@@ -594,7 +595,7 @@ def api_avatar_modify_overrides():
     action = data.get("action", "set")
     overrides = data.get("overrides", {})
     logger.debug(f"api_avatar_modify_overrides: instance '{instance_id}', action '{action}', "
-                 f"{len(overrides)} morph(s)")
+                 f"{len(overrides)} morph{common_text.plural_s(len(overrides))}")
     avatar.modify_overrides(instance_id, action, overrides)
     return "OK"
 
@@ -919,7 +920,7 @@ def api_imagefx_process():
         format = parameters["format"]
 
         # Filter names, not the image, and not the uploaded filename either -- a user's filename is theirs.
-        logger.debug(f"api_imagefx_process: format '{format}', {len(postprocessor_chain)} filter(s): "
+        logger.debug(f"api_imagefx_process: format '{format}', {len(postprocessor_chain)} filter{common_text.plural_s(len(postprocessor_chain))}: "
                      f"{[name for name, _settings in postprocessor_chain]}")
         processed_image = imagefx.process(file.stream,
                                           output_format=format,

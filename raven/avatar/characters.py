@@ -66,6 +66,8 @@ import pathlib
 
 logger = logging.getLogger(__name__)
 
+from ..common import text as common_text
+
 from . import assets_path
 
 METADATA_EXT = ".json"  # `aria1.json`, the character itself
@@ -221,7 +223,7 @@ def characters() -> dict[str, Character]:
     global _cache
     if _cache is None:
         _cache = scan()
-        logger.info(f"characters: {len(_cache)} character(s) declared: {sorted(_cache)}")
+        logger.info(f"characters: {len(_cache)} character{common_text.plural_s(len(_cache))} declared: {sorted(_cache)}")
     return _cache
 
 

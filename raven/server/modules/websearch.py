@@ -36,6 +36,8 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from unpythonic import memoize
 
+from ...common import text as common_text
+
 # --------------------------------------------------------------------------------
 # Bootup
 
@@ -294,7 +296,7 @@ def _search_google(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     links = _get_attr_by_selector(selector=".yuRUbf a", attr="href")
 
     preformatted_text, results = _format_results(texts=texts, links=links)
-    logger.info(f"_search_google: {len(results)} result(s), {len(preformatted_text)} characters.")
+    logger.info(f"_search_google: {len(results)} result{common_text.plural_s(len(results))}, {len(preformatted_text)} characters.")
     return preformatted_text, results
 
 @memoize
@@ -318,7 +320,7 @@ def _search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     texts = _get_content_by_selector('[data-result="snippet"]')
 
     preformatted_text, results = _format_results(texts=texts, links=links)
-    logger.info(f"_search_duckduckgo: {len(results)} result(s), {len(preformatted_text)} characters.")
+    logger.info(f"_search_duckduckgo: {len(results)} result{common_text.plural_s(len(results))}, {len(preformatted_text)} characters.")
     return preformatted_text, results
 
 # # StartPage. Doesn't work yet. Likely missing some magic parameters from query.

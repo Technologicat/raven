@@ -48,6 +48,8 @@ from typing import Callable, NamedTuple, Optional, Sequence, Union
 
 import dearpygui.dearpygui as dpg
 
+from .. import text as common_text
+
 from . import messagebox
 from . import utils as guiutils
 
@@ -111,7 +113,7 @@ def _dispatch_loop() -> None:
         if not dpg.is_dearpygui_running():
             # Teardown, or a drop that landed before the render loop started. Calling into DPG after
             # `destroy_context` segfaults, so drop the drop and say so.
-            logger.info(f"_dispatch_loop: render loop not running, discarding {len(paths)} dropped path(s)")
+            logger.info(f"_dispatch_loop: render loop not running, discarding {len(paths)} dropped path{common_text.plural_s(len(paths))}")
             continue
         try:
             handler(paths)
@@ -128,7 +130,7 @@ def _on_drop(window, count, paths) -> None:  # noqa: ARG001 -- `window` is part 
     # An exception escaping a `ctypes` callback unwinds into C, so contain everything.
     try:
         files = [paths[i].decode("utf-8", errors="replace") for i in range(count)]
-        logger.info(f"_on_drop: {len(files)} path(s) dropped")
+        logger.info(f"_on_drop: {len(files)} path{common_text.plural_s(len(files))} dropped")
         _drops.put(files)
     except Exception as exc:
         logger.exception(f"_on_drop: {type(exc)}: {exc}")
@@ -307,7 +309,7 @@ def make_router(rules: Sequence[DropRule],
         if not paths:
             return
         if blocked is not None and blocked():
-            logger.info(f"make_router.route: a modal window is open, ignoring {len(paths)} dropped path(s)")
+            logger.info(f"make_router.route: a modal window is open, ignoring {len(paths)} dropped path{common_text.plural_s(len(paths))}")
             return
         claimed = {}  # rule index -> matched paths, in rule order (dicts preserve insertion order)
         unmatched = []
@@ -320,7 +322,7 @@ def make_router(rules: Sequence[DropRule],
                 unmatched.append(path)
 
         if unmatched:
-            logger.info(f"make_router.route: {len(unmatched)} dropped path(s) match no rule")
+            logger.info(f"make_router.route: {len(unmatched)} dropped path{common_text.plural_s(len(unmatched))} matched by no rule")
             reject("Cannot open this",
                    f"Dropped:\n{_describe(unmatched)}\n\n{what} accepts:\n{accepted}")
             return
@@ -340,7 +342,7 @@ def make_router(rules: Sequence[DropRule],
                    f"Dropped:\n{_describe(matched)}\n\n"
                    f"{what} opens one at a time here ({rule.label}). Drop a single one.")
             return
-        logger.info(f"make_router.route: routing {len(matched)} path(s) to rule '{rule.label}'")
+        logger.info(f"make_router.route: routing {len(matched)} path{common_text.plural_s(len(matched))} to rule '{rule.label}'")
         rule.handler(matched)
 
     return route

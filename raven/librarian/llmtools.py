@@ -489,7 +489,7 @@ def list_consulted_documents() -> tuple[str, dict]:
     if not entries:
         logger.info("list_consulted_documents: nothing consulted on this branch yet.")
         return (CANONICAL_NOTHING_CONSULTED, {"grounding": False})
-    logger.info(f"list_consulted_documents: {len(entries)} document(s).")
+    logger.info(f"list_consulted_documents: {len(entries)} document{common_text.plural_s(len(entries))}.")
     return (_formatters().consulted_documents(entries), {"grounding": False})
 
 CANONICAL_NO_SUCH_DOCUMENT = ("There is no document with that ID in the database. Document IDs come from "

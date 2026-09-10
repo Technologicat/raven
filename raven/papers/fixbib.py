@@ -61,6 +61,8 @@ import sys
 
 from bibtexparser.model import DuplicateFieldKeyBlock, MiddlewareErrorBlock
 
+from ..common import text as textutil
+
 from . import bibtex
 
 KIND_UNBALANCED_BRACES = "unbalanced braces"
@@ -118,7 +120,7 @@ def _diagnose(failed_block, key: str, line: int) -> RepairReport:
     unbalanced = bibtex.unbalanced_field_names(failed_block.raw)
     if unbalanced:
         return RepairReport(key, line, KIND_UNBALANCED_BRACES,
-                            f"suspect field(s): {', '.join(unbalanced)}")
+                            f"suspect field{textutil.plural_s(len(unbalanced))}: {', '.join(unbalanced)}")
     return RepairReport(key, line, KIND_UNREADABLE, str(failed_block.error).replace("\n", " "))
 
 
@@ -278,11 +280,11 @@ def main() -> None:  # pragma: no cover
         if decoded:
             print(f"{path.name}: decoded {decoded} HTML character entit{'y' if decoded == 1 else 'ies'}.")
         if moved:
-            print(f"{path.name}: moved {moved} rights notice(s) out of `abstract` into `copyright`.")
+            print(f"{path.name}: moved {moved} rights notice{textutil.plural_s(moved)} out of `abstract` into `copyright`.")
         if recovered:
-            print(f"{path.name}: repaired {len(recovered)} record(s) — {_summarize_by_kind(recovered)}.")
+            print(f"{path.name}: repaired {len(recovered)} record{textutil.plural_s(len(recovered))} — {_summarize_by_kind(recovered)}.")
         if unrecovered:
-            print(f"{path.name}: {len(unrecovered)} record(s) still unreadable — {_summarize_by_kind(unrecovered)}.")
+            print(f"{path.name}: {len(unrecovered)} record{textutil.plural_s(len(unrecovered))} still unreadable — {_summarize_by_kind(unrecovered)}.")
         if not recovered and not decoded and not moved:
             if not unrecovered:
                 print(f"{path.name}: nothing to repair.")
@@ -299,7 +301,9 @@ def main() -> None:  # pragma: no cover
         # Each remaining fault needs a decision rather than an edit: where a missing brace belonged, or
         # which commas in `Bloggs, PhD, MSc, Joan` separate name parts and which separate credentials.
         # Those are answerable, but not from the file alone, so they are named and left alone.
-        print(f"\n{total_unrecovered} record(s) need a look by hand: what would fix them is not "
+        # Phrased as a count after a label rather than as "N records need ...", so that the sentence needs
+        # no verb agreeing with the number — English would want "1 record needs" and "2 records need".
+        print(f"\nRecords needing a look by hand: {total_unrecovered}. What would fix them is not "
               f"recoverable from the text.", file=sys.stderr)
     if total_recovered or total_unrecovered or total_decoded or total_moved:
         extras = "".join([f", {total_decoded} entities decoded" if total_decoded else "",

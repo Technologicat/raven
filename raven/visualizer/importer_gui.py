@@ -45,6 +45,7 @@ from unpythonic import box, sym, unbox
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from ..vendor.file_dialog.fdialog import FileDialog
 
+from ..common import text as textutil
 from ..common.gui import utils as guiutils
 
 from . import config as visualizer_config
@@ -212,7 +213,7 @@ def _open_dialog_callback(selected_files):
     logger.debug("_open_dialog_callback: Open import dialog callback triggered.")
     app_state.exit_modal_mode()
     if selected_files:
-        logger.debug(f"_open_dialog_callback: User selected the file(s) {selected_files}.")
+        logger.debug(f"_open_dialog_callback: User selected {len(selected_files)} file{textutil.plural_s(len(selected_files))}: {selected_files}.")
         _input_files_box << selected_files  # the dialog hands over a list of its own, so this one is ours to keep
         _update_input_files_table()
     else:  # empty selection -> cancelled
@@ -256,7 +257,7 @@ def import_bibtex_files(filenames: list[str]) -> None:
     also needs an output dataset to save as, and picking that is the user's next step, so the window opens
     ready rather than running.
     """
-    logger.debug(f"import_bibtex_files: {len(filenames)} file(s).")
+    logger.debug(f"import_bibtex_files: {len(filenames)} file{textutil.plural_s(len(filenames))}.")
     _input_files_box << list(filenames)  # our own copy — the box outlives this call
     _update_input_files_table()
     show_window()

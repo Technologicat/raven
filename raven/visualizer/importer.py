@@ -221,7 +221,7 @@ def _report_unparseable_records(filename, library):
         header_line = failed_block.raw.lstrip().split("\n", 1)[0]
         key = bibtex.header_key(header_line) or "?"
         unbalanced = bibtex.unbalanced_field_names(failed_block.raw)
-        suspects = f" Suspect field(s): {', '.join(unbalanced)}." if unbalanced else ""
+        suspects = f" Suspect field{textutil.plural_s(len(unbalanced))}: {', '.join(unbalanced)}." if unbalanced else ""
         logger.warning(f"_parse_input_files: unparseable record '{key}' at line {failed_block.start_line} "
                        f"of {filename}.{suspects}")
 
@@ -1057,7 +1057,7 @@ def _canonicalize_cluster_keywords(vis_keywords_by_cluster):
     if not mapping:
         logger.info("        No keyword replacements to apply.")
         return vis_keywords_by_cluster
-    logger.info(f"        Applying {len(mapping)} keyword replacement(s): "
+    logger.info(f"        Applying {len(mapping)} keyword replacement{textutil.plural_s(len(mapping))}: "
                 + ", ".join(f"'{original}' -> '{replacement}'" for original, replacement in sorted(mapping.items())))
 
     canonicalized = []

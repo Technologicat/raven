@@ -32,6 +32,8 @@ importer_gui = pytest.importorskip("raven.visualizer.importer_gui")
 import dearpygui.dearpygui as dpg  # noqa: E402 -- after importorskip by design
 
 from unpythonic import box, unbox  # noqa: E402 -- ditto
+
+from raven.common import text as textutil  # noqa: E402 -- ditto
 from unpythonic.env import env  # noqa: E402 -- ditto
 
 from raven.vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # noqa: E402 -- ditto
@@ -132,7 +134,8 @@ def test_the_pipeline_is_not_imported_at_module_level():
     tree = ast.parse(pathlib.Path(importer_gui.__file__).read_text(encoding="utf-8"))
     offenders = [node.lineno for node in tree.body
                  if isinstance(node, ast.ImportFrom) and any(alias.name == "importer" for alias in node.names)]
-    assert not offenders, (f"importer_gui.py imports the pipeline at module level (line(s) {offenders}); "
+    assert not offenders, (f"importer_gui.py imports the pipeline at module level "
+                           f"(line{textutil.plural_s(len(offenders))} {offenders}); "
                            f"that takes this whole test file out of CI")
 
 

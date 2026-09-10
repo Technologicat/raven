@@ -28,6 +28,7 @@ import dearpygui.dearpygui as dpg  # noqa: E402 -- after importorskip by design
 from unpythonic import box  # noqa: E402 -- ditto
 from unpythonic.env import env  # noqa: E402 -- ditto
 
+from raven.common import text as textutil  # noqa: E402 -- ditto
 from raven.visualizer.app_state import app_state  # noqa: E402 -- ditto
 
 SEARCH_FIELD = "search_field"  # tag
@@ -48,7 +49,8 @@ def test_spacy_is_not_imported_at_module_level():
     offenders = [node.lineno for node in tree.body
                  if (isinstance(node, ast.ImportFrom) and (node.module or "").startswith("spacy"))
                  or (isinstance(node, ast.Import) and any(a.name.startswith("spacy") for a in node.names))]
-    assert not offenders, (f"info_panel.py imports spaCy at module level (line(s) {offenders}); "
+    assert not offenders, (f"info_panel.py imports spaCy at module level "
+                           f"(line{textutil.plural_s(len(offenders))} {offenders}); "
                            f"that takes this whole test file out of CI")
 
 

@@ -56,6 +56,9 @@ from pathlib import Path
 import feedparser
 
 from .. import __version__
+
+from ..common import text as textutil
+
 from . import config as papers_config
 from . import httpfetch
 from .bibtex import entries_to_bibtex
@@ -184,7 +187,7 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover
     # against here: it looks like success, and the gap only surfaces much later as a missing document.
     missing = sorted({strip_version(i) for i in identifiers} - _returned_identifiers(entries))
     if missing:
-        print(f"Warning: {len(missing)} identifier(s) returned nothing: {', '.join(missing[:10])}"
+        print(f"Warning: {len(missing)} identifier{textutil.plural_s(len(missing))} returned nothing: {', '.join(missing[:10])}"
               + (" ..." if len(missing) > 10 else ""), file=sys.stderr)
 
     bibtex = entries_to_bibtex(entries, keep_versions=not args.strip_versions)

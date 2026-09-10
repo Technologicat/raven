@@ -14,6 +14,7 @@ import re
 
 import pytest
 
+from raven.common import text as textutil
 from raven.common.gui.xdotwidget import graph as xdotgraph
 
 from raven.librarian import chatgraph
@@ -1294,7 +1295,7 @@ class TestAttachmentThumbnails:
             columns = chatgraph._pile_columns(count, config.attachment_fan_offset,
                                               config.attachment_fan_drop)
             assert sorted(columns) == list(range(count)), \
-                f"the pile for {count} card(s) is not a permutation: {columns}"
+                f"the pile for {count} card{textutil.plural_s(count)} is not a permutation: {columns}"
 
     def test_a_pile_is_not_the_staircase_it_replaced(self):
         """The identity permutation is a legal Latin square and is exactly the thing being avoided, so the
@@ -1376,7 +1377,7 @@ class TestAttachmentThumbnails:
             _origin_x, origin_y = config._get_attachment_deck_origin(count)
             front = config._get_attachment_card_offset(0, count)[1]
             assert origin_y + front + half_card - 0.5 * config.node_h \
-                == pytest.approx(config.attachment_overhang), f"with {count} card(s)"
+                == pytest.approx(config.attachment_overhang), f"with {count} card{textutil.plural_s(count)}"
 
     def test_a_deep_pile_is_pulled_up_rather_than_drawn_over_the_next_row(self):
         """The clamp, and the control that says it fires at all. Six is the most a deck is ever drawn

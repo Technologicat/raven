@@ -1097,7 +1097,8 @@ def _apply_judge(records: list[Record],
                 continue
             conflicts.append((base, other, "conflict"))
     pairs = [(a, b, "fuzzy") for a, b in fuzzy] + conflicts
-    print(f"judge: {len(fuzzy)} near-miss pair(s), {len(conflicts)} DOI-disagreement pair(s)"
+    print(f"judge: {len(fuzzy)} near-miss pair{textutil.plural_s(len(fuzzy))}, "
+          f"{len(conflicts)} DOI-disagreement pair{textutil.plural_s(len(conflicts))}"
           + (f", {settled} settled by rule and not asked about" if settled else ""))
     if not pairs and not doi_candidates(clusters):
         return clusters, frozenset()
@@ -1129,7 +1130,8 @@ def _apply_judge(records: list[Record],
         merges = sum(1 for (i, j), same in verdicts.items()
                      if same and was_together[i] != was_together[j])
         splits = sum(1 for same in verdicts.values() if not same)
-        print(f"judge: {merges} pair(s) newly merged, {splits} pair(s) refused")
+        print(f"judge: {merges} pair{textutil.plural_s(merges)} newly merged, "
+              f"{splits} pair{textutil.plural_s(splits)} refused")
         clusters = cluster_records(records, verdicts)
 
     # Recomputed against the clusters as they now stand, which is why this is not hoisted above: a merge
@@ -1138,7 +1140,7 @@ def _apply_judge(records: list[Record],
     candidates = doi_candidates(clusters)
     rejected = frozenset()
     if candidates:
-        print(f"judge: {len(candidates)} DOI(s) to check against the venue claimed for them")
+        print(f"judge: {len(candidates)} DOI{textutil.plural_s(len(candidates))} to check against the venue claimed for them")
         doi_verdicts = judge_doi_fit(llm_settings, candidates, state_path, on_progress=progress)
         rejected = rejected_dois(clusters, doi_verdicts)
         for doi in sorted(rejected):
@@ -1386,10 +1388,10 @@ def _report(records: list[Record],
     """Print what the run found, in the shape a method section asks for."""
     merged = [cluster for cluster in clusters if len(cluster) > 1]
     removed = sum(len(cluster) - 1 for cluster in merged)
-    print(f"read {len(records)} record(s)"
+    print(f"read {len(records)} record{textutil.plural_s(len(records))}"
           + (f", {len(unreadable)} unreadable" if unreadable else ""))
-    print(f"  {len(records) - removed} unique, {removed} duplicate(s) merged away "
-          f"from {len(merged)} cluster(s)")
+    print(f"  {len(records) - removed} unique, {removed} duplicate{textutil.plural_s(removed)} merged away "
+          f"from {len(merged)} cluster{textutil.plural_s(len(merged))}")
 
     # A `doi` field holding something that is not a DOI is treated as no DOI at all, which is the safe
     # reading and a silent one — those records then match on title alone, and nothing would say why.
@@ -1397,11 +1399,13 @@ def _report(records: list[Record],
     # about. (Not hypothetical: the fixtures written for this tool's own tests contained five.)
     rejected = sum(1 for record in records if record.doi is None and record.field("doi"))
     if rejected:
-        print(f"    {rejected} record(s) have a `doi` field that is not a DOI; matched on title only")
+        # No verb agreeing with the count, here and just below: English would want "1 record has" against
+        # "2 records have", which a plural suffix on the noun alone cannot deliver.
+        print(f"    {rejected} record{textutil.plural_s(rejected)} with a `doi` field that is not a DOI; matched on title only")
 
     by_rule = collections.Counter("+".join(cluster.rules) for cluster in merged)
     for rule, count in by_rule.most_common():
-        print(f"    matched by {rule}: {count} cluster(s)")
+        print(f"    matched by {rule}: {count} cluster{textutil.plural_s(count)}")
 
     sizes = collections.Counter(len(cluster) for cluster in merged)
     if sizes:
@@ -1411,7 +1415,7 @@ def _report(records: list[Record],
     conflicted = [cluster for cluster in merged
                   if len({record.doi for record in cluster.records if record.doi}) > 1]
     if conflicted:
-        print(f"    {len(conflicted)} cluster(s) hold more than one DOI (see the audit)")
+        print(f"    {len(conflicted)} cluster{textutil.plural_s(len(conflicted))} holding more than one DOI (see the audit)")
 
     # Named in full rather than counted. Each one says a DOI in the input looks attached to the wrong
     # record, which is a fault worth reading and — unlike a merge — leaves nothing in the audit, since
