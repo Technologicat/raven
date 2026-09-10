@@ -418,8 +418,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
             # steppers carries the same keys and cannot answer it: it is blank exactly then, and a blank
             # readout is nothing to hover.
             add_button(fa.ICON_REPLY, self._commit_cursor,
-                       "Switch to the previewed branch [Enter]\n(or click its box a second time)\n"
-                       "The first arrow press puts the cursor on HEAD; the arrows move it from there.",
+                       "Switch to the previewed branch [Enter]\n(or click its box a second time)\n\n"
+                       "To show a cursor, press an arrow key, which puts\nit on HEAD. Then the arrows move it from there.",
                        self._commit_button_tag, enabled=False)
 
             guiutils.add_toolbar_separator(horizontal=True, toolbar_extent=_TOOLBAR_H,
