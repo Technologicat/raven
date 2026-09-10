@@ -70,8 +70,8 @@ extract_keywords = True
 #                     the configured character will be asked to perform the task).
 #                    See `raven.librarian.config`.
 #
-# clusters_keyword_method = "frequencies"
-clusters_keyword_method = "llm"
+clusters_keyword_method = "frequencies"
+# clusters_keyword_method = "llm"
 
 clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
     **Instructions**
@@ -399,8 +399,6 @@ gui_config = env(  # ----------------------------------------
                  #
                  word_cloud_w=768, word_cloud_h=768,
                  word_cloud_background_color="black",
-                 # word_cloud_w=1024, word_cloud_h=1024,
-                 # word_cloud_background_color="white",
                  word_cloud_colormap="viridis",  # Matplotlib colormap (name as string)
                  # ----------------------------------------
                  # Plotter
