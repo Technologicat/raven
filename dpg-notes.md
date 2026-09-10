@@ -1435,6 +1435,21 @@ Note the hazard is not confined to streaming: a user can scroll *while* content 
 
 # Testing DPG code
 
+## To check a frame rate in a running app, open Metrics — do not infer it from CPU load
+
+`Ctrl+Shift+M` brings up DPG's own Metrics window in every Raven app, and it reports application average
+ms/frame with the FPS beside it, plus plots of frame and presentation time. In a driven test that is one
+synthetic chord and a screenshot, and it reads the quantity that actually changed.
+
+**CPU percentage is a proxy and a poor one**, because it is the frame rate multiplied by the cost of a
+frame, and a change to either moves it. It is fine for the question *"is this pegging a core"* — which is
+how the Visualizer's missing idle throttle was quantified on 2026-09-10, 42.0% of a core before and 7.7%
+after — and it cannot tell you the app settled at twelve frames a second rather than at nine, or that a
+frame got cheaper while the rate stayed put.
+
+So: CPU load to establish that there is a problem, Metrics to say what the frame rate now *is*. Note the
+window is the same `Ctrl+Shift+M` a reader would use, so nothing has to be built to make an app measurable.
+
 ## DPG runs without a mapped window, so GUI code is unit-testable
 
 `dpg.create_context()` + `dpg.create_viewport()` + `dpg.setup_dearpygui()` gives a fully working DPG — real widgets, real themes, working getters — **without** `dpg.show_viewport()`. Nothing is mapped, so nothing takes focus and nothing appears on screen. This matters on a shared desktop, where the alternative (launching the app) interrupts whoever is using it.
