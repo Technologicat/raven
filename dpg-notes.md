@@ -1147,6 +1147,20 @@ The practical consequence is that a programmatic focus is never neutral: returni
 
 That has a use beyond gating. Since a write lands on an *inactive* field and is reverted on an active one, **Enter is itself a licence to write the field** — no focus dance required, because the commit already released it. `FileDialog.chdir` relies on exactly this: Enter on a directory clears the find field on the way in, and the `set_value` sticks precisely because Enter had deactivated the field a moment earlier. On a multiline field it would not: Enter inserts a newline there and leaves it active, so the same write would be reverted on the next frame.
 
+**And where no key released the field, the focus dance is two frames long.** A hotkey that writes a field the user may be typing in has to deactivate it first, and the deactivation is not immediate: `dpg.focus_item` lands on the *next* frame, and the field gives up the caret on the one after. Measured 2026-09-10, three runs out of three, on a single-line field on DPG 2.3.1 — one `split_frame` leaves `is_item_active` still `True`, and a write made there is reverted exactly as if nothing had been done. The recipe:
+
+```python
+if dpg.is_item_active("the_field"):          # tag
+    dpg.focus_item("some_button")            # tag -- a button, not a child window; see above
+    for _ in range(SOME_BOUND):              # wait on the state, do not count to two
+        guiutils.split_frame(operation="...", required=True)
+        if not dpg.is_item_active("the_field"):
+            break
+dpg.set_value("the_field", "")               # now it sticks
+```
+
+**Wait on the state rather than counting frames.** Two is what it takes today; a literal `2` is a number the next DPG release can falsify without any test noticing, where a loop that exits on `is_item_active` cannot be wrong. Bound it and log if the bound is reached, because the visible symptom of "still active" is a hotkey that silently did nothing — which is a long way from its cause. `raven.visualizer.app.clear_search` is the worked example, and `test_focus_semantics.py` pins both halves: that the write is reverted, and that one frame is not enough.
+
 So an app whose text field is single-line must gate its Enter handler on `is_item_focused` while still gating its *bare-key* branch on `is_item_active` — two different questions about the same widget, each chosen for the state the key actually arrives in. Both Raven GUI apps do this, and they differ from each other because their fields differ in kind: `raven-visualizer`'s search field is single-line, `raven-librarian`'s composer is multiline. Learned by regression — switching the Visualizer's Enter gate to `is_item_active` silently killed its search.
 
 **The rule is really about the chord that *commits*, not about the kind of field** — the third row is what makes that visible. Ctrl+Enter commits and deactivates a **multiline** field too, so a send handler gated on `is_item_active` can never fire on it either, exactly as for single-line bare Enter. Found 2026-08-04 when `raven-librarian` made Ctrl+Enter its default send chord: the chord unfocused the composer and sent nothing, silently, because the branch guarding it tested a state the commit had already cleared.

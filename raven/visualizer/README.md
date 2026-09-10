@@ -494,6 +494,7 @@ it, and Ctrl+Shift intersects with it. The tables below spell each combination o
 | `Ctrl+O` | Open a dataset |
 | `Ctrl+I` | Import BibTeX files — this is how a dataset is made |
 | `Ctrl+F` | Put the caret in the search field |
+| `Ctrl+Shift+F` | Clear the search — works whether or not you are typing in the field |
 | `Enter` | Select the search matches and leave the field |
 | `Shift+Enter` / `Ctrl+Enter` / `Ctrl+Shift+Enter` | ...adding to / subtracting from / intersecting with the selection |
 | `Esc` | Cancel the edit and leave the field |

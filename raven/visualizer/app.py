@@ -118,6 +118,18 @@ with timer() as tim:
     gui_config = visualizer_config.gui_config  # shorthand, this is used a lot
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
+#: How many frames `clear_search` will wait for the search field to give up the caret before giving up on it.
+#: Two is what it takes (measured 2026-09-10); the rest is headroom, so that a change in DPG costs a log line
+#: rather than a hang.
+#:
+#: **A bound, not a pass count**, which is what separates it from the constellation's other settle numbers —
+#: `helpcard._PAGE_FIT_PASSES`, `tooltip._SETTLE_FRAMES`, `chat_controller._SCROLL_SETTLE_FRAMES`. Those say
+#: how many frames a thing *takes*, so each has to be right, and each was measured for its own mechanism
+#: (column widths, autosize reporting, scroll position — this one is focus). This one only has to be
+#: generous, the loop exiting on the state rather than on the count. Four for the family resemblance; it
+#: would be no more correct at ten.
+_SEARCH_FIELD_DEACTIVATION_FRAME_LIMIT = 4
+
 # --------------------------------------------------------------------------------
 # Selection management subsystem wire-up
 selection.reset_undo_history(_update_gui=False)  # GUI not initialized yet. This is the only time the flag should be set to `False`!
@@ -673,13 +685,48 @@ with timer() as tim:
                     dpg.add_text("Search", color=(140, 140, 140), tag="search_header_text")  # tag  # TODO: DRY duplicate definitions for labels
 
                     def clear_search():
+                        """Empty the search field and the search it committed. The button and Ctrl+Shift+F.
+
+                        Safe to call whether or not the field holds the caret, which is the difference
+                        between the two callers: a click has already moved focus off the field, and the
+                        hotkey can arrive mid-word with the caret still in it.
+                        """
+                        # ImGui keeps its own edit buffer for an *active* `InputText`, and that buffer wins:
+                        # a `set_value` on a field holding the caret is written back from the buffer on the
+                        # next frame — and fires the edit callback while doing it, so the search would come
+                        # back rather than merely failing to clear. `configure_item(default_value=...)` does
+                        # not get around it either. There is no spelling of the write that survives, so the
+                        # field has to be deactivated first, and only then written.
+                        #
+                        # Focus parks on this button rather than on the panel: `dpg.focus_item` cannot focus
+                        # a child window, and asked to, it activates the enclosing window's first navigable
+                        # item — which here is the very field being cleared. A focused button is inert, DPG
+                        # leaving ImGui's keyboard-nav activation off.
+                        #
+                        # See `dpg-notes.md`, "Keyboard input", and `investigations/dpg-focus/`.
+                        if dpg.is_item_active("search_field"):  # tag
+                            dpg.focus_item("clear_search_button")  # tag
+                            # Wait for the deactivation rather than counting frames to it. Measured
+                            # 2026-09-10 it takes two — `focus_item` lands on the next frame, and the field
+                            # gives up the caret on the one after — but a number measured today is a number
+                            # the next DPG release may falsify silently, where a wait cannot be wrong.
+                            for _ in range(_SEARCH_FIELD_DEACTIVATION_FRAME_LIMIT):
+                                guiutils.split_frame(operation="deactivating the search field before clearing it",
+                                                     required=True)
+                                if not dpg.is_item_active("search_field"):  # tag
+                                    break
+                            else:
+                                # Never silently: a write from here is about to be reverted, and the visible
+                                # result is a clear that did nothing — which is a long way from its cause.
+                                logger.warning(f"clear_search: the search field still holds the caret after "
+                                               f"{_SEARCH_FIELD_DEACTIVATION_FRAME_LIMIT} frames; clearing it will not take.")
                         dpg.set_value("search_field", "")  # tag
                         search.update()  # we should wait, because this button may get hammered.
                         dpg.focus_item("search_field")  # tag
                     dpg.add_button(label=fa.ICON_X, callback=clear_search, tag="clear_search_button")
                     dpg.bind_item_font("clear_search_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                     with dpg.tooltip("clear_search_button", tag="clear_search_tooltip"):  # tag
-                        dpg.add_text("Clear the search",
+                        dpg.add_text("Clear the search [Ctrl+Shift+F]",
                                      tag="clear_search_tooltip_text")
                     with dpg.theme(tag="clear_search_theme"):  # tag
                         with dpg.theme_component(dpg.mvAll):
@@ -796,6 +843,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=2, key="Ctrl+Enter", action_indent=1, action="Same, but subtract from it", notes="While typing in the search field"),
                env(key_indent=2, key="Ctrl+Shift+Enter", action_indent=1, action="Same, but intersect with it", notes="While typing in the search field"),
                env(key_indent=1, key="Esc", action_indent=0, action="Cancel the edit, and unfocus", notes="While typing in the search field"),
+               env(key_indent=0, key="Ctrl+Shift+F", action_indent=0, action="Clear the search", notes=""),
                env(key_indent=0, key="F3", action_indent=0, action="Scroll to the next search match", notes="When matches shown in info panel"),
                env(key_indent=1, key="Shift+F3", action_indent=1, action="Same, but the previous one", notes="When matches shown in info panel"),
                helpcard.hotkey_blank_entry,
@@ -1213,6 +1261,14 @@ def hotkeys_callback(sender, app_data):
     # deactivated is exactly what the bare-key branch below tests for. The handler that used to be here
     # existed only to repair the keyboard focus afterwards, which was both unnecessary and — aimed at a child
     # window — the one call able to put the caret back where it had just left.
+    #
+    # **And it does not gain one for clearing the search**, which is the obvious place to put that and would
+    # have been free — a second Escape arrives on an already-deactivated field, where a write sticks with no
+    # focus dance at all. Librarian is the reason: its composer clears on the first Escape and leaves the
+    # field on the second, so Escape there does the same two things in the opposite order. One key meaning
+    # two sequences across the constellation is worse than a key that costs a few lines, so clearing is
+    # Ctrl+Shift+F. (Librarian's order is not a preference either: its composer is multiline, where ImGui's
+    # Escape does not commit, so `escape_clears_all` is what makes the key mean anything at all there.)
     elif key == dpg.mvKey_F1:  # de facto standard hotkey for help
         help_window.show()
     elif key == dpg.mvKey_F3:  # some old MS-DOS software in the 1990s used F3 for next/prev search match, I think?
@@ -1234,7 +1290,9 @@ def hotkeys_callback(sender, app_data):
         word_cloud.toggle_window()
     # Ctrl+Shift+...
     elif ctrl_pressed and shift_pressed:
-        if key == dpg.mvKey_Z and dpg.is_item_enabled("selection_undo_button"):  # tag
+        if key == dpg.mvKey_F:
+            clear_search()
+        elif key == dpg.mvKey_Z and dpg.is_item_enabled("selection_undo_button"):  # tag
             selection.undo()
         elif key == dpg.mvKey_Y and dpg.is_item_enabled("selection_redo_button"):  # tag
             selection.redo()

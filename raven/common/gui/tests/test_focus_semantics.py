@@ -162,6 +162,74 @@ def test_focus_item_on_a_child_window_activates_a_text_field_instead(widgets):
     assert dpg.is_item_active(widgets.field) is True
 
 
+#: What `single_line_field` starts out holding. Seeded at creation rather than written afterwards: writing it
+#: would need the very `set_value` these tests are about, and on an active field that write is the thing that
+#: does not work — so seeding it that way would make the test prove itself.
+_SEEDED_TEXT = "typed by the user"
+
+
+@pytest.fixture
+def single_line_field(widgets, request):
+    """A single-line text field in the same window, since the fixture's own is multiline.
+
+    The distinction is load-bearing elsewhere — Enter commits a single-line field and inserts a newline in a
+    multiline one — so a result measured on one is not automatically true of the other. The app code these
+    two tests exist for drives a single-line field.
+    """
+    tag = f"focus_single_line_field_{request.node.name}"
+    dpg.add_input_text(tag=tag, width=300, default_value=_SEEDED_TEXT, parent=widgets.main)
+    yield tag
+    dpg.delete_item(tag)
+
+
+def _activate(field: str, widgets) -> None:
+    """Give `field` the caret, via the child-window quirk two tests above characterize."""
+    render()
+    dpg.focus_item(widgets.panel)
+    render()
+    dpg.focus_item(field)
+    render()
+
+
+def test_a_write_to_a_text_field_holding_the_caret_is_reverted(widgets, single_line_field):
+    """ImGui's own edit buffer outlives a `set_value`, and the write appears to land before it does not.
+
+    The appearing is what makes this expensive to diagnose: `get_value` immediately afterwards reports the
+    new string, so a caller checking its own work sees success, and the old value comes back a frame later.
+    """
+    assert dpg.get_value(single_line_field) == _SEEDED_TEXT, "precondition: the field starts with content"
+    _activate(single_line_field, widgets)
+    assert dpg.is_item_active(single_line_field) is True, "precondition: the field must hold the caret"
+
+    dpg.set_value(single_line_field, "written by the program")
+    assert dpg.get_value(single_line_field) == "written by the program", "the write appears to have landed"
+    render()
+    assert dpg.get_value(single_line_field) == _SEEDED_TEXT, "and then the edit buffer puts the old value back"
+
+
+def test_parking_focus_on_a_button_takes_two_frames_to_release_the_caret(widgets, single_line_field):
+    """How long a caller must wait after `focus_item` before a write to the field will stick.
+
+    `raven.visualizer.app.clear_search` is the caller this exists for: its hotkey can arrive with the caret
+    in the search field, so it parks focus on a button and waits for the field to let go. It waits on the
+    *state* rather than counting to two, but if that number changes this test is where it is noticed.
+    """
+    _activate(single_line_field, widgets)
+    assert dpg.is_item_active(single_line_field) is True, "precondition: the field must hold the caret"
+
+    dpg.focus_item(widgets.button)
+    dpg.render_dearpygui_frame()
+    assert dpg.is_item_active(single_line_field) is True, (
+        "one frame did not use to be enough, so this fixture cannot tell a one-frame wait from a two-frame "
+        "one — if DPG has made it one, the app's wait loop can be simplified")  # the negative control
+    dpg.render_dearpygui_frame()
+    assert dpg.is_item_active(single_line_field) is False, "two frames releases it"
+
+    dpg.set_value(single_line_field, "written by the program")
+    render()
+    assert dpg.get_value(single_line_field) == "written by the program", "and now the write sticks"
+
+
 def _press(keysym: str, window_title: str) -> bool:
     """Send one key press to the window named `window_title`. False if the desktop tools are missing.
 
