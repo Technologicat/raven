@@ -1086,6 +1086,21 @@ Currently used in: `raven-cherrypick`, `raven-xdot-viewer`.
 
 # Keyboard input
 
+## Two global handler registries can both carry a key handler, and both fire
+
+Not a probe result — a live one. `FileDialog` builds its own `fdialog_handler_registry` with an
+`add_key_press_handler` of its own, and it runs alongside the host app's `global_handler_registry` and that
+app's key handler. The dialog's keyboard works while the app's does, so key presses reach both.
+
+Worth knowing because it decides where bookkeeping goes for a *component* that needs to see input without
+owning the app's callbacks: it may add a registry beside the app's rather than asking the app to call it.
+Where the component and the callback have the same owner there is nothing to separate, and the call belongs
+in the callback — `raven.visualizer.app._on_any_input`, the idle throttle's input timestamp, is that case.
+
+**Mouse handlers are unmeasured**, as is a second handler of the *same* type inside *one* registry. Neither
+is known to fail; neither has been checked, and the key result above does not settle either — a registry is
+not a handler, and keys are not the mouse.
+
 ## `mvKey_*` constants vs. runtime codes (the 517/518 trap)
 
 A key-press handler receives the live **ImGuiKey code** in `app_data`. For most keys, `dpg.mvKey_*` equals that code, but a handful of constants are **stale 1.x values** that no longer match what's delivered — most notably **Page Up = 517** (`mvKey_Prior` is still 266) and **Page Down = 518** (`mvKey_Next` is still 267). Comparing against the constant silently never matches; compare against the literal code instead. DPG 1.x reported Windows-VK-style codes that the constants matched; DPG 2.0 rebased delivered codes onto the ImGuiKey enum but forgot to update these specific constants.

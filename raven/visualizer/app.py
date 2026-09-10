@@ -75,6 +75,7 @@ with timer() as tim:
     import pathlib
     import platform
     import textwrap
+    import time
     from typing import Union
 
     import numpy as np
@@ -117,6 +118,53 @@ with timer() as tim:
 
     gui_config = visualizer_config.gui_config  # shorthand, this is used a lot
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
+
+# --------------------------------------------------------------------------------
+# Idle framerate throttle
+#
+# The plotter's selection and search-result glows pulsate for as long as anything is selected or matched,
+# which is most of a working session — so "is an animation running" is the wrong question to gate the frame
+# rate on, and asking it is why this app had no throttle at all and sat at 60 fps burning a core whenever it
+# was open (measured 41.6% of one on an idle instance with no dataset loaded, 2026-09-10).
+#
+# `Animator.transient_count` is the right question, and the glow already answers it correctly:
+# `PlotterPulsatingGlow` declares `ambient=True`, meaning it belongs to the resting state rather than
+# reporting that something is happening. So the throttle engages while the glow is pulsing, and the glow
+# runs at the idle rate — which is the trade this exists to make.
+
+IDLE_SLEEP_S = 0.08   # ~12 fps when idle
+INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after the last user input
+
+_last_input_ns: int = 0  # monotonic_ns timestamp of the last user input
+
+def _on_any_input() -> None:
+    """Note that the user just did something, so the next half-second renders at full rate.
+
+    Called from each registered input callback rather than from handlers of its own. The app owns those
+    callbacks, and noticing the input is as much its business as acting on it, so there is nothing to
+    separate. A component that needed this bookkeeping *without* owning the callback would have to add a
+    handler beside the app's — which works for keys, `FileDialog` having its own global registry and
+    key-press handler that fires alongside this module's, and is unmeasured for mouse handlers.
+
+    A missed call site shows up as an app that feels sluggish to one kind of input and normal to every
+    other, which is a bad thing to hunt. `test_app_throttle.py` asserts that every registered callback
+    makes this call, reading the source rather than importing it.
+    """
+    global _last_input_ns
+    _last_input_ns = time.monotonic_ns()
+
+def _is_busy() -> bool:
+    """True when the render loop should run at full frame rate."""
+    if (time.monotonic_ns() - _last_input_ns) < INPUT_ACTIVE_S * 1e9:
+        return True
+    # A flash, a smooth scroll — something is *happening*, as opposed to the plotter's endless glow.
+    #
+    # Deliberately the whole of the test. A background task that paints into the GUI — the importer's
+    # progress bar, the word cloud's finished image landing — does not need full frame rate: twelve is
+    # plenty for a progress bar, and choosing twelve rather than one is what makes that true. Librarian's
+    # equivalent lists its own long tasks because one of them is *video*, and the Visualizer has none.
+    return gui_animation.animator.transient_count > 0
+
 
 #: How many frames `clear_search` will wait for the search field to give up the caret before giving up on it.
 #: Two is what it takes (measured 2026-09-10); the rest is headroom, so that a change in DPG costs a log line
@@ -1044,6 +1092,7 @@ def mouse_wheel_callback(sender, app_data):
     Also, if scrolling the info panel, flash the end when reached.
     """
     # If we reach the end of the info panel, flash it.
+    _on_any_input()
     if mouse_inside_info_panel():
         # direction = app_data  # -1 = down, +1 = up  # for documentation only
         info_panel.note_wheel_scroll()
@@ -1055,6 +1104,7 @@ def mouse_wheel_callback(sender, app_data):
 lmb_pressed_inside_plot = False  # for tracking whether a drag started inside the plot (to prevent losing selection while scrolling info panel using the scrollbar, with the mouse then entering the plot area while LMB is down)
 def mouse_click_callback(sender, app_data):
     """Handle the case where the user selects items by clicking, without moving the mouse."""
+    _on_any_input()
     # print(dpg.get_item_type(sender), sender, app_data)  # dpg.get_item_alias(sender), but just printing `sender` shows the alias if it has one, and otherwise the raw numeric ID.
 
     global lmb_pressed_inside_plot
@@ -1113,6 +1163,7 @@ def keydown_callback(sender, app_data):
 
     This gives immediate visual feedback that the "select more" or "select less" mode is active.
     """
+    _on_any_input()
     key, time_since_press_ = app_data  # for documentation only
 
     if not mouse_inside_plot_widget():
@@ -1122,6 +1173,7 @@ def keydown_callback(sender, app_data):
 
 def keyup_callback(sender, app_data):
     """Disable selection brush indicator when Shift/Ctrl is released (and the mouse button is not down)."""
+    _on_any_input()
     key = app_data  # for documentation only
 
     if key in (dpg.mvKey_LControl, dpg.mvKey_RControl, dpg.mvKey_LShift, dpg.mvKey_RShift):
@@ -1135,6 +1187,7 @@ def mouse_move_callback():
         - Plotter data tooltip.
         - Select radius indicator for mouse-draw select.
     """
+    _on_any_input()
     plotter.clear_select_radius_indicator()
 
     if not mouse_inside_plot_widget():
@@ -1157,6 +1210,7 @@ def mouse_move_callback():
 
 def mouse_release_callback(sender, app_data):
     """Finalize a mouse-click select or mouse-draw select."""
+    _on_any_input()
     global lmb_pressed_inside_plot
     lmb_pressed_inside_plot = False  # finalize the drag
 
@@ -1202,6 +1256,7 @@ def _handled_by_a_subwindow(key, ctrl_pressed: bool, shift_pressed: bool) -> boo
 
 def hotkeys_callback(sender, app_data):
     """Handle hotkeys."""
+    _on_any_input()
     key = app_data  # for documentation only
     ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
     shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
@@ -1462,6 +1517,10 @@ try:
     while dpg.is_dearpygui_running():
         update_animations()
         dpg.render_dearpygui_frame()
+
+        # Idle throttle: sleep when nothing is happening. The plotter's glow keeps pulsing, at the idle rate.
+        if not _is_busy():
+            time.sleep(IDLE_SLEEP_S)
     # dpg.start_dearpygui()  # automatic render loop
 except Exception:
     exitcode = 1
