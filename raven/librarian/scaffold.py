@@ -22,6 +22,7 @@ from unpythonic import dyn
 from unpythonic.env import env
 
 from ..common import netutil
+from ..common import text as common_text
 from ..common import utils
 
 from . import chattree
@@ -1200,7 +1201,7 @@ def ai_turn(llm_settings: env,
                                                  refused_tool_rounds < librarian_config.max_tool_call_refusal_rounds)
         if any_tools_available and not tools_offered:
             logger.info(f"ai_turn: tool-call round cap ({librarian_config.max_tool_call_rounds}) reached and "
-                        f"{refused_tool_rounds} refusal round(s) did not end the turn; "
+                        f"{refused_tool_rounds} refusal round{common_text.plural_s(refused_tool_rounds)} did not end the turn; "
                         "requesting the final reply with no tools offered.")
         message_history = chatutil.linearize_chat(datastore=datastore,
                                                   node_id=head_node_id)

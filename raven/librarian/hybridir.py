@@ -64,6 +64,7 @@ from ..common import bgtask
 from ..common import datastorelock
 from ..common import docextract
 from ..common import nlptools
+from ..common import text as common_text
 from ..common import utils as common_utils
 
 from . import config as librarian_config
@@ -832,7 +833,7 @@ class HybridIR:
                 with self._pending_edits_lock:
                     self._pending_edits[0:0] = remainder  # prepend, preserving original order
                 logger.info(f"HybridIR.commit: Cancelled before edit {edit_num} of {len(pending_edits)}; "
-                            f"{len(remainder)} pending change(s) requeued for a later commit.")
+                            f"{len(remainder)} pending change{common_text.plural_s(len(remainder))} requeued for a later commit.")
                 break
             # Both add and delete data shapes carry `document_id` (made uniform when the edit was queued).
             document_id = data["document_id"] if isinstance(data, dict) else "?"
@@ -892,7 +893,7 @@ class HybridIR:
         self._save_datastore()
 
         if cancelled_at is not None:
-            logger.info(f"HybridIR.commit: Partial commit persisted ({cancelled_at - 1} of {len(pending_edits)} edit(s) applied before cancellation).")
+            logger.info(f"HybridIR.commit: Partial commit persisted ({cancelled_at - 1} of {len(pending_edits)} edit{common_text.plural_s(len(pending_edits))} applied before cancellation).")
         elif errors_occurred:
             plural_s = "s" if errors_occurred != 1 else ""
             logger.error(f"Error{plural_s} occurred while pending changes were being applied. This may cause the semantic search index to go out of sync with the actual data. Recommend deleting '{self.semantic_index_path}' and restarting the app to perform a full reindex.")

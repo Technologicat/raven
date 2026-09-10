@@ -73,6 +73,7 @@ from unpythonic.env import env
 
 from ..avatar import characters as avatar_characters  # who the shipped characters are, by name
 from ..common import netutil
+from ..common import text as common_text
 from ..common import utils
 
 from . import chattree
@@ -2154,11 +2155,11 @@ def invoke(settings: env,
     else:
         unknown_names = set(tool_names) - {tool["function"]["name"] for tool in data["tools"]}
         if unknown_names:  # a typo here would silently switch a tool off, so say so rather than filter quietly
-            logger.warning(f"{me}: Ignoring unknown tool name(s) {sorted(unknown_names)} in `tool_names`; "
+            logger.warning(f"{me}: Ignoring unknown tool name{common_text.plural_s(len(unknown_names))} {sorted(unknown_names)} in `tool_names`; "
                            f"available: {sorted(settings.tool_entrypoints)}.")
         data["tools"] = [tool for tool in data["tools"] if tool["function"]["name"] in tool_names]
         logger.info(f"{me}: Tool calling is enabled, restricted to {sorted(tool_names)}. "
-                    f"Providing {len(data['tools'])} tool specification(s) in request.")
+                    f"Providing {len(data['tools'])} tool specification{common_text.plural_s(len(data['tools']))} in request.")
         if not data["tools"]:  # an empty `tools` list is not the same thing as no tools; some backends reject it
             data.pop("tools")
 

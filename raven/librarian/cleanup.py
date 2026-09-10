@@ -42,6 +42,7 @@ from typing import Any, Optional, Union
 
 from unpythonic.env import env
 
+from ..common import text as common_text
 from ..common import utils as common_utils
 
 from . import chattree
@@ -227,8 +228,8 @@ def commit_cleanup(datastore: chattree.PersistentForest, *roots: str) -> env:
         datastore.prune_dead_links(*roots)
         deleted_sidecars = datastore.prune_unreferenced_sidecars()
         datastore.save()
-    logger.info(f"commit_cleanup: deleted {len(deleted_node_ids)} unreachable node(s) and "
-                f"{len(deleted_sidecars)} unreferenced sidecar file(s); datastore saved.")
+    logger.info(f"commit_cleanup: deleted {len(deleted_node_ids)} unreachable node{common_text.plural_s(len(deleted_node_ids))} and "
+                f"{len(deleted_sidecars)} unreferenced sidecar file{common_text.plural_s(len(deleted_sidecars))}; datastore saved.")
     return env(deleted_node_ids=deleted_node_ids, deleted_sidecars=deleted_sidecars)
 
 

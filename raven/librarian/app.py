@@ -78,6 +78,7 @@ with timer() as tim:
     from ..common import datastorelock
     from ..common import docextract
     from ..common import quitsignal
+    from ..common import text as common_text
     from ..common import utils as common_utils
 
     from ..common.gui import animation as gui_animation
@@ -1133,7 +1134,7 @@ def _attach_callback(selected_files) -> None:
     but this rejection remains the enforcement, because "All files" is still offered and a drag'n'drop does not
     go through the picker at all.
     """
-    logger.debug(f"_attach_callback: {len(selected_files)} file(s) selected.")
+    logger.debug(f"_attach_callback: {len(selected_files)} file{common_text.plural_s(len(selected_files))} selected.")
     rejected_images = []
     for selected_file in selected_files:
         if imagestore.is_supported(selected_file):
@@ -2983,7 +2984,8 @@ def _get_cleanup_roots() -> tuple[str, ...]:
 
 def _on_cleanup_committed(result: env) -> None:
     """Acknowledge a completed cleanup on the button that started it (the dialog is gone by now)."""
-    message = (f"Reclaimed {len(result.deleted_sidecars)} attachment(s)" if result.deleted_sidecars
+    n_reclaimed = len(result.deleted_sidecars)
+    message = (f"Reclaimed {n_reclaimed} attachment{common_text.plural_s(n_reclaimed)}" if result.deleted_sidecars
                else "Saved; nothing to reclaim")
     gui_animation.flash_button(button="util_cleanup_button",  # tag
                                tooltip=util_cleanup_tooltip,

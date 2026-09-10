@@ -46,6 +46,8 @@ import pathlib
 
 logger = logging.getLogger(__name__)
 
+from ..common import text as common_text
+
 from . import config as librarian_config
 
 METADATA_EXT = ".json"  # `juha.json`, the profile itself
@@ -173,7 +175,7 @@ def profiles() -> dict[str, UserProfile]:
     if _cache is None:
         _cache = scan()
         if _cache:
-            logger.info(f"profiles: {len(_cache)} user profile(s) declared: {sorted(_cache)}")
+            logger.info(f"profiles: {len(_cache)} user profile{common_text.plural_s(len(_cache))} declared: {sorted(_cache)}")
     return _cache
 
 
