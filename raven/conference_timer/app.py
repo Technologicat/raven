@@ -428,10 +428,22 @@ def main() -> int:
     exitcode = 0
     try:
         while dpg.is_dearpygui_running():
+            # Idle throttle. The countdown reads whole seconds, so twelve frames a second is already far
+            # more than it needs; what needs the frames is the pulsation once the time is up, whose job is
+            # to be seen from across a room. Hence full rate for that state alone.
+            #
+            # The animator cannot answer this one, unlike every other app's throttle: both glows are
+            # `PulsatingColor`, which is `ambient=True` by design, so `transient_count` is zero exactly
+            # when the glow is running. The state is the app's own, and `color_state` already carries it.
+            #
+            # Note the sleep has to appear in both paths: the branch below ends in `continue`, so a single
+            # sleep at the foot of the loop would never run while the timer was paused or unstarted.
             if start_time is None or paused:
                 # Waiting for startup, or paused — just keep animations ticking.
                 gui_animation.animator.render_frame()
                 dpg.render_dearpygui_frame()
+                if color_state != "expired":
+                    time.sleep(config.IDLE_SLEEP_S)
                 continue
 
             elapsed = time.monotonic() - start_time
@@ -455,6 +467,9 @@ def main() -> int:
 
             gui_animation.animator.render_frame()
             dpg.render_dearpygui_frame()
+
+            if color_state != "expired":
+                time.sleep(config.IDLE_SLEEP_S)
     except Exception:
         exitcode = 1
         logger.exception("Unhandled exception in render loop")
