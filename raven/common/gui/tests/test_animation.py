@@ -1112,3 +1112,111 @@ class TestAnAnimationWhoseWidgetsAreGoneIsDropped:
                 animation.animator.render_frame()
         finally:
             animation.animator.clear()
+
+
+def _is_registered(anim) -> bool:
+    """Whether the animator still holds this exact object. Identity, since `Animation` defines no `__eq__`."""
+    return any(anim is registered for registered in animation.animator._animations)
+
+
+class _FrameCounter(animation.Animation):
+    """A minimal animation that counts the frames it was given and never ends on its own."""
+
+    def __init__(self):
+        super().__init__()
+        self.frames = 0
+        self.finishes = 0
+
+    def render_frame(self, t: int):
+        self.frames += 1
+        return animation.action_continue
+
+    def finish(self) -> None:
+        self.finishes += 1
+
+
+class TestTheRegistrySurvivesBeingMutatedFromInsideAFrame:
+    """An animation's `render_frame` may register or cancel animations, and the animator's lock is
+    reentrant — so those land in the very list the animator is walking.
+
+    This is not hypothetical: `ScrollEndFlasher.show` cancels itself from inside
+    `SmoothScrolling.render_frame`, which happens on every scroll that reaches an end. Walking the live
+    list then loses whichever animation sat *after* the removed one — the index-based iterator skips it,
+    so it never reaches the survivors and the rebuild drops it, with no `finish`, no exception and nothing
+    logged. Diagnosed 2026-09-10 from a Librarian instance where four chat messages were left permanently
+    highlighted, each by a `WidgetFlash` that had been skipped this way.
+    """
+
+    def test_a_bystander_is_not_dropped_when_something_earlier_is_cancelled(self, dpg_context):
+        class Canceller(_FrameCounter):
+            def __init__(self, victim):
+                super().__init__()
+                self.victim = victim
+                self.saw_victim_removed = None
+
+            def render_frame(self, t: int):
+                animation.animator.cancel(self.victim, finalize=False)
+                # Recorded here rather than asserted afterwards, because "is the victim gone?" answered
+                # after the frame conflates two things: whether the removal happened at all, and whether
+                # the rebuild honoured it. This is the first of those, and it is what says the fixture
+                # actually mutated the registry mid-iteration.
+                self.saw_victim_removed = not _is_registered(self.victim)
+                return super().render_frame(t)
+
+        victim = _FrameCounter()
+        canceller = Canceller(victim)
+        bystander = _FrameCounter()
+        # Order matters and is the whole fixture: the victim must sit *before* the canceller, so that
+        # removing it shifts the list left under an iterator that has already passed it. A victim after
+        # the canceller is removed ahead of the cursor and skips nothing.
+        for anim in (victim, canceller, bystander):
+            animation.animator.add(anim)
+        try:
+            animation.animator.render_frame()
+
+            assert canceller.saw_victim_removed is True, (
+                "the registry was never actually mutated mid-iteration, so this fixture cannot tell a "
+                "skipped neighbour from a kept one")
+            assert bystander.frames == 1, "the bystander was never rendered: the removal skipped it"
+            assert not _is_registered(victim), "the cancelled animation came back as a survivor"
+            assert _is_registered(bystander), "the bystander was dropped from the registry"
+            assert bystander.finishes == 0, "the bystander was finished, which nothing asked for"
+        finally:
+            animation.animator.clear()
+
+    def test_an_animation_added_during_a_frame_is_kept(self, dpg_context):
+        # The other half of the same rebuild. Iterating a snapshot fixes the skip above; rebuilding from
+        # that snapshot's survivors alone would then forget anything registered while the frame ran.
+        newcomer = _FrameCounter()
+
+        class Adder(_FrameCounter):
+            def render_frame(self, t: int):
+                animation.animator.add(newcomer)
+                return super().render_frame(t)
+
+        animation.animator.add(Adder())
+        try:
+            animation.animator.render_frame()
+
+            assert _is_registered(newcomer), "an animation registered during the frame was forgotten"
+            assert newcomer.frames == 0, "the newcomer was rendered in the frame it was added to"
+        finally:
+            animation.animator.clear()
+
+    def test_an_animation_that_cancels_itself_stays_cancelled(self, dpg_context):
+        # And the third: a snapshot must not resurrect what the frame removed. The self-canceller is still
+        # in the snapshot, so it goes on to report `action_continue` from a cancellation it just performed.
+        class SelfCanceller(_FrameCounter):
+            def render_frame(self, t: int):
+                animation.animator.cancel(self, finalize=False)
+                return super().render_frame(t)
+
+        suicide = SelfCanceller()
+        animation.animator.add(suicide)
+        try:
+            animation.animator.render_frame()
+
+            assert suicide.frames == 1, "the fixture never ran the animation, so it cancelled nothing"
+            assert not _is_registered(suicide), "a cancelled animation came back as a survivor"
+        finally:
+            animation.animator.clear()

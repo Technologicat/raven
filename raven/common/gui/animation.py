@@ -103,7 +103,18 @@ class Animator:
         with self._lock:
             time_now = time.monotonic_ns()
             running_animations = []
-            for animation in self._animations:
+            # Over a *snapshot*, because an animation's `render_frame` is allowed to register or cancel
+            # animations, and our lock is reentrant, so those land in this very list while it is being
+            # walked. Iterating the live list then loses whichever animation happened to sit after a
+            # removal: the index-based iterator skips it, so it never reaches `running_animations` and the
+            # rebuild below drops it — with no `finish`, no exception and nothing logged.
+            #
+            # `ScrollEndFlasher.show` does exactly that from inside `SmoothScrolling.render_frame`, so
+            # every scroll that reached an end silently killed the animation next to it in the list. The
+            # reentrant lock is what let it happen quietly: a plain `Lock` would have deadlocked at the
+            # `cancel`, loudly, the first time a view scrolled to its end.
+            snapshot = list(self._animations)
+            for animation in snapshot:
                 # An animation whose widgets have been deleted draws into nothing, every frame, for as
                 # long as it stays registered. Today that is fatal — the error leaves this loop, the app's
                 # render loop catches it, and the app exits — and it names the animation that happened to
@@ -141,8 +152,18 @@ class Animator:
                     pass  # when cancelled, do nothing, just remove the animation
                 else:
                     raise ValueError(f"Animator.render_frame: animation {animation} returned unknown action {action}, expected one of the `raven.common.gui.animation.action_X` constants (where X is 'continue', 'finish', or 'cancel').")
-            self._animations.clear()
-            self._animations.extend(running_animations)
+            # The rebuild has to honour whatever the loop itself did to the registry, which is why it is
+            # not simply `running_animations`. A snapshot alone would resurrect an animation cancelled
+            # mid-loop — it is still in the snapshot, so it renders after its cancellation and comes back
+            # as a survivor — and would forget one added mid-loop, which is not in the snapshot at all.
+            #
+            # Identity, not equality: `Animation` defines no `__eq__`, and two of them comparing equal by
+            # accident would silently drop one.
+            registered_now = {id(animation) for animation in self._animations}
+            survivors = [animation for animation in running_animations if id(animation) in registered_now]
+            seen = {id(animation) for animation in snapshot}
+            added_during_frame = [animation for animation in self._animations if id(animation) not in seen]
+            self._animations[:] = survivors + added_during_frame
 
     @property
     def active_count(self) -> int:
@@ -586,6 +607,12 @@ class WidgetFlash(Animation):
                                 if other.original_message is None:
                                     other.original_message = _read_text(other.message_target)
                                 _write_text(other.message_target, other.message)
+                    # Logged because this branch's failure mode is *silence*: a flash that runs announces
+                    # itself by flashing, while one that declines leaves no trace. If `other` is ever
+                    # abandoned without finishing, its registry entry outlives it and turns every later
+                    # flash on this widget into one of these — so a run of these lines with no matching
+                    # "released" is the signature of that, and is readable from an ordinary DEBUG log.
+                    logger.debug(f"WidgetFlash.start: '{self.target}' is already flashing; restarting the running instance WidgetFlash@0x{id(other):x} instead of starting WidgetFlash@0x{id(self):x}.")
                     other.reset()
                     return
 
@@ -602,6 +629,7 @@ class WidgetFlash(Animation):
                         self.painted.append(record)
 
                 if not self.painted:  # everything we were given is already gone; nothing to animate
+                    logger.debug(f"WidgetFlash.start: nothing left to flash for '{self.target}'; every widget it was given is gone. Doing nothing.")
                     self._destroy_theme()
                     return
 
