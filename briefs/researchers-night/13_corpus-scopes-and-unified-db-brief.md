@@ -104,6 +104,11 @@ when it runs. Everything in this section is [P] and wants arguing with.
   per-document summary — shared across scopes, so a delete costs nothing and an add costs one unit. *Tier 1*,
   per-scope and global: the dimension-reduction fit, the HDBSCAN fit, cluster labels, corpus frequency stats.
   - Brief 12's derived-artifact store *is* the tier-0 cache. That is why the two briefs meet.
+  - **The corpus frequency stats have a reader waiting**: `visualizer-keyword-pools-brief.md` wants a
+    window showing what a dataset is about, and leaves open whether it shows the low-IDF terms, the raw
+    frequency head, or both — *"a judgement that wants a GUI in front of it rather than a table in a
+    brief"*. That is the same data this tier stores, so keeping it is what makes the window cheap. Linked
+    2026-09-10, the two halves having been written independently and neither mentioning the other.
 - **[P] The map is a materialized view with an as-of time, not a build target.** Procrustes exists because
   spatial memory is worth protecting, and a map that silently refits destroys exactly what Procrustes was
   added to preserve. So show staleness rather than fixing it: *"map built 3 days ago; 47 placed since, 2

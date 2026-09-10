@@ -368,3 +368,8 @@ never join the common pool.*
   the first is "what every cluster mentions", the second is "what the corpus is made of" — and both have
   a claim on the phrase *what this dataset is about*. Cheap to show both, and a judgement that wants a
   GUI in front of it rather than a table in a brief.
+  - **Where the numbers would come from is settled elsewhere**, and the two halves had no link between
+    them until 2026-09-10: `researchers-night/13_corpus-scopes-and-unified-db-brief.md` §2 files corpus
+    frequency stats as a Tier-1 derived artifact, computed per scope and globally and stored with the
+    dataset. So that brief answers *what is kept*, and this one answers *what it is for* — neither is
+    findable from the other by searching for the feature, which is how it went missing twice.
