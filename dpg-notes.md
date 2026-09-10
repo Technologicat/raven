@@ -1450,11 +1450,17 @@ frame got cheaper while the rate stayed put.
 So: CPU load to establish that there is a problem, Metrics to say what the frame rate now *is*. Note the
 window is the same `Ctrl+Shift+M` a reader would use, so nothing has to be built to make an app measurable.
 
-**Opening it is one-way from the keyboard.** Every app binds `dpg.show_metrics()`, which shows and does not
-toggle, and the window itself is ImGui's with no hooks we can reach — so a second `Ctrl+Shift+M` does
-nothing and only a click on its own ✕ closes it. Harmless in a driven measurement, where the app is being
-shut down afterwards anyway; worth knowing before opening it in an app somebody is *using*, and a reason to
-make it the last step of a driven sequence rather than the first.
+**Opening it is one-way, and that is the API rather than our binding.** DPG's whole tool-window surface is
+`show_metrics()` and `show_tool(mvTool_*)` — there is no hide, no close and no toggle for any of the eight
+(`About`, `Debug`, `Doc`, `Font`, `ItemRegistry`, `Metrics`, `Stack`, `Style`), the windows being ImGui's
+own with nothing exposed to reach them by. Checked by introspection on DPG 2.3.1, 2026-09-10; the only
+`toggle` names in the module are a tree node's open state and viewport fullscreen.
+
+So a second `Ctrl+Shift+M` does nothing, and only a click on the window's own ✕ closes it. The same is true
+of Raven's other three debug keys — `Ctrl+Shift+R`, `T` and `L`, for the item registry, font manager and
+style editor. Harmless in a driven measurement, where the app is shut down afterwards anyway; worth knowing
+before opening one in an app somebody is *using*, and a reason to make it the last step of a driven
+sequence rather than the first.
 
 ## DPG runs without a mapped window, so GUI code is unit-testable
 
