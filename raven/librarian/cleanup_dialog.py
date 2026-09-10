@@ -24,6 +24,7 @@ import dearpygui.dearpygui as dpg
 from unpythonic.env import env
 
 from ..common import bgtask
+from ..common import text as common_text
 from ..common import utils as common_utils
 from ..common.gui import utils as guiutils
 
@@ -208,7 +209,7 @@ class DPGCleanupDialog:
                             with dpg.table_cell():
                                 cell = dpg.add_group()
                                 self._image_slots.append(env(entry=entry, cell_group_id=cell))
-                                dpg.add_text(cleanup._ellipsize(entry.display_name, 22))
+                                dpg.add_text(common_text.ellipsize(entry.display_name, 22, middle=True))
                                 with dpg.group(horizontal=True):
                                     dpg.add_text(cleanup.format_size(entry.total_bytes), color=(140, 140, 140))
                                     self._add_open_button(entry)

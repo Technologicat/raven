@@ -62,6 +62,7 @@ from unpythonic.env import env
 from .. import __version__
 
 from ..common import netutil
+from ..common import text as common_text
 from ..common import utils as common_utils
 
 from ..papers import bibtex
@@ -739,10 +740,10 @@ _MAXIMUM_LABEL_LENGTH = 200
 def _shorten(text: str,
              max_length: int) -> str:
     """Cut `text` to `max_length`, marking that it was cut. For display labels, not for content."""
-    text = " ".join(text.split())  # a title wrapped across source lines reads as one line here
-    if len(text) <= max_length:
-        return text
-    return text[:max_length - 1].rstrip() + "…"
+    # The collapse is this wrapper's whole reason to exist: it is right for a title read out of a file,
+    # which may be wrapped across source lines, and wrong for the other callers of `ellipsize`.
+    text = " ".join(text.split())
+    return common_text.ellipsize(text, max_length)
 
 def _bibtex_library(text: str) -> Optional[Any]:
     """Parse `text` as BibTeX, returning the `bibtexparser` library, or `None` if it will not parse at all.

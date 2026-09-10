@@ -52,6 +52,7 @@ logger = logging.getLogger(__name__)
 
 import strip_markdown
 
+from ..common import text as common_text
 from ..common.gui.xdotwidget import constants as xdotconstants
 from ..common.gui.xdotwidget import graph as xdotgraph
 from ..common.gui.xdotwidget import renderer as xdotrenderer
@@ -999,30 +1000,6 @@ def _plain(text: str) -> str:
     return strip_markdown.strip_markdown(text) or ""
 
 
-def _longest_prefix_that_fits(text: str, max_width: float,
-                              width_of: Callable[[str], float]) -> str:
-    """Return the longest prefix of `text` no wider than `max_width`, or its first character.
-
-    At least one character, always, so that a caller stepping through a word cannot fail to make progress
-    and spin. A single character too wide for the box is a box too narrow to draw text in at all, and the
-    honest answer there is one character overflowing rather than an empty label.
-
-    Binary search rather than a walk: width grows with length, and the alternative measures once per
-    character dropped — which for a long identifier in a narrow box is dozens of measurements per box, on
-    the render thread.
-    """
-    if width_of(text) <= max_width:
-        return text
-    low, high = 1, len(text)  # `low` always fits by fiat; `high` is known not to
-    while low < high - 1:
-        middle = (low + high) // 2
-        if width_of(text[:middle]) <= max_width:
-            low = middle
-        else:
-            high = middle
-    return text[:low]
-
-
 def _wrap(text: str, max_width: float, max_lines: int, font_size: float,
           measure_text: Optional[MeasureText]) -> List[str]:
     """Fold `text` into at most `max_lines` lines no wider than `max_width` graph units, marking any cut.
@@ -1059,7 +1036,7 @@ def _wrap(text: str, max_width: float, max_lines: int, font_size: float,
                 break
             # A single word wider than the box, so no line break can help: cut it here and leave the
             # remainder to the next line. A URL or a long identifier, usually.
-            head = _longest_prefix_that_fits(words[0], max_width, width_of)
+            head = common_text.longest_prefix_that_fits(words[0], max_width, width_of)
             words[0] = words[0][len(head):]
             line = head
             break
@@ -1072,9 +1049,12 @@ def _wrap(text: str, max_width: float, max_lines: int, font_size: float,
 
 def _with_ellipsis(line: str, max_width: float, width_of: Callable[[str], float]) -> str:
     """Return `line` with an ellipsis appended, shortened until the result fits `max_width`."""
+    # Not `common_text.ellipsize_to_width`, which asks a different question. That one shortens text that is
+    # too long and leaves text that fits alone; here the caller has already established that there is more
+    # text than the box will hold, so the mark goes on whether or not the line by itself would have fitted.
     if width_of(f"{line}…") <= max_width:
         return f"{line}…"
-    return f"{_longest_prefix_that_fits(line, max_width - width_of('…'), width_of)}…"
+    return f"{common_text.longest_prefix_that_fits(line, max_width - width_of('…'), width_of)}…"
 
 
 # --------------------------------------------------------------------------------

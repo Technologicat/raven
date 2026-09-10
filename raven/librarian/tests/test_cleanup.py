@@ -294,13 +294,3 @@ class TestFormatting:
                                                       (2_000_000_000, "2.0 GB")])
     def test_format_size(self, size_bytes, expected):
         assert cleanup.format_size(size_bytes) == expected
-
-    def test_ellipsize_keeps_both_ends(self):
-        """The topic is at the front of a filename and the file type at the back; both have to survive."""
-        result = cleanup._ellipsize("quarterly_report_2026_final.pdf", 22)
-        assert len(result) == 22
-        assert result.startswith("quarterly_r")
-        assert result.endswith(".pdf")
-
-    def test_ellipsize_leaves_short_names_alone(self):
-        assert cleanup._ellipsize("short.pdf", 22) == "short.pdf"

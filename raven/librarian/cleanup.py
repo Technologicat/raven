@@ -290,17 +290,3 @@ def format_size(size_bytes: int) -> str:
 def _plural(count: int, singular: str, plural: Optional[str] = None) -> str:
     """`"1 node"`, `"3 nodes"` — the count and its noun, agreeing. `plural` defaults to `singular + "s"`."""
     return f"{count} {singular if count == 1 else (plural if plural is not None else singular + 's')}"
-
-
-def _ellipsize(text: str, max_chars: int) -> str:
-    """Shorten `text` to `max_chars` by eliding the *middle*, e.g. `"quarterly_re…port_2026.pdf"`.
-
-    Middle rather than end, because the informative parts of an attachment's name sit at both ends: the topic
-    at the front, the file type at the back. Chopping the tail throws away the extension, which is precisely
-    what tells the reader whether the thing about to be deleted is a paper or a slide deck.
-    """
-    if len(text) <= max_chars:
-        return text
-    keep = max_chars - 1  # the ellipsis costs one character
-    head = keep - keep // 2
-    return f"{text[:head]}…{text[len(text) - keep // 2:]}"
