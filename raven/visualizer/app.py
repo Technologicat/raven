@@ -913,7 +913,8 @@ def render_help_extras(self: helpcard.HelpWindow,
          helpcard.section(
             "**The importer**",
             'Turns BibTeX files into a dataset, combining several at once into one. It is where a dataset comes from in the first place.',
-            f'{self.c_hig}**Ctrl+I**{self.c_end} opens and closes it. Not modal either, and likewise not closed by Esc.')],
+            f'{self.c_hig}**Ctrl+I**{self.c_end} opens and closes it. Not modal either, and likewise not closed by Esc.',
+            'The window shows a progress bar and the stage it has reached. The terminal you started Raven-visualizer from gets the detail — every step, with its timings and counts — which is the place to look when an import of a large database is taking its time.')],
         [helpcard.section(
             "**How search works**",
             f"Each space-separated search term is a **fragment**. For a data point to match, **all** fragments must match, and their ordering does **not** matter. The {c_search}search result{self.c_end} and {c_selection}selection{self.c_end} sets are **independent**, and {c_search}search results{self.c_end} live-update as you type.",
