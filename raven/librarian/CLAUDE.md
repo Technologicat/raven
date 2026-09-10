@@ -29,22 +29,23 @@ scaffold, so the same word named two different scopes one layer apart.
 `python scripts/check_module_maps.py` checks this table against the package — sizes and, more usefully, whether
 every module is here at all.
 
-Sizes are rounded to two significant figures, measured **2026-09-04**. Rounded because the figure is here
+Sizes are rounded to two significant figures, measured **2026-09-10**. Rounded because the figure is here
 for the *shape* — where the mass sits, which is what makes the refactoring calls legible — and an exact
 number claims a precision that the next commit removes. The previous exact figures were 30–45% low by the
 time anyone noticed. Re-measure before quoting one.
 
 ```
-Layer 5 - Applications:     app.py (~3.1k), minichat.py (~730, minimal reference client),
-                            indexer.py (~170, the `raven-indexer` CLI; also where the frontends get their
+Layer 5 - Applications:     app.py (~3.4k), minichat.py (~730, minimal reference client),
+                            indexer.py (~150, the `raven-indexer` CLI; also where the frontends get their
                             shared `open_document_store`)
-Layer 4 - Controller/GUI:   chat_controller.py (~5.2k), cleanup_dialog.py (~410), audio_input_panel.py (~700),
-                            chatgraph_panel.py (~1.6k)
+Layer 4 - Controller/GUI:   chat_controller.py (~5.5k), cleanup_dialog.py (~410), audio_input_panel.py (~750),
+                            chatgraph_panel.py (~1.7k)
 Layer 4 - Scripting:        agent.py (~630), the headless sibling of the controller
 Layer 3 - Orchestration:    scaffold.py (~1.5k)
 Layer 2 - Backends:         llmclient.py (~2.6k), llmtools.py (~990), hybridir.py (~1.9k)
 Layer 1 - Utilities:        chatutil.py (~1.8k), appstate.py (~510), cleanup.py (~300),
-                            imagestore.py (~270), textfilestore.py (~200), chatgraph.py (~2.7k)
+                            imagestore.py (~270), textfilestore.py (~200), chatgraph.py (~2.7k),
+                            userprofile.py (~200)
 Layer 0 - Foundation:       config.py (~870), chattree.py (~1.4k), sidecarstore.py (~150),
                             gguftokenizer.py (~350)
 ```
@@ -54,6 +55,8 @@ Each layer only imports from layers below it. No circular dependencies.
 ## Module Details
 
 - **`config.py`** — Configuration-as-code, and since 0.2.9 *only* the parts that are genuinely code: module-level constants, computed defaults, and where to find things. The prompt **prose** is Markdown under `raven/librarian/prompts/`, and loading and filling it in is `llmclient`'s (`_setup_system_prompt` and siblings), that being resolution rather than configuration. A character's own name, voice, card, face and glyph travel with the character; `llm_char_name` selects one by name — see `raven.avatar.characters`. Template variables are `user` and `char`, and those two only: `model` and `context_length` were offered until 0.2.8 and are gone, because this text is built once at app start and stored as the message a chat is rooted at, so either would freeze at the value it had then; both are injected per turn instead (`scaffold.build_turn_prompt`), as the date is and for the same reason. Also image-storage knobs (megapixel cap, keep-original toggle, staging dir) and the per-model VLM image-token-cost table. Imports `raven.config` (global) and `raven.common.video.colorspace`.
+
+- **`userprofile.py`** — Who the user is: the link from a name to the card describing the person the AI is talking to. The mirror of `raven.avatar.characters`, one step simpler, and `llm_user_name` selects a profile exactly as `llm_char_name` selects a character — so the setting that names you in the chat log also brings your card, and the two cannot disagree. A profile is `<name>.json` in `~/.config/raven/librarian/users/`, optionally with `<name>.md` (the card, as the LLM is told it) and `<name>_icon.png` (the glyph beside your messages) beside it. **Nothing ships and nothing is required**: a Raven with no `users/` directory behaves as it always has, the user having a name and no card. A directory rather than a single `user.json` because a name selects from a set — a shared machine, or one person keeping a work profile and a personal one, is then a settings change rather than an edit to prose, and the format is a directory scan either way. Read by `llmclient` when it builds the system prompt.
 
 - **`chattree.py`** — `Forest` (in-memory) and `PersistentForest(Forest)` (JSON-backed). Nodes with parent pointers + children lists. Payload revisioning (multiple immutable versions per node). Thread-safe (`threading.RLock`). Key ops: `create_node`, `linearize_up` (ancestor walk), `copy_subtree`, `delete_subtree`, `reparent_subtree`, `prune_unreachable_nodes`. Also a content-addressed **attachment sidecar store** for any attachment bytes (images *and* text/PDF documents), split by what actually differs between the two classes: `Forest` owns the policy — content addressing, first-write-wins descriptions, mark-and-sweep GC (`prune_unreferenced_sidecars`/`list_unreferenced_sidecars`) — over a dict held in memory, and `PersistentForest` overrides only the members that touch the filesystem, keeping the bytes in `<datastore>.sidecars/`. So a `Forest` carries attachments too, which is what lets a script attach a paper without leaving a file behind. `store_sidecar`/`read_sidecar`/`sidecar_size`/`has_sidecar` work on either; `sidecar_path`/`sidecar_dir` raise on an in-memory store and have only GUI callers left. The per-payload reference reader is injected at construction (`sidecar_extractor`), so chattree drives the GC traversal without knowing the message schema — worth passing even in memory, since nothing else ever reclaims an in-memory sidecar. Auto-saves via `atexit`. Format migration in `_upgrade()`.
 
