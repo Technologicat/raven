@@ -796,7 +796,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=2, key="Ctrl+Shift+Enter", action_indent=1, action="Same, but intersect with it", notes="While typing in the search field"),
                env(key_indent=1, key="Esc", action_indent=0, action="Cancel the edit, and unfocus", notes="While typing in the search field"),
                env(key_indent=0, key="F3", action_indent=0, action="Scroll to the next search match", notes="When matches shown in info panel"),
-               env(key_indent=0, key="Shift+F3", action_indent=0, action="Same, but the previous one", notes="When matches shown in info panel"),
+               env(key_indent=1, key="Shift+F3", action_indent=1, action="Same, but the previous one", notes="When matches shown in info panel"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+U", action_indent=0, action="Scroll to the cluster's start", notes='"up"'),
                env(key_indent=1, key="Ctrl+N", action_indent=0, action="Scroll to the next cluster", notes=""),

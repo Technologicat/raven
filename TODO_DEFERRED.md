@@ -2829,9 +2829,11 @@ Three things learned there that the remaining seven should expect:
 - **The variant rows were spelling their neighbour out in full** in six places, not the one the sweep
   below records. Look for a repeated *Action* string, which is what hides the relationship the indentation
   is asserting.
-- **A card can be quietly wrong about the app.** This one credited clustering to "a linguistic analysis",
-  which is what produces the *keywords*; the clusters are HDBSCAN over the embedding vectors. Nothing
-  checks a claim like that, and it had been there for years.
+- **A sentence compressed to fit stays compressed after the room arrives.** This card said clusters were
+  "auto-detected by a linguistic analysis" — defensible, semantic embedding being one, and about all that
+  fitted on a single page beside everything else. With a page to spend it says what actually happens, which
+  is what a reader wanting to know can use. So the pass that finds room is also the moment to re-read what
+  was written without it; nothing else will, a card being checked by nothing.
 
 **The other seven cards are untouched and stay that way for now** (Juha, 2026-09-09): Librarian's is the
 prototype, and the rest conform if and when their own content calls for it. Nothing forces them to — a
