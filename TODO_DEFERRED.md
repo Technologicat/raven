@@ -4297,9 +4297,29 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 **Librarian's tooltip half is done as well** (2026-09-10), so that app is finished on both. Every key it
 binds is now named on the control that triggers it — the composer's `Esc` was the last gap — and the chat
 graph's cursor keys, which have no button of their own anywhere, went onto the sibling counter and the
-commit button. **Six apps are left**: `visualizer`, `xdot_viewer`, `conference_timer`,
-`avatar/pose_editor`, `avatar/settings_editor`, `cherrypick`. For each: every bound key, confirm the
-control it triggers names it in brackets. Nothing checks that.
+commit button. **And half of it is mechanized now** (2026-09-10): `scripts/check_hotkey_tooltips.py` takes each app's
+`hotkey_info` and asks whether every key in it is named on some control, understanding that a modifier
+variant is named through the parent it differs from. It cannot close the audit — nothing in the source
+tells a missing caption from a key with no control to carry one — but it narrows it to a list a person can
+read in a minute, and an app read through goes in its `SIGNED_OFF` table, after which a newly bound key
+with no caption fails the run.
+
+**Three of the seven are done, and the standing count is in the script's own output.** As of 2026-09-10:
+
+| app | named | left to look at |
+|---|---|---|
+| `librarian` | 59 / 62 | signed off |
+| `visualizer` | 38 / 41 | signed off |
+| `conference_timer` | 0 / 4 | signed off — **it has no controls at all**, one `add_text` and a key handler |
+| `avatar/pose_editor` | 7 / 7 | nothing outstanding; wants a read to sign off |
+| `avatar/settings_editor` | 14 / 14 | nothing outstanding; wants a read to sign off |
+| `xdot_viewer` | 9 / 16 | 7 |
+| `cherrypick` | 21 / 31 | 10, of which 5 are mouse gestures |
+
+So the remaining work is smaller than "four apps" suggests: two want only a confirming read, and half of
+what is left in the other two is `Click`, `Mouse wheel` and friends, which are the `Esc`-and-arrows case
+again. **But do not read the count as the cost** — Librarian's 62 keys took five commits, and only one was
+captions; what the reading turns up is missing bindings and keys that do the wrong thing.
 
 **The first pass produced the estimate this item was waiting for: a tooltip sweep is a behaviour-change
 pass, not a caption edit.** Five commits on Librarian, of which exactly one was captions alone. What the
