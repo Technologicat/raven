@@ -1450,6 +1450,12 @@ frame got cheaper while the rate stayed put.
 So: CPU load to establish that there is a problem, Metrics to say what the frame rate now *is*. Note the
 window is the same `Ctrl+Shift+M` a reader would use, so nothing has to be built to make an app measurable.
 
+**Opening it is one-way from the keyboard.** Every app binds `dpg.show_metrics()`, which shows and does not
+toggle, and the window itself is ImGui's with no hooks we can reach — so a second `Ctrl+Shift+M` does
+nothing and only a click on its own ✕ closes it. Harmless in a driven measurement, where the app is being
+shut down afterwards anyway; worth knowing before opening it in an app somebody is *using*, and a reason to
+make it the last step of a driven sequence rather than the first.
+
 ## DPG runs without a mapped window, so GUI code is unit-testable
 
 `dpg.create_context()` + `dpg.create_viewport()` + `dpg.setup_dearpygui()` gives a fully working DPG — real widgets, real themes, working getters — **without** `dpg.show_viewport()`. Nothing is mapped, so nothing takes focus and nothing appears on screen. This matters on a shared desktop, where the alternative (launching the app) interrupts whoever is using it.
