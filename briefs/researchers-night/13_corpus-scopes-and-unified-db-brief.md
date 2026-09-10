@@ -109,6 +109,8 @@ when it runs. Everything in this section is [P] and wants arguing with.
     frequency head, or both — *"a judgement that wants a GUI in front of it rather than a table in a
     brief"*. That is the same data this tier stores, so keeping it is what makes the window cheap. Linked
     2026-09-10, the two halves having been written independently and neither mentioning the other.
+    - **Which orders the two: this brief first** (Juha, 2026-09-10, on seeing them linked), it being the
+      foundation the window reads from.
 - **[P] The map is a materialized view with an as-of time, not a build target.** Procrustes exists because
   spatial memory is worth protecting, and a map that silently refits destroys exactly what Procrustes was
   added to preserve. So show staleness rather than fixing it: *"map built 3 days ago; 47 placed since, 2

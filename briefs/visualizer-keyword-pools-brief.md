@@ -373,3 +373,5 @@ never join the common pool.*
     frequency stats as a Tier-1 derived artifact, computed per scope and globally and stored with the
     dataset. So that brief answers *what is kept*, and this one answers *what it is for* — neither is
     findable from the other by searching for the feature, which is how it went missing twice.
+  - **Brief 13 goes first** (Juha, 2026-09-10, on seeing the two linked): it builds the foundation this
+    window reads from.
