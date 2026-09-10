@@ -10,7 +10,7 @@ is. What differs between them is only where the cut goes — the end by default,
 """
 
 __all__ = ["ellipsize", "ellipsize_to_width",
-           "longest_prefix_that_fits"]
+           "longest_prefix_that_fits", "longest_suffix_that_fits"]
 
 from typing import Callable
 
@@ -49,7 +49,9 @@ def ellipsize(text: str, max_chars: int, *, middle: bool = False) -> str:
 
 def ellipsize_to_width(text: str,
                        max_width: float,
-                       width_of: Callable[[str], float]) -> str:
+                       width_of: Callable[[str], float],
+                       *,
+                       middle: bool = False) -> str:
     """Return `text` at no wider than `max_width`, marked with an ellipsis if it had to be cut.
 
     `ellipsize`, with the budget measured instead of counted — which is what a GUI label in a proportional
@@ -59,16 +61,32 @@ def ellipsize_to_width(text: str,
     `max_width`: The budget, in whatever unit `width_of` reports.
     `width_of`: Measures a string in that same unit. A toolkit's text-measuring call, bound to the font
                 the label will be drawn in.
-
-    End-cut only; there is no `middle` here, since eliding a middle by measurement needs two searches
-    rather than one and no caller has wanted it.
+    `middle`: Take the cut out of the middle, keeping both ends, as `ellipsize` does. What is left after
+              the ellipsis is split evenly between the two ends *by width*, which is the analogue of the
+              character version splitting it evenly by count.
 
     A budget too narrow for even one character plus the ellipsis still yields one character plus the
-    ellipsis, rather than nothing — `longest_prefix_that_fits` says why that is the honest answer.
+    ellipsis, rather than nothing — `longest_prefix_that_fits` says why that is the honest answer. With
+    `middle`, that floor applies at each end, so the narrowest possible result is two characters and the
+    ellipsis between them.
     """
     if width_of(text) <= max_width:
         return text
-    return f"{longest_prefix_that_fits(text, max_width - width_of(_ELLIPSIS), width_of)}{_ELLIPSIS}"
+    budget = max_width - width_of(_ELLIPSIS)
+    if not middle:
+        return f"{longest_prefix_that_fits(text, budget, width_of)}{_ELLIPSIS}"
+    # Two searches rather than one: how many characters the head got says nothing about how many the tail
+    # can have, the two ends of a proportional string being different widths for the same count.
+    half = budget / 2
+    head = longest_prefix_that_fits(text, half, width_of)
+    tail = longest_suffix_that_fits(text, half, width_of)
+    if len(head) + len(tail) >= len(text):
+        # The two ends met or overlapped, so there is nothing in the middle to drop and an ellipsis would
+        # be claiming otherwise — while a head and tail spliced together would repeat the characters they
+        # share. Only reachable when `width_of` is not additive, a kerned pair measuring narrower than its
+        # two characters do apart, and then only by a hair.
+        return text
+    return f"{head}{_ELLIPSIS}{tail}"
 
 
 def longest_prefix_that_fits(text: str,
@@ -98,3 +116,28 @@ def longest_prefix_that_fits(text: str,
         else:
             high = middle
     return text[:low]
+
+
+def longest_suffix_that_fits(text: str,
+                             max_width: float,
+                             width_of: Callable[[str], float]) -> str:
+    """Return the longest suffix of `text` no wider than `max_width`, or its last character.
+
+    `longest_prefix_that_fits` from the other end, with the same guarantee of at least one character and
+    for the same reason. It is what a middle cut needs for its second search, the tail of a proportional
+    string not being the width its head was.
+
+    A separate search rather than reversing the string and reusing the other one: `width_of` measures a
+    *rendering*, and a font is free to make "AV" narrower than "VA", so the reversed measurement is not
+    the one that was asked for.
+    """
+    if width_of(text) <= max_width:
+        return text
+    low, high = 1, len(text)  # lengths, counted from the end; `low` fits by fiat, `high` is known not to
+    while low < high - 1:
+        middle = (low + high) // 2
+        if width_of(text[len(text) - middle:]) <= max_width:
+            low = middle
+        else:
+            high = middle
+    return text[len(text) - low:]
