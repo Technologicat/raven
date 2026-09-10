@@ -74,9 +74,13 @@ in the deferred file is one we would walk past.
      the app's `Ctrl` and `Alt` chords. Librarian is now finished on both halves; the numbers and the six
      remaining apps are in "Fleet audit: every hotkey discoverable in a tooltip + help card".
 
-2. **Merge the three display shorteners** into `raven/common/text/`, per the shape agreed on 2026-09-09 and
-   filed under *"Three display shorteners in `librarian/`"*. Sized that day at six files plus tests, 30–45
-   minutes; the two wrinkles found while sizing it are in the item, and neither is a blocker.
+2. ~~**Merge the three display shorteners**~~ — **done 2026-09-10**, and the item is retired.
+   `raven/common/text/shorten.py` holds `ellipsize`, `ellipsize_to_width` and `longest_prefix_that_fits`;
+   the estimate of six files plus tests was right, and both predicted wrinkles were real. One thing the
+   sizing had wrong, worth knowing if a fourth shortener ever turns up: `chatgraph._with_ellipsis` is not
+   a shortener at all. It marks a line whether or not that line would have fitted, because its caller has
+   already established there is more text than the box holds — a different question from "shorten this if
+   it is too long", so it stays private and takes only the prefix search from the shared module.
 
 Neither is on any brief, and neither blocks the exhibit. They are here so that the next stock-take sees
 them and decides, rather than skipping them by never seeing them.

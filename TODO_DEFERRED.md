@@ -2761,56 +2761,6 @@ clusters, as of 2026-07-27:
   own terms: figure- and equation-heavy literature extracts to prose that omits the argument, in exactly the
   corpus Raven exists to read.
 
-## Three display shorteners in `librarian/`, and the shape agreed for merging them
-
-*Cluster: ? · Cost: S · Gate: none — design settled, just needs writing · Filed: 2026-09-09*
-
-`librarian/` grew three ways to shorten a string for display, differing on two axes — where the cut goes,
-and what the budget is measured in:
-
-| | cut | budget | caller |
-|---|---|---|---|
-| `cleanup._ellipsize` | middle | characters | `cleanup_dialog`, for filenames — the middle goes so the extension survives |
-| `chatutil._shorten` | end | characters | display labels; also collapses whitespace |
-| `chatgraph._with_ellipsis` | end | **measured width**, via a `width_of` callable | graph box labels |
-
-**`llmclient.truncate_middle` is deliberately not on that list** (Juha, 2026-09-09). It elides the middle
-too, but its marker states *how many characters were dropped*, and it exists so a model is not handed
-silent truncation and left unable to tell a cut document from one that ends there. That is a different
-contract from a cosmetic label, and folding it in would destroy it.
-
-**Agreed shape: two functions, not one** (Juha, 2026-09-09). A single function taking `width_of=None` to
-select the unit would make `budget` mean characters or pixels depending on another argument, which is a
-parameter meaning two things. So:
-
-    ellipsize(text, max_chars, *, middle=False)
-    ellipsize_to_width(text, max_width, width_of, *, middle=False)
-
-in `raven/common/text/`, with the three private helpers deleted and their call sites and tests moved over.
-A GUI label in a proportional font wants the measured one; character budgets are for text that is not being
-laid out.
-
-**Sized 2026-09-09: six files plus tests, 30–45 minutes.** New module, then `cleanup.py` and its two tests,
-`cleanup_dialog.py`, `chatutil.py` (four call sites) and `chatgraph.py` (two). Two wrinkles found while
-sizing it, neither a blocker, both worth knowing before starting:
-
-- **`_with_ellipsis` is not standalone.** It rests on `chatgraph._longest_prefix_that_fits`, which the
-  graph *also* uses directly for word-wrapping — so that helper is layout machinery, not merely part of the
-  shortener. It should move too (a longest-prefix-fitting-a-measured-width is general), and `chatgraph`
-  then imports both back.
-- **`chatutil._shorten` also collapses whitespace**, which the other callers must not inherit. Keep a
-  two-line `_shorten` in `chatutil` that collapses and delegates, rather than pushing the collapse into the
-  shared function or repeating it at four call sites.
-
-**And one deviation from the agreed shape, for a decision:** `middle=` on the *width* variant has no
-caller. Middle-elide by measurement needs two binary searches rather than one, and nothing would exercise
-it, so the plan is to leave it out and say so in the docstring — an end-elide-only
-`ellipsize_to_width`. Change that if a caller appears, or if the symmetry is wanted for its own sake.
-
-**Found while asking whether a device name could overflow a help-card cell.** It could not, in the end —
-the answer there was to stop putting live state on the card at all — so this is standalone cleanup with
-nothing waiting on it.
-
 ## Librarian's help card: the room exists now, and is not all spent
 
 *Cluster: discoverability · Cost: S per remaining piece · Gate: none · Filed: 2026-08-05 · Updated: 2026-09-09 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
