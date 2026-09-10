@@ -6254,3 +6254,28 @@ Not tasks. There is no action available on our side; what is recorded is the tri
   either way: most messages are a sentence or two, and the ones that are not tend to be pasted rather than
   typed. Carried an `RN2026` gate until 2026-08-13, which it should never have had: a deadline on
   work outside our control can only be missed. Noticed by Juha (2026-08-04) while testing the send-key change.
+
+## A `discard()` hook, so a dropped animation cannot orphan its registry entry
+
+*Cluster: ? · Cost: S · Gate: none — belt-and-braces, revisit if the shape recurs · Filed: 2026-09-10 · See also: the root cause, fixed the same day, in `Animator.render_frame`*
+
+`WidgetFlash` keeps a class-level registry of which flash owns which widget, written when a flash reifies
+and cleared **only** by `finish`. So any path that removes an animation from the animator without finishing
+it leaves an entry behind — and for a flash that is not a lost animation but a permanent, visible fault: the
+widget keeps the colour it was mid-fade on, and every later flash on it takes the de-duplication branch and
+declines to run, so the affordance never works again.
+
+The way that happened is fixed — `Animator.render_frame` walked its live list while `cancel` mutated it, so
+whichever animation sat after the removed one was skipped. What is not fixed is the *asymmetry* that made a
+skip so expensive: the registry outlives the registration, and nothing reconciles them.
+
+Proposal: a `discard()` on `Animation`, no-op by default, called wherever the animator drops an animation
+without finishing it. `WidgetFlash` overrides it to clear its `instances` entry and its `reified` flag and
+**touch no widgets** — which is what makes it safe on exactly the path that exists because `finish` is the
+method most likely to touch widgets that have just turned out to be gone. A future drop would then cost one
+missed flash rather than a dead widget.
+
+Low priority: the cause is gone, and the root `conftest.py` now fails any test module that finishes with a
+registry entry the animator is not rendering, so a reintroduction is caught in tests rather than in the GUI.
+
+Discovered while diagnosing four permanently-highlighted chat messages (2026-09-10).
