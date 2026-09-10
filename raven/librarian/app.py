@@ -1465,7 +1465,7 @@ with timer() as tim:
                             dpg.add_text("Compose messages to the AI here.\n"
                                          f"    [{_newline_keys_label()}]: insert a new line\n"
                                          f"    [{_send_key_label()}]: send to the AI\n"
-                                         "    [Esc]: clear the text and cancel\n"
+                                         "    [Esc]: clear the text; press again to unfocus\n"
                                          "    [Ctrl+Space]: focus this field")
 
                         # Staged-image thumbnail strip. Hidden until the user attaches an image; populated by the
