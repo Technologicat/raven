@@ -281,8 +281,10 @@ def check(rule: Rule) -> Tuple[List[str], List[str]]:
                 listed = ", ".join(repr(name) for name in absent)
                 caveat = (" (some may be there under a computed name — see the unreadable entries above)"
                           if unresolved else "")
-                notes.append(f"{where}: documents {len(absent)} key(s) that {label} does not "
-                             f"offer, so they are missing from the F1 card{caveat}: {listed}")
+                # No pronoun and no verb agreeing with the count — "1 key ... so they are missing" was
+                # the old wording, and "it is" against "they are" is not something a plural suffix fixes.
+                notes.append(f"{where}: documents {len(absent)} key{'s' if len(absent) != 1 else ''} that "
+                             f"{label} does not offer, missing from the F1 card{caveat}: {listed}")
     return problems, notes
 
 
@@ -304,8 +306,8 @@ def main() -> int:
             print(f"  {line}")
 
     if not problems:
-        print(f"OK: {len(RULES)} option list(s) named in code, and every value appears in each of the "
-              f"{checked} place(s) that documents them.")
+        print(f"OK: {len(RULES)} option list{'s' if len(RULES) != 1 else ''} named in code, and every "
+              f"value appears in each of the {checked} place{'s' if checked != 1 else ''} that documents them.")
         return 0
 
     for what, found in problems.items():
@@ -313,7 +315,7 @@ def main() -> int:
         for line in found:
             print(f"  {line}")
     total = sum(len(found) for found in problems.values())
-    print(f"\n{total} problem(s). A value is documented where it appears in backticks or quotes; "
+    print(f"\n{total} problem{'s' if total != 1 else ''}. A value is documented where it appears in backticks or quotes; "
           "prose that merely contains the word does not count.")
     return 1
 

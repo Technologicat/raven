@@ -175,10 +175,10 @@ def main() -> None:
         n_modules += 1
 
     if not findings:
-        print(f"OK: {n_modules} test module(s) whose guards would not fire in CI, and everything they "
-              "reach; every module-level import is available there.")
+        print(f"OK: {n_modules} test module{'s' if n_modules != 1 else ''} whose guards would not fire "
+              "in CI, and everything they reach; every module-level import is available there.")
         return
-    print(f"{len(findings)} unguarded test module(s) would fail to collect in CI:\n")
+    print(f"{len(findings)} unguarded test module{'s' if len(findings) != 1 else ''} would fail to collect in CI:\n")
     for test, reasons in sorted(findings.items()):
         print(f"  {test}")
         for r in reasons:

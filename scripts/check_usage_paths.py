@@ -90,7 +90,7 @@ def main() -> int:
     broken = unresolvable(usages)
 
     if broken:
-        print(f"{len(broken)} of {len(usages)} `python -m` path(s) name nothing in the tree:",
+        print(f"{len(broken)} of {len(usages)} `python -m` path{'s' if len(usages) != 1 else ''} naming nothing in the tree:",
               file=sys.stderr)
         for dotted in sorted(broken):
             print(f"  {dotted}", file=sys.stderr)

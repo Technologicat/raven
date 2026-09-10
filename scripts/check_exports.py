@@ -171,10 +171,12 @@ def main() -> int:
 
     print()
     if problems:
-        print(f"{problems} problem(s) in {len(files)} module(s). Fix them by hand, comments attached —")
+        print(f"{problems} problem{'s' if problems != 1 else ''} in {len(files)} "
+              f"module{'s' if len(files) != 1 else ''}. Fix them by hand, comments attached —")
         print("their prose is positional, which is why nothing here rewrites a list for you.")
         return 1
-    print(f"Every `__all__` in {len(files)} module(s) follows its file and names everything public in it.")
+    print(f"Every `__all__` in {len(files)} module{'s' if len(files) != 1 else ''} follows its file "
+          "and names everything public in it.")
     return 0
 
 

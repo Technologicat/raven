@@ -72,7 +72,7 @@ def main() -> int:
 
     complaints = check(TODO_PATH)
     if complaints:
-        print(f"{TODO_PATH.name}: {len(complaints)} structural problem(s):", file=sys.stderr)
+        print(f"{TODO_PATH.name}: {len(complaints)} structural problem{'s' if len(complaints) != 1 else ''}:", file=sys.stderr)
         for complaint in complaints:
             print(f"  {complaint}", file=sys.stderr)
         return 1
