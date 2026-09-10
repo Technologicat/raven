@@ -2223,17 +2223,17 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
 # rather than a corner of one. Two-thirds of these are unreachable from anywhere else in the app, and
 # until the card had pages they lived only in the README, which is not open while you are using the graph.
 chat_graph_hotkey_info = (env(key_indent=0, key="Tab", action_indent=0, action="Move the keyboard to the graph", notes="Or click anywhere in it"),
-                          # The ring has to be conjured before it can be moved, and the first arrow press is
-                          # what does it — planting it on HEAD rather than stepping. Its own row, because a
-                          # reader whose first press "did nothing" is looking straight at the key that
+                          # The cursor has to be conjured before it can be moved, and the first arrow press
+                          # is what does it — planting it on HEAD rather than stepping. Its own row, because
+                          # a reader whose first press "did nothing" is looking straight at the key that
                           # worked, and the rows below would have them pressing it again to no effect.
-                          env(key_indent=0, key="Any arrow", action_indent=0, action="Show the ring, on HEAD", notes="The first press only"),
+                          env(key_indent=0, key="Any arrow", action_indent=0, action="Show the cursor, on HEAD", notes="The first press only"),
                           env(key_indent=1, key="Up", action_indent=1, action="Then: move it up the conversation", notes="Up and down follow the branch"),
                           env(key_indent=1, key="Down", action_indent=1, action="Same, the other way", notes=""),
                           env(key_indent=1, key="Left", action_indent=1, action="Move it along the siblings", notes="Left and right stay on one level"),
                           env(key_indent=1, key="Right", action_indent=1, action="Same, the other way", notes=""),
                           env(key_indent=0, key="Enter", action_indent=0, action="Look at it", notes="Again to switch to it. A gap opens what it hides"),
-                          env(key_indent=0, key="Esc", action_indent=0, action="Put the ring away", notes="Without going anywhere"),
+                          env(key_indent=0, key="Esc", action_indent=0, action="Put the cursor away", notes="Without going anywhere"),
                           env(key_indent=0, key="Backspace", action_indent=0, action="Fold an opened tool round back up", notes="From anywhere inside the round"),
                           helpcard.hotkey_blank_entry,
                           env(key_indent=0, key="Ctrl+Right", action_indent=0, action="Next sibling, drawn or not", notes="Slides the window to follow"),
@@ -2264,7 +2264,7 @@ chat_graph_hotkey_info = (env(key_indent=0, key="Tab", action_indent=0, action="
                           )
 def render_chat_graph_help(self: helpcard.HelpWindow,
                            gui_parent: str | int) -> None:
-    """Render the chat graph's explanation, below its hotkey table on the card's second page.
+    """Render the chat graph's explanation, below its hotkey table on the card's chat graph page.
 
     Called by `HelpWindow` when the help card is first rendered.
     """
