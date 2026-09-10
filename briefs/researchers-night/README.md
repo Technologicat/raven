@@ -61,6 +61,10 @@ deadline actually binds; everything else could slip past September without anyth
 line each — and arrived out of a comment written while doing something else. It was in no plan and the
 schedule pays, but a deadline can absorb a tail like this one.
 
+**The order for the morning** (Juha, 2026-09-10): this first, then the rest of the help cards and tooltips
+— `xdot_viewer` and `cherrypick` being the real work there, the two avatar editors wanting only a
+confirming read, and the two-column prose sweep untouched on all seven cards.
+
 **Every throttling app sleeps a fixed nap, where the name promises a frame interval.** Eight sleep sites
 across seven apps, all of them a bare `time.sleep(IDLE_SLEEP_S)` — so the fix is one shape repeated, not a
 design decision per app:
@@ -89,10 +93,14 @@ Two wrinkles found while sizing it, neither a blocker:
 
 - **The conference timer has two sleep sites**, one per path through its loop, and its guard is app state
   rather than `transient_count`. It is the fiddly one again.
-- **The constant lives in two different places**: module-level in `librarian`, `visualizer`,
-  `avatar/pose_editor` and `avatar/settings_editor`, and in `config.py` for `cherrypick`,
-  `conference_timer` and `xdot_viewer`. Worth aligning while touching all of them, or deciding not to —
-  but noticing it during the sweep and leaving it half-done is the outcome to avoid.
+- ~~**The constant lives in two different places**~~ — **settled 2026-09-10, before the sweep rather than
+  during it.** `IDLE_SLEEP_S` and `INPUT_ACTIVE_S` are in `config.py` for five of the seven apps now.
+  - **The two avatar editors are the exception, and are an open question rather than an oversight**:
+    neither `avatar/pose_editor` nor `avatar/settings_editor` has a `config.py` at all — they read the
+    server's and the client's — so there is no relevant file to move into. Give each one (matches every
+    other app, but two new modules holding two constants apiece), give the pair a shared
+    `raven/avatar/config.py` (fewer files, but asserts a shared configuration they do not otherwise have),
+    or leave them at module scope and record that here so the next sweep stops rediscovering it.
 
 ### Tomorrow morning, filed 2026-09-09 — two hammerspace items from the help card pass
 
