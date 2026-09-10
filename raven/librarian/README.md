@@ -910,7 +910,10 @@ yours to create. Make `~/.config/raven/librarian/users/` and put two files in it
 |---|---|---|
 | `juha.json` | what you are **called** — `{"user_profile_version": 1, "name": "Juha"}` | required |
 | `juha.md` | your **user card**: who you are, and how you prefer to be answered | optional |
-| `juha_icon.png` | the **glyph** shown beside your messages in the chat | optional |
+| `juha_icon.png` | the **glyph** shown beside your messages in the chat — any square image | optional |
+
+The icon is scaled into a small square box, so any resolution works — but make it **square**, or it comes
+out stretched. (Raven's own are 64×64.) The same is true of a character's icon, below.
 
 `llm_user_name` then selects a profile by that name, exactly as `llm_char_name` selects a character — so
 the setting that names you in the chat log brings your card and your icon with it, and the two cannot
@@ -935,7 +938,7 @@ the same stem:
 | `aria1.json` | what the character is **called**, and the TTS voice it speaks in | required |
 | `aria1.md` | its **personality**: the character card the AI is set up with | optional |
 | `aria1.png` | its **avatar image**, which the avatar animates | optional |
-| `aria1_icon.png` | the small **glyph** shown beside its messages in the chat | optional |
+| `aria1_icon.png` | the small **glyph** shown beside its messages in the chat — any square image | optional |
 
 The JSON is short:
 

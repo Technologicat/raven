@@ -9,7 +9,7 @@ stem::
 
     juha.json        the profile: what the user is called.        Required.
     juha.md          their user card, as the LLM is told it.      Optional.
-    juha_icon.png    the glyph beside their messages in the chat.  Optional.
+    juha_icon.png    the glyph beside their messages in the chat.  Optional. Any square image.
 
 ::
 
@@ -71,7 +71,8 @@ class UserProfile:
                    caller then has a name and no description. Read it with `read_card`.
         icon_path: The glyph shown beside their messages in the chat, or `None` for the generic one. Same
                    `_icon.png` convention a character's icon follows, so the two sides of a conversation
-                   are decorated the same way.
+                   are decorated the same way. Any resolution: the chat log scales it into a square box,
+                   which is the one thing to match, a non-square image arriving stretched.
     """
 
     name: str

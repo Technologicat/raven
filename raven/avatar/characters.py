@@ -10,7 +10,7 @@ optional, and is found beside it under the same stem::
     aria1.json        the character itself: its name, and its voice.    Required.
     aria1.md          its character card, as the LLM is told it.        Optional.
     aria1.png         its avatar image, which the avatar animates.      Optional.
-    aria1_icon.png    the glyph beside its messages in the chat.        Optional.
+    aria1_icon.png    the glyph beside its messages in the chat.        Optional. Any square image.
 
 ::
 
@@ -89,7 +89,8 @@ class Character:
         image_path: The avatar image, which the avatar system animates, or `None` if this character has no
                     face — an ordinary state rather than an incomplete one.
         icon_path: The chat glyph, or `None` if this character has none — also ordinary, and callers fall
-                   back to a generic glyph.
+                   back to a generic glyph. Any resolution: the chat log scales it into a square box,
+                   which is the one thing to match, a non-square image arriving stretched.
         voice: The TTS voice this character speaks in, or `None` to leave the caller's own default alone.
                Not validated here: which voices exist is the speech server's answer, and it may not be
                running when a character is read.
