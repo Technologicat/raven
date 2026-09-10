@@ -318,6 +318,9 @@
 
 - **the SYSTEM indicator now lights while the idle prefill is being read**, as it already did for a turn. SYSTEM means the backend has a prompt and has emitted nothing yet, which is exactly what a prefill is — but only a turn raised it, so the app looked idle throughout. Against a cold cache that is the better part of a minute with the GPU at its busiest and nothing on screen saying so.
 
+- **`Esc` in the message composer now clears what you have written.** It used to put back whatever the field held when your caret last entered it — so the same key cleared the box or restored an older draft depending on where you had last clicked, which is not a difference you can see from the screen.
+  - With text in the field, `Esc` clears it; press it again to leave the field.
+
 *Raven-visualizer*
 
 - **keyword extraction now counts nouns and proper nouns, and leaves the verbs out.** A topic keyword is nearly always a noun, while the verbs of academic prose — *provide*, *improve*, *develop*, *investigate*, *identify*, *propose* — describe what a paper **does**, are the same in every field, and were crowding the head of the frequency list without saying anything. Measured on a corpus about AI in education: dropping them lifts *chatbot*, *agent*, *interaction*, *language* and *task* into the top of the list instead, and removes about a third of the distinct words.
