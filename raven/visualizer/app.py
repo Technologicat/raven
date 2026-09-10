@@ -788,6 +788,8 @@ app_state.update_info_panel = info_panel.update  # Published here so cross-modul
 # The debug keys (Ctrl+Shift+M/R/T/L) are deliberately absent: they are developer tools, `README.md`
 # documents them, and the card is what a visitor reads.
 hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a dataset", notes=""),
+               # Alone: loading a dataset is the one thing here that is not about a dataset already loaded.
+               helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus the search field", notes=""),
                env(key_indent=1, key="Enter", action_indent=0, action="Select the matches, and unfocus", notes="While typing in the search field"),
                env(key_indent=2, key="Shift+Enter", action_indent=1, action="Same, but add to the selection", notes="While typing in the search field"),
@@ -859,7 +861,7 @@ _SEARCH_FIELD_EDIT_KEYS = (("Enter", "select the matches, and unfocus"),
                            ("End", "to the end of the text"),
                            ("Ctrl+Left", "one word left"),
                            ("Ctrl+Right", "one word right"),
-                           ("Shift-select", "extend the selection"),
+                           ("Shift", "held with a movement key, selects as you move"),
                            ("Ctrl+A", "select all the text"),
                            ("Ctrl+C", "copy the selected text"),
                            ("Ctrl+X", "cut the selected text"),
