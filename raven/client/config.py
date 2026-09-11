@@ -58,7 +58,6 @@ network_timeout_streaming = Timeout(connect=10.0, read=None)
 tts_playback_audio_device = "system-default"  # OS's default, i.e. the same one other apps use
 # tts_playback_audio_device = None  # first available as listed by `raven-check-audio-devices`
 # tts_playback_audio_device = "Built-in Audio Analog Stereo"
-# tts_playback_audio_device = "M Audio Duo Analog Stereo"
 
 # Which audio capture device to use for STT (speech to text, speech recognition).
 #

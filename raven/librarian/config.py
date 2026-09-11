@@ -660,7 +660,6 @@ gui_config = env(  # ----------------------------------------
 #
 llm_user_name = "User"
 llm_char_name = "Aria"
-# llm_char_name = "Juha"  # DT researcher
 
 # The AI's initial greeting. Used when a new chat is started.
 llm_greeting = "How can I help you today?"
