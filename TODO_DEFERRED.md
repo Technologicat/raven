@@ -17,38 +17,6 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
-## Move the overridable half of the config out of the tracked `config.py` files
-
-*Cluster: config · Cost: M — the design is most of it · Gate: none · Filed: 2026-09-10 · See also: the `GUI_IDLE_FRAMERATE` question in `briefs/researchers-night/README.md`, which this would decide the home for*
-
-Three tracked files carry machine-local overrides as their normal steady state — `client/config.py`,
-`librarian/config.py`, `visualizer/config.py` — and `CLAUDE.md` spends a long section on never bulk-adding
-them. **The two kinds of value in those files are categorically different**: what Raven does out of the
-box, and what this particular machine happens to be. Today they are distinguished only by which lines
-somebody remembers not to stage.
-
-**Which failed on 2026-09-10, in the way the existing rule cannot catch.** The rule forbids `git add -A`,
-`-u`, `.` and `raven/`; that day's commit added the two files *by name*, which the rule permits, because
-they genuinely needed editing — the throttle constants were moving into them. So the guard did not fire,
-and an `llm_backend_url` naming a personal machine plus `llm_user_name = "Juha"` went to a public repo.
-Reverted forward in `24c0b5b8`; the history was left alone deliberately (Juha: hostnames are a cleanliness
-matter rather than a privacy one, and his name is on every commit anyway). **The real harm was a shipped
-default that works for exactly one person.**
-
-No amount of care fixes this, because the failure needs the file to be one somebody is legitimately
-editing. A file boundary does: shipped defaults stay tracked in `config.py`, overrides move to a gitignored
-JSON under `~/.config/raven/`, and a file that is not in the tree cannot be staged. The `# XXX testing`
-markers already in use are a hand-rolled version of the same idea.
-
-**One design wrinkle, and it is why this is not a sweep.** The two files differ in shape. Librarian's
-overrides are module-level names (`llm_backend_url`, `llm_user_name`), where the Visualizer's are a mix of
-module-level (`clusters_keyword_method`) and fields *inside* the `gui_config` `env` (`word_cloud_w`,
-`word_cloud_background_color`). So a loader has to rebind module globals and reach into an `env`, and the
-override file needs a way to say which it means.
-
-**What it retires**: `CLAUDE.md`'s never-bulk-add section, the standing three-file `M` in `git status`, and
-the class of accident above.
-
 ## A multiline text control of our own
 
 *Cluster: text-input · Cost: L — two weeks (Juha, 2026-09-10), by Kolmogorov taming · Gate: none, and nothing waits on it · Filed: 2026-09-10 · See also: "Make the Librarian chat composer text field resizable"*

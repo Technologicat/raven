@@ -163,7 +163,19 @@ To check the answer for a *running* process rather than for your shell, read its
 
 ### Working-tree state: `config.py` files are edited in place
 
-Raven is configured via in-place edits to tracked `config.py` files — paths, model choices, hardware-specific tweaks. On any dev machine, expect some subset of the following to show up as `M` in `git status` as the **normal steady state**, not as a pending change that needs committing:
+**Machine-local settings have a home outside the repository as of 2026-09-11**, and that is where they now
+belong: `~/.config/raven/overrides.json`, keyed by config module, applied by `raven.configoverrides` as the
+last statement of every config module. A file that is not in the tree cannot be staged by accident. The
+README's *Configuration* section documents the format for users; the four settings this machine had were
+migrated the same day, so **the three files below are expected to be clean**.
+
+The rest of this section is the guard against the arrangement that preceded it, and is kept because the
+hazard is only smaller, not gone: a `config.py` is still editable, and still tracked.
+
+Raven was configured via in-place edits to tracked `config.py` files — paths, model choices,
+hardware-specific tweaks — so on a dev machine that has not migrated, expect some subset of the following
+to show up as `M` in `git status` as a **steady state** rather than as a pending change that needs
+committing:
 
 - `raven/client/config.py`
 - `raven/librarian/config.py`

@@ -55,15 +55,28 @@ not settled, and the two sensible axes disagree — closure rate (smallest first
 they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
 deadline actually binds; everything else could slip past September without anything breaking.
 
-### Tomorrow morning, filed 2026-09-10 — make `IDLE_SLEEP_S` mean what it says
+### ~~Make `IDLE_SLEEP_S` mean what it says~~ — done 2026-09-11, and it grew a tail
 
 *Hammerspace*, and of the low-density kind: the work is behind a fixed interface — one loop per app, one
 line each — and arrived out of a comment written while doing something else. It was in no plan and the
 schedule pays, but a deadline can absorb a tail like this one.
 
-**The order for the morning** (Juha, 2026-09-10): this first, then the rest of the help cards and tooltips
-— `xdot_viewer` and `cherrypick` being the real work there, the two avatar editors wanting only a
-confirming read, and the two-column prose sweep untouched on all seven cards.
+**What landed** (2026-09-11). `raven.config` holds `GUI_IDLE_FRAMERATE` and `GUI_INPUT_ACTIVE_S` for the
+whole constellation, `guiutils.sleep_until_next_frame` does the budget arithmetic, and all eight sleep
+sites across the seven apps use it. A 60 ms frame now comes out at twelve frames a second instead of
+seven. `dpg-notes.md`'s idle-throttle section described the old pattern throughout — including a design
+note recommending against exactly this — and is rewritten.
+
+**The tail, which was most of the day.** The config question below turned into `raven.configoverrides`
+(machine-local settings in `~/.config/raven/overrides.json`, out of the tracked `config.py` files), and
+that pulled in `CALIBRATION_FPS`, the `finalize()` pass on the config `env`s, and a live bug: the
+Visualizer would not start at all when the LLM backend was down. All of it is in the git log for the day;
+what is *left* is at the end of this section.
+
+**The order was** (Juha, 2026-09-10): this first, then the rest of the help cards and tooltips —
+`xdot_viewer` and `cherrypick` being the real work there, the two avatar editors wanting only a confirming
+read, and the two-column prose sweep untouched on all seven cards. **The help cards did not get started,
+and are Monday's** (Juha, 2026-09-11, with half an hour of the day left).
 
 **Every throttling app sleeps a fixed nap, where the name promises a frame interval.** Eight sleep sites
 across seven apps, all of them a bare `time.sleep(IDLE_SLEEP_S)` — so the fix is one shape repeated, not a
@@ -98,16 +111,18 @@ Two wrinkles found while sizing it, neither a blocker:
   - **The two avatar editors are the exception**: neither `avatar/pose_editor` nor
     `avatar/settings_editor` has a `config.py` at all — they read the server's and the client's — so there
     is no relevant file to move into.
-  - **Which raises the better question** (Juha, 2026-09-10): whether the fleet wants a *single*
-    `GUI_IDLE_FRAMERATE` somewhere, rather than the same two numbers copied into seven config files. All
-    seven currently say `0.08` and `0.5`, identically, meaning identically the same thing — so the
-    duplication buys nothing but the freedom to diverge, and nothing has diverged. Answering this decides
-    the avatar editors as a side effect, which is why it is worth asking first.
-  - **Decide it together with where overridable config lives at all** — `TODO_DEFERRED.md`, *"Move the
-    overridable half of the config out of the tracked `config.py` files"*, filed the same evening after a
-    commit swept up the maintainer's local overrides. The two overlap: a fleet-wide idle value wants a home
-    outside the per-app configs, which is the same question that item is about, and answering them
-    separately means answering the second one twice.
+  - ~~**Which raises the better question**~~ — **answered 2026-09-11: yes, one value, in `raven.config`.**
+    All seven said `0.08` and `0.5`, identically, meaning identically the same thing, so the duplication
+    bought nothing but the freedom to diverge and nothing had diverged. It is `GUI_IDLE_FRAMERATE = 12`
+    now — a rate, which is the quantity anyone actually has an opinion about — and it settled the avatar
+    editors as predicted.
+  - ~~**Decide it together with where overridable config lives at all**~~ — **both done the same day.**
+    `raven.configoverrides` reads `~/.config/raven/overrides.json`, keyed by config module; all eleven
+    config modules apply it as their last statement; the maintainer's four local settings are migrated and
+    the three tracked files are back to shipped defaults. The deferred item is retired.
+    - Worth knowing for the next sweep, because it is the shape rather than the detail: a `//` prefix on a
+      key comments it out (JSON has no comments, and a settings file is where the alternative you switch to
+      occasionally lives beside the one in force), and a `//` key naming no setting is a free-form note.
   - **It looks exactly like the settle-wait question from the same day, which came out the other way**, and
     the difference is worth having in view before deciding. There, `helpcard._PAGE_FIT_PASSES` (4),
     `fdialog._HELP_CARD_FIT_PASSES` (3), `tooltip._SETTLE_FRAMES` (2) and
@@ -116,6 +131,27 @@ Two wrinkles found while sizing it, neither a blocker:
     merely clustering near one another, so a shared constant would have asserted a sameness that is not
     there and let a re-measurement of one silently move the rest. Here the values are not clustered, they
     are equal, and they answer one question. Same shape, opposite content.
+
+#### What Monday picks up, left over from 2026-09-11
+
+In order, and the first is the only one carrying a decision that is already made rather than still open:
+
+1. **Importer commit 2** — the second half of the Visualizer-startup fix, agreed and specified, not
+   started. Two pieces:
+   - **Record the keyword method actually used in the dataset.** `clusters_keyword_method` is absent from
+     the saved dataset, under a comment in `importer._save` that says *"Be sure to save the values of any
+     settings that affect data availability and interpretation!"* — which it plainly is. That gap predates
+     today and is what makes the fallback below safe: a log warning scrolls past in an hour-long run, where
+     the artifact carries its provenance forever.
+   - **Then the fallback**, on the policy Juha set: the CLI keeps failing fast (done), and the GUI falls
+     back to frequency keywords and says so **in a pill in the importer window** — *"LLM backend
+     unreachable. Will use frequency keywords instead."* Same semantics as Librarian's two connection
+     pills, and **not a modal**, Raven avoiding those. Juha, 2026-09-11: "feel free to run the GUI as
+     needed", so the live check is cleared in advance.
+2. **The help cards**, which is where this section was going before the day filled up. `xdot_viewer` (7
+   keys) and `cherrypick` (10, of which 5 are mouse gestures) are the real work; the two avatar editors
+   want a confirming read; the two-column prose sweep is untouched on all seven cards.
+   `scripts/check_hotkey_tooltips.py` prints the standing count and is the place to start.
 
 ### Tomorrow morning, filed 2026-09-09 — two hammerspace items from the help card pass
 
