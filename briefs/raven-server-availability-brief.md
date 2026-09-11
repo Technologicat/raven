@@ -117,6 +117,18 @@ server.** So a connect that follows an earlier connect must *unload the old sess
 reconnect leaks one. That makes reconnect-shaped code the natural owner of the unload, rather than
 teardown, which by definition does not run on the path that matters.
 
+**Better still, if it turns out to be reachable: re-adopt the old session rather than replace it** (Juha,
+2026-09-11). Persistence is the property that makes the leak possible, and it is also the property that
+would make this the *good* outcome — the session the client lost is, from the server's side, still sitting
+there loaded and posed. A reconnect that resumes it costs no model load and no visible restart, where
+unload-then-create pays for both and blinks the avatar.
+
+Which of the two a given disconnection admits is the thing to establish first, and it is a question about
+the server rather than about Librarian: whether a session's id survives on the client across the outage,
+whether the server can be asked what it still holds, and whether a session whose stream was dropped is
+still in a state worth resuming or has been torn down by something else. If re-adoption turns out to be
+available only sometimes, the unload path is still needed as the fallback, so it is not wasted either way.
+
 Open, and worth settling before building:
 
 - **Automatic or asked-for?** The status row already offers "click to retry now". Whether the *connect*
