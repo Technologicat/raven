@@ -91,6 +91,8 @@ with timer() as tim:
     from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
+    from .. import config as global_config
+
     from ..client import api
     from ..client import config as client_config
 
@@ -137,13 +139,11 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # against a quiet fan and the electricity. Written down because the choppiness is the visible half and the
 # saving is not, so a later reader meeting the first without the second has every reason to "fix" it.
 #
-# **What that did not cover is a large selection**, say *select all* over ten thousand points, and there is
-# a reason to expect it to differ rather than merely to be more of the same: this sleeps for a fixed
-# interval on top of whatever the frame cost, rather than budgeting a frame time. So where a frame is
-# nearly free the result is the ~12 fps intended, and where a frame already costs 60 ms the result is
-# nearer 7 — the throttle taking its cut from a rate that was already low. If the glow ever looks wrong
-# somewhere this one did not, that is the first thing to measure, and sleeping `IDLE_SLEEP_S` minus the
-# elapsed frame time is the fix rather than abandoning the throttle.
+# **What that did not cover is a large selection**, say *select all* over ten thousand points, where the
+# glow is redrawn for every one of them. `sleep_until_next_frame` subtracts the frame's own cost from the
+# budget rather than napping on top of it, so a 60 ms frame still comes out at the rate asked for instead
+# of at seven. Past the budget — a frame costing more than the whole 83 ms — the rate does fall, and there
+# is nothing a throttle can do about that except get out of the way, which it does.
 
 _last_input_ns: int = 0  # monotonic_ns timestamp of the last user input
 
@@ -165,7 +165,7 @@ def _on_any_input() -> None:
 
 def _is_busy() -> bool:
     """True when the render loop should run at full frame rate."""
-    if (time.monotonic_ns() - _last_input_ns) < visualizer_config.INPUT_ACTIVE_S * 1e9:
+    if (time.monotonic_ns() - _last_input_ns) < global_config.GUI_INPUT_ACTIVE_S * 1e9:
         return True
     # A flash, a smooth scroll — something is *happening*, as opposed to the plotter's endless glow.
     #
@@ -1525,12 +1525,14 @@ exitcode = 0
 try:
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
     while dpg.is_dearpygui_running():
+        t0 = time.perf_counter()
         update_animations()
         dpg.render_dearpygui_frame()
 
-        # Idle throttle: sleep when nothing is happening. The plotter's glow keeps pulsing, at the idle rate.
+        # Idle throttle: sleep out the rest of the frame's budget when nothing is happening. The plotter's
+        # glow keeps pulsing, at the idle rate.
         if not _is_busy():
-            time.sleep(visualizer_config.IDLE_SLEEP_S)
+            guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
     # dpg.start_dearpygui()  # automatic render loop
 except Exception:
     exitcode = 1

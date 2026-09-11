@@ -10,6 +10,7 @@ Usage:
 import argparse
 
 from .. import __version__
+from .. import config as global_config
 from . import config
 from ..common import replserver
 
@@ -428,6 +429,7 @@ def main() -> int:
     exitcode = 0
     try:
         while dpg.is_dearpygui_running():
+            t0 = time.perf_counter()
             # Idle throttle. The countdown reads whole seconds, so twelve frames a second is already far
             # more than it needs. What needs the frames is a pulsation, and this app has two — the expired
             # glow, whose job is to be seen from across a room, and the paused one. Both are the thing the
@@ -450,7 +452,7 @@ def main() -> int:
                 gui_animation.animator.render_frame()
                 dpg.render_dearpygui_frame()
                 if not (paused or color_state == "expired"):  # i.e. unstarted, and nothing is pulsating
-                    time.sleep(config.IDLE_SLEEP_S)
+                    guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
                 continue
 
             elapsed = time.monotonic() - start_time
@@ -476,7 +478,7 @@ def main() -> int:
             dpg.render_dearpygui_frame()
 
             if color_state != "expired":  # `paused` is False on this path, so the glow is the only question
-                time.sleep(config.IDLE_SLEEP_S)
+                guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
     except Exception:
         exitcode = 1
         logger.exception("Unhandled exception in render loop")

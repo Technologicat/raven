@@ -87,6 +87,8 @@ with timer() as tim:
     from ...common import docstring_utils
     from ...common import utils as common_utils
 
+    from ... import config as global_config
+
     from ...client import api  # convenient Python functions that abstract away the web API
     from ...client import config as client_config
     from ...client.avatar_controller import DPGAvatarController
@@ -142,15 +144,15 @@ with dpg.theme(tag="my_pulsating_red_text_theme"):
 # continuously and stay registered for the lifetime of the app. Snapshot the
 # count here as the baseline; only animations *above* baseline (e.g. fdialog
 # button flash) count as "busy".
-
-IDLE_SLEEP_S = 0.08   # ~12 fps when idle
-INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input
+#
+# The two numbers are `GUI_IDLE_FRAMERATE` and `GUI_INPUT_ACTIVE_S` in `raven.config`, where the whole
+# constellation keeps them. This app has no `config.py` of its own; it reads the server's and the client's.
 
 _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
 def _is_busy() -> bool:
     """True when the render loop should run at full frame rate."""
-    if (time.monotonic_ns() - _last_input_ns) < INPUT_ACTIVE_S * 1e9:
+    if (time.monotonic_ns() - _last_input_ns) < global_config.GUI_INPUT_ACTIVE_S * 1e9:
         return True
     if gui_instance is not None and gui_instance.dpg_avatar_renderer.animator_running:
         return True
@@ -1896,6 +1898,7 @@ try:
     # during helpcard/fdialog/messagebox display.
     _last_modal_state = False
     while dpg.is_dearpygui_running():
+        t0 = time.perf_counter()
         update_animations()
         if gui_instance is not None:
             modal_visible = is_any_modal_window_visible()
@@ -1904,9 +1907,9 @@ try:
                 _last_modal_state = modal_visible
         dpg.render_dearpygui_frame()
 
-        # Idle throttle: sleep when nothing needs updating (avatar paused, no recent input, no transient animation).
+        # Idle throttle: sleep out the rest of the frame's budget when nothing needs updating (avatar paused, no recent input, no transient animation).
         if not _is_busy():
-            time.sleep(IDLE_SLEEP_S)
+            guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
     # dpg.start_dearpygui()  # automatic render loop
 except Exception:
     exitcode = 1

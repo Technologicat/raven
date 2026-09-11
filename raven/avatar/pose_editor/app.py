@@ -102,6 +102,8 @@ with timer() as tim:
     from ...vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
     from ...vendor.tha3.util import torch_linear_to_srgb
 
+    from ... import config as global_config
+
     from ...common import utils as common_utils
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
     from ...common.gui import helpcard
@@ -170,15 +172,15 @@ gui_cel_blending_layout = ["blush1",
 # animation (fdialog button flash) is running. We can sleep between frames
 # in the idle case, saving CPU. `mouse_move` fires during slider drags,
 # so dragging naturally counts as "input active" and keeps full fps.
-
-IDLE_SLEEP_S = 0.08   # ~12 fps when idle
-INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input
+#
+# The two numbers are `GUI_IDLE_FRAMERATE` and `GUI_INPUT_ACTIVE_S` in `raven.config`, where the whole
+# constellation keeps them. This app has no `config.py` of its own; it reads the server's and the client's.
 
 _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
 def _is_busy() -> bool:
     """True when the render loop should run at full frame rate."""
-    if (time.monotonic_ns() - _last_input_ns) < INPUT_ACTIVE_S * 1e9:
+    if (time.monotonic_ns() - _last_input_ns) < global_config.GUI_INPUT_ACTIVE_S * 1e9:
         return True
     return gui_animation.animator.transient_count > 0  # e.g. fdialog button flash
 
@@ -1571,12 +1573,13 @@ exitcode = 0
 try:
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
     while dpg.is_dearpygui_running():
+        t0 = time.perf_counter()
         update_animations()
         dpg.render_dearpygui_frame()
 
-        # Idle throttle: sleep when nothing needs updating.
+        # Idle throttle: sleep out the rest of the frame's budget when nothing needs updating.
         if not _is_busy():
-            time.sleep(IDLE_SLEEP_S)
+            guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
     # dpg.start_dearpygui()  # automatic render loop
 except Exception:
     exitcode = 1

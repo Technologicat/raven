@@ -654,10 +654,16 @@ Raven is currently mostly configured via text files - more specifically, Python 
 
 We believe that `.py` files are as good a plaintext configuration format as any, but in the long term, we aim to have a GUI to configure at least the most important parts.
 
-In the meantime: each part of the Raven constellation has its own configuration file. Each configuration file is named `config.py`.
+In the meantime: each part of the Raven constellation has its own configuration file, and there is one more for the settings that belong to the constellation as a whole. Each configuration file is named `config.py`.
 
-In the documentation as well as in the source code docstrings and comments, we refer to these files by their dotted module names. The most important ones are:
+In the documentation as well as in the source code docstrings and comments, we refer to these files by their dotted module names. All of them, in the order you are most likely to want them:
 
+- `raven.config` → [`raven/config.py`](raven/config.py)
+  - Settings shared by the whole constellation, rather than belonging to any one app.
+  - `toplevel_userdata_dir` is where Raven keeps your per-user data. It defaults to `~/.config/raven/`.
+  - `GUI_IDLE_FRAMERATE` is the frame rate every Raven GUI app drops to when nothing is happening — twelve frames a second, against the sixty or more an unthrottled window draws. That is the difference between an idle Raven window costing a noticeable share of a CPU core and costing almost nothing. Anything that *is* happening returns the app to full speed at once: moving the mouse, a reply streaming in, an animation playing. So the throttle only ever spends frames nobody is watching.
+    - Raise it if a slowly pulsating highlight looks steppier than you would like; lower it to save more. It is one number for all seven GUI apps, so the change reaches every window at once.
+    - `GUI_INPUT_ACTIVE_S` is how long an app stays at full speed after you last touched it. Half a second, which is what it takes for tooltips and dropdowns to settle; there is rarely a reason to change it.
 - `raven.visualizer.config` → [`raven/visualizer/config.py`](raven/visualizer/config.py)
   - *Raven-visualizer* settings, including plotter and word cloud colors, and word cloud image size.
   - Local AI model loading settings. Used if *Visualizer* is started when *Server* is not running.
@@ -681,6 +687,19 @@ In the documentation as well as in the source code docstrings and comments, we r
 - `raven.client.config` → [`raven/client/config.py`](raven/client/config.py)
   - *Raven-server* URL, shared between all client apps.
   - Audio device selection for voice mode (TTS/STT, i.e. speech synthesizer and speech recognition).
+- `raven.papers.config` → [`raven/papers/config.py`](raven/papers/config.py)
+  - Settings for the bibliography command-line tools (`raven-arxiv-search`, `raven-arxiv-download`, `raven-deduplicate` and the rest).
+  - How Raven talks to arXiv: the API endpoint, the page size, and the delay it waits between requests. **The delay is arXiv's, not ours** — their terms of use require three seconds — so it can be raised but not lowered.
+  - The `User-Agent` those requests carry. It names this project and its maintainer's address, which is what arXiv asks for. **Change it if you are running a modified Raven, or running it at volume**: that address cannot answer for what your copy did.
+  - What `raven-deduplicate` treats as the same paper: the title similarity it merges at, whether a year may differ, and the instructions the optional AI judge is given.
+- `raven.cherrypick.config` → [`raven/cherrypick/config.py`](raven/cherrypick/config.py)
+  - *Raven-cherrypick* settings: which GPU thumbnails are built on, the thumbnail sizes offered, and the colors that mark a picked or rejected image.
+- `raven.xdot_viewer.config` → [`raven/xdot_viewer/config.py`](raven/xdot_viewer/config.py)
+  - *Raven-xdot-viewer* settings, including which GraphViz layout engines the filter offers.
+- `raven.conference_timer.config` → [`raven/conference_timer/config.py`](raven/conference_timer/config.py)
+  - *Raven-conference-timer* settings: the countdown's font size, the colors, and how much time is left when the counter turns yellow and then red.
+
+The two avatar editors — `raven-avatar-pose-editor` and `raven-avatar-settings-editor` — have no configuration file of their own. They read *Raven-server*'s and *Raven-client*'s, and edit the avatar's JSON assets described above.
 
 The paths are relative to the top level of the `raven` repository (i.e. to the directory this README is in).
 

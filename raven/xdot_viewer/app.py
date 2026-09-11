@@ -12,6 +12,7 @@ Usage:
 import argparse
 
 from .. import __version__
+from .. import config as global_config
 from . import config
 from ..common import replserver
 
@@ -528,7 +529,7 @@ def _check_file_reload() -> None:
 
 def _is_busy() -> bool:
     """True when the render loop should run at full frame rate."""
-    if (time.monotonic_ns() - _last_input_ns) < config.INPUT_ACTIVE_S * 1e9:
+    if (time.monotonic_ns() - _last_input_ns) < global_config.GUI_INPUT_ACTIVE_S * 1e9:
         return True
     # The animator's own count, as every other app in the constellation asks it. This used to ask the
     # widget directly, which answered for the graph and for nothing else — so the file dialog's button
@@ -921,13 +922,14 @@ def main() -> int:
             last_check = now
     try:
         while dpg.is_dearpygui_running():
+            t0 = time.perf_counter()
             _poll_reload()
             gui_animation.animator.render_frame()
             dpg.render_dearpygui_frame()
 
-            # Idle throttle: sleep when nothing needs updating.
+            # Idle throttle: sleep out the rest of the frame's budget when nothing needs updating.
             if not _is_busy():
-                time.sleep(config.IDLE_SLEEP_S)
+                guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
     except Exception:
         exitcode = 1
         logger.exception("Unhandled exception in render loop")

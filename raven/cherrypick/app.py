@@ -62,6 +62,7 @@ logger.info("Loading libraries...")
 
 import dearpygui.dearpygui as dpg
 import torch
+from .. import config as global_config
 from ..common import deviceinfo
 from ..common.gui import utils as guiutils
 from ..common.gui import helpcard
@@ -149,7 +150,7 @@ def _detect_preload_budget() -> int:
 def _is_busy() -> bool:
     """True when the render loop should run at full frame rate."""
     # Recent user input — covers tooltips, combos, and general responsiveness.
-    if (time.monotonic_ns() - _last_input_ns) < config.INPUT_ACTIVE_S * 1e9:
+    if (time.monotonic_ns() - _last_input_ns) < global_config.GUI_INPUT_ACTIVE_S * 1e9:
         return True
     compare = _app_state["compare"]
     if compare is not None and compare.active:
@@ -1831,6 +1832,7 @@ def main() -> int:
     exitcode = 0
     try:
         while dpg.is_dearpygui_running():
+            t0 = time.perf_counter()
             # Poll thumbnail pipeline.
             pipeline = _app_state["pipeline"]
             grid = _app_state["grid"]
@@ -1897,10 +1899,10 @@ def main() -> int:
             gui_animation.animator.render_frame()
             dpg.render_dearpygui_frame()
 
-            # Idle throttle: sleep when nothing needs updating.
+            # Idle throttle: sleep out the rest of the frame's budget when nothing needs updating.
             # Cuts GPU/CPU usage when the user is just looking at an image.
             if not _is_busy():
-                time.sleep(config.IDLE_SLEEP_S)
+                guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
     except Exception:
         exitcode = 1
         logger.exception("Unhandled exception in render loop")

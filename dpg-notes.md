@@ -1009,15 +1009,15 @@ Reference patterns for building DearPyGui apps in Raven (Librarian as primary re
 
 DPG's render loop runs at full GPU frame rate (typically 60 fps with vsync, or uncapped without). For apps with a mostly static GUI — where the user spends most time looking at results rather than interacting — this wastes CPU and GPU cycles, heats the machine, and drains laptop batteries.
 
-The pattern: detect whether anything actually needs updating, and `time.sleep()` in the render loop when idle. This drops the effective frame rate to ~12 fps when nothing is happening, then instantly returns to full speed on user input or animation.
+The pattern: detect whether anything actually needs updating, and sleep out the rest of the frame's time budget when idle. This drops the effective frame rate to ~12 fps when nothing is happening, then instantly returns to full speed on user input or animation.
 
 ### Components
 
-**1. Configuration** (`config.py`):
+**1. Configuration** (`raven/config.py`, constellation-wide — every app reads these two, none keeps its own):
 
 ```python
-IDLE_SLEEP_S = 0.08    # ~12 fps when idle (1 / 0.08 ≈ 12.5)
-INPUT_ACTIVE_S = 0.5   # stay at full fps for this long after last user input
+GUI_IDLE_FRAMERATE = 12    # frames per second, while the app is idle
+GUI_INPUT_ACTIVE_S = 0.5   # stay at full frame rate for this long after the last user input
 ```
 
 **2. Input timestamp tracking** — a module-level `_last_input_ns` updated by all input handlers:
@@ -1038,51 +1038,55 @@ with dpg.handler_registry():
 
 **3. Activity detector** — `_is_busy()` returns `True` when any of these hold:
 
-- Recent user input (within `INPUT_ACTIVE_S`)
-- GUI animations running (`gui_animation.animator.active_count > 0`)
+- Recent user input (within `GUI_INPUT_ACTIVE_S`)
+- A *transient* GUI animation running (`gui_animation.animator.transient_count > 0`)
 - Background pipeline producing results (app-specific: thumbnail loading, mip loading, etc.)
 - Visual effects in progress (resize flash, scroll countdown, etc.)
+
+**`transient_count`, not `active_count`.** The distinction is what makes the throttle usable at all: an
+*ambient* animation — a pulsating status indicator, the plotter's selection glow — runs for the lifetime of
+the app, so an app asking `active_count` would never once be idle. `Animation.ambient=True` is how an
+animation declares it belongs to the resting state, and `transient_count` leaves those out.
 
 Minimal version (xdot-viewer):
 
 ```python
 def _is_busy() -> bool:
-    if (time.monotonic_ns() - _last_input_ns) < config.INPUT_ACTIVE_S * 1e9:
+    if (time.monotonic_ns() - _last_input_ns) < global_config.GUI_INPUT_ACTIVE_S * 1e9:
         return True
-    if gui_animation.animator.active_count > 0:
-        return True
-    widget = _app_state["widget"]
-    if widget is not None and widget.is_animating():
-        return True
-    return False
+    return gui_animation.animator.transient_count > 0
 ```
 
-**4. Render loop** — the sleep goes *after* `render_dearpygui_frame()`:
+**4. Render loop** — take the frame's start time at the head, and sleep *after* `render_dearpygui_frame()`:
 
 ```python
 while dpg.is_dearpygui_running():
+    t0 = time.perf_counter()
     # ... poll pipelines, update components ...
     gui_animation.animator.render_frame()
     dpg.render_dearpygui_frame()
 
     if not _is_busy():
-        time.sleep(config.IDLE_SLEEP_S)
+        guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
 ```
 
 ### Design notes
 
 - **Sleep after render, not before.** This way the last input event still gets a full-speed frame immediately, and the sleep only affects the *next* frame if still idle.
-- **`INPUT_ACTIVE_S = 0.5`** provides a grace period after the last input. This keeps tooltips, combo dropdowns, and hover highlights responsive — DPG needs a few frames after mouse-move to settle these. Too short and the UI feels sluggish; too long and the power savings are lost.
-- **`IDLE_SLEEP_S = 0.08`** (~12 fps) is a sweet spot: fast enough that the GUI doesn't feel frozen (cursor changes, repaints still happen reasonably quickly), slow enough to cut idle CPU/GPU usage dramatically.
-- **`time.sleep` precision**: on Linux, actual sleep granularity is ~1–4 ms (timer slack), so 80 ms sleeps are accurate enough. On Windows, default timer resolution is ~15.6 ms, which is still fine at this scale.
-- **Animations self-wake**: since `_is_busy()` checks `animator.active_count`, starting an animation (e.g. a fade or smooth scroll) automatically returns to full frame rate for the animation's duration.
-- **No explicit target FPS**: the pattern doesn't set a target frame rate. Full-speed mode runs at whatever vsync or the GPU provides; idle mode is governed by the sleep duration. This is simpler and more robust than trying to maintain a precise low FPS.
+- **Budget, don't nap.** `sleep_until_next_frame` subtracts the frame's own cost from `1 / GUI_IDLE_FRAMERATE`, so what the number names is the resulting frame *rate*. A bare `time.sleep(interval)` adds the interval *on top of* the frame, and the two agree only while frames are nearly free: at a 60 ms frame a fixed 80 ms nap yields 7 fps rather than 12 — the throttle taking its cut from a rate that was already low, which is exactly where it is least wanted.
+- **A cap on rate, not on effort.** A frame that has already spent its budget gets no sleep at all, so the app runs flat out whenever the work is heavy. That is what "twelve frames a second unless you cannot" means, and it is the deliberate half of the trade.
+  - **What makes that safe is that the whole constellation is already framerate-compensated.** `Animator.render_frame` reads `time.monotonic_ns()` once per frame and hands it to every animation, each of which derives its state from `(t - t0)` in seconds — so a frame that arrives late shows a *later* stage of the animation rather than the next one. Dropping frames costs smoothness and nothing else: nothing runs slow-motion, nothing falls behind, and no state is skipped. The avatar's video works the same way at its own layer, and is where this started — the math Juha developed to keep it honest under a varying frame rate is what became `raven.common.smoothvalue.SmoothValue`, which the GUI animations then inherited. A toolkit whose animations stepped per frame could not make this trade, because there a throttle would visibly slow everything down — which is also the reason to keep a new animation on the clock rather than on a frame counter.
+- **`GUI_INPUT_ACTIVE_S = 0.5`** provides a grace period after the last input. This keeps tooltips, combo dropdowns, and hover highlights responsive — DPG needs a few frames after mouse-move to settle these. Too short and the UI feels sluggish; too long and the power savings are lost.
+- **`GUI_IDLE_FRAMERATE = 12`** is a sweet spot: fast enough that the GUI doesn't feel frozen (cursor changes, repaints still happen reasonably quickly), slow enough to cut idle CPU/GPU usage dramatically. Smooth it is not — the Visualizer's glow is visibly steppy at twelve, and that was looked at with a real dataset loaded and accepted, against a quiet fan and the electricity.
+- **`time.sleep` precision**: on Linux, actual sleep granularity is ~1–4 ms (timer slack), so sleeps of this length are accurate enough. On Windows, default timer resolution is ~15.6 ms, which is still fine at this scale.
+- **Animations self-wake**: since `_is_busy()` checks `animator.transient_count`, starting a transient animation (a fade, a smooth scroll) automatically returns to full frame rate for its duration.
+- **The full-speed side has no target.** Only the idle side is paced; unthrottled frames run at whatever vsync or the GPU provides. There is nothing to gain from capping the fast path, and a second target would be a second thing to keep true.
 
 ### When to use
 
 Good candidates: apps with static content display (image viewers, graph viewers, document readers). Poor candidates: apps with continuous animation (real-time video, particle systems) — they're always busy anyway.
 
-Currently used in: `raven-cherrypick`, `raven-xdot-viewer`.
+Used in all seven DPG apps: `raven-visualizer`, `raven-librarian`, `raven-cherrypick`, `raven-xdot-viewer`, `raven-conference-timer`, `raven-avatar-pose-editor`, `raven-avatar-settings-editor`.
 
 # Keyboard input
 

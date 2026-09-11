@@ -66,6 +66,8 @@ with timer() as tim:
     from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
+    from .. import config as global_config
+
     from ..client import api  # Raven-server support
     from ..client.avatar_controller import DPGAvatarController
     from ..client.avatar_renderer import DPGAvatarRenderer
@@ -340,8 +342,8 @@ print()
 # lifetime of the app, so they are *ambient* and `transient_count` leaves them out. Only a
 # button flash or a smooth scroll counts as being busy.
 #
-# The two numbers are `IDLE_SLEEP_S` and `INPUT_ACTIVE_S` in `config.py`, where every app in the
-# constellation now keeps them; `_is_busy` below is what reads them.
+# The two numbers are `GUI_IDLE_FRAMERATE` and `GUI_INPUT_ACTIVE_S` in `raven.config`, where the whole
+# constellation keeps them; `_is_busy` below is what reads the second, and the render loop the first.
 
 
 # The AI-disclosure notice shown below the avatar. Module-level because both the widget that renders it and
@@ -359,7 +361,7 @@ _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
 def _is_busy() -> bool:
     """True when the render loop should run at full frame rate."""
-    if (time.monotonic_ns() - _last_input_ns) < librarian_config.INPUT_ACTIVE_S * 1e9:
+    if (time.monotonic_ns() - _last_input_ns) < global_config.GUI_INPUT_ACTIVE_S * 1e9:
         return True
     if "dpg_avatar_renderer" in globals() and dpg_avatar_renderer.animator_running:
         return True
@@ -3361,6 +3363,7 @@ try:
     # can be asked to stop, and it is not something either overlay can see, so the app says.
     # See `DPGAvatarRenderer.set_overlays_suppressed`.
     while dpg.is_dearpygui_running():
+        t0 = time.perf_counter()
         update_animations()
         # Each of the two occupants of the avatar column draws its debug overlay in a `front=True`
         # viewport drawlist, and gets told the one thing neither can see for itself. Whether its own
@@ -3371,9 +3374,9 @@ try:
         chat_graph_panel.set_overlays_suppressed(modal_up)
         dpg.render_dearpygui_frame()
 
-        # Idle throttle: sleep when nothing needs updating (avatar paused, no LLM streaming, no RAG indexing, no recent input).
+        # Idle throttle: sleep out the rest of the frame's budget when nothing needs updating (avatar paused, no LLM streaming, no RAG indexing, no recent input).
         if not _is_busy():
-            time.sleep(librarian_config.IDLE_SLEEP_S)
+            guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
     # dpg.start_dearpygui()  # automatic render loop
 except KeyboardInterrupt:
     pass  # cleanup will be handled by our DPG exit handler

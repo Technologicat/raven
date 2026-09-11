@@ -871,10 +871,3 @@ user_profiles_dir = librarian_userdata_dir / "users"
 #     configuration, and warns when a name matches nothing.
 #   - To change the shared half every card splices in as `{interaction}`: `prompts/interaction.md`.
 
-
-# ---------------------------------------------------------------------------
-# Idle throttle
-# ---------------------------------------------------------------------------
-
-IDLE_SLEEP_S = 0.08   # ~12 fps when idle
-INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after the last user input

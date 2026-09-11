@@ -395,6 +395,10 @@
   - It will not shrink past the point where its own controls stop fitting — the sort buttons are fixed-width and cannot reflow, so below that size the Thumbnails checkbox would be clipped off the edge.
   - In the thumbnail view, the tiles reflow to fill the new width as you drag.
 
+- **one idle frame rate for the whole constellation, and it now means a rate.** Every Raven GUI app drops to a low frame rate while nothing is happening. That rate is a single setting now — `GUI_IDLE_FRAMERATE` in [`raven.config`](raven/config.py) — rather than the same two numbers copied into each app's own `config.py`, so changing it reaches every window at once. The default is unchanged at twelve frames a second.
+  - **It holds that rate when frames are expensive.** The throttle used to sleep a fixed interval *on top of* whatever the frame had already cost, so the two agreed only while frames were nearly free: a view whose frame took 60 ms landed nearer seven frames a second than the twelve asked for, the throttle taking its cut from a rate that was already low. It now sleeps out what is left of the frame's budget, so a heavy view idles at the rate you set. Past the budget there is no sleep at all and the app runs flat out, which is what a cap on rate rather than on effort means.
+  - If you had edited `IDLE_SLEEP_S` or `INPUT_ACTIVE_S` in an app's `config.py`, those are gone. Set `GUI_IDLE_FRAMERATE` — frames per second, where the old one was seconds per frame — and `GUI_INPUT_ACTIVE_S` in `raven.config` instead.
+
 **Fixed**:
 
 *Raven-avatar*

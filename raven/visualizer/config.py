@@ -433,10 +433,3 @@ gui_config = env(  # ----------------------------------------
                  max_titles_in_tooltip=10,
                  max_items_in_info_panel=100)
 
-
-# ---------------------------------------------------------------------------
-# Idle throttle
-# ---------------------------------------------------------------------------
-
-IDLE_SLEEP_S = 0.08   # ~12 fps when idle
-INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after the last user input

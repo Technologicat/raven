@@ -27,11 +27,6 @@ RED_THRESHOLD = 120     # 2:00 — counter turns red
 # Pulsation cycle duration (seconds). Used for expired and paused states.
 PULSATION_CYCLE = 2.0
 
-# Idle framerate throttle. A countdown reading whole seconds needs very few frames a second; what needs
-# them is the pulsation, whose whole job is to be noticed from across a room. So the app runs at this
-# interval until the timer expires, and at full rate once it does.
-IDLE_SLEEP_S = 0.08  # ~12 fps when idle
-
 # Colors (RGBA 0–255).
 COLOR_NORMAL = (255, 255, 255, 255)
 COLOR_YELLOW = (255, 255, 0, 255)
