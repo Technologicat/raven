@@ -47,6 +47,11 @@ class _Timeout(NamedTuple):
 
 
 #: Stands in for a `torch.dtype`: a value `config.py` can hold because it is code, and JSON cannot.
+#:
+#: `sym` rather than a bare `object()`, which is what these assertions would otherwise reach for. It reads
+#: as itself in a failure message instead of as `<object object at 0x7f…>`, and it survives a pickle
+#: roundtrip — but mostly because committed code is read as sanction, and a nonce here would be teaching
+#: the next sentinel in this tree how to spell itself.
 _not_json_expressible = sym("not_json_expressible")
 
 
