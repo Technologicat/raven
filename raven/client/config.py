@@ -73,8 +73,8 @@ tts_playback_audio_device = "system-default"  # OS's default, i.e. the same one 
 
 # This has NO system-default setting, as our recording backend doesn't support that.
 #
-# stt_capture_audio_device = None
-stt_capture_audio_device = "Built-in Audio Analog Stereo"
+stt_capture_audio_device = None
+# stt_capture_audio_device = "Built-in Audio Analog Stereo"
 
 # How the recorder decides that you have stopped speaking, and how its VU meter behaves.
 #
