@@ -123,11 +123,21 @@ would make this the *good* outcome — the session the client lost is, from the 
 there loaded and posed. A reconnect that resumes it costs no model load and no visible restart, where
 unload-then-create pays for both and blinks the avatar.
 
-Which of the two a given disconnection admits is the thing to establish first, and it is a question about
-the server rather than about Librarian: whether a session's id survives on the client across the outage,
-whether the server can be asked what it still holds, and whether a session whose stream was dropped is
-still in a state worth resuming or has been torn down by something else. If re-adoption turns out to be
-available only sometimes, the unload path is still needed as the fallback, so it is not wasted either way.
+Three things to establish first, and all three are about the server rather than about Librarian: whether a
+session's id survives on the client across the outage, whether the server can be asked what it still holds,
+and whether a session whose stream was dropped is still in a state worth resuming or has been torn down by
+something else.
+
+**"No" is a design input rather than an answer, because the server is ours** (Juha, 2026-09-11). If
+resumability is not there, we are free to build it — and probably should, on the condition that it comes at
+reasonable effort and does not drag in much complexity. So the investigation is not "is this reachable"
+but "does it already work, and if not, what would making it work cost". Worth having in view while reading
+the answers, since the first two questions have cheap fixes available if they come out wrong: an id the
+client forgets can be persisted, and a server that cannot be asked what it holds can be given an endpoint
+that says.
+
+The unload path is needed either way, as the fallback for the disconnections that resumption cannot cover
+and as the thing that stops the leak meanwhile, so it is not wasted whichever way this goes.
 
 Open, and worth settling before building:
 
