@@ -1038,7 +1038,7 @@ class Animator:
 
         `"blink_interval_min"`: float, seconds, lower limit for random minimum time until next blink is allowed.
         `"blink_interval_max"`: float, seconds, upper limit for random minimum time until next blink is allowed.
-        `"blink_probability"`: float, at each frame at a reference of 25 FPS. FPS-corrected automatically.
+        `"blink_probability"`: float, at each frame at a reference of `CALIBRATION_FPS`. FPS-corrected automatically.
         `"blink_confusion_duration"`: float, seconds, upon entering "confusion" emotion, during which blinking
                                       quickly in succession is allowed.
 
@@ -1321,7 +1321,7 @@ class Animator:
                                                 self._settings["sway_interval_max"])  # seconds; duration of this sway target before randomizing new one
             return new_target_pose
 
-        # Add dynamic noise (re-generated at 25 FPS) to the target to make the animation look less robotic, especially once we are near the target pose.
+        # Add dynamic noise (re-generated at `CALIBRATION_FPS`) to the target to make the animation look less robotic, especially once we are near the target pose.
         def add_microsway() -> None:  # DANGER: MUTATING FUNCTION
             CALIBRATION_FPS = smoothvalue.CALIBRATION_FPS  # the rate at which randomizing a new microsway target looks good
             time_now = time.monotonic_ns()
@@ -1512,7 +1512,7 @@ class Animator:
         Relevant `self._settings` keys:
 
         `"pose_interpolator_step"`: [0, 1]; how far toward `target` to interpolate in one frame,
-                                            assuming a reference of 25 FPS. This is FPS-corrected automatically.
+                                            assuming a reference of `CALIBRATION_FPS`. This is FPS-corrected automatically.
                                             0 means just keep `current`, 1 means immediately replace with `target`.
 
         This is a history-free rate-based formulation, which needs only the current and target vectors, and

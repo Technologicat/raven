@@ -607,8 +607,9 @@ class Postprocessor:
         #
         # This could be fixed by resetting `stream_start_timestamp` once the frame number
         # becomes too large. But in practice, how long does it take for this issue to occur?
-        # The ULP becomes 1.0 at ~5e15. To reach frame number 5e15, at the reference 25 FPS,
-        # the time required is 2e14 seconds, i.e. 2.31e9 days, or 6.34 million years.
+        # The ULP becomes 1.0 at ~5e15. To reach frame number 5e15, at the factory `CALIBRATION_FPS` of 25,
+        # the time required is 2e14 seconds, i.e. 2.31e9 days, or 6.34 million years. (The figures are
+        # worked at 25 so they can be checked; no plausible value of the constant moves the conclusion.)
         # While I can almost imagine the eventual bug report, I think it's safe to ignore this.
 
         # Apply the current filter chain.
@@ -910,7 +911,7 @@ class Postprocessor:
 
         `name`: Cache key. Only needs changing if the same filter appears twice in one chain.
 
-        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        NOTE: "frame" here refers to the normalized frame number, at a reference of `CALIBRATION_FPS`.
         """
         c, h, w = image.shape
         if count <= 0:
@@ -1714,7 +1715,7 @@ class Postprocessor:
         `speed`: At speed 1.0, a wave of `density = 1.0` completes a full cycle every
                  `image_height` frames. So effectively the cycle position updates by
                  `speed * (1 / image_height)` at each frame. "Frame" here refers to the
-                 normalized frame number, at a reference of 25 FPS.
+                 normalized frame number, at a reference of `CALIBRATION_FPS`.
 
         `amplitude1`, `amplitude2`, `amplitude3`: peak horizontal displacement of each
                 wave component, in units where the image width (and height) is 2.0.
@@ -1790,7 +1791,7 @@ class Postprocessor:
         `placement`: one of "top", "bottom". Near which edge of the image to apply the maximal distortion.
                      The distortion then decays to zero, with a quadratic profile, in 1/8 of the image height.
 
-        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        NOTE: "frame" here refers to the normalized frame number, at a reference of `CALIBRATION_FPS`.
         """
         c, h, w = image.shape
 
@@ -1904,7 +1905,7 @@ class Postprocessor:
                    and there will be fewer of them (in the same video frame) when they do appear.
         `max_glitches`: Maximum number of glitches in the video frame.
         `min_glitch_height`, `max_glitch_height`: in pixels. The height is randomized separately for each glitch.
-        `hold_min`, `hold_max`: in frames (at a reference of 25 FPS). Limits for the random time that the
+        `hold_min`, `hold_max`: in frames (at a reference of `CALIBRATION_FPS`). Limits for the random time that the
                                 filter holds one glitch pattern before randomizing the next one.
 
         `name`: Optional name for this filter instance in the chain. Used as cache key.
@@ -1993,7 +1994,7 @@ class Postprocessor:
                 If you have more than one `analog_vhs_headswitching` in the chain, they should have
                 different names so that each one gets its own cache.
 
-        NOTE: "frame" refers to the normalized frame number, at 25 FPS.
+        NOTE: "frame" refers to the normalized frame number, at a reference of `CALIBRATION_FPS`.
         """
         c, h, w = image.shape
         n_rows = max(1, int(height * h))
@@ -2084,7 +2085,7 @@ class Postprocessor:
                 If you have more than one `analog_vhstracking` in the chain, they should have
                 different names so that each one gets its own cache.
 
-        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        NOTE: "frame" here refers to the normalized frame number, at a reference of `CALIBRATION_FPS`.
         """
         c, h, w = image.shape
 
@@ -2162,7 +2163,7 @@ class Postprocessor:
                    and there will be fewer of them (in the same video frame) when they do appear.
         `max_glitches`: Maximum number of glitches in the video frame.
         `min_glitch_height`, `max_glitch_height`: in pixels. The height is randomized separately for each glitch.
-        `hold_min`, `hold_max`: in frames (at a reference of 25 FPS). Limits for the random time that the
+        `hold_min`, `hold_max`: in frames (at a reference of `CALIBRATION_FPS`). Limits for the random time that the
                                 filter holds one glitch pattern before randomizing the next one.
 
         `name`: Optional name for this filter instance in the chain. Used as cache key.
@@ -2479,7 +2480,7 @@ class Postprocessor:
 
         `name`: Cache key. Only needs changing if the same filter appears twice in one chain.
 
-        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        NOTE: "frame" here refers to the normalized frame number, at a reference of `CALIBRATION_FPS`.
         """
         c, h, w = image.shape
 
@@ -2661,7 +2662,7 @@ class Postprocessor:
         `density`: how many banding cycles per full image height
         `speed`: band movement, in pixels per frame
 
-        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        NOTE: "frame" here refers to the normalized frame number, at a reference of `CALIBRATION_FPS`.
         """
         c, h, w = image.shape
         yy = torch.linspace(0, math.pi, h, dtype=image.dtype, device=self.device)
@@ -2702,7 +2703,7 @@ class Postprocessor:
                      "A": darken the alpha channel (fast; makes the darkened lines translucent)
         `strength`: E.g. 0.25 -> dim to 75% brightness/alpha.
 
-        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        NOTE: "frame" here refers to the normalized frame number, at a reference of `CALIBRATION_FPS`.
         """
         if dynamic:
             start = (field + int(self.frame_no)) % 2
