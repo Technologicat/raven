@@ -1265,8 +1265,9 @@ class SmoothScrolling(Animation):
                 except Exception as exc:
                     logger.warning(f"SmoothScrolling.finish: instance for '{self.target_child_window}': finish callback {callback} raised, continuing teardown: {type(exc)}: {exc}")
 
-# The FPS-corrected exponential decay math is now in `raven.common.smoothvalue` (which see).
-# For the full derivation, see `raven.server.modules.avatar.interpolate`.
+# The FPS-corrected exponential decay math lives in `raven.common.smoothvalue`, and the full derivation —
+# Newton's law of cooling, solved for the per-frame step — is in the comments of its `fps_corrected_step`.
+# The avatar's pose interpolator, `raven.server.modules.avatar.Animator.interpolate`, is the other caller.
 
 # --------------------------------------------------------------------------------
 # Pulsation envelope
