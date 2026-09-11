@@ -6,6 +6,7 @@ This module is licensed under the 2-clause BSD license.
 import torch
 
 from .. import config as global_config
+from .. import configoverrides
 
 # Where to store files. Currently only used for the server API key, and websearch's debug functionality.
 server_userdata_dir = global_config.toplevel_userdata_dir / "server"
@@ -462,3 +463,7 @@ animator_defaults = {
     # postprocessor
     "postprocessor_chain": postprocessor_defaults
 }
+
+
+# Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.
+configoverrides.apply(__name__, globals())

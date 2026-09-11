@@ -14,6 +14,7 @@ from unpythonic.env import env
 from .. import avatar  # for `avatar.assets_path`
 from ..avatar import characters as avatar_characters  # who the shipped characters are, by name
 from .. import config as global_config
+from .. import configoverrides
 
 from ..client.config import Timeout  # `(connect, read)` timeout tuple with named fields; see `raven.client.config`
 
@@ -871,3 +872,6 @@ user_profiles_dir = librarian_userdata_dir / "users"
 #     configuration, and warns when a name matches nothing.
 #   - To change the shared half every card splices in as `{interaction}`: `prompts/interaction.md`.
 
+
+# Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.
+configoverrides.apply(__name__, globals())

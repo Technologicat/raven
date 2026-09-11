@@ -14,6 +14,8 @@ Some components also have their own configurations, which see:
 
 import pathlib
 
+from . import configoverrides
+
 # Used for various things. E.g. the web API keys go here.
 toplevel_userdata_dir = "~/.config/raven/"
 
@@ -36,3 +38,7 @@ toplevel_userdata_dir = pathlib.Path(toplevel_userdata_dir).expanduser().resolve
 
 GUI_IDLE_FRAMERATE = 12    # frames per second, while the app is idle
 GUI_INPUT_ACTIVE_S = 0.5   # stay at full frame rate for this long after the last user input
+
+
+# Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.
+configoverrides.apply(__name__, globals())

@@ -7,6 +7,7 @@ To use this, start the server with:
 
 import torch
 
+from .. import configoverrides
 from .config import *  # Use the default config as a base.  # noqa: F401, F403
 
 # We override just this, running everything except the avatar on CPU.
@@ -33,3 +34,11 @@ enabled_modules = {
     "websearch": {},
     "webfetch": {},
 }
+
+
+# Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.
+#
+# Two keys reach this module. `raven.server.config`'s were applied before the star-import above and came
+# through it; this call then reads `raven.server.config_lowvram`, for anything meant to hold only when the
+# server is started on this variant.
+configoverrides.apply(__name__, globals())

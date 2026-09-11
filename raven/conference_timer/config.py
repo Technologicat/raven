@@ -1,5 +1,7 @@
 """Configuration constants for the Raven Conference Timer."""
 
+from .. import configoverrides
+
 # GUI font size for non-countdown elements (help card, etc.).
 GUI_FONT_SIZE = 20
 
@@ -36,3 +38,7 @@ COLOR_EXPIRED = (255, 0, 0, 255)
 # Help window dimensions (pixels).
 HELP_WINDOW_W = 500
 HELP_WINDOW_H = 260
+
+
+# Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.
+configoverrides.apply(__name__, globals())

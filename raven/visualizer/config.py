@@ -7,6 +7,8 @@ import textwrap
 
 from unpythonic.env import env
 
+from .. import configoverrides
+
 import dearpygui.dearpygui as dpg
 
 # --------------------------------------------------------------------------------
@@ -433,3 +435,6 @@ gui_config = env(  # ----------------------------------------
                  max_titles_in_tooltip=10,
                  max_items_in_info_panel=100)
 
+
+# Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.
+configoverrides.apply(__name__, globals())

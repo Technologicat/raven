@@ -2,6 +2,8 @@
 
 import torch
 
+from .. import configoverrides
+
 # ---------------------------------------------------------------------------
 # GPU
 # ---------------------------------------------------------------------------
@@ -177,3 +179,7 @@ TRIAGE_MARK_DEFAULT_VISIBLE = True  # show by default
 
 BEACON_DURATION = 0.6  # seconds, fade-out after resize settles
 BEACON_COLOR = (80, 160, 255, 160)  # same blue family as CURRENT_COLOR
+
+
+# Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.
+configoverrides.apply(__name__, globals())

@@ -4,6 +4,7 @@ from typing import NamedTuple
 
 import torch
 
+from .. import configoverrides
 from ..server import config as server_config  # NOTE: default config location (can be overridden on the command line when starting the server)
 
 # TODO: Assumption: The `userdata_dir` of the client/server pair is local anyway, so we can just as well use the server app's.
@@ -72,8 +73,8 @@ tts_playback_audio_device = "system-default"  # OS's default, i.e. the same one 
 
 # This has NO system-default setting, as our recording backend doesn't support that.
 #
-stt_capture_audio_device = None
-# stt_capture_audio_device = "Built-in Audio Analog Stereo"
+# stt_capture_audio_device = None
+stt_capture_audio_device = "Built-in Audio Analog Stereo"
 
 # How the recorder decides that you have stopped speaking, and how its VU meter behaves.
 #
@@ -171,3 +172,7 @@ tts_model_name = server_config.kokoro_models
 # Word-level metadata (needed for avatar lipsync) currently only supports English.
 # See `raven.common.audio.speech.tts.load_tts_pipeline` for the full list.
 tts_lang_code = "a"
+
+
+# Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.
+configoverrides.apply(__name__, globals())

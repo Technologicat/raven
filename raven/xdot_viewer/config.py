@@ -1,5 +1,7 @@
 """Configuration constants for the Raven XDot Viewer."""
 
+from .. import configoverrides
+
 # Font size (pixels) — must match raven's global app standard.
 FONT_SIZE = 20
 
@@ -57,3 +59,7 @@ GRAPHVIZ_ENGINES = ["[as-is]", "dot", "neato", "fdp", "sfdp", "circo", "twopi"]
 # Help card dimensions (pixels). Chosen to fit the content.
 HELP_WINDOW_W = 1400
 HELP_WINDOW_H = 760
+
+
+# Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.
+configoverrides.apply(__name__, globals())

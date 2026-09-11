@@ -9,6 +9,7 @@ Used by `papers.deduplicate`, and by the arXiv tools: `papers.search`, `papers.a
 """
 
 from .. import __version__
+from .. import configoverrides
 
 # --------------------------------------------------------------------------------
 # Talking to arXiv
@@ -267,3 +268,7 @@ Items:
 # differ; short enough that a row holding two abstracts is still a row. The input file is where anyone reads
 # one in full.
 audit_value_chars = 300
+
+
+# Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.
+configoverrides.apply(__name__, globals())

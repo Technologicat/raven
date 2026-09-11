@@ -40,6 +40,7 @@
         - [Pin vsync to the right display on multi-monitor setups (NVIDIA + X11)](#pin-vsync-to-the-right-display-on-multi-monitor-setups-nvidia--x11)
         - [Exit from the Raven venv (optional, to end the session)](#exit-from-the-raven-venv-optional-to-end-the-session)
 - [Configuration](#configuration)
+    - [Settings that belong to your machine, not to Raven](#settings-that-belong-to-your-machine-not-to-raven)
 - [Uninstall](#uninstall)
 - [Technologies](#technologies)
 - [Privacy](#privacy)
@@ -702,6 +703,40 @@ In the documentation as well as in the source code docstrings and comments, we r
 The two avatar editors — `raven-avatar-pose-editor` and `raven-avatar-settings-editor` — have no configuration file of their own. They read *Raven-server*'s and *Raven-client*'s, and edit the avatar's JSON assets described above.
 
 The paths are relative to the top level of the `raven` repository (i.e. to the directory this README is in).
+
+## Settings that belong to your machine, not to Raven
+
+Editing the files above works, and it has one flaw: what Raven ships and what *your* machine happens to be end up as the same lines in the same file. The backend URL naming your other box, the audio device that exists only here, your own name — those are yours, and they sit in files that `git pull` will one day want to change underneath you. If you work from a clone, they also show up as modifications every time you look at `git status`.
+
+So you can put them somewhere else instead. Create `~/.config/raven/overrides.json`, keyed by the module names above:
+
+```json
+{
+    "raven.librarian.config": {
+        "llm_backend_url": "http://otherbox.local:1234",
+        "llm_user_name": "Kaisa"
+    },
+    "raven.visualizer.config": {
+        "clusters_keyword_method": "llm",
+        "gui_config.word_cloud_w": 1024,
+        "gui_config.word_cloud_background_color": "white"
+    },
+    "raven.client.config": {
+        "stt_capture_audio_device": "Built-in Audio Analog Stereo"
+    },
+    "raven.config": {
+        "GUI_IDLE_FRAMERATE": 30
+    }
+}
+```
+
+Anything set here wins over the `config.py` that ships with Raven, which then goes back to being purely a record of the defaults — and the settings that are yours stay yours across upgrades.
+
+- **A dotted name reaches inside a setting that holds other settings.** `gui_config` in the *Visualizer*'s and *Librarian*'s configs is one of those, so its fields are written `gui_config.word_cloud_w`.
+- **Only settings that already exist can be overridden.** A misspelled name is reported in the log and ignored, rather than quietly becoming a setting nothing reads. The same goes for a value of the wrong kind — a word where a number belongs — which leaves the shipped default in place and says so.
+- **A mistyped *module* name is the one thing that cannot be reported that way**, since no module would claim it. Raven logs the module names it found in the file when it reads it, so a setting that did not take effect can be traced there.
+- **If the file has a syntax error, Raven says so and starts anyway**, on the shipped defaults. It will not refuse to run over a stray comma.
+- Settings that Raven *derives* from other settings — the directories built from `toplevel_userdata_dir`, for instance — are worked out before your overrides are read. Override the derived setting itself rather than the one it came from.
 
 For more, see the documentation for the individual constellation components (Visualizer, Librarian, Server).
 
