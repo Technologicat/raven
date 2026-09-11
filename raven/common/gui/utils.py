@@ -25,6 +25,8 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
            "get_mouse_relative_pos", "is_mouse_on_widget",
 
+           "sleep_until_next_frame",  # pacing the render loop
+
            "is_render_thread", "split_frame",  # frame waiting, guarded against deadlock
            "wait_for_resize",
            "park_offscreen", "recenter_window",
@@ -41,6 +43,7 @@ import inspect
 import os
 import pathlib
 import threading
+import time
 from collections.abc import Callable
 
 from unpythonic.env import env
@@ -765,7 +768,34 @@ def is_mouse_on_widget(widget: str | int) -> bool:
     return dpg.is_item_hovered(widget)
 
 # ---------------------------------------------------------------------------
-# Layout helpers
+# Pacing the render loop
+# ---------------------------------------------------------------------------
+
+def sleep_until_next_frame(t0: float, framerate: float) -> float:
+    """Sleep off whatever is left of one frame's budget at `framerate`. Return the seconds slept.
+
+    `t0`: when the frame started, as a `time.perf_counter()` reading.
+    `framerate`: the rate to pace at, in frames per second. For the constellation's idle rate, pass
+                 `raven.config.GUI_IDLE_FRAMERATE`.
+
+    A frame that has already spent its budget gets no sleep at all, and the return value is then zero. So
+    this caps the frame *rate* and not the effort: the app runs flat out whenever a frame costs more than
+    the budget, which is what "twelve frames a second unless you cannot" means.
+
+    Call it at the foot of the render loop, having taken `t0` at the head::
+
+        while dpg.is_dearpygui_running():
+            t0 = time.perf_counter()
+            update_animations()
+            dpg.render_dearpygui_frame()
+            if not _is_busy():
+                guiutils.sleep_until_next_frame(t0, global_config.GUI_IDLE_FRAMERATE)
+    """
+    budget = 1.0 / framerate
+    remaining = max(0.0, budget - (time.perf_counter() - t0))
+    time.sleep(remaining)
+    return remaining
+
 # ---------------------------------------------------------------------------
 # Waiting for frames, without deadlocking
 # ---------------------------------------------------------------------------

@@ -1,4 +1,8 @@
-"""Tests for `raven.common.gui.utils`' frame-waiting guard.
+"""Tests for `raven.common.gui.utils`.
+
+Most of the module is a thin dressing over DPG and is exercised wherever it is used; what is collected here
+is the handful of things that have their own logic — the frame-waiting guard, the idle throttle's
+arithmetic, widget identity, and the one-frame lifetime of an offscreen park.
 
 `dpg.split_frame()` waits for the render loop to complete a frame. Called *from* that loop — or from app
 startup, which runs on the same thread before the loop begins — the wait can never be satisfied, and the app
@@ -15,12 +19,17 @@ is already standing on the hazardous thread.
 
 import logging
 import threading
+import time
 
 import pytest
 
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed (GUI toolkit absent in CI)")
 
 from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
+
+# What the constellation actually paces at; see `raven.config.GUI_IDLE_FRAMERATE`. Spelled out rather than
+# imported, so that changing the shipped rate cannot quietly change what these assertions mean.
+_IDLE_FRAMERATE = 12
 
 
 @pytest.fixture
@@ -73,6 +82,29 @@ def test_a_worker_thread_is_not_the_render_thread():
     worker.start()
     worker.join()
     assert answers == [False]
+
+
+def test_a_frame_that_overran_its_budget_gets_no_sleep():
+    """A cap on rate, not on effort: an app whose frames are expensive is left to run flat out."""
+    budget = 1.0 / _IDLE_FRAMERATE
+    started_ten_budgets_ago = time.perf_counter() - 10 * budget
+    assert guiutils.sleep_until_next_frame(started_ten_budgets_ago, _IDLE_FRAMERATE) == 0.0
+
+
+def test_the_sleep_absorbs_the_frame_cost_rather_than_adding_to_it():
+    """The whole of the fix: what is slept is the budget *minus* the frame, so the rate is the rate."""
+    budget = 1.0 / _IDLE_FRAMERATE
+    spent = budget / 2  # half the budget already gone when the throttle is reached
+    before = time.perf_counter()
+    slept = guiutils.sleep_until_next_frame(before - spent, _IDLE_FRAMERATE)
+    elapsed = time.perf_counter() - before
+
+    # An exact bound rather than an approximation: `perf_counter` only moves forward, so the frame can only
+    # have cost more than `spent`, and the sleep can only be shorter than what is left. A fixed nap would
+    # return the whole `budget`, which is above this bound, so the assertion tells the two apart.
+    assert slept <= budget - spent
+    assert slept > 0.0, "the throttle slept not at all, so this fixture is measuring the overrun case instead"
+    assert elapsed >= 0.9 * slept, "the return value was computed but not slept"
 
 
 def test_a_required_wait_raises_instead_of_hanging():
