@@ -32,6 +32,10 @@ def main() -> None:
                         help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
                              'Optional — the import pipeline loads NLP and embedding models locally when no '
                              'server answers, so pointing this at nothing exercises that path.')
+    parser.add_argument('--backend-url', metavar='URL', default=None,
+                        help='LLM backend to talk to, overriding the configured one; e.g. http://localhost:1234. '
+                             'Used only when this configuration has a stage that needs an LLM — cluster keywords '
+                             'set to "llm", or summaries enabled — and ignored otherwise.')
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='root logger level (default: INFO)')
@@ -71,9 +75,32 @@ def main() -> None:
 
     try:
         with timer() as tim:
-            importer.import_bibtex(None, opts.output_filename, *opts.input_filenames)
+            importer.import_bibtex(None, opts.output_filename, *opts.input_filenames,
+                                   llm_backend_url=opts.backend_url)
+    except importer.LLMBackendUnavailable as exc:
+        # A batch tool stops rather than starting. The check runs before any of the expensive stages, so
+        # nothing is lost by stopping here, and the alternative — finishing with frequency keywords where
+        # the configuration asked for LLM ones — would write a dataset whose keywords are quietly worse
+        # than the ones that were asked for.
+        from mcpyrate import colorizer  # noqa: PLC0415 -- intentional deferred import
+        # Named as a labelled list rather than as a sentence about them, so that nothing in the line has to
+        # agree with how many there turn out to be.
+        wanted = []
+        if visualizer_config.clusters_keyword_method == "llm":
+            wanted.append('cluster keywords (`clusters_keyword_method = "llm"`)')
+        if visualizer_config.summarize:
+            wanted.append("entry summaries (`summarize = True`)")
+        print(colorizer.colorize(exc.headline, colorizer.Style.BRIGHT, colorizer.Fore.RED) + f" {exc.advice}")
+        print(f"Configured to need it, in `raven.visualizer.config`: {', '.join(wanted)}.")
+        print("If the backend is elsewhere, point this run at it with --backend-url.")
+        logger.error(f"{exc.headline} {exc.advice} Cannot proceed.")
+        sys.exit(2)
     except Exception:
-        logger.warning(f"Error after {tim.dt:0.6g}s total", exc_info=True)
+        # Nonzero, because this is a batch tool and something is reading its exit status. It used to log a
+        # *warning* here and then fall off the end of `main`, which exits 0 — so a failed import reported
+        # success to whatever ran it.
+        logger.error(f"Error after {tim.dt:0.6g}s total", exc_info=True)
+        sys.exit(1)
     else:
         logger.info(f"All done in {tim.dt:0.6g}s total.")
 

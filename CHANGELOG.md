@@ -534,6 +534,11 @@
 
 *Raven-visualizer*
 
+- **Raven-visualizer starts even when the LLM backend is down.** With cluster keywords set to `"llm"` (or summaries on), the app used to exit at startup — no window, no message, exit status 255 — if the configured LLM backend did not answer. A feature that matters only while importing was killing every session, including the ones that never import anything. The check now runs when an import starts, where it belongs; the app opens as usual and says nothing about a backend it is not going to use.
+  - `raven-importer` still stops rather than starting, which is the right answer for a batch tool: the check runs before any of the expensive stages, so nothing is lost, and finishing with frequency keywords where LLM ones were asked for would write a dataset quietly worse than the one requested. It now names what needs the backend and exits **2**.
+  - **A failed import exits nonzero at all now.** Any error used to be logged as a warning and the process then exited **0**, so an import that failed reported success to whatever ran it.
+  - **`raven-importer` gained `--backend-url`**, to point one run at a different LLM backend — the same spelling every other Raven tool uses. It had `--server-url` but no way to say where the LLM was.
+
 - **the wheel over the word cloud or the importer no longer disturbs what is behind them.** Both float
   above the main window, and a wheel over either was taken as one over whatever its rectangle covered: the
   info panel would flash its end-of-scroll marker, or the plot would refresh the tooltip under a pointer
