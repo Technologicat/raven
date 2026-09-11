@@ -164,13 +164,22 @@ def _coerce(default, value, where: str):
     elif isinstance(default, float) and isinstance(value, int):
         return float(value)  # JSON writes a whole number without its point; the setting still wants a float
     elif isinstance(default, tuple) and hasattr(default, "_fields"):
-        # A `NamedTuple` — `client_config.network_timeout` is one. Rebuilt through its own class rather
-        # than through `tuple`, which would hand back a plain tuple that reads correctly at every index
-        # and raises on every *name*, somewhere far from here. Both spellings are accepted, the mapping
-        # being the one worth writing: `{"connect": 5, "read": null}` says which number is which.
+        # A `NamedTuple` — `client_config.network_timeout` is one. Copy-and-update from the shipped value,
+        # so an override may name only the field it means: a connect timeout worth changing usually sits
+        # beside a read timeout that is not. `_replace` is also what checks the field names, which is the
+        # only validation a record of numbers can offer.
+        #
+        # Through its own class either way. `tuple(value)` would hand back a plain tuple, which reads
+        # correctly at every index and raises on every *name*, somewhere far from here.
         try:
-            return type(default)(**value) if isinstance(value, dict) else type(default)(*value)
-        except TypeError as exc:
+            if isinstance(value, dict):
+                updates = value
+            elif len(value) <= len(default._fields):
+                updates = dict(zip(default._fields, value))  # a positional prefix, as a list has no names
+            else:
+                raise TypeError(f"{len(value)} values given for fields {default._fields}")
+            return default._replace(**updates)
+        except (AttributeError, TypeError, ValueError) as exc:
             logger.warning(f"_coerce: {where} is a {type(default).__name__}{default._fields} and the override does not fit it: {exc}; ignored, so the shipped default applies.")
             return _refused
     elif isinstance(default, tuple) and isinstance(value, list):

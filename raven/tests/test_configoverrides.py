@@ -11,13 +11,13 @@ body was `return []`.
 """
 
 import ast
-import enum
 import json
 import pathlib
 from typing import NamedTuple
 
 import pytest
 
+from unpythonic import sym
 from unpythonic.env import env
 
 from raven import configoverrides
@@ -46,9 +46,8 @@ class _Timeout(NamedTuple):
     read: float
 
 
-class _NotJSONExpressible(enum.Enum):
-    """Stands in for a `torch.dtype`: a value `config.py` can hold because it is code, and JSON cannot."""
-    SENTINEL = object()
+#: Stands in for a `torch.dtype`: a value `config.py` can hold because it is code, and JSON cannot.
+_not_json_expressible = sym("not_json_expressible")
 
 
 def make_namespace() -> dict:
@@ -59,7 +58,7 @@ def make_namespace() -> dict:
             "a_flag": True,
             "a_color": (0, 0, 0, 255),
             "a_timeout": _Timeout(connect=10.0, read=120.0),
-            "a_dtype": _NotJSONExpressible.SENTINEL,
+            "a_dtype": _not_json_expressible,
             "a_path": pathlib.Path("/shipped"),
             "unset": None,
             "gui_config": env(width=768, height=768)}
@@ -184,6 +183,27 @@ def test_a_named_tuple_keeps_its_names(write_overrides, written):
     assert isinstance(namespace["a_timeout"], _Timeout)
 
 
+@pytest.mark.parametrize("written, expected", [({"connect": 5}, _Timeout(connect=5, read=120.0)),
+                                               ({"read": None}, _Timeout(connect=10.0, read=None)),
+                                               ([5], _Timeout(connect=5, read=120.0))])
+def test_a_named_tuple_override_may_name_only_what_it_changes(write_overrides, written, expected):
+    """Copy-and-update from the shipped value: a connect timeout worth changing usually sits beside a read that is not."""
+    path = write_overrides({"raven.demo.config": {"a_timeout": written}})
+    namespace = make_namespace()
+    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["a_timeout"]
+    assert namespace["a_timeout"] == expected, "the untouched field did not keep its shipped value"
+
+
+def test_a_named_tuple_override_naming_a_field_that_does_not_exist_is_refused(write_overrides, caplog):
+    """`_replace` is what checks the names, which is the only validation a record of numbers can offer."""
+    path = write_overrides({"raven.demo.config": {"a_timeout": {"conect": 5}, "a_number": 7}})
+    namespace = make_namespace()
+    with caplog.at_level("WARNING", logger="raven.configoverrides"):
+        applied = configoverrides.apply("raven.demo.config", namespace, path=path)
+    assert applied == ["a_number"], "the good sibling did not apply either, so this fixture proves nothing"
+    assert namespace["a_timeout"] == make_namespace()["a_timeout"]
+
+
 def test_a_named_tuple_that_does_not_fit_is_refused(write_overrides, caplog):
     """Arity and field names are the whole of what can be checked here, so they are checked."""
     path = write_overrides({"raven.demo.config": {"a_timeout": [5, 30, 99], "a_number": 7}})
@@ -202,7 +222,7 @@ def test_a_value_json_cannot_express_at_all_is_refused(write_overrides, caplog):
     with caplog.at_level("WARNING", logger="raven.configoverrides"):
         applied = configoverrides.apply("raven.demo.config", namespace, path=path)
     assert applied == ["a_number"], "the good sibling did not apply either, so this fixture proves nothing"
-    assert namespace["a_dtype"] is _NotJSONExpressible.SENTINEL
+    assert namespace["a_dtype"] is _not_json_expressible
 
 
 def test_a_float_default_accepts_a_whole_number(write_overrides):
