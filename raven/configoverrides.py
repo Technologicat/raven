@@ -53,6 +53,20 @@ larger white word cloud is for print articles"` — which is how a commented-out
 kept. Give each a distinct name, JSON having nothing to say about two keys spelled the same.
 """
 
+# **What this costs, since the docstring above only says what it buys.** A value that is pure data — a
+# window size, a colour, a device name — can now be spelled in two places and two syntaxes, and a reader
+# asking "what is this set to" has two files to look in. That is a genuine cost and not a wart to hide.
+#
+# It was taken knowingly, and two things hold it down. The precedence is one-directional and absolute — the
+# JSON always wins, so there is no puzzle about which, only about where — and every applied override is
+# logged at INFO, naming the setting and the file it came from, so a running app can be asked rather than
+# reasoned about.
+#
+# The alternative, moving *everything* to JSON, is what the cost would buy, and it is not available: the
+# prose in the `config.py` files is user-facing documentation — the avatar's postprocessor chain is mostly
+# explanation — and JSON has nowhere to put a paragraph. So the split is along the line where the two
+# formats are each good at their half: `config.py` documents what can be set, this file records what was.
+
 __all__ = ["OVERRIDES_PATH", "apply"]
 
 import json

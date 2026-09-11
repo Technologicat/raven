@@ -730,7 +730,9 @@ So you can put them somewhere else instead. Create `~/.config/raven/overrides.js
 }
 ```
 
-Anything set here wins over the `config.py` that ships with Raven, which then goes back to being purely a record of the defaults — and the settings that are yours stay yours across upgrades.
+Anything set here wins over the `config.py` that ships with Raven, and the settings that are yours stay yours across upgrades.
+
+**The two files are for different things, which is why this is a split rather than a replacement.** `config.py` stays the place the *documentation* lives: what each setting means, what the other values are, why one was chosen. That is prose, sometimes paragraphs of it — the avatar's postprocessor chain is mostly explanation — and a JSON file has nowhere to put it. Your overrides are the other half: short, specific to this machine, and needing no explanation beyond the occasional note. So read `config.py` to find out what you can set, and write `overrides.json` to set it.
 
 - **A dotted name reaches inside a setting that holds other settings.** `gui_config` in the *Visualizer*'s and *Librarian*'s configs is one of those, so its fields are written `gui_config.word_cloud_w`.
 - **A name beginning with `//` is commented out**, and is ignored in silence. JSON has no comments of its own, and a settings file is where you keep the alternative you switch to occasionally as well as the answer you are using today:
