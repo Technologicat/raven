@@ -117,6 +117,17 @@ def test_a_commented_out_setting_is_skipped_in_silence(write_overrides, caplog):
     assert caplog.text == "", "a commented-out entry was reported; the point of one is that it says nothing"
 
 
+def test_a_comment_key_naming_no_setting_at_all_is_harmless(write_overrides, caplog):
+    """The same rule doing a second job: a `//` key that names nothing is a free-form comment."""
+    path = write_overrides({"raven.demo.config": {"// note": "why the alternative below is kept",
+                                                  "a_number": 7}})
+    namespace = make_namespace()
+    with caplog.at_level("WARNING", logger="raven.configoverrides"):
+        applied = configoverrides.apply("raven.demo.config", namespace, path=path)
+    assert applied == ["a_number"], "the live sibling did not apply either, so this fixture proves nothing"
+    assert caplog.text == "", "the comment was reported as a name matching no setting, which is what it is"
+
+
 def test_a_whole_commented_out_module_is_skipped_in_silence(write_overrides, caplog):
     """The marker works at either level, so a component's settings can be switched off as a block."""
     path = write_overrides({"// raven.demo.config": {"a_string": "switched off"},

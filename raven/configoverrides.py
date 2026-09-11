@@ -47,6 +47,10 @@ worse than what it replaces. It works at either level::
 
 Deleting the three characters turns one back on, which is what a comment is for. Nothing else can collide
 with the marker, `//` being unspellable as a Python name.
+
+Since *any* `//` key is skipped, one naming no setting at all is a free-form comment — `"// note": "the
+larger white word cloud is for print articles"` — which is how a commented-out entry says why it is being
+kept. Give each a distinct name, JSON having nothing to say about two keys spelled the same.
 """
 
 __all__ = ["OVERRIDES_PATH", "apply"]

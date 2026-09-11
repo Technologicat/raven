@@ -739,12 +739,15 @@ Anything set here wins over the `config.py` that ships with Raven, which then go
   "raven.visualizer.config": {
       "clusters_keyword_method": "llm",
 
+      "// note": "the larger white word cloud below is for print articles",
       "// gui_config.word_cloud_w": 1024,
       "// gui_config.word_cloud_background_color": "white"
   }
   ```
 
   Delete the three characters to switch one on. It works on a whole component too — `"// raven.server.config": { ... }` — and nothing can collide with it, since no setting's name can begin that way.
+
+  **`"// note"` above is the same rule doing a second job**: since *any* `//` key is ignored, one that names no setting at all is a free-form comment. Use it to say why an alternative is kept, which is the thing you will want a year from now and the thing a bare pair of numbers cannot tell you. Give each one a slightly different name (`"// note"`, `"// why"`, `"// see also"`) — they share an object, and JSON has nothing to say about two keys that are spelled the same.
 - **Only settings that already exist can be overridden.** A misspelled name is reported in the log and ignored, rather than quietly becoming a setting nothing reads. The same goes for a value of the wrong kind — a word where a number belongs — which leaves the shipped default in place and says so.
 - **A mistyped *module* name is the one thing that cannot be reported that way**, since no module would claim it. Raven logs the module names it found in the file when it reads it, so a setting that did not take effect can be traced there.
 - **If the file has a syntax error, Raven says so and starts anyway**, on the shipped defaults. It will not refuse to run over a stray comma.

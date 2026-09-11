@@ -646,7 +646,7 @@ gui_config = env(  # ----------------------------------------
                  subtitle_y0=0,  # pixels, negative = up
                  # Margin at right edge of avatar panel when wrapping subtitle text
                  subtitle_text_wrap_margin=24,  # pixels
-                )
+                ).finalize()  # settings may be changed, but a name not declared here is a typo, not a new setting
 
 # ----------------------------------------
 # Names, AI's greeting
@@ -707,7 +707,7 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
                                                  "backdrop_path": str(avatar.assets_path("backdrops", "cyberspace.png")),
                                                  "backdrop_blur": True,  # The blur is applied once, when the backdrop is loaded, so it doesn't affect rendering performance.
                                                  }
-                    )
+                    ).finalize()  # settings may be changed, but a name not declared here is a typo, not a new setting
 
 # The discontinuity effect: a brief visual flourish over the avatar whenever the conversation on screen is
 # replaced by a different one - stepping to a sibling branch, jumping to where a branch continues, starting
