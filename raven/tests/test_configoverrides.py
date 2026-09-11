@@ -168,6 +168,26 @@ def test_a_path_arrives_as_a_string_and_is_expanded(write_overrides):
     assert namespace["a_path"].is_absolute()
 
 
+def test_a_path_override_is_not_resolved_through_symlinks(write_overrides, tmp_path):
+    """Most paths in these configs are roots that other paths are identities under, and resolving moves them.
+
+    Someone whose `~/.config` is a symlink into a dotfiles checkout meets this on an ordinary setup: the
+    root they configured would silently become somewhere else, and every id built relative to it changes.
+    """
+    real = tmp_path / "real_documents"
+    real.mkdir()
+    link = tmp_path / "documents"
+    link.symlink_to(real, target_is_directory=True)
+
+    path = write_overrides({"raven.demo.config": {"a_path": str(link)}})
+    namespace = make_namespace()
+    configoverrides.apply("raven.demo.config", namespace, path=path)
+
+    assert link.resolve() == real, "this fixture's symlink does not point where the test assumes"
+    assert namespace["a_path"] == link, "the override was resolved through the symlink, so the configured root became a different directory"
+    assert namespace["a_path"].is_absolute()
+
+
 def test_a_tuple_default_accepts_a_json_list(write_overrides):
     """JSON has one kind of sequence; the colors and sizes in these configs are tuples."""
     path = write_overrides({"raven.demo.config": {"a_color": [255, 128, 0, 255]}})

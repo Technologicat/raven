@@ -71,7 +71,9 @@ kept. Give each a distinct name, JSON having nothing to say about two keys spell
 #     from a font size and two paddings, a `User-Agent` from `__version__`. JSON cannot derive anything,
 #     which is also why an override applies to the *derived* name rather than to what it came from.
 #   - **Python values.** `torch.float16`, a `Timeout`, a `pathlib.Path` — some of what these files hold has
-#     no JSON spelling at all. `_coerce` rebuilds the two that have an unambiguous one and refuses the rest.
+#     no JSON spelling at all. `_coerce` rebuilds the two that can be reconstructed without guessing: a
+#     `pathlib.Path` from a string, and a `NamedTuple` from a mapping or a list. A `torch.dtype` is the
+#     other kind — "float16" could name any number of things — and is refused, the shipped value standing.
 #
 # So the split runs along the line where each format is good at its half: `config.py` documents what can be
 # set, and this file records what was.
@@ -155,7 +157,18 @@ def _coerce(default, value, where: str):
     if default is None:  # nothing to fit to, and plenty of settings ship as "unset"
         return value
     if isinstance(default, pathlib.PurePath):
-        return pathlib.Path(value).expanduser().resolve()
+        # Absolutized and `~`-expanded, but **not** resolved through symlinks — `canonical_path` rather
+        # than `absolutize_filename`, the pair `raven.common.utils` draws that distinction for. Nearly
+        # every path in these configs is a *root* that other paths are built under or checked against
+        # (`llm_docs_dir`, and a document id is where a file sits beneath it), and resolving a symlink can
+        # relocate such a root out of the tree that gave it its meaning. Someone whose `~/.config` is a
+        # symlink into a dotfiles checkout is the ordinary way to meet that. Nothing is given up: the OS
+        # follows symlinks on open and on stat, so the unresolved path still reaches the real file.
+        #
+        # Deferred because `raven.common.utils` reaches numpy, and `raven.config` — the first module of the
+        # constellation to load — would otherwise pay for it before doing anything.
+        from .common import utils as common_utils  # noqa: PLC0415 -- intentional deferred import
+        return common_utils.canonical_path(value)
     if isinstance(default, bool) or isinstance(value, bool):
         # Asked before the numeric case below, because `bool` is a subclass of `int`: otherwise `true`
         # would quietly pass for a setting that wants a number, and `1` for one that wants a switch.
