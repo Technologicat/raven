@@ -10,8 +10,10 @@ time regardless of the render frame rate.
 The `rate` parameter, in the half-open interval (0, 1], controls
 how quickly the value approaches the target. Higher values mean faster
 animation. For example, a rate of 0.8 means 80% of the remaining
-distance is covered per frame at *calibration FPS* (25 FPS).
-The animator compensates for actual FPS automatically.
+distance is covered per frame at `CALIBRATION_FPS`, the constellation's
+reference clock (`raven.config`, which see for what it is and what
+changing it would cost). The animator compensates for actual FPS
+automatically.
 
 Terminology: ``rate`` is the user-facing parameter you configure — the fraction
 of remaining distance covered per frame at ``CALIBRATION_FPS``.  ``step`` is
@@ -27,7 +29,23 @@ import time
 from typing import Optional
 
 
-CALIBRATION_FPS = 25  # FPS for which `rate` was calibrated
+# The constellation's reference clock, and the unit anyone tuning a time-varying effect works in: a `rate`
+# here, the avatar's pose-interpolator `step` and blink probability, a video postprocessor effect's
+# durations — all of them are "per frame at `CALIBRATION_FPS`", each corrected at run time to whatever the
+# machine actually achieves.
+#
+# **Read from `raven.config` rather than defined here**, even though this module owns the math, because one
+# process must not hold two answers. The value is overridable (`~/.config/raven/overrides.json`), and a
+# local default here would take the override in `raven.config` and leave every consumer of this module on
+# the old number — measured, and it is exactly the split that produces an animation running at one speed
+# and its neighbour at another.
+#
+# The cost is that `raven.common` is no longer free of the constellation's config, which matters on the day
+# it is extracted as an upstream library; see `TODO_DEFERRED.md`. That is one line to re-point, against a
+# class of bug that is invisible until somebody watches two animations disagree.
+from .. import config as global_config
+
+CALIBRATION_FPS = global_config.CALIBRATION_FPS
 
 
 def fps_corrected_step(rate: float, dt: float) -> float:

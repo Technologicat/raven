@@ -40,5 +40,22 @@ GUI_IDLE_FRAMERATE = 12    # frames per second, while the app is idle
 GUI_INPUT_ACTIVE_S = 0.5   # stay at full frame rate for this long after the last user input
 
 
+# ---------------------------------------------------------------------------
+# The reference clock for time-varying effects
+# ---------------------------------------------------------------------------
+#
+# Every animated quantity in the constellation is tuned *per frame at `CALIBRATION_FPS`*, and corrected at
+# run time to whatever frame rate is actually achieved — a GUI animation's rate, the avatar's pose
+# interpolator step and blink probability, a video postprocessor effect's durations. So this is the unit
+# those numbers are quoted in, and re-exported here because this is where a reader looks for it.
+#
+# **Changing it redefines the unit rather than reconfiguring anything.** Nothing anywhere assumes the
+# number: every consumer uses it as a ratio (`avg_fps / CALIBRATION_FPS`, `CALIBRATION_FPS * seconds`), so
+# a different value is self-consistent — but every quantity that was *tuned* against it would then need
+# re-tuning by the same factor, which is a day's work with a video capture and an eye, not an edit. It is
+# here to make the assumption discoverable by anyone willing to take that on, not to invite it.
+CALIBRATION_FPS = 25
+
+
 # Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.
 configoverrides.apply(__name__, globals())

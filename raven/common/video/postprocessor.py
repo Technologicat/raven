@@ -24,6 +24,7 @@ import numpy as np
 import torch
 import torchvision
 
+from ..smoothvalue import CALIBRATION_FPS
 from .colorspace import rgb_to_yuv, yuv_to_rgb, luminance
 from .upscaler import Upscaler
 
@@ -458,7 +459,7 @@ class Postprocessor:
         self._meshgrid_prev_w = None
 
         # FPS correction
-        self.CALIBRATION_FPS = 25  # design FPS for dynamic effects (for automatic FPS correction)
+        self.CALIBRATION_FPS = CALIBRATION_FPS  # design FPS for dynamic effects (for automatic FPS correction)
         self.stream_start_timestamp = time.monotonic_ns()  # for updating frame counter reliably (no accumulation)
         self.frame_no = -1  # float, frame counter for *normalized* frame number *at CALIBRATION_FPS*
         self.last_frame_no = -1

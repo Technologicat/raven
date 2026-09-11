@@ -1045,7 +1045,7 @@ class Animator:
         Return the modified pose.
         """
         # Compute FPS-corrected blink probability
-        CALIBRATION_FPS = 25
+        CALIBRATION_FPS = smoothvalue.CALIBRATION_FPS
         p_orig = self._settings["blink_probability"]  # blink probability per frame at CALIBRATION_FPS
         avg_render_sec = self.render_duration_statistics.average()
         if avg_render_sec > 0:
@@ -1323,7 +1323,7 @@ class Animator:
 
         # Add dynamic noise (re-generated at 25 FPS) to the target to make the animation look less robotic, especially once we are near the target pose.
         def add_microsway() -> None:  # DANGER: MUTATING FUNCTION
-            CALIBRATION_FPS = 25  # FPS at which randomizing a new microsway target looks good
+            CALIBRATION_FPS = smoothvalue.CALIBRATION_FPS  # the rate at which randomizing a new microsway target looks good
             time_now = time.monotonic_ns()
             should_microsway = True
             if self.last_microsway_timestamp is not None:

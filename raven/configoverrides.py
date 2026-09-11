@@ -154,7 +154,7 @@ def _coerce(default, value, where: str):
     A value that does not fit is refused rather than applied. Both choices produce the same warning, and
     refusing additionally leaves the app running on a default that works.
     """
-    if default is None:  # nothing to fit to, and plenty of settings ship as "unset"
+    if default is None:  # nothing to fit to
         return value
     if isinstance(default, pathlib.PurePath):
         # Absolutized and `~`-expanded, but **not** resolved through symlinks — `canonical_path` rather
