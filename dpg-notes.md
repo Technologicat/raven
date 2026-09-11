@@ -1082,8 +1082,8 @@ while dpg.is_dearpygui_running():
     | layer | indexes by | how |
     |---|---|---|
     | GUI animations | elapsed seconds | `Animator.render_frame` passes one `time.monotonic_ns()` per frame; each animation computes where on its trajectory `(t - t0)` puts it |
-    | Avatar pose interpolator | a corrected per-frame step | a constant `rate` calibrated at 25 FPS, converted each frame by `smoothvalue.fps_corrected_step` into the step matching the rate actually achieved (from a running average of render duration) |
-    | Video postprocessor | a normalized frame number | `frame_no = 25 * seconds_since_stream_start`, a **float**, so an effect written in "frames" is written in frames-at-25-FPS and needs no correction of its own |
+    | Avatar pose interpolator | a per-frame step at 25 FPS | a constant `rate` calibrated there, converted each frame by `smoothvalue.fps_corrected_step` into the step matching the rate actually achieved (from a running average of render duration) |
+    | Video postprocessor | a frame number at 25 FPS | `frame_no = 25 * seconds_since_stream_start`, a **float**, so an effect written in "frames" needs no correction of its own |
 
     - **The lower two share a reference clock of 25 FPS**, and that is the number an author of either one works in: the avatar's `pose_interpolator_step` is *the fraction of the remaining distance covered in one frame at 25 FPS*, and a postprocessor effect's durations are *frames at 25 FPS*. Neither is a claim about what the machine achieves — both are corrected to whatever it actually does. The GUI layer needs no such reference, working in seconds outright.
     - The position-based form needs a start time and a trajectory; the rate-based one needs neither, which is what suits it to a pose being retargeted continuously; the normalized-frame form lets an effect author think in frames while the clock does the compensating.
