@@ -161,43 +161,28 @@ To check the answer for a *running* process rather than for your shell, read its
 `tr '\0' '\n' < /proc/<pid>/environ | grep LD_LIBRARY_PATH` — or look for the library in
 `/proc/<pid>/maps`. That is authoritative where your own shell is merely suggestive.
 
-### Working-tree state: `config.py` files are edited in place
+### Machine-local settings live outside the repository
 
-**Machine-local settings have a home outside the repository as of 2026-09-11**, and that is where they now
-belong: `~/.config/raven/overrides.json`, keyed by config module, applied by `raven.configoverrides` as the
-last statement of every config module. A file that is not in the tree cannot be staged by accident. The
-README's *Configuration* section documents the format for users; the four settings this machine had were
-migrated the same day, so **the three files below are expected to be clean**.
+`~/.config/raven/overrides.json`, keyed by config module, applied by `raven.configoverrides` as the last
+statement of every config module. Shipped defaults stay in the tracked `config.py` files and the override
+file wins. The README's *Configuration* section has the format.
 
-The rest of this section is the guard against the arrangement that preceded it, and is kept because the
-hazard is only smaller, not gone: a `config.py` is still editable, and still tracked.
+**So a tracked `config.py` is an ordinary source file, and the tree is expected to be clean.** Until
+2026-09-11 it was not: the three configs carried machine-local overrides as their steady state, and a long
+section here forbade every bulk `git add` form in an attempt to keep them out of commits. It failed three
+times anyway, because the failure needs a file somebody is *legitimately* editing, and a rule that caught
+that would have blocked the feature work. A file boundary is what fixed it. The deny rules on `git add -A`,
+`-u`, `.` and `raven/` stay in the agent's permission settings; they cost nothing and guard other things.
 
-Raven was configured via in-place edits to tracked `config.py` files — paths, model choices,
-hardware-specific tweaks — so on a dev machine that has not migrated, expect some subset of the following
-to show up as `M` in `git status` as a **steady state** rather than as a pending change that needs
-committing:
+### `git stash` is a mutation of the working tree in service of a read
 
-- `raven/client/config.py`
-- `raven/librarian/config.py`
-- `raven/visualizer/config.py`
+Independent of the above, and it survived the fix because it was never really about `config.py`.
 
-The specific files and the specific contents differ between dev machines; the pattern is the same everywhere — at least some config.py somewhere carries local overrides.
+- **`git stash push <paths>` can fail and leave you believing it worked.** An intent-to-add file elsewhere in the tree (`git add -N`, which is what a newly written and not-yet-committed script looks like) makes it abort with "Entry ... not uptodate. Cannot merge." A script that pushes, runs something, and pops then runs its check against the *unstashed* tree — measuring exactly what it meant to revert.
+- **Prefer not stashing at all.** To see how the tree behaved before an edit, read it out of git instead: `git show HEAD:path/to/file`, or `git stash create` (which makes a commit and touches nothing).
+- **Never `git stash pop` or `git stash apply` without naming the entry and reading it first** — `git stash show --name-only stash@{N}`, then decide. `pop` with no argument means `stash@{0}`, whatever was stashed most recently by anyone, not what this session pushed.
 
-**Implication for `git add`**: add specific files by name. **Never** `git add -A`, `git add --all`, `git add .`, `git add -u`, `git add --update`, or `git add raven/`. If a commit you're working on touches one of these files coincidentally (e.g. a refactor sweeps through them), check with me before staging — there may be an unrelated local override mixed in that shouldn't be part of the commit.
-
-**`-u` belongs on that list even though it looks narrower than `-A`.** It stages only files git already tracks, which reads as the safe one — and every `config.py` here is tracked, so it sweeps up exactly the overrides this section exists to protect. It is tempting for the same reason each time: after a wide refactor it is the short way to say "the files I touched", which it is not; it means "every tracked file that differs", and the difference is invisible until it is committed. (Live case 2026-08-07: a docs restructure staged with `-u` put a personal-machine hostname into `llm_backend_url` on a public repo, and the working tree looked *clean* afterwards, which is what made it noticeable at all.) All these forms are denied in the agent's permission settings, so the failure should now be a refused command rather than a bad commit.
-
-**That sentence was not true of `git add raven/` until 2026-08-10, and the gap cost exactly what it looks like it would.** The directory form was on the never-list above but absent from the deny list, which covered only the flags — so the documentation asserted a guard that did not exist, and the command went through unremarked after a multi-file change ("add the files I touched"). It staged all three `config.py` overrides; caught in `git status` before committing, but only because the habit of reading the staged list survived the missing guard. The rule is now `Bash(git add raven)` and `Bash(git add raven/)` as **exact** matches, deliberately not `git add raven:*` — a prefix rule would also refuse `git add raven/librarian/app.py`, which is the correct way to stage and must stay frictionless.
-
-**`git stash` is the same hazard wearing a different hat, and the dangerous half is `pop`.** A stash made in this tree is *very likely* to contain the `config.py` overrides — that is what makes it a stash rather than a commit — so restoring one blindly writes somebody's local settings over the current ones. The asymmetry with `git add` is that the damage is silent in the other direction too: `pop` does not report which files it restored beyond a status listing nobody reads, and there is no staged list to catch it in.
-
-Rules:
-
-- **Never `git stash pop` or `git stash apply` without naming the entry and reading it first** — `git stash show --name-only stash@{N}`, then decide. `pop` with no argument means `stash@{0}`, which is whatever was stashed *most recently by anyone*, not what this session pushed.
-- **`git stash push <paths>` can fail and leave you believing it worked.** An intent-to-add file elsewhere in the tree (`git add -N`, which is what a newly written and not-yet-committed script looks like) makes it abort with "Entry ... not uptodate. Cannot merge." A script that pushes, runs something, and pops then runs its check against the *unstashed* tree and pops a stranger's entry.
-- **Prefer not stashing at all.** To see how the tree behaved before an edit, read it out of git instead: `git show HEAD:path/to/file`, or `git stash create` (which makes a commit and touches nothing). Stashing to run a check is a mutation of the working tree in service of a read.
-
-(Live case 2026-08-31: `git stash push` on four named paths aborted for exactly the reason above; the check that followed silently measured the already-fixed tree, and the paired `git stash pop` then aimed at a months-old `stash@{0}` holding all three `config.py` overrides. It failed too, for the same reason. Had either succeeded alone, the result was a wrong answer or overwritten local settings.)
+(Live case 2026-08-31: a `git stash push` on four named paths aborted for exactly that reason; the check that followed silently measured the already-fixed tree, and concluded the opposite of the truth.)
 
 Version is defined in `raven/__init__.py` (`__version__`), read by PDM via `[tool.pdm.version]` in `pyproject.toml`. Tag format: `vX.Y.Z`.
 

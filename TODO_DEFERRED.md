@@ -17,6 +17,25 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Is Librarian's `target_fps = 20` still needed, now that it upscales with bicubic?
+
+*Cluster: avatar · Cost: S — a measurement and a one-line change, or a one-line comment saying why not · Gate: none · Filed: 2026-09-11*
+
+The constellation ships `target_fps = 25` — `server/config.py`, `animator.json`, the two preset settings
+files and the settings editor all agree — and `librarian.config.avatar_config` alone overrides it to **20**.
+
+**The override was set for Anime4K on a 3070 Ti, where 25 did not hold** (Juha, 2026-09-11). Librarian
+upscales with `bicubic` now, which the cost table in `raven/avatar/README.md` puts far below Anime4K, so the
+reason may simply have expired. If it has, dropping the override gets Librarian's avatar a fifth more frames
+for nothing; if it has not, the comment saying so is worth as much, because the next person to notice the
+discrepancy will otherwise ask this question again.
+
+Measure on the one-GPU configuration rather than at the desk — with the external card attached, the avatar
+has a GPU to itself, which is exactly the case that hides a frame-rate ceiling.
+
+Discovered while chasing a stale `~25 Hz` in an unrelated comment (2026-09-11), which turned out to be right
+about the server and wrong about Librarian.
+
 ## A multiline text control of our own
 
 *Cluster: text-input · Cost: L — two weeks (Juha, 2026-09-10), by Kolmogorov taming · Gate: none, and nothing waits on it · Filed: 2026-09-10 · See also: "Make the Librarian chat composer text field resizable"*

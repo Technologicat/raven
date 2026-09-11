@@ -709,8 +709,12 @@ class Animator:
         self.target_size = poser.get_image_size()
         self.upscaler = None
         # Serializes the render pipeline's crop→upscale→postprocess region against settings-handler
-        # updates. Rendering proceeds at ~25 Hz and each call holds the lock for ~40 ms; settings
-        # updates are rare, so contention is negligible in practice.
+        # updates. Held for part of each rendered frame — those three of the ten stages the frame log
+        # times, with the THA3 inference outside it — so a settings update waits at most that long.
+        #
+        # **What makes contention negligible is that settings updates are rare, not that the hold is
+        # short.** A rare writer meets a continuous reader rarely, however long the reader holds it; and
+        # when it does meet it, waiting a fraction of a frame for a settings change is imperceptible.
         self.render_pipeline_lock = threading.Lock()
         self.upscale_factor = None  # Nice to know; but also so that we can re-instantiate the upscaler only when the settings actually change.
         self.upscale_preset = None

@@ -186,9 +186,14 @@ shape further to the right.
 | `low` (Anime4K) | 4.32 | 230 |
 | `high` (Anime4K) | 10.0 | 100 |
 
-The avatar renders at `target_fps` — 20 by default — so all five leave room on this hardware, and the
-choice is about what else the GPU is doing. On a card where Anime4K does not fit, `lanczos` is the sharpest
-that still does.
+The avatar renders at `target_fps`, which is **25** in the animator settings the server ships — so all five
+leave room on this hardware, and the choice is about what else the GPU is doing. On a card where Anime4K
+does not fit, `lanczos` is the sharpest that still does.
+
+*Raven-librarian overrides it to 20* (`librarian.config.avatar_config`), which is worth knowing when a
+figure here does not match what that app reports. The override dates from running Anime4K on a 3070 Ti,
+where 25 did not hold; Librarian uses `bicubic` now, so whether it is still needed is an open question —
+see `TODO_DEFERRED.md`.
 
 The [video postprocessor](../common/video/postprocessor.py) is a set of custom pixel shaders implemented in PyTorch.
 

@@ -148,7 +148,11 @@ In order, and the first is the only one carrying a decision that is already made
      unreachable. Will use frequency keywords instead."* Same semantics as Librarian's two connection
      pills, and **not a modal**, Raven avoiding those. Juha, 2026-09-11: "feel free to run the GUI as
      needed", so the live check is cleared in advance.
-2. **The help cards**, which is where this section was going before the day filled up. `xdot_viewer` (7
+2. **Migrate `maia`'s config to the override file** (Juha, 2026-09-11 — "something for next week"). The
+   work machine was done on the day; the personal one still carries its settings as in-place edits to the
+   tracked `config.py` files, so its tree will show the old `M` state until someone moves them. The README's
+   *Configuration* section is the format, and `git diff` on the three files is the list of what to move.
+3. **The help cards**, which is where this section was going before the day filled up. `xdot_viewer` (7
    keys) and `cherrypick` (10, of which 5 are mouse gestures) are the real work; the two avatar editors
    want a confirming read; the two-column prose sweep is untouched on all seven cards.
    `scripts/check_hotkey_tooltips.py` prints the standing count and is the place to start.
