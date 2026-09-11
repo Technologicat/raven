@@ -62,10 +62,19 @@ kept. Give each a distinct name, JSON having nothing to say about two keys spell
 # logged at INFO, naming the setting and the file it came from, so a running app can be asked rather than
 # reasoned about.
 #
-# The alternative, moving *everything* to JSON, is what the cost would buy, and it is not available: the
-# prose in the `config.py` files is user-facing documentation — the avatar's postprocessor chain is mostly
-# explanation — and JSON has nowhere to put a paragraph. So the split is along the line where the two
-# formats are each good at their half: `config.py` documents what can be set, this file records what was.
+# The alternative, moving *everything* to JSON, is what the cost would buy, and it is not available. A
+# `config.py` is three things JSON is not, and each rules out a different part of the contents:
+#
+#   - **Prose.** The comments are user-facing documentation — the avatar's postprocessor chain is mostly
+#     explanation — and JSON has nowhere to put a paragraph.
+#   - **Code.** Half these files are computed: `librarian_userdata_dir` from the global one, `TOOLBAR_H`
+#     from a font size and two paddings, a `User-Agent` from `__version__`. JSON cannot derive anything,
+#     which is also why an override applies to the *derived* name rather than to what it came from.
+#   - **Python values.** `torch.float16`, a `Timeout`, a `pathlib.Path` — some of what these files hold has
+#     no JSON spelling at all. `_coerce` rebuilds the two that have an unambiguous one and refuses the rest.
+#
+# So the split runs along the line where each format is good at its half: `config.py` documents what can be
+# set, and this file records what was.
 
 __all__ = ["OVERRIDES_PATH", "apply"]
 
@@ -154,6 +163,16 @@ def _coerce(default, value, where: str):
             return value
     elif isinstance(default, float) and isinstance(value, int):
         return float(value)  # JSON writes a whole number without its point; the setting still wants a float
+    elif isinstance(default, tuple) and hasattr(default, "_fields"):
+        # A `NamedTuple` — `client_config.network_timeout` is one. Rebuilt through its own class rather
+        # than through `tuple`, which would hand back a plain tuple that reads correctly at every index
+        # and raises on every *name*, somewhere far from here. Both spellings are accepted, the mapping
+        # being the one worth writing: `{"connect": 5, "read": null}` says which number is which.
+        try:
+            return type(default)(**value) if isinstance(value, dict) else type(default)(*value)
+        except TypeError as exc:
+            logger.warning(f"_coerce: {where} is a {type(default).__name__}{default._fields} and the override does not fit it: {exc}; ignored, so the shipped default applies.")
+            return _refused
     elif isinstance(default, tuple) and isinstance(value, list):
         return tuple(value)
     elif isinstance(value, type(default)):

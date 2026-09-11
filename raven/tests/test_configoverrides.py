@@ -11,8 +11,10 @@ body was `return []`.
 """
 
 import ast
+import enum
 import json
 import pathlib
+from typing import NamedTuple
 
 import pytest
 
@@ -38,6 +40,17 @@ def write_overrides(tmp_path):
     return write
 
 
+class _Timeout(NamedTuple):
+    """Stands in for `client_config.network_timeout`, the real `NamedTuple` in these configs."""
+    connect: float
+    read: float
+
+
+class _NotJSONExpressible(enum.Enum):
+    """Stands in for a `torch.dtype`: a value `config.py` can hold because it is code, and JSON cannot."""
+    SENTINEL = object()
+
+
 def make_namespace() -> dict:
     """A stand-in config module's globals, holding one of each shape a real config module has."""
     return {"a_string": "shipped",
@@ -45,6 +58,8 @@ def make_namespace() -> dict:
             "a_float": 0.5,
             "a_flag": True,
             "a_color": (0, 0, 0, 255),
+            "a_timeout": _Timeout(connect=10.0, read=120.0),
+            "a_dtype": _NotJSONExpressible.SENTINEL,
             "a_path": pathlib.Path("/shipped"),
             "unset": None,
             "gui_config": env(width=768, height=768)}
@@ -156,6 +171,38 @@ def test_a_tuple_default_accepts_a_json_list(write_overrides):
     configoverrides.apply("raven.demo.config", namespace, path=path)
     assert namespace["a_color"] == (255, 128, 0, 255)
     assert isinstance(namespace["a_color"], tuple)
+
+
+@pytest.mark.parametrize("written", [[5, 30], {"connect": 5, "read": 30}])
+def test_a_named_tuple_keeps_its_names(write_overrides, written):
+    """`client_config.network_timeout` is one, and a plain tuple would read fine by index and raise by name."""
+    path = write_overrides({"raven.demo.config": {"a_timeout": written}})
+    namespace = make_namespace()
+    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["a_timeout"]
+    assert namespace["a_timeout"] == _Timeout(connect=5, read=30)
+    assert namespace["a_timeout"].connect == 5, "rebuilt as a plain tuple, so every access by name now raises"
+    assert isinstance(namespace["a_timeout"], _Timeout)
+
+
+def test_a_named_tuple_that_does_not_fit_is_refused(write_overrides, caplog):
+    """Arity and field names are the whole of what can be checked here, so they are checked."""
+    path = write_overrides({"raven.demo.config": {"a_timeout": [5, 30, 99], "a_number": 7}})
+    namespace = make_namespace()
+    with caplog.at_level("WARNING", logger="raven.configoverrides"):
+        applied = configoverrides.apply("raven.demo.config", namespace, path=path)
+    assert applied == ["a_number"], "the good sibling did not apply either, so this fixture proves nothing"
+    assert namespace["a_timeout"] == make_namespace()["a_timeout"]
+    assert "a_timeout" in caplog.text
+
+
+def test_a_value_json_cannot_express_at_all_is_refused(write_overrides, caplog):
+    """A `torch.dtype`, a compiled regex — `config.py` is code, and some of what it holds has no JSON form."""
+    path = write_overrides({"raven.demo.config": {"a_dtype": "float16", "a_number": 7}})
+    namespace = make_namespace()
+    with caplog.at_level("WARNING", logger="raven.configoverrides"):
+        applied = configoverrides.apply("raven.demo.config", namespace, path=path)
+    assert applied == ["a_number"], "the good sibling did not apply either, so this fixture proves nothing"
+    assert namespace["a_dtype"] is _NotJSONExpressible.SENTINEL
 
 
 def test_a_float_default_accepts_a_whole_number(write_overrides):
