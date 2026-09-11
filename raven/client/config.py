@@ -57,7 +57,7 @@ network_timeout_streaming = Timeout(connect=10.0, read=None)
 #
 tts_playback_audio_device = "system-default"  # OS's default, i.e. the same one other apps use
 # tts_playback_audio_device = None  # first available as listed by `raven-check-audio-devices`
-# tts_playback_audio_device = "Built-in Audio Analog Stereo"
+# tts_playback_audio_device = "Built-in Audio Analog Stereo"  # explicitly named device, see `raven-check-audio-devices`
 
 # Which audio capture device to use for STT (speech to text, speech recognition).
 #
@@ -73,7 +73,7 @@ tts_playback_audio_device = "system-default"  # OS's default, i.e. the same one 
 # This has NO system-default setting, as our recording backend doesn't support that.
 #
 stt_capture_audio_device = None
-# stt_capture_audio_device = "Built-in Audio Analog Stereo"
+# stt_capture_audio_device = "Built-in Audio Analog Stereo"  # explicitly named device, see `raven-check-audio-devices`
 
 # How the recorder decides that you have stopped speaking, and how its VU meter behaves.
 #
