@@ -33,6 +33,20 @@ rule covers both shapes a config module has, and needs no declaration of which i
 Only settings that already exist can be overridden, and a name matching nothing is reported rather than
 created. That is the whole of the typo protection available here: a `config.py` is Python and a setting
 is just a name, so there is nothing to validate a *value* against beyond the type the default has.
+
+**A name beginning with `//` is a commented-out entry**, and is skipped in silence. JSON has no comments,
+and the `config.py` this replaces had them — a settings file is somewhere people keep the alternative they
+switch to occasionally, not only the answer they are using today, and losing that would make the file
+worse than what it replaces. It works at either level::
+
+    "raven.visualizer.config": {
+        "gui_config.word_cloud_w": 768,
+        "// gui_config.word_cloud_w": 1024
+    },
+    "// raven.server.config": {"...": "a whole component, switched off"}
+
+Deleting the three characters turns one back on, which is what a comment is for. Nothing else can collide
+with the marker, `//` being unspellable as a Python name.
 """
 
 __all__ = ["OVERRIDES_PATH", "apply"]
@@ -52,6 +66,10 @@ OVERRIDES_PATH = pathlib.Path("~/.config/raven/overrides.json").expanduser()
 
 # Returned by `_coerce` for a value it will not fit to the setting's shipped shape.
 _refused = sym("refused")
+
+# What marks a key as commented out, at either level. Chosen because JSON's own de facto comment idiom is
+# `//`, and because no Python name can start with it, so a real setting can never be mistaken for one.
+_COMMENT_MARKER = "//"
 
 # Paths whose contents have been announced to the log, so that eight config modules reading one file
 # produce one line about it rather than eight.
@@ -87,8 +105,9 @@ def _read(path: pathlib.Path) -> dict:
     # setting that did not take effect. Printing the names the file offers lets them spot it.
     if path not in _announced:
         _announced.add(path)
-        logger.info(f"_read: {path} has overrides for: {', '.join(sorted(data)) if data else '(nothing)'}")
-        for key in sorted(data):
+        live = sorted(key for key in data if not key.startswith(_COMMENT_MARKER))
+        logger.info(f"_read: {path} has overrides for: {', '.join(live) if live else '(nothing)'}")
+        for key in live:
             if not (key == "raven.config" or (key.startswith("raven.") and key.endswith(".config"))):
                 logger.warning(f"_read: in {path}, '{key}' does not name a Raven config module (expected 'raven.config' or 'raven.<component>.config'); nothing will claim it.")
     return data
@@ -183,7 +202,8 @@ def apply(module_name: str, namespace: dict, *, path: pathlib.Path | None = None
         return []
 
     applied = [name for name, value in settings.items()
-               if _apply_one(namespace, name, value, module_name, path)]
+               if not name.startswith(_COMMENT_MARKER)
+               and _apply_one(namespace, name, value, module_name, path)]
     if applied:
         logger.info(f"apply: {module_name}: overridden from {path}: {', '.join(applied)}")
     return applied

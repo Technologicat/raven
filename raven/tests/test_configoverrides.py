@@ -104,6 +104,31 @@ def test_a_typo_inside_an_env_does_not_add_a_field(write_overrides, caplog):
     assert "widht" in caplog.text
 
 
+def test_a_commented_out_setting_is_skipped_in_silence(write_overrides, caplog):
+    """JSON has no comments, and a settings file is where people keep the alternative they switch to."""
+    path = write_overrides({"raven.demo.config": {"a_string": "local",
+                                                  "// a_string": "the other one",
+                                                  "// a_strnig": "a typo, but commented out"}})
+    namespace = make_namespace()
+    with caplog.at_level("WARNING", logger="raven.configoverrides"):
+        applied = configoverrides.apply("raven.demo.config", namespace, path=path)
+    assert applied == ["a_string"], "the live sibling did not apply either, so this fixture cannot tell a skip from an inert loader"
+    assert namespace["a_string"] == "local"
+    assert caplog.text == "", "a commented-out entry was reported; the point of one is that it says nothing"
+
+
+def test_a_whole_commented_out_module_is_skipped_in_silence(write_overrides, caplog):
+    """The marker works at either level, so a component's settings can be switched off as a block."""
+    path = write_overrides({"// raven.demo.config": {"a_string": "switched off"},
+                            "raven.demo.config": {"a_number": 7}})
+    namespace = make_namespace()
+    with caplog.at_level("WARNING", logger="raven.configoverrides"):
+        applied = configoverrides.apply("raven.demo.config", namespace, path=path)
+    assert applied == ["a_number"], "the live sibling did not apply either, so this fixture proves nothing"
+    assert namespace["a_string"] == "shipped"
+    assert caplog.text == "", "the commented-out module was reported as not naming a config module"
+
+
 def test_a_path_arrives_as_a_string_and_is_expanded(write_overrides):
     """JSON has no path type, and `~` in a hand-written config file is what a person would write."""
     path = write_overrides({"raven.demo.config": {"a_path": "~/elsewhere"}})

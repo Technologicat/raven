@@ -733,6 +733,18 @@ So you can put them somewhere else instead. Create `~/.config/raven/overrides.js
 Anything set here wins over the `config.py` that ships with Raven, which then goes back to being purely a record of the defaults — and the settings that are yours stay yours across upgrades.
 
 - **A dotted name reaches inside a setting that holds other settings.** `gui_config` in the *Visualizer*'s and *Librarian*'s configs is one of those, so its fields are written `gui_config.word_cloud_w`.
+- **A name beginning with `//` is commented out**, and is ignored in silence. JSON has no comments of its own, and a settings file is where you keep the alternative you switch to occasionally as well as the answer you are using today:
+
+  ```json
+  "raven.visualizer.config": {
+      "clusters_keyword_method": "llm",
+
+      "// gui_config.word_cloud_w": 1024,
+      "// gui_config.word_cloud_background_color": "white"
+  }
+  ```
+
+  Delete the three characters to switch one on. It works on a whole component too — `"// raven.server.config": { ... }` — and nothing can collide with it, since no setting's name can begin that way.
 - **Only settings that already exist can be overridden.** A misspelled name is reported in the log and ignored, rather than quietly becoming a setting nothing reads. The same goes for a value of the wrong kind — a word where a number belongs — which leaves the shipped default in place and says so.
 - **A mistyped *module* name is the one thing that cannot be reported that way**, since no module would claim it. Raven logs the module names it found in the file when it reads it, so a setting that did not take effect can be traced there.
 - **If the file has a syntax error, Raven says so and starts anyway**, on the shipped defaults. It will not refuse to run over a stray comma.
