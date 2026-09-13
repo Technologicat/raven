@@ -29,7 +29,7 @@
 #
 # Versions are the ones that passed on main at 1cc20a2 (CI run 30772151270).
 
-bibtexparser==2.0.0b9
+bibtexparser==2.0.0
 # The GUI toolkit. Here so that the tests which drive a DPG context — `raven/common/gui/tests/` and
 # `raven/librarian/tests/test_chat_controller.py` — actually run, instead of `importorskip`-ing away on
 # every CI run and reporting a skip that looks like a pass. Tests that *map a window* stay out regardless:
