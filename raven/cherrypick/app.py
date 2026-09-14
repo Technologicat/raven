@@ -1805,24 +1805,42 @@ def main() -> int:
         self.prose_columns(
             gui_parent,
             [helpcard.section(
+                None,
+                "Raven-cherrypick is a GUI for triaging a folder of images *by hand*, quickly. "
+                "Nothing here decides anything for you: you look, and you sort them into "
+                "**cherries** (keepers), **lemons** (rejects) and neutral. Two-handed — one "
+                "hand navigates, the other marks."),
+             helpcard.section(
                 "**Marks move your files**",
                 "This is the thing worth knowing before you start. Marking is not a label "
                 "held in the app: a cherry is *moved* into a `cherries/` folder beneath the "
                 "one you opened, and a lemon into `lemons/`. Clearing a mark moves it back "
                 "out.",
-                "So a triaged folder is sorted on disk when you close the app, with no "
-                "export step — and **Ctrl+Z** undoes a move by moving the file back.")],
-            [helpcard.section(
-                "**One listing, three folders**",
-                "The grid shows `cherries/` and `lemons/` merged with the folder itself, as "
-                "a single sorted listing. A marked image therefore keeps its place in the "
-                "order rather than vanishing, which is what makes it safe to mark as you go.",
-                "**G** narrows that listing to one kind at a time — all images, then "
-                "cherries, lemons, and neutral."),
+                "So a triaged folder is sorted on disk by the time you close the app, with "
+                "no export step and nothing to save — and **Ctrl+Z** undoes a move by moving "
+                "the file back. There is no thumbnail cache and no metadata file; the state "
+                "*is* the directory an image sits in."),
              helpcard.section(
-                 None,
-                 "**B**, **N** and **M** jump to the next lemon, cherry or neutral image, "
-                 "and work in the unfiltered view, where there is something to jump past.")])
+                 "**One listing, three folders**",
+                 "The grid shows `cherries/` and `lemons/` merged with the folder itself, as "
+                 "a single sorted listing. A marked image therefore keeps its place in the "
+                 "order rather than vanishing, which is what makes it safe to mark as you go.",
+                 "**G** narrows that listing to one kind at a time. **B**, **N** and **M** "
+                 "jump to the next lemon, cherry or neutral image, and work in the unfiltered "
+                 "view, where there is something to jump past.")],
+            [helpcard.section(
+                "**Comparing a detail between shots**",
+                "Zoom and pan are kept when you move between images *of the same dimensions*. "
+                "So zoom into one corner, then flick back and forth with the arrow keys: the "
+                "view stays put and only the picture under it changes.",
+                "That is the quickest way to tell nearly-identical frames apart — which of a "
+                "burst is sharpest, or which generated variant got the hands right. For more "
+                "than two, the **Compare** page has a mode that cycles them for you."),
+             helpcard.section(
+                 "**Thumbnails**",
+                 "Made as they are needed and kept in memory, never on disk. A tile shows "
+                 "noise until its thumbnail has been built, which is what that is — not a "
+                 "damaged image.")])
 
     def _help_on_show():
         if _app_state["image_view"] is not None:

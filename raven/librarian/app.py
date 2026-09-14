@@ -2314,8 +2314,8 @@ def render_help_extras(self: helpcard.HelpWindow,
         [helpcard.section(
             "**Message attachments**",
             'The document database answers *what do my documents say about this*; an attachment answers *read this one, now* - the whole thing, rather than the snippets that matched.',
-            textwrap.dedent(f"""
-                Attach one or several with the paperclip button, with {self.c_hig}**Ctrl+Shift+O**{self.c_end}, or by dropping files on the window. Two kinds, asking different things of the model:
+            textwrap.dedent("""
+                Attach one or several with the paperclip button, with **Ctrl+Shift+O**, or by dropping files on the window. Two kinds, asking different things of the model:
 
                 - **Documents** — anything the database accepts. Any model can read one.
                 - **Images** — seen only by a vision-capable model (a VLM).

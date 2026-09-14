@@ -1019,13 +1019,16 @@ def render_help_extras(self: helpcard.HelpWindow,
          helpcard.section(
             "**The word cloud**",
             'Built from the auto-detected keywords of whatever is selected, each word sized by how often it occurs there. It redraws itself when the selection changes, and the colours and placement are picked at random, so the same selection gives a different-looking picture each time.',
-            # The Esc stays plain: the highlight marks a key worth reaching for, and this one is named to
-            # say it does nothing here.
-            f'{self.c_hig}**F10**{self.c_end} opens and closes it, {self.c_hig}**Ctrl+S**{self.c_end} saves it as a PNG. The window is not modal, so you can keep working with the app while it is open — and Esc does not close it.'),
+            # A key mentioned in prose is bold and in the text colour, across the constellation. The
+            # highlight is for emphasis — `**near**` above — and a key that took it read as a different
+            # kind of thing from the same key one card over. This section used the colour to mark "a key
+            # worth reaching for", leaving the Esc plain to say it does nothing here; that distinction was
+            # carried by a colour already doing other work two lines up, so the sentence says it instead.
+            '**F10** opens and closes it, **Ctrl+S** saves it as a PNG. The window is not modal, so you can keep working with the app while it is open — and Esc does not close it.'),
          helpcard.section(
             "**The importer**",
             'Turns BibTeX files into a dataset, combining several at once into one. It is where a dataset comes from in the first place.',
-            f'{self.c_hig}**Ctrl+I**{self.c_end} opens and closes it. Not modal either, and likewise not closed by Esc.',
+            '**Ctrl+I** opens and closes it. Not modal either, and likewise not closed by Esc.',
             'The window shows a progress bar and the stage it has reached. The terminal you started Raven-visualizer from gets the detail — every step, with its timings and counts — which is the place to look when an import of a large database is taking its time.')],
         [helpcard.section(
             "**How search works**",
