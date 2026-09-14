@@ -407,7 +407,7 @@ def main() -> int:
         env(key_indent=0, key="Space", action_indent=0, action="Pause / resume", notes=""),
         env(key_indent=0, key="Esc", action_indent=0, action="Quit", notes=""),
         helpcard.hotkey_blank_entry,
-        env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
+        env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
         env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen", notes=""),
     )
     global _help_window

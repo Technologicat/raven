@@ -1724,7 +1724,7 @@ def main() -> int:
         env(key_indent=0, key="Shift+G", action_indent=0, action="Cycle filter backward", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="Ctrl+1..5", action_indent=0, action="Tile size preset", notes=""),
-        env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
+        env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
         env(key_indent=0, key="F11", action_indent=0, action="Fullscreen", notes=""),
 
         helpcard.hotkey_new_column,
