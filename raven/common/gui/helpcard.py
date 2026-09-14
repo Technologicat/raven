@@ -808,8 +808,9 @@ class HelpWindow:
         self._height_fitted = True
 
         was_showing = self._page_index
-        tallest = self._height
+        tallest = 0
         tallest_page = None
+        unmeasured = False
         for index in range(len(self._pages)):
             self.page_index = index
             # Several frames per page, as `fdialog._fit_help_card_to_content` spends: a table's column
@@ -823,9 +824,16 @@ class HelpWindow:
                 if measured is None or measured == previous:
                     break
                 previous = measured
-            if previous is not None and previous > tallest:
+            if previous is None:
+                unmeasured = True
+            elif previous > tallest:
                 tallest, tallest_page = previous, self._pages[index].name
         self.page_index = was_showing
+
+        # A page that would not answer is a page this cannot vouch for, so the configured height stands as
+        # a floor rather than being shrunk past something that may not have fitted in it.
+        if unmeasured or not tallest:
+            tallest = max(tallest, self._height)
 
         # Clamped so that an oversized card stays reachable — a modal taller than the viewport puts its
         # own title bar out of reach. It should never fire: a page that does not fit the screen is a page
