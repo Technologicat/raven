@@ -1,5 +1,6 @@
 """Configuration constants for the Raven XDot Viewer."""
 
+from .. import config as global_config
 from .. import configoverrides
 
 # Font size (pixels) — must match raven's global app standard.
@@ -23,9 +24,8 @@ WIDGET_V_PADDING = (2 * DPG_WINDOW_PADDING_Y +     # top + bottom window margin
                     STATUS_H)                       # status bar
 
 # Default viewport dimensions (also used as argparse defaults).
-# Fits onto a 1080p screen in Linux Mint (same as Librarian/Visualizer).
-DEFAULT_WIDTH = 1920
-DEFAULT_HEIGHT = 1040
+DEFAULT_WIDTH = global_config.GUI_MAIN_WINDOW_W
+DEFAULT_HEIGHT = global_config.GUI_MAIN_WINDOW_H
 
 # Arrow key pan amount (pixels per keypress).
 PAN_AMOUNT = 10
@@ -57,8 +57,8 @@ GRAPH_TEXT_FONT_SIZES = [4, 8, 16, 32, 64]
 GRAPHVIZ_ENGINES = ["[as-is]", "dot", "neato", "fdp", "sfdp", "circo", "twopi"]
 
 # Help card dimensions (pixels). Chosen to fit the content.
-HELP_WINDOW_W = 1400
-HELP_WINDOW_H = 760
+HELP_WINDOW_W = global_config.GUI_HELP_WINDOW_W
+HELP_WINDOW_H = global_config.GUI_HELP_WINDOW_H
 
 
 # Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.

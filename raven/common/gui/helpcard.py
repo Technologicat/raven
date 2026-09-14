@@ -779,7 +779,7 @@ class HelpWindow:
         return True
 
     def _fit_height_to_pages(self) -> None:
-        """Grow a paged card to its tallest page, once per session.
+        """Grow a card to its tallest page, once per session.
 
         The height is the tallest page's rather than each page's own, so that turning a page does not
         resize the window under the reader — which is unpleasant to read and costs the card its placement.
@@ -790,10 +790,20 @@ class HelpWindow:
         sight, so nothing here is drawn where the reader can see it — the caller has already parked it,
         and `settle_offscreen` renews the park per frame.
 
-        A single-screen card is left alone entirely: its owner may be fitting it through `on_parked`
-        (`fdialog` does), and two things sizing one window would fight.
+        **A card whose owner sizes it itself is left alone**, because two things sizing one window would
+        fight. That is what `on_parked` means here, and `fdialog` is the one card that uses it.
+
+        The test used to be the page *count*, on the reasoning that a single-screen card is the kind whose
+        owner fits it. That held only because the one self-fitting card happens to have a single page, and
+        it silently cost every *other* single-page card its fitting — Raven-cherrypick's grew past its
+        configured height and dropped its own `F1` row off the bottom, with no warning, because a card has
+        no scrollbar. Asking the question the docstring was already answering fixes that, and costs the
+        self-fitting card nothing.
+
+        Growing only, note: `tallest` starts at the height it was given, so a card with room to spare keeps
+        it. Nothing here can shrink a card that was sized deliberately.
         """
-        if self._height_fitted or len(self._pages) < 2:
+        if self._height_fitted or self.on_parked is not None:
             return
         self._height_fitted = True
 

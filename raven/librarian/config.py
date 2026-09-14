@@ -503,13 +503,12 @@ llm_line_wrap_width = 160  # Raven-minichat: text wrapping in live update.
 # TODO: Section this into subnamespaces?
 gui_config = env(  # ----------------------------------------
                  # GUI element sizes, in pixels.
-                 main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
-                 # The help content is static, so these are chosen to fit it. The height went 1000 -> 1030 when
-                 # the prose started wrapping instead of being clipped at the right edge: a long line that used
-                 # to occupy one row now occupies two or three. There is not much left to give - `main_window_h`
-                 # is 1040, and the card has to fit inside the viewport - so the next addition of any size needs
-                 # the shape decision rather than another thirty pixels.
-                 help_window_w=1700, help_window_h=1030,
+                 main_window_w=global_config.GUI_MAIN_WINDOW_W, main_window_h=global_config.GUI_MAIN_WINDOW_H,
+                 # The card fits its own height to its tallest page, this being a starting value. What it
+                 # cannot do is exceed the viewport: `main_window_h` is the ceiling, and `HelpWindow` clamps
+                 # to it and says so in the log. A page that reaches it wants splitting rather than another
+                 # thirty pixels, there being nowhere left to find them.
+                 help_window_w=global_config.GUI_HELP_WINDOW_W, help_window_h=global_config.GUI_HELP_WINDOW_H,
                  # The AI-disclosure label below the chat. Two lines' worth of height, because the
                  # disclosure states two separate things (that the interlocutor is an AI, and that its
                  # output needs checking) and does not fit on one line at the default window width.

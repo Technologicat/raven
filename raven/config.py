@@ -41,6 +41,34 @@ GUI_INPUT_ACTIVE_S = 0.5   # stay at full frame rate for this long after the las
 
 
 # ---------------------------------------------------------------------------
+# Window sizes for the full-size GUI apps
+# ---------------------------------------------------------------------------
+#
+# Raven-librarian, Raven-visualizer, Raven-cherrypick and Raven-xdot-viewer: four apps that open a window
+# meant to be worked in all day, and a help card in front of it. One set of numbers rather than one per
+# app, for the reason the idle throttle above has one — they answer one question, and an app wanting its
+# own answer would be saying something about itself that none of them has to say.
+#
+# **Not every app is one of the four.** The conference timer is a full-screen countdown with four keys, and
+# the two avatar editors are laid out for windows of their own size; each keeps its own numbers, and the
+# file dialog sizes its card to the dialog it belongs to.
+
+GUI_MAIN_WINDOW_W = 1920
+GUI_MAIN_WINDOW_H = 1040   # this pair just fits onto a 1080p screen in Linux Mint, taskbar included
+
+# The help card floating in front of it. Wide enough that three column-groups of hotkeys need no
+# telegraphic phrasing to fit: the house style treats a dropped article as a concession bought with
+# horizontal space, so the width is what stops that concession being necessary.
+#
+# **The height is a starting value, not a size.** A card of two or more pages measures its tallest page and
+# fits itself to it (`HelpWindow._fit_height_to_pages`), clamping to the viewport and logging if it has to.
+# A *single*-page card gets no such fitting: it keeps the height it was given and silently clips whatever
+# does not fit, which is how Raven-cherrypick's card came to omit its own `F1` row.
+GUI_HELP_WINDOW_W = 1700
+GUI_HELP_WINDOW_H = 1000
+
+
+# ---------------------------------------------------------------------------
 # The reference clock for time-varying effects
 # ---------------------------------------------------------------------------
 #

@@ -2,6 +2,7 @@
 
 import torch
 
+from .. import config as global_config
 from .. import configoverrides
 
 # ---------------------------------------------------------------------------
@@ -38,8 +39,8 @@ STATUS_H = FONT_SIZE  # 20
 # Window
 # ---------------------------------------------------------------------------
 
-DEFAULT_WIDTH = 1920
-DEFAULT_HEIGHT = 1040  # fits 1080p Linux Mint with taskbar
+DEFAULT_WIDTH = global_config.GUI_MAIN_WINDOW_W
+DEFAULT_HEIGHT = global_config.GUI_MAIN_WINDOW_H
 
 # ---------------------------------------------------------------------------
 # Split
@@ -163,8 +164,8 @@ SCROLL_ENDS_HERE_DURATION = 0.5
 # Help
 # ---------------------------------------------------------------------------
 
-HELP_WINDOW_W = 1400
-HELP_WINDOW_H = 760
+HELP_WINDOW_W = global_config.GUI_HELP_WINDOW_W
+HELP_WINDOW_H = global_config.GUI_HELP_WINDOW_H
 
 # ---------------------------------------------------------------------------
 # Triage mark overlay (main image view)

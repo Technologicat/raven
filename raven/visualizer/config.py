@@ -7,6 +7,7 @@ import textwrap
 
 from unpythonic.env import env
 
+from .. import config as global_config
 from .. import configoverrides
 
 import dearpygui.dearpygui as dpg
@@ -381,8 +382,8 @@ custom_stopwords = set(filler_stopwords + scilang_stopwords +
 # TODO: Section this into subnamespaces?
 gui_config = env(  # ----------------------------------------
                  # GUI element sizes, in pixels.
-                 main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
-                 help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
+                 main_window_w=global_config.GUI_MAIN_WINDOW_W, main_window_h=global_config.GUI_MAIN_WINDOW_H,
+                 help_window_w=global_config.GUI_HELP_WINDOW_W, help_window_h=global_config.GUI_HELP_WINDOW_H,
                  importer_w=600,
                  info_panel_w=600,
                  info_panel_header_h=40,  # The title section and the navigation controls section both have this height.

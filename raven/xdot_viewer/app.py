@@ -68,7 +68,6 @@ with timer() as tim:
     from ..common.gui import messagebox
     from ..common.gui import filedrop
     from ..common.gui import qroverlay
-    from ..vendor import DearPyGui_Markdown as dpg_markdown
     from ..vendor.file_dialog.fdialog import FileDialog
 
     from .dot_utils import _strip_xdot_layout_attrs
@@ -833,42 +832,42 @@ def main() -> int:
     def render_help_extras(self: helpcard.HelpWindow,
                            gui_parent) -> None:
         """Render app-specific extra information into the help card."""
-        dpg_markdown.add_text(f"{self.c_hed}**Interaction modes**{self.c_end}", parent=gui_parent, wrap=self.content_width)
-        g = dpg.add_group(parent=gui_parent)
-        dpg_markdown.add_text(f"{self.c_txt}**Click** a node or edge to focus the view on it. Clicking an edge cycles: zoom-to-fit -> source -> destination -> zoom-to-fit.{self.c_end}",
-                              parent=g, wrap=self.content_width)
-        dpg_markdown.add_text(f"{self.c_txt}**Right-click** a node to open its URL (if it has one) in the browser.{self.c_end}",
-                              parent=g, wrap=self.content_width)
-        dpg_markdown.add_text(f"{self.c_txt}**Shift+hover** (**Ctrl+hover**) over a node to highlight its outgoing (incoming) connections, respectively.{self.c_end}",
-                              parent=g, wrap=self.content_width)
-        dpg_markdown.add_text(f"{self.c_txt}**Hover near an edge endpoint** to reveal a follow indicator; **click** it to jump to the node at the other end.{self.c_end}",
-                              parent=g, wrap=self.content_width)
-
-        dpg.add_spacer(width=1, height=themes_and_fonts.font_size // 2, parent=gui_parent)
-        dpg_markdown.add_text(f"{self.c_hed}**How search works**{self.c_end}", parent=gui_parent, wrap=self.content_width)
-        g = dpg.add_group(parent=gui_parent)
-        dpg_markdown.add_text(f"{self.c_txt}Each space-separated search term is a **fragment**. For a match, **all** fragments must match. Order does not matter. Results live-update as you type.{self.c_end}",
-                              parent=g, wrap=self.content_width)
-        dpg_markdown.add_text(f'- {self.c_txt}A **lowercase** fragment matches {self.c_end}{self.c_hig}case-insensitively{self.c_end}{self.c_txt}. E.g. *"cat photo"* matches *"photocatalytic"*.{self.c_end}',
-                              parent=g, wrap=self.content_width)
-        dpg_markdown.add_text(f'- {self.c_txt}A fragment with **at least one uppercase** letter matches {self.c_end}{self.c_hig}case-sensitively{self.c_end}{self.c_txt}. E.g. *"TiO"* matches titanium oxide, not *"bastion"*.{self.c_end}',
-                              parent=g, wrap=self.content_width)
-
-        dpg.add_spacer(width=1, height=themes_and_fonts.font_size // 2, parent=gui_parent)
-        dpg_markdown.add_text(f"{self.c_hed}**Auto-reload**{self.c_end}", parent=gui_parent, wrap=self.content_width)
-        g = dpg.add_group(parent=gui_parent)
-        dpg_markdown.add_text(f"{self.c_txt}The currently open file is polled for changes and reloaded automatically.{self.c_end}",
-                              parent=g, wrap=self.content_width)
+        self.prose_columns(
+            gui_parent,
+            [helpcard.section(
+                "**Interaction modes**",
+                "**Click** a node or edge to focus the view on it. Clicking an edge cycles: zoom-to-fit "
+                "-> source -> destination -> zoom-to-fit.",
+                "**Right-click** a node to open its URL (if it has one) in the browser.",
+                "**Shift+hover** (**Ctrl+hover**) over a node to highlight its outgoing (incoming) "
+                "connections, respectively.",
+                "**Hover near an edge endpoint** to reveal a follow indicator; **click** it to jump to "
+                "the node at the other end.")],
+            [helpcard.section(
+                "**How search works**",
+                "Each space-separated search term is a **fragment**. For a match, **all** fragments must "
+                "match. Order does not matter. Results live-update as you type.",
+                f'- A **lowercase** fragment matches {self.c_hig}case-insensitively{self.c_end}. '
+                f'E.g. *"cat photo"* matches *"photocatalytic"*.',
+                f'- A fragment with **at least one uppercase** letter matches {self.c_hig}case-sensitively'
+                f'{self.c_end}. E.g. *"TiO"* matches titanium oxide, not *"bastion"*.'),
+             helpcard.section(
+                 "**Auto-reload**",
+                 "The currently open file is polled for changes and reloaded automatically.")])
 
     # No `on_show` / `on_hide` input toggling: `is_any_modal_window_visible` asks the help card directly, so
     # there is no second copy of the state to keep in step with it.
     global _help_window
-    _help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
+    # Two pages, split by scope: page one is the keyboard and nothing else, so it is a reference a reader
+    # can screenshot and keep beside the app — which is what the card's header invites, and what prose
+    # sharing the page took away. Paging also turns on `HelpWindow`'s height fitting, which a single-page
+    # card does not get: it keeps the height it was given and silently clips whatever does not fit.
+    _help_window = helpcard.HelpWindow(pages=[helpcard.page("Keyboard", hotkey_info=hotkey_info),
+                                              helpcard.page("Features", on_render_extras=render_help_extras)],
                                        width=config.HELP_WINDOW_W,
                                        height=config.HELP_WINDOW_H,
                                        reference_window="main_window",
-                                       themes_and_fonts=themes_and_fonts,
-                                       on_render_extras=render_help_extras)
+                                       themes_and_fonts=themes_and_fonts)
     dpg.set_item_callback("help_button", _help_window.show)  # tag
 
     # Say where the arrow keys are when Ctrl+E hands them to the layout-engine combo. DPG draws nothing on

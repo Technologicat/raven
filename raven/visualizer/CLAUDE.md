@@ -16,7 +16,7 @@ config.py         (~440)  — Configuration-as-code (import settings, models, st
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services
 plotter.py        (~420)  — the scatter plot: dataset loading, plotter-space queries, the select brush
-importer_gui.py   (~500)  — the importer's window, its two file dialogs, and its start/stop lifecycle
+importer_gui.py   (~550)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~250)  — selection state and the lasso/wand tools
 word_cloud.py     (~270)  — word cloud rendering
 entry_renderer.py (~190)  — per-entry rendering shared by panel and tooltip

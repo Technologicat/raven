@@ -1704,28 +1704,26 @@ def main() -> int:
     # --- Help card ---
     hotkey_info = (
         # --- Column 1: Triage, Jump, Filter (14 rows) ---
-        env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open folder", notes=""),
-        env(key_indent=0, key="C", action_indent=0, action="Mark cherry", notes=""),
+        env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a folder", notes=""),
+        helpcard.hotkey_blank_entry,
+        env(key_indent=0, key="C", action_indent=0, action="Mark as cherry", notes=""),
         env(key_indent=1, key="Ctrl+C", action_indent=1, action="...all selected", notes=""),
-        env(key_indent=1, key="Ctrl+Shift+C", action_indent=1, action="...winner", notes="Others selected -> lemon"),
-        env(key_indent=0, key="X", action_indent=0, action="Mark lemon", notes=""),
+        env(key_indent=1, key="Ctrl+Shift+C", action_indent=1, action="...winner", notes="Others -> lemon"),
+        env(key_indent=0, key="X", action_indent=0, action="Mark as lemon", notes=""),
         env(key_indent=1, key="Ctrl+X", action_indent=1, action="...all selected", notes=""),
-        env(key_indent=0, key="V", action_indent=0, action="Clear mark", notes=""),
+        env(key_indent=0, key="V", action_indent=0, action="Clear the mark", notes=""),
         env(key_indent=1, key="Ctrl+V", action_indent=1, action="...all selected", notes=""),
-        env(key_indent=0, key="T", action_indent=0, action="Toggle triage mark", notes="On main image"),
-        env(key_indent=0, key="Ctrl+Z", action_indent=0, action="Undo triage move", notes="Navigates to it"),
-        env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Redo triage move", notes=""),
+        env(key_indent=0, key="T", action_indent=0, action="Toggle the mark", notes="On main image"),
+        helpcard.hotkey_blank_entry,
+        env(key_indent=0, key="Ctrl+Z", action_indent=0, action="Undo a triage move", notes="Navigates to it"),
+        env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Redo a triage move", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="B / Shift+B", action_indent=0, action="Next / prev lemon", notes="All view only; wraps"),
         env(key_indent=0, key="N / Shift+N", action_indent=0, action="Next / prev cherry", notes="All view only; wraps"),
         env(key_indent=0, key="M / Shift+M", action_indent=0, action="Next / prev neutral", notes="All view only; wraps"),
         helpcard.hotkey_blank_entry,
-        env(key_indent=0, key="G", action_indent=0, action="Cycle filter forward", notes="All/Cherries/Lemons/Neutral"),
-        env(key_indent=0, key="Shift+G", action_indent=0, action="Cycle filter backward", notes=""),
-        helpcard.hotkey_blank_entry,
-        env(key_indent=0, key="Ctrl+1..5", action_indent=0, action="Tile size preset", notes=""),
-        env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
-        env(key_indent=0, key="F11", action_indent=0, action="Fullscreen", notes=""),
+        env(key_indent=0, key="G", action_indent=0, action="Cycle the filter forward", notes="See the Features page"),
+        env(key_indent=0, key="Shift+G", action_indent=0, action="Cycle the filter backward", notes=""),
 
         helpcard.hotkey_new_column,
 
@@ -1736,35 +1734,95 @@ def main() -> int:
         env(key_indent=0, key="Page Up / Down (Q / E)", action_indent=0, action="Scroll by page", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="Click", action_indent=0, action="Navigate and select", notes=""),
-        env(key_indent=0, key="Ctrl+Click", action_indent=0, action="Toggle in selection", notes=""),
-        env(key_indent=0, key="Shift+Click", action_indent=0, action="Range select", notes=""),
-        env(key_indent=0, key="Space", action_indent=0, action="Toggle select current", notes=""),
+        env(key_indent=0, key="Ctrl+Click", action_indent=0, action="Toggle in the selection", notes=""),
+        env(key_indent=0, key="Shift+Click", action_indent=0, action="Select a range", notes=""),
+        env(key_indent=0, key="Space", action_indent=0, action="Toggle this image", notes="In the selection"),
         env(key_indent=0, key="Ctrl+A", action_indent=0, action="Select all", notes=""),
         env(key_indent=0, key="Ctrl+D", action_indent=0, action="Deselect all", notes=""),
-        env(key_indent=0, key="Ctrl+I", action_indent=0, action="Invert selection", notes=""),
+        env(key_indent=0, key="Ctrl+I", action_indent=0, action="Invert the selection", notes=""),
         helpcard.hotkey_blank_entry,
-        env(key_indent=0, key="Tab", action_indent=0, action="Toggle image pane focus", notes=""),
-        env(key_indent=1, key="Arrows / WASD", action_indent=0, action="Pan (when focused)", notes=""),
-        env(key_indent=1, key="Esc", action_indent=0, action="Unfocus", notes=""),
+        # The key that enters a mode belongs with the main UI even though a later page explains the mode —
+        # which is where you are when you press it. Librarian keeps `Alt+G` on its keyboard page for the
+        # same reason, and gives the chat graph's own keys a page of their own.
+        env(key_indent=0, key="Enter", action_indent=0, action="Compare selected", notes="Need 2+ selected"),
 
         helpcard.hotkey_new_column,
 
         # --- Column 3: Zoom, Compare, App (17 rows) ---
         env(key_indent=0, key="+  / Numpad +", action_indent=0, action="Zoom in", notes=""),
         env(key_indent=0, key="-  / Numpad -", action_indent=0, action="Zoom out", notes=""),
+        env(key_indent=0, key="Mouse wheel", action_indent=0, action="Zoom at the cursor", notes=""),
         env(key_indent=0, key="F", action_indent=0, action="Zoom to fit", notes=""),
-        env(key_indent=0, key="Shift+F", action_indent=0, action="Toggle fit cap", notes="No upscale"),
+        env(key_indent=0, key="Shift+F", action_indent=0, action="Toggle the fit cap", notes="No upscale"),
         env(key_indent=0, key="1  / Numpad 1", action_indent=0, action="Zoom to 1:1", notes="Also while comparing"),
-        env(key_indent=0, key="Mouse wheel", action_indent=0, action="Zoom at cursor", notes=""),
-        env(key_indent=0, key="Mouse drag", action_indent=0, action="Pan image", notes=""),
+        env(key_indent=0, key="Mouse drag", action_indent=0, action="Pan the image", notes=""),
         helpcard.hotkey_blank_entry,
-        env(key_indent=0, key="Enter", action_indent=0, action="Compare selected", notes="Need 2+ selected"),
-        env(key_indent=1, key="Shift+1\u20139", action_indent=0, action="Select frame, exit", notes=""),
-        env(key_indent=1, key="Esc", action_indent=0, action="Exit, restore image", notes=""),
-        env(key_indent=1, key=",  / .", action_indent=0, action="Slower / faster", notes=""),
-        env(key_indent=1, key="M", action_indent=0, action="Reset FPS to default", notes=""),
-        env(key_indent=1, key="Space", action_indent=0, action="Pause / resume", notes=""),
+        env(key_indent=0, key="Tab", action_indent=0, action="Focus the image pane", notes=""),
+        env(key_indent=1, key="Arrows / WASD", action_indent=0, action="Pan from the keyboard", notes="While focused"),
+        env(key_indent=1, key="Esc", action_indent=0, action="Leave the image pane", notes=""),
+        helpcard.hotkey_blank_entry,
+        env(key_indent=0, key="Ctrl+1..5", action_indent=0, action="Set the tile size", notes=""),
+        env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
+        env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen", notes=""),
     )
+
+    # --- Page 2: the keys that answer only while comparing ---
+    compare_hotkey_info = (
+        env(key_indent=0, key="Shift+1\u20139", action_indent=0, action="Pick that one and exit", notes=""),
+        env(key_indent=0, key="Esc", action_indent=0, action="Exit, restoring the image", notes=""),
+        helpcard.hotkey_blank_entry,
+        env(key_indent=0, key="Space", action_indent=0, action="Pause / resume", notes=""),
+        env(key_indent=0, key=",  / .", action_indent=0, action="Slower / faster", notes=""),
+        env(key_indent=0, key="M", action_indent=0, action="Back to the default speed", notes=""),
+        helpcard.hotkey_blank_entry,
+        env(key_indent=0, key="1  / Numpad 1", action_indent=0, action="Zoom to 1:1", notes="As on the Keyboard page"),
+    )
+
+    def _render_compare_help(self: helpcard.HelpWindow, gui_parent) -> None:
+        """Page 2's prose: what compare mode is for."""
+        self.prose_columns(
+            gui_parent,
+            [helpcard.section(
+                "**Comparing variants**",
+                "Compare mode cycles the selected images in place, so the same pixels are "
+                "shown one after another in the same spot on screen. Differences that are "
+                "invisible side by side are obvious when they blink.",
+                "It is for picking the best of a bunch — the sharpest frame of a burst, or "
+                "the best of a set of generated variants."),
+             helpcard.section(
+                 None,
+                 "Select two or more images and press **Enter**. Up to nine are taken, "
+                 "numbered 1 to 9 in the order they appear in the grid.")],
+            [helpcard.section(
+                "**What it leaves alone**",
+                "Compare mode is an overlay: triage marks, the selection and the filter are "
+                "untouched by entering or leaving it.",
+                "**Esc** restores whichever image was showing beforehand. **Shift** and a "
+                "number picks that one and leaves, which is the point of the mode.")])
+
+    def _render_features_help(self: helpcard.HelpWindow, gui_parent) -> None:
+        """Page 3's prose: what the app does, and the one thing a key table cannot say."""
+        self.prose_columns(
+            gui_parent,
+            [helpcard.section(
+                "**Marks move your files**",
+                "This is the thing worth knowing before you start. Marking is not a label "
+                "held in the app: a cherry is *moved* into a `cherries/` folder beneath the "
+                "one you opened, and a lemon into `lemons/`. Clearing a mark moves it back "
+                "out.",
+                "So a triaged folder is sorted on disk when you close the app, with no "
+                "export step — and **Ctrl+Z** undoes a move by moving the file back.")],
+            [helpcard.section(
+                "**One listing, three folders**",
+                "The grid shows `cherries/` and `lemons/` merged with the folder itself, as "
+                "a single sorted listing. A marked image therefore keeps its place in the "
+                "order rather than vanishing, which is what makes it safe to mark as you go.",
+                "**G** narrows that listing to one kind at a time — all images, then "
+                "cherries, lemons, and neutral."),
+             helpcard.section(
+                 None,
+                 "**B**, **N** and **M** jump to the next lemon, cherry or neutral image, "
+                 "and work in the unfiltered view, where there is something to jump past.")])
 
     def _help_on_show():
         if _app_state["image_view"] is not None:
@@ -1779,8 +1837,16 @@ def main() -> int:
             _app_state["grid"].input_enabled = True
 
     global _help_window
+    # Three pages, split by scope rather than to find room — though it badly needed room: the single page
+    # overflowed, and a card has no scrollbar, so `F1` and `F11` were in the table and off the bottom of
+    # the window. Page one is the keyboard and nothing else, which is what the header's "screenshot this!"
+    # has been promising. Compare mode answers to its own keys and gets the page that explains them.
     _help_window = helpcard.HelpWindow(
-        hotkey_info=hotkey_info,
+        pages=[helpcard.page("Keyboard", hotkey_info=hotkey_info),
+               helpcard.page("Compare",
+                             hotkey_info=compare_hotkey_info,
+                             on_render_extras=_render_compare_help),
+               helpcard.page("Features", on_render_extras=_render_features_help)],
         width=config.HELP_WINDOW_W,
         height=config.HELP_WINDOW_H,
         reference_window="cherrypick_main_window",
