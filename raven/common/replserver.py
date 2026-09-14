@@ -41,6 +41,11 @@ Raven's apps come in both shapes:
 
 `python -m unpythonic.net.client localhost` is the other end — note the client takes its ports as separate
 arguments (`localhost PORT CONTROL`), not as `host:port`, and defaults to the same pair this module does.
+
+It also reads piped stdin, running each line in the session namespace, so a script can drive a live app
+without an interactive session. The session echoes the *value* of an expression and a statement has none,
+so a pipe of pure assignments prints nothing and looks the same whether it executed or not — have such a
+script `print` something and check for it.
 """
 
 __all__ = ["DEFAULT_PORT", "add_argument", "maybe_start"]

@@ -271,6 +271,14 @@ backend takes `--backend-url`** — same spelling everywhere, no exceptions to l
 `python -m unpythonic.net.client localhost` connects to it. The app's own namespace is in scope, so the
 session can reach every widget, controller and panel it has, plus `dpg` itself.
 
+**The client is pipe-scriptable**, which is what makes this more than an interactive aid: each line of
+`printf '…\n' | python -m unpythonic.net.client localhost` runs in the app's namespace, so a state that is
+expensive to reach through the UI can be set up directly. Driving an import in the Visualizer this way
+costs one window mapping and no synthetic keystrokes, against two file dialogs otherwise. The one trap is
+that the session echoes the *value* of an expression and a statement has none, so a pipe of pure
+assignments prints nothing and looks identical whether it ran or not — have the check `print` something.
+The `live-gui-testing` skill carries the recipe.
+
 **Reach for it when an instance came up *wrong* and is still running**, which is the case nothing else
 covers: `py-spy dump` says where the threads are, a log says what was logged, and neither can be asked a
 new question about an object. Restarting to investigate destroys the evidence, and for an intermittent
