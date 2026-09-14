@@ -1136,10 +1136,11 @@ def test_the_visualized_keywords_per_entry_are_capped(initialized_api, two_entry
 def live_llm(request, monkeypatch):
     """Give `importer` a real LLM connection, whatever its config said when it was imported.
 
-    `importer` sets `llm_settings` at *import* time, and only when the config asks for cluster keywords or
-    summaries -- so a test that waited for that would skip on any machine configured without them, which is
-    the common case and would make it a test that never runs. It is built here instead, exactly as the
-    module builds its own, and injected the way the fake-LLM tests inject theirs.
+    `importer` binds `llm_settings` in `_setup_llm_backend`, at the start of a run, and only when the config
+    asks for cluster keywords or summaries -- so a test that waited for that would have to start a real
+    import, on a machine configured for one, which is not the common case and would make it a test that
+    rarely runs. It is built here instead, exactly as the module builds its own, and injected the way the
+    fake-LLM tests inject theirs.
 
     Only the *connection* is built here. The LLM call itself belongs to `_summarize`, which makes it
     through `agent.turn` -- so this fixture must not make one of its own, or the test would be asserting
