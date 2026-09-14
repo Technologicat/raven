@@ -1681,9 +1681,9 @@ with dpg.handler_registry(tag="avatar_settings_editor_handler_registry"):  # glo
 
 hotkey_info = (
     # Column 1: file operations
-    env(key_indent=0, key="Ctrl+O", action_indent=0, action="Load character image", notes=""),
-    env(key_indent=0, key="Ctrl+R", action_indent=0, action="Refresh character image", notes=""),
-    env(key_indent=0, key="Ctrl+B", action_indent=0, action="Load backdrop image", notes=""),
+    env(key_indent=0, key="Ctrl+O", action_indent=0, action="Load a character image", notes=""),
+    env(key_indent=0, key="Ctrl+R", action_indent=0, action="Refresh the character image", notes=""),
+    env(key_indent=0, key="Ctrl+B", action_indent=0, action="Load a backdrop image", notes=""),
     helpcard.hotkey_blank_entry,
     env(key_indent=0, key="Ctrl+Shift+E", action_indent=0, action="Load emotion templates", notes=""),
     env(key_indent=0, key="Ctrl+Shift+A", action_indent=0, action="Load animator settings", notes=""),
@@ -1692,16 +1692,16 @@ hotkey_info = (
     helpcard.hotkey_new_column,
 
     # Column 2: controls & app
-    env(key_indent=0, key="Ctrl+T", action_indent=0, action="Toggle talking animation", notes="Non-lipsynced"),
-    env(key_indent=0, key="Ctrl+P", action_indent=0, action="Toggle animator paused", notes=""),
+    env(key_indent=0, key="Ctrl+T", action_indent=0, action="Toggle the talking animation", notes="Non-lipsynced"),
+    env(key_indent=0, key="Ctrl+P", action_indent=0, action="Pause or resume the animator", notes=""),
     env(key_indent=0, key="Ctrl+S", action_indent=0, action="Speak / stop speaking", notes=""),
-    env(key_indent=0, key="Ctrl+E", action_indent=0, action="Focus emotion chooser", notes=""),
-    env(key_indent=0, key="Ctrl+V", action_indent=0, action="Focus voice chooser", notes=""),
-    env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus text to speak", notes=""),
+    env(key_indent=0, key="Ctrl+E", action_indent=0, action="Focus the emotion chooser", notes=""),
+    env(key_indent=0, key="Ctrl+V", action_indent=0, action="Focus the voice chooser", notes=""),
+    env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus the text to speak", notes=""),
     env(key_indent=1, key="Up / Down", action_indent=0, action="Previous / next choice", notes="While focused"),
     env(key_indent=1, key="Home / End", action_indent=0, action="First / last choice", notes="While focused"),
     helpcard.hotkey_blank_entry,
-    env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
+    env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
     env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen", notes=""),
 )
 

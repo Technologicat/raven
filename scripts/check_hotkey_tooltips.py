@@ -85,6 +85,8 @@ SIGNED_OFF: Dict[str, Dict[str, str]] = {
     # caption fails the run. The four `Ctrl+Shift+` debug keys (M/R/T/L, DPG's own developer windows) are
     # deliberately absent from the card and from `hotkey_info`, so they never reach this checker.
     "raven/avatar/pose_editor": {},
+    # Same shape as its sibling above: every key is on a button or a heading carrying the bracketed hint.
+    "raven/avatar/settings_editor": {},
     "raven/librarian": {
         "Page Up": "scrolls the chat log; `view.page_up` has no button, only the key handler",
         "Page Down": "as Page Up",
