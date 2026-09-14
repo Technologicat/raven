@@ -1,27 +1,27 @@
 # Visualizer — CLAUDE.md
 
-~7.1k lines across 13 modules. The `app.py` split has landed.
+~8.0k lines across 13 modules. The `app.py` split has landed.
 
-Sizes are rounded to two significant figures, measured **2026-09-01** — they are here for the shape of the
+Sizes are rounded to two significant figures, measured **2026-09-14** — they are here for the shape of the
 package, not as a figure to quote. Re-measure before quoting one. `python scripts/check_module_maps.py`
 checks this table against the package, including whether every module is in it.
 
 ```
-app.py            (~1.4k) — GUI app: window layout, event wiring, the main render loop
+importer.py       (~1.8k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 info_panel.py     (~1.7k) — the info panel: its header and navigation bar, content build, scrolling,
                             navigation, anchors
-importer.py       (~1.6k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
+app.py            (~1.6k) — GUI app: window layout, event wiring, the main render loop
 annotation.py     (~500)  — datapoint annotations and their tooltips
 config.py         (~440)  — Configuration-as-code (import settings, models, stopwords, GUI settings).
                             Compute devices live in `raven.client.config.devices` — one map for the
                             constellation, since these stages are `mayberemote` services
 plotter.py        (~420)  — the scatter plot: dataset loading, plotter-space queries, the select brush
-importer_gui.py   (~470)  — the importer's window, its two file dialogs, and its start/stop lifecycle
+importer_gui.py   (~500)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~250)  — selection state and the lasso/wand tools
 word_cloud.py     (~270)  — word cloud rendering
 entry_renderer.py (~190)  — per-entry rendering shared by panel and tooltip
 search.py         (~150)  — the title scan, and the three GUI elements reporting its result
-importer_cli.py    (~82)  — `raven-importer` entry point
+importer_cli.py   (~110)  — `raven-importer` entry point
 app_state.py       (~62)  — top-level app state containers
 ```
 
