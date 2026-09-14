@@ -3394,6 +3394,11 @@ finally:
     _gui_cancel_tasks()
     gui_shutdown()
 
+    # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
+    # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one
+    # against a destroyed context segfaults rather than raising.
+    guiutils.teardown()
+
     try:
         dpg.destroy_context()
     except BaseException:

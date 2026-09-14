@@ -571,6 +571,8 @@
 
 *Constellation-wide*
 
+- **closing an app no longer risks a crash on the way out.** The Markdown renderer runs background threads that keep drawing after the window is gone, and they were not stopped before the GUI was torn down — so on an unlucky close the app died with a segfault instead of exiting. Most likely while a message full of links was still being drawn, which is why it showed up when closing Raven-librarian during startup, but every app that renders Markdown could hit it, including ones that only ever show a help card. They are now stopped and waited for before teardown.
+
 - **an app no longer runs at full frame rate for the rest of the session after Raven-server goes down.** Losing the video stream makes the avatar renderer pause itself, and pausing told the server first — the same server that had just gone away — so the call failed and the renderer stayed marked as running. The idle throttle reads that mark, so it never engaged again. Telling the server is now a courtesy done last, and a missing GUI widget cannot skip the mark either.
 
 - **`&amp;` and `&nbsp;` no longer survive into text taken from a bibliography.** A database that exports HTML into a BibTeX field leaves them there, and Raven decoded the neighbouring entities (`&lt;`, `&le;`, `&auml;`) while passing these two through — so a title reading `Q&A` displayed as `Q&amp;A`, in the Visualizer's word cloud and info panel and in Librarian's citations alike. An escaped entity is still decoded only once, so a source that wrote `&amp;lt;` to mean a literal `&lt;` keeps saying that.

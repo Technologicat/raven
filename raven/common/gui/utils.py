@@ -14,7 +14,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "SECTION_SEPARATOR_SPACING",  # the constellation's vertical rhythm
            "DEBUG_OVERLAY_COLOR", "DEBUG_OVERLAY_FONT_SIZE", "DEBUG_OVERLAY_INSET",  # how a numbers overlay looks
 
-           "bootup", "load_extra_font",  # high-level bootup API, you usually want these two for app bootup
+           "bootup", "teardown", "load_extra_font",  # high-level bootup API, you usually want these for app bootup
            "get_font_path",  # mostly internal, but available for exotic use cases
            "setup_default_font", "setup_icon_fonts", "setup_markdown", "setup_themes",  # granular low-level app bootup API
 
@@ -189,8 +189,14 @@ def bootup(font_size: int,
 
     The first use (during an app session) of a particular font size/family loads the font into the renderer.
 
-    During app startup (first frame?), don't call `dpg_markdown.add_text` more than once, or it'll crash the app
-    (some kind of race condition in font loading?). After the app has started, it's fine to call it as often as needed.
+    **Before the first frame, do not build *wrapped* Markdown.** Wrapping means measuring, measuring needs
+    the face in DPG's font atlas, and a face reaches the atlas only between frames — so during GUI building
+    the thread that would render that frame is the one waiting for it. `get_text_size` raises there rather
+    than waiting for a frame that cannot come.
+
+    An **unwrapped** `dpg_markdown.add_text` measures nothing, so it is safe before the first frame, and is
+    how an app preloads the faces it will need: see `raven.visualizer.app`'s
+    `markdown_font_loader_trigger_dummy`. Once the render loop is up, wrap freely.
     """
     font_registry = setup_default_font(font_size, font_basename)
     icons = setup_icon_fonts(font_registry, font_size)
@@ -207,6 +213,23 @@ def bootup(font_size: int,
                disablable_widget_theme=themes.disablable_widget_theme,
                disablable_red_widget_theme=themes.disablable_red_widget_theme,
                disablable_blue_widget_theme=themes.disablable_blue_widget_theme)
+
+def teardown() -> None:
+    """Shut down the shared GUI machinery `bootup` started. The counterpart to it, and its mirror image.
+
+    Call **after the render loop has exited and before `dpg.destroy_context()`**, from the main thread.
+
+    What it currently does is stop the Markdown renderer's worker threads. Those are daemon threads, so
+    they do not hold up interpreter exit — which is exactly what makes them easy to overlook. They are also
+    free to wake up *during* teardown, and a DPG call against a destroyed context does not raise: it takes
+    the process down, with no traceback and nothing in the log.
+
+    Safe in an app that never rendered any Markdown; there is then nothing to stop.
+
+    Every GUI app wants this, whether or not it mentions the renderer by name — a help card's prose goes
+    through it, so an app that only ever shows an F1 card has the threads running too.
+    """
+    dpg_markdown.shutdown()
 
 def load_extra_font(themes_and_fonts: env,
                     font_size: int,

@@ -522,8 +522,9 @@ with timer() as tim:
                 # This could also have something to do with the DPG container stack, which seems to be global. Just to be safe, we have already changed
                 # both background renderers (the info panel and the annotation) not to use the container stack, but to parent each GUI widget explicitly.
                 #
-                # Note also that if we call `dpg_markdown.add_text` twice or more before the first frame renders, it segfaults DPG (at least 1.11).
-                # So this is the only Markdown render in the initial main window setup. Any other Markdown text is rendered later.
+                # Note this dummy is deliberately *unwrapped*. Wrapped Markdown cannot be built before the first frame renders: wrapping measures the text,
+                # measuring needs the face in DPG's atlas, a face reaches the atlas only between frames, and the thread that would render that frame is
+                # this one. `get_text_size` raises there rather than waiting forever. Unwrapped text measures nothing, which is what lets this run here.
                 #
                 # It goes inside the info panel header, which has no scrollbar, so the "hello" it renders is clipped away rather than shown. That is the
                 # header's only involvement: this is a DPG startup concern, not part of what the header displays.
@@ -1572,6 +1573,11 @@ finally:
         if filedialog is not None:
             filedialog.destroy()
     importer_gui.destroy_filedialogs()
+
+    # Stop the shared GUI machinery `bootup` started, while the context it uses is still there.
+    # Its worker threads are daemons, so nothing else would stop them, and a DPG call from one
+    # against a destroyed context segfaults rather than raising.
+    guiutils.teardown()
 
     try:
         dpg.destroy_context()

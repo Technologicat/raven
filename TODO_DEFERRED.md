@@ -4054,10 +4054,17 @@ shared helper / per-app conversion must handle, beyond the two-phase skeleton:
       the work and poll every 15 ms segfaulted the `gui` group 1/1, in `split_frame` on the worker thread:
       after `destroy_context` every call into DPG is into freed memory, so a worker that keeps trying is a
       worker that eventually crashes the app on exit. 3/3 clean once it stands down instead.
-    - **What is left is the case the item is about**, and it is untouched: work queued *while* the GUI is
-      still up and running as teardown proceeds. Standing down needs the wait to fail first, and during a
-      normal shutdown there is a window where the loop still exists. The stop flag and the drain described
-      above are still what closes this.
+    - ~~**What is left is the case the item is about**~~ — **closed 2026-09-14, with exactly the stop flag
+      and drain described above.** `dpg_markdown.shutdown()` sets a module-level stopping `Event`, wakes
+      the idle wait (now an `Event.wait` rather than a `time.sleep`, so there is no interval of exposure),
+      and joins both workers with a timeout, warning if one does not come out. The workers check the flag
+      before queueing, before each queued call, and in `CallWhenDPGStarted`'s `get_frame_count` poll —
+      which was itself a DPG call in a loop. `guiutils.teardown()` is the app-side call, the mirror of
+      `bootup`, and all seven GUI apps make it after the render loop exits and before `destroy_context`.
+      - **Found by a test rather than by an app**, which is why it closed now: a new module in
+        `raven/vendor/DearPyGui_Markdown/tests/` builds Markdown and then tears its context down, and
+        segfaulted 1/1 on its own — no mid-boot close, no URL-heavy message, no timing to catch. It passes
+        now, so the suite holds this shut.
   - **A second, separate offender, diagnosed from a core dump on 2026-08-21 — see the item below.** Closing
     `raven-cherrypick` with Alt+F4 segfaulted (Juha), and `coredumpctl` put the crash in
     `dpg.is_dearpygui_running()` on a background thread. Not this worker, and worth stating because the
@@ -6111,31 +6118,29 @@ before measuring. The constraint that makes it interesting is that this code can
 where nothing can wait for a frame — so a decoration cannot simply block until the text is placed, and the
 answer is more likely "draw it, then correct it on a later frame" than "measure later".
 
-**On a help card the decoration never appears at all**, which is a harder case than the chat log's and a
-much better one to debug from. Measured 2026-09-14 across every card in the constellation that has an
-inline-code span — Raven-librarian's, Raven-cherrypick's, and the two avatar editors' — some fifteen spans
-between them, from `rec/` and `cherries/` to `llm_docs_exts` and `raven/librarian/config.py`. Not one drew a
-background anywhere on the card, misplaced or otherwise. So a card's backticks currently buy the reader
-nothing, while the style guide treats them as one of the three stylings that carry a card's meaning.
-(Raven-visualizer's card is the one a reader might remember as working; it has no code spans at all, and
-what it shows is the highlight colour.)
+**There are two faults here, not one, and only this item's original subject is a timing race.** Measured
+2026-09-14; apparatus and the full table in `investigations/dpg-markdown-decorations/`.
 
-**The card-vs-chat-log split is the discriminator this needed**, and it points at *when* rather than *where*:
-the same renderer draws the decoration in a chat message, sometimes in the wrong place, and never draws it on
-a card. Two differences to start from, both about the moment of measurement rather than about the text:
+**The second fault: a decoration on a hidden widget is built with zero area.** `Code.render` sizes its quad
+from `dpg.get_item_rect_size` of the text group, a widget DPG has not laid out has no metrics, and the read
+comes back `[0, 0]`. The quad is created — three items per span — and covers no pixels. Revealing the widget
+afterwards does not repair it: nothing re-runs the decoration, so the frame the worker happened to wake on was
+the only chance to measure.
 
-- A card is built in a single pass with no frame in between, where the chat log is built incrementally and
-  frames pass while it grows.
-- A card is built **parked offscreen** and measured there during `HelpWindow`'s fitting passes, so
-  `get_item_pos` may answer a position off the viewport — and a drawlist placed there is drawn nowhere the
-  reader can see. That would make the card a *positioning* case rather than a size-zero one, and the two are
-  indistinguishable from outside.
+Visibility is the *whole* of it. The probe varied nesting and visibility independently: flat and nested both
+measure `[211, 26]` when shown and `[0, 0]` when hidden. So this is not `prose_columns`, not `wrap`, not
+`color`, and not the `get_item_pos`-versus-`rect_min` confusion — `get_widget_pos` answers `(0, 0)` there too,
+there being no position to get.
 
-Both are hypotheses, not findings. What is worth saying for whoever picks this up is that the card is a
-reproduction that fails *every* time, so none of it needs waiting around for.
+Where it shows: **a card of two or more pages builds every page and hides all but the current one**, so any
+code span past page one is decorated while hidden. Raven-avatar-pose-editor's card decorated correctly while it
+was a single page and stopped the day it gained a second one, which is the clean before-and-after.
 
-What still works on a card is everything that is not a drawlist: bold, and the highlight colour. That agrees
-with the six sites above being the whole of the fault.
+Candidate fixes, none measured: don't decorate a hidden widget and arrange for something to notice when it is
+shown; size from `dpg_markdown.get_text_size`, which answers from the font rather than the layout; or drop the
+positioning altogether and draw the span as an inline drawlist carrying quad and text together, laid out by DPG
+like any other item — the shape the URL secondary-action icon in the same file already uses, which removes the
+frame delay rather than working around it.
 
 **Probably not the same as the URL colour being one character off** — the note about that lived in
 `CLAUDE.md` and pointed here. `Url.render` calls `dpg.configure_item(dpg_text, color=...)`: it recolours the

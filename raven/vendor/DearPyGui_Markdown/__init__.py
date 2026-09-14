@@ -1,9 +1,12 @@
+import logging
 import threading
 import time
 import traceback
 from typing import List, Any, Callable, Union, Tuple
 
 import dearpygui.dearpygui as dpg
+
+logger = logging.getLogger(__name__)
 
 # `raven.common.gui.utils` is imported inside the two functions that need it rather than here, because it
 # imports *this* module at module level and a top-level import back would be a cycle. It does so to hand
@@ -12,7 +15,7 @@ import dearpygui.dearpygui as dpg
 
 # The setup functions are re-exported from the submodules further down, so that a caller configures the
 # renderer through the package it imported rather than having to know which module owns which setter.
-__all__ = ["get_text_size",
+__all__ = ["get_text_size", "shutdown",
            "CallInNextFrame", "CallWhenDPGStarted",
 
            "set_font_registry", "set_add_font_function", "set_font", "set_url_secondary_action",
@@ -23,23 +26,125 @@ __all__ = ["get_text_size",
            "add_text_italic", "add_text_bold", "add_text_bold_italic"]
 
 
-def get_text_size(text: str, *, wrap_width: float = -1.0, font: int | str = 0, **kwargs) -> list[float | int] | tuple[float | int, ...]:
-    strip_text = text.strip()
-    while 1:
-        size: list[float, float] = dpg.get_text_size(text, wrap_width=wrap_width, font=font, **kwargs)
+# How many frames to let pass while waiting for a font to reach the atlas. **Slack over a mechanism that
+# should need one**: the load lands at a frame boundary. Chosen rather than measured, and the choice is
+# nearly free — the case that actually bites is "no frame can ever arrive", and that exits on the first
+# pass, so any value above one behaves the same unless the atlas genuinely lags.
+#
+# Deliberately its own number rather than shared with the settle-waits elsewhere in the constellation
+# (`helpcard._PAGE_FIT_PASSES`, `tooltip._SETTLE_FRAMES`, `chat_controller._SCROLL_SETTLE_FRAMES`). Those
+# count different things — column widths, autosize reporting, scroll position — and a shared constant would
+# assert a sameness that is not there, letting a re-measurement of one silently move the rest.
+_TEXT_SIZE_WAIT_FRAMES = 3
 
-        if size is None:
-            continue
-        if size[1] == 0:
-            continue
+
+def get_text_size(text: str, *, wrap_width: float = -1.0, font: int | str = 0, **kwargs) -> list[float | int] | tuple[float | int, ...]:
+    """Measure `text` in `font`, waiting for the font atlas if it cannot be measured yet.
+
+    DPG answers `None`, or a zero size, while the font this text wants is not in the atlas — a font is
+    loaded on first use at a given size, and reaches the atlas only between frames. So this waits for a
+    frame, and raises `RuntimeError` where no frame can arrive rather than waiting for one that cannot.
+
+    Two situations make the wait impossible, and both are ways of building Markdown too early:
+
+      - **Called from the render loop thread**, app startup included, since that runs on the same thread
+        before the loop begins. The thread that would produce the frame is the one waiting for it.
+      - **No frame arrives within `_TEXT_SIZE_WAIT_S`** for any other reason.
+
+    Hence the standing rule that a Raven app builds at most one piece of Markdown before its first frame:
+    the first call loads the font, and the second one needs the atlas the first call has not yet reached.
+    """
+    strip_text = text.strip()
+
+    def measured() -> list | tuple | None:
+        size = dpg.get_text_size(text, wrap_width=wrap_width, font=font, **kwargs)
+        if size is None or size[1] == 0:
+            return None
         if size[0] == 0 and len(strip_text) != 0:
-            continue
-        break
-    return size
+            return None
+        return size
+
+    size = measured()
+    if size is not None:
+        return size
+
+    # Not measurable yet, so what this is waiting for is a frame — which is exactly what `split_frame` waits
+    # for, including the two cases where waiting cannot work. Those are reported rather than waited out: an
+    # unbounded retry here is indistinguishable from a wedged GPU or a slow model, and leaves nothing in the
+    # log to bisect.
+    from ...common.gui import utils as guiutils  # local import: see the note beside the imports
+    excerpt = strip_text[:60] + ("..." if len(strip_text) > 60 else "")
+    advice = ("Build wrapped Markdown from a frame callback or a background thread instead. Before the "
+              "first frame, `wrap` is the part that cannot work: an unwrapped `add_text` never measures "
+              "anything, so it is fine there and is how an app preloads the faces it will need.")
+    def fail(reason: str) -> "RuntimeError":
+        """Log `reason`, with the stack that reached here, and return the error to raise with it.
+
+        Logged as well as raised because the commonest caller is `CallInNextFrame`'s worker, which catches
+        whatever a render step raises and prints the traceback to *stdout*. An app started with `--log PATH`
+        would otherwise have no record of this at all.
+
+        `stack_info`, not `exc_info`: what a reader needs is which caller built wrapped Markdown too early,
+        and that is the stack at this point. An exception that has been constructed but not yet raised
+        carries no traceback of its own, and `logger.exception` reads the one being *handled*, of which
+        there is none here.
+        """
+        message = f"DearPyGui_Markdown.get_text_size: cannot measure {excerpt!r}: {reason} {advice}"
+        logger.error(message, stack_info=True)
+        return RuntimeError(message)
+
+    for _ in range(_TEXT_SIZE_WAIT_FRAMES):
+        if not guiutils.split_frame(operation=f"DearPyGui_Markdown: measuring {excerpt!r} once its font is "
+                                              "in the atlas",
+                                    required=False):
+            # Both cases are named here rather than left to `split_frame`'s own log line: several threads
+            # write to that log, so "the line above" is not reliably the one meant.
+            raise fail("the font is not in the atlas, and a font reaches it only between frames — but no "
+                       "frame can arrive, either because this call is on the render loop thread (app "
+                       "startup included, which runs on it before the loop begins) or because no render "
+                       "loop is running.")
+        size = measured()
+        if size is not None:
+            return size
+    raise fail(f"the font has not reached the atlas after {_TEXT_SIZE_WAIT_FRAMES} frames.")
+
+
+# Set once, by `shutdown`, and never cleared: teardown happens once and there is nothing to come back from.
+# Both worker threads below check it, because both otherwise sit in a poll loop that calls into DPG — and
+# after `destroy_context` such a call is a *segfault* rather than an exception.
+_stopping = threading.Event()
+
+# Pulsed when work is queued, so the idle wait is a wait rather than a poll — and so `shutdown` can end it
+# immediately instead of leaving up to one sleep interval of exposure.
+_work_ready = threading.Event()
+
+
+def shutdown(timeout: float = 1.0) -> None:
+    """Stop the renderer's worker threads. Call before `dpg.destroy_context()`.
+
+    The renderer defers work to two daemon threads, both of which call into DPG. A daemon thread does not
+    hold up interpreter exit, which is what makes this easy to skip — but it is also free to wake *during*
+    teardown, and a DPG call against a destroyed context takes the process down with no traceback.
+
+    `timeout`: seconds to wait for each worker to leave DPG. Waiting is the point: returning before they
+               are out only moves the race. A worker already parked in `split_frame` is released by the
+               render loop stopping, so this is short in practice.
+
+    Idempotent, and safe where the renderer was never used — there may be no threads to stop.
+    """
+    _stopping.set()
+    _work_ready.set()
+    for thread in (CallInNextFrame.worker_thread, CallWhenDPGStarted.worker_thread):
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=timeout)
+            if thread.is_alive():
+                logger.warning(f"shutdown: {thread.name} did not stop within {timeout} s; it may still be "
+                               "inside a DPG call, which `dpg.destroy_context()` would pull out from under it.")
 
 
 class CallInNextFrame:
     __started = False
+    worker_thread = None
     now_frame_queue = []
 
     def __new__(cls, func):
@@ -50,18 +155,27 @@ class CallInNextFrame:
 
     @classmethod
     def append(cls, func, *args, **kwargs):
+        if _stopping.is_set():
+            # Tearing down. Queueing more work would queue calls into a context that is about to go away.
+            return
         if cls.__started is False:
             cls.__started = True
-            threading.Thread(target=cls._worker, daemon=True).start()
+            cls.worker_thread = threading.Thread(target=cls._worker, daemon=True,
+                                                 name="DearPyGui_Markdown.CallInNextFrame")
+            cls.worker_thread.start()
         cls.now_frame_queue.append(
             [func, args, kwargs]
         )
+        _work_ready.set()
 
     @classmethod
     def _worker(cls):
-        while True:
+        while not _stopping.is_set():
             if len(cls.now_frame_queue) == 0:
-                time.sleep(0.015)
+                # Waited on rather than slept through, so `shutdown` gets this thread out of the way at
+                # once instead of after up to one interval.
+                _work_ready.wait(0.015)
+                _work_ready.clear()
                 continue
             next_frame_queue = cls.now_frame_queue.copy()
             cls.now_frame_queue.clear()
@@ -80,6 +194,10 @@ class CallInNextFrame:
                 # quietly, with `split_frame` naming the reason in the log.
                 return
             for func, args, kwargs in next_frame_queue:
+                if _stopping.is_set():
+                    # Teardown began while this thread was waiting for its frame. Every remaining call in
+                    # the batch would land in a context on its way out.
+                    return
                 try:
                     func(*args, **kwargs)
                 except Exception:
@@ -88,14 +206,19 @@ class CallInNextFrame:
 
 class CallWhenDPGStarted:
     __thread = None
+    worker_thread = None
     STARTUP_DONE = False
     functions_queue = []
 
     @classmethod
     def append(cls, func, *args, **kwargs):
+        if _stopping.is_set():
+            return
         if cls.__thread is None:
             cls.__thread = True
-            threading.Thread(target=cls._worker, daemon=True).start()
+            cls.worker_thread = threading.Thread(target=cls._worker, daemon=True,
+                                                 name="DearPyGui_Markdown.CallWhenDPGStarted")
+            cls.worker_thread.start()
         if not cls.STARTUP_DONE:
             cls.functions_queue.append(
                 [func, args, kwargs]
@@ -108,8 +231,14 @@ class CallWhenDPGStarted:
 
     @classmethod
     def _worker(cls):
+        # `get_frame_count` is a DPG call, so this poll must stop the moment teardown begins: after
+        # `destroy_context` it would be a call into freed memory.
         while dpg.get_frame_count() <= 1:
+            if _stopping.is_set():
+                return
             time.sleep(0.01)
+        if _stopping.is_set():
+            return
         # Same reasoning as in `CallInNextFrame._worker`: a bare `dpg.split_frame()` raises where no render
         # loop is running, and the exception would kill this thread rather than delay it. Standing down
         # leaves `STARTUP_DONE` unset, which is the safe state — callers then queue their work instead of

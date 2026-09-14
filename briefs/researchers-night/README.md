@@ -183,13 +183,17 @@ Two things the work turned up that were in nobody's list:
   one app that sets its fonts up by hand instead of through `guiutils.bootup`, so it had no icon font, and
   FontAwesome codepoints are not in a text font. Fixed with `setup_icon_fonts`. `HelpWindow`'s comment
   claimed this fallback degraded to "the literal glyph names", which it does not; the comment is corrected.
-- **Backticks draw nothing at all on a help card** — checked across all four cards that have a code span,
-  about fifteen of them, and not one drew a background. It is the filed decoration-placement bug, and the
-  card is the *good* reproduction: systematic, where in the chat log it is intermittent. Bold and the
-  highlight colour are unaffected, which agrees with the fault being the six drawlist sites and nothing
-  else. Evidence and two hypotheses are in `TODO_DEFERRED.md` under *"Markdown decorations are placed by
+- **Backticks draw no background under `prose_columns`** — checked across all four cards that have a code
+  span, about fifteen of them, and not one drew one. **The card is not the variable**, which took two wrong
+  answers to establish: the same prose decorated correctly on the pose editor's card that same morning,
+  before it moved to `prose_columns`, and the chat log decorates fine with `wrap` and `color` both set. What
+  is left is the two-group nesting `prose_columns` puts the text in. Evidence, the comparison table and the
+  ten-minute probe that would settle it are in `TODO_DEFERRED.md` under *"Markdown decorations are placed by
   measuring the text"*. The backticks stay: the markup says what the word is, and the day the decoration
   lands the prose is already right.
+  - Note this makes the pose editor's conversion a **trade** rather than a pure win — it bought the
+    mid-word truncation fix and cost a decoration that had been rendering. Worth taking while the bug is
+    open, not worth forgetting, since `prose_columns` is the house style for card prose.
 
 The original list, for the record:
 

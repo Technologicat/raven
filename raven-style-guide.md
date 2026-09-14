@@ -265,14 +265,15 @@ docstrings and comments, so the rules are their own.
   emphasis and contrast where a sentence needs it — the xdot viewer's case-sensitivity pair — which is the
   same job from the other side: *this* one, not the others.
 
-  **Backticks currently draw nothing on a help card, and write them anyway.** The renderer decorates inline
-  code with a background quad positioned from a measurement nothing waits for, and on a card it never
-  lands: checked 2026-09-14 across all four cards that have a code span, about fifteen of them, and not one
-  drew a background. Bold and the highlight colour are unaffected, those being properties of the text
-  widget rather than something drawn beside it. It is a rendering bug with an entry of its own in
-  `TODO_DEFERRED.md`, not a reason to reach for a styling that does show: the markup says what the word is,
-  and the day the decoration lands the prose is already right. Do not spend the highlight colour on a path
-  to make it visible — that would say *go and find this on screen*, which a path is not.
+  **Backticks draw no background past a card's first page, and write them anyway.** The renderer gives
+  inline code a background quad sized from a laid-out read of the text, and a card of two or more pages
+  builds every page and hides the ones that are not current — a hidden widget has no metrics, so the quad
+  comes out zero-sized. Measured, with the apparatus, in
+  `investigations/dpg-markdown-decorations/`. Bold and the highlight colour are unaffected, being
+  properties of the text widget rather than something drawn beside it. It is a rendering bug, not a reason
+  to reach for a styling that does show: the markup says what the word is, and the day the decoration
+  lands the prose is already right. Do not spend the highlight colour on a path to make it visible — that
+  would say *go and find this on screen*, which a path is not.
 
   **Spend the colour sparingly, and judge it by the whole view rather than the sentence.**
   Raven-visualizer's second help-card page is the reference density: noticeably more than that, and a page

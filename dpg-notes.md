@@ -865,9 +865,24 @@ default font to keep the atlas lean) can call just the functions they need.
 
 ## `dpg_markdown` during app init
 
-**Do not** call `dpg_markdown.add_text` more than once before the first frame
-renders — this segfaults DPG (at least 1.11), likely a race condition in font
-loading.
+**Do not** build *wrapped* Markdown before the first frame renders. Wrapping
+means deciding line breaks, which means measuring; measuring needs the face in
+DPG's font atlas; and **a face reaches the atlas only between frames**. During
+GUI building the thread that would render that frame is the thread waiting for
+it, so the wait can never end.
+
+An **unwrapped** `dpg_markdown.add_text` measures nothing and is safe there —
+which is what makes the preloading workaround below work.
+
+`get_text_size` raises a named `RuntimeError` at that point rather than waiting,
+the way `guiutils.split_frame` reports its own impossible wait, and logs it with
+the stack that reached it.
+
+Measured 2026-09-14 on DPG 2.3.1 (`investigations/dpg-markdown-decorations/`):
+two *unwrapped* calls before the first frame both succeed, and a single
+*wrapped* one fails — so this is about `wrap`, not about how many calls have
+been made. The rule was originally written down against DPG 1.11 as "at most one
+call, or it segfaults", which is what was seen then.
 
 The render also appears asynchronous: if you populate other content into the same
 container while `dpg_markdown` is loading its fonts, the rendering engine can lose

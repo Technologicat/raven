@@ -350,11 +350,11 @@ def format_generation_stats(*, n_tokens: int, dt: float, exact: bool = True, lab
 # tooltip are written in one place. Rendered as Markdown, so no hand-wrapping — `wrap` sets the width, and
 # a single newline would come out as a space anyway.
 #
-# Markdown is safe here despite the "at most one `dpg_markdown.add_text` before the first frame" rule: a
-# message's tooltip is built with the message, long after the render loop is up, and the message body
-# itself already renders this way. Prose only, though — a list or a code span inside a *hidden* container
-# is a different matter (see `raven/vendor/DearPyGui_Markdown/text_attributes.py`, which still positions
-# those from a laid-out read).
+# Markdown is safe here despite the "no wrapped Markdown before the first frame" rule: a message's tooltip
+# is built with the message, long after the render loop is up, and the message body itself already renders
+# this way. Prose only, though — a code span or a list inside a *hidden* container
+# loses its decoration outright: those are sized from a laid-out read, a hidden widget has no metrics, and
+# the quad comes out zero-sized. Measured; see `investigations/dpg-markdown-decorations/`.
 _PHASE_TOOLTIP_WRAP_W = 430  # pixels; about the width the table above it comes out at
 
 _PHASE_BREAKDOWN_FOOTNOTE = ("*Prompt processing* is the wait before the model generates anything: how much of "
