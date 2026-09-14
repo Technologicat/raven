@@ -658,8 +658,10 @@ class HelpWindow:
                                     width=button_w,
                                     parent=toolbar_group)
             # An app that skipped `bootup` passes a minimal `env(font_size=N)`, which carries neither of
-            # these. The buttons then draw in the default font, as the literal glyph names rather than
-            # icons - ugly and still usable, which is the right failure for a help card.
+            # these. The card still builds; what it costs is the buttons' appearance, and rather more than
+            # it sounds - a text font has no codepoints in FontAwesome's private-use range, so the four
+            # page buttons come out as replacement boxes rather than as glyph names. An app giving a card
+            # more than one page wants `setup_icon_fonts` at least, whatever else it does about fonts.
             icon_font = getattr(self.themes_and_fonts, "icon_font_solid", None)
             if icon_font is not None:
                 dpg.bind_item_font(button, icon_font)

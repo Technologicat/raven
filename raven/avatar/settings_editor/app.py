@@ -1707,18 +1707,37 @@ hotkey_info = (
 
 def _render_help_extras(self: helpcard.HelpWindow, gui_parent) -> None:
     """Render app-specific extra information into the help card."""
-    dpg_markdown.add_text(f"{self.c_hed}**Lipsynced speech**{self.c_end}", parent=gui_parent)
-    g = dpg.add_group(parent=gui_parent)
-    dpg_markdown.add_text(f"{self.c_txt}Speaking through the TTS (**Ctrl+S**) automatically activates lipsynced talking animation.\n"
-                          f"The avatar's mouth movements are driven by phoneme timestamps from the TTS engine.{self.c_end}",
-                          parent=g)
+    self.prose_columns(
+        gui_parent,
+        [helpcard.section(
+            "**What this app is for**",
+            "Testing a character, and configuring the video postprocessor that the character is drawn "
+            "through. The rendering happens in `raven-server`, which must already be running.",
+            "Emotion templates are loaded from `raven/avatar/assets/emotions/`; "
+            "`raven-avatar-pose-editor` is what edits them."),
+         helpcard.section(
+             "**Lipsynced speech**",
+             "Speaking through the TTS (**Ctrl+S**) automatically activates the talking animation. The "
+             "mouth movements are driven by phoneme timestamps from the TTS engine.")],
+        [helpcard.section(
+            "**Recording**",
+            f"The round red button beside {self.c_hig}**Speak**{self.c_end} speaks the text in the speech "
+            f"field and records the audio and the avatar video together.",
+            "Recordings land in `rec/`, under the directory the app was started from. It is created if "
+            "missing and never cleared, so rename or delete it before recording again.",
+            "The audio is MP3, the video a numbered QOI image sequence at the avatar's output "
+            "resolution - upscaled, postprocessed, alpha channel included, backdrop left out. "
+            "`raven-qoi2png` converts the frames for a video editor.")])
 
-_help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
-                                   width=1100,
-                                   height=560,
+# Two pages, split by scope: page one is the keyboard and nothing else, so it is a reference a reader can
+# screenshot and keep beside the app. Paging also turns on `HelpWindow`'s height fitting, which a
+# single-page card does not get - it keeps the height it was given and silently clips the rest.
+_help_window = helpcard.HelpWindow(pages=[helpcard.page("Keyboard", hotkey_info=hotkey_info),
+                                          helpcard.page("Features", on_render_extras=_render_help_extras)],
+                                   width=global_config.GUI_HELP_WINDOW_COMPACT_W,
+                                   height=global_config.GUI_HELP_WINDOW_COMPACT_H,
                                    reference_window="avatar_settings_editor_main_window",
-                                   themes_and_fonts=themes_and_fonts,
-                                   on_render_extras=_render_help_extras)
+                                   themes_and_fonts=themes_and_fonts)
 
 # --------------------------------------------------------------------------------
 # Start the app

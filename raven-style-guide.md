@@ -265,6 +265,14 @@ docstrings and comments, so the rules are their own.
   emphasis and contrast where a sentence needs it — the xdot viewer's case-sensitivity pair — which is the
   same job from the other side: *this* one, not the others.
 
+  **Backticks currently draw nothing on a help card, and write them anyway.** The renderer decorates inline
+  code with a background quad positioned from a measurement nothing waits for, and on a card that
+  measurement is taken while the card is parked offscreen — six spans across the two avatar editors' cards
+  drew no background at all (2026-09-14). It is a rendering bug with an entry of its own in
+  `TODO_DEFERRED.md`, not a reason to reach for a styling that does show: the markup says what the word is,
+  and the day the decoration lands the prose is already right. Do not spend the highlight colour on a path
+  to make it visible — that would say *go and find this on screen*, which a path is not.
+
   **Spend the colour sparingly, and judge it by the whole view rather than the sentence.**
   Raven-visualizer's second help-card page is the reference density: noticeably more than that, and a page
   reads as red rather than as having something highlighted in it.
@@ -334,9 +342,23 @@ and there is usually space to buy.
 
 ### Card size, and what fits itself
 
-The four full-size apps — librarian, visualizer, cherrypick, xdot_viewer — take `GUI_HELP_WINDOW_W` / `_H`
-and `GUI_MAIN_WINDOW_W` / `_H` from `raven.config`. The conference timer and the two avatar editors keep
-their own, being laid out for windows of their own size, and the file dialog's card is sized to the dialog.
+Two sizes in `raven.config`, and a card takes one of them rather than a number of its own.
+`GUI_HELP_WINDOW_W` / `_H` is for librarian, visualizer and cherrypick; `GUI_HELP_WINDOW_COMPACT_W` / `_H`
+for xdot_viewer and the two avatar editors. The conference timer keeps its own, having four keys, and the
+file dialog's card is sized to the dialog. (`GUI_MAIN_WINDOW_W` / `_H` is a separate question with a
+separate membership — the four apps meant to be worked in all day.)
+
+**A card's width is set by its widest hotkey row, not by how many column-groups it has.** Which is why the
+compact size is 1550 against the full 1700 rather than something dramatically smaller: the width follows
+the longest *action text*, and *"Focus the emotion preset chooser"* is as long in a nine-key app as in a
+seventy-seven-key one. The compact number is the narrowest at which those three tables still do not wrap,
+measured on screen — so a card that grows a longer action outgrows it, and the only way to find out is the
+standing instruction at the top of this section.
+
+**Narrowing is not the remedy for a card that looks wide for its height.** The fitted height falls with the
+width as cells stop wrapping, so the ratio barely moves: xdot_viewer's card fits to 507 px at 1700 and to
+456 px at 1500, which is 3.35:1 against 3.29:1. What would change it is fewer column-groups, or not
+reserving a Notes column that every row in that group leaves empty.
 
 **The height is a starting value.** `HelpWindow` measures each page offscreen on first show and fits the
 card to the tallest, clamping to the viewport and logging if it has to. It is skipped only for a card whose
@@ -354,6 +376,11 @@ once. If a page outgrows one screen, add a page rather than cutting the prose.
   Librarian's chat graph, Raven-cherrypick's compare mode.
 - **The key that *enters* a mode stays on the main page.** Which key reaches a mode is part of the main UI,
   even when a later page explains the mode. Librarian keeps `Alt+G — Chat graph` on its keyboard page.
+- **A second page needs the icon font**, and an app that set its fonts up by hand rather than through
+  `guiutils.bootup` has not got one. The page buttons are FontAwesome glyphs, which a text font has no
+  codepoints for, so all four come out as replacement boxes — `guiutils.setup_icon_fonts` into whatever
+  registry the app already has, and pass the result as `themes_and_fonts`. Raven-avatar-pose-editor is the
+  one app in the constellation this applied to.
 
 ### Prose on a card
 

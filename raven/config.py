@@ -45,20 +45,44 @@ GUI_INPUT_ACTIVE_S = 0.5   # stay at full frame rate for this long after the las
 # ---------------------------------------------------------------------------
 #
 # Raven-librarian, Raven-visualizer, Raven-cherrypick and Raven-xdot-viewer: four apps that open a window
-# meant to be worked in all day, and a help card in front of it. One set of numbers rather than one per
-# app, for the reason the idle throttle above has one — they answer one question, and an app wanting its
-# own answer would be saying something about itself that none of them has to say.
+# meant to be worked in all day. One set of numbers rather than one per app, for the reason the idle
+# throttle above has one — they answer one question, and an app wanting its own answer would be saying
+# something about itself that none of them has to say.
 #
 # **Not every app is one of the four.** The conference timer is a full-screen countdown with four keys, and
-# the two avatar editors are laid out for windows of their own size; each keeps its own numbers, and the
-# file dialog sizes its card to the dialog it belongs to.
+# the two avatar editors are laid out for windows of their own size; each keeps its own numbers.
 
 GUI_MAIN_WINDOW_W = 1920
 GUI_MAIN_WINDOW_H = 1040   # this pair just fits onto a 1080p screen in Linux Mint, taskbar included
 
-# The help card floating in front of it. Wide enough that three column-groups of hotkeys need no
-# telegraphic phrasing to fit: the house style treats a dropped article as a concession bought with
-# horizontal space, so the width is what stops that concession being necessary.
+# ---------------------------------------------------------------------------
+# Help card sizes
+# ---------------------------------------------------------------------------
+#
+# **A card's width is set by its widest hotkey row, not by how many column-groups it has** — so this is
+# not the main window's question asked again, and the apps do not group the same way. Two sizes cover the
+# constellation:
+#
+#   - The full size is for a keyboard page that runs to three column-groups: Raven-librarian (77 rows),
+#     Raven-cherrypick (47) and Raven-visualizer (44). The width is what lets three groups fit without
+#     telegraphic phrasing, the house style treating a dropped article as a concession bought with
+#     horizontal space.
+#   - The compact size is **the narrowest at which the smaller cards' tables still do not wrap**, measured
+#     on screen 2026-09-14: Raven-xdot-viewer needs 1500 and Raven-avatar-pose-editor 1550, which is where
+#     the number comes from. Raven-avatar-settings-editor shares it.
+#
+# **The gap between the two is small, and that is the finding rather than a rounding.** These cards are
+# two column-groups of ten-odd rows against three groups of twenty, so the expectation was a much narrower
+# compact size — but the width follows the longest *action text*, and an action like "Focus the emotion
+# preset chooser" is as long in a small app as in a large one.
+#
+# Which is also why narrowing is not the remedy for a card that looks wide for its height: the fitted
+# height falls with the width, as cells stop wrapping, so the ratio barely moves. Raven-xdot-viewer's card
+# fits to 507 px at 1700 and to 456 px at 1500 — 3.35:1 against 3.29:1. What would change it is fewer
+# column-groups, or not reserving a Notes column that every row in that group leaves empty.
+#
+# The two outliers stay outside both, and for the same reason as their windows: the conference timer has
+# four keys, and the file dialog sizes its card to the dialog it belongs to.
 #
 # **The height is a starting value, not a size.** A card of two or more pages measures its tallest page and
 # fits itself to it (`HelpWindow._fit_height_to_pages`), clamping to the viewport and logging if it has to.
@@ -66,6 +90,9 @@ GUI_MAIN_WINDOW_H = 1040   # this pair just fits onto a 1080p screen in Linux Mi
 # does not fit, which is how Raven-cherrypick's card came to omit its own `F1` row.
 GUI_HELP_WINDOW_W = 1700
 GUI_HELP_WINDOW_H = 1000
+
+GUI_HELP_WINDOW_COMPACT_W = 1550
+GUI_HELP_WINDOW_COMPACT_H = 700
 
 
 # ---------------------------------------------------------------------------

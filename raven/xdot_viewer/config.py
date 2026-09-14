@@ -56,9 +56,10 @@ GRAPH_TEXT_FONT_SIZES = [4, 8, 16, 32, 64]
 # falls back to GRAPHVIZ_ENGINES[1] for .dot/.gv files).
 GRAPHVIZ_ENGINES = ["[as-is]", "dot", "neato", "fdp", "sfdp", "circo", "twopi"]
 
-# Help card dimensions (pixels). Chosen to fit the content.
-HELP_WINDOW_W = global_config.GUI_HELP_WINDOW_W
-HELP_WINDOW_H = global_config.GUI_HELP_WINDOW_H
+# Help card dimensions (pixels). The compact size: two column-groups of ten rows each, which at the full
+# width would leave most of every row empty.
+HELP_WINDOW_W = global_config.GUI_HELP_WINDOW_COMPACT_W
+HELP_WINDOW_H = global_config.GUI_HELP_WINDOW_COMPACT_H
 
 
 # Machine-local overrides (`~/.config/raven/overrides.json`); applied last, so they can name anything above.

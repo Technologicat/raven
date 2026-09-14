@@ -146,19 +146,46 @@ file dialog's own fitter was a second copy of the shared algorithm and is gone. 
 take their window and card sizes from `raven.config` now. And the rules are written down:
 `raven-style-guide.md` → *User-facing text* is the reference, `.claude/skills/helpcard/` the index.
 
-**What is left of it, from Juha's review of all thirteen card pages (2026-09-14), none started:**
+~~**What is left of it, from Juha's review of all thirteen card pages (2026-09-14):**~~ — **done the same
+day**, except the last, which turned out not to need doing. What each came to:
 
-- **The xdot viewer's card is too wide for its height.** It took the shared 1700 with the others, and its
-  content is two columns and short. The awkward part is that fixing it reopens whether that app belongs in
-  the shared-size group at all.
-- **Both avatar editors want a slightly wider card**, their hotkey tables wrapping at the hand-tuned 1100.
-- **The pose editor's prose is cut off mid-word.** It renders through bare `dpg_markdown.add_text` calls
-  rather than `prose_columns`, so it gets no wrap width — the fix is the same layout the two-column cards
-  use, in a single column.
-- **The settings editor's card has almost no prose.** Worth checking the user-facing avatar documentation
-  for anything that belongs on it.
-- **Librarian's chat graph and the xdot viewer share much of their UX**, and nothing says so. Whether each
-  card should point at the other is open; there is no recommendation yet.
+- ~~**The xdot viewer's card is too wide for its height.**~~ — **narrowing is not the remedy, measured.** A
+  second size class now exists (`GUI_HELP_WINDOW_COMPACT_W` / `_H`, shared by xdot_viewer and the two avatar
+  editors), but it is 1550 against 1700 rather than anything dramatic, because a card's width follows its
+  longest *action text* and not its number of column-groups. And the aspect barely moves with it: the fitted
+  height falls as cells stop wrapping, so xdot_viewer's card is 1700×507 or 1500×456 — 3.35:1 against
+  3.29:1. **What would actually change it is one of two things, and neither was taken**: fewer
+  column-groups (twenty keys is one column's worth, at the cost of the search/file against navigation/app
+  grouping), or not reserving a Notes column that every row in that group leaves empty — about ten lines in
+  `_render_hotkey_table`, and it re-lays-out every card in the constellation, so it wants the whole sweep
+  looked at again.
+- ~~**Both avatar editors want a slightly wider card**~~ — both at the compact size now, and both tables
+  measured clean on screen. The minima are xdot_viewer 1500 and the pose editor 1550, which is where the
+  shared number comes from.
+- ~~**The pose editor's prose is cut off mid-word.**~~ — on `prose_columns`, two columns, verified.
+- ~~**The settings editor's card has almost no prose.**~~ — it has a *Features* page now: what the app is
+  for, lipsynced speech, and recording, the last of these sourced from `raven/avatar/README.md`. Both
+  avatar editors went to two pages while this was being done, which is what gives their cards height
+  fitting instead of a hand-tuned number that silently clips.
+- **Librarian's chat graph and the xdot viewer share much of their UX** — **recommendation: leave the cards
+  alone.** Their shared keys already agree exactly (`F`, `1`, `Numpad +`, `Numpad -`, drag to pan, wheel to
+  zoom at the cursor), so a reader who knows one gets the other without being told. The single divergence is
+  that bare arrows pan in the xdot viewer and move the cursor in the chat graph, which is forced — the graph
+  has a cursor and pans on `Shift`+arrow — and a card cannot usefully warn about a difference from an app
+  that is not open. If the kinship is worth saying anywhere it is the READMEs, where a reader is browsing
+  the constellation rather than operating one app; that is one sentence each and nobody has asked for it.
+
+Two things the work turned up that were in nobody's list:
+
+- **The pose editor's card toolbar drew four replacement boxes** the moment it got a second page: it is the
+  one app that sets its fonts up by hand instead of through `guiutils.bootup`, so it had no icon font, and
+  FontAwesome codepoints are not in a text font. Fixed with `setup_icon_fonts`. `HelpWindow`'s comment
+  claimed this fallback degraded to "the literal glyph names", which it does not; the comment is corrected.
+- **Backticks draw nothing at all on a help card.** Six inline-code spans across the two avatar editors'
+  cards, no background on any of them — the filed decoration-placement bug, and on a card it is systematic
+  where in the chat log it is intermittent. New evidence and a hypothesis (the card is measured while parked
+  offscreen) are in `TODO_DEFERRED.md` under *"Markdown decorations are placed by measuring the text"*. The
+  backticks stay: the markup says what the word is, and the day the decoration lands the prose is right.
 
 The original list, for the record:
 

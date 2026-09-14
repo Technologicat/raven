@@ -6111,6 +6111,19 @@ before measuring. The constraint that makes it interesting is that this code can
 where nothing can wait for a frame — so a decoration cannot simply block until the text is placed, and the
 answer is more likely "draw it, then correct it on a later frame" than "measure later".
 
+**On a help card the decoration does not appear at all**, which is a harder case than the chat log's and a
+better one to debug from. Measured 2026-09-14 on Raven-avatar-settings-editor's and Raven-avatar-pose-editor's
+cards: six inline-code spans between them — `rec/`, `raven-server`, `raven/avatar/assets/emotions/` and the
+rest — and not one drew a background anywhere on the card, misplaced or otherwise. So a card's backticks
+currently buy the reader nothing, while the style guide treats them as one of the three stylings that carry
+a card's meaning.
+
+Systematic where the chat log's is intermittent, which is the useful part: a reproduction that fails *every*
+time needs no waiting around. **A hypothesis to test first, not a finding:** a card is built parked offscreen
+and measured there during `HelpWindow`'s fitting passes, so `get_item_pos` may well answer a position that is
+off the viewport, and a drawlist placed there is drawn nowhere the reader can see. That would make the card a
+*positioning* case rather than a size-zero one, and the two look identical from outside.
+
 **Probably not the same as the URL colour being one character off** — the note about that lived in
 `CLAUDE.md` and pointed here. `Url.render` calls `dpg.configure_item(dpg_text, color=...)`: it recolours the
 widget it was given and positions nothing, so a colour landing on the wrong character means the *text* was

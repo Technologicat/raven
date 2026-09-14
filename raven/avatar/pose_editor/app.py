@@ -113,7 +113,6 @@ with timer() as tim:
     from ...common.gui import qroverlay
     from ...common.gui import utils as guiutils
     from ...common.image import codec
-    from ...vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     from ...common.hfutil import maybe_install_models
     from ...common.running_average import RunningAverage
     from ...common.video import compositor
@@ -203,8 +202,13 @@ with dpg.font_registry() as the_font_registry:
                                 font_size)
     dpg.bind_font(default_font)
 
-# Set up the Markdown renderer — only used by the help card's extras section, but must be configured
-# before any `dpg_markdown.add_text` call.
+# The help card's page buttons draw FontAwesome glyphs, which OpenSans has no codepoints for — without
+# this they come out as four replacement boxes.
+icon_fonts = guiutils.setup_icon_fonts(the_font_registry, font_size)
+icon_fonts.font_size = font_size
+
+# Set up the Markdown renderer — only the help card's prose goes through it, but it must be configured
+# before the first piece of Markdown is rendered.
 guiutils.setup_markdown(the_font_registry, font_size)
 
 # Modify global theme
@@ -1445,28 +1449,31 @@ hotkey_info = (
 
 def _render_help_extras(self: helpcard.HelpWindow, gui_parent) -> None:
     """Render app-specific extra information into the help card."""
-    dpg_markdown.add_text(f"{self.c_hed}**Editing emotion templates**{self.c_end}", parent=gui_parent)
-    g1 = dpg.add_group(parent=gui_parent)
-    dpg_markdown.add_text(f"{self.c_txt}Pose the character with the morph and pose sliders. "
-                          f"**Ctrl+S** opens a file dialog to save the posed image, and writes the pose beside it "
-                          f"as a JSON emotion template under the same name.{self.c_end}",
-                          parent=g1)
-    dpg_markdown.add_text(f"{self.c_hed}**Where templates are used**{self.c_end}", parent=gui_parent)
-    g2 = dpg.add_group(parent=gui_parent)
-    dpg_markdown.add_text(f"{self.c_txt}Both **raven-server**'s live animator and **raven-avatar-settings-editor** "
-                          f"load emotion templates from `raven/avatar/assets/emotions/`.{self.c_end}",
-                          parent=g2)
-    g3 = dpg.add_group(parent=gui_parent)
-    dpg_markdown.add_text(f"{self.c_txt}For automatic emotion selection from LLM text (**raven-librarian**), "
-                          f"template names must match the classifier model's emotion labels.{self.c_end}",
-                          parent=g3)
+    self.prose_columns(
+        gui_parent,
+        [helpcard.section(
+            "**Editing emotion templates**",
+            "Pose the character with the morph and pose sliders. **Ctrl+S** opens a file dialog to save "
+            "the posed image, and writes the pose beside it as a JSON emotion template under the same "
+            "name.",
+            "**Ctrl+Shift+S** asks for a directory instead, and renders one image per preset into it, "
+            "together with an `_emotions.json` holding every template.")],
+        [helpcard.section(
+            "**Where templates are used**",
+            "Both `raven-server`'s live animator and `raven-avatar-settings-editor` load emotion templates "
+            "from `raven/avatar/assets/emotions/`.",
+            "For automatic emotion selection from LLM text (`raven-librarian`), template names must match "
+            "the classifier model's emotion labels.")])
 
-_help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
-                                   width=1100,
-                                   height=540,
+# Two pages, split by scope: page one is the keyboard and nothing else, so it is a reference a reader can
+# screenshot and keep beside the app. Paging also turns on `HelpWindow`'s height fitting, which a
+# single-page card does not get - it keeps the height it was given and silently clips the rest.
+_help_window = helpcard.HelpWindow(pages=[helpcard.page("Keyboard", hotkey_info=hotkey_info),
+                                          helpcard.page("Features", on_render_extras=_render_help_extras)],
+                                   width=global_config.GUI_HELP_WINDOW_COMPACT_W,
+                                   height=global_config.GUI_HELP_WINDOW_COMPACT_H,
                                    reference_window="pose_editor_window",
-                                   themes_and_fonts=env(font_size=font_size),
-                                   on_render_extras=_render_help_extras)
+                                   themes_and_fonts=icon_fonts)
 
 # --------------------------------------------------------------------------------
 # Start the app
