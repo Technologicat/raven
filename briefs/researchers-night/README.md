@@ -132,9 +132,35 @@ Two wrinkles found while sizing it, neither a blocker:
     there and let a re-measurement of one silently move the rest. Here the values are not clustered, they
     are equal, and they answer one question. Same shape, opposite content.
 
-#### What Monday picks up, left over from 2026-09-11
+#### ~~What Monday picks up, left over from 2026-09-11~~ — **all three done 2026-09-14**
 
-In order, and the first is the only one carrying a decision that is already made rather than still open:
+The importer's second commit landed with the GUI fallback and its notice, live-verified against a dead
+backend; `maia`'s settings moved to `~/.config/raven/overrides.json` over ssh, its tracked configs clean
+again; and the help cards are finished — all eight apps now read through, with
+`check_hotkey_tooltips.py` reporting **0 keys left for a person to look at**.
+
+What the card sweep turned up beyond the text, since none of it was in any plan: cherrypick's card was
+**silently dropping its own `F1` row**, because `HelpWindow`'s height fitting guarded on page *count* while
+its docstring reasoned about who sizes the card — those coincided only for the one self-fitting card. The
+file dialog's own fitter was a second copy of the shared algorithm and is gone. The four full-size apps
+take their window and card sizes from `raven.config` now. And the rules are written down:
+`raven-style-guide.md` → *User-facing text* is the reference, `.claude/skills/helpcard/` the index.
+
+**What is left of it, from Juha's review of all thirteen card pages (2026-09-14), none started:**
+
+- **The xdot viewer's card is too wide for its height.** It took the shared 1700 with the others, and its
+  content is two columns and short. The awkward part is that fixing it reopens whether that app belongs in
+  the shared-size group at all.
+- **Both avatar editors want a slightly wider card**, their hotkey tables wrapping at the hand-tuned 1100.
+- **The pose editor's prose is cut off mid-word.** It renders through bare `dpg_markdown.add_text` calls
+  rather than `prose_columns`, so it gets no wrap width — the fix is the same layout the two-column cards
+  use, in a single column.
+- **The settings editor's card has almost no prose.** Worth checking the user-facing avatar documentation
+  for anything that belongs on it.
+- **Librarian's chat graph and the xdot viewer share much of their UX**, and nothing says so. Whether each
+  card should point at the other is open; there is no recommendation yet.
+
+The original list, for the record:
 
 1. **Importer commit 2** — the second half of the Visualizer-startup fix, agreed and specified, not
    started. Two pieces:
