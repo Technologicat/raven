@@ -183,17 +183,21 @@ Two things the work turned up that were in nobody's list:
   one app that sets its fonts up by hand instead of through `guiutils.bootup`, so it had no icon font, and
   FontAwesome codepoints are not in a text font. Fixed with `setup_icon_fonts`. `HelpWindow`'s comment
   claimed this fallback degraded to "the literal glyph names", which it does not; the comment is corrected.
-- **Backticks draw no background under `prose_columns`** — checked across all four cards that have a code
-  span, about fifteen of them, and not one drew one. **The card is not the variable**, which took two wrong
-  answers to establish: the same prose decorated correctly on the pose editor's card that same morning,
-  before it moved to `prose_columns`, and the chat log decorates fine with `wrap` and `color` both set. What
-  is left is the two-group nesting `prose_columns` puts the text in. Evidence, the comparison table and the
-  ten-minute probe that would settle it are in `TODO_DEFERRED.md` under *"Markdown decorations are placed by
-  measuring the text"*. The backticks stay: the markup says what the word is, and the day the decoration
-  lands the prose is already right.
-  - Note this makes the pose editor's conversion a **trade** rather than a pure win — it bought the
-    mid-word truncation fix and cost a decoration that had been rendering. Worth taking while the bug is
-    open, not worth forgetting, since `prose_columns` is the house style for card prose.
+- **Backticks draw no background past a card's first page**, across all four cards that have a code span.
+  **The cause is that the page is hidden when the decoration runs**: it is sized from a laid-out read, a
+  widget DPG has not laid out has no metrics, and the quad is built with zero area. A card of two or more
+  pages builds every page and hides all but the current one. Measured, with the apparatus, in
+  `investigations/dpg-markdown-decorations/`; the standing item is `TODO_DEFERRED.md`, *"Markdown
+  decorations are placed by measuring the text"*, which now carries two faults rather than one — this, and
+  the separate misplacement race in the chat log. The backticks stay: the markup says what the word is, and
+  the day the decoration lands the prose is already right.
+  - **Two hypotheses were wrong before this one, and both looked well-evidenced** — first `prose_columns`,
+    then its group nesting, because every card that had lost the decoration used it and the one card that
+    had kept it did not. It was a coincidence: every multi-page card uses `prose_columns` too. The probe
+    settles it by varying nesting and visibility independently, which is the only reason the answer is
+    trustworthy.
+  - So giving the pose editor's card a second page is what cost it a decoration it had that morning, and
+    the mid-word truncation fix is not implicated. Worth taking while the bug is open.
 
 The original list, for the record:
 
