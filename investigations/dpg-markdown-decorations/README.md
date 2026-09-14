@@ -63,6 +63,22 @@ Not measured, so treat as candidates rather than a plan:
   already uses in `text_attributes.py` — it is added with a plain `dpg.add_text(parent=parent)` and
   computes no position — and it removes the frame delay rather than working around it.
 
+**Which one is right is an open question, not a conclusion this bundle reached.** The third reads best from
+the source, and that is *all* it is: a judgement from reading, with nothing tried. Recorded that way on
+purpose, because a preference stated in a write-up is the kind of thing a later session inherits as a
+decision, and the cheapest moment to say it was never measured is now.
+
+Two things the choice turns on, and only the first is a measurement:
+
+- **Does deferring until shown actually get a second chance?** The first two candidates both assume
+  something can notice a widget becoming visible and re-run the decoration. Whether DPG offers that
+  cheaply — a visible-state handler, a per-frame sweep of pending decorations, or nothing usable — is
+  unestablished, and it decides whether they are small or large.
+- **The third changes behaviour, not just implementation.** A drawlist is one atomic box, so a code span
+  drawn as one cannot break across lines — where today a long backticked path wraps like any other text.
+  For a path that is arguably an improvement and for a long inline snippet it is a regression, which makes
+  it a decision for the maintainer rather than a detail to settle while implementing.
+
 ## How to run it
 
 ```bash

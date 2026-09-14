@@ -6139,8 +6139,13 @@ was a single page and stopped the day it gained a second one, which is the clean
 Candidate fixes, none measured: don't decorate a hidden widget and arrange for something to notice when it is
 shown; size from `dpg_markdown.get_text_size`, which answers from the font rather than the layout; or drop the
 positioning altogether and draw the span as an inline drawlist carrying quad and text together, laid out by DPG
-like any other item — the shape the URL secondary-action icon in the same file already uses, which removes the
-frame delay rather than working around it.
+like any other item — the shape the URL secondary-action icon in the same file already uses.
+
+**Do not pick one from that list without measuring and raising it**, and read
+`investigations/dpg-markdown-decorations/` before starting: it says what each candidate turns on, and flags
+that the third **changes behaviour** — a drawlist is atomic, so a code span drawn as one stops wrapping across
+lines, which is a maintainer's call rather than an implementation detail. The write-up's preference for that
+third option is explicitly a judgement from reading, with nothing tried.
 
 **Probably not the same as the URL colour being one character off** — the note about that lived in
 `CLAUDE.md` and pointed here. `Url.render` calls `dpg.configure_item(dpg_text, color=...)`: it recolours the
