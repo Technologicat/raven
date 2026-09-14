@@ -1797,8 +1797,8 @@ def main() -> int:
                 "**What it leaves alone**",
                 "Compare mode is an overlay: triage marks, the selection and the filter are "
                 "untouched by entering or leaving it.",
-                "**Esc** restores whichever image was showing beforehand. **Shift** and a "
-                "number picks that one and leaves, which is the point of the mode.")])
+                "**Esc** restores whichever image was showing beforehand. **Shift+1–9** picks "
+                "that one and leaves, which is the point of the mode.")])
 
     def _render_features_help(self: helpcard.HelpWindow, gui_parent) -> None:
         """Page 3's prose: what the app does, and the one thing a key table cannot say."""
@@ -1806,7 +1806,7 @@ def main() -> int:
             gui_parent,
             [helpcard.section(
                 None,
-                "Raven-cherrypick is a GUI for triaging a folder of images *by hand*, quickly. "
+                "Raven-cherrypick is a GUI for triaging a folder of images by hand, quickly. "
                 "Nothing here decides anything for you: you look, and you sort them into "
                 "**cherries** (keepers), **lemons** (rejects) and neutral. Two-handed — one "
                 "hand navigates, the other marks."),
@@ -1826,8 +1826,9 @@ def main() -> int:
                  "a single sorted listing. A marked image therefore keeps its place in the "
                  "order rather than vanishing, which is what makes it safe to mark as you go.",
                  "**G** narrows that listing to one kind at a time. **B**, **N** and **M** "
-                 "jump to the next lemon, cherry or neutral image, and work in the unfiltered "
-                 "view, where there is something to jump past.")],
+                 "jump to the next lemon, cherry or neutral image, and with **Shift** to the "
+                 "previous one. They work in the unfiltered view, where there is something to "
+                 "jump past.")],
             [helpcard.section(
                 "**Comparing a detail between shots**",
                 "Zoom and pan are kept when you move between images *of the same dimensions*. "

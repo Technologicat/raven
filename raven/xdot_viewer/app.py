@@ -838,7 +838,7 @@ def main() -> int:
                 "**Interaction modes**",
                 "**Click** a node or edge to focus the view on it. Clicking an edge cycles: zoom-to-fit "
                 "-> source -> destination -> zoom-to-fit.",
-                "**Right-click** a node to open its URL (if it has one) in the browser.",
+                "**Right-click** a node to open its URL (if it has one) in the default browser.",
                 "**Shift+hover** (**Ctrl+hover**) over a node to highlight its outgoing (incoming) "
                 "connections, respectively.",
                 "**Hover near an edge endpoint** to reveal a follow indicator; **click** it to jump to "

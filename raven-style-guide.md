@@ -331,9 +331,23 @@ once. If a page outgrows one screen, add a page rather than cutting the prose.
 Two newspaper columns (`HelpWindow.prose_columns`, sections built by `helpcard.section`); a reader finishes
 one column before crossing, so a section belongs wholly to one of them.
 
-- **A key named in prose is bold and in the text colour** — `**Ctrl+S**`. The highlight colour is for
-  emphasis and contrast; a key wearing it reads as a different kind of thing from the same key one card
-  over.
+**Three stylings, and each has one job.** The rule matters because a card is mostly nouns pointing at
+things, and a reader who cannot tell *which kind* of thing from the styling has to read every sentence to
+find out:
+
+| | for | example |
+|---|---|---|
+| **bold**, in the text colour | a key you press | `**Ctrl+S**`, `**Shift+1–9**` |
+| `backticks` | a literal — a path, a filename, a config key, a command | `` `~/.config/raven/` ``, `` `raven-indexer` `` |
+| the highlight colour | a label you have to *find on screen* | the **Documents** checkbox, the **Maintenance** row |
+
+- **The highlight means "look for this".** It is the only one that is about the screen rather than about
+  the text, which is why a key or a path wearing it reads as a different kind of thing from the same key or
+  path one card over. It also does emphasis and contrast where a sentence needs it (the xdot viewer's
+  case-sensitivity pair), which is the same job seen from the other side: *this* one, not the others.
+- **Spend the colour sparingly, and judge it by the page rather than the sentence.** Raven-visualizer's
+  second page is the reference density: noticeably more than that and a page reads as red, rather than as
+  having something highlighted in it.
 - **Say what no key table can say.** That is what earns a prose page. Raven-cherrypick's marks *move the
   user's files* into `cherries/` and `lemons/`, and its zoom and pan survive between images of the same
   dimensions — neither is deducible from a key.

@@ -39,7 +39,8 @@ The `live-gui-testing` skill has the launch, wait-for-ready, screenshot and shut
 | add rows, or wonder why a cell went to two lines | *A help card cannot be checked by reading its source* — the no-wrap rule, its mechanism, and buying width rather than cutting words |
 | decide whether something needs a second page | *Pages* — split by scope, page one is the keyboard alone, a mode earns a page, the key that enters it does not |
 | set or change a card's size | *Card size, and what fits itself* — the shared constants, which apps are exceptions, and what fits itself when |
-| write the prose on a page | *Prose on a card* — two columns, a key is bold in the text colour, say what no key table can, source it from the code |
+| write the prose on a page | *Prose on a card* — two columns, say what no key table can, source it from the code |
+| style a key, a path or a UI label in prose, or wonder why a page reads as too red | *Prose on a card* → the three stylings — bold for a key, backticks for a literal, the highlight for a label to find on screen — and what counts as too much of the last |
 | finish, before committing | *Before you finish* — the two audit scripts, and reading the key handler yourself |
 
 ## Adjacent material

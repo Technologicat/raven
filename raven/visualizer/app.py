@@ -1041,9 +1041,10 @@ def render_help_extras(self: helpcard.HelpWindow,
          helpcard.section(
             "**Editing the search term**",
             "While the search field has the caret, the usual text editing keys are available.",
-            # The key wears the highlight and its gloss does not, so the column scans as a list of keys
-            # rather than as one long coloured string.
-            "\n".join(f"- {self.c_hig}**{key}**{self.c_end}: {what}" for key, what in _SEARCH_FIELD_EDIT_KEYS))])
+            # Bold and in the text colour, as a key named in prose is everywhere. The bold alone is what
+            # makes the column scan as a list of keys rather than one long string; the highlight was doing
+            # that job in a colour that means something else.
+            "\n".join(f"- **{key}**: {what}" for key, what in _SEARCH_FIELD_EDIT_KEYS))])
 # Two pages, split by scope rather than to find room — though it does find some, and the keys needed it.
 # Page one is the app's keyboard and nothing else, so it is a reference a reader can screenshot and keep
 # open beside the app, which is what the card's header has been inviting all along and what prose sharing
