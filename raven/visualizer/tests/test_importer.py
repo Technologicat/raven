@@ -22,7 +22,7 @@ importer = pytest.importorskip("raven.visualizer.importer")
 
 pytestmark = pytest.mark.ml
 
-from unpythonic import unbox  # noqa: E402 -- must follow the guard above
+from unpythonic import box, unbox  # noqa: E402 -- must follow the guard above
 
 from raven.visualizer import config as visualizer_config  # noqa: E402 -- ditto
 
@@ -637,6 +637,20 @@ def initialized(uninitialized, monkeypatch):
     executor.shutdown(wait=True)
 
 
+def pipeline_stub(body=None):
+    """Stand in for `import_bibtex`, mirroring its signature. `body` is called with `(out, input_files)`.
+
+    The signature is mirrored here rather than in each test that needs a stub. A stub taking `**kwargs`
+    would accept anything and so stop checking how `importer_task` calls the pipeline, which is part of
+    what these tests are for; a stub per test restating the signature breaks every test at once when a
+    parameter is added, which has now happened twice -- `llm_backend_url`, then `llm_policy`.
+    """
+    def stub(status_cb, out, *ins, llm_backend_url=None, llm_policy=None):
+        if body is not None:
+            return body(out, ins)
+    return stub
+
+
 def run_one_task(fake_import_bibtex, monkeypatch, timeout=10.0):
     """Start an import whose pipeline is `fake_import_bibtex`, wait for it, and return its `task_env`."""
     monkeypatch.setattr(importer, "import_bibtex", fake_import_bibtex)
@@ -681,7 +695,7 @@ def test_initialization_is_idempotent(initialized):
 
 def test_a_task_runs_the_pipeline_with_the_filenames_it_was_given(initialized, monkeypatch):
     called = []
-    task_env = run_one_task(lambda status_cb, out, *ins, llm_backend_url=None: called.append((out, ins)), monkeypatch)
+    task_env = run_one_task(pipeline_stub(lambda out, ins: called.append((out, ins))), monkeypatch)
     assert called == [("/out/dataset.pickle", ("/in/one.bib",))]
     assert task_env.result_code is importer.result_successful
 
@@ -690,7 +704,7 @@ def test_only_one_import_runs_at_a_time(initialized, monkeypatch):
     # An import takes a lot of GPU and CPU, so a second one alongside the first would make both slower
     # and could exhaust VRAM.
     release = threading.Event()
-    monkeypatch.setattr(importer, "import_bibtex", lambda status_cb, out, *ins, llm_backend_url=None: release.wait(10.0))
+    monkeypatch.setattr(importer, "import_bibtex", pipeline_stub(lambda out, ins: release.wait(10.0)))
     assert importer.start_task(None, None, "/out/dataset.pickle", "/in/one.bib") is True
     try:
         assert importer.has_task(), "nothing was running, so this fixture cannot tell a refusal from a start"
@@ -703,7 +717,7 @@ def test_the_started_callback_fires_before_the_pipeline_does(initialized, monkey
     # The GUI re-enables its stop button from this callback, so it must arrive while there is still
     # something to stop.
     order = []
-    monkeypatch.setattr(importer, "import_bibtex", lambda status_cb, out, *ins, llm_backend_url=None: order.append("pipeline"))
+    monkeypatch.setattr(importer, "import_bibtex", pipeline_stub(lambda out, ins: order.append("pipeline")))
     finished = threading.Event()
     importer.start_task(lambda task_env: order.append("started"), lambda task_env: finished.set(),
                         "/out/dataset.pickle", "/in/one.bib")
@@ -714,30 +728,30 @@ def test_the_started_callback_fires_before_the_pipeline_does(initialized, monkey
 def test_a_failing_import_is_reported_in_the_status_the_gui_reads(initialized, monkeypatch):
     # The task dies on a background thread, so the exception itself never reaches the user. The status
     # line is the only place they learn the import did not happen.
-    def explode(status_cb, out, *ins, llm_backend_url=None):
+    def explode(out, ins):
         raise RuntimeError("the embedder went away")
 
-    task_env = run_one_task(explode, monkeypatch)
+    task_env = run_one_task(pipeline_stub(explode), monkeypatch)
     assert task_env.result_code is importer.result_errored
     assert isinstance(task_env.exc, RuntimeError)
     assert "the embedder went away" in unbox(importer.status_box)
 
 
 def test_a_finished_import_says_so_and_says_how_to_start_another(initialized, monkeypatch):
-    run_one_task(lambda status_cb, out, *ins, llm_backend_url=None: None, monkeypatch)
+    run_one_task(pipeline_stub(), monkeypatch)
     assert "complete" in unbox(importer.status_box)
 
 
 def test_a_finished_task_leaves_the_progress_counter_at_the_start(initialized, monkeypatch):
     advanced = []
 
-    def advance(status_cb, out, *ins, llm_backend_url=None):
+    def advance(out, ins):
         importer.progress.tock()
         importer.progress.tock()
         advanced.append(importer.progress._macrosteps_done)
 
     monkeypatch.setattr(importer, "has_task", importer.has_task)  # keep the real one; the fixture has a task
-    run_one_task(advance, monkeypatch)
+    run_one_task(pipeline_stub(advance), monkeypatch)
     # The negative control. A stub that died before advancing anything leaves the counter at zero, which is
     # also what a correct reset looks like -- so without this, the assertion below would pass whether or not
     # there was ever anything to reset.
@@ -859,6 +873,75 @@ def test_configured_frequency_keywords_are_recorded_whatever_the_backend_did(mon
     monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
     monkeypatch.setattr(importer, "llm_settings", settings, raising=False)
     assert importer._effective_keyword_method() == "frequencies"
+
+
+@pytest.fixture
+def no_backend(monkeypatch):
+    """Configure LLM cluster keywords and summaries, and make the backend refuse to answer.
+
+    The one probe is stubbed on the real `llmclient`, rather than a stand-in module put into
+    `sys.modules`: `_setup_llm_backend` also imports `agent`, which reaches `scaffold`, which reads
+    names off `llmclient` at import time -- so a stand-in breaks the import before the test begins.
+    """
+    from raven.librarian import llmclient
+    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+    monkeypatch.setattr(visualizer_config, "summarize", True)
+    monkeypatch.setattr(importer, "llm_fallback_box", box(None), raising=False)
+    monkeypatch.setattr(llmclient, "test_connection", lambda url: False)
+
+
+def test_a_required_backend_that_does_not_answer_stops_the_run(no_backend):
+    with pytest.raises(importer.LLMBackendUnavailable):
+        importer._setup_llm_backend(llm_policy=importer.llm_required)
+
+
+def test_an_optional_backend_that_does_not_answer_lets_the_run_continue(no_backend):
+    # The pair with the test above, and the whole of the GUI's policy: same configuration, same dead
+    # backend, and the only difference is what the caller asked for. Returning rather than raising is the
+    # claim; the fallback assertion is the control, since `llm_settings` reads `None` before the call too,
+    # so on its own it would pass against a function that did nothing at all.
+    importer._setup_llm_backend(llm_policy=importer.llm_optional)
+    assert unbox(importer.llm_fallback_box) is not None, "no fallback was recorded, so the run did not reach the unavailable path and this asserts nothing"
+    assert importer.llm_settings is None
+
+
+def test_the_run_that_continued_says_which_backend_it_gave_up_on(no_backend):
+    importer._setup_llm_backend(llm_policy=importer.llm_optional)
+    fallback = unbox(importer.llm_fallback_box)
+    assert isinstance(fallback, importer.LLMBackendUnavailable)
+    assert fallback.headline and fallback.advice
+
+
+def test_a_run_that_gives_up_nothing_publishes_no_fallback(monkeypatch):
+    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
+    monkeypatch.setattr(visualizer_config, "summarize", False)
+    monkeypatch.setattr(importer, "llm_fallback_box", box("stale, from an earlier run"), raising=False)
+    importer._setup_llm_backend(llm_policy=importer.llm_optional)
+    assert unbox(importer.llm_fallback_box) is None
+
+
+def test_every_llm_stage_drops_together(no_backend):
+    """Keywords fall back and summaries are skipped, rather than one of the two going ahead."""
+    importer._setup_llm_backend(llm_policy=importer.llm_optional)
+    assert importer._effective_keyword_method() == "frequencies"
+    # What the summarize gate in `import_bibtex` tests. Summaries are still *configured* -- the run simply
+    # has nothing to make them with, which is the state the gate has to notice.
+    assert visualizer_config.summarize is True
+    assert importer.llm_settings is None
+
+
+def test_a_configuration_wanting_no_llm_names_no_stages(monkeypatch):
+    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
+    monkeypatch.setattr(visualizer_config, "summarize", False)
+    assert importer.llm_backed_stages() == ()
+
+
+def test_each_named_stage_says_what_a_run_without_it_does(monkeypatch):
+    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+    monkeypatch.setattr(visualizer_config, "summarize", True)
+    stages = importer.llm_backed_stages()
+    assert [stage.name for stage in stages] == ["cluster keywords", "entry summaries"]
+    assert all(stage.setting and stage.without for stage in stages)
 
 
 def test_the_saved_dataset_carries_the_keyword_method():

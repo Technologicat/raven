@@ -31,7 +31,7 @@ importer_gui = pytest.importorskip("raven.visualizer.importer_gui")
 
 import dearpygui.dearpygui as dpg  # noqa: E402 -- after importorskip by design
 
-from unpythonic import box, unbox  # noqa: E402 -- ditto
+from unpythonic import box, sym, unbox  # noqa: E402 -- ditto
 
 from raven.common import text as textutil  # noqa: E402 -- ditto
 from unpythonic.env import env  # noqa: E402 -- ditto
@@ -46,27 +46,43 @@ STARTSTOP = "importer_startstop_button"  # tag
 STARTSTOP_HEADING = "importer_startstop_heading_text_button"  # tag
 PROGRESS_BAR = "importer_progress_bar"  # tag
 STATUS_TEXT = "importer_status_text"  # tag
+FALLBACK_GROUP = "importer_llm_fallback_group"  # tag
+FALLBACK_TEXT = "importer_llm_fallback_text"  # tag
+FALLBACK_TOOLTIP_TEXT = "importer_llm_fallback_tooltip_text"  # tag
 
 
 class FakeImporter:
     """Stands in for `raven.visualizer.importer`, recording what the GUI asked the pipeline to do.
 
-    Only the task interface is modelled: the GUI never reaches into the pipeline itself.
+    The task interface, plus what the GUI reads back about a run: the status and progress it polls, and
+    the LLM fallback it reports.
+
+    `llm_optional` is this object's own sentinel rather than the real module's, because importing
+    `raven.visualizer.importer` here would take the whole file out of CI -- see `_importer` in the module
+    under test. Identity is still what a test asserts on, so passing anything else would fail.
     """
-    def __init__(self, running=False):
+    def __init__(self, running=False, llm_stages=()):
         self.running = running
         self.started_with = None  # (output_filename, input_filenames), as `start_task` received them
+        self.started_policy = None  # the `llm_policy` it received
         self.cancelled = False
         self.started_callback = None
         self.done_callback = None
         self.status_box = box("")
         self.progress = None
+        self.llm_optional = sym("llm_optional")
+        self.llm_fallback_box = box(None)
+        self._llm_stages = tuple(llm_stages)
 
     def has_task(self):
         return self.running
 
-    def start_task(self, started_callback, done_callback, output_filename, *input_filenames):
+    def llm_backed_stages(self):
+        return self._llm_stages
+
+    def start_task(self, started_callback, done_callback, output_filename, *input_filenames, llm_policy=None):
         self.started_with = (output_filename, input_filenames)
+        self.started_policy = llm_policy
         self.started_callback = started_callback
         self.done_callback = done_callback
         self.running = True
@@ -331,6 +347,70 @@ def test_the_progress_bar_reads_zero_before_the_pipeline_has_any_progress_to_rep
     importer_gui.update_status()
     assert dpg.get_value(PROGRESS_BAR) == pytest.approx(0.0)
     assert dpg.get_item_configuration(PROGRESS_BAR)["overlay"] == "0%"
+
+
+# ---------------------------------------------------------------------------
+# The notice that a run went ahead without its LLM-backed stages
+
+
+class FakeFallback:
+    """What `importer.llm_fallback_box` holds: the two halves of the diagnosis, plus the backend tried."""
+    headline = "This import needs an LLM backend, and none answered at http://nowhere:1234."
+    advice = "Start it, point the run at another one, or turn off the stages that need it."
+
+
+class FakeStage:
+    """One entry of what `importer.llm_backed_stages()` returns. Only `without` is read here."""
+    def __init__(self, without):
+        self.without = without
+
+
+def test_a_gui_run_lets_the_import_finish_without_a_backend(gui):
+    """The policy difference from `raven-importer`, which stops instead."""
+    importer_gui._start("/out/dataset.pickle", "/in/one.bib")
+    assert gui.started_policy is gui.llm_optional
+
+
+def test_no_notice_while_nothing_has_been_given_up(gui):
+    importer_gui.update_status()
+    assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is False
+
+
+def test_the_notice_names_both_stages_when_both_were_configured(gui):
+    gui._llm_stages = (FakeStage("using frequency keywords"), FakeStage("no summaries"))
+    gui.llm_fallback_box << FakeFallback()
+    importer_gui.update_status()
+    assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is True
+    assert dpg.get_value(FALLBACK_TEXT) == "LLM backend unreachable. Using frequency keywords; no summaries."
+
+
+def test_the_notice_names_only_the_stage_that_was_configured(gui):
+    # The pair with the test above: a run that asked for LLM keywords and no summaries must not be told
+    # its summaries were dropped, there having been none to drop.
+    gui._llm_stages = (FakeStage("using frequency keywords"),)
+    gui.llm_fallback_box << FakeFallback()
+    importer_gui.update_status()
+    assert dpg.get_value(FALLBACK_TEXT) == "LLM backend unreachable. Using frequency keywords."
+
+
+def test_the_notice_carries_the_full_diagnosis_in_its_tooltip(gui):
+    """The line has room for what happened; which backend, and what to do about it, go underneath."""
+    gui._llm_stages = (FakeStage("no summaries"),)
+    gui.llm_fallback_box << FakeFallback()
+    importer_gui.update_status()
+    caption = dpg.get_value(FALLBACK_TOOLTIP_TEXT)
+    assert "http://nowhere:1234" in caption
+    assert FakeFallback.advice in caption
+
+
+def test_a_later_run_that_gives_up_nothing_takes_the_notice_down(gui):
+    gui._llm_stages = (FakeStage("no summaries"),)
+    gui.llm_fallback_box << FakeFallback()
+    importer_gui.update_status()
+    assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is True, "nothing was shown, so this fixture cannot tell a hide from a never-shown"
+    gui.llm_fallback_box << None  # what `_setup_llm_backend` writes when a fresh run starts
+    importer_gui.update_status()
+    assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is False
 
 
 # --------------------------------------------------------------------------------

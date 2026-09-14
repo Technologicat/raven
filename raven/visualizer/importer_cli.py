@@ -84,12 +84,9 @@ def main() -> None:
         # than the ones that were asked for.
         from mcpyrate import colorizer  # noqa: PLC0415 -- intentional deferred import
         # Named as a labelled list rather than as a sentence about them, so that nothing in the line has to
-        # agree with how many there turn out to be.
-        wanted = []
-        if visualizer_config.clusters_keyword_method == "llm":
-            wanted.append('cluster keywords (`clusters_keyword_method = "llm"`)')
-        if visualizer_config.summarize:
-            wanted.append("entry summaries (`summarize = True`)")
+        # agree with how many there turn out to be. The settings are spelled out because a terminal has the
+        # room and the reader is about to go and edit one.
+        wanted = [f"{stage.name} (`{stage.setting}`)" for stage in importer.llm_backed_stages()]
         print(colorizer.colorize(exc.headline, colorizer.Style.BRIGHT, colorizer.Fore.RED) + f" {exc.advice}")
         print(f"Configured to need it, in `raven.visualizer.config`: {', '.join(wanted)}.")
         print("If the backend is elsewhere, point this run at it with --backend-url.")

@@ -266,6 +266,23 @@ def import_bibtex_files(filenames: list[str]) -> None:
 # --------------------------------------------------------------------------------
 # Status display
 
+def _refresh_llm_fallback_notice() -> None:
+    """Show or hide the notice saying this run went ahead without its LLM-backed stages."""
+    importer = _importer()
+    fallback = unbox(importer.llm_fallback_box)
+    if fallback is None:
+        dpg.hide_item("importer_llm_fallback_group")  # tag
+        return
+
+    # The stages are the ones the configuration asked for: they all drop together, and the config cannot
+    # have changed under a run, so what was configured is what was given up. Each carries its own phrase
+    # for what happens without it, so this reads the list rather than keeping a second copy keyed by name.
+    without = "; ".join(stage.without for stage in importer.llm_backed_stages())
+    dpg.set_value("importer_llm_fallback_text",  # tag
+                  f"LLM backend unreachable. {without[:1].upper()}{without[1:]}.")
+    dpg.set_value("importer_llm_fallback_tooltip_text", f"{fallback.headline}\n{fallback.advice}")  # tag
+    dpg.show_item("importer_llm_fallback_group")  # tag
+
 def update_status():
     """Update the BibTeX importer status in the GUI.
 
@@ -276,6 +293,8 @@ def update_status():
 
     # The importer generates the GUI messages. We only need to get them from there.
     dpg.set_value("importer_status_text", unbox(importer.status_box))  # tag
+
+    _refresh_llm_fallback_notice()
 
     # Update the importer progress bar.
     if importer.progress is not None:
@@ -335,7 +354,11 @@ def _start(output_file, *input_files):
     dpg.show_item("importer_progress_bar")  # tag
     dpg.disable_item("importer_startstop_button")  # tag  # Prevent multiple clicks: wait until the task actually starts before allowing the user to tell it to stop. The button will be re-enabled by the `_started_callback`.
     dpg.disable_item("importer_startstop_heading_text_button")  # tag
-    importer.start_task(_started_callback, _done_callback, output_file, *input_files)
+    # `llm_optional`: a GUI run finishes on what it can do without a backend and says so in the notice
+    # above the status line, where the CLI stops instead. It has a window to report in and a Stop button
+    # for a user who would rather wait for the backend than keep the result.
+    importer.start_task(_started_callback, _done_callback, output_file, *input_files,
+                        llm_policy=importer.llm_optional)
 
 def _stop():
     """Stop (cancel) the BibTeX importer task, if any is running."""
@@ -464,4 +487,18 @@ def build_window():
             separator()
 
             dpg.add_progress_bar(default_value=0, width=-1, show=False, tag="importer_progress_bar")
+
+            # The LLM fallback notice. Hidden until a run actually gives something up; `update_status`
+            # shows it. Above the status line because the status line is about the stage running now,
+            # where this is about the whole run and stays put once it appears.
+            with dpg.group(horizontal=True, show=False, tag="importer_llm_fallback_group"):
+                dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=guiutils.CAUTION_COLOR, tag="importer_llm_fallback_icon")
+                dpg.bind_item_font("importer_llm_fallback_icon", app_state.themes_and_fonts.icon_font_solid)  # tag
+                dpg.add_text("",
+                             wrap=gui_config.importer_w - gui_config.toolbutton_w,
+                             color=guiutils.CAUTION_COLOR,
+                             tag="importer_llm_fallback_text")
+            with dpg.tooltip("importer_llm_fallback_group", tag="importer_llm_fallback_tooltip"):  # tag
+                dpg.add_text("", wrap=gui_config.importer_w, tag="importer_llm_fallback_tooltip_text")
+
             dpg.add_text("[To start, select files, and then click the play button.]", wrap=gui_config.importer_w, color=(140, 140, 140, 255), tag="importer_status_text")

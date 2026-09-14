@@ -8,7 +8,12 @@ module stays free of argparse and logging configuration so the GUI can host it s
 """
 
 __all__ = ["MISSING_TITLE", "MISSING_AUTHOR", "MISSING_YEAR",
-           "MISSING_FIELD_PLACEHOLDERS", "is_missing_field",
+           "MISSING_FIELD_PLACEHOLDERS",
+
+           "llm_required", "llm_optional",  # what a run does when it asks for an LLM and does not get one
+           "LLMBackendUnavailable", "LLMBackedStage", "llm_backed_stages",
+
+           "is_missing_field",
 
            "result_successful", "result_cancelled", "result_errored",
            "init", "start_task", "has_task", "cancel_task",
@@ -26,7 +31,7 @@ import os
 import pathlib
 import pickle
 import threading
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from unpythonic.env import env
 from unpythonic import box, dyn, ETAEstimator, islice, make_dynvar, sym, timer, uniqify
@@ -63,6 +68,12 @@ MISSING_YEAR = "[Year not specified]"
 
 MISSING_FIELD_PLACEHOLDERS = frozenset({MISSING_TITLE, MISSING_AUTHOR, MISSING_YEAR})
 
+# What a run does when it asks for an LLM backend and does not get one. The frontends differ because their
+# situations do, rather than by taste: a batch tool has nobody to tell and nothing to show, so it stops and
+# says why on its way out, where a GUI has a window, a user watching it, and a Stop button already wired.
+llm_required = sym("llm_required")  # no usable backend -> raise `LLMBackendUnavailable`
+llm_optional = sym("llm_optional")  # no usable backend -> run without the LLM-backed stages, and say so
+
 class LLMBackendUnavailable(RuntimeError):
     """The LLM-backed stages were asked for, and no usable backend answered.
 
@@ -84,10 +95,44 @@ agent = None
 llmclient = None
 llm_settings = None
 
+# What this run had to do without, for a frontend to show: an `LLMBackendUnavailable` describing the
+# backend that did not answer, or `None` where nothing was given up. Written once per run by
+# `_setup_llm_backend` and read from the GUI thread.
+#
+# No lock. A single `<<` is one attribute assignment and the payload is never mutated after it is built,
+# so a reader sees either the old value or the new one and both are whole. `status_box` beside it takes
+# `status_lock` because its writer composes as well as assigns.
+llm_fallback_box = box(None)
 
-def _llm_backend_needed() -> bool:
-    """Whether this configuration has any stage that needs an LLM."""
-    return visualizer_config.clusters_keyword_method == "llm" or visualizer_config.summarize
+
+class LLMBackedStage(NamedTuple):
+    """One stage that needs an LLM, in the three ways something has to say it.
+
+    `name`: what it is, for a reader — "cluster keywords".
+    `setting`: the configuration line that asks for it — `clusters_keyword_method = "llm"`.
+    `without`: what a run that cannot have it does instead — "using frequency keywords".
+    """
+    name: str
+    setting: str
+    without: str
+
+
+def llm_backed_stages() -> tuple[LLMBackedStage, ...]:
+    """Which stages this configuration asks an LLM for.
+
+    Empty when the configuration needs no backend, so `if llm_backed_stages():` is how to ask that.
+
+    One source for a condition two frontends act on and three messages describe. They render it
+    differently — `raven-importer` prints the settings, having a terminal and a reader about to go and
+    edit one, where the importer window has room for a phrase about the result — so what is returned is
+    the parts rather than a finished line.
+    """
+    return tuple(stage for stage, wanted in
+                 ((LLMBackedStage("cluster keywords", 'clusters_keyword_method = "llm"', "using frequency keywords"),
+                   visualizer_config.clusters_keyword_method == "llm"),
+                  (LLMBackedStage("entry summaries", "summarize = True", "no summaries"),
+                   visualizer_config.summarize))
+                 if wanted)
 
 
 def _effective_keyword_method() -> str:
@@ -104,14 +149,22 @@ def _effective_keyword_method() -> str:
     return visualizer_config.clusters_keyword_method
 
 
-def _setup_llm_backend(backend_url: Optional[str] = None) -> None:
-    """Connect the LLM-backed stages to their backend, binding `llm_settings`. Raise if none is usable.
+def _setup_llm_backend(backend_url: Optional[str] = None, *, llm_policy=llm_required) -> None:
+    """Connect the LLM-backed stages to their backend, binding `llm_settings`. No-op if none is needed.
 
     `backend_url`: which backend to use. `None` (the default) takes the configured
                    `raven.librarian.config.llm_backend_url`.
 
-    Raises `LLMBackendUnavailable` when the backend cannot be reached, or answers without a model loaded.
-    No-op when this configuration needs no backend.
+    `llm_policy`: what to do when no usable backend answers.
+
+                  `llm_required` (the default): raise `LLMBackendUnavailable`.
+
+                  `llm_optional`: leave `llm_settings` unbound, so every LLM-backed stage skips and the
+                  run finishes on what it can do without one, and publish the diagnosis to
+                  `llm_fallback_box` for a frontend to show.
+
+    Raises `LLMBackendUnavailable` under `llm_required` when the backend cannot be reached, or answers
+    without a model loaded.
     """
     # **Called when a run starts, not when this module is imported.** It used to be the latter, and that
     # made a library module decide the fate of a process: `raven-visualizer` would `sys.exit(255)` before
@@ -129,9 +182,23 @@ def _setup_llm_backend(backend_url: Optional[str] = None) -> None:
     # what to do with the entries already done, which is a design question rather than a missing line. The
     # interactive frontends do reconnect; see `llmclient.reconnect`.
     global agent, llmclient, llm_settings
-    if not _llm_backend_needed():
-        llm_settings = None
+    llm_settings = None
+    llm_fallback_box << None  # a fresh run has not fallen back on anything yet
+
+    stages = llm_backed_stages()
+    if not stages:
         return
+
+    def unavailable(headline: str, advice: str, url: str) -> None:
+        """Report no usable backend, in whichever way this run asked for.
+
+        One description of the failure, two dispositions — so a frontend cannot be told a different
+        story depending on which of the two checks below found the problem.
+        """
+        if llm_policy is llm_required:
+            raise LLMBackendUnavailable(headline, advice, url)
+        logger.warning(f"_setup_llm_backend: {headline} {advice} Continuing without: {', '.join(stage.name for stage in stages)}.")
+        llm_fallback_box << LLMBackendUnavailable(headline, advice, url)
 
     logger.info("LLM backend needed (for cluster keywords and/or summarization). Setting up connection.")
     from ..librarian import agent as agent_module  # noqa: PLC0415 -- intentional deferred import
@@ -145,13 +212,13 @@ def _setup_llm_backend(backend_url: Optional[str] = None) -> None:
     if not llmclient.test_connection(llm_backend_url):
         # Deliberately not a restatement of what `test_connection` just reported — it prints the "cannot
         # connect, is it running?" line itself. This one says what that means *for the import*.
-        raise LLMBackendUnavailable(f"This import needs an LLM backend, and none answered at {llm_backend_url}.",
-                                    "Start it, point the run at another one, or turn off the stages that need it.",
-                                    llm_backend_url)
+        return unavailable(f"This import needs an LLM backend, and none answered at {llm_backend_url}.",
+                           "Start it, point the run at another one, or turn off the stages that need it.",
+                           llm_backend_url)
     settings = llmclient.setup(backend_url=llm_backend_url)
     if (status := llmclient.backend_status(settings)) is llmclient.backend_has_no_model:
         headline, advice = llmclient.describe_backend_status(status, llm_backend_url)
-        raise LLMBackendUnavailable(headline, advice, llm_backend_url)
+        return unavailable(headline, advice, llm_backend_url)
 
     llm_settings = settings
     # Which model did the keywording and summarizing is worth having in the log of an import that can run
@@ -1177,7 +1244,11 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vector
     """
     _update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
 
-    if visualizer_config.clusters_keyword_method == "frequencies":
+    # The *effective* method throughout, so that a run whose backend did not answer takes the frequency
+    # branch here rather than the LLM one it was configured for. Under `llm_required` the two agree, the
+    # run having stopped before reaching this.
+    keyword_method = _effective_keyword_method()
+    if keyword_method == "frequencies":
         with timer() as tim:
             logger.info("        Collecting keywords from data points in each cluster (`suggest_keywords` will treat each cluster as a 'document')...")
             keywords_by_cluster = [collections.Counter() for _ in range(n_vis_clusters)]
@@ -1195,7 +1266,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vector
                                                                 threshold_fraction=fraction,
                                                                 max_keywords=max_vis_kw)
         logger.info(f"        Done in {tim.dt:0.6g}s.")
-    elif visualizer_config.clusters_keyword_method == "llm":
+    elif keyword_method == "llm":
         # First, group entries by cluster. The index of each entry is kept alongside it, because
         # `all_vectors` is in the same order as `vis_data` - both are the per-input-file lists
         # concatenated the same way - and the capping below needs the vector for each entry.
@@ -1295,7 +1366,7 @@ def _collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, all_vector
         # this can be done, and why it is a second pass rather than part of the loop.
         vis_keywords_by_cluster = _canonicalize_cluster_keywords(vis_keywords_by_cluster)
     else:
-        error_msg = f"Unknown cluster keyword method '{visualizer_config.clusters_keyword_method}'; valid: 'frequencies', 'llm'. Please check your `raven.visualizer.config`."
+        error_msg = f"Unknown cluster keyword method '{keyword_method}'; valid: 'frequencies', 'llm'. Please check your `raven.visualizer.config`."
         logger.error(f"_collect_cluster_keywords: {error_msg}")
         raise ValueError(error_msg)
 
@@ -1436,7 +1507,7 @@ def init(executor):
         task_manager = None
         raise
 
-def start_task(started_callback, done_callback, output_filename, *input_filenames, llm_backend_url=None) -> bool:
+def start_task(started_callback, done_callback, output_filename, *input_filenames, llm_backend_url=None, llm_policy=llm_required) -> bool:
     """Spawn a background task to convert BibTeX files into a Raven-visualizer dataset file.
 
     `started_callback`: callable or `None`.
@@ -1477,6 +1548,10 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
 
     `llm_backend_url`: As in `import_bibtex`, which see.
 
+    `llm_policy`: As in `import_bibtex`, which see. A GUI frontend wants `llm_optional`: it has a window
+                  to report the fallback in, and a Stop button for a user who would rather wait for the
+                  backend than keep the result.
+
     Return value is `True` if the task was successfully submitted, and `False` otherwise.
     Task submission may fail if the module has not been initialized, or if an importer
     task is already running.
@@ -1509,7 +1584,7 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
                 started_callback(task_env)
             with dyn.let(task_env=task_env):
                 logger.info(f"importer_task: {task_env.task_name}: entering `import_bibtex` function.")
-                import_bibtex(update_status, output_filename, *input_filenames, llm_backend_url=llm_backend_url)  # get args from closure, no need to have them in `task_env`
+                import_bibtex(update_status, output_filename, *input_filenames, llm_backend_url=llm_backend_url, llm_policy=llm_policy)  # get args from closure, no need to have them in `task_env`
                 logger.info(f"importer_task: {task_env.task_name}: done.")
         # Used to be VERY IMPORTANT, to not silently swallow uncaught exceptions from background task.
         # But now `TaskManager._done_callback` does this. However, we need to update the GUI with the
@@ -1561,7 +1636,7 @@ def cancel_task():
 # --------------------------------------------------------------------------------
 # The actual BibTeX importer function (BibTeX to Raven-visualizer dataset)
 
-def import_bibtex(status_update_callback, output_filename, *input_filenames, llm_backend_url=None) -> None:
+def import_bibtex(status_update_callback, output_filename, *input_filenames, llm_backend_url=None, llm_policy=llm_required) -> None:
     """Import BibTeX file(s) into a Raven-visualizer dataset.
 
     This is the synchronous, foreground function that actually performs the task,
@@ -1591,13 +1666,17 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
                        configured one. Consulted only when the configuration has a stage that needs a
                        backend — LLM cluster keywords, or summaries.
 
+    `llm_policy`: what to do when such a stage is configured and no usable backend answers.
+                  `llm_required` (the default) stops the run; `llm_optional` finishes it without those
+                  stages. See `_setup_llm_backend`, whose parameter this is.
+
     No return value.
 
     Filenames are automatically converted to absolute paths via `_parse_input_files`,
     which see.
 
-    Raises `LLMBackendUnavailable` when such a stage is configured and no usable backend answers. That
-    check runs before any of the expensive stages, so nothing is lost by it.
+    Raises `LLMBackendUnavailable` under `llm_required` when such a stage is configured and no usable
+    backend answers. That check runs before any of the expensive stages, so nothing is lost by it.
     """
     if status_update_callback is not None:
         maybe_update_status = status_update_callback
@@ -1610,7 +1689,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         #
         # First, before any of the expensive stages: a diagnosis now costs the caller nothing, where the
         # same one after the embeddings have been computed costs however long that took.
-        _setup_llm_backend(llm_backend_url)
+        _setup_llm_backend(llm_backend_url, llm_policy=llm_policy)
 
         # --------------------------------------------------------------------------------
         # Prepare input data
@@ -1680,8 +1759,13 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
         # --------------------------------------------------------------------------------
         # Write LLM summary for each item
 
-        if visualizer_config.summarize:
+        if visualizer_config.summarize and llm_settings is not None:
             _summarize(input_data)  # mutates its input
+        elif visualizer_config.summarize:
+            # Distinguished from "off" in the log, because the two produce the same dataset and only one
+            # of them is what was asked for. Under `llm_required` this is unreachable, the run having
+            # stopped at `_setup_llm_backend`.
+            logger.warning("LLM summarization was configured, but no LLM backend answered for this run. Skipping.")
         else:
             logger.info("LLM summarization disabled, skipping.")
         progress.tock()

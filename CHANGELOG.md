@@ -538,6 +538,8 @@
   - `raven-importer` still stops rather than starting, which is the right answer for a batch tool: the check runs before any of the expensive stages, so nothing is lost, and finishing with frequency keywords where LLM ones were asked for would write a dataset quietly worse than the one requested. It now names what needs the backend and exits **2**.
   - **A failed import exits nonzero at all now.** Any error used to be logged as a warning and the process then exited **0**, so an import that failed reported success to whatever ran it.
   - **`raven-importer` gained `--backend-url`**, to point one run at a different LLM backend — the same spelling every other Raven tool uses. It had `--server-url` but no way to say where the LLM was.
+  - **In the Visualizer, an import whose backend is unreachable now finishes instead of failing.** It falls back to frequency keywords and skips summaries, and says which of those it did in a notice above the status line, with the backend it tried and what to do about it underneath. Stop is there for anyone who would rather start the backend and run the import again.
+  - **A dataset now records which cluster keyword method actually built it.** Keywords look the same whichever way they were arrived at, so there was previously no telling a dataset built as configured from one built by the fallback above. Datasets written by earlier versions do not carry the field and load exactly as before.
 
 - **the wheel over the word cloud or the importer no longer disturbs what is behind them.** Both float
   above the main window, and a wheel over either was taken as one over whatever its rectangle covered: the
