@@ -251,8 +251,8 @@ docstrings and comments, so the rules are their own.
   table's syntax into one would put literal asterisks on screen. That is a fact about where the renderer is
   wired, not a limit — it could be used in a tooltip. Whether it should be is its own question, and it has
   a real cost on one side: `dpg_markdown` is a Python engine that parses the text and builds several
-  widgets per run, where `add_text` is one widget. A card is built once and read; a tooltip is built far
-  more often and for far less text.
+  widgets per run, where `add_text` is one widget. An app has one card and a tooltip on nearly every
+  control, so the two differ by how many of them there are rather than by how often either is built.
 
   | | for | example |
   |---|---|---|
