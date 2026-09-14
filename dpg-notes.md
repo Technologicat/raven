@@ -1573,7 +1573,7 @@ Consequences, which are small:
 
 `dpg.get_item_configuration(item)["color"]` reports color as **normalized floats** while `dpg.configure_item(item, color=...)` takes **0–255**, so a read-modify-write round trip has to scale. An unset color reads back as the sentinel `[-1.0, 0.0, 0.0, 1.0]`, and writing that sentinel back (scaled) correctly restores "unset".
 
-`dpg.get_item_theme(item)` returns `None` for an unbound widget, and `dpg.bind_item_theme(item, None)` unbinds — so capture-and-restore of a theme is symmetric with no special case. (`0` also unbinds; prefer `None`.)
+`dpg.get_item_theme(item)` returns `None` for an unbound widget, and `dpg.bind_item_theme(item, None)` unbinds — so capture-and-restore of a theme is symmetric with no special case. (`0` also unbinds; prefer `None`.) **For a bound one it follows the general getter convention** — the alias string if the theme has one, the numeric id otherwise — so compare through `guiutils.item_identifiers`, whose comment carries that rule and what it was measured on. Doing it by hand gives `'my_theme' == 23`.
 
 **An unshown viewport does not have the client size it was created with.** Measured
 2026-08-20 on DPG 2.3.1: after `create_viewport(width=400, height=300)` and

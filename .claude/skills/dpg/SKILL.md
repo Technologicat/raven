@@ -12,14 +12,39 @@ they are what a person reads in an IDE. Nothing here restates them — routing y
 whole job. Read the section rather than guessing from its heading: several of these are counter-intuitive,
 which is why they are written down.
 
-`CLAUDE.md` carries a numbered index of the eight worst pitfalls, as a safety net for when this skill does
+`CLAUDE.md` carries a numbered index of the nine worst pitfalls, as a safety net for when this skill does
 not fire. That index is a *warning list*; the table below is a *map*.
+
+**Two of those entries are keyed on a literal call rather than on a task** — `dpg.split_frame` (3) and
+`dpg.create_context` (9) — because the tasks that reach them do not present as DPG work. "Give this test
+its own context" reads as test plumbing, and by the time it is typed nobody has thought about contexts at
+all. Where a pitfall keeps being met despite being written down, a greppable token is the trigger that
+actually fires.
 
 ## The standing instruction
 
 **Measure a DPG claim before writing it down.** Not before *acting* on one — before committing it to a code
 comment, a docstring, a note or a commit message. A wrong "why" attached to working code is worse than no
 why, because it reads as checked and gets believed by whoever arrives next.
+
+**And first, check whether `guiutils` has already absorbed it.** `api-inventory raven/common/gui/utils.py`
+lists every public name with its signature and one-line summary; reading it costs seconds. The trigger is
+not "I am about to write a helper" — it is either of the two moments this actually fails at:
+
+- **About to hand-roll a comparison, a guard or a workaround against DPG's own API.** An expression is not
+  a helper, so the fleet-wide rule about checking before writing one does not fire on it.
+- **About to write a gotcha down.** A DPG behaviour surprising enough to be worth a note is one somebody
+  here has probably already hit — and the way this project absorbs those is a *wrapper*, so the fact is
+  more likely to be in a helper's docstring or its explanatory comment than in the notes.
+
+Both failures cost the same two things: a hand-rolled fragility left standing beside the helper that
+already handles it, and a second account of one behaviour for the next reader to reconcile with the first.
+
+Live case 2026-09-14: `get_item_theme` answering with an alias *string* where the test compared against a
+numeric id. It was fixed by hard-coding the observed spelling and written up in `dpg-notes.md` as a fresh
+measurement — while `guiutils.item_identifiers` existed for exactly this, carrying the general rule (a
+getter answers with the alias if the widget has one, the id otherwise) and the 2026-08-21 measurement of it
+in its own comment. Both the fix and the note had to be redone.
 
 This is cheap in a way that makes refusing it hard to justify: a headless context (`create_context` /
 `create_viewport` / `setup_dearpygui`, no `show_viewport`) answers most behavioural questions in one short
