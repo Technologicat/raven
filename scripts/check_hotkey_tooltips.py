@@ -80,6 +80,11 @@ SIGNED_OFF: Dict[str, Dict[str, str]] = {
         "F1": "as Space",
         "F11": "as Space",
     },
+    # Every key it binds is on a button whose label carries the bracketed hint, so there is nothing to
+    # exempt — the empty map is the sign-off itself, and what it buys is that a newly bound key with no
+    # caption fails the run. The four `Ctrl+Shift+` debug keys (M/R/T/L, DPG's own developer windows) are
+    # deliberately absent from the card and from `hotkey_info`, so they never reach this checker.
+    "raven/avatar/pose_editor": {},
     "raven/librarian": {
         "Page Up": "scrolls the chat log; `view.page_up` has no button, only the key handler",
         "Page Down": "as Page Up",

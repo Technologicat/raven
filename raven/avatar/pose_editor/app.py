@@ -1426,21 +1426,21 @@ with dpg.handler_registry(tag="pose_editor_handler_registry"):  # global (whole 
 
 hotkey_info = (
     # Column 1: file operations
-    env(key_indent=0, key="Ctrl+O", action_indent=0, action="Load character image", notes=""),
-    env(key_indent=0, key="Ctrl+S", action_indent=0, action="Save posed image + emotion", notes=""),
+    env(key_indent=0, key="Ctrl+O", action_indent=0, action="Load a character image", notes=""),
+    env(key_indent=0, key="Ctrl+S", action_indent=0, action="Save the posed image and emotion", notes=""),
     helpcard.hotkey_blank_entry,
-    env(key_indent=0, key="Ctrl+Shift+O", action_indent=0, action="Load emotion template JSON", notes=""),
-    env(key_indent=0, key="Ctrl+Shift+S", action_indent=0, action="Batch save all presets", notes=""),
+    env(key_indent=0, key="Ctrl+Shift+O", action_indent=0, action="Load an emotion template", notes=""),
+    env(key_indent=0, key="Ctrl+Shift+S", action_indent=0, action="Save an image for each preset", notes=""),
 
     helpcard.hotkey_new_column,
 
     # Column 2: focus + combobox browsing + app
-    env(key_indent=0, key="Ctrl+P", action_indent=0, action="Focus emotion preset chooser", notes=""),
-    env(key_indent=0, key="Ctrl+I", action_indent=0, action="Focus output index chooser", notes=""),
+    env(key_indent=0, key="Ctrl+P", action_indent=0, action="Focus the emotion preset chooser", notes=""),
+    env(key_indent=0, key="Ctrl+I", action_indent=0, action="Focus the output index chooser", notes=""),
     env(key_indent=1, key="Up / Down", action_indent=0, action="Previous / next choice", notes="While focused"),
     env(key_indent=1, key="Home / End", action_indent=0, action="First / last choice", notes="While focused"),
     helpcard.hotkey_blank_entry,
-    env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
+    env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
 )
 
 def _render_help_extras(self: helpcard.HelpWindow, gui_parent) -> None:
@@ -1448,7 +1448,8 @@ def _render_help_extras(self: helpcard.HelpWindow, gui_parent) -> None:
     dpg_markdown.add_text(f"{self.c_hed}**Editing emotion templates**{self.c_end}", parent=gui_parent)
     g1 = dpg.add_group(parent=gui_parent)
     dpg_markdown.add_text(f"{self.c_txt}Pose the character with the morph and pose sliders. "
-                          f"**Ctrl+S** opens a file dialog to save the current pose as a JSON emotion template.{self.c_end}",
+                          f"**Ctrl+S** opens a file dialog to save the posed image, and writes the pose beside it "
+                          f"as a JSON emotion template under the same name.{self.c_end}",
                           parent=g1)
     dpg_markdown.add_text(f"{self.c_hed}**Where templates are used**{self.c_end}", parent=gui_parent)
     g2 = dpg.add_group(parent=gui_parent)
