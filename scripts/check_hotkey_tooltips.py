@@ -87,6 +87,21 @@ SIGNED_OFF: Dict[str, Dict[str, str]] = {
     "raven/avatar/pose_editor": {},
     # Same shape as its sibling above: every key is on a button or a heading carrying the bracketed hint.
     "raven/avatar/settings_editor": {},
+    # Its toolbar opens, zooms, marks, undoes and compares — and has no selection controls whatsoever, so
+    # the four selection keys below have nothing to be named on. Buttons for them would be a feature, and
+    # this table is the record that somebody looked rather than that a caption was forgotten.
+    "raven/cherrypick": {
+        "Click": "navigates and selects in the grid; a gesture, with no widget equivalent",
+        "Ctrl+Click": "as Click",
+        "Shift+Click": "as Click",
+        "Mouse wheel": "zooms at the pointer, which no button can do — a button has no pointer position to zoom at",
+        "Mouse drag": "pans the image, and nothing in the toolbar pans",
+        "Space": "toggles the current image's selection; there are no selection controls",
+        "Ctrl+A": "as Space",
+        "Ctrl+D": "as Space",
+        "Ctrl+I": "as Space",
+        "Tab": "moves focus between the grid and the image pane; no widget does that",
+    },
     # A canvas app: its toolbar covers opening, zooming and the app-level toggles, and everything left here
     # is either a text-field behaviour or a gesture on the graph itself.
     "raven/xdot_viewer": {
