@@ -152,9 +152,11 @@ In order, and the first is the only one carrying a decision that is already made
    work machine was done on the day; the personal one still carries its settings as in-place edits to the
    tracked `config.py` files, so its tree will show the old `M` state until someone moves them. The README's
    *Configuration* section is the format, and `git diff` on the three files is the list of what to move.
-3. **The help cards**, which is where this section was going before the day filled up. `xdot_viewer` (7
-   keys) and `cherrypick` (10, of which 5 are mouse gestures) are the real work; the two avatar editors
-   want a confirming read; the two-column prose sweep is untouched on all seven cards.
+3. **The help cards**, which is where this section was going before the day filled up. Librarian's and the
+   Visualizer's are done on both halves; six cards remain. `xdot_viewer` (7 keys) and `cherrypick` (10, of
+   which 5 are mouse gestures) are the real work; the two avatar editors want a confirming read; the
+   conference timer and the file dialog have cards nobody has swept. The two-column prose layout has
+   landed on the two finished cards and is untouched on the rest.
    `scripts/check_hotkey_tooltips.py` prints the standing count and is the place to start.
 
 ### Tomorrow morning, filed 2026-09-09 — two hammerspace items from the help card pass
@@ -163,12 +165,14 @@ Both are *hammerspace*: real, unplanned, and the schedule pays. They are written
 `TODO_DEFERRED.md` because this is the list we read when picking the next item, and an item that lives only
 in the deferred file is one we would walk past.
 
-1. **Finish the help card sweep** — the other eight cards, to the standard Librarian's now sets. That
+1. **Finish the help card sweep** — the other six cards, to the standard Librarian's now sets. That
    standard is written down (`raven-style-guide.md`, *User-facing text*: grammatical labels, sentence case,
    `"Same, but …"`, and no wrapping in a hotkey table), and `TODO_DEFERRED.md`'s help-card item carries a
    checklist of what Librarian's turned out to have wrong, which is what to look for in the rest.
-   - **Start with the Visualizer.** It is the one with a known missing key — `check_option_lists.py` reports
-     its `Ctrl+S` for saving a word cloud — and the one most likely to want the paging feature.
+   - ~~**Start with the Visualizer.**~~ — **done 2026-09-10.** Its `Ctrl+S` for saving a word cloud is on
+     the card, `check_option_lists.py` reports no gap for it, and the card took the paging feature: two
+     pages and the two-column prose layout, as Librarian's has. Signed off on the tooltip half as well, so
+     the app is finished on both.
    - ~~**Then Librarian's tooltip half**~~ — **done first instead, on the morning of 2026-09-10**, and it
      produced the estimate it was meant to. A tooltip sweep is a behaviour-change pass: of its five commits
      only one was captions, and the others gave three per-message buttons the hotkeys they never had, made

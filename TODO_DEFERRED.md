@@ -2816,7 +2816,8 @@ clusters, as of 2026-07-27:
 
 *Cluster: discoverability · Cost: S per remaining piece · Gate: none · Filed: 2026-08-05 · Updated: 2026-09-09 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
 
-**Librarian's card is finished and signed off (2026-09-09), and the remaining work is the other eight.**
+**Librarian's card is finished and signed off (2026-09-09), the Visualizer's followed (2026-09-10), and the
+remaining work is the other six.**
 The standard it now sets is written down rather than left to be inferred — `raven-style-guide.md`, *User-facing
 text*: grammatical labels with their articles, sentence case, `"Same, but …"` for a row that varies its
 neighbour, and **nothing in a hotkey table may wrap**, that last one because the two column-groups share
@@ -2845,9 +2846,9 @@ is two: the keys on one, everything the card says *about* Librarian on the other
 **What is still missing is printed on every run** by `scripts/check_option_lists.py`, as the keys each
 README documents that the app's `hotkey_info` does not offer. Librarian's card is complete as of
 2026-09-09 — the graph's nineteen keys went onto a page of their own, and the seven mode switches onto
-the keyboard page — so what it reports now is the Visualizer's `Ctrl+S` for saving a word cloud, plus
-Librarian's `Ctrl+Enter`, which is on the card under a computed name the script cannot read
-(`_send_key_label`).
+the keyboard page — and the Visualizer's `Ctrl+S` for saving a word cloud went onto its card the next day.
+What the script reports now is one entry, Librarian's `Ctrl+Enter`, which is on the card under a computed
+name it cannot read (`_send_key_label`).
 
 **The visual pass and the attachments content are done (2026-09-09)**, in the session that asked for them.
 What landed, so a later reader does not re-do it: paragraph and section spacing; `HelpWindow.column_width`,
@@ -4306,12 +4307,12 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 - **Half of it is now mechanized.** `scripts/check_option_lists.py` compares each README's documented keys
   against the app's `hotkey_info` and prints the difference on every run, which is the card half of the
-  audit for the keys a README lists. As of today it reports exactly one real gap — the Visualizer's
-  `Ctrl+S` for saving a word cloud — plus Librarian's `Ctrl+Enter`, which *is* on the card under a computed
-  name (`_send_key_label`) the script cannot read. So the card half is close to done and its remainder is
-  visible without anyone auditing by hand.
-- **Librarian's card was gone through key by key and signed off** (2026-09-09), which is one of seven apps
-  done to a standard now written in `raven-style-guide.md`.
+  audit for the keys a README lists. It reports no real gap now (2026-09-10, when the Visualizer's `Ctrl+S`
+  for saving a word cloud went onto its card) — only Librarian's `Ctrl+Enter`, which *is* on the card under
+  a computed name (`_send_key_label`) the script cannot read. So the card half is close to done and its
+  remainder is visible without anyone auditing by hand.
+- **Librarian's and the Visualizer's cards were gone through key by key and signed off** (2026-09-09 and
+  2026-09-10), which is two of seven apps done to a standard now written in `raven-style-guide.md`.
 
 **Librarian's tooltip half is done as well** (2026-09-10), so that app is finished on both. Every key it
 binds is now named on the control that triggers it — the composer's `Esc` was the last gap — and the chat
