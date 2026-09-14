@@ -34,6 +34,8 @@ import dearpygui.dearpygui as dpg  # noqa: E402 -- after importorskip by design
 from unpythonic import box, sym, unbox  # noqa: E402 -- ditto
 
 from raven.common import text as textutil  # noqa: E402 -- ditto
+from raven.common.gui import animation as gui_animation  # noqa: E402 -- ditto
+from raven.common.gui import utils as guiutils  # noqa: E402 -- ditto
 from unpythonic.env import env  # noqa: E402 -- ditto
 
 from raven.vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # noqa: E402 -- ditto
@@ -47,6 +49,7 @@ STARTSTOP_HEADING = "importer_startstop_heading_text_button"  # tag
 PROGRESS_BAR = "importer_progress_bar"  # tag
 STATUS_TEXT = "importer_status_text"  # tag
 FALLBACK_GROUP = "importer_llm_fallback_group"  # tag
+FALLBACK_ICON = "importer_llm_fallback_icon"  # tag
 FALLBACK_TEXT = "importer_llm_fallback_text"  # tag
 FALLBACK_TOOLTIP_TEXT = "importer_llm_fallback_tooltip_text"  # tag
 
@@ -115,10 +118,18 @@ def gui(monkeypatch):
     dpg.create_viewport(width=100, height=100)  # never shown: tests must not steal focus
     dpg.setup_dearpygui()
 
-    # `build_window` binds these; the app makes them during its own bootup.
+    # `build_window` binds this; the app makes it during its own bootup.
     with dpg.theme(tag="disablable_widget_theme"):  # tag
         pass
     monkeypatch.setattr(app_state, "themes_and_fonts", env(icon_font_solid=0), raising=False)
+
+    # The real `setup_themes` rather than a stub theme, so it is exercised. Its ambient glow registers with
+    # the animator, which is process-wide and outlives this context, so whatever it adds comes back out at
+    # teardown -- otherwise it is ticked forever against a theme colour that has been destroyed, and the
+    # root `conftest.py`'s leak check fails the module.
+    animations_before = list(gui_animation.animator._animations)
+    importer_gui.setup_themes()
+    registered = [a for a in gui_animation.animator._animations if a not in animations_before]
 
     # The selected filenames are module-local and outlive a test, so every test starts with none chosen.
     monkeypatch.setattr(importer_gui, "_input_files_box", box([]))
@@ -136,6 +147,8 @@ def gui(monkeypatch):
 
     importer_gui.build_window()
     yield fake_importer
+    for animation in registered:
+        gui_animation.animator.cancel(animation, finalize=False)
     dpg.destroy_context()
 
 
@@ -384,6 +397,22 @@ def test_the_backend_url_from_the_command_line_reaches_the_import(gui, monkeypat
     monkeypatch.setattr(importer_gui, "_llm_backend_url", "http://nowhere:1234")
     importer_gui._start("/out/dataset.pickle", "/in/one.bib")
     assert gui.started_backend_url == "http://nowhere:1234"
+
+
+def test_the_notice_icon_pulsates_and_the_sentence_beside_it_does_not(gui):
+    """The icon carries the eye; a sentence is too long to read inside one pulsation cycle.
+
+    The colour assertion is the load-bearing one. A colour set on the item wins over the theme, so an icon
+    that declares its own would sit at full alpha and never move -- while every assertion about the theme
+    being bound still passed. DPG reports an undeclared colour as the sentinel `(-1, 0, 0, 1)`.
+    """
+    # Through `item_identifiers`, because a DPG getter answers with whichever spelling the widget happens
+    # to have -- alias if it has one, numeric id otherwise -- and a comparison against one of the two is
+    # right for some widgets and silently never matches for the rest.
+    assert dpg.get_item_theme(FALLBACK_ICON) in guiutils.item_identifiers(importer_gui.FALLBACK_ICON_THEME)
+    icon_color = dpg.get_item_configuration(FALLBACK_ICON)["color"]
+    assert icon_color[0] == -1.0, f"the icon declares its own colour {icon_color}, which the theme then cannot animate"
+    assert dpg.get_item_theme(FALLBACK_TEXT) is None, "the sentence should be left steady"
 
 
 def test_no_notice_while_nothing_has_been_given_up(gui):

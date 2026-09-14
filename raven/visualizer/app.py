@@ -872,6 +872,7 @@ with timer() as tim:
                                                                      "Save word cloud as PNG [Ctrl+S]")
 
     # BibTeX importer integration. This allows invoking the BibTeX importer from the Raven-visualizer GUI.
+    importer_gui.setup_themes()  # its ambient glow registers with the animator, so once per app, not per window
     importer_gui.build_window()
 
 logger.info(f"    Done in {tim.dt:0.6g}s.")

@@ -16,7 +16,9 @@ once the default path for the dialogs is known. `destroy_filedialogs` belongs in
 before `dpg.destroy_context`.
 """
 
-__all__ = ["set_llm_backend_url",
+__all__ = ["FALLBACK_ICON_THEME", "setup_themes",
+
+           "set_llm_backend_url",
 
            "show_window",
            "toggle_window",
@@ -48,6 +50,7 @@ from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from ..vendor.file_dialog.fdialog import FileDialog
 
 from ..common import text as textutil
+from ..common.gui import animation as gui_animation
 from ..common.gui import utils as guiutils
 
 from . import config as visualizer_config
@@ -83,6 +86,23 @@ _filedialog_save = None  # FileDialog for picking the output file, likewise
 
 _action_start = sym("start")
 _action_stop = sym("stop")
+
+#: Theme for the LLM fallback notice's icon: the caution colour, breathing. Built by `setup_themes`.
+FALLBACK_ICON_THEME = "importer_llm_fallback_icon_theme"  # tag
+
+
+def setup_themes() -> None:
+    """Build the themes and ambient animations this window needs. Call once, during the app's GUI build.
+
+    Separate from `build_window` because the pulsation is an `Animator` registration, and the animator
+    outlives any one window: registering per build would leave a glow behind for every window ever built,
+    ticking against a theme colour that has gone. The app's plotter glow is added once for the same reason.
+    """
+    with dpg.theme(tag=FALLBACK_ICON_THEME):  # tag
+        with dpg.theme_component(dpg.mvAll):
+            icon_color = dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.CAUTION_COLOR)
+    gui_animation.animator.add(gui_animation.PulsatingColor(cycle_duration=gui_config.glow_cycle_duration,
+                                                            theme_color_widget=icon_color))
 
 # Which LLM backend an import should use, or `None` for the configured one. Set by the app from
 # `--backend-url`; see `set_llm_backend_url`.
@@ -508,9 +528,14 @@ def build_window():
             # The LLM fallback notice. Hidden until a run actually gives something up; `update_status`
             # shows it. Above the status line because the status line is about the stage running now,
             # where this is about the whole run and stays put once it appears.
+            # The icon pulsates and the sentence beside it does not, which is the constellation's split for
+            # this shape: the icon says "act on me", where a sentence is too long to read inside one cycle.
+            # It declares no colour of its own — `FALLBACK_ICON_THEME` is what carries it, and a colour set
+            # on the item would win over the theme and sit there at full alpha, unmoving.
             with dpg.group(horizontal=True, show=False, tag="importer_llm_fallback_group"):
-                dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=guiutils.CAUTION_COLOR, tag="importer_llm_fallback_icon")
+                dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, tag="importer_llm_fallback_icon")  # tag
                 dpg.bind_item_font("importer_llm_fallback_icon", app_state.themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_theme("importer_llm_fallback_icon", FALLBACK_ICON_THEME)  # tag
                 dpg.add_text("",
                              wrap=gui_config.importer_w - gui_config.toolbutton_w,
                              color=guiutils.CAUTION_COLOR,
