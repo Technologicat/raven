@@ -2474,7 +2474,7 @@ class FileDialog:
             (env(key_indent=0, key="Ctrl+T", action_indent=0, action="Thumbnails, or the list", notes="")
              if self._grid_is_available() else None),
             helpcard.hotkey_blank_entry,
-            env(key_indent=0, key="F1", action_indent=0, action="This card", notes=""),
+            env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
         ) if entry is not None]
 
     def _the_help_card(self):
