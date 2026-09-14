@@ -16,7 +16,9 @@ once the default path for the dialogs is known. `destroy_filedialogs` belongs in
 before `dpg.destroy_context`.
 """
 
-__all__ = ["show_window",
+__all__ = ["set_llm_backend_url",
+
+           "show_window",
            "toggle_window",
            "handle_key",
 
@@ -81,6 +83,20 @@ _filedialog_save = None  # FileDialog for picking the output file, likewise
 
 _action_start = sym("start")
 _action_stop = sym("stop")
+
+# Which LLM backend an import should use, or `None` for the configured one. Set by the app from
+# `--backend-url`; see `set_llm_backend_url`.
+_llm_backend_url = None
+
+
+def set_llm_backend_url(url: str | None) -> None:
+    """Point imports at the LLM backend at `url`, overriding the configured one. `None` restores it.
+
+    Call before any import starts. The app calls it once, during startup, with whatever `--backend-url`
+    was given.
+    """
+    global _llm_backend_url
+    _llm_backend_url = url
 
 
 # --------------------------------------------------------------------------------
@@ -358,6 +374,7 @@ def _start(output_file, *input_files):
     # above the status line, where the CLI stops instead. It has a window to report in and a Stop button
     # for a user who would rather wait for the backend than keep the result.
     importer.start_task(_started_callback, _done_callback, output_file, *input_files,
+                        llm_backend_url=_llm_backend_url,
                         llm_policy=importer.llm_optional)
 
 def _stop():

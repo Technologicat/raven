@@ -64,6 +64,7 @@ class FakeImporter:
     def __init__(self, running=False, llm_stages=()):
         self.running = running
         self.started_with = None  # (output_filename, input_filenames), as `start_task` received them
+        self.started_backend_url = None  # the `llm_backend_url` it received
         self.started_policy = None  # the `llm_policy` it received
         self.cancelled = False
         self.started_callback = None
@@ -80,8 +81,9 @@ class FakeImporter:
     def llm_backed_stages(self):
         return self._llm_stages
 
-    def start_task(self, started_callback, done_callback, output_filename, *input_filenames, llm_policy=None):
+    def start_task(self, started_callback, done_callback, output_filename, *input_filenames, llm_backend_url=None, llm_policy=None):
         self.started_with = (output_filename, input_filenames)
+        self.started_backend_url = llm_backend_url
         self.started_policy = llm_policy
         self.started_callback = started_callback
         self.done_callback = done_callback
@@ -369,6 +371,19 @@ def test_a_gui_run_lets_the_import_finish_without_a_backend(gui):
     """The policy difference from `raven-importer`, which stops instead."""
     importer_gui._start("/out/dataset.pickle", "/in/one.bib")
     assert gui.started_policy is gui.llm_optional
+
+
+def test_an_import_uses_the_configured_backend_unless_told_otherwise(gui):
+    importer_gui._start("/out/dataset.pickle", "/in/one.bib")
+    assert gui.started_backend_url is None  # `None` is what the pipeline reads as "take the configured one"
+
+
+def test_the_backend_url_from_the_command_line_reaches_the_import(gui, monkeypatch):
+    # The pair with the test above. `--backend-url` is set once at startup and every import thereafter
+    # uses it, so what is checked is that `_start` passes on what the app was given.
+    monkeypatch.setattr(importer_gui, "_llm_backend_url", "http://nowhere:1234")
+    importer_gui._start("/out/dataset.pickle", "/in/one.bib")
+    assert gui.started_backend_url == "http://nowhere:1234"
 
 
 def test_no_notice_while_nothing_has_been_given_up(gui):

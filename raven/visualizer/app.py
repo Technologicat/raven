@@ -30,6 +30,11 @@ parser.add_argument('--server-url', metavar='URL', default=None,
                     help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
                          'Optional here — the importer loads NLP and embedding models locally when no server '
                          'answers — so pointing this at nothing is how to exercise that fallback.')
+parser.add_argument('--backend-url', metavar='URL', default=None,
+                    help='LLM backend the importer should use, overriding the configured one; e.g. '
+                         'http://localhost:1234. Consulted only when the import settings ask for an LLM '
+                         '(cluster keywords, or summaries), so pointing this at nothing is how to exercise '
+                         'the fallback to frequency keywords.')
 parser.add_argument('--qr', action='store_true',
                     help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
 replserver.add_argument(parser)
@@ -1467,6 +1472,15 @@ if api.raven_server_available():
     logger.info(f"Raven-server is available at '{raven_server_url}'; server-side acceleration will be used where applicable.")
 else:
     logger.info(f"Raven-server is not available at '{raven_server_url}'; running standalone, models will be loaded locally as needed.")
+
+# Where the importer's LLM-backed stages should look, when the settings ask for any. Not probed here:
+# the check belongs at the start of an import, which is the one time it matters, and most sessions never
+# run one. `raven-importer` takes the same flag with the same spelling.
+importer_gui.set_llm_backend_url(opts.backend_url)
+if opts.backend_url is not None:
+    # Which configured value it replaces is named by `importer._setup_llm_backend` when a run actually
+    # connects — that has the librarian config in hand, where importing it here would cost every startup.
+    logger.info(f"Using LLM backend '{opts.backend_url}' from --backend-url, overriding the configured one.")
 
 app_state.bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
 # Subsystem task managers (annotation, info panel, word cloud) are created lazily inside their own modules on first use.

@@ -248,14 +248,17 @@ to watch.
   to close rather than a convention with exceptions.
 
 **To point an app at a different endpoint — or at nothing — use `--backend-url` and `--server-url`**
-(2026-08-20). `raven-librarian` takes both (the LLM backend and the Raven server); `raven-visualizer` takes
-`--server-url`, the only one it uses. Each logs the override against the configured value it replaced.
+(2026-08-20). `raven-librarian` and `raven-visualizer` both take both — the Visualizer reaches an LLM
+backend through its importer, when the import settings ask for cluster keywords or summaries. Each logs
+the override against the configured value it replaced.
 
-This is how a *degraded* state gets exercised on purpose, which is otherwise awkward: aim `--backend-url`
-at a port nothing is listening on and Librarian's backend-status pill appears and stays, and aim
-`--server-url` likewise and the Visualizer's importer falls back to loading models locally. The alternative
-was editing a `config.py` that carries local overrides and restoring it exactly afterwards — which is the
-one file class this repo is most careful about, so a flag is worth having for that reason alone.
+This is how a *degraded* state gets exercised on purpose, which is otherwise awkward. Aim `--backend-url`
+at a port nothing is listening on and Librarian's backend-status pill appears and stays, while the
+Visualizer's importer falls back to frequency keywords and no summaries and says so above its status line;
+aim `--server-url` likewise and that importer loads its NLP and embedding models locally instead. The
+alternative was editing configuration and putting it back exactly afterwards, which is worth a flag on its
+own — machine-local settings now live outside the repository, but they are still somebody's settings and a
+test has no business rewriting them.
 
 **Every console script that talks to Raven-server takes `--server-url`, and every one that talks to an LLM
 backend takes `--backend-url`** — same spelling everywhere, no exceptions to look up. `raven-minichat` and
