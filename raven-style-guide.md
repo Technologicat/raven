@@ -240,6 +240,31 @@ docstrings and comments, so the rules are their own.
   *Documents*, *Chat graph* — no articles, because that is what the checkbox is called. The rule above is
   about labels that describe *an action*.
 
+- **Styling is semantic, not decorative: choose it from what the word *is*, never from what you want to
+  stand out.** Where user-facing prose points at a thing, the styling is what says which kind of thing, so
+  a reader need not read the sentence to find out. The three below are the whole vocabulary and each has
+  exactly one job; a word fitting none of them wants no styling rather than the nearest-looking one.
+
+  **This applies where we render Markdown** — a help card's prose, and anywhere else going through
+  `dpg_markdown`. A **tooltip is plain text** (`dpg.add_text`, no renderer), and has its own convention:
+  the key in square brackets after the caption, `"Load character [Ctrl+O]"`. Status lines likewise. Do not
+  carry the table below into either; there is nothing there to render it.
+
+  | | for | example |
+  |---|---|---|
+  | **bold**, in the text colour | a key you press | `**Ctrl+S**`, `**Shift+1–9**` |
+  | `backticks` | a literal — a path, a filename, a config key, a command | `` `~/.config/raven/` ``, `` `raven-indexer` `` |
+  | the highlight colour | a label you have to *find on screen* | the **Documents** checkbox, the **Maintenance** row |
+
+  The highlight is the only one about the screen rather than about the text, which is why a key or a path
+  wearing it reads as a different kind of thing from the same key or path elsewhere. It also carries
+  emphasis and contrast where a sentence needs it — the xdot viewer's case-sensitivity pair — which is the
+  same job from the other side: *this* one, not the others.
+
+  **Spend the colour sparingly, and judge it by the whole view rather than the sentence.**
+  Raven-visualizer's second help-card page is the reference density: noticeably more than that, and a page
+  reads as red rather than as having something highlighted in it.
+
 - **Sentence case, never Title Case.** *"Open this help card"*, *"Chat graph"*, *"Message attachments"* —
   capitalize the first word and whatever is a proper noun, and nothing else. This is what the tree already
   does, near enough universally: an audit on 2026-09-09 across Librarian's page names, section headings and
@@ -331,23 +356,10 @@ once. If a page outgrows one screen, add a page rather than cutting the prose.
 Two newspaper columns (`HelpWindow.prose_columns`, sections built by `helpcard.section`); a reader finishes
 one column before crossing, so a section belongs wholly to one of them.
 
-**Three stylings, and each has one job.** The rule matters because a card is mostly nouns pointing at
-things, and a reader who cannot tell *which kind* of thing from the styling has to read every sentence to
-find out:
+A card is mostly nouns pointing at things, so **the three stylings above carry most of the weight here** —
+bold for a key, backticks for a literal, the highlight for a label to go and find. A card is also the
+densest place they appear, which is where the budget matters: judge the colour by the page.
 
-| | for | example |
-|---|---|---|
-| **bold**, in the text colour | a key you press | `**Ctrl+S**`, `**Shift+1–9**` |
-| `backticks` | a literal — a path, a filename, a config key, a command | `` `~/.config/raven/` ``, `` `raven-indexer` `` |
-| the highlight colour | a label you have to *find on screen* | the **Documents** checkbox, the **Maintenance** row |
-
-- **The highlight means "look for this".** It is the only one that is about the screen rather than about
-  the text, which is why a key or a path wearing it reads as a different kind of thing from the same key or
-  path one card over. It also does emphasis and contrast where a sentence needs it (the xdot viewer's
-  case-sensitivity pair), which is the same job seen from the other side: *this* one, not the others.
-- **Spend the colour sparingly, and judge it by the page rather than the sentence.** Raven-visualizer's
-  second page is the reference density: noticeably more than that and a page reads as red, rather than as
-  having something highlighted in it.
 - **Say what no key table can say.** That is what earns a prose page. Raven-cherrypick's marks *move the
   user's files* into `cherries/` and `lemons/`, and its zoom and pan survive between images of the same
   dimensions — neither is deducible from a key.
