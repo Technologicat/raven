@@ -154,11 +154,13 @@ day**, except the last, which turned out not to need doing. What each came to:
   editors), but it is 1550 against 1700 rather than anything dramatic, because a card's width follows its
   longest *action text* and not its number of column-groups. And the aspect barely moves with it: the fitted
   height falls as cells stop wrapping, so xdot_viewer's card is 1700×507 or 1500×456 — 3.35:1 against
-  3.29:1. **What would actually change it is one of two things, and neither was taken**: fewer
-  column-groups (twenty keys is one column's worth, at the cost of the search/file against navigation/app
-  grouping), or not reserving a Notes column that every row in that group leaves empty — about ten lines in
-  `_render_hotkey_table`, and it re-lays-out every card in the constellation, so it wants the whole sweep
-  looked at again.
+  3.29:1. **What would actually change it is fewer column-groups** — twenty keys is one column's worth, at
+  the cost of the search/file against navigation/app grouping. Not taken.
+  - **The other candidate is now closed rather than open**: dropping a Notes column that a group leaves
+    entirely empty would have bought about a quarter of xdot_viewer's width, and it is deliberately not
+    done (Juha, 2026-09-14) — the empty column says *this group has no notes*, where a group missing it
+    would read as an oversight. Recorded in the style guide and in `raven.config` so it is not re-proposed
+    as a width saving.
 - ~~**Both avatar editors want a slightly wider card**~~ — both at the compact size now, and both tables
   measured clean on screen. The minima are xdot_viewer 1500 and the pose editor 1550, which is where the
   shared number comes from.
@@ -181,11 +183,13 @@ Two things the work turned up that were in nobody's list:
   one app that sets its fonts up by hand instead of through `guiutils.bootup`, so it had no icon font, and
   FontAwesome codepoints are not in a text font. Fixed with `setup_icon_fonts`. `HelpWindow`'s comment
   claimed this fallback degraded to "the literal glyph names", which it does not; the comment is corrected.
-- **Backticks draw nothing at all on a help card.** Six inline-code spans across the two avatar editors'
-  cards, no background on any of them — the filed decoration-placement bug, and on a card it is systematic
-  where in the chat log it is intermittent. New evidence and a hypothesis (the card is measured while parked
-  offscreen) are in `TODO_DEFERRED.md` under *"Markdown decorations are placed by measuring the text"*. The
-  backticks stay: the markup says what the word is, and the day the decoration lands the prose is right.
+- **Backticks draw nothing at all on a help card** — checked across all four cards that have a code span,
+  about fifteen of them, and not one drew a background. It is the filed decoration-placement bug, and the
+  card is the *good* reproduction: systematic, where in the chat log it is intermittent. Bold and the
+  highlight colour are unaffected, which agrees with the fault being the six drawlist sites and nothing
+  else. Evidence and two hypotheses are in `TODO_DEFERRED.md` under *"Markdown decorations are placed by
+  measuring the text"*. The backticks stay: the markup says what the word is, and the day the decoration
+  lands the prose is already right.
 
 The original list, for the record:
 

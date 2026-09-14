@@ -266,9 +266,10 @@ docstrings and comments, so the rules are their own.
   same job from the other side: *this* one, not the others.
 
   **Backticks currently draw nothing on a help card, and write them anyway.** The renderer decorates inline
-  code with a background quad positioned from a measurement nothing waits for, and on a card that
-  measurement is taken while the card is parked offscreen — six spans across the two avatar editors' cards
-  drew no background at all (2026-09-14). It is a rendering bug with an entry of its own in
+  code with a background quad positioned from a measurement nothing waits for, and on a card it never
+  lands: checked 2026-09-14 across all four cards that have a code span, about fifteen of them, and not one
+  drew a background. Bold and the highlight colour are unaffected, those being properties of the text
+  widget rather than something drawn beside it. It is a rendering bug with an entry of its own in
   `TODO_DEFERRED.md`, not a reason to reach for a styling that does show: the markup says what the word is,
   and the day the decoration lands the prose is already right. Do not spend the highlight colour on a path
   to make it visible — that would say *go and find this on screen*, which a path is not.
@@ -357,8 +358,12 @@ standing instruction at the top of this section.
 
 **Narrowing is not the remedy for a card that looks wide for its height.** The fitted height falls with the
 width as cells stop wrapping, so the ratio barely moves: xdot_viewer's card fits to 507 px at 1700 and to
-456 px at 1500, which is 3.35:1 against 3.29:1. What would change it is fewer column-groups, or not
-reserving a Notes column that every row in that group leaves empty.
+456 px at 1500, which is 3.35:1 against 3.29:1. What would change it is fewer column-groups.
+
+**A column-group keeps its Notes column even when every row leaves it empty.** Dropping it would buy real
+width — a quarter of xdot_viewer's card is an empty Notes column — and the empty column is doing a job: it
+says *this group has no notes*, where a group missing the column would read as somebody having forgotten
+it. Settled 2026-09-14; don't re-open it as a width saving.
 
 **The height is a starting value.** `HelpWindow` measures each page offscreen on first show and fits the
 card to the tallest, clamping to the viewport and logging if it has to. It is skipped only for a card whose

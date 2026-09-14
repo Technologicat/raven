@@ -79,7 +79,12 @@ GUI_MAIN_WINDOW_H = 1040   # this pair just fits onto a 1080p screen in Linux Mi
 # Which is also why narrowing is not the remedy for a card that looks wide for its height: the fitted
 # height falls with the width, as cells stop wrapping, so the ratio barely moves. Raven-xdot-viewer's card
 # fits to 507 px at 1700 and to 456 px at 1500 — 3.35:1 against 3.29:1. What would change it is fewer
-# column-groups, or not reserving a Notes column that every row in that group leaves empty.
+# column-groups.
+#
+# **Dropping a Notes column that a column-group leaves entirely empty would buy width, and it is
+# deliberately not done** (Juha, 2026-09-14). Every group shows the column whether or not it has anything
+# in it, because an empty one says *this group has no notes* — where a group missing the column would read
+# as somebody having forgotten it, and that is a distinction worth the pixels.
 #
 # The two outliers stay outside both, and for the same reason as their windows: the conference timer has
 # four keys, and the file dialog sizes its card to the dialog it belongs to.

@@ -6111,18 +6111,31 @@ before measuring. The constraint that makes it interesting is that this code can
 where nothing can wait for a frame — so a decoration cannot simply block until the text is placed, and the
 answer is more likely "draw it, then correct it on a later frame" than "measure later".
 
-**On a help card the decoration does not appear at all**, which is a harder case than the chat log's and a
-better one to debug from. Measured 2026-09-14 on Raven-avatar-settings-editor's and Raven-avatar-pose-editor's
-cards: six inline-code spans between them — `rec/`, `raven-server`, `raven/avatar/assets/emotions/` and the
-rest — and not one drew a background anywhere on the card, misplaced or otherwise. So a card's backticks
-currently buy the reader nothing, while the style guide treats them as one of the three stylings that carry
-a card's meaning.
+**On a help card the decoration never appears at all**, which is a harder case than the chat log's and a
+much better one to debug from. Measured 2026-09-14 across every card in the constellation that has an
+inline-code span — Raven-librarian's, Raven-cherrypick's, and the two avatar editors' — some fifteen spans
+between them, from `rec/` and `cherries/` to `llm_docs_exts` and `raven/librarian/config.py`. Not one drew a
+background anywhere on the card, misplaced or otherwise. So a card's backticks currently buy the reader
+nothing, while the style guide treats them as one of the three stylings that carry a card's meaning.
+(Raven-visualizer's card is the one a reader might remember as working; it has no code spans at all, and
+what it shows is the highlight colour.)
 
-Systematic where the chat log's is intermittent, which is the useful part: a reproduction that fails *every*
-time needs no waiting around. **A hypothesis to test first, not a finding:** a card is built parked offscreen
-and measured there during `HelpWindow`'s fitting passes, so `get_item_pos` may well answer a position that is
-off the viewport, and a drawlist placed there is drawn nowhere the reader can see. That would make the card a
-*positioning* case rather than a size-zero one, and the two look identical from outside.
+**The card-vs-chat-log split is the discriminator this needed**, and it points at *when* rather than *where*:
+the same renderer draws the decoration in a chat message, sometimes in the wrong place, and never draws it on
+a card. Two differences to start from, both about the moment of measurement rather than about the text:
+
+- A card is built in a single pass with no frame in between, where the chat log is built incrementally and
+  frames pass while it grows.
+- A card is built **parked offscreen** and measured there during `HelpWindow`'s fitting passes, so
+  `get_item_pos` may answer a position off the viewport — and a drawlist placed there is drawn nowhere the
+  reader can see. That would make the card a *positioning* case rather than a size-zero one, and the two are
+  indistinguishable from outside.
+
+Both are hypotheses, not findings. What is worth saying for whoever picks this up is that the card is a
+reproduction that fails *every* time, so none of it needs waiting around for.
+
+What still works on a card is everything that is not a drawlist: bold, and the highlight colour. That agrees
+with the six sites above being the whole of the fault.
 
 **Probably not the same as the URL colour being one character off** — the note about that lived in
 `CLAUDE.md` and pointed here. `Url.render` calls `dpg.configure_item(dpg_text, color=...)`: it recolours the
