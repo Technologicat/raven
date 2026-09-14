@@ -245,10 +245,11 @@ docstrings and comments, so the rules are their own.
   a reader need not read the sentence to find out. The three below are the whole vocabulary and each has
   exactly one job; a word fitting none of them wants no styling rather than the nearest-looking one.
 
-  **This applies where we render Markdown** — a help card's prose, and anywhere else going through
-  `dpg_markdown`. A **tooltip is plain text** (`dpg.add_text`, no renderer), and has its own convention:
-  the key in square brackets after the caption, `"Load character [Ctrl+O]"`. Status lines likewise. Do not
-  carry the table below into either; there is nothing there to render it.
+  **This applies where Markdown is actually rendered** — a help card's prose, and anywhere else going
+  through `dpg_markdown`. Tooltips and status lines are plain `dpg.add_text` today, and a tooltip has its
+  own convention: the key in square brackets after the caption, `"Load character [Ctrl+O]"`. Writing the
+  table's syntax into one would put literal asterisks on screen. That is a fact about where the renderer is
+  wired, not a limit — it could be used in a tooltip, and whether it should be is its own question.
 
   | | for | example |
   |---|---|---|
