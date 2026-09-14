@@ -681,7 +681,7 @@ def test_initialization_is_idempotent(initialized):
 
 def test_a_task_runs_the_pipeline_with_the_filenames_it_was_given(initialized, monkeypatch):
     called = []
-    task_env = run_one_task(lambda status_cb, out, *ins: called.append((out, ins)), monkeypatch)
+    task_env = run_one_task(lambda status_cb, out, *ins, llm_backend_url=None: called.append((out, ins)), monkeypatch)
     assert called == [("/out/dataset.pickle", ("/in/one.bib",))]
     assert task_env.result_code is importer.result_successful
 
@@ -690,7 +690,7 @@ def test_only_one_import_runs_at_a_time(initialized, monkeypatch):
     # An import takes a lot of GPU and CPU, so a second one alongside the first would make both slower
     # and could exhaust VRAM.
     release = threading.Event()
-    monkeypatch.setattr(importer, "import_bibtex", lambda status_cb, out, *ins: release.wait(10.0))
+    monkeypatch.setattr(importer, "import_bibtex", lambda status_cb, out, *ins, llm_backend_url=None: release.wait(10.0))
     assert importer.start_task(None, None, "/out/dataset.pickle", "/in/one.bib") is True
     try:
         assert importer.has_task(), "nothing was running, so this fixture cannot tell a refusal from a start"
@@ -703,7 +703,7 @@ def test_the_started_callback_fires_before_the_pipeline_does(initialized, monkey
     # The GUI re-enables its stop button from this callback, so it must arrive while there is still
     # something to stop.
     order = []
-    monkeypatch.setattr(importer, "import_bibtex", lambda status_cb, out, *ins: order.append("pipeline"))
+    monkeypatch.setattr(importer, "import_bibtex", lambda status_cb, out, *ins, llm_backend_url=None: order.append("pipeline"))
     finished = threading.Event()
     importer.start_task(lambda task_env: order.append("started"), lambda task_env: finished.set(),
                         "/out/dataset.pickle", "/in/one.bib")
@@ -714,7 +714,7 @@ def test_the_started_callback_fires_before_the_pipeline_does(initialized, monkey
 def test_a_failing_import_is_reported_in_the_status_the_gui_reads(initialized, monkeypatch):
     # The task dies on a background thread, so the exception itself never reaches the user. The status
     # line is the only place they learn the import did not happen.
-    def explode(status_cb, out, *ins):
+    def explode(status_cb, out, *ins, llm_backend_url=None):
         raise RuntimeError("the embedder went away")
 
     task_env = run_one_task(explode, monkeypatch)
@@ -724,17 +724,24 @@ def test_a_failing_import_is_reported_in_the_status_the_gui_reads(initialized, m
 
 
 def test_a_finished_import_says_so_and_says_how_to_start_another(initialized, monkeypatch):
-    run_one_task(lambda status_cb, out, *ins: None, monkeypatch)
+    run_one_task(lambda status_cb, out, *ins, llm_backend_url=None: None, monkeypatch)
     assert "complete" in unbox(importer.status_box)
 
 
 def test_a_finished_task_leaves_the_progress_counter_at_the_start(initialized, monkeypatch):
-    def advance(status_cb, out, *ins):
+    advanced = []
+
+    def advance(status_cb, out, *ins, llm_backend_url=None):
         importer.progress.tock()
         importer.progress.tock()
+        advanced.append(importer.progress._macrosteps_done)
 
     monkeypatch.setattr(importer, "has_task", importer.has_task)  # keep the real one; the fixture has a task
     run_one_task(advance, monkeypatch)
+    # The negative control. A stub that died before advancing anything leaves the counter at zero, which is
+    # also what a correct reset looks like -- so without this, the assertion below would pass whether or not
+    # there was ever anything to reset.
+    assert advanced and advanced[0] > 0, "the pipeline stub never advanced the counter, so this fixture cannot tell a reset from an untouched one"
     # With no task running the counter reports `None` rather than a number, so the reset is checked on
     # the underlying macrostep count -- which is what the *next* run would otherwise inherit.
     assert importer.progress._macrosteps_done == 0
@@ -823,6 +830,55 @@ def run_keyword_extraction(monkeypatch, fake_turn, caplog):
 
     with caplog.at_level("WARNING"):
         return importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors)
+
+
+# ---------------------------------------------------------------------------
+# What the dataset records about how it was built
+#
+# The keywords themselves do not say which method produced them -- six nouns look alike either way -- so a
+# dataset built by the fallback is indistinguishable from one built as configured unless the run writes down
+# which it was.
+
+
+def test_a_run_that_had_a_backend_records_the_llm_method(monkeypatch):
+    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+    monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+    assert importer._effective_keyword_method() == "llm"
+
+
+def test_a_run_that_had_no_backend_records_the_fallback_it_actually_used(monkeypatch):
+    # The pair with the test above: same configuration, and only `llm_settings` differs, so a fallback that
+    # went unrecorded would show up here as the two agreeing.
+    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+    monkeypatch.setattr(importer, "llm_settings", None, raising=False)
+    assert importer._effective_keyword_method() == "frequencies"
+
+
+@pytest.mark.parametrize("settings", [object(), None], ids=["backend", "no backend"])
+def test_configured_frequency_keywords_are_recorded_whatever_the_backend_did(monkeypatch, settings):
+    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
+    monkeypatch.setattr(importer, "llm_settings", settings, raising=False)
+    assert importer._effective_keyword_method() == "frequencies"
+
+
+def test_the_saved_dataset_carries_the_keyword_method():
+    """The method reaches the file, not just the helper.
+
+    Read from the source, because the save is inline in `import_bibtex` and reaching it for real means a
+    whole pipeline run -- embeddings, clustering and all -- to assert on one key. What is checked is
+    syntactic anyway: that the dict literal written to the file has the entry.
+    """
+    import ast
+    import pathlib
+    source = (pathlib.Path(importer.__file__)).read_text(encoding="utf-8")
+    saved_keys = {key.value
+                  for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Dict)
+                  for key in node.keys
+                  if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                  if any(isinstance(other, ast.Constant) and other.value == "lowdim_data"
+                         for other in node.keys)}
+    assert saved_keys, "no dict literal here looks like the saved dataset, so this test checks nothing"
+    assert "clusters_keyword_method" in saved_keys
 
 
 # ---------------------------------------------------------------------------

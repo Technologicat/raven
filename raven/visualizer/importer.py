@@ -90,6 +90,20 @@ def _llm_backend_needed() -> bool:
     return visualizer_config.clusters_keyword_method == "llm" or visualizer_config.summarize
 
 
+def _effective_keyword_method() -> str:
+    """Which cluster keyword method this run is actually using.
+
+    The configured `raven.visualizer.config.clusters_keyword_method`, except that `"llm"` reads as
+    `"frequencies"` where no usable LLM backend answered for this run.
+
+    Meaningful only once `_setup_llm_backend` has run, which is what binds `llm_settings`; before that
+    it reports a fallback that has not been decided yet.
+    """
+    if visualizer_config.clusters_keyword_method == "llm" and llm_settings is None:
+        return "frequencies"
+    return visualizer_config.clusters_keyword_method
+
+
 def _setup_llm_backend(backend_url: Optional[str] = None) -> None:
     """Connect the LLM-backed stages to their backend, binding `llm_settings`. Raise if none is usable.
 
@@ -1695,6 +1709,12 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames, llm
                            "vis_data": vis_data,  # list, concatenated entries from all input files
                            "lowdim_data": lowdim_data,  # rank-2 `np.array` of shape `[N, 2]`, 2D points from the semantic mapping, after dimension reduction
                            "keywords_available": visualizer_config.extract_keywords,
+                           # Which method produced `vis_keywords_by_cluster`, because the keywords themselves
+                           # do not say: a list of six nouns looks the same whichever way it was arrived at,
+                           # so without this the dataset cannot be told apart from one built the other way.
+                           # The method *used*, not the one configured — a run whose backend was unavailable
+                           # falls back, and the fallback is exactly what a later reader needs to know about.
+                           "clusters_keyword_method": _effective_keyword_method(),
                            "all_keywords": all_keywords,
                            "vis_keywords_by_cluster": vis_keywords_by_cluster}
             with open(output_filename, "wb") as output_file:
