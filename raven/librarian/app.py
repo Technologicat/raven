@@ -221,12 +221,6 @@ with timer() as tim:
                                           font=themes_and_fonts.icon_font_solid,
                                           tooltip="Send to chat input:\n{url}")
 
-    # The app's "read this, but nothing has gone wrong" orange. Two owners: the AI-disclosure label below
-    # the avatar, and the LLM backend status row above the composer. Named rather than written out at each
-    # site, because two literals in one file are two literals that can drift, and these two are meant to be
-    # recognizably the same voice — neither is an error, both want reading before the user sends anything.
-    _CAUTION_COLOR = (255, 180, 120)
-
     # animation for document database and web access indicators (cyclic, runs in the background)
     with dpg.theme(tag="my_pulsating_gray_text_theme"):
         with dpg.theme_component(dpg.mvAll):
@@ -281,13 +275,13 @@ with timer() as tim:
     # about it, is what the words are for.
     with dpg.theme(tag="my_pulsating_caution_backend_theme"):
         with dpg.theme_component(dpg.mvAll):
-            pulsating_caution_backend_color = dpg.add_theme_color(dpg.mvThemeCol_Text, _CAUTION_COLOR)
+            pulsating_caution_backend_color = dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.CAUTION_COLOR)
         pulsating_caution_backend_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
                                                                       theme_color_widget=pulsating_caution_backend_color)
         gui_animation.animator.add(pulsating_caution_backend_glow)
     with dpg.theme(tag="my_steady_caution_backend_theme"):
         with dpg.theme_component(dpg.mvAll):
-            dpg.add_theme_color(dpg.mvThemeCol_Text, _CAUTION_COLOR)
+            dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.CAUTION_COLOR)
     # The connected state, which appears only to announce itself and then leaves. Steady on both widgets:
     # nothing here is asking to be acted on.
     with dpg.theme(tag="my_steady_green_backend_theme"):
@@ -2096,9 +2090,9 @@ with timer() as tim:
                         # (4 px) after the spacer, so the spacer itself supplies the remaining 5.
                         with dpg.group():
                             dpg.add_spacer(height=5)
-                            dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=_CAUTION_COLOR, tag="ai_warning_icon")
+                            dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=guiutils.CAUTION_COLOR, tag="ai_warning_icon")
                         dpg.add_text(_AI_WARNING_TEXT,
-                                     color=_CAUTION_COLOR,
+                                     color=guiutils.CAUTION_COLOR,
                                      wrap=gui_config.ai_warning_w,
                                      tag="ai_warning_text")
         dpg.bind_item_font("ai_warning_icon", themes_and_fonts.icon_font_solid)  # tag

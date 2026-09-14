@@ -10,6 +10,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "compute_zoom_to_fit", "compute_tooltip_position_scalar",  # ...ditto
 
            "DISABLED_TEXT_COLOR", "DEFAULT_TEXT_COLOR", "DEFAULT_BUTTON_BG_COLOR",  # what the default theme draws
+           "CAUTION_COLOR",  # "read this, but nothing has gone wrong"
            "SECTION_SEPARATOR_SPACING",  # the constellation's vertical rhythm
            "DEBUG_OVERLAY_COLOR", "DEBUG_OVERLAY_FONT_SIZE", "DEBUG_OVERLAY_INSET",  # how a numbers overlay looks
 
@@ -89,6 +90,14 @@ DEFAULT_TEXT_COLOR = (255, 255, 255)
 # so the fade ran to a colour a shade too dark and snapped at the end. Declaring it is what stops a
 # transcription of a default from drifting away from the default.
 DEFAULT_BUTTON_BG_COLOR = (51, 51, 55)
+
+# The constellation's "read this, but nothing has gone wrong" orange.
+#
+# Owners so far: Raven-librarian's AI-disclosure label under the avatar and its LLM backend status row,
+# and the Visualizer importer's notice that a run is going ahead without the LLM stages. None of those is
+# an error — each wants reading before the user does anything else — and they are meant to be recognizably
+# the same voice across the apps, which a value copied per app stays only until one of them is adjusted.
+CAUTION_COLOR = (255, 180, 120)
 
 # Blank space above and below a horizontal rule that divides one block of GUI from the next.
 #
