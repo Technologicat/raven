@@ -284,6 +284,72 @@ docstrings and comments, so the rules are their own.
   *"Takes you to NEW"*, rather than folding one row's destination into its action and the other's into
   its notes.
 
+### A help card cannot be checked by reading its source
+
+Whether a cell wraps depends on column widths the table computes at run time from the content, and a card
+has **no scrollbar by design**, so anything past the bottom edge is cut off in silence. The source can be
+perfectly correct while the card on screen is missing rows: Raven-cherrypick's omitted its own `F1` row for
+as long as it existed, and every reading of `hotkey_info` said otherwise.
+
+**So open it and look**, at every page. Three things, of which the first two are invisible in the source:
+
+1. Rows that are in `hotkey_info` and not on screen — compare the last row of each column-group.
+2. Cells that wrap. The column-groups share table rows, so one wrapped cell pushes every group down from
+   there and the blank-row grouping stops lining up, which is what that grouping spends its space on.
+3. That grouping still lining up across the groups.
+
+Measured 2026-09-14: writing the articles this section asks for into a three-group card at 1400 px made
+eight cells wrap; at 1700 px none of them do. **So the first question about a wrapping cell is whether the
+card can be wider, not which words to cut** — terse phrasing is a concession bought with horizontal space,
+and there is usually space to buy.
+
+### Card size, and what fits itself
+
+The four full-size apps — librarian, visualizer, cherrypick, xdot_viewer — take `GUI_HELP_WINDOW_W` / `_H`
+and `GUI_MAIN_WINDOW_W` / `_H` from `raven.config`. The conference timer and the two avatar editors keep
+their own, being laid out for windows of their own size, and the file dialog's card is sized to the dialog.
+
+**The height is a starting value.** `HelpWindow` measures each page offscreen on first show and fits the
+card to the tallest, clamping to the viewport and logging if it has to. It is skipped only for a card whose
+owner sizes it itself (`on_parked`). Where a page cannot be measured, the configured height stands as a
+floor.
+
+### Pages
+
+**Split by scope, not to find room** — though a split usually finds some. Page one is the app's keyboard and
+nothing else, so it is a reference a reader can screenshot and keep open beside the app, which is what the
+card's header invites and what prose sharing the page takes away. A later page is what the app *does*, read
+once. If a page outgrows one screen, add a page rather than cutting the prose.
+
+- **A distinct view or mode with its own keys earns its own page**, with the prose explaining it —
+  Librarian's chat graph, Raven-cherrypick's compare mode.
+- **The key that *enters* a mode stays on the main page.** Which key reaches a mode is part of the main UI,
+  even when a later page explains the mode. Librarian keeps `Alt+G — Chat graph` on its keyboard page.
+
+### Prose on a card
+
+Two newspaper columns (`HelpWindow.prose_columns`, sections built by `helpcard.section`); a reader finishes
+one column before crossing, so a section belongs wholly to one of them.
+
+- **A key named in prose is bold and in the text colour** — `**Ctrl+S**`. The highlight colour is for
+  emphasis and contrast; a key wearing it reads as a different kind of thing from the same key one card
+  over.
+- **Say what no key table can say.** That is what earns a prose page. Raven-cherrypick's marks *move the
+  user's files* into `cherries/` and `lemons/`, and its zoom and pan survive between images of the same
+  dimensions — neither is deducible from a key.
+- **Say what the app is, and who does the work.** Most of this constellation has a model in it, so *"it
+  triages a folder"* is read as a claim that it classifies them.
+- **Source it from the code**, not from what the keys imply. Raven-avatar-pose-editor's prose said `Ctrl+S`
+  saves a JSON emotion template; `save_image` writes the PNG *and* drops the pose beside it.
+
+### Before you finish
+
+`python scripts/check_hotkey_tooltips.py` asks whether every key is named on the control that triggers it;
+an app read through by hand goes in its `SIGNED_OFF` table, after which a newly bound key with no caption
+fails the run. `python scripts/check_option_lists.py` asks whether the card offers every key its README
+documents. Neither can read the app's key handler, so do that too: a card may legitimately omit keys — the
+`Ctrl+Shift+` M/R/T/L debug keys are deliberately off every card, and live in the READMEs.
+
 ## Docstrings
 
 reStructuredText format. Extensive for public API, pragmatic for internals:

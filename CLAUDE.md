@@ -616,13 +616,15 @@ down*. The reference itself is **`dpg-notes.md`** (project root) — read the se
 ### Help cards
 
 **Before editing any `hotkey_info`, `HelpWindow` call or card prose, invoke the `helpcard` skill**
-(`.claude/skills/helpcard/`). It carries what a card owes its reader — how pages are split, the hotkey
-table's hard no-wrap rule, how a key is written in prose — and one standing instruction worth repeating
-here, because it is the one that cannot be recovered by being careful: **a card cannot be checked by
-reading its source.** Whether a cell wraps depends on column widths the table computes at run time, and a
-card has no scrollbar, so anything past the bottom edge is simply cut off. Raven-cherrypick's card omitted
-its own `F1` row for as long as it existed, and every reading of the source said otherwise. Launch it and
-look.
+(`.claude/skills/helpcard/`), which indexes the reference by the question you arrived with. The reference
+itself is **`raven-style-guide.md` → *User-facing text*** — a card's rules are rules about user-facing
+prose, and that is the file a person reads.
+
+One instruction is repeated here because it cannot be recovered by being careful, and because the moment it
+is needed comes before a skill would load: **a card cannot be checked by reading its source.** Whether a
+cell wraps depends on column widths the table computes at run time, and a card has no scrollbar, so
+anything past the bottom edge is cut off in silence. Raven-cherrypick's card omitted its own `F1` row for
+as long as it existed, and every reading of the source said otherwise. Launch it and look.
 
 ### Hotkeys: one meaning per key, per set of scopes that can be on screen together
 
