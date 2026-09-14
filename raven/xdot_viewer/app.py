@@ -693,7 +693,7 @@ def main() -> int:
             dpg.add_button(label=fa.ICON_FOLDER_OPEN, tag="open_file_button", callback=_show_open_dialog, width=30)
             dpg.bind_item_font("open_file_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("open_file_button"):  # tag
-                dpg.add_text("Open file [Ctrl+O]")
+                dpg.add_text("Open a file [Ctrl+O]")
 
             dpg.add_button(label=fa.ICON_SQUARE, tag="zoom_to_fit_button", callback=_zoom_to_fit, width=30)
             dpg.bind_item_font("zoom_to_fit_button", themes_and_fonts.icon_font_regular)  # tag
@@ -704,17 +704,17 @@ def main() -> int:
                            callback=_zoom_actual_size, width=30)
             dpg.bind_item_font("actual_size_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("actual_size_button"):  # tag
-                dpg.add_text("Actual size (1:1) [1 / numpad 1]")
+                dpg.add_text("Zoom to actual size (1:1) [1 / Numpad 1]")
 
             dpg.add_button(label=fa.ICON_MAGNIFYING_GLASS_PLUS, tag="zoom_in_button", callback=_zoom_in, width=30)
             dpg.bind_item_font("zoom_in_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("zoom_in_button"):  # tag
-                dpg.add_text("Zoom in [numpad +]")
+                dpg.add_text("Zoom in [Numpad +]")
 
             dpg.add_button(label=fa.ICON_MAGNIFYING_GLASS_MINUS, tag="zoom_out_button", callback=_zoom_out, width=30)
             dpg.bind_item_font("zoom_out_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("zoom_out_button"):  # tag
-                dpg.add_text("Zoom out [numpad -]")
+                dpg.add_text("Zoom out [Numpad -]")
 
             _dark_mode_initial_icon = fa.ICON_SUN if config.DARK_MODE else fa.ICON_MOON
             dpg.add_button(label=_dark_mode_initial_icon, tag="dark_mode_button", callback=_toggle_dark_mode, width=30)
@@ -800,27 +800,30 @@ def main() -> int:
     # --- Help card ---
     hotkey_info = (
         # Column 1: search & file
-        env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open file", notes=""),
-        env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus search field", notes=""),
-        env(key_indent=1, key="Enter", action_indent=0, action="Accept and jump to first match", notes="When focused"),
-        env(key_indent=1, key="Esc", action_indent=0, action="Unfocus and revert", notes="When focused"),
-        env(key_indent=0, key="F3", action_indent=0, action="Next search match", notes=""),
-        env(key_indent=0, key="Shift+F3", action_indent=0, action="Previous search match", notes=""),
-        env(key_indent=0, key="Ctrl+E", action_indent=0, action="Focus layout engine selector", notes=""),
+        env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a file", notes=""),
+        env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus the search field", notes=""),
+        env(key_indent=1, key="Enter", action_indent=0, action="Accept and jump to the first match", notes="When focused"),
+        env(key_indent=1, key="Esc", action_indent=0, action="Cancel the edit and unfocus", notes="When focused"),
+        env(key_indent=0, key="F3", action_indent=0, action="Jump to the next match", notes=""),
+        env(key_indent=0, key="Shift+F3", action_indent=0, action="Jump to the previous match", notes=""),
+        env(key_indent=0, key="Ctrl+E", action_indent=0, action="Focus the layout engine selector", notes=""),
         env(key_indent=1, key="Up / Down", action_indent=0, action="Previous / next engine", notes="While focused"),
         env(key_indent=1, key="Home / End", action_indent=0, action="First / last engine", notes="While focused"),
-        env(key_indent=1, key="Esc", action_indent=0, action="Focus graph view", notes="While engine selector focused"),
+        env(key_indent=1, key="Esc", action_indent=0, action="Focus the graph view", notes="While engine selector focused"),
 
         helpcard.hotkey_new_column,
 
         # Column 2: navigation & app
+        # Grouped by what the key does rather than by which device it is on: the two pan rows sit together
+        # so the second can say "the same", which is the constellation's idiom for a row that varies its
+        # neighbour. Spelling one action two ways reads as two features.
         env(key_indent=0, key="Numpad +", action_indent=0, action="Zoom in", notes=""),
         env(key_indent=0, key="Numpad -", action_indent=0, action="Zoom out", notes=""),
-        env(key_indent=0, key="1  / Numpad 1", action_indent=0, action="Actual size (1:1)", notes=""),
+        env(key_indent=1, key="Mouse wheel", action_indent=1, action="...the same, at the cursor", notes=""),
+        env(key_indent=0, key="1  / Numpad 1", action_indent=0, action="Zoom to actual size (1:1)", notes=""),
         env(key_indent=0, key="F", action_indent=0, action="Zoom to fit", notes=""),
-        env(key_indent=0, key="Arrow keys", action_indent=0, action="Pan view", notes=""),
-        env(key_indent=0, key="Mouse wheel", action_indent=0, action="Zoom at cursor", notes=""),
-        env(key_indent=0, key="Mouse drag", action_indent=0, action="Pan view", notes=""),
+        env(key_indent=0, key="Arrow keys", action_indent=0, action="Pan the view", notes=""),
+        env(key_indent=1, key="Mouse drag", action_indent=1, action="...the same, with the mouse", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
         env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen", notes=""),

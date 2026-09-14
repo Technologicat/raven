@@ -87,6 +87,15 @@ SIGNED_OFF: Dict[str, Dict[str, str]] = {
     "raven/avatar/pose_editor": {},
     # Same shape as its sibling above: every key is on a button or a heading carrying the bracketed hint.
     "raven/avatar/settings_editor": {},
+    # A canvas app: its toolbar covers opening, zooming and the app-level toggles, and everything left here
+    # is either a text-field behaviour or a gesture on the graph itself.
+    "raven/xdot_viewer": {
+        "Enter": "accepts the search and jumps to the first match; the field has no accept button",
+        "Esc": "hands the caret back from the search field or the engine selector; no widget does that",
+        "Arrow keys": "pan the view, and nothing in the toolbar pans",
+        "Mouse wheel": "zooms at the pointer, which no button can do — a button has no pointer position to zoom at",
+        "Mouse drag": "pans, as the arrow keys do, and by the same argument",
+    },
     "raven/librarian": {
         "Page Up": "scrolls the chat log; `view.page_up` has no button, only the key handler",
         "Page Down": "as Page Up",
