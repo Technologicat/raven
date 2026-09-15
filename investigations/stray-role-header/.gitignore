@@ -1,0 +1,3 @@
+# The captured requests carry the configured system prompt and user card, and the records carry whole chats.
+# This repository is public, so the data stays local; the probe regenerates it.
+data/
