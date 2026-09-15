@@ -405,15 +405,15 @@ def emotion_config(monkeypatch, video_config):
     controller, config, renderer = video_config
     sent = []
     monkeypatch.setattr(avatar_controller.api, "avatar_set_emotion", lambda instance_id, emotion_name: sent.append(emotion_name))
-    controller.emotion_wait_task_manager = avatar_controller.bgtask.TaskManager(name="test_emotion_wait", mode="concurrent",
-                                                                                executor=concurrent.futures.ThreadPoolExecutor())
-    config._emotion_lock = threading.Lock()
-    config._pending_emotion = None
-    config._emotion_waiting = False
+    controller.video_wait_task_manager = avatar_controller.bgtask.TaskManager(name="test_video_wait", mode="concurrent",
+                                                                              executor=concurrent.futures.ThreadPoolExecutor())
+    config._video_wait_lock = threading.Lock()
+    config._pending_on_video = {}
+    config._video_waiting = False
     config._current_emotion = "neutral"
     config._emotion_autoreset_t0 = 0
     yield controller, config, renderer, sent
-    controller.emotion_wait_task_manager.clear(wait=True)
+    controller.video_wait_task_manager.clear(wait=True)
 
 
 def _wait_for(predicate, timeout=5.0):
@@ -458,7 +458,7 @@ def test_a_sleeping_avatar_is_woken_and_gets_the_latest_emotion_when_its_video_i
 
 def test_a_wait_that_runs_out_applies_the_emotion_anyway(emotion_config, monkeypatch):
     controller, config, renderer, sent = emotion_config
-    monkeypatch.setattr(avatar_controller, "_EMOTION_VIDEO_WAIT_TIMEOUT", 0.2)
+    monkeypatch.setattr(avatar_controller, "_VIDEO_WAIT_TIMEOUT", 0.2)
     config._video_suppressed = True  # a ping does not resume a suppressed video, so it never comes back
     config._idle_paused = True
     renderer.animator_running = False
@@ -475,3 +475,16 @@ def test_an_emotion_applied_directly_cancels_one_still_waiting(emotion_config):
     controller.set_emotion(config, "surprise")  # video is back: applied at once
     time.sleep(0.3)
     assert sent == ["surprise"], "the older emotion was applied after the newer one"
+
+
+def test_an_effect_waits_for_the_video_beside_an_emotion_and_neither_replaces_the_other(emotion_config, monkeypatch):
+    controller, config, renderer, sent = emotion_config
+    monkeypatch.setattr(avatar_controller.api, "avatar_trigger_animefx", lambda instance_id, fx_name: sent.append(f"fx {fx_name}"))
+    renderer.first_frame_received = False
+    controller.set_emotion(config, "joy")
+    controller.trigger_animefx(config, "notice")
+    time.sleep(0.2)
+    assert sent == [], "something was applied while the video was still off"
+    renderer.first_frame_received = True
+    assert _wait_for(lambda: len(sent) == 2), f"not everything pending arrived: {sent}"
+    assert sent == ["joy", "fx notice"]

@@ -646,6 +646,32 @@ def api_avatar_stop_data_eyes():
     avatar.stop_data_eyes(data["instance_id"])
     return "OK"
 
+@app.route("/api/avatar/trigger_animefx", methods=["POST"])
+def api_avatar_trigger_animefx():
+    """Play an anime-style effect from the start, whatever the current emotion.
+
+    Input is JSON::
+
+        {"instance_id": "some_important_string",
+         "fx_name": "notice"}
+
+    where "fx_name" is one of the names in the "animefx" animator setting.
+
+    No outputs.
+    """
+    if not avatar.is_available():
+        abort(403, "Module 'avatar' not running")
+
+    data = request.get_json()
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_trigger_animefx: "instance_id" is required')
+    if "fx_name" not in data or not isinstance(data["fx_name"], str):
+        abort(400, 'api_avatar_trigger_animefx: "fx_name" is required')
+
+    logger.debug(f"api_avatar_trigger_animefx: instance '{data['instance_id']}', effect '{data['fx_name']}'")
+    avatar.trigger_animefx(data["instance_id"], data["fx_name"])
+    return "OK"
+
 @app.route("/api/avatar/result_feed")
 def api_avatar_result_feed():
     """Video output.

@@ -2175,6 +2175,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+T", action_indent=0, action="Thinking trace of marked message", notes="For thinking models"),
                env(key_indent=0, key="Ctrl+S", action_indent=0, action="Start/stop AI speaking", notes="The blue mark shows which message"),
+               env(key_indent=0, key="Ctrl+P", action_indent=0, action="Ping the avatar", notes="Wakes it; it takes notice"),
                env(key_indent=0, key="Ctrl+Right", action_indent=0, action="Next sibling of marked message", notes=""),
                env(key_indent=1, key="Ctrl+Shift+Right", action_indent=1, action="Same, but jump 10", notes=""),
                env(key_indent=1, key="Ctrl+End", action_indent=1, action="Same, but to the last", notes=""),
@@ -2846,6 +2847,13 @@ def librarian_hotkeys_callback(sender, app_data):
                 stop_speech_callback()
             else:
                 fire_event_if_exists("speak")
+        elif key == dpg.mvKey_P:  # P for ping
+            # The notice lines, played on their own rather than through an emotion: the one emotion that triggers
+            # them, surprise, also shrinks the irises, which reads as far too intense for a ping. The effect
+            # first: an asleep avatar is woken there and the lines wait for its video; an awake one then has its
+            # idle timer reset by the ping.
+            avatar_controller.trigger_animefx(avatar_record, "notice")
+            avatar_controller.ping(avatar_record)
         elif key == dpg.mvKey_G:
             if dpg.is_item_enabled("chat_stop_generation_button"):  # tag
                 stop_text_generation_callback()

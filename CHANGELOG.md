@@ -325,7 +325,9 @@
 - **`Esc` in the message composer now clears what you have written.** It used to put back whatever the field held when your caret last entered it — so the same key cleared the box or restored an older draft depending on where you had last clicked, which is not a difference you can see from the screen.
   - With text in the field, `Esc` clears it; press it again to leave the field.
 
-- **the app starts with the keyboard in the chat log**, where it used to start in the message composer. Nothing is sent before you mean to write something; `Ctrl+Space`, or a click, puts the caret in the composer.
+- **the app starts with the keyboard in the chat log**, where it used to start in the message composer. `Ctrl+Space`, or a click, puts the caret in the composer. `startup_keyboard_home = "composer"` in `raven.librarian.config` starts with the caret there instead.
+
+- **`Ctrl+P` pings the avatar**: it wakes the avatar if it is asleep, and plays the "notice" lines above its head.
 
 - **sending an empty message does nothing by default**, where it used to ask the AI to take another turn. The request then ends on the AI's own reply, and current models mostly answer that with an empty message. `llm_allow_empty_send` in `raven.librarian.config` switches the old behaviour back on, in both Raven-librarian and `raven-minichat`.
 

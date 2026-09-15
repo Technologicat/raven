@@ -58,10 +58,10 @@ from . import config as client_config
 from . import mayberemote
 from .avatar_renderer import DPGAvatarRenderer
 
-# How long `set_emotion` waits for a sleeping avatar's video before setting the emotion regardless, in seconds.
+# How long `_when_video_is_back` waits for a sleeping avatar's video before applying regardless, in seconds.
 # A bound rather than a measurement: waking takes a moment, and an emotion nobody saw arrive is still the right
 # pose to be in when the video does come back.
-_EMOTION_VIDEO_WAIT_TIMEOUT = 5.0
+_VIDEO_WAIT_TIMEOUT = 5.0
 
 # --------------------------------------------------------------------------------
 # For CPU-friendliness, LRU-cache all AI-heavy parts (for the "speak again" feature).
@@ -223,9 +223,9 @@ class DPGAvatarController:
         self.emotion_autoreset_task_manager = bgtask.TaskManager(name="avatar_controller_emotion_autoreset",
                                                                  mode="concurrent",
                                                                  executor=executor)
-        self.emotion_wait_task_manager = bgtask.TaskManager(name="avatar_controller_emotion_wait",  # see `set_emotion`
-                                                            mode="concurrent",
-                                                            executor=executor)
+        self.video_wait_task_manager = bgtask.TaskManager(name="avatar_controller_video_wait",  # see `_when_video_is_back`
+                                                          mode="concurrent",
+                                                          executor=executor)
 
         self.tts_input_queue = queue.Queue()  # for TTS input preprocessing and subtitle generation; see `send_text_to_tts`
         self.tts_output_queue = queue.Queue()  # for TTS and subtitle playback; see `preprocess_task`
@@ -253,7 +253,7 @@ class DPGAvatarController:
         self.input_queue_task_manager.clear(wait=True)
         self.output_queue_task_manager.clear(wait=True)
         self.emotion_autoreset_task_manager.clear(wait=True)
-        self.emotion_wait_task_manager.clear(wait=True)
+        self.video_wait_task_manager.clear(wait=True)
 
     def register_avatar_instance(self,
                                  avatar_instance_id: str,
@@ -342,9 +342,9 @@ class DPGAvatarController:
 
         config._emotion_autoreset_t0 = time.monotonic_ns()
         config._current_emotion = "neutral"  # last emotion we sent; a fresh avatar instance starts neutral
-        config._emotion_lock = threading.Lock()
-        config._pending_emotion = None  # waiting for the video to come back; see `set_emotion`
-        config._emotion_waiting = False  # whether a wait for it is already running
+        config._video_wait_lock = threading.Lock()
+        config._pending_on_video = {}  # {key: (what, action)} waiting for the video to come back; see `_when_video_is_back`
+        config._video_waiting = False  # whether a wait for it is already running
         config._idle_detector_lock = threading.RLock()
         config._idle_detector_overrides = 0
         config._idle_detector_t0 = time.monotonic_ns()
@@ -592,49 +592,72 @@ class DPGAvatarController:
 
         `emotion`: The name of the emotion, as the server knows it.
 
-        If the avatar's video is off — the idle detector has switched it off, or a stream is still warming
-        up — the avatar is woken, and the emotion is applied when its video is back: at most
-        `_EMOTION_VIDEO_WAIT_TIMEOUT` seconds later, and then regardless. Of several emotions set meanwhile, only
-        the latest is applied. Returns without waiting either way.
+        If the avatar's video is off, the emotion is applied once it is back; see `_when_video_is_back`. Of
+        several emotions set meanwhile, only the latest is applied. Returns without waiting either way.
         """
-        # Applied to a sleeping avatar, the emotion would change while nobody can see it, and an animefx it
-        # triggers — the notice lines of "surprise", say — would play out before the first frame arrived.
+        self._when_video_is_back(config, key="emotion", what=f"emotion '{emotion}'",
+                                 action=lambda: self._apply_emotion(config, emotion))
+
+    def trigger_animefx(self, config: env, fx_name: str) -> None:
+        """Play the anime-style effect `fx_name` on the avatar, from the start, whatever its current emotion.
+
+        `config`: Configuration for controlling a specific avatar instance and its GUI elements.
+                  See `register_avatar_instance`.
+
+        `fx_name`: One of the names in the server's "animefx" animator setting, e.g. "notice".
+
+        If the avatar's video is off, the effect plays once it is back; see `_when_video_is_back`. Returns without
+        waiting either way.
+        """
+        self._when_video_is_back(config, key=f"animefx {fx_name}", what=f"effect '{fx_name}'",
+                                 action=lambda: api.avatar_trigger_animefx(config.avatar_instance_id, fx_name))
+
+    def _when_video_is_back(self, config: env, key: str, what: str, action: Callable[[], None]) -> None:
+        """Run `action` now if the avatar has video to show it on; otherwise wake the avatar and run it then.
+
+        The wait lasts until the video is back, or `_VIDEO_WAIT_TIMEOUT` seconds, after which `action` runs
+        regardless. A later call with the same `key` replaces an action still waiting, and one that runs at once
+        cancels it. `what` names the action in the log.
+        """
+        # An emotion changed on a sleeping avatar changes while nobody can see it, and an effect played on one is
+        # over before the first frame arrives.
         renderer = config.avatar_renderer
         has_stream = renderer is not None and renderer.avatar_instance_id is not None
         # Waiting helps only when there is a stream and it has nothing to show yet. With no stream, no video is
         # coming; with video already there, there is nothing to wait for.
         video_on_its_way = has_stream and not self.video_available(config)
         if not video_on_its_way:
-            with config._emotion_lock:
-                config._pending_emotion = None  # a wait still running must not apply an older one after this
-            self._apply_emotion(config, emotion)
+            with config._video_wait_lock:
+                config._pending_on_video.pop(key, None)  # a wait still running must not run an older one after this
+            action()
             return
-        with config._emotion_lock:
-            config._pending_emotion = emotion
-            if config._emotion_waiting:  # the running wait picks up this newer one
+        with config._video_wait_lock:
+            config._pending_on_video[key] = (what, action)
+            if config._video_waiting:  # the running wait picks this one up
                 return
-            config._emotion_waiting = True
-        logger.info(f"set_emotion: video is off; waking the avatar, and setting emotion '{emotion}' when it is back.")
+            config._video_waiting = True
+        logger.info(f"_when_video_is_back: video is off; waking the avatar, and applying {what} when it is back.")
         self.ping(config)
-        self.emotion_wait_task_manager.submit(self._apply_emotion_when_video_is_back, env(config=config))
+        self.video_wait_task_manager.submit(self._run_pending_when_video_is_back, env(config=config))
 
-    def _apply_emotion_when_video_is_back(self, task_env: env) -> None:
-        """Background task for `set_emotion`: wait for the video, then apply the latest pending emotion."""
+    def _run_pending_when_video_is_back(self, task_env: env) -> None:
+        """Background task for `_when_video_is_back`: wait for the video, then run what is pending, in order."""
         config = task_env.config
-        deadline = time.monotonic() + _EMOTION_VIDEO_WAIT_TIMEOUT
+        deadline = time.monotonic() + _VIDEO_WAIT_TIMEOUT
         while not task_env.cancelled and not self.video_available(config) and time.monotonic() < deadline:
             time.sleep(0.05)
-        with config._emotion_lock:
-            emotion, config._pending_emotion = config._pending_emotion, None
-            config._emotion_waiting = False
-        if emotion is None or task_env.cancelled:
+        with config._video_wait_lock:
+            pending, config._pending_on_video = config._pending_on_video, {}
+            config._video_waiting = False
+        if task_env.cancelled:
             return
-        if not self.video_available(config):
-            logger.info(f"_apply_emotion_when_video_is_back: no video after {_EMOTION_VIDEO_WAIT_TIMEOUT} seconds; setting emotion '{emotion}' anyway.")
-        try:
-            self._apply_emotion(config, emotion)
-        except Exception as exc:  # the server may have gone away while we waited
-            logger.warning(f"_apply_emotion_when_video_is_back: failed to set emotion '{emotion}': {type(exc)}: {exc}")
+        if pending and not self.video_available(config):
+            logger.info(f"_run_pending_when_video_is_back: no video after {_VIDEO_WAIT_TIMEOUT} seconds; applying anyway.")
+        for what, action in pending.values():
+            try:
+                action()
+            except Exception as exc:  # the server may have gone away while we waited
+                logger.warning(f"_run_pending_when_video_is_back: failed to apply {what}: {type(exc)}: {exc}")
 
     def _apply_emotion(self, config: env, emotion: str) -> None:
         """Send `emotion` to the server now, and restart the autoreset timer from here."""

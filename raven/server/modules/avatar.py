@@ -27,6 +27,7 @@ __all__ = ["init_module",
            "modify_overrides",
            "start_data_eyes",
            "stop_data_eyes",
+           "trigger_animefx",
            "result_feed",
            "Animator",
            "Encoder"]
@@ -527,6 +528,23 @@ def stop_data_eyes(instance_id: str) -> str:
 
     logger.info(f"stop_data_eyes: instance '{instance_id}': fade started")
 
+def trigger_animefx(instance_id: str, fx_name: str) -> None:
+    """Play the anime-style effect `fx_name` from the start, whatever the current emotion.
+
+    `fx_name` is one of the names in the "animefx" animator setting. Raises `ValueError` for one that is not.
+    """
+    if not module_initialized:
+        raise RuntimeError("trigger_animefx: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"trigger_animefx: no such avatar instance '{instance_id}'")
+        raise ValueError(f"trigger_animefx: no such avatar instance '{instance_id}'")
+
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.trigger_animefx(fx_name)
+
+    logger.info(f"trigger_animefx: instance '{instance_id}': playing '{fx_name}'")
+
 # There are three tasks we must do each frame:
 #
 #   1) Render an animation frame
@@ -775,6 +793,7 @@ class Animator:
         self.data_eyes_fadeout_start_ts = t0  # timestamp at which the current fadeout begins, possibly still ahead; unused when state != "fading"
 
         self.animefx_epochs = {}
+        self.animefx_trigger_timestamps = {}  # {fx_name: t0}, for effects played by `trigger_animefx` rather than by entering an emotion
 
         # manual overrides, used for lipsync
         self.animation_key_overrides = {}  # {morph_or_cel_name0: value0, ...}
@@ -1382,6 +1401,17 @@ class Animator:
             self.data_eyes_on_since_ts = time.monotonic_ns()
         self.data_eyes_state = "on"
 
+    def trigger_animefx(self, fx_name: str) -> None:
+        """Play the anime-style effect `fx_name` from the start, whatever the current emotion.
+
+        The effect runs as it would on entering one of its trigger emotions: for its configured duration, with
+        its configured animation type. `fx_name` is one of the names in the "animefx" animator setting; see
+        `raven.server.config`. Raises `ValueError` for a name that is not there.
+        """
+        if fx_name not in {name for name, _ in self._settings["animefx"]}:
+            raise ValueError(f"Animator.trigger_animefx: no anime effect named '{fx_name}'")
+        self.animefx_trigger_timestamps[fx_name] = time.monotonic_ns()
+
     def stop_data_eyes(self) -> None:
         """Begin fading out the scifi "data eyes" cel effect.
 
@@ -1464,16 +1494,23 @@ class Animator:
         """
         new_celstack = copy.copy(celstack)
         time_now = time.monotonic_ns()  # TODO: use frame start time (`time_render_start`)?
-        seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         for fx_name, fx_config in self._settings["animefx"]:
             # Skip if effect disabled
             if not fx_config["enabled"] or fx_config["duration"] == 0.0 or not fx_config["cels"]:
                 continue
 
-            # Skip if wrong emotion or if effect ended
-            if self.emotion not in fx_config["emotions"] or seconds_since_last_emotion_change >= fx_config["duration"]:
+            # An effect starts either on entering one of its trigger emotions, or on `trigger_animefx`, and runs
+            # from whichever of the two happened last. Skip it if neither has, or if it has since ended.
+            starts = []
+            if self.emotion in fx_config["emotions"] and self.last_emotion_change_timestamp is not None:
+                starts.append(self.last_emotion_change_timestamp)
+            if (triggered_at := self.animefx_trigger_timestamps.get(fx_name)) is not None:
+                starts.append(triggered_at)
+            if not starts:
                 continue
-            # When we reach this point, we have recently entered one of the trigger emotions for this effect
+            t0 = max(starts)
+            if (time_now - t0) / 10**9 >= fx_config["duration"]:
+                continue
 
             # Determine which of the requested cels we actually have available for the current character loaded to this animator; build the animation out of what we have
             cels = []
@@ -1491,7 +1528,7 @@ class Animator:
                                                                        celstack=new_celstack)
                 self.animefx_epochs[fx_name] = new_epoch
             elif fx_config["type"] == "sequence":
-                new_celstack = compositor.animate_cel_sequence(t0=self.last_emotion_change_timestamp,
+                new_celstack = compositor.animate_cel_sequence(t0=t0,
                                                                duration=fx_config["duration"],
                                                                strength=1.0,
                                                                cels=cels,
@@ -1500,13 +1537,13 @@ class Animator:
                 new_epoch, new_celstack = compositor.animate_cel_cycle_with_fadeout(cycle_duration=(len(fx_config["cels"]) / fx_config["fps"]),
                                                                                     epoch=self.animefx_epochs.get(fx_name, time_now),
                                                                                     strength=1.0,
-                                                                                    fadeout_t0=self.last_emotion_change_timestamp,
+                                                                                    fadeout_t0=t0,
                                                                                     fadeout_duration=fx_config["duration"],
                                                                                     cels=cels,
                                                                                     celstack=new_celstack)
                 self.animefx_epochs[fx_name] = new_epoch
             elif fx_config["type"] == "sequence_with_fadeout":
-                new_celstack = compositor.animate_cel_sequence_with_fadeout(t0=self.last_emotion_change_timestamp,
+                new_celstack = compositor.animate_cel_sequence_with_fadeout(t0=t0,
                                                                             duration=fx_config["duration"],
                                                                             strength=1.0,
                                                                             cels=cels,

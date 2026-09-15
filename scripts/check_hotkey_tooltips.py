@@ -114,6 +114,7 @@ SIGNED_OFF: Dict[str, Dict[str, str]] = {
     "raven/librarian": {
         "Page Up": "scrolls the chat log; `view.page_up` has no button, only the key handler",
         "Page Down": "as Page Up",
+        "Ctrl+P": "pings the avatar; a live-testing aid with no button, only the key handler",
         "Any arrow": "the card's cell names a class of keys; the graph's captions name the members "
                      "individually ('press an arrow key', '[Up] and [Down]'), so there is nothing to match",
     },

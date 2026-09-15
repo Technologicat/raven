@@ -52,6 +52,7 @@ __all__ = [# Re-exported: TTS was the one subsystem large enough to want its own
            "avatar_set_emotion",
            "avatar_set_overrides", "avatar_modify_overrides",
            "avatar_start_data_eyes", "avatar_stop_data_eyes",
+           "avatar_trigger_animefx",
            "avatar_result_feed",  # this reads the AI avatar video stream
            "avatar_get_available_filters",  # shared between "avatar" and "imagefx" modules
            "classify_labels", "classify",
@@ -367,6 +368,16 @@ def avatar_stop_data_eyes(instance_id: str) -> None:
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/stop_data_eyes", json=data, headers=headers, timeout=util.api_config.network_timeout)
+    util.yell_on_error(response)
+
+def avatar_trigger_animefx(instance_id: str, fx_name: str) -> None:
+    """Play the anime-style effect `fx_name` from the start, whatever the current emotion; a name from the server's "animefx" animator setting."""
+    util.require()
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    data = {"instance_id": instance_id,
+            "fx_name": fx_name}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/trigger_animefx", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_result_feed(instance_id: str, chunk_size: int = 4096, expected_mimetype: Optional[str] = None) -> Generator[Tuple[Optional[str], Dict[str, str], bytes], None, None]:

@@ -717,6 +717,7 @@ the blue mark shows where it went.
 | `Ctrl+N` | Start a new chat |
 | `Ctrl+G` | Stop the AI's text generation |
 | `Ctrl+S` | Speak the marked message — or stop the avatar, if it is already speaking |
+| `Ctrl+P` | Ping the avatar: wake it if it is asleep, and have it take notice |
 | `Ctrl+Shift+Enter` | Record an audio message |
 | `Ctrl+Shift+O` | Attach a file |
 | `Enter` *or* `Ctrl+Enter` | Send — whichever is not the newline key; see `send_message_key` in [`config.py`](config.py) |

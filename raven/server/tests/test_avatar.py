@@ -1,4 +1,5 @@
-"""Unit tests for raven.server.modules.avatar: the "data eyes" effect's state machine.
+"""Unit tests for raven.server.modules.avatar: the "data eyes" effect's state machine, and anime effects played on
+their own rather than through an emotion.
 
 The `Animator` is built with `__new__` and only the fields the effect reads, so no model is loaded; the module
 itself still imports torch, hence the `ml` marker. Time is driven by hand through `time.monotonic_ns`, which
@@ -74,3 +75,44 @@ class TestDataEyesMinimumDuration:
         animator.stop_data_eyes()
         clock[0] += int(0.25 * SECOND)
         assert 0.0 < strength(animator) < 1.0, "the minimum was counted again from the snap-back"
+
+
+@pytest.fixture
+def fx_animator(clock):
+    animator = avatar.Animator.__new__(avatar.Animator)
+    animator._settings = {"animefx": [["notice", {"enabled": True,
+                                                  "emotions": ["surprise"],
+                                                  "type": "sequence",
+                                                  "duration": 0.5,
+                                                  "cels": ["fx_notice1", "fx_notice2"]}]]}
+    animator.emotion = "neutral"
+    animator.last_emotion_change_timestamp = clock[0] - 60 * SECOND  # long settled
+    animator.animefx_epochs = {}
+    animator.animefx_trigger_timestamps = {}
+    return animator
+
+
+def notice_showing(animator):
+    """Whether either notice cel is drawn in the next frame."""
+    celstack = animator.animate_animefx([("fx_notice1", 0.0), ("fx_notice2", 0.0)])
+    return any(value > 0.0 for _, value in celstack)
+
+
+class TestTriggerAnimefx:
+    def test_a_triggered_effect_plays_whatever_the_emotion_and_then_ends(self, fx_animator, clock):
+        assert not notice_showing(fx_animator), "the effect shows untriggered, so this cannot tell a trigger apart"
+        fx_animator.trigger_animefx("notice")
+        clock[0] += int(0.1 * SECOND)
+        assert notice_showing(fx_animator)
+        clock[0] += int(0.5 * SECOND)
+        assert not notice_showing(fx_animator), "the effect outlived its duration"
+
+    def test_entering_a_trigger_emotion_still_plays_it(self, fx_animator, clock):
+        fx_animator.emotion = "surprise"
+        fx_animator.last_emotion_change_timestamp = clock[0]
+        clock[0] += int(0.1 * SECOND)
+        assert notice_showing(fx_animator)
+
+    def test_an_unknown_effect_is_refused(self, fx_animator):
+        with pytest.raises(ValueError):
+            fx_animator.trigger_animefx("no such effect")
