@@ -225,6 +225,8 @@
 
 - **the settings editor separates its postprocessor filters with a rule.** The panel lists every filter one after another, and there are enough of them now that where one ends and the next begins had become a thing to work out rather than a thing to see.
 
+- **the "data eyes" effect stays on for at least a second** before it fades, so a lookup that finishes quickly is still seen. A slow one keeps the effect on for as long as it runs, as before. The animator setting `data_eyes_min_duration` sets the minimum, next to `data_eyes_fadeout_duration`.
+
 *Raven-librarian*
 
 - **a character now declares itself, and switching character is one setting.** A character is a JSON file

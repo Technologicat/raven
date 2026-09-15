@@ -626,7 +626,8 @@ def api_avatar_start_data_eyes():
 def api_avatar_stop_data_eyes():
     """Begin fading out the scifi "data eyes" cel effect.
 
-    Fade duration is the animator setting `data_eyes_fadeout_duration`.
+    Fade duration is the animator setting `data_eyes_fadeout_duration`, and the fade waits until the effect has
+    been on for `data_eyes_min_duration`.
 
     Input is JSON::
 

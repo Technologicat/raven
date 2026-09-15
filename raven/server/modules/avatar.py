@@ -511,7 +511,8 @@ def start_data_eyes(instance_id: str) -> str:
 def stop_data_eyes(instance_id: str) -> str:
     """Begin fading out the scifi "data eyes" cel effect.
 
-    The fade duration is `data_eyes_fadeout_duration` seconds (from animator settings).
+    The fade duration is `data_eyes_fadeout_duration` seconds (from animator settings), and the fade waits
+    until the effect has been on for `data_eyes_min_duration` seconds.
     No-op unless the effect is currently on.
     """
     if not module_initialized:
@@ -770,7 +771,8 @@ class Animator:
         self.data_eyes_epoch = t0  # cel cycle start time
         self.data_eyes_celnames = []
         self.data_eyes_state = "off"  # "off", "on", "fading". The effect switches on instantly; only the switch-off fades.
-        self.data_eyes_fadeout_start_ts = t0  # timestamp at which the current fadeout began; unused when state != "fading"
+        self.data_eyes_on_since_ts = t0  # timestamp at which the effect last switched on from "off"; what the minimum duration counts from
+        self.data_eyes_fadeout_start_ts = t0  # timestamp at which the current fadeout begins, possibly still ahead; unused when state != "fading"
 
         self.animefx_epochs = {}
 
@@ -1376,19 +1378,24 @@ class Animator:
         No-op-friendly: if the effect is already on, this just keeps it on.
         If it was fading out, the pending fadeout is abandoned and the effect snaps back to full strength.
         """
+        if self.data_eyes_state == "off":  # a snap-back from a fade continues the same appearance
+            self.data_eyes_on_since_ts = time.monotonic_ns()
         self.data_eyes_state = "on"
 
     def stop_data_eyes(self) -> None:
         """Begin fading out the scifi "data eyes" cel effect.
 
-        Fade duration is `data_eyes_fadeout_duration` (from animator settings).
+        Fade duration is `data_eyes_fadeout_duration` (from animator settings). The fade begins no sooner than
+        `data_eyes_min_duration` after the effect switched on, so a stop that comes earlier holds it at full
+        strength until then.
 
         No-op unless the effect is currently "on". In particular, calling this while already fading
         does not restart the fadeout, and calling it while off does nothing.
         """
         if self.data_eyes_state != "on":
             return
-        self.data_eyes_fadeout_start_ts = time.monotonic_ns()
+        earliest_fade_ts = self.data_eyes_on_since_ts + int(self._settings["data_eyes_min_duration"] * 10**9)
+        self.data_eyes_fadeout_start_ts = max(time.monotonic_ns(), earliest_fade_ts)
         self.data_eyes_state = "fading"
 
     def animate_data_eyes(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
@@ -1412,13 +1419,13 @@ class Animator:
             return new_celstack
         elif self.data_eyes_state == "on":
             strength = 1.0
-        else:  # "fading"
+        else:  # "fading", which may not have begun yet: before its start, the minimum duration is still being held
             fadeout_duration = self._settings["data_eyes_fadeout_duration"]
             elapsed = (time.monotonic_ns() - self.data_eyes_fadeout_start_ts) / 10**9
             if elapsed >= fadeout_duration:
                 self.data_eyes_state = "off"
                 return new_celstack
-            r = numutils.clamp(elapsed / fadeout_duration)
+            r = numutils.clamp(elapsed / fadeout_duration)  # negative `elapsed` clamps to 0, i.e. full strength
             r = numutils.nonanalytic_smooth_transition(r)
             strength = 1.0 - r
 

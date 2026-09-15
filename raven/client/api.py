@@ -361,7 +361,7 @@ def avatar_start_data_eyes(instance_id: str) -> None:
     util.yell_on_error(response)
 
 def avatar_stop_data_eyes(instance_id: str) -> None:
-    """Begin fading out the scifi "data eyes" cel effect; fade duration is the server's `data_eyes_fadeout_duration` animator setting."""
+    """Begin fading out the scifi "data eyes" cel effect; fade duration is the server's `data_eyes_fadeout_duration` animator setting, and the fade waits until the effect has been on for `data_eyes_min_duration`."""
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"

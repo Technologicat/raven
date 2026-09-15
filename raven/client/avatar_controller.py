@@ -318,7 +318,7 @@ class DPGAvatarController:
                    This one is about *activity*.
 
         The fadeout duration of the "data eyes" effect (LLM tool access indicator) is the animator setting
-        `data_eyes_fadeout_duration`.
+        `data_eyes_fadeout_duration`, and the shortest time it stays on is `data_eyes_min_duration`.
         """
         config = env()
 
@@ -690,7 +690,8 @@ class DPGAvatarController:
         """Stop the scifi "data eyes" cel effect. See `start_data_eyes` for the nesting contract.
 
         Semantics: the effect fades out once every `start_data_eyes` has been matched. Fade duration is the
-        animator setting `data_eyes_fadeout_duration`.
+        animator setting `data_eyes_fadeout_duration`, and the fade waits until the effect has been on for
+        `data_eyes_min_duration`.
 
         `config`: Configuration for controlling a specific avatar instance and its GUI elements.
                   See `register_avatar_instance`.
