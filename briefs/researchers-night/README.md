@@ -87,11 +87,10 @@ dozed off never spoke, and the speech-off talking animation stopped after a repl
   conditions; filed in `TODO_DEFERRED.md` with what was ruled out.
 - ~~**Periodic autosave of the chat datastore and app state**~~ — **done** (`e323bb5a`): every minute, and
   both saves skip unchanged content, so an idle app writes nothing.
-- **A stray `assistant` opening some replies**: three in the datastore, the first on 2026-09-10, all early
-  in a chat and with no thinking. Looks like a chat-template role header leaking; the timing points at
-  `2ec78fbb`, the framing notice moving to an inject, unverified. Evidence copies are in the maintainer's
-  `~/.config/raven/librarian/evidence-2026-09-15-item11/`. Plan: reproduce headlessly with
-  `raven.librarian.agent`, capture a raw request, then bisect the injects against a baseline that leaks.
+- **A stray `assistant` opening some replies** — **cause found, not fixed**: one send starts two AI turns
+  milliseconds apart, and the second's request ends on the first's empty assistant node.
+  `investigations/stray-role-header/` has the evidence, the three ways a double send gets through, and what
+  the fix needs deciding. It is demo-relevant: a double send also runs two turns' tool rounds at once.
 
 ### ~~Make `IDLE_SLEEP_S` mean what it says~~ — done 2026-09-11, and it grew a tail
 
