@@ -6409,3 +6409,28 @@ the reply into sentences the way the TTS preprocessor does, classify each with t
 
 Until then, an emotion that keeps looking wrong can be switched off in `emotion_blacklist`, in
 `raven.librarian.config`.
+
+## `Ctrl+N` in Raven-librarian once left the composer without the caret
+
+*Cluster: librarian-keyboard · Cost: ? · Gate: a reproduction · Filed: 2026-09-15*
+
+Seen once, by the maintainer, during a live test: `Ctrl+N` started a new chat and the caret did not appear
+in the composer, though `start_new_chat_callback` ends with `dpg.focus_item("chat_field")` for exactly that.
+`Ctrl+Space` afterwards worked. Where focus was beforehand is not known; possibly the chat graph.
+
+**Does not reproduce.** Measured the same day, through `--repl` on the running app, and each time the caret
+arrived and stayed:
+
+- `view.build()` followed by `focus_item`, from the REPL thread — so the rebuild does not defeat it.
+- `start_new_chat_callback` itself, from the REPL thread.
+- A real `Ctrl+N` from each of the three keyboard homes: the chat log (focus parked on `chat_send_button`),
+  the composer, and the graph (via `_give_keyboard_to_graph`).
+- A real `Ctrl+N` while the graph stood in for a sleeping avatar, so the rebuild's ping woke the avatar and
+  the panel swapped back mid-sequence.
+
+**One oddity, unexplained**: one frame after `_give_keyboard_to_graph`, `dpg.get_focused_item()` read
+`chat_field` (focused, not active) before settling back on `chat_send_button`. A transient focus of that
+kind, landing at the wrong moment, would fit a failure that happens once and then will not come back.
+
+If it recurs, examine that instance through `--repl` before closing it: `dpg.get_focused_item()`,
+`dpg.is_item_active("chat_field")`, `chat_graph_panel.has_keyboard`.
