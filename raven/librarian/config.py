@@ -209,6 +209,12 @@ context_reserve_fraction = 0.25
 # Set it to `"enter"` if that is the muscle memory you arrive with; for short questions it is fewer keys.
 send_message_key = "ctrl+enter"
 
+# Where the keyboard is when Raven-librarian starts: `"chat_log"` or `"composer"`.
+#
+# Both are defensible, which is why this is a setting: a chat app might be expected to start ready to type,
+# while the composer is the field that sends data away. `"composer"` starts with the caret in it.
+startup_keyboard_home = "chat_log"
+
 # Whether sending an empty message, with nothing attached, lets the AI take another turn without the user
 # writing in between. In Raven-librarian and in `raven-minichat` alike.
 #

@@ -3224,14 +3224,20 @@ def _build_initial_chat_view(sender, app_data) -> None:
         return
     chat_controller.view.build()
 
-    # The app starts with the keyboard in the chat log rather than the composer, so that nothing is sent
-    # before the user means to write something. `Ctrl+Space` or a click puts the caret in the composer.
+    # Where the keyboard starts is `startup_keyboard_home`.
     #
-    # Parked on the send button, as after a send. Not on the chat panel, which would be the obvious place:
-    # `dpg.focus_item` cannot focus a child window, and asked to, it lands on the enclosing window's first
-    # navigable item and *activates* it — which for the composer means handing it the caret. The button is
-    # safe because DPG leaves ImGui's keyboard-nav activation off, so a focused button ignores Space and Enter.
-    dpg.focus_item("chat_send_button")  # tag
+    # The chat log is reached by parking on the send button, as after a send. Not on the chat panel, which would
+    # be the obvious place: `dpg.focus_item` cannot focus a child window, and asked to, it lands on the
+    # enclosing window's first navigable item and *activates* it — which for the composer means handing it the
+    # caret. The button is safe because DPG leaves ImGui's keyboard-nav activation off, so a focused button
+    # ignores Space and Enter.
+    if librarian_config.startup_keyboard_home == "composer":
+        gui_animation.give_caret("chat_field")  # tag
+    else:
+        if librarian_config.startup_keyboard_home != "chat_log":
+            logger.warning(f"_build_initial_chat_view: unknown `startup_keyboard_home` {librarian_config.startup_keyboard_home!r}; "
+                           f"expected 'chat_log' or 'composer'. Starting in the chat log.")
+        dpg.focus_item("chat_send_button")  # tag
 
     # Report the LLM backend if it cannot answer yet, and keep watching until it can. Here rather than at
     # `connect` time because both the status row and the chat view the reconnect rebuilds are DPG widgets,
