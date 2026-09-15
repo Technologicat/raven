@@ -6398,5 +6398,14 @@ the reply into sentences the way the TTS preprocessor does, classify each with t
 `raven-avatar-settings-editor` by driving its emotion picker over `--repl` (`on_send_emotion`, with
 `emotion_choice` set) — the sentence and its expression side by side, at whatever pace the reader likes.
 
+**Showing the sentence needs two things the settings editor lacks**, though it already runs the same
+`DPGAvatarController` as Librarian — it constructs it with `subtitles_enabled=False` and no subtitle widget.
+
+- **A subtitle widget of its own**, created and passed in with its position as Librarian does. Wiring.
+- **A caption that can be shown without speaking.** The subtitle is set and shown only inside `speak_task`'s
+  start-of-sentence handler, so text appears on screen only while a sentence is being spoken. Pulling that
+  out as a public `show_subtitle` / `hide_subtitle` on the controller, used by the speech path as well,
+  lets the judging tool put each sentence up as a closed caption with no audio at all.
+
 Until then, an emotion that keeps looking wrong can be switched off in `emotion_blacklist`, in
 `raven.librarian.config`.
