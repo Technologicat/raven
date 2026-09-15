@@ -457,6 +457,25 @@ class TestSave:
         assert state_path.read_text(encoding="utf-8") == survivor
 
 
+    def test_an_unchanged_state_is_not_written_again(self, tmp_path, llm_settings, monkeypatch):
+        _, state, _, state_path = _load(tmp_path, llm_settings)
+        writes = []
+        real_atomic_write = appstate.common_utils.atomic_write
+        def counting_atomic_write(path, *args, **kwargs):
+            writes.append(path)
+            return real_atomic_write(path, *args, **kwargs)
+        monkeypatch.setattr(appstate.common_utils, "atomic_write", counting_atomic_write)
+
+        appstate.save(state_path, state)
+        assert writes == [], "an unchanged state was written again"
+        state["show_thinking"] = not state["show_thinking"]
+        appstate.save(state_path, state)
+        assert len(writes) == 1, "a changed state was not written"
+        state_path.unlink()
+        appstate.save(state_path, state)
+        assert len(writes) == 2, "a deleted state file was not written back"
+
+
 class TestPersist:
     def test_saves_the_datastore_and_the_state(self, tmp_path, llm_settings):
         datastore, state, datastore_path, state_path = _load(tmp_path, llm_settings)

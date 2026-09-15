@@ -756,6 +756,53 @@ class TestPersistentForestRoundtrip:
         assert list(tmp_path.iterdir()) == [filepath], f"a temp file was left behind: {list(tmp_path.iterdir())}"
 
 
+class TestPersistentForestSavesOnlyChanges:
+    """Saving is periodic, so an unchanged forest must cost no disk writes."""
+
+    @staticmethod
+    def _count_writes(monkeypatch):
+        writes = []
+        real_atomic_write = chattree.common_utils.atomic_write
+        def counting_atomic_write(path, *args, **kwargs):
+            writes.append(path)
+            return real_atomic_write(path, *args, **kwargs)
+        monkeypatch.setattr(chattree.common_utils, "atomic_write", counting_atomic_write)
+        return writes
+
+    def test_an_unchanged_forest_is_not_written_again(self, tmp_path, monkeypatch):
+        writes = self._count_writes(monkeypatch)
+        pf = PersistentForest(datastore_file=tmp_path / "forest.json")
+        root = pf.create_node({"role": "system", "content": "hello"}, parent_id=None)
+        pf.save()
+        assert len(writes) == 1, "the first save did not write, so this fixture cannot tell a skip from a failure"
+        pf.save()
+        assert len(writes) == 1, "an unchanged forest was written again"
+        pf.create_node({"role": "user", "content": "world"}, parent_id=root)
+        pf.save()
+        assert len(writes) == 2, "a changed forest was not written"
+
+    def test_the_first_save_after_loading_writes(self, tmp_path, monkeypatch):
+        # Load-time migrations can change the forest without advancing its counter.
+        filepath = tmp_path / "forest.json"
+        pf1 = PersistentForest(datastore_file=filepath)
+        pf1.create_node({"role": "system", "content": "hello"}, parent_id=None)
+        pf1.save()
+
+        writes = self._count_writes(monkeypatch)
+        pf2 = PersistentForest(datastore_file=filepath)
+        pf2.save()
+        assert len(writes) == 1
+
+    def test_a_deleted_file_is_written_even_if_nothing_changed(self, tmp_path):
+        filepath = tmp_path / "forest.json"
+        pf = PersistentForest(datastore_file=filepath)
+        pf.create_node({"role": "system", "content": "hello"}, parent_id=None)
+        pf.save()
+        filepath.unlink()
+        pf.save()
+        assert filepath.exists()
+
+
 # ---------------------------------------------------------------------------
 # PersistentForest: image sidecar storage + mark-and-sweep GC
 # ---------------------------------------------------------------------------

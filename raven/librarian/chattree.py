@@ -1188,6 +1188,10 @@ class PersistentForest(Forest):
 
         self.datastore_file = datastore_file
         self._autosave = autosave
+        # The `generation` last written to disk. Not set by loading, because the loaded forest may already differ
+        # from the file: `_upgrade` migrates it on the way in, and `chatutil.upgrade_datastore` migrates it
+        # afterwards without advancing the counter at all. So only a save knows the file matches.
+        self._saved_generation = None
 
         # Filesystem-level migration, so it cannot live in `_upgrade` — that one migrates the loaded nodes
         # dict and knows nothing about paths.
@@ -1236,12 +1240,20 @@ class PersistentForest(Forest):
         The write is atomic: readers see either the previous datastore or the new one, never a partial
         file. An interrupted save therefore costs the session's changes rather than the whole history.
 
+        Writes nothing if the forest has not changed since it was last saved, and the file is still there — so
+        saving often costs no disk writes while nothing is happening. The first save after loading always
+        writes.
+
         With `autosave=True` (the default), this is called automatically at interpreter exit via `atexit`.
         With `autosave=False`, the caller must invoke this explicitly if persistence is wanted.
         """
         # Atomic, because the crash that kills a save half-way is exactly when the history is most wanted.
         with self.lock:
             absolute_path = self.datastore_file.expanduser().resolve()
+            if self._generation == self._saved_generation and absolute_path.exists():
+                logger.debug(f"PersistentForest.save: No changes since the last save to '{str(self.datastore_file)}'; nothing to do.")
+                return
+            generation = self._generation
             logger.info(f"PersistentForest.save: Saving datastore to '{str(self.datastore_file)}' (resolved to '{str(absolute_path)}').")
 
             directory = self.datastore_file.parent
@@ -1249,6 +1261,7 @@ class PersistentForest(Forest):
 
             with common_utils.atomic_write(absolute_path) as json_file:
                 json.dump(self.nodes, json_file, indent=2)
+            self._saved_generation = generation
 
             logger.info("PersistentForest.save: All done.")
 

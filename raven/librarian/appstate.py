@@ -84,6 +84,9 @@ _RENAMED_FLAGS = {"tools_enabled": "internet_enabled"}
 # by this name if the configured one is absent, so an existing chat history is not left behind by an upgrade.
 _LEGACY_DATASTORE_FILENAME = "data.json"
 
+# What `save` last wrote, per resolved state file path, so that saving an unchanged state writes nothing.
+_last_saved_state_text: Dict[pathlib.Path, str] = {}
+
 
 def configured_defaults() -> Dict:
     """Return the configured starting values for the numeric per-app settings, keyed as in the app state.
@@ -511,8 +514,15 @@ def save(state_file: Union[str, pathlib.Path],
 
     # A copy, because GUI threads write flags into `state` while a periodic save may be iterating it. The
     # values are scalars, so a shallow copy is the whole snapshot.
+    snapshot = dict(state)
+    text = json.dumps(snapshot, indent=2)
+    # Compared as text, there being no change counter on a plain dict. It is a few hundred bytes.
+    if _last_saved_state_text.get(state_file) == text and state_file.exists():
+        logger.debug(f"save: No changes to app state since the last save to '{mayberel_state_file}'; nothing to do.")
+        return
     with common_utils.atomic_write(state_file) as json_file:
-        json.dump(dict(state), json_file, indent=2)
+        json.dump(snapshot, json_file, indent=2)
+    _last_saved_state_text[state_file] = text
 
     logger.info(f"save: Saved app state to '{mayberel_state_file}' (resolved to '{state_file}').")
 
