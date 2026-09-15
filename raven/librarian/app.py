@@ -3224,19 +3224,14 @@ def _build_initial_chat_view(sender, app_data) -> None:
         return
     chat_controller.view.build()
 
-    # Keyboard focus is deliberately left alone here, and the reason is worth recording because the obvious
-    # thing to write instead — park focus on the chat panel, so the app starts ready to read — is not
-    # available and does harm when attempted.
+    # The app starts with the keyboard in the chat log rather than the composer, so that nothing is sent
+    # before the user means to write something. `Ctrl+Space` or a click puts the caret in the composer.
     #
-    # `dpg.focus_item` cannot focus a child window. Asked to, it does not merely fail: focus lands on the
-    # first navigable item of the enclosing window and is *activated*, which for a text field means it takes
-    # the caret. So the instruction meant to send focus away from the composer is one of the few that can
-    # reliably put it there.
-    #
-    # Nothing needs to replace it. ImGui gives the first navigable item nav focus of its own accord, but
-    # leaves it *inactive* — no caret — and inactive is what the navigation keys are gated on, so the log is
-    # scrollable from the first frame without anyone having been sent anywhere. `Ctrl+Space` activates the
-    # composer when the reader wants it.
+    # Parked on the send button, as after a send. Not on the chat panel, which would be the obvious place:
+    # `dpg.focus_item` cannot focus a child window, and asked to, it lands on the enclosing window's first
+    # navigable item and *activates* it — which for the composer means handing it the caret. The button is
+    # safe because DPG leaves ImGui's keyboard-nav activation off, so a focused button ignores Space and Enter.
+    dpg.focus_item("chat_send_button")  # tag
 
     # Report the LLM backend if it cannot answer yet, and keep watching until it can. Here rather than at
     # `connect` time because both the status row and the chat view the reconnect rebuilds are DPG widgets,

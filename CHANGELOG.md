@@ -323,6 +323,8 @@
 - **`Esc` in the message composer now clears what you have written.** It used to put back whatever the field held when your caret last entered it — so the same key cleared the box or restored an older draft depending on where you had last clicked, which is not a difference you can see from the screen.
   - With text in the field, `Esc` clears it; press it again to leave the field.
 
+- **the app starts with the keyboard in the chat log**, where it used to start in the message composer. Nothing is sent before you mean to write something; `Ctrl+Space`, or a click, puts the caret in the composer.
+
 - **sending an empty message does nothing by default**, where it used to ask the AI to take another turn. The request then ends on the AI's own reply, and current models mostly answer that with an empty message. `llm_allow_empty_send` in `raven.librarian.config` switches the old behaviour back on, in both Raven-librarian and `raven-minichat`.
 
 - **with speech on, the avatar's expression follows what it is saying.** It used to react to the reply as the text streamed in, so the face was already showing the mood of a sentence the voice had not reached yet. Now it stays neutral while the reply is being written, and changes as each sentence starts to be spoken, from that sentence and the few before it. With speech off, the expression follows the text as it arrives, as before.
