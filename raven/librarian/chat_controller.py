@@ -36,7 +36,6 @@ _DOCUMENT_ICON_PREFIX = "icon:"
 # they cost is a DPG texture apiece.
 _GRAPH_THUMBNAIL_MIN_MIP = 4
 
-import collections
 import concurrent.futures
 import dataclasses
 import io
@@ -79,6 +78,7 @@ def _client_api():
 from ..common import bgtask
 from ..common import netutil
 from ..common import numutils
+from ..common import text as common_text
 from ..common import utils as common_utils
 
 from ..common.gui import animation as gui_animation
@@ -1764,7 +1764,8 @@ class DPGChatMessage:
                                                   add_persona=False)
                     self.parent_view.chat_controller.avatar_controller.send_text_to_tts(config=self.parent_view.chat_controller.avatar_record,
                                                                                         text=message_text,
-                                                                                        video_offset=librarian_config.avatar_config.video_offset)
+                                                                                        video_offset=librarian_config.avatar_config.video_offset,
+                                                                                        update_emotion=True)
 
                     # Acknowledge the action in the GUI.
                     gui_animation.flash_button(button=speak_message_button,
@@ -5105,18 +5106,12 @@ class DPGChatController:
                 task_env.thinking_t0 = None  # when reasoning first arrived, for the live count on the thought bubble
                 task_env.first_chunk_t = None  # when the first generated text arrived on any channel; what `thinking_t0` becomes if it turns out all of it was reasoning
 
-                task_env.emotion_update_interval = 5  # how many lines of text to wait between emotion updates (NOTE: Qwen3 uses a double newline as its paragraph separator, so that eats an extra line)
-                task_env.emotion_recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap between updates, to stabilize the detection
-                task_env.emotion_update_calls = 0
+                task_env.emotion_window = common_text.EmotionWindow()
                 def _update_avatar_emotion_from_incoming_text(new_paragraph: str) -> None:
-                    task_env.emotion_recent_paragraphs.append(new_paragraph)
-                    task_env.emotion_recent_paragraphs.popleft()
-                    if task_env.emotion_update_calls % task_env.emotion_update_interval == 0:
-                        text = "".join(task_env.emotion_recent_paragraphs)
+                    if (text := task_env.emotion_window.add(new_paragraph)) is not None:
                         logger.info(f"ai_turn.ai_turn_task._update_avatar_emotion_from_incoming_text: updating emotion from {len(text)} characters of recent text")
                         self.avatar_controller.update_emotion_from_text(config=self.avatar_record,
                                                                         text=text)
-                    task_env.emotion_update_calls += 1
 
                 def on_llm_progress(event: dict[str, Any]) -> sym | None:
                     """Render one streaming event, tolerating the widget disappearing mid-render.
@@ -5249,7 +5244,9 @@ class DPGChatController:
                         task_env.t0 = time_now
                         task_env.n_chunks0 = n_chunks
                         # NOTE: The last paragraph of the AI's reply - for thinking models, commonly the final response - often never gets a "\n", and must be handled in `on_done`.
-                        _update_avatar_emotion_from_incoming_text(paragraph_text)  # update emotion from recent received text (thoughts too)
+                        # With speech on, the listener has not heard this yet, so the emotion waits for the voice.
+                        if not speak_this_turn:
+                            _update_avatar_emotion_from_incoming_text(paragraph_text)  # update emotion from recent received text (thoughts too)
                         streaming_chat_message.replace_last_paragraph(paragraph_text,
                                                                       is_thought=is_thought)
                         streaming_chat_message.add_paragraph("",
@@ -5301,12 +5298,13 @@ class DPGChatController:
                             logger.info("ai_turn.ai_turn_task.on_done: sending final (non-thought) message content for translation, TTS, and subtitling")
                             self.avatar_controller.send_text_to_tts(config=self.avatar_record,
                                                                     text=text,
-                                                                    video_offset=librarian_config.avatar_config.video_offset)
-
-                        # Update avatar emotion one last time, from the final message text
-                        logger.info("ai_turn.ai_turn_task.on_done: updating emotion from final (non-thought) message content")
-                        self.avatar_controller.update_emotion_from_text(config=self.avatar_record,
-                                                                        text=text)
+                                                                    video_offset=librarian_config.avatar_config.video_offset,
+                                                                    update_emotion=True)
+                        else:
+                            # Update avatar emotion one last time, from the final message text
+                            logger.info("ai_turn.ai_turn_task.on_done: updating emotion from final (non-thought) message content")
+                            self.avatar_controller.update_emotion_from_text(config=self.avatar_record,
+                                                                            text=text)
 
                         # Update linearized chat view
                         logger.info("ai_turn.ai_turn_task.on_done: updating chat view with final message")

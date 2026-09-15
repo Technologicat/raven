@@ -321,6 +321,9 @@
 - **`Esc` in the message composer now clears what you have written.** It used to put back whatever the field held when your caret last entered it — so the same key cleared the box or restored an older draft depending on where you had last clicked, which is not a difference you can see from the screen.
   - With text in the field, `Esc` clears it; press it again to leave the field.
 
+- **with speech on, the avatar's expression follows what it is saying.** It used to react to the reply as the text streamed in, so the face was already showing the mood of a sentence the voice had not reached yet. Now it stays neutral while the reply is being written, and changes as each sentence starts to be spoken, from that sentence and the few before it. With speech off, the expression follows the text as it arrives, as before.
+  - Speaking a message again (`Ctrl+S`, or its speak button) does the same.
+
 *Raven-visualizer*
 
 - **keyword extraction now counts nouns and proper nouns, and leaves the verbs out.** A topic keyword is nearly always a noun, while the verbs of academic prose — *provide*, *improve*, *develop*, *investigate*, *identify*, *propose* — describe what a paper **does**, are the same in every field, and were crowding the head of the frequency list without saying anything. Measured on a corpus about AI in education: dropping them lifts *chatbot*, *agent*, *interaction*, *language* and *task* into the top of the list instead, and removes about a third of the distinct words.

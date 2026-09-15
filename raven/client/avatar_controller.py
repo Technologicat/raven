@@ -570,14 +570,18 @@ class DPGAvatarController:
             emotion = _avatar_get_emotion_from_text(config.emotion_blacklist,
                                                     text)
             logger.info(f"update_emotion_from_text: updating emotion to '{emotion}'")
-            api.avatar_set_emotion(instance_id=config.avatar_instance_id,
-                                   emotion_name=emotion)
-            config._current_emotion = emotion  # so the autoreset knows whether it has anything to return from
+            self._set_emotion(config, emotion)
             logger.info("update_emotion_from_text: emotion updated")
             return emotion
         finally:
             # Reset the timer last. If running on CPU, the emotion analysis may be slow.
             config._emotion_autoreset_t0 = time.monotonic_ns()
+
+    def _set_emotion(self, config: env, emotion: str) -> None:
+        """Set an already-classified emotion on the avatar instance described by `config`."""
+        api.avatar_set_emotion(instance_id=config.avatar_instance_id,
+                               emotion_name=emotion)
+        config._current_emotion = emotion  # so the autoreset knows whether it has anything to return from
 
     def load_animator_settings(self, config: env, animator_settings: Dict) -> None:
         """Send animator settings to the server, and remember them as this instance's baseline.
@@ -711,7 +715,8 @@ class DPGAvatarController:
                          on_start_speaking: Optional[Callable] = None,
                          on_stop_speaking: Optional[Callable] = None,
                          on_start_sentence: Optional[Callable] = None,
-                         on_stop_sentence: Optional[Callable] = None) -> str:
+                         on_stop_sentence: Optional[Callable] = None,
+                         update_emotion: bool = False) -> str:
         """Send a complete piece of text into the TTS queue.
 
         Returns a batch UUID. This is used in the events to identify which call to `send_text_to_tts`
@@ -758,6 +763,11 @@ class DPGAvatarController:
                             Useful mainly if you are recording avatar video, so that your
                             event handler can note down the video frame number and/or timestamp.
 
+        `update_emotion`: If `True`, the avatar's emotion follows the speech: it is updated as each sentence
+                          starts to be spoken, from that sentence and the few before it in the same batch.
+                          The emotion is detected while the audio is being precomputed, so setting it
+                          does not delay the speech.
+
         For the content of `output_record`, the authoritative source is the source code of
         `preprocess_task.process_item`, which generates them. Generally, you can identify
         the batch and the sentence from there, and it also has a copy of most of the arguments
@@ -788,6 +798,7 @@ class DPGAvatarController:
                                   "on_stop_speaking": on_stop_speaking,
                                   "on_start_sentence": on_start_sentence,
                                   "on_stop_sentence": on_stop_sentence,
+                                  "update_emotion": update_emotion,
                                   "config": config})
         return batch_uuid
 
@@ -867,6 +878,9 @@ class DPGAvatarController:
             # Dropping unspeakable lines is what keeps a dangling Markdown bullet — an answer ending "...naked eye:\n*"
             # leaves a line that is just "*" — from becoming a sentence of its own, with no phonemes to synthesize.
             lines = [line.strip() for line in lines if common_text.is_speakable(line)]
+            # Every sentence is due: LLM sentences are long, so waiting several of them leaves the face far behind
+            # the voice, and misses a change of mood between two sentences. The window spans lines, but not batches.
+            emotion_window = common_text.EmotionWindow(interval=1, size=4, separator=" ")
             plural_s = "s" if len(lines) != 1 else ""
             logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: detected {len(lines)} non-blank line{plural_s}.")
             for lineno, line in enumerate(lines, start=1):
@@ -924,6 +938,12 @@ class DPGAvatarController:
                         logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): no audio produced during precomputing, skipping sentence")
                         continue
 
+                    emotion = None
+                    if input_record["update_emotion"] and (emotion_text := emotion_window.add(sentence)) is not None:
+                        emotion = _avatar_get_emotion_from_text(input_record["config"].emotion_blacklist,
+                                                                emotion_text)
+                        logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): emotion when spoken: '{emotion}'")
+
                     logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): processing done")
                     if task_env.cancelled:  # IMPORTANT: don't queue the result (and trigger event) if cancelled
                         return
@@ -939,6 +959,7 @@ class DPGAvatarController:
                                      "sentence": sentence,
                                      # ----------------------------------------
                                      "subtitle": subtitle,
+                                     "emotion": emotion,  # `None` if the emotion is not to follow the speech
                                      "prep": prep,
                                      "is_first_sentence_in_batch": (is_first_line and is_first_sentence),
                                      "is_last_sentence_in_batch": (is_last_line and is_last_sentence),
@@ -1018,6 +1039,12 @@ class DPGAvatarController:
             def speak_task_on_start_speaking():
                 logger.info(f"speak_task.process_item.speak_task_on_start_speaking: instance {task_env.task_name}: sentence {sentence_uuid}: TTS starting to speak.")
                 self.ping(config)
+                if (emotion := output_record["emotion"]) is not None:
+                    logger.info(f"speak_task.process_item.speak_task_on_start_speaking: instance {task_env.task_name}: sentence {sentence_uuid}: updating emotion to '{emotion}'")
+                    try:
+                        self._set_emotion(config, emotion)
+                    except Exception as exc:  # a missed expression must not cost the sentence
+                        logger.warning(f"speak_task.process_item.speak_task_on_start_speaking: instance {task_env.task_name}: sentence {sentence_uuid}: failed to set emotion: {type(exc)}: {exc}")
                 if output_record["is_first_sentence_in_batch"] and (custom_on_start_speaking := output_record["on_start_speaking"]) is not None:
                     custom_on_start_speaking(output_record)
                 if (custom_on_start_sentence := output_record["on_start_sentence"]) is not None:
