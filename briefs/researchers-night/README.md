@@ -17,13 +17,13 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 
 | Brief | What | Status |
 |---|---|---|
-| `markdown-block-rendering-brief.md` | Band-2 item 12: block-level Markdown in the chat view | Researchers' Night. Steps 1 and 5 landed 2026-08-25; what remains is behind the single-newline split, which is also what fenced code and multi-line lists are waiting on |
-| `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night, and **next**. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. **Step zero is done** (2026-08-25): a hand-built chat-shaped `Graph` renders through `XDotWidget.set_graph` with no GraphViz and no xdot in the path, and `test_widget.py` covers it. So this starts from the feature work, not from proving the door opens |
-| `12_derived-artifact-store-brief.md` | One keying and regeneration mechanism for everything computed *from* a source artifact | v0.2.9. Does not depend on 13 |
+| `markdown-block-rendering-brief.md` | Band-2 item 12: block-level Markdown in the chat view | **After Researchers' Night** — it was the sprint's slack, and the slack is gone (2026-09-15). Steps 1 and 5 landed 2026-08-25; what remains is behind the single-newline split, which is also what fenced code and multi-line lists are waiting on |
+| `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night, and **in progress**. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Items 1–7 are done. **Left for the exhibit: the transition animation, then the look check (item 10).** Search (item 8) moved past the event on 2026-09-15, with a first draft welcome before it; see *Decided 2026-09-15* below |
+| `12_derived-artifact-store-brief.md` | One keying and regeneration mechanism for everything computed *from* a source artifact | v0.2.10. Does not depend on 13 |
 | `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night. **It precedes `visualizer-keyword-pools-brief.md`'s corpus-level display** (Juha, 2026-09-10): its §2 keeps the corpus frequency stats that window reads, so it is the foundation and goes first |
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, ~~PCA preprocessing~~, ~~cosine-to-medoid outlier assignment~~, Procrustes alignment, and **clustering in high-D**. **Items 2, 3 and 5 were measured on 2026-09-01 and the brief now points at `investigations/highdim-clustering/README.md`, which is the specification** — 2 and 3 are measured harmful and must not be built as written, 5 is settled and ready to implement (agglomerative, not HDBSCAN) | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
 | `aokk-corpus-scope-classification-brief.md` | An LLM batch pass over the AOKK corpus, flagging records the boolean search pulled in that are not about AI agents in higher education | Filed 2026-08-31. **In hand as of 2026-09-08**, in a parallel session rather than on this repo's main line: the corpus is deduplicated and topic-filtered in the Visualizer already, and what it needs next is the agglomerative clustering that `investigations/highdim-clustering/` measured as the better answer — 1–2 days (Juha). Originally **the only near-term item with a date**: needed within two weeks of 2026-09-01, and its two open questions were settled that day, so it starts from a decided spec. The problem is confirmed rather than suspected: `"conversational agent"` caught a child-helpline paper, and `"learning assistant"` matches 40 records across *two senses* — the AI tool, and the STEM term of art for a human undergraduate Learning Assistant. Carries a warning about reusing `agent-batch-classification`'s confidence-based escalation, whose known failure mode applies directly |
-| `14_chat-search-brief.md` | Search within the chat log | v0.2.9. The match unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer implementation rebuilds the whole panel and so does not transfer to an incrementally-built chat log |
+| `14_chat-search-brief.md` | Search within the chat log | v0.2.10, as half of brief 16's item 8 — **after Researchers' Night**, with a first draft welcome before it (2026-09-15). The match unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer implementation rebuilds the whole panel and so does not transfer to an incrementally-built chat log |
 
 ## Closed
 
@@ -54,6 +54,27 @@ cannot move as a unit is in the closed brief's last section.
 not settled, and the two sensible axes disagree — closure rate (smallest first, so briefs shut faster than
 they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
 deadline actually binds; everything else could slip past September without anything breaking.
+
+### Decided 2026-09-15 — search moves past the event, the animation stays
+
+11 days out. Taking stock found brief 16's remaining three pieces all unstarted, and the band-2 item 11
+spike still open, against about nine working days. Juha's calls:
+
+- **No slack items.** Message editing and the Markdown remainder are after the event. The week of
+  2026-09-10 went on hammerspace — the idle frame rate, machine-local config, the help cards — which
+  produced a better product than the plan, just a different one; 0.2.9 ships whatever is in it on the day,
+  and work continues afterwards.
+- **Search (brief 16 item 8, both halves) is bumped past Researchers' Night.** It is GUI and UX work of
+  the kind that proceeds one edge case at a time, each fix making the next observable, so its real size is
+  the two weeks of finding those rather than the first working version. **A first working draft before the
+  day is still welcome**, imperfect or not. This retires the two estimates recorded above ("1–2 days",
+  2026-09-07, and "at least a week", 2026-09-09) as a planning input.
+- **The transition animation stays on the exhibit path**, and is the important one. Its design is in the
+  brief (*Animating a change of topology*, settled 2026-09-02) and much of the machinery under it exists.
+  The ordering argument of 2026-09-09 (animation before search) still holds.
+
+**So the remainder is: the item 11 spike, the transition animation, then the look check (item 10)** — with
+a search draft only if time is left after those.
 
 ### ~~Make `IDLE_SLEEP_S` mean what it says~~ — done 2026-09-11, and it grew a tail
 

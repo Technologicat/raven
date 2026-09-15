@@ -1161,6 +1161,17 @@ Three directions, none chosen:
 The first two are compatible and could both apply. The third is the one that makes the *avatar* panel
 growable, which the other two deliberately avoid needing.
 
+## Where this stands, 2026-09-15
+
+**What the exhibit needs from this brief is the transition animation** (*Animating a change of topology*,
+under *Out of scope for v1*, where it was filed before being scheduled on 2026-09-09) **and then the look
+check, item 10.** Neither is started.
+
+**Item 8, search, moved past Researchers' Night** (Juha, 2026-09-15): it is edge-case-by-edge-case GUI work
+whose real size is the two weeks of finding those, so it cannot be scheduled into what is left. A first
+working draft before the day is still welcome if time remains. The brief therefore stays open past the
+event, on item 8 alone. `briefs/researchers-night/README.md` → *Decided 2026-09-15* has the rest.
+
 ## Where this stands, 2026-09-07
 
 **Items 6, 4 and 5 are done**, all on 2026-09-07. What item 6 shipped is in *How item 6 came out* below;
@@ -1886,8 +1897,9 @@ list is a judgement about how the picture reads, and those are decided in front 
       should probably be one pass rather than two.
 
 **So the demo needs 4, 5, 6 and 8** (Juha, 2026-09-04), with 10 as the final look afterwards. Three of
-those are done; **8 is what remains**. Nothing else
-on this list is Researchers' Night work.
+those are done. **8 moved past the event on 2026-09-15**, and the transition animation — not on this list,
+being filed under *Out of scope for v1* — took its place. Nothing else on this list is Researchers' Night
+work.
 
 **The loose ends that used to sit here are in `TODO_DEFERRED.md` now** (2026-09-04, Juha's call), so that
 this brief lists what the demo requires and nothing else: *"`raven-xdot-viewer` has no actual-size button,
