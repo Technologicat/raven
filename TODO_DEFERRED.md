@@ -6376,3 +6376,27 @@ Low priority: the cause is gone, and the root `conftest.py` now fails any test m
 registry entry the animator is not rendering, so a reintroduction is caught in tests rather than in the GUI.
 
 Discovered while diagnosing four permanently-highlighted chat messages (2026-09-10).
+
+## A better emotion classifier for the avatar, judged at reading speed
+
+*Cluster: avatar · Cost: M · Gate: none · Filed: 2026-09-15 · See also: `raven.server.config.classification_model`*
+
+The avatar's expression comes from `joeddav/distilbert-base-uncased-go-emotions-student`, which is several
+years old, and it misreads things a reader would not: a reply discussing capability *lag* put the avatar in
+`disappointment`, with other odd picks in the same reply. Now that the expression follows speech sentence by
+sentence, each misreading is on screen for as long as its sentence takes to say, so they are more visible
+than when the face followed the streamed text.
+
+**The test case is that reply**: node `gensym#forest-node:805a7010-f9d4-4e53-8277-f3ffd95396ee`, in the
+maintainer's datastore (2026-09-15). Candidate models get run against it, and against whatever else looks
+jarring in the meantime.
+
+**Judge at reading speed, without TTS in the loop** (Juha): a person reads far faster than the voice speaks,
+so waiting for speech to show each sentence's expression is the slow way to compare models. Instead, split
+the reply into sentences the way the TTS preprocessor does, classify each with the candidate model through
+`text.EmotionWindow` as the spoken path uses it, and step through the results in
+`raven-avatar-settings-editor` by driving its emotion picker over `--repl` (`on_send_emotion`, with
+`emotion_choice` set) — the sentence and its expression side by side, at whatever pace the reader likes.
+
+Until then, an emotion that keeps looking wrong can be switched off in `emotion_blacklist`, in
+`raven.librarian.config`.
