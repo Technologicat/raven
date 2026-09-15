@@ -83,14 +83,21 @@ dozed off never spoke, and the speech-off talking animation stopped after a repl
 
 **Queued for the rest of 2026-09-15**, none of them sprint items, before the transition animation:
 
-- ~~**`Ctrl+N` does not give the composer the caret**~~ — **does not reproduce**, measured under five
-  conditions; filed in `TODO_DEFERRED.md` with what was ruled out.
-- ~~**Periodic autosave of the chat datastore and app state**~~ — **done** (`e323bb5a`): every minute, and
-  both saves skip unchanged content, so an idle app writes nothing.
-- **A stray `assistant` opening some replies** — **cause found, not fixed**: one send starts two AI turns
-  milliseconds apart, and the second's request ends on the first's empty assistant node.
-  `investigations/stray-role-header/` has the evidence, the three ways a double send gets through, and what
-  the fix needs deciding. It is demo-relevant: a double send also runs two turns' tool rounds at once.
+- ~~**`Ctrl+N` does not give the composer the caret**~~ — **fixed** (`ba9f2858`). It reproduced as the first
+  action after launch: a tooltip rewritten by the button flash takes a pending `focus_item`.
+  `animation.give_caret` keeps asking; `dpg-notes.md` has the write-up.
+- ~~**Periodic autosave of the chat datastore and app state**~~ — **done** (`e323bb5a`, and minichat in
+  `17c272d6`): every minute, and both saves skip unchanged content, so an idle app writes nothing.
+- ~~**A stray `assistant` opening some replies**~~ — **fixed** (`2f0d7bd4`): one send started two AI turns.
+  `investigations/stray-role-header/`. An empty send is now behind `llm_allow_empty_send`, off by default.
+- **Also landed, from the live testing**: Librarian starts with the keyboard in the chat log
+  (`startup_keyboard_home`), the data eyes hold for `data_eyes_min_duration`, emotions and effects wait for a
+  sleeping avatar's video, and `Ctrl+P` pings the avatar with the notice lines.
+- **Settled without a diff**: an empty send with the setting off still moves focus off the composer, so the
+  user can see the key took (Juha). Not to be "fixed" into leaving the caret put.
+
+**The next session starts on the transition animation** (brief 16, *Animating a change of topology*), then the
+look check (item 10). Search stays past the event.
 
 ### ~~Make `IDLE_SLEEP_S` mean what it says~~ — done 2026-09-11, and it grew a tail
 

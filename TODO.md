@@ -47,7 +47,14 @@ for a constellation carrying this much of an ML stack. Packaging wants looking a
 things. The distribution rename to `raven-lab` therefore keeps its hard gate — a name cannot be corrected
 after publishing — without that gate being on any release path.
 
-## Next session, from 2026-09-10
+## Next session, from 2026-09-16
+
+**Start on brief 16's transition animation** (*Animating a change of topology*, design settled 2026-09-02),
+then the look check (item 10). Search moved past Researchers' Night on 2026-09-15. Everything from the
+2026-09-15 session is committed and pushed, and the tree is clean; what it closed and settled is in
+`briefs/researchers-night/README.md` → *Decided 2026-09-15*.
+
+## Previous session, from 2026-09-10
 
 **Everything the 2026-09-09 session set out to do is done, live-tested, pushed and CI-green**: the framing
 notice is an inject with a preamble slot of its own, the `...N more cards` box walks the older character
