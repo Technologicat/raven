@@ -1512,6 +1512,10 @@ def upgrade_datastore(llm_settings: env,
         # This writes `nodes` directly, so it has to announce a change itself, or a save skipping unchanged
         # data would never persist the migration. Detected by comparison rather than flagged per step, so
         # that a step added later cannot forget to flag. A snapshot costs about 10 ms per few hundred nodes.
+        #
+        # `==` on JSON data compares by value, but ignores key order and does not tell `1` from `1.0` or `True`.
+        # A migration that changes only those goes unsaved until the next real change, which is harmless: the
+        # migrations run again on every load.
         changed = False
         for node in datastore.nodes.values():
             original = copy.deepcopy(node)
