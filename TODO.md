@@ -65,8 +65,8 @@ can be tested.
 **The sprint stands at item 3.** Items 1 and 2 of the build order below are closed. What remains before
 the exhibit:
 
-- **Band-2 item 11, the avatar's expression following the spoken words** — a prototype and a decision
-  rather than a build. The last of the three that were meant to be done by 2026-09-10.
+- ~~**Band-2 item 11, the avatar's expression following the spoken words**~~ — **done 2026-09-15**
+  (`5ce3e114`). Today's remaining queue is in `briefs/researchers-night/README.md` → *Decided 2026-09-15*.
 - **The chat graph's transition animation** (brief 16), which must precede search.
 - ~~**Brief 16 item 8, search in both halves**~~ — **moved past Researchers' Night on 2026-09-15**, a
   first draft before the day being welcome if time remains. The slack items (message editing, the

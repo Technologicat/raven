@@ -76,6 +76,23 @@ spike still open, against about nine working days. Juha's calls:
 **So the remainder is: the item 11 spike, the transition animation, then the look check (item 10)** — with
 a search draft only if time is left after those.
 
+~~**Item 11**~~ **landed the same day** (`5ce3e114`), and the spike's risk did not materialize: with the
+current model and backend, the neutral pause before speech starts is short enough not to matter (Juha,
+live test). The live test also turned up two defects, fixed alongside it — a reply after the avatar had
+dozed off never spoke, and the speech-off talking animation stopped after a reply's first tool round.
+
+**Queued for the rest of 2026-09-15**, none of them sprint items, before the transition animation:
+
+- **`Ctrl+N` does not give the composer the caret**, though `start_new_chat_callback` asks for it.
+  Suspected: the chat view rebuild between them. To be measured through `--repl`.
+- **Periodic autosave of the chat datastore and app state**, with one helper saving both. Librarian saves
+  only at exit today.
+- **A stray `assistant` opening some replies**: three in the datastore, the first on 2026-09-10, all early
+  in a chat and with no thinking. Looks like a chat-template role header leaking; the timing points at
+  `2ec78fbb`, the framing notice moving to an inject, unverified. Evidence copies are in the maintainer's
+  `~/.config/raven/librarian/evidence-2026-09-15-item11/`. Plan: reproduce headlessly with
+  `raven.librarian.agent`, capture a raw request, then bisect the injects against a baseline that leaks.
+
 ### ~~Make `IDLE_SLEEP_S` mean what it says~~ — done 2026-09-11, and it grew a tail
 
 *Hammerspace*, and of the low-density kind: the work is behind a fixed interface — one loop per app, one
