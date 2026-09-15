@@ -299,6 +299,9 @@ def _lookup(container, step: str):
     return None
 
 
+# TODO: once `unpythonic` 2.5.0 is released, replace `_store` and the walk back up in `_apply_one` with
+# `unpythonic.mogrify_in(const(fitted), keys, namespace)` — the same semantics, upstreamed — and raise the
+# `unpythonic` floor in `pyproject.toml`. `_lookup` stays: it resolves JSON's string steps to the real keys.
 def _store(container, key, member):
     """Store `member` in `container` under `key`. Return the container that now holds it.
 
