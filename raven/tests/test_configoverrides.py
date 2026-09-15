@@ -11,6 +11,7 @@ body was `return []`.
 """
 
 import ast
+import dataclasses
 import json
 import pathlib
 from typing import NamedTuple
@@ -279,6 +280,133 @@ def test_a_value_of_the_wrong_shape_leaves_the_default_in_place(write_overrides,
     assert applied == ["a_color"], "the good sibling did not apply either, so this fixture cannot tell a refusal from an inert loader"
     assert namespace[name] == make_namespace()[name]
     assert name in caplog.text
+
+
+@dataclasses.dataclass(frozen=True)
+class _Frozen:
+    """Stands in for a frozen dataclass, the other immutable record a setting might be."""
+    width: int
+    height: int
+
+
+def make_nested_namespace() -> dict:
+    """A stand-in config module's globals, holding the containers a dotted name has to reach through."""
+    return {"devices": {"tts": {"device_string": "cpu"},
+                        "embeddings": {"device_string": "gpu", "dtype": _not_json_expressible}},
+            "pool_sizes": {32: 256, 64: 128},
+            "mixed_keys": {1: "int", "1": "str"},
+            "empty": {},
+            "sizes": [32, 64, 128],
+            "a_range": range(3),  # a sequence with no way to rebuild it from items
+            "a_record": _Frozen(width=768, height=768),
+            "gui_config": env(width=768, timeout=_Timeout(connect=10.0, read=120.0))}
+
+
+def test_a_dotted_name_reaches_inside_a_dict_in_place(write_overrides):
+    """Device selection is a dict of dicts, and the setting most likely to belong to one machine."""
+    path = write_overrides({"raven.demo.config": {"devices.tts.device_string": "gpu"}})
+    namespace = make_nested_namespace()
+    devices, tts = namespace["devices"], namespace["devices"]["tts"]
+    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["devices.tts.device_string"]
+    assert namespace["devices"]["tts"]["device_string"] == "gpu"
+    assert namespace["devices"]["embeddings"]["dtype"] is _not_json_expressible, "a sibling entry was lost"
+    assert namespace["devices"] is devices and namespace["devices"]["tts"] is tts, "a mutable container on the path was replaced rather than updated"
+
+
+def test_a_dotted_name_reaches_a_field_of_a_named_tuple_without_raising(write_overrides):
+    """A `NamedTuple` cannot be assigned into, so it is rebuilt and stored back into the `env` holding it."""
+    path = write_overrides({"raven.demo.config": {"gui_config.timeout.connect": 5}})
+    namespace = make_nested_namespace()
+    gui_config = namespace["gui_config"]
+    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["gui_config.timeout.connect"]
+    assert namespace["gui_config"].timeout == _Timeout(connect=5.0, read=120.0)
+    assert isinstance(namespace["gui_config"].timeout, _Timeout)
+    assert namespace["gui_config"] is gui_config, "the env holding the rebuilt tuple was replaced rather than updated"
+
+
+def test_a_dotted_name_reaches_a_field_of_a_frozen_dataclass(write_overrides):
+    path = write_overrides({"raven.demo.config": {"a_record.width": 1024}})
+    namespace = make_nested_namespace()
+    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["a_record.width"]
+    assert namespace["a_record"] == _Frozen(width=1024, height=768)
+
+
+def test_a_dotted_name_reaches_an_item_of_a_list_by_index(write_overrides):
+    path = write_overrides({"raven.demo.config": {"sizes.1": 96}})
+    namespace = make_nested_namespace()
+    sizes = namespace["sizes"]
+    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["sizes.1"]
+    assert namespace["sizes"] == [32, 96, 128]
+    assert namespace["sizes"] is sizes
+
+
+def test_a_dotted_name_names_an_int_key_by_its_digits(write_overrides):
+    """JSON cannot spell `32`, so the step names the key whose string form it is."""
+    path = write_overrides({"raven.demo.config": {"pool_sizes.32": 512}})
+    namespace = make_nested_namespace()
+    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["pool_sizes.32"]
+    assert namespace["pool_sizes"] == {32: 512, 64: 128}
+    assert "32" not in namespace["pool_sizes"], "a string key was added beside the int one"
+
+
+def test_a_dotted_name_matching_two_keys_is_refused(write_overrides, caplog):
+    path = write_overrides({"raven.demo.config": {"mixed_keys.1": "which?", "pool_sizes.64": 1}})
+    namespace = make_nested_namespace()
+    with caplog.at_level("WARNING", logger="raven.configoverrides"):
+        applied = configoverrides.apply("raven.demo.config", namespace, path=path)
+    assert applied == ["pool_sizes.64"], "the good sibling did not apply either, so this fixture proves nothing"
+    assert namespace["mixed_keys"] == {1: "int", "1": "str"}
+    assert "mixed_keys.1" in caplog.text
+
+
+def test_a_dotted_name_that_cannot_be_written_is_refused_rather_than_raised(write_overrides, caplog):
+    """An override file must not stop an app from starting, whatever the path runs into."""
+    path = write_overrides({"raven.demo.config": {"a_range.0": 5, "sizes.0": 16}})
+    namespace = make_nested_namespace()
+    with caplog.at_level("WARNING", logger="raven.configoverrides"):
+        applied = configoverrides.apply("raven.demo.config", namespace, path=path)
+    assert applied == ["sizes.0"], "the good sibling did not apply either, so this fixture proves nothing"
+    assert namespace["a_range"] == range(3)
+    assert "cannot be set" in caplog.text, "refused before the write was attempted, so this fixture does not reach the store"
+
+
+def test_a_whole_dict_replaces_the_shipped_one(write_overrides):
+    """Replace, not merge: a dict's keys are part of its value, and replacing is the only way to drop one."""
+    path = write_overrides({"raven.demo.config": {"devices": {"tts": {"device_string": "gpu"}}}})
+    namespace = make_nested_namespace()
+    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["devices"]
+    assert namespace["devices"] == {"tts": {"device_string": "gpu"}}
+
+
+def test_a_whole_dict_gets_the_shipped_key_type(write_overrides):
+    """JSON writes every key as a string, and a dict with `"32"` for `32` would miss every lookup."""
+    path = write_overrides({"raven.demo.config": {"pool_sizes": {"32": 64, "128": 16}}})
+    namespace = make_nested_namespace()
+    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["pool_sizes"]
+    assert namespace["pool_sizes"] == {32: 64, 128: 16}
+
+
+@pytest.mark.parametrize("name, bad_value", [("pool_sizes", {"thirty-two": 64}),                           # not an int
+                                             ("mixed_keys", {"2": "which type?"}),                         # key type undetermined
+                                             ("empty", {"a": 1}),                                          # ...nothing to determine it from
+                                             ("devices", {"embeddings": {"dtype": "float16"}}),            # a value inside does not fit
+                                             ("gui_config", {"width": 1024, "timeout": [1, 2]})])          # an env is not replaced wholesale
+def test_a_whole_dict_that_does_not_fit_is_refused(write_overrides, caplog, name, bad_value):
+    path = write_overrides({"raven.demo.config": {name: bad_value, "sizes.0": 16}})
+    namespace = make_nested_namespace()
+    with caplog.at_level("WARNING", logger="raven.configoverrides"):
+        applied = configoverrides.apply("raven.demo.config", namespace, path=path)
+    assert applied == ["sizes.0"], "the good sibling did not apply either, so this fixture cannot tell a refusal from an inert loader"
+    assert namespace[name] == make_nested_namespace()[name]
+    assert name in caplog.text
+
+
+def test_an_empty_dict_may_replace_one(write_overrides):
+    """No keys, so no key type to determine — the refusal above is about ambiguity, not about emptiness."""
+    path = write_overrides({"raven.demo.config": {"devices.tts": {}, "empty": {}}})
+    namespace = make_nested_namespace()
+    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["devices.tts", "empty"]
+    assert namespace["devices"]["tts"] == {}
 
 
 def test_a_malformed_file_is_reported_and_does_not_stop_the_app(tmp_path, caplog):

@@ -26,9 +26,27 @@ The file is `~/.config/raven/overrides.json`, and its top-level keys are config 
         }
     }
 
-A setting named with dots reaches inside whatever the first component holds — `gui_config` in the
-Visualizer's and Librarian's configs is an `unpythonic` `env`, so its fields are addressed that way. One
-rule covers both shapes a config module has, and needs no declaration of which is which.
+The top-level key names the module; the keys inside it name settings in that module. The two are never
+joined into one key.
+
+A setting named with dots reaches inside whatever the first component holds, to any depth, and needs no
+declaration of what that is:
+
+  - **An object's attribute** — `gui_config.word_cloud_w`, `gui_config` in the Visualizer's and
+    Librarian's configs being an `unpythonic` `env`. A `NamedTuple`'s field or a frozen dataclass's is
+    named the same way.
+  - **A mapping's entry**, by its key — `devices.tts.device_string`. JSON spells every key as a string,
+    so a key that is not one is named by its digits: `PLACEHOLDER_POOL_SIZES.32`. A name matching two
+    keys (`1` and `"1"`) is refused.
+  - **A sequence's item**, by its index — `TILE_SIZES.2`.
+
+Whatever holds the setting is updated in place where it can be. An immutable container — a `NamedTuple`,
+a frozen dataclass, a tuple — is rebuilt with the new value and stored back into its own parent, and so on
+up, so everything mutable on the way keeps its identity.
+
+A value naming a whole mapping replaces it rather than merging into it: the keys are part of the value,
+and replacing is the only way to drop one. Its keys are converted to the type the shipped keys have, and a
+mapping whose key type cannot be told — shipped empty, or with keys of mixed types — is refused.
 
 Only settings that already exist can be overridden, and a name matching nothing is reported rather than
 created. That is the whole of the typo protection available here: a `config.py` is Python and a setting
@@ -71,20 +89,23 @@ kept. Give each a distinct name, JSON having nothing to say about two keys spell
 #     from a font size and two paddings, a `User-Agent` from `__version__`. JSON cannot derive anything,
 #     which is also why an override applies to the *derived* name rather than to what it came from.
 #   - **Python values.** `torch.float16`, a `Timeout`, a `pathlib.Path` — some of what these files hold has
-#     no JSON spelling at all. `_coerce` rebuilds the two that can be reconstructed without guessing: a
-#     `pathlib.Path` from a string, and a `NamedTuple` from a mapping or a list. A `torch.dtype` is the
-#     other kind — "float16" could name any number of things — and is refused, the shipped value standing.
+#     no JSON spelling at all. `_coerce` rebuilds what can be reconstructed without guessing: a
+#     `pathlib.Path` from a string, a `NamedTuple` from a mapping or a list, and a mapping's non-string keys
+#     from the type its shipped keys have. A `torch.dtype` is the other kind — "float16" could name any
+#     number of things — and is refused, the shipped value standing.
 #
 # So the split runs along the line where each format is good at its half: `config.py` documents what can be
 # set, and this file records what was.
 
 __all__ = ["OVERRIDES_PATH", "apply"]
 
+from collections.abc import Mapping, MutableMapping, MutableSequence, Sequence
+import dataclasses
 import json
 import logging
 import pathlib
 
-from unpythonic import sym
+from unpythonic import fupdate, sym
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +216,8 @@ def _coerce(default, value, where: str):
         except (AttributeError, TypeError, ValueError) as exc:
             logger.warning(f"_coerce: {where} is a {type(default).__name__}{default._fields} and the override does not fit it: {exc}; ignored, so the shipped default applies.")
             return _refused
+    elif isinstance(default, Mapping) and isinstance(value, dict):
+        return _coerce_mapping(default, value, where)
     elif isinstance(default, tuple) and isinstance(value, list):
         return tuple(value)
     elif isinstance(value, type(default)):
@@ -203,40 +226,129 @@ def _coerce(default, value, where: str):
     return _refused
 
 
+def _coerce_mapping(default: Mapping, value: dict, where: str):
+    """Fit a JSON object to the shape of the shipped mapping `default`, as a whole replacement. Return it, or `_refused`.
+
+    JSON spells every key as a string, so the keys are converted to the type the shipped keys have. Each
+    value whose key the shipped mapping also has is fitted to the shipped value, in turn; a new key's value
+    is taken as it comes, there being nothing to fit it to.
+    """
+    # A mapping in a config file has one key type in practice, so the shipped keys say which — and when
+    # they do not (none to look at, or a mix), a string could mean either, and guessing would quietly
+    # produce a dict whose lookups all miss. `type(...)` rather than `isinstance`, so a `bool` key is not
+    # counted as an `int` one; and only the types a string converts to without ambiguity.
+    key_types = {type(key) for key in default}
+    if value and (len(key_types) != 1 or not key_types <= {str, int, float}):
+        logger.warning(f"_coerce_mapping: {where} ships with keys of type {sorted(t.__name__ for t in key_types) or 'unknown (it is empty)'}, so which type the override's keys should have cannot be told; ignored, so the shipped default applies.")
+        return _refused
+    key_type = key_types.pop() if key_types else str
+
+    fitted = {}
+    for written_key, written_value in value.items():
+        try:
+            key = key_type(written_key)
+        except ValueError:
+            logger.warning(f"_coerce_mapping: {where} has keys of type {key_type.__name__}, and the override's key '{written_key}' is not one; ignored, so the shipped default applies.")
+            return _refused
+        if key in default:
+            written_value = _coerce(default[key], written_value, f"{where}[{key!r}]")
+            if written_value is _refused:
+                return _refused
+        fitted[key] = written_value
+
+    # Through its own class, as for a `NamedTuple` above. A class that cannot be built from a dict — an
+    # `env`, whose fields are keyword arguments — is refused here: its set of fields is what the app reads,
+    # and replacing it wholesale is not something an override should be able to do by accident.
+    try:
+        return type(default)(fitted)
+    except TypeError as exc:
+        logger.warning(f"_coerce_mapping: {where} is a {type(default).__name__}, which cannot be replaced as a whole ({type(exc)}: {exc}); name its entries with a dotted name instead. Ignored, so the shipped default applies.")
+        return _refused
+
+
+def _lookup(container, step: str):
+    """Find the member of `container` that `step` names. Return `(key, member)`, or `None` if there is no unique one.
+
+    A mapping's member is an entry, named by its key as a string — so `32` is named `"32"`, and a mapping
+    holding both `32` and `"32"` has no unique member by that name. A sequence's member is an item, named
+    by its index. Anything else is reached by attribute, which is also how a `NamedTuple`'s fields are named.
+    """
+    if isinstance(container, Mapping):  # an `env` too, whose fields are its keys
+        matches = [key for key in container if str(key) == step]
+        return (matches[0], container[matches[0]]) if len(matches) == 1 else None
+    if isinstance(container, Sequence) and not isinstance(container, (str, bytes)) and step.isdigit():
+        index = int(step)
+        return (index, container[index]) if index < len(container) else None
+    # `hasattr` is asked rather than trusting the write to fail, because an `env` or an ordinary object
+    # accepts a brand-new attribute without complaint — a misspelling would add a field nobody reads.
+    if hasattr(container, step):
+        return step, getattr(container, step)
+    return None
+
+
+def _store(container, key, member):
+    """Store `member` in `container` under `key`. Return the container that now holds it.
+
+    That is `container` itself when it could be updated in place, and a rebuilt copy when it is immutable —
+    which then has to be stored in *its* parent in turn. Raise if neither can be done.
+    """
+    # Same division `unpythonic.mogrify` draws: a mutable container keeps its identity, and only an
+    # immutable one is rebuilt, since there is no in-place update to be had for it. A `NamedTuple` is
+    # genuinely immutable rather than merely lacking an API for it (3.13's `copy.replace` is its `_replace`,
+    # a copy), so rebuilding is the only correct option there, not a shortcut.
+    if isinstance(container, MutableMapping):
+        container[key] = member
+        return container
+    if isinstance(container, Mapping):  # `frozendict`, say
+        return type(container)({**container, key: member})
+    if isinstance(container, MutableSequence):
+        container[key] = member
+        return container
+    if isinstance(container, tuple) and isinstance(key, str):  # a `NamedTuple` field, by name
+        return container._replace(**{key: member})
+    if isinstance(container, Sequence):  # an immutable sequence, by index; `fupdate` rebuilds through `_make` where there is one
+        return fupdate(container, key, member)
+    try:
+        setattr(container, key, member)
+        return container
+    except dataclasses.FrozenInstanceError:
+        return dataclasses.replace(container, **{key: member})
+
+
 def _apply_one(namespace: dict, dotted_name: str, value, module_name: str, path: pathlib.Path) -> bool:
     """Bind one setting, walking `dotted_name` into whatever holds it. Return whether it was applied."""
     where = f"'{dotted_name}' of '{module_name}'"
-    head, *rest = dotted_name.split(".")
 
-    if head not in namespace:
-        logger.warning(f"_apply_one: {where} names nothing in that module (from {path}); ignored.")
-        return False
-
-    # Everything but the last component is a container to reach through; the last is the setting itself.
-    # `hasattr` is asked at every step, because an `env` accepts a brand-new key without complaint, so
-    # nothing downstream would notice a misspelling — it would simply add a field nobody reads.
-    target = namespace[head]
-    for step in rest[:-1]:
-        if not hasattr(target, step):
-            logger.warning(f"_apply_one: {where} names nothing: '{step}' is not in {target!r} (from {path}); ignored.")
+    # Walk down, keeping each container and the key that led out of it: a rebuilt immutable container has
+    # to be stored back into its parent, and the trail is how the way back up is found.
+    trail = []
+    member = namespace
+    for step in dotted_name.split("."):
+        found = _lookup(member, step)
+        if found is None:
+            container_name = "that module" if member is namespace else repr(member)
+            logger.warning(f"_apply_one: {where} names nothing: '{step}' is not in {container_name} (from {path}); ignored.")
             return False
-        target = getattr(target, step)
+        key, next_member = found
+        trail.append((member, key))
+        member = next_member
 
-    if not rest:
-        fitted = _coerce(namespace[head], value, where)
-        if fitted is _refused:
-            return False
-        namespace[head] = fitted
-        return True
-
-    leaf = rest[-1]
-    if not hasattr(target, leaf):
-        logger.warning(f"_apply_one: {where} names nothing: '{leaf}' is not in {target!r} (from {path}); ignored.")
-        return False
-    fitted = _coerce(getattr(target, leaf), value, where)
+    fitted = _coerce(member, value, where)
     if fitted is _refused:
         return False
-    setattr(target, leaf, fitted)
+
+    # Up again, until a container takes the new member in place; everything above that still holds it.
+    # Nothing is mutated before that last store, so a failure anywhere on the way leaves the module as
+    # shipped rather than half-updated.
+    try:
+        for container, key in reversed(trail):
+            updated = _store(container, key, fitted)
+            if updated is container:
+                break
+            fitted = updated
+    except Exception as exc:  # a container this cannot write to; an override file must not stop an app from starting
+        logger.warning(f"_apply_one: {where} cannot be set ({type(exc)}: {exc}) (from {path}); ignored, so the shipped default applies.")
+        return False
     return True
 
 

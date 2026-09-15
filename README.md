@@ -739,7 +739,11 @@ Anything set here wins over the `config.py` that ships with Raven, and the setti
 
 Settings that have no JSON form are simply not overridable this way — Raven says so in the log and keeps the shipped value — and neither is a setting Raven *derives* from another, which has to be overridden in its own right. Those stay `config.py` edits.
 
-- **A dotted name reaches inside a setting that holds other settings.** `gui_config` in the *Visualizer*'s and *Librarian*'s configs is one of those, so its fields are written `gui_config.word_cloud_w`.
+- **The outer key names the module, and the keys inside it name that module's settings.** They are two levels of the file, not one long name.
+- **A dotted name reaches inside a setting that holds other settings**, as deep as it needs to go.
+  - `gui_config` in the *Visualizer*'s and *Librarian*'s configs is one of those, so its fields are written `gui_config.word_cloud_w`.
+  - The same works for a dictionary's entries, so one device can be moved without restating the rest: `"devices.tts.device_string": "gpu"` in `raven.client.config`. A number used as a key is written as its digits (`PLACEHOLDER_POOL_SIZES.32`), and an item of a list by its position, counting from zero (`TILE_SIZES.2`).
+  - Writing a whole dictionary instead *replaces* it, so any entry you leave out is gone. That is how to remove one, and the reason to prefer a dotted name when you mean to change a single entry.
 - **A name beginning with `//` is commented out**, and is ignored in silence. JSON has no comments of its own, and a settings file is where you keep the alternative you switch to occasionally as well as the answer you are using today:
 
   ```json
