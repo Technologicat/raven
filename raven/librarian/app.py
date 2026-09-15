@@ -2996,11 +2996,11 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     docs_search_progress_text_widget="docs_search_progress_text",
                                     web_indicator_widget=web_indicator_group,
                                     is_any_modal_window_visible=is_any_modal_window_visible,
-                                    # Asked of the renderer, which owns the answer, rather than of
-                                    # whichever pane happens to have taken the space. The two agree
-                                    # today; only one of them keeps agreeing when a third occupant of
-                                    # the avatar column arrives.
-                                    avatar_panel_covered=(lambda: not dpg_avatar_renderer.is_shown),
+                                    # The user's choice, not whether the renderer is shown. The graph also
+                                    # stands in for an avatar whose video is off or still warming up, and
+                                    # that absence clears itself: speaking wakes the avatar, the video
+                                    # returns, and the graph steps aside with the captions visible again.
+                                    avatar_panel_covered=(lambda: app_state["chat_graph_shown"]),
                                     executor=bg)
 
 def _get_cleanup_roots() -> tuple[str, ...]:

@@ -4021,11 +4021,14 @@ class DPGChatController:
                                        opens. The app layer owns the list of its own dialogs, and this layer
                                        must not import it, so it arrives as a callable.
 
-        `avatar_panel_covered`: Zero-argument predicate: is something else currently occupying the avatar's
+        `avatar_panel_covered`: Zero-argument predicate: has the user put something else in the avatar's
                                 panel? `None` means never. When it answers `True`, the avatar and the
                                 subtitles drawn in its rect are both off screen, and a reply that would be
                                 captioned does not start speaking of its own accord. An explicit request
                                 — `Ctrl+S`, or a message's speak button — still speaks.
+
+                                Something standing in for an avatar that is merely asleep should not count:
+                                speaking wakes the avatar, and the captions come back with its video.
 
                                 Like `is_any_modal_window_visible`, a callable rather than a value: the app
                                 layer owns its panels and this layer must not import it.
