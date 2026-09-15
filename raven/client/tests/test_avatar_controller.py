@@ -1,4 +1,5 @@
-"""Two avatar effects whose contracts a caller cannot verify locally.
+"""Avatar controller contracts a caller cannot verify locally: two effects, the video's availability, and
+setting an emotion on an avatar that may be asleep.
 
 The **data eyes** say "the system is consulting an external source", and more than one thing can be doing
 that at once: a turn's tool call runs on the turn's thread while an attachment is read on a background one.
@@ -13,6 +14,7 @@ No server and no GUI: the API calls are replaced, and only the bookkeeping is un
 *looks* is a matter for the eye, and its parameters are tuned by looking rather than asserted here.
 """
 
+import concurrent.futures
 import threading
 import time
 
@@ -389,3 +391,87 @@ def test_an_idle_paused_avatar_has_nothing_to_show_until_the_next_ping(video_con
     controller.ping(config)
     assert renderer.actions == ["resume"]
     assert controller.video_available(config)
+
+
+# --------------------------------------------------------------------------------
+# Setting an emotion on an avatar that may be asleep
+#
+# An emotion set while the video is off changes while nobody can see it, and an effect it triggers plays out
+# before the first frame. So `set_emotion` wakes the avatar and applies the emotion once the video is back.
+
+@pytest.fixture
+def emotion_config(monkeypatch, video_config):
+    """`video_config`, plus a recorded `avatar_set_emotion` and a real task manager for the wait."""
+    controller, config, renderer = video_config
+    sent = []
+    monkeypatch.setattr(avatar_controller.api, "avatar_set_emotion", lambda instance_id, emotion_name: sent.append(emotion_name))
+    controller.emotion_wait_task_manager = avatar_controller.bgtask.TaskManager(name="test_emotion_wait", mode="concurrent",
+                                                                                executor=concurrent.futures.ThreadPoolExecutor())
+    config._emotion_lock = threading.Lock()
+    config._pending_emotion = None
+    config._emotion_waiting = False
+    config._current_emotion = "neutral"
+    config._emotion_autoreset_t0 = 0
+    yield controller, config, renderer, sent
+    controller.emotion_wait_task_manager.clear(wait=True)
+
+
+def _wait_for(predicate, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def test_an_awake_avatar_gets_the_emotion_at_once(emotion_config):
+    controller, config, renderer, sent = emotion_config
+    controller.set_emotion(config, "surprise")
+    assert sent == ["surprise"]
+    assert config._emotion_autoreset_t0 > 0, "the autoreset timer was not restarted"
+
+
+def test_an_avatar_with_no_stream_gets_the_emotion_at_once(emotion_config):
+    controller, config, renderer, sent = emotion_config
+    renderer.avatar_instance_id = None  # nothing is coming to wait for
+    controller.set_emotion(config, "surprise")
+    assert sent == ["surprise"]
+
+
+def test_a_sleeping_avatar_is_woken_and_gets_the_latest_emotion_when_its_video_is_back(emotion_config):
+    controller, config, renderer, sent = emotion_config
+    config._idle_paused = True
+    renderer.animator_running = False
+    renderer.first_frame_received = False  # the woken stream has not delivered a frame yet
+
+    controller.set_emotion(config, "curiosity")
+    controller.set_emotion(config, "surprise")
+    assert renderer.actions == ["resume"], "the avatar was not woken"
+    time.sleep(0.2)
+    assert sent == [], "the emotion was sent while the video was still off"
+
+    renderer.first_frame_received = True
+    assert _wait_for(lambda: sent), "the emotion never arrived once the video was back"
+    assert sent == ["surprise"], "an emotion superseded while waiting was applied too"
+
+
+def test_a_wait_that_runs_out_applies_the_emotion_anyway(emotion_config, monkeypatch):
+    controller, config, renderer, sent = emotion_config
+    monkeypatch.setattr(avatar_controller, "_EMOTION_VIDEO_WAIT_TIMEOUT", 0.2)
+    config._video_suppressed = True  # a ping does not resume a suppressed video, so it never comes back
+    config._idle_paused = True
+    renderer.animator_running = False
+    controller.set_emotion(config, "surprise")
+    assert sent == []
+    assert _wait_for(lambda: sent == ["surprise"]), "a wait that ran out dropped the emotion"
+
+
+def test_an_emotion_applied_directly_cancels_one_still_waiting(emotion_config):
+    controller, config, renderer, sent = emotion_config
+    renderer.first_frame_received = False
+    controller.set_emotion(config, "curiosity")  # waits
+    renderer.first_frame_received = True
+    controller.set_emotion(config, "surprise")  # video is back: applied at once
+    time.sleep(0.3)
+    assert sent == ["surprise"], "the older emotion was applied after the newer one"
