@@ -5,6 +5,7 @@ __all__ = ["action_continue", "action_finish", "action_cancel",  # return values
            "Animation", "Overlay",  # base classes
            "Dimmer",  # overlays
            "WidgetFlash", "flash_button", "highlight_widget", "set_text_under_flash",  # the flash animation, its two conveniences, and writing to a widget one has borrowed
+           "CaretRequest", "give_caret",  # putting the caret in a text field, against whatever else claims focus
            "SmoothScrolling",  # animations
            "pulsating_alpha", "pulsation_envelope",  # utilities: the alpha a pulsating animation yields, and the curve it follows
            "PulsatingColor",  # ...which this one uses
@@ -890,6 +891,64 @@ def set_text_under_flash(widget: Union[str, int, object], text: str) -> None:
                 flash.original_message = text
                 return
     _write_text(widget, text)
+
+# --------------------------------------------------------------------------------
+
+# How many frames `give_caret` keeps asking before it gives up. Measured: a request lost to a tooltip took
+# three frames to land when re-issued, so this leaves plenty of room without asking forever.
+_CARET_REQUEST_MAX_FRAMES = 10
+
+def _shown_all_the_way_up(item: str | int) -> bool:
+    """Whether `item` and every container above it, up to its window, is shown."""
+    while item:
+        if not dpg.is_item_shown(item):
+            return False
+        item = dpg.get_item_parent(item)
+    return True
+
+class CaretRequest(Animation):
+    """Give a text field the caret, and keep asking each frame until it has it. See `give_caret`."""
+
+    def __init__(self, field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES):
+        super().__init__()
+        self.field = field
+        self.frames_left = max_frames
+
+    def render_frame(self, t: int) -> sym:
+        with guiutils.nonexistent_ok():
+            if dpg.is_item_active(self.field):
+                return action_finish
+            if self.frames_left <= 0:
+                logger.debug(f"CaretRequest.render_frame: gave up giving '{self.field}' the caret: still not active after the last of its frames.")
+                return action_cancel
+            # Hidden since the request was made: asking again would only pull focus toward a window nobody
+            # can see.
+            if not _shown_all_the_way_up(self.field):
+                logger.debug(f"CaretRequest.render_frame: gave up giving '{self.field}' the caret: it is no longer shown.")
+                return action_cancel
+            self.frames_left -= 1
+            dpg.focus_item(self.field)
+            return action_continue
+        return action_cancel  # reached only when the field has gone away
+
+def give_caret(field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) -> CaretRequest | None:
+    """Put the caret in the text field `field` (DPG tag or ID), even if something else claims focus meanwhile.
+
+    Use in place of `dpg.focus_item` wherever the point is to let the user type. Asks at once, and then, while
+    the field is shown, once per frame until it is active, for at most `max_frames` frames. A field that is
+    not shown gets the single request and no more. Callable from any thread.
+
+    Returns the `CaretRequest` the global `animator` runs, or `None` if the field is not shown.
+    """
+    # A single `focus_item` is a request ImGui applies on a later frame, and a window shown in between takes
+    # the focus instead: a `tooltip.Tooltip` measuring new text does exactly that, for two frames, whatever
+    # its `no_focus_on_appearing` says. So the request is repeated until it has visibly landed. See
+    # `investigations/dpg-focus/focus_request_vs_tooltip_probe.py`.
+    with guiutils.nonexistent_ok():
+        dpg.focus_item(field)
+        if _shown_all_the_way_up(field):
+            return animator.add(CaretRequest(field, max_frames=max_frames))
+    return None
 
 # --------------------------------------------------------------------------------
 

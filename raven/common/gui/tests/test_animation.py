@@ -524,6 +524,48 @@ class TestDeduplication:
 # SmoothScrolling: what a retarget adopts
 # ---------------------------------------------------------------------------
 
+class TestGiveCaret:
+    """When a caret request goes on asking, and when it stops. Whether it *lands* against a competing window
+    needs rendered frames, and is `test_focus_semantics.py`'s."""
+
+    @pytest.fixture
+    def field_window(self, dpg_context):
+        with dpg.window() as window:
+            field = dpg.add_input_text()
+        yield window, field
+        animation.animator.clear()
+        dpg.delete_item(window)
+
+    def test_a_shown_field_gets_a_request_that_keeps_asking(self, field_window):
+        window, field = field_window
+        request = animation.give_caret(field)
+        assert isinstance(request, animation.CaretRequest)
+        assert request in animation.animator._animations
+        assert request.render_frame(time.monotonic_ns()) is animation.action_continue
+
+    def test_a_field_in_a_hidden_window_gets_one_request_and_no_more(self, field_window):
+        # A `FileDialog` sets its find field's caret while it is being built, hidden: asking again every frame
+        # would pull focus toward a window nobody can see.
+        window, field = field_window
+        dpg.hide_item(window)
+        assert animation.give_caret(field) is None
+        assert not any(isinstance(a, animation.CaretRequest) for a in animation.animator._animations)
+
+    def test_a_request_stops_asking_once_its_window_is_hidden(self, field_window):
+        window, field = field_window
+        request = animation.give_caret(field)
+        assert request.render_frame(time.monotonic_ns()) is animation.action_continue, \
+            "the request stopped while its window was still shown, so this cannot tell hiding apart"
+        dpg.hide_item(window)
+        assert request.render_frame(time.monotonic_ns()) is animation.action_cancel
+
+    def test_a_request_gives_up_after_its_frames(self, field_window):
+        window, field = field_window
+        request = animation.give_caret(field, max_frames=3)
+        results = [request.render_frame(time.monotonic_ns()) for _ in range(4)]
+        assert results == [animation.action_continue] * 3 + [animation.action_cancel]
+
+
 @pytest.fixture
 def scroll_target(dpg_context):
     """A child window to scroll, plus a clean `SmoothScrolling.instances` before and after."""

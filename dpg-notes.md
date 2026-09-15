@@ -1247,6 +1247,29 @@ Since 2026-08-18 it is also *pinned*, by `test_a_focused_button_ignores_the_keys
 
 So this is the third distinct case in DPG's focus model, and the mildest: a child window *cannot* be focused and does harm when asked, a button focuses normally, and a menu item quietly declines. Anything built from menu items — `fdialog`'s places panel is — cannot use the focus-dispatch idiom, and needs either a drawn cursor with a mode flag, or a real focusable widget inside it to hold the focus on the panel's behalf.
 
+## A `focus_item` still pending is lost to a window being shown
+
+**A `focus_item` request lands on a later frame, and a window shown in between takes the focus instead.**
+Measured 2026-09-15 on DearPyGui 2.3.1, where it made Raven-librarian's New chat leave the composer without
+the caret: New chat asks for the caret and then flashes its button, the flash rewrites the button's
+`tooltip.Tooltip`, and a `Tooltip` measuring new text shows its window offscreen for two frames. During
+those frames that window reports `is_item_focused` True — **`no_focus_on_appearing=True` notwithstanding** —
+and the request never lands.
+
+- **A field that already has the caret keeps it.** Only a request still pending is lost. Pinned by
+  `test_rewriting_a_tooltip_does_not_cost_the_caret`.
+- **It reproduces in a fresh context, with the window built before the first frame** — an app's state at
+  launch — from both a field holding untouched navigation focus and focus parked on a button. It did *not*
+  reproduce in the shared `--run-gui` context, with the window built after rendering had started. What
+  separates the two was not isolated; ruled out were a child window ahead of the field, the new text being
+  longer, parking on the tooltip's own target, and the field having held the caret before.
+- **The remedy is to keep asking**: `raven.common.gui.animation.give_caret` re-issues the request each frame
+  until the field is active. Against the tooltip it landed within three frames.
+
+`investigations/dpg-focus/focus_request_vs_tooltip_probe.py` runs the arms. The regression test is
+`test_give_caret_lands_where_a_plain_focus_request_is_swallowed_by_a_tooltip_rewrite`, which runs its case
+in a subprocess with a fresh context for the reason above.
+
 ## What still reaches a global handler while a single-line field holds the caret
 
 Nearly everything, which is what makes a keyboard-operable dialog possible at all with focus parked in a

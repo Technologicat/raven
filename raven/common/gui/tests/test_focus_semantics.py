@@ -36,8 +36,10 @@ dialog would commit and close instead of stepping into the directory, which in s
 file. The arrow keys would be unaffected; a button has nothing to do with them either way.
 """
 
+import pathlib
 import shutil
 import subprocess
+import sys
 import time
 
 import pytest
@@ -348,3 +350,32 @@ def test_rewriting_a_tooltip_does_not_cost_the_caret(widgets):
 
     assert dpg.is_item_active(widgets.field) is True, \
         "rewriting a tooltip took the caret out of a text field that had it"
+
+
+def _focus_request_in_a_fresh_context(how: str) -> bool:
+    """Whether the field got the caret, asked for `how` ("plain" or "give_caret"), in a fresh-launch state.
+
+    Run in a process of its own: see `focus_request_subprocess.py` for why it cannot be done here.
+    """
+    script = pathlib.Path(__file__).with_name("focus_request_subprocess.py")
+    completed = subprocess.run([sys.executable, str(script), how], capture_output=True, text=True, timeout=120)
+    lines = [line for line in completed.stdout.splitlines() if line.startswith("RESULT ")]
+    assert lines, f"the subprocess reported nothing (exit {completed.returncode}):\n{completed.stderr[-2000:]}"
+    return lines[-1] == "RESULT active=True"
+
+
+def test_give_caret_lands_where_a_plain_focus_request_is_swallowed_by_a_tooltip_rewrite(mapped_gui_context):
+    """A text field only asked for the caret loses the request to a `Tooltip` rewriting its text meanwhile.
+
+    `focus_item` is applied on a later frame, and the tooltip shows its window for the frames it measures in.
+    Raven-librarian's New chat did exactly that — focus the composer, then flash the button with a message in
+    its tooltip — and at a fresh launch the composer never got the caret. `test_rewriting_a_tooltip_does_not_
+    cost_the_caret` is the other half: a field that already *has* the caret keeps it.
+
+    The first assertion is the control. If it starts failing, DPG has stopped swallowing the request, and
+    `animation.give_caret` has become unnecessary.
+    """
+    assert _focus_request_in_a_fresh_context("plain") is False, \
+        "a plain request survived the rewrite, so this cannot tell `give_caret` from `focus_item`"
+    assert _focus_request_in_a_fresh_context("give_caret") is True, \
+        "`give_caret` was swallowed by the tooltip's rewrite too"

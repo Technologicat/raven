@@ -215,7 +215,7 @@ with timer() as tim:
         current = dpg.get_value("chat_field")  # tag
         separator = "" if (not current or current.endswith((" ", "\n"))) else " "
         dpg.set_value("chat_field", f"{current}{separator}{url}")  # tag
-        dpg.focus_item("chat_field")  # tag
+        gui_animation.give_caret("chat_field")  # tag
     dpg_markdown.set_url_secondary_action(_append_url_to_chat_input,
                                           glyph=fa.ICON_ARROW_RIGHT_TO_BRACKET,
                                           font=themes_and_fonts.icon_font_solid,
@@ -1944,7 +1944,9 @@ with timer() as tim:
                         # avatar was in.
                         chat_controller.mark_discontinuity()
                         chat_controller.view.build()
-                        dpg.focus_item("chat_field")  # tag  # Focus the chat field for convenience, since the whole point of a new chat is to immediately start a new conversation.
+                        # The flash below rewrites the button's tooltip, and a tooltip measuring new text takes a
+                        # plain `focus_item` request for itself, so ask in the way that keeps asking.
+                        gui_animation.give_caret("chat_field")  # tag  # Focus the chat field for convenience, since the whole point of a new chat is to immediately start a new conversation.
                         # Acknowledge the action in the GUI.
                         gui_animation.flash_button(button=new_chat_button,
                                                    message="New chat started!",
@@ -2629,7 +2631,7 @@ def _cycle_keyboard_home(backwards: bool = False) -> None:
     # ImGui text field from the outside. A button is the safe place to park: DPG leaves ImGui's keyboard
     # navigation activation off, so a focused button ignores Space and Enter rather than pressing itself.
     if target == "composer":
-        dpg.focus_item("chat_field")  # tag
+        gui_animation.give_caret("chat_field")  # tag
         chat_graph_panel.has_keyboard = False
     elif target == "graph":
         _give_keyboard_to_graph()
@@ -2805,7 +2807,7 @@ def librarian_hotkeys_callback(sender, app_data):
     # Ctrl+...
     elif ctrl_pressed:
         if key == dpg.mvKey_Spacebar:
-            dpg.focus_item("chat_field")  # tag
+            gui_animation.give_caret("chat_field")  # tag
         # The send chord, when it is the composer that is *not* holding the caret. While it is, the field
         # commits and this fires on the same keypress; `_request_send` is what makes that one send.
         elif key == dpg.mvKey_Return and librarian_config.send_message_key == "ctrl+enter":

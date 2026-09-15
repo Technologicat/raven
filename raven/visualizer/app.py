@@ -786,7 +786,7 @@ with timer() as tim:
                                                f"{_SEARCH_FIELD_DEACTIVATION_FRAME_LIMIT} frames; clearing it will not take.")
                         dpg.set_value("search_field", "")  # tag
                         search.update()  # we should wait, because this button may get hammered.
-                        dpg.focus_item("search_field")  # tag
+                        gui_animation.give_caret("search_field")  # tag
                     dpg.add_button(label=fa.ICON_X, callback=clear_search, tag="clear_search_button")
                     dpg.bind_item_font("clear_search_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                     with dpg.tooltip("clear_search_button", tag="clear_search_tooltip"):  # tag
@@ -1386,7 +1386,7 @@ def hotkeys_callback(sender, app_data):
     # Ctrl+...
     elif ctrl_pressed:
         if key == dpg.mvKey_F:
-            dpg.focus_item("search_field")  # tag
+            gui_animation.give_caret("search_field")  # tag
         elif key == dpg.mvKey_O:
             show_open_file_dialog()
         elif key == dpg.mvKey_I:

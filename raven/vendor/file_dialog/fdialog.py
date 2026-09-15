@@ -2956,7 +2956,7 @@ class FileDialog:
     def _focus_field(self) -> None:
         """Put the caret back in the find field, where typing filters the listing."""
         self._caret_home = CaretHome.FIELD
-        dpg.focus_item(self.search_field)
+        gui_animation.give_caret(self.search_field)
 
     def _focus_path_field(self) -> None:
         """Put the caret in the path field, where a folder is pasted or a short root typed.
@@ -2971,7 +2971,7 @@ class FileDialog:
         # remembers the home it is displacing, and by the time it runs this line has already displaced it.
         self._home_before_path = self._caret_home
         self._caret_home = CaretHome.PATH
-        dpg.focus_item(self.path_field)
+        gui_animation.give_caret(self.path_field)
 
     def _abandon_path_draft(self) -> None:
         """Escape from the path field: put back where we actually are, and hand the caret to the find field."""

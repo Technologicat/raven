@@ -162,6 +162,15 @@ because both land in `raven/common/gui/animation.py` and are better done togethe
   section above. Two multiline fields, one per `send_message_key` setting. Added 2026-08-28, DPG 2.3.1.
   About fifteen seconds.
 
+- `focus_request_vs_tooltip_probe.py` — whether a `focus_item` still pending survives a `Tooltip` rewriting
+  its text in the same frames. It does not: the tooltip's offscreen measurement shows its window and takes
+  the focus, from a fresh-launch state and from focus parked on a button alike, while a request re-issued
+  each frame lands within three. Environment switches vary one thing at a time (`PROBE_CHILD_PANEL`,
+  `PROBE_NEW_TEXT`, `PROBE_PARK_ON_TOOLTIP_TARGET`). Each arm runs in its own process. Added 2026-09-15,
+  DPG 2.3.1, when Raven-librarian's New chat was found leaving the composer without the caret. Takes the
+  keyboard for a few seconds. The write-up is `dpg-notes.md` → "A `focus_item` still pending is lost to a
+  window being shown".
+
 - `catch_visual_flash.sh` — not a probe but the instrument that worked when three probes did not. Records a
   running app's window with `ffmpeg -f x11grab` at 60 fps and ranks the frames by how much the region of
   interest stands out, so a 25–100 ms artifact can be found and looked at. Screenshots cannot: `import`
