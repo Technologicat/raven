@@ -5270,6 +5270,7 @@ class DPGChatController:
 
                 def on_done(node_id: str) -> None:
                     task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
+                    task_env.seen_content = False  # re-arm the talking animation for it too, since the animation is stopped below
                     if not turn_owns_the_view():
                         # The user has navigated away. The reply is written and stays where it belongs, on
                         # the branch it was generated for; what must not happen is this turn dragging the
