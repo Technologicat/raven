@@ -1,7 +1,7 @@
 """Miscellaneous general utilities."""
 
 __all__ = ["absolutize_filename", "canonical_path",
-           "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
+           "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory", "atomic_write",
            "user_directory",
            "open_file", "open_in_file_manager",
            "make_blank_index_array", "bail",
@@ -17,6 +17,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import atexit
+import contextlib
 import functools
 import io
 import os
@@ -24,7 +25,8 @@ import pathlib
 import re
 import subprocess
 import sys
-from typing import Any, Callable, Dict, List, NoReturn, Optional, Union
+import tempfile
+from typing import IO, Any, Callable, Dict, Iterator, List, NoReturn, Optional, Union
 import unicodedata
 
 import numpy as np
@@ -108,6 +110,55 @@ def validate_cache_mtime(cachefullpath: Union[str, pathlib.Path], origfullpath: 
 def create_directory(path: Union[str, pathlib.Path]) -> None:
     p = pathlib.Path(path).expanduser().resolve()
     pathlib.Path.mkdir(p, parents=True, exist_ok=True)
+
+@contextlib.contextmanager
+def atomic_write(path: Union[str, pathlib.Path],
+                 mode: str = "w",
+                 encoding: str | None = "utf-8") -> Iterator[IO]:
+    """Write a file so that readers see either its previous content or the new one, never a partial file.
+
+    Use like `open`::
+
+        with atomic_write(path) as f:
+            json.dump(data, f)
+
+    The file is replaced only when the block exits normally. If it raises, the previous content stays as it
+    was, and the exception propagates.
+
+    `path`: The file to write. A symlink is followed, so its target is what gets replaced. The directory must
+            exist.
+
+    `mode`: `"w"` for text, `"wb"` for bytes.
+
+    `encoding`: For text mode. Ignored in binary mode.
+    """
+    # Written to a sibling temp file and moved into place, because the obvious form - open the real file for
+    # writing and serialize into it - truncates it as its first act. A process that dies anywhere in the
+    # write then leaves a fragment where the previous content used to be.
+    #
+    # `os.replace` is atomic only within a filesystem, so the temp file is created in the destination's own
+    # directory rather than in the system temp area, which may be a different mount.
+    if mode not in ("w", "wb"):
+        raise ValueError(f"atomic_write: `mode` must be 'w' or 'wb'; got {mode!r}")
+    absolute_path = pathlib.Path(path).expanduser().resolve()
+    temporary_file = tempfile.NamedTemporaryFile(mode=mode,  # noqa: SIM115 -- it *is* entered as a context manager below; the name has to outlive that block so the failure path can find the file to unlink
+                                                 encoding=(encoding if mode == "w" else None),
+                                                 dir=absolute_path.parent,
+                                                 prefix=f"{absolute_path.name}.",
+                                                 suffix=".tmp",
+                                                 delete=False)
+    try:
+        with temporary_file as f:
+            yield f
+            f.flush()
+            os.fsync(f.fileno())  # the bytes must be on disk before the name points at them
+        os.replace(temporary_file.name, absolute_path)
+    except BaseException:
+        # Includes KeyboardInterrupt and SystemExit: saves run at interpreter exit, where those are live
+        # possibilities, and leaving a stray `*.tmp` behind on every one of them would accumulate beside the file.
+        with contextlib.suppress(OSError):
+            os.unlink(temporary_file.name)
+        raise
 
 # def clear_and_create_directory(path: str) -> None:
 #     delete_directory_recursively(path)

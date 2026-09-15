@@ -441,6 +441,34 @@ class TestSave:
         with pytest.raises(KeyError):
             appstate.save(state_path, state)
 
+    def test_a_save_that_dies_partway_leaves_the_previous_state_intact(self, tmp_path, llm_settings, monkeypatch):
+        # Saves happen periodically during a session, so a crash mid-write is no longer confined to exit.
+        _, state, _, state_path = _load(tmp_path, llm_settings)
+        survivor = state_path.read_text(encoding="utf-8")
+        assert survivor, "nothing was saved, so this fixture cannot tell a kept file from a lost one"
+
+        def die_partway(*args, **kwargs):
+            raise RuntimeError("interrupted mid-dump")
+        monkeypatch.setattr(appstate.json, "dump", die_partway)
+
+        state["show_thinking"] = not state["show_thinking"]
+        with pytest.raises(RuntimeError):
+            appstate.save(state_path, state)
+        assert state_path.read_text(encoding="utf-8") == survivor
+
+
+class TestPersist:
+    def test_saves_the_datastore_and_the_state(self, tmp_path, llm_settings):
+        datastore, state, datastore_path, state_path = _load(tmp_path, llm_settings)
+        new_node = datastore.create_node({"role": "user", "content": "written during the session"},
+                                         parent_id=state["HEAD"])
+        state["HEAD"] = new_node
+
+        appstate.persist(datastore, state_path, state)
+
+        assert new_node in datastore_path.read_text(encoding="utf-8"), "the datastore was not saved"
+        assert json.loads(state_path.read_text(encoding="utf-8"))["HEAD"] == new_node, "the state was not saved"
+
 
 # ---------------------------------------------------------------------------
 # Numeric settings (the audio input tuning), as opposed to the boolean flags

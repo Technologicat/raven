@@ -103,6 +103,58 @@ class TestValidateCacheMtime:
         assert utils.validate_cache_mtime(str(cache), str(orig)) is False
 
 
+class TestAtomicWrite:
+    def test_writes_text(self, tmp_path):
+        target = tmp_path / "state.json"
+        with utils.atomic_write(target) as f:
+            f.write("héllo")
+        assert target.read_text(encoding="utf-8") == "héllo"
+
+    def test_writes_bytes(self, tmp_path):
+        target = tmp_path / "blob.bin"
+        with utils.atomic_write(target, mode="wb") as f:
+            f.write(b"\x00\x01")
+        assert target.read_bytes() == b"\x00\x01"
+
+    def test_replaces_existing_content(self, tmp_path):
+        target = tmp_path / "state.json"
+        target.write_text("old", encoding="utf-8")
+        with utils.atomic_write(target) as f:
+            f.write("new")
+        assert target.read_text(encoding="utf-8") == "new"
+
+    @pytest.mark.parametrize("exc_type", [RuntimeError, KeyboardInterrupt])
+    def test_a_write_that_dies_partway_keeps_the_previous_content(self, tmp_path, exc_type):
+        # KeyboardInterrupt too: saves run at interpreter exit, where it is a live possibility.
+        target = tmp_path / "state.json"
+        target.write_text("previous", encoding="utf-8")
+        with pytest.raises(exc_type):
+            with utils.atomic_write(target) as f:
+                f.write("a fragment")
+                f.flush()
+                raise exc_type()
+        assert target.read_text(encoding="utf-8") == "previous"
+        assert list(tmp_path.iterdir()) == [target], f"a temp file was left behind: {list(tmp_path.iterdir())}"
+
+    def test_a_symlink_has_its_target_replaced(self, tmp_path):
+        real = tmp_path / "real.json"
+        real.write_text("old", encoding="utf-8")
+        link = tmp_path / "link.json"
+        try:
+            link.symlink_to(real)
+        except OSError:  # Windows without the privilege to create symlinks
+            pytest.skip("cannot create a symlink here")
+        with utils.atomic_write(link) as f:
+            f.write("new")
+        assert link.is_symlink(), "the link itself was replaced by a regular file"
+        assert real.read_text(encoding="utf-8") == "new"
+
+    def test_rejects_other_modes(self, tmp_path):
+        with pytest.raises(ValueError):
+            with utils.atomic_write(tmp_path / "x", mode="a"):
+                pass
+
+
 class TestOsOpen:
     """`open_file` / `open_in_file_manager` cross-platform dispatch and unified error contract.
 

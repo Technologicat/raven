@@ -10,7 +10,7 @@ __all__ = ["configured_defaults",
            "refresh_system_prompt",
            "load",
            "backfill_sidecar_metadata",
-           "save"]
+           "save", "persist"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ from typing import Dict, Tuple, Union
 from unpythonic.env import env
 
 from ..client import config as client_config
+from ..common import utils as common_utils
 
 from . import chattree
 from . import chatutil
@@ -508,7 +509,21 @@ def save(state_file: Union[str, pathlib.Path],
     mayberel_state_file = state_file
     state_file = pathlib.Path(state_file).expanduser().resolve()
 
-    with open(state_file, "w", encoding="utf-8") as json_file:
-        json.dump(state, json_file, indent=2)
+    # A copy, because GUI threads write flags into `state` while a periodic save may be iterating it. The
+    # values are scalars, so a shallow copy is the whole snapshot.
+    with common_utils.atomic_write(state_file) as json_file:
+        json.dump(dict(state), json_file, indent=2)
 
     logger.info(f"save: Saved app state to '{mayberel_state_file}' (resolved to '{state_file}').")
+
+def persist(datastore: chattree.PersistentForest,
+            state_file: Union[str, pathlib.Path],
+            state: Dict) -> None:
+    """Save the chat datastore, and then the app state, each to its own file.
+
+    `datastore`, `state_file`, `state`: As returned by, and passed to, `load`.
+
+    For saving during a session, e.g. periodically. At app exit both are saved automatically; see `load`.
+    """
+    datastore.save()
+    save(state_file=state_file, state=state)
