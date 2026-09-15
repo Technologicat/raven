@@ -1509,7 +1509,12 @@ def upgrade_datastore(llm_settings: env,
         # up-to-date list (since `PersistentForest` auto-upgrades upon loading if the data format has changed).
         system_keys = set(datastore.nodes[system_prompt_node_id].keys())
 
+        # This writes `nodes` directly, so it has to announce a change itself, or a save skipping unchanged
+        # data would never persist the migration. Detected by comparison rather than flagged per step, so
+        # that a step added later cannot forget to flag. A snapshot costs about 10 ms per few hundred nodes.
+        changed = False
         for node in datastore.nodes.values():
+            original = copy.deepcopy(node)
             payload_revisions = node["data"]  # {revision_id: payload, ...}
 
             # v0.2.3: Upgrade payload format
@@ -1552,6 +1557,11 @@ def upgrade_datastore(llm_settings: env,
                 _migrate_tool_call_id(payload)
                 _migrate_content_to_parts(message)  # wrap legacy string content as parts (runs last, since it changes the shape)
                 _migrate_text_file_source(payload)  # needs the parts list, so it runs after the shape change
+
+            changed = changed or (node != original)
+
+        if changed:
+            datastore.touch()
 
 def factory_reset_datastore(datastore: chattree.Forest, llm_settings: env) -> str:
     """Reset `datastore` to its "factory-default" state.

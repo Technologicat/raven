@@ -781,8 +781,7 @@ class TestPersistentForestSavesOnlyChanges:
         pf.save()
         assert len(writes) == 2, "a changed forest was not written"
 
-    def test_the_first_save_after_loading_writes(self, tmp_path, monkeypatch):
-        # Load-time migrations can change the forest without advancing its counter.
+    def test_a_loaded_forest_needing_no_upgrade_is_not_written(self, tmp_path, monkeypatch):
         filepath = tmp_path / "forest.json"
         pf1 = PersistentForest(datastore_file=filepath)
         pf1.create_node({"role": "system", "content": "hello"}, parent_id=None)
@@ -791,7 +790,19 @@ class TestPersistentForestSavesOnlyChanges:
         writes = self._count_writes(monkeypatch)
         pf2 = PersistentForest(datastore_file=filepath)
         pf2.save()
-        assert len(writes) == 1
+        assert writes == [], "a forest loaded unchanged was written straight back"
+
+    def test_a_loaded_forest_that_was_upgraded_is_written(self, tmp_path, monkeypatch):
+        # A node in the pre-0.2.3 shape: no revisions, no timestamp.
+        filepath = tmp_path / "forest.json"
+        filepath.write_text(json.dumps({"n1": {"id": "n1", "parent": None, "children": [],
+                                               "data": {"role": "system", "content": "hello"}}}),
+                            encoding="utf-8")
+        writes = self._count_writes(monkeypatch)
+        pf = PersistentForest(datastore_file=filepath)
+        assert pf.get_revisions("n1") == [1], "the fixture was not in the old shape, so nothing was upgraded"
+        pf.save()
+        assert len(writes) == 1, "an upgraded forest was not written"
 
     def test_a_deleted_file_is_written_even_if_nothing_changed(self, tmp_path):
         filepath = tmp_path / "forest.json"

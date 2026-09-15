@@ -1188,9 +1188,7 @@ class PersistentForest(Forest):
 
         self.datastore_file = datastore_file
         self._autosave = autosave
-        # The `generation` last written to disk. Not set by loading, because the loaded forest may already differ
-        # from the file: `_upgrade` migrates it on the way in, and `chatutil.upgrade_datastore` migrates it
-        # afterwards without advancing the counter at all. So only a save knows the file matches.
+        # The `generation` the file on disk holds, or `None` if the file does not match what is in memory.
         self._saved_generation = None
 
         # Filesystem-level migration, so it cannot live in `_upgrade` — that one migrates the loaded nodes
@@ -1240,9 +1238,9 @@ class PersistentForest(Forest):
         The write is atomic: readers see either the previous datastore or the new one, never a partial
         file. An interrupted save therefore costs the session's changes rather than the whole history.
 
-        Writes nothing if the forest has not changed since it was last saved, and the file is still there — so
-        saving often costs no disk writes while nothing is happening. The first save after loading always
-        writes.
+        Writes nothing if the forest has not changed since it was loaded or last saved, and the file is still
+        there — so saving often costs no disk writes while nothing is happening. A migration at load time
+        counts as a change.
 
         With `autosave=True` (the default), this is called automatically at interpreter exit via `atexit`.
         With `autosave=False`, the caller must invoke this explicitly if persistence is wanted.
@@ -1283,10 +1281,12 @@ class PersistentForest(Forest):
                 logger.warning(f"PersistentForest._load: Caught exception while loading datastore from '{str(absolute_path)}'", exc_info=True)
                 logger.info(f"PersistentForest._load: Will create new datastore at '{str(absolute_path)}', at app shutdown.")
             else:
-                self._upgrade(data)
+                upgraded = self._upgrade(data)
                 self.nodes.clear()
                 self.nodes.update(data)
                 self.touch()
+                if not upgraded:  # what is in memory is what the file holds
+                    self._saved_generation = self._generation
                 plural_s = "s" if len(data) != 1 else ""
                 logger.info(f"PersistentForest._load: PersistentForest loaded successfully ({len(data)} node{plural_s}).")
 
@@ -1412,8 +1412,10 @@ class PersistentForest(Forest):
         return sorted(entry.name for entry in directory.iterdir()
                       if entry.is_file() and not entry.name.endswith(self._SIDECAR_METADATA_SUFFIX))
 
-    def _upgrade(self, nodes: Dict[str, Dict[str, Any]]) -> None:
+    def _upgrade(self, nodes: Dict[str, Dict[str, Any]]) -> bool:
         """Migrate `nodes` (loaded from a saved datastore) to the latest format.
+
+        Return whether anything was changed.
 
         Called automatically by `_load`.
 
@@ -1423,8 +1425,13 @@ class PersistentForest(Forest):
               See also `chatutil.upgrade_datastore`, which upgrades the
               payload format inside each revision of the data.
         """
+        changed = False
         upgrade_time = time.time_ns()
         for node_id, node in nodes.items():
+            # Detected by comparison rather than flagged per step, so that a step added later cannot forget to
+            # flag, leaving its migration unsaved. A snapshot costs about 10 ms per few hundred nodes.
+            original = copy.deepcopy(node)
+
             # v0.2.3+: chat node timestamps
             if "timestamp" not in node:
                 node["timestamp"] = upgrade_time
@@ -1436,3 +1443,6 @@ class PersistentForest(Forest):
                 node["data"] = {str(1): node["data"]}  # up to v0.2.2, the "data" field (payload) has no revisions container
             if "revision_names" not in node:  # separate check, because I didn't think of needing this feature later, until I had committed and uploaded the code
                 node["revision_names"] = {}
+
+            changed = changed or (node != original)
+        return changed

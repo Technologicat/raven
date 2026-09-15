@@ -1372,6 +1372,17 @@ class TestUpgradeDatastoreReasoningAndToolCallId:
         for nid, before in snapshot.items():
             assert f.get_payload(nid) == before
 
+    def test_a_migration_that_changes_something_advances_the_generation(self, llm_settings):
+        # It writes the nodes directly, and a save that skips unchanged data goes by the generation.
+        f, system_id, assistant_id, tool_id = self._old_format_forest(llm_settings)
+        before = f.generation
+        chatutil.upgrade_datastore(llm_settings, f, system_id)
+        assert f.generation != before, "a migration changed the forest without announcing it"
+
+        after_first = f.generation
+        chatutil.upgrade_datastore(llm_settings, f, system_id)
+        assert f.generation == after_first, "a migration that changed nothing still announced a change"
+
     def test_no_think_or_tool_call_substrings_remain(self, llm_settings):
         # Idempotency invariant from the brief: no message content retains the inline tags after migration.
         f, system_id, assistant_id, tool_id = self._old_format_forest(llm_settings)
