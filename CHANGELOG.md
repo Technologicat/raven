@@ -97,6 +97,8 @@
 
 - **Ctrl+Home and Ctrl+End switch to the first and last sibling** of the marked chat message. Those were the two of the six sibling buttons with no key at all, so a fan of branches could be crossed one step or ten at a time from the keyboard but never jumped to its ends. Bare Home and End still scroll the chat log.
 
+- **the chat history is saved every minute while the app runs**, not only when it closes, so a crash loses at most the last minute of the conversation. Nothing is written while nothing has changed. The interval is `llm_autosave_interval` in `raven.librarian.config`; `None` goes back to saving only at exit.
+
 *Raven-avatar*
 
 - **`atmospheric_dust`, light-catching motes drifting in the air around the character** — dust in a sunbeam, or with different tuning something nearer to pollen, snow or petals. In the default chain, at the head of it: the dust is composited before the camera looks at the scene, so the particles are framed by the zoom and lit by the capture optics exactly as the character is.
