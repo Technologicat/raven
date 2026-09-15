@@ -38,8 +38,12 @@ example under `turn` — is waiting in the app afterwards, while a run that buil
 `raven/librarian/tests/test_agent.py`, which is the better place to look for a pattern this docstring does
 not cover: it drives the real loop against a faked backend, so every example in it is one CI runs.
 
-Two properties worth knowing before scripting against it:
+Three things worth knowing before scripting against it:
 
+  - **Save the whole record, and stream the turn to a file.** `json.dumps(record.to_dict())` keeps
+    everything, where a hand-picked set of fields keeps what seemed relevant when the script was written —
+    and the reasoning traces are what gets left out and then wanted. `on_progress=stream_log(file)` covers
+    what a record cannot: a turn that runs away has no record until it hits the token cap.
   - **The network is off by default.** `internet_enabled=False`, so `websearch` and `webfetch` are not
     offered. A probe that silently reaches the internet is the more expensive mistake, and turning it on is
     one keyword.
@@ -50,7 +54,7 @@ Two properties worth knowing before scripting against it:
 
 __all__ = ["DEFAULT_MAX_REPLY_TOKENS",
 
-           "TurnRecord", "describe_turn", "turn",
+           "TurnRecord", "describe_turn", "turn", "stream_log",
 
            "ask", "ask_record", "parse_json_reply"]
 
@@ -84,13 +88,14 @@ import re
 DEFAULT_MAX_REPLY_TOKENS = 32768
 
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TextIO
 
 from unpythonic import sym
 from unpythonic.env import env
 
 from . import chattree
 from . import chatutil
+from . import llmclient
 from . import scaffold
 
 if TYPE_CHECKING:
@@ -178,6 +183,27 @@ class TurnRecord:
     grounded: bool | None
     generation: dict | None
     prompts: tuple[list[dict], ...]
+
+    def to_dict(self) -> dict:
+        """Everything in this record as plain dicts and lists, ready for `json.dumps`, except `datastore`.
+
+        `datastore` is a live object; what it holds for this turn is already in `messages`, and what was sent
+        is in `prompts`. Like those fields, the result shares the datastore's own dicts: serialize it, do not
+        edit it.
+
+        This is the form to save a record in. Picking fields by hand is how a probe loses the one it later
+        needs, and the reasoning traces are the usual casualty.
+        """
+        return {"head_node_id": self.head_node_id,
+                "node_ids": list(self.node_ids),
+                "messages": list(self.messages),
+                "reply": self.reply,
+                "reasoning": list(self.reasoning),
+                "rounds": self.rounds,
+                "tool_calls": dict(self.tool_calls),
+                "grounded": self.grounded,
+                "generation": self.generation,
+                "prompts": list(self.prompts)}
 
 
 def describe_turn(datastore: chattree.Forest,
@@ -532,6 +558,44 @@ def turn(llm_settings: env,
                          head_node_id=final_node_id,
                          since_node_id=since_node_id,
                          prompts=tuple(prompts))
+
+
+def stream_log(file: TextIO, label: str | None = None) -> Callable[[dict], sym]:
+    """Make an `on_progress` callback for `turn` that writes what the model streams to `file`, as it arrives.
+
+    `file`: An open text file. It is flushed after every write, so the text can be read while the turn runs.
+
+    `label`: If given, written as a separator before the first thing this callback writes.
+
+    The reasoning and the visible answer each get a `[reasoning]` / `[content]` heading where the stream
+    switches between them, and each tool call a line of its own. Make one per turn — for a batch, one per
+    turn into the same file, with the turn's number as `label`.
+
+    For an unattended run this is the half `TurnRecord` cannot provide: a turn that runs away does not return
+    until it hits the token cap, and until then its record does not exist. This file has the text already.
+    """
+    channel = None
+    label_pending = label is not None
+
+    def on_progress(event: dict) -> sym:
+        nonlocal channel, label_pending
+        if label_pending:
+            file.write(f"\n===== {label} =====\n")
+            label_pending = False
+        kind = event["type"]
+        if kind in ("content", "reasoning"):
+            if kind != channel:
+                file.write(f"\n[{kind}]\n")
+                channel = kind
+            file.write(event["text"])
+        else:  # tool calls, and the retcon that reclassifies the content so far as reasoning
+            fields = {key: value for key, value in event.items() if key != "type"}
+            file.write(f"\n[{kind}] {json.dumps(fields, ensure_ascii=False)}\n")
+            channel = None
+        file.flush()
+        return llmclient.action_ack
+
+    return on_progress
 
 
 def ask(llm_settings: env, prompt: str, max_tokens: int | None = DEFAULT_MAX_REPLY_TOKENS) -> str:

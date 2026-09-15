@@ -58,6 +58,12 @@ index.
     accumulate — `dpg-focus/` has gathered probes over months, because each new question about focus and
     keyboard dispatch belonged beside the table it was extending. A bundle per probe would scatter one
     subject across the index and lose exactly the adjacency that makes the earlier answers findable.
+  - **A probe that runs LLM turns saves each whole turn, and streams it to a file as it runs.**
+    `json.dumps(record.to_dict())` and `on_progress=agent.stream_log(file)`, both in `raven.librarian.agent`.
+    A probe that picks which fields to keep drops the ones that did not seem relevant yet, and the thinking
+    traces are what gets lost — more than once, the one time they would have explained the result (2026-09-15:
+    a turn ran past 50k tokens, and the probe was keeping only the visible reply). The stream is for the
+    turn that never returns: it has no record until the token cap stops it.
 - **`TODO.md`** for planned work, **`TODO_DEFERRED.md`** for things noticed mid-task and set aside.
 - **`scripts/`** — repository-maintenance tooling: scripts that check *this repo*, run by a maintainer and
   not shipped in the wheel. Distinct from `raven/tools/`, which holds user-facing console scripts. Each is

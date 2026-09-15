@@ -6,6 +6,8 @@ rather than a replica of the loop.
 """
 
 import dataclasses
+import io
+import json
 import logging
 
 import pytest
@@ -137,6 +139,31 @@ class TestDescribeTurn:
         head = add(forest, llm_settings, None, "user", "Hello?")
         head = add(forest, llm_settings, head, "assistant", "Hi.")
         assert agent.describe_turn(forest, head).prompts == ()
+
+
+class TestTurnRecordToDict:
+    def _record(self, llm_settings):
+        forest = chattree.Forest()
+        head = add(forest, llm_settings, None, "user", "Hello?")
+        started_from = head
+        head = add(forest, llm_settings, head, "assistant", reasoning_content="First I should search.",
+                   tool_calls=[tool_call("websearch", "call_0")])
+        head = add(forest, llm_settings, head, "tool", "result", generation_metadata={"function_name": "websearch"})
+        head = add(forest, llm_settings, head, "assistant", "Hi.", reasoning_content="Now I can answer.")
+        return agent.describe_turn(forest, head, since_node_id=started_from, prompts=([{"role": "user", "content": "Hello?"}],))
+
+    def test_every_field_but_the_datastore_is_there(self, llm_settings):
+        # From the dataclass itself, so a field added later and not serialized fails here.
+        expected = {field.name for field in dataclasses.fields(agent.TurnRecord)} - {"datastore"}
+        assert set(self._record(llm_settings).to_dict()) == expected
+
+    def test_it_survives_json_and_keeps_the_reasoning(self, llm_settings):
+        record = self._record(llm_settings)
+        restored = json.loads(json.dumps(record.to_dict()))
+        assert restored["reasoning"] == ["First I should search.", "Now I can answer."]
+        assert restored["tool_calls"] == {"websearch": 1}
+        assert restored["prompts"] == [[{"role": "user", "content": "Hello?"}]]
+        assert len(restored["messages"]) == len(record.messages)
 
 
 # ---------------------------------------------------------------------------
@@ -540,6 +567,31 @@ class TestTurn:
         # The control arm for "what is the automatic search worth?" must still let the model search itself,
         # or it measures the tools' absence instead.
         assert set(llm_settings.document_tool_names).issubset(offered[0])
+
+
+class TestStreamLog:
+    def test_writes_both_channels_and_tool_calls_as_they_arrive(self):
+        f = io.StringIO()
+        on_progress = agent.stream_log(f, label="turn 1")
+        events = [{"type": "reasoning", "text": "Let me ", "n_chunks": 1},
+                  {"type": "reasoning", "text": "think.", "n_chunks": 2},
+                  {"type": "tool_call", "id": "call_0", "name": "websearch", "arguments": "{}"},
+                  {"type": "reasoning", "text": "Found it.", "n_chunks": 3},
+                  {"type": "content", "text": "Hi.", "n_chunks": 4}]
+        for event in events:
+            assert on_progress(event) is llmclient.action_ack, "a log must not stop the generation"
+        assert f.getvalue() == ("\n===== turn 1 =====\n"
+                                "\n[reasoning]\nLet me think."
+                                '\n[tool_call] {"id": "call_0", "name": "websearch", "arguments": "{}"}\n'
+                                "\n[reasoning]\nFound it."
+                                "\n[content]\nHi.")
+
+    def test_a_retcon_has_no_text_and_still_gets_a_line(self):
+        f = io.StringIO()
+        on_progress = agent.stream_log(f)
+        on_progress({"type": "content", "text": "Hmm", "n_chunks": 1})
+        on_progress({"type": "reasoning_retcon"})
+        assert f.getvalue() == "\n[content]\nHmm\n[reasoning_retcon] {}\n"
 
 
 class TestAsk:
