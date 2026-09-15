@@ -13,7 +13,9 @@ those is a dependency-hygiene sweep across several modules rather than a change 
 happens these tests do not run in the minimal-dependency CI job even though they would pass there.
 """
 
+import concurrent.futures
 import threading
+import time
 import types
 
 import pytest
@@ -22,6 +24,7 @@ pytest.importorskip("raven.librarian.chat_controller")  # noqa: E402 -- still re
 
 from unpythonic.env import env  # noqa: E402 -- the class; `from unpythonic import env` gets the submodule
 
+from raven.common import bgtask  # noqa: E402
 from raven.librarian import chat_controller  # noqa: E402
 
 
@@ -629,3 +632,68 @@ class TestTheSpeakerGlyphFollowsTheStoredCharacter:
     def test_an_unknown_role_draws_nothing(self, monkeypatch):
         controller = self._controller(monkeypatch)
         assert controller.icon_texture_for("narrator", None) is None
+
+
+class TestChatExchange:
+    """One send, one AI turn: the gate has to see a send from the moment it is accepted.
+
+    A send whose AI turn has not started yet used to read as idle, so a second send arriving in between
+    passed the gate and started a second turn on top of the first.
+    """
+
+    @staticmethod
+    def _controller():
+        """A controller with just what `chat_exchange` and `is_generating` touch, and a user turn that waits."""
+        executor = concurrent.futures.ThreadPoolExecutor()
+        controller = chat_controller.DPGChatController.__new__(chat_controller.DPGChatController)
+        controller.gui_updates_safe = False
+        controller.app_state = {"HEAD": "head"}
+        controller.chat_exchange_task_manager = bgtask.TaskManager(name="test_exchange", mode="concurrent", executor=executor)
+        controller.ai_turn_task_manager = bgtask.TaskManager(name="test_ai_turn", mode="concurrent", executor=executor)
+        controller.user_turn_may_finish = threading.Event()
+        controller.ai_turns = []
+        controller.user_turn = lambda text, staged_images=None, staged_files=None: controller.user_turn_may_finish.wait(5.0)
+        controller.ai_turn = lambda docs_query, continue_: controller.ai_turns.append(docs_query)
+        return controller
+
+    @staticmethod
+    def _wait_for(predicate, timeout=5.0):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if predicate():
+                return True
+            time.sleep(0.01)
+        return False
+
+    def test_a_send_is_in_flight_before_its_turn_has_started(self):
+        controller = self._controller()
+        assert not controller.is_generating(), "a fresh controller already reads as busy, so this cannot tell anything"
+        controller.chat_exchange("Hi!")
+        assert controller.is_generating(), "a send still in its user turn read as idle, which lets a second send through"
+        controller.user_turn_may_finish.set()
+        assert self._wait_for(lambda: controller.ai_turns == ["Hi!"])
+
+    def test_stopping_before_the_turn_starts_prevents_it(self):
+        controller = self._controller()
+        controller.chat_exchange("Hi!")
+        controller.stop_ai_turn()
+        controller.user_turn_may_finish.set()
+        # On the exchange's own task, not on `is_generating`: that would read idle as soon as the gate forgot the
+        # send, and the assertion below would then run before the exchange had had its chance to go wrong.
+        assert self._wait_for(lambda: not controller.chat_exchange_task_manager.has_tasks())
+        assert controller.ai_turns == [], "a stopped send still started its AI turn"
+
+    def test_an_empty_send_does_nothing_unless_allowed(self, monkeypatch):
+        monkeypatch.setattr(chat_controller.chatutil, "latest_user_message_text", lambda datastore, head: "earlier question")
+        controller = self._controller()
+        controller.datastore = None
+        controller.user_turn_may_finish.set()
+
+        monkeypatch.setattr(chat_controller.librarian_config, "llm_allow_empty_send", False)
+        controller.chat_exchange("")
+        assert not controller.is_generating(), "an empty send was accepted with `llm_allow_empty_send` off"
+
+        monkeypatch.setattr(chat_controller.librarian_config, "llm_allow_empty_send", True)
+        controller.chat_exchange("")
+        assert self._wait_for(lambda: controller.ai_turns == ["earlier question"]), \
+            "an empty send did nothing with the setting on, so the refusal above proves nothing"

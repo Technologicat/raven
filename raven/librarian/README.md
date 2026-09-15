@@ -547,10 +547,10 @@ Basic **conversation flow** in *Librarian* works like in many LLM chatbot applic
   - You can write in the message entry field at the bottom and click the **send button**, or click the **mic button** to speak to the AI in voice mode.
     - For voice mode, see [AI avatar and voice mode](#ai-avatar-and-voice-mode).
   - **LLM agent loop**: the AI may call tools to gather information needed for composing its reply. For details, see [Tools](#tools) above.
-- You can send an empty message.
+- You can send an empty message, if `llm_allow_empty_send` is switched on in `raven.librarian.config`. It is off by default.
   - Just leave the message entry field blank and click the **send button**.
   - Doing so omits the user's turn, asking the AI to take the next turn instead.
-    - How the AI behaves in this situation depends on your particular LLM.
+    - How the AI behaves in this situation depends on your particular LLM. Qwen 3.6 on LM Studio, for one, mostly answers with an empty message, which is why the setting is off.
 - You can interrupt the AI generation, and resume (continue) it later.
     - Continuing can be useful also if the output token limit ran out before the AI was done replying.
 

@@ -1,7 +1,8 @@
 # Why do some replies open with a bare `assistant`?
 
-**Status: mechanism identified from the logs and the datastore, not yet reproduced on purpose, not fixed.**
-Started 2026-09-15.
+**Status: fixed 2026-09-15, and live-checked** — one `invoke[turn]` per send, and an empty send ignored. The
+send is coalesced from when the first one *finished*, the gate counts a send from the moment it is accepted,
+and an empty send is off by default (`llm_allow_empty_send`). The runaway below remains unexplained.
 
 **Question.** Raven-librarian sometimes stores a reply whose content begins with the word `assistant` and
 nothing else on that line — either the whole reply, or `assistant` followed by the real answer. Is it the
@@ -35,8 +36,10 @@ things combine in it — read from the source, not measured:
   the second send runs, the composer has been cleared, so it is exactly that, from HEAD on A's node.
 
 The third holds for a deliberate empty send too: pressing send with an empty composer while HEAD is an AI
-message would build a request ending on an assistant message. What such a send should mean is a design
-question.
+message builds a request ending on an assistant message. **Measured the same day, five times**, from a
+finished reply to `Hi!`: four of the five came back empty, one token generated, and the fifth was a generic
+offer to help. No `assistant` leaked in that sample — the leak needs the *empty* in-progress node, where a
+finished reply is simply ended. That is what put the feature behind a setting.
 
 ## What is established
 
@@ -103,12 +106,7 @@ The runaway in prefill run 1 remains unexplained.
 
 ## Next steps
 
-1. **Reproduce the leak on purpose**, headlessly: a turn run from HEAD on a finished AI reply, i.e. a request
-   ending on an assistant message. If that leaks reliably, the mechanism is confirmed without the GUI.
-2. **Fix the double send**, which needs deciding: the coalescing window, a gate that counts an accepted send,
-   and what an empty send should do while HEAD is an AI message. Verify live with the send chord, since the
-   race involves both key paths.
-3. **The runaway is a separate question.** Run the prefill arm again with the live stream, to catch one.
+1. **The runaway is a separate question.** Run the prefill arm again with the live stream, to catch one.
 
 ## Apparatus
 

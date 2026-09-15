@@ -4125,6 +4125,12 @@ class DPGChatController:
         self.task_manager = bgtask.TaskManager(name="librarian_chat_controller",  # for most tasks
                                                mode="concurrent",
                                                executor=executor)
+        # Its own manager so that a send counts as in flight from the moment it is accepted: the exchange runs the
+        # user's turn before it submits the AI's, and a second send arriving in between would otherwise pass the
+        # gate and start a second AI turn on top of the first.
+        self.chat_exchange_task_manager = bgtask.TaskManager(name="librarian_chat_controller_chat_exchange",
+                                                             mode="concurrent",
+                                                             executor=executor)  # same thread pool
         self.ai_turn_task_manager = bgtask.TaskManager(name="librarian_chat_controller_ai_turn",  # for running the AI's turn, specifically (so that we can easily cancel just that one task when needed)
                                                        mode="concurrent",
                                                        executor=executor)  # same thread pool
@@ -4234,6 +4240,7 @@ class DPGChatController:
         """
         self.disable_gui_updates()
         self.task_manager.clear(wait=False)
+        self.chat_exchange_task_manager.clear(wait=False)  # before the AI turns, since an exchange submits one
         self.ai_turn_task_manager.clear(wait=False)
         self.context_prefill_task_manager.clear(wait=False)
 
@@ -4246,6 +4253,7 @@ class DPGChatController:
         """
         self.disable_gui_updates()
         self.task_manager.clear(wait=True)
+        self.chat_exchange_task_manager.clear(wait=True)  # before the AI turns, since an exchange submits one
         self.ai_turn_task_manager.clear(wait=True)
         self.context_prefill_task_manager.clear(wait=True)
 
@@ -4292,11 +4300,13 @@ class DPGChatController:
             self._docs_search_progress_last = query_progress
 
     def is_generating(self) -> bool:
-        """Return whether an AI turn is currently in flight (LLM streaming or tool calls).
+        """Return whether an AI turn is currently in flight (LLM streaming or tool calls), or a send has been
+        accepted and its turn has not started yet.
 
-        Intended for GUI clients that gate an idle-throttle predicate on "something is happening".
+        Intended for GUI clients that gate an idle-throttle predicate on "something is happening", and for
+        refusing a send while one is already under way.
         """
-        return self.ai_turn_task_manager.has_tasks()
+        return self.chat_exchange_task_manager.has_tasks() or self.ai_turn_task_manager.has_tasks()
 
     def get_current_message(self) -> DPGChatMessage | None:
         """Return the `DPGChatMessage` the per-message hotkeys act on, or `None` if the view is empty.
@@ -4827,7 +4837,8 @@ class DPGChatController:
 
                              If `user_message_text` is the empty string *and* nothing is attached (no images and
                              no documents), the AI will generate another message without the user writing in
-                             between.
+                             between — if `librarian_config.llm_allow_empty_send` is on. Otherwise such an
+                             exchange does nothing.
 
         `staged_images`: Images the user attached to this message, or `None`. Each entry is an `env` with `raw`
                          (image bytes), `provenance_url`, and `provenance_source` (see `scaffold.user_turn`).
@@ -4848,6 +4859,10 @@ class DPGChatController:
         This spawns a background task to avoid hanging GUI event handlers,
         since the typical use case is to call `chat_exchange` from a GUI event handler.
         """
+        if not (user_message_text or staged_images or staged_files) and not librarian_config.llm_allow_empty_send:
+            logger.info("chat_exchange: empty message and nothing attached, and `llm_allow_empty_send` is off; ignoring.")
+            return
+
         def chat_exchange_task(task_env: env) -> None:
             if task_env.cancelled:  # while the task was in the queue
                 return
@@ -4873,7 +4888,7 @@ class DPGChatController:
                 return
             self.ai_turn(docs_query=docs_query,
                          continue_=False)
-        self.task_manager.submit(chat_exchange_task, env())
+        self.chat_exchange_task_manager.submit(chat_exchange_task, env())
 
     def user_turn(self, text: str, staged_images: list[env] | None = None,
                   staged_files: list[env] | None = None) -> str:
@@ -5538,4 +5553,6 @@ class DPGChatController:
         if self.gui_updates_safe:
             dpg.disable_item(self.chat_stop_generation_button_widget)
         # Cancelling all background tasks from the AI turn specific task manager stops the task (co-operatively, so it shuts down gracefully).
+        # A send whose turn has not started yet is stopped too: its exchange checks `cancelled` before submitting the turn.
+        self.chat_exchange_task_manager.clear()
         self.ai_turn_task_manager.clear()

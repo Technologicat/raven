@@ -1113,13 +1113,21 @@ def _request_send() -> None:
     enough because a gap that short admits at most one boundary. And it cannot swallow anything real: two
     *legitimate* sends that close together are not reachable — a human cannot produce them, and
     `_describe_send_gate` refuses while a turn is in flight.
+
+    **The window is measured from when the first send *finished*.** The second callback is queued behind the
+    first on that one thread, so it starts right after the first returns — and the first does not return in
+    microseconds: clearing the composer waits for a frame. Measured from the start, the window was already
+    spent by then, and one keypress started two AI turns.
     """
     global _last_send_frame
     frame = dpg.get_frame_count()
     if _last_send_frame is not None and frame - _last_send_frame <= 1:
         return
     _last_send_frame = frame
-    send_message_to_ai_callback()
+    try:
+        send_message_to_ai_callback()
+    finally:
+        _last_send_frame = dpg.get_frame_count()
 
 def _attach_callback(selected_files) -> None:
     """FileDialog callback: route each selected file to image or document staging by its extension.
@@ -2145,7 +2153,8 @@ def update_animations():
 # Built-in help window
 
 hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus the message composer", notes=""),
-               env(key_indent=0, key=_send_key_label(), action_indent=0, action="Send the message to the AI", notes="Empty message = the AI adds a reply"),
+               env(key_indent=0, key=_send_key_label(), action_indent=0, action="Send the message to the AI",
+                   notes=("Empty message = the AI adds a reply" if librarian_config.llm_allow_empty_send else "")),
                env(key_indent=1, key=_newline_keys_label(), action_indent=0, action="Insert a new line", notes="While writing a message"),
                env(key_indent=1, key="Esc", action_indent=0, action="Clear the text", notes="While writing. Again to unfocus"),
                # No device name here, deliberately. This tuple is built once at import and `helpcard` renders
@@ -2190,8 +2199,8 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+G", action_indent=0, action="Stop the AI's text generation", notes="While the AI is writing"),
                # These three notes are a set, and are worded to be read as one: sending an empty message
-               # *adds* a reply, continuing *extends* the one that is there, rerolling makes an
-               # *alternative* to it. Each says what happens to the chat before naming the tree operation,
+               # *adds* a reply (with `llm_allow_empty_send` on), continuing *extends* the one that is there,
+               # rerolling makes an *alternative* to it. Each says what happens to the chat before naming the tree operation,
                # because the table is met before the prose that explains the tree.
                env(key_indent=0, key="Ctrl+U", action_indent=0, action="Continue the marked AI message", notes="The last one only (new revision)"),
                env(key_indent=0, key="Ctrl+R", action_indent=0, action="Reroll the marked AI message", notes="An alternative to it (new sibling)"),
@@ -2863,7 +2872,7 @@ def librarian_hotkeys_callback(sender, app_data):
         # commit action, wired at the widget (`on_enter` + `ctrl_enter_for_new_line`), because ImGui
         # consumes the chord itself while the field holds the caret. This branch is for every other moment —
         # notably just after a send, which parks focus on the send button, where an empty message is the
-        # "let the AI take another turn" gesture and nothing was pressable.
+        # "let the AI take another turn" gesture (with `llm_allow_empty_send` on) and nothing was pressable.
         #
         # It sits above the `is_item_active` branch below so that it is reached while typing too. That costs
         # nothing: by the time this handler runs the commit has already deactivated the field, so the branch

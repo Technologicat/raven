@@ -209,6 +209,14 @@ context_reserve_fraction = 0.25
 # Set it to `"enter"` if that is the muscle memory you arrive with; for short questions it is fewer keys.
 send_message_key = "ctrl+enter"
 
+# Whether sending an empty message, with nothing attached, lets the AI take another turn without the user
+# writing in between. In Raven-librarian and in `raven-minichat` alike.
+#
+# Off, because the request then ends on the AI's own reply, and the model tried (Qwen 3.6 on LM Studio) mostly
+# answers that with an empty message — see `investigations/stray-role-header/`. With this off, an empty send
+# does nothing.
+llm_allow_empty_send = False
+
 # How long a fetched document has to be, in characters, before the chat log shows it as an attachment
 # chip plus an opening excerpt rather than in full.
 #

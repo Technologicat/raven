@@ -569,7 +569,11 @@ def minimal_chat_client(backend_url) -> None:
             # Add the user's message to the chat, if non-empty.
             #
             # By sending empty `user_message_text`, it is possible to have the AI generate
-            # another message without the user writing in between.
+            # another message without the user writing in between — if `llm_allow_empty_send` is on.
+            if not user_message_text and not librarian_config.llm_allow_empty_send:
+                print("Empty message: nothing sent. (`llm_allow_empty_send` in `raven.librarian.config` lets the AI take another turn instead.)")
+                print()
+                return Values(action=action_next_exchange)
             if user_message_text:
                 new_head_node_id = scaffold.user_turn(llm_settings=llm_settings,
                                                       datastore=datastore,
