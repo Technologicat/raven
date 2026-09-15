@@ -285,8 +285,17 @@ new question about an object. Restarting to investigate destroys the evidence, a
 fault the next launch will not reproduce it.
 
 **The standing example is the intermittent Markdown-renderer glyph drop** (`TODO_DEFERRED.md`, "The
-Markdown renderer drops text"). It is per-launch — roughly one run in four — so a damaged instance is the
-only specimen there will be until the next one happens. What to ask it: `dpg_markdown`'s faces are
+Markdown renderer drops text"). It is settled per launch, and there is no usable rate: it can turn up on
+consecutive runs and then stay away for a hundred launches (Juha, 2026-09-15), so a damaged instance is the
+only specimen there will be until the next one happens.
+
+**So until it has been caught, launch every GUI app with `--repl`** — every launch, whatever it is for
+(Juha, 2026-09-15). A specimen cannot be scheduled, and an instance launched without the REPL is one that
+has to be closed to be examined. Every app with a help card renders Markdown, so this is every GUI app, not
+only Librarian. When two run at once, give the second its own port (`--repl 1339`): a busy port costs that
+app its REPL with a logged error, and the app starts regardless, so the collision is easy to miss.
+
+What to ask a damaged instance: `dpg_markdown`'s faces are
 `FontAttribute` subclasses in `raven/vendor/DearPyGui_Markdown/attribute_types.py`, each keeping its own
 `_fonts` dict of size → DPG font id, so a session can enumerate which (face, size) pairs a bad run actually
 built and compare against a good one.
