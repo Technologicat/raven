@@ -3071,7 +3071,7 @@ def _gui_cancel_tasks() -> None:
     backend_status_task_manager.clear(wait=False)  # stop watching the LLM backend (it rebuilds the chat view)
     panel_occupancy_task_manager.clear(wait=False)  # stop watching the avatar's video (it swaps panels, and can use split_frame)
     server_status_task_manager.clear(wait=False)  # stop watching Raven-server (it writes into the utility panel's row)
-    autosave_task_manager.clear(wait=False)  # stop saving periodically; the saves at exit take over
+    stop_autosave(wait=False)  # stop saving periodically; the saves at exit take over
     dpg_avatar_renderer.stop(wait=False)  # signal the avatar renderer's background (OpenGL) task to stop (no wait)
     avatar_controller.stop_tts()          # stop TTS playback (no wait)
     audio_recorder.require().stop()       # the capture task writes the VU readout into DPG widgets (no wait)
@@ -3109,7 +3109,7 @@ def gui_shutdown() -> None:
     backend_status_task_manager.clear(wait=True)
     panel_occupancy_task_manager.clear(wait=True)
     server_status_task_manager.clear(wait=True)
-    autosave_task_manager.clear(wait=True)  # before the saves at exit, so that none of them overlaps a periodic one
+    stop_autosave(wait=True)  # before the saves at exit, so that none of them overlaps a periodic one
     chat_controller.shutdown()
     avatar_controller.shutdown()
     dpg_avatar_renderer.stop(wait=True)
@@ -3309,29 +3309,13 @@ def _panel_occupancy_task(task_env: env) -> None:
         _apply_panel_occupancy()
         time.sleep(_PANEL_OCCUPANCY_TICK_S)
 
-autosave_task_manager = bgtask.TaskManager(name="librarian_autosave",
-                                           mode="concurrent",
-                                           executor=bg)
-
-def _autosave_task(task_env: env) -> None:
-    """Save the chat datastore and the app state every `llm_autosave_interval` seconds, until shutdown.
-
-    The saves at exit are registered by `appstate.load` and run regardless; this is for the crash, where they
-    do not.
-    """
-    interval = librarian_config.llm_autosave_interval
-    next_save = time.monotonic() + interval
-    while not (task_env.cancelled or _shutting_down):
-        if time.monotonic() >= next_save:
-            try:
-                appstate.persist(datastore, librarian_config.llm_state_file, app_state)
-            except Exception as exc:  # a failed save must not end the saving
-                logger.warning(f"_autosave_task: instance {task_env.task_name}: save failed, will try again in {interval} seconds: {type(exc)}: {exc}")
-            next_save = time.monotonic() + interval
-        time.sleep(0.5)  # short, so that shutdown does not wait out the interval
-
+# For the crash, where the saves at exit (registered by `appstate.load`) do not run.
 if librarian_config.llm_autosave_interval is not None:
-    autosave_task_manager.submit(_autosave_task, env())
+    stop_autosave = appstate.start_autosave(datastore, librarian_config.llm_state_file, app_state,
+                                            interval=librarian_config.llm_autosave_interval)
+else:
+    def stop_autosave(wait: bool = True) -> None:
+        pass
 
 def _start_panel_occupancy_watch() -> None:
     """Start watching who should hold the avatar's panel. Supersedes a watch already running."""

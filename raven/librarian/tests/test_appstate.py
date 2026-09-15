@@ -2,6 +2,7 @@
 
 import json
 import pathlib
+import time
 
 import pytest
 
@@ -474,6 +475,51 @@ class TestSave:
         state_path.unlink()
         appstate.save(state_path, state)
         assert len(writes) == 2, "a deleted state file was not written back"
+
+
+class TestStartAutosave:
+    @staticmethod
+    def _wait_for(predicate, timeout=5.0):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if predicate():
+                return True
+            time.sleep(0.01)
+        return False
+
+    def test_a_change_is_saved_and_stopping_ends_the_saving(self, tmp_path, llm_settings):
+        datastore, state, datastore_path, state_path = _load(tmp_path, llm_settings)
+        stop = appstate.start_autosave(datastore, state_path, state, interval=0.02)
+        try:
+            first = datastore.create_node({"role": "user", "content": "during the session"}, parent_id=state["HEAD"])
+            assert self._wait_for(lambda: first in datastore_path.read_text(encoding="utf-8")), \
+                "a change made during the session was never saved"
+        finally:
+            stop(wait=True)
+
+        second = datastore.create_node({"role": "user", "content": "after stopping"}, parent_id=first)
+        time.sleep(0.2)  # ten intervals
+        assert second not in datastore_path.read_text(encoding="utf-8"), "saving went on after `stop`"
+
+    def test_a_failed_save_does_not_end_the_saving(self, tmp_path, llm_settings, monkeypatch):
+        datastore, state, datastore_path, state_path = _load(tmp_path, llm_settings)
+        real_persist = appstate.persist
+        failures = []
+        def persist_failing_once(*args, **kwargs):
+            if not failures:
+                failures.append(True)
+                raise OSError("disk full, once")
+            return real_persist(*args, **kwargs)
+        monkeypatch.setattr(appstate, "persist", persist_failing_once)
+
+        stop = appstate.start_autosave(datastore, state_path, state, interval=0.02)
+        try:
+            node = datastore.create_node({"role": "user", "content": "saved on the retry"}, parent_id=state["HEAD"])
+            assert self._wait_for(lambda: node in datastore_path.read_text(encoding="utf-8")), \
+                "saving stopped after the first failure"
+        finally:
+            stop(wait=True)
+        assert failures, "no save failed, so this fixture cannot tell a surviving loop from one never tested"
 
 
 class TestPersist:

@@ -10,7 +10,7 @@ __all__ = ["configured_defaults",
            "refresh_system_prompt",
            "load",
            "backfill_sidecar_metadata",
-           "save", "persist"]
+           "save", "persist", "start_autosave"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -19,7 +19,8 @@ import atexit
 import functools
 import json
 import pathlib
-from typing import Dict, Tuple, Union
+import threading
+from typing import Callable, Dict, Tuple, Union
 
 from unpythonic.env import env
 
@@ -537,3 +538,36 @@ def persist(datastore: chattree.PersistentForest,
     """
     datastore.save()
     save(state_file=state_file, state=state)
+
+def start_autosave(datastore: chattree.PersistentForest,
+                   state_file: Union[str, pathlib.Path],
+                   state: Dict,
+                   interval: float) -> Callable[..., None]:
+    """Start saving the chat datastore and the app state every `interval` seconds, in a background thread.
+
+    `datastore`, `state_file`, `state`: As returned by, and passed to, `load`.
+
+    `interval`: Seconds between saves. Each save writes only what has changed, so an idle app writes nothing.
+
+    Returns a function `stop(wait=True)` that ends the saving. With `wait=True` it also waits for a save in
+    progress to finish, which is what to do before the saves at exit run. With `wait=False` it only signals,
+    for a caller that must not block.
+    """
+    stopped = threading.Event()
+
+    def autosave() -> None:
+        while not stopped.wait(interval):
+            try:
+                persist(datastore, state_file, state)
+            except Exception as exc:  # a failed save must not end the saving
+                logger.warning(f"start_autosave.autosave: save failed, will try again in {interval} seconds: {type(exc)}: {exc}")
+
+    thread = threading.Thread(target=autosave, name="librarian_autosave", daemon=True)
+    thread.start()
+    logger.info(f"start_autosave: saving the chat datastore and app state every {interval} seconds.")
+
+    def stop(wait: bool = True) -> None:
+        stopped.set()
+        if wait:
+            thread.join()
+    return stop

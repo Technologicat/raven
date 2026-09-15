@@ -29,7 +29,7 @@ librarian_userdata_dir = global_config.toplevel_userdata_dir / "librarian"
 # filenames happened to agree, with nothing enforcing it and nothing to notice if one drifted.
 llm_datastore_file = librarian_userdata_dir / "chat.json"  # chat node datastore
 llm_state_file = librarian_userdata_dir / "state.json"  # important node IDs for the chat client state
-# How often Raven-librarian saves both files during a session, in seconds, or `None` to save only at exit.
+# How often the chat frontends save both files during a session, in seconds, or `None` to save only at exit.
 # A crash loses at most this much of the chat.
 llm_autosave_interval = 60.0
 # Attachment sidecars live beside the datastore, in a directory derived from its name — see

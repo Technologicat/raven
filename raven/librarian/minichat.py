@@ -279,6 +279,13 @@ def minimal_chat_client(backend_url) -> None:
         #     https://docs.python.org/3/library/atexit.html
         atexit.register(persist)
 
+        # For the crash, where the saves at exit do not run. Registered last, so that it runs first at exit
+        # and no periodic save overlaps the prune or the saves after it.
+        if librarian_config.llm_autosave_interval is not None:
+            stop_autosave = appstate.start_autosave(datastore, state_file, app_state,
+                                                    interval=librarian_config.llm_autosave_interval)
+            atexit.register(stop_autosave)
+
         print(colorizer.colorize("Starting chat.", colorizer.Style.BRIGHT))
         print()
         def chat_show_help() -> None:
