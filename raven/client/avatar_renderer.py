@@ -825,7 +825,8 @@ class DPGAvatarRenderer:
                 logger.warning(f"DPGAvatarRenderer.pause (avatar instance '{self.avatar_instance_id}', action '{action}'): could not tell the server to start the avatar, staying paused: {type(exc)}: {exc}")
                 return
             dpg.hide_item(self.paused_text_gui_widget)
-            dpg.show_item(self.backdrop_drawlist_gui_widget)
+            if self.first_frame_received:  # a stream still warming up keeps its backdrop hidden; see `start`
+                dpg.show_item(self.backdrop_drawlist_gui_widget)
             dpg.show_item(f"avatar_live_image_{self.live_texture_id_counter}")
             self.animator_running = True
 
@@ -894,6 +895,10 @@ class DPGAvatarRenderer:
 
         self.avatar_instance_id = avatar_instance_id  # store for pause/resume
         self.first_frame_received = False  # a fresh stream is in warmup until its first frame arrives, however many the previous one delivered
+        # And the backdrop waits for that frame too: a backdrop with no avatar in front of it is a picture of
+        # nothing, and during warmup that is all it would be.
+        with guiutils.nonexistent_ok():
+            dpg.hide_item(self.backdrop_drawlist_gui_widget)
 
         # We must continuously retrieve new frames as they become ready, so this runs in the background.
         def update_live_texture(task_env) -> None:
@@ -988,6 +993,8 @@ class DPGAvatarRenderer:
                     if not self.first_frame_received:
                         self.first_frame_received = True
                         self._redraw_crop_overlay()
+                        with guiutils.nonexistent_ok():
+                            dpg.show_item(self.backdrop_drawlist_gui_widget)  # held back by `start` until now
 
                     tex = self.live_texture  # read after possible reconfigure; may still go away mid-frame (shutdown / texture swap), handled at the blit site below
 

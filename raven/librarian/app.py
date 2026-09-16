@@ -3057,12 +3057,11 @@ cleanup_dialog = DPGCleanupDialog(datastore=datastore,
                                   on_committed=_on_cleanup_committed,
                                   centering_reference_window="librarian_main_window")  # tag
 
-# Set in `_gui_cancel_tasks` (the DPG exit callback) and again, defensively, in `gui_shutdown`. The two
-# startup frame callbacks (`_load_initial_animator_settings`, `_build_initial_chat_view`) run on DPG's
-# callback thread and can race app teardown: if the user closes the window mid-boot, a callback may still be
-# in flight while the context is being destroyed, and creating widgets then segfaults the process (no Python
-# `try/except` can catch a crash in DPG's C side — the only safe move is to not make the call). The callbacks
-# check this flag and bail.
+# Set in `_gui_cancel_tasks` (the DPG exit callback) and again, defensively, in `gui_shutdown`. The startup
+# frame callback (`_finish_startup`) runs on DPG's callback thread and can race app teardown: if the user
+# closes the window mid-boot, it may still be in flight while the context is being destroyed, and creating
+# widgets then segfaults the process (no Python `try/except` can catch a crash in DPG's C side — the only
+# safe move is to not make the call). Its steps check this flag and bail.
 _shutting_down = False
 
 # Two-phase shutdown (the pattern raven-cherrypick uses; see `raven.cherrypick.app`):
@@ -3179,10 +3178,7 @@ filedrop.install(filedrop.make_router([filedrop.DropRule(matches=lambda path: (o
                                       what="Raven-librarian",
                                       blocked=is_any_modal_window_visible))
 
-# Load default animator settings from disk.
-#
-# We must defer loading the animator settings until after the GUI has been rendered at least once,
-# so that if there are any issues during loading, we can open a modal dialog. (We don't currently do that, though.)
+# Load default animator settings from disk. A step of `_finish_startup`.
 _animator_settings = None
 def _load_initial_animator_settings() -> None:
     global _animator_settings
@@ -3225,9 +3221,8 @@ def _load_initial_animator_settings() -> None:
     _animator_settings = animator_settings  # for access from GUI event handlers
     _resize_gui()  # force GUI resize just in case (app startup on 1920x1080 screen)
 
-dpg.set_frame_callback(2, _load_initial_animator_settings)
-
-def _build_initial_chat_view(sender, app_data) -> None:
+def _build_initial_chat_view() -> None:
+    """Build the chat log, and put the keyboard where `startup_keyboard_home` says. A step of `_finish_startup`."""
     if _shutting_down:  # window closed during startup; building chat widgets now would race context teardown (segfault)
         return
     chat_controller.view.build()
@@ -3254,7 +3249,6 @@ def _build_initial_chat_view(sender, app_data) -> None:
     if startup_backend_status is not llmclient.backend_ready:
         _refresh_backend_status_pill(startup_backend_status)
         _start_backend_status_poll(delay_first_probe=True)
-dpg.set_frame_callback(3, _build_initial_chat_view)
 
 # How often to re-ask whether the avatar has video. Second-scale, because the one thing left for it to
 # notice is a stream warming up: the checkbox applies itself directly, and the idle detector announces
@@ -3343,17 +3337,22 @@ def _start_panel_occupancy_watch() -> None:
         return
     panel_occupancy_task_manager.submit(_panel_occupancy_task, env())
 
-def _apply_saved_panel_choice(sender, app_data) -> None:
-    """Start deciding who holds the right-hand panel, which also puts the chat graph back if that is where the user left it.
+def _finish_startup(sender, app_data) -> None:
+    """Everything at startup that waits for the GUI to have rendered once, in order."""
+    # One callback rather than one frame each: frame callbacks all run on DPG's single callback thread, so a
+    # later one could not start before an earlier one returned anyway, and separate numbers only spread the
+    # order across the file.
+    _load_initial_animator_settings()  # the avatar's settings, its stream, and the backdrop
 
-    Frame 4, which is after the avatar has started (frame 2) and the chat view has been built (frame 3).
-    Later rather than at GUI build time for two reasons: the avatar renderer initializes into that panel
-    and should not have to do it while the panel is hidden, and the graph's first build wants a datastore
-    and a chat view that already exist.
-    """
+    # Before the chat view, which is the slow step: the watch decides the panel's occupant, and until the
+    # stream's first frame that is the chat graph. It is also what puts the graph back if the user left it
+    # on.
+    _start_panel_occupancy_watch()
+
+    _build_initial_chat_view()
+
     if _shutting_down:
         return
-    _start_panel_occupancy_watch()
     # Raven-server was reachable at startup or the app would have exited, so the watch starts believing that
     # and waits an interval before its first probe.
     _start_server_status_poll(delay_first_probe=True)
@@ -3362,7 +3361,9 @@ def _apply_saved_panel_choice(sender, app_data) -> None:
     # ImGui gives nav focus to the first navigable item of a window by itself, so the composer reports
     # focused from the first frame and a focus-driven mark would be lit before anyone had touched it.
     keyboardmark.install_caret_follower(["chat_field"])  # tag
-dpg.set_frame_callback(4, _apply_saved_panel_choice)
+# Frame 2: after the GUI has been rendered at least once, so that a problem while loading could open a modal
+# dialog. (Loading does not currently open one.)
+dpg.set_frame_callback(2, _finish_startup)
 
 # A `SIGTERM` — a plain `kill`, a session manager logging out, a supervisor stopping the app — now leaves
 # the loop the way the window's close button does, so the teardown below runs and the chat is saved. The

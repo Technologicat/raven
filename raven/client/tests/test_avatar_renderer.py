@@ -64,6 +64,7 @@ def renderer(dpg_context, monkeypatch):
     # backdrop here, so it takes the second branch and wants the video's own geometry.
     instance.backdrop_last_configured_image = None
     instance.full_h = 8
+    instance.first_frame_received = True  # a stream that is past its warmup, which is the ordinary case
 
     yield instance, calls, live_image
     dpg.delete_item(window)
@@ -128,6 +129,19 @@ def test_resuming_normally_sets_the_flag(renderer):
     instance.pause(action="resume")
     assert instance.animator_running is True
     assert calls == ["start"]
+
+
+@pytest.mark.parametrize("first_frame_received", [False, True])
+def test_resuming_shows_the_backdrop_only_once_the_stream_has_a_frame(renderer, first_frame_received):
+    """A backdrop with no avatar in front of it is a picture of nothing, so a stream still warming up keeps
+    it hidden, and a resume must not bring it back early. Both halves, so the test cannot pass against a
+    resume that never shows it at all."""
+    instance, unused_calls, unused_live_image = renderer
+    dpg.hide_item(instance.backdrop_drawlist_gui_widget)
+    instance.first_frame_received = first_frame_received
+    instance.animator_running = False
+    instance.pause(action="resume")
+    assert dpg.is_item_shown(instance.backdrop_drawlist_gui_widget) is first_frame_received
 
 
 def test_the_running_flag_is_not_shared_between_renderers(renderer):
