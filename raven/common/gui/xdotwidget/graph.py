@@ -173,12 +173,15 @@ class Pen:
 
     @staticmethod
     def mix(tgt: "Pen", pen1: "Pen", pen2: "Pen", t: float) -> None:
-        """Mix colors of pen1 and pen2, saving result to tgt.
+        """Mix pen1 and pen2, saving result to tgt.
 
-        t in [0, 1]: mix result is (1 - t) * pen1 + t * pen2.
+        t in [0, 1]: mix result is (1 - t) * pen1 + t * pen2, for the colors, the line width and the font
+        size. The dash pattern has no in-between, and is left as `tgt` has it.
         """
         tgt.color = mix_colors(pen1.color, pen2.color, t)
         tgt.fillcolor = mix_colors(pen1.fillcolor, pen2.fillcolor, t)
+        tgt.linewidth = pen1.linewidth + (pen2.linewidth - pen1.linewidth) * t
+        tgt.fontsize = pen1.fontsize + (pen2.fontsize - pen1.fontsize) * t
 
 
 class Shape:

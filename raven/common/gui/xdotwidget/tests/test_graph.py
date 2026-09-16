@@ -21,6 +21,23 @@ def _make_edge(src, dst):
     return Edge(src, dst, points, [])
 
 
+class TestPenMix:
+    def test_everything_with_an_in_between_is_mixed(self):
+        a, b = Pen(), Pen()
+        a.color, b.color = (0.0, 0.0, 0.0, 1.0), (1.0, 0.0, 0.0, 1.0)
+        a.fillcolor, b.fillcolor = (0.0, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 1.0)
+        a.linewidth, b.linewidth = 1.0, 3.0
+        a.fontsize, b.fontsize = 10.0, 20.0
+        b.dash = (4.0, 2.0)
+        mixed = a.copy()
+        Pen.mix(mixed, a, b, 0.25)
+        assert mixed.color == pytest.approx((0.25, 0.0, 0.0, 1.0))
+        assert mixed.fillcolor == pytest.approx((0.0, 0.25, 0.0, 0.25))
+        assert approx(mixed.linewidth, 1.5)
+        assert approx(mixed.fontsize, 12.5)
+        assert mixed.dash == (), "the dash has no in-between, so `mix` must leave the target's alone"
+
+
 # ---------------------------------------------------------------------------
 # Tests: tessellate_bezier
 # ---------------------------------------------------------------------------

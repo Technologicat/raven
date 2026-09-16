@@ -70,11 +70,13 @@ class TestASurvivor:
             assert drawn(frame(still(a), b, t), "r") == [pytest.approx((100.0 * t, 40.0 * t, 1.0))]
 
 
-def styled_box(name: str, x: float, *extras, width: float = 40.0, color=(0.0, 0.0, 0.0, 1.0)) -> Node:
+def styled_box(name: str, x: float, *extras, width: float = 40.0, color=(0.0, 0.0, 0.0, 1.0),
+               linewidth: float = 1.0) -> Node:
     """A box at `(x, 0)`: a fill, an outline and a label, then `extras` — each a function of the box's left
     edge returning one more shape."""
     pen = Pen()
     pen.color = color
+    pen.linewidth = linewidth
     pen.fillcolor = (0.5, 0.5, 0.5, 1.0)
     x1, x2 = x - width / 2, x + width / 2
     corners = [(x1, -5.0), (x2, -5.0), (x2, 5.0), (x1, 5.0)]
@@ -127,13 +129,15 @@ class TestABoxChangesShapeAsOneItem:
             (["PolygonShape"], 0.75)]
 
     def test_geometry_and_pen_are_interpolated(self):
-        """A box widening as it is marked, and its outline changing colour, both happen gradually."""
-        old = styled_box("r", 0.0, width=40.0, color=(0.0, 0.0, 0.0, 1.0))
-        new = styled_box("r", 0.0, width=80.0, color=(1.0, 0.0, 0.0, 1.0))
+        """A box widening as it is marked, its outline changing colour and growing heavy as it becomes HEAD —
+        all of it happens gradually."""
+        old = styled_box("r", 0.0, width=40.0, color=(0.0, 0.0, 0.0, 1.0), linewidth=1.0)
+        new = styled_box("r", 0.0, width=80.0, color=(1.0, 0.0, 0.0, 1.0), linewidth=3.0)
         (node, _, _, _), = frame(still(graph(old)), graph(new), 0.5).nodes
-        fill = node.shapes[0]
+        fill, outline = node.shapes[0], node.shapes[1]
         assert [p[0] for p in fill.points] == pytest.approx([-30.0, 30.0, 30.0, -30.0])
-        assert node.shapes[1].pen.color == pytest.approx((0.5, 0.0, 0.0, 1.0))
+        assert outline.pen.color == pytest.approx((0.5, 0.0, 0.0, 1.0))
+        assert outline.pen.linewidth == pytest.approx(2.0)
 
     def test_a_moved_box_keeps_its_shapes_where_they_belong(self):
         """Shapes are paired in the box's own coordinates, so moving the whole box moves them with it."""

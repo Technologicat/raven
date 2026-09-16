@@ -332,10 +332,8 @@ def _lerp_number(a: float, b: float, t: float) -> float:
 
 
 def _pen_between(old: Pen, new: Pen, t: float) -> Pen:
-    pen = new.copy()
+    pen = new.copy()  # for the dash, which `mix` leaves alone and pairing guarantees the two share
     Pen.mix(pen, old, new, t)
-    pen.linewidth = _lerp_number(old.linewidth, new.linewidth, t)
-    pen.fontsize = _lerp_number(old.fontsize, new.fontsize, t)
     return pen
 
 
