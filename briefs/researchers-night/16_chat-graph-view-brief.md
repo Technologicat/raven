@@ -1223,6 +1223,31 @@ jump-then-chase it was meant to prevent cannot happen, because the anchor never 
 
 The transition animation is therefore done.
 
+**Open, found live the same afternoon: a box and its decorations do not fade as one item.** Stepping the
+cursor up and down the active branch, attachment cards and role icons turn briefly translucent (Juha,
+2026-09-16). **The intended unit is the box plus its decorations, if any** (Juha). Diagnosis, inferred from
+the drawing and not measured: a surviving box is drawn twice — new version underneath, old version fading
+on top — and alpha is per shape, so the old copy's half-transparent box fill lands over the new copy's card
+and icon where they straddle the box's edges. A box fading alone (arriving or leaving) has the same flaw:
+its own fill shows through its card. DPG has no group opacity. Options raised, **decision pending (Juha)**:
+
+1. **Draw a surviving box once, no crossfade.** A few lines in `morph.frame`; the ring and any count change
+   inside a box switch instantly, as before 2026-09-16. Does not fix a box fading alone.
+2. **Crossfade only the shapes that differ.** Moderate. Probably does not fix the reported case: matching by
+   position relative to the box fails when a box widens on being marked (5 units, per a measurement in an
+   earlier test; not re-measured).
+3. **Morph shapes within a surviving box** — pair old and new shapes by kind and order, interpolate their
+   geometry, fade only the unpaired ones. Correct everywhere, including a widened box; the largest (all
+   seven shape kinds, plus pairing). Does not by itself fix a box fading alone.
+4. **Fade toward the background colour instead of toward transparent, and draw survivors once.** Every shape
+   of a fading unit is drawn opaque with its colour mixed toward the panel background by `1 - opacity`, so
+   the unit's shapes occlude each other exactly as at rest; an image gets a background-coloured patch under
+   it and is drawn at alpha. Exact on a plain background, and fixes the lone-fade case too. Moderate: a
+   couple of hours with tests (renderer mixing, image patch, survivors once in `morph`, the opacity and
+   stacking tests rewritten). The trade: a fading unit covers what is behind it instead of showing it —
+   visible mainly where a box travels into a gap and passes over the gap box. Recommended, pending a live
+   look at that case.
+
 **Item 10, the look check, is struck** (Juha, 2026-09-16): it was done continuously alongside the other
 items rather than as a pass of its own, and the view looks right as it stands. **So nothing in this brief is
 left for Researchers' Night.** It stays open on item 8, search, which is after the event.
