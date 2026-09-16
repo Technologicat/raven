@@ -154,6 +154,7 @@ class DPGAvatarRenderer:
         self.backdrop_image = None  # PIL image; latest loaded image, or `None` for no backdrop
         self.backdrop_texture = None  # raw texture
         self.backdrop_texture_id_counter = 0
+        self._backdrop_lock = threading.Lock()  # serializes `configure_backdrop`
         # tracking for backdrop's state so that `configure_backdrop` knows whether it needs to do anything
         self.backdrop_last_configured_image = None  # image last seen and configured by `configure_backdrop`
         self.backdrop_width = None  # will contain the width after `configure_backdrop`
@@ -501,6 +502,21 @@ class DPGAvatarRenderer:
 
               Calling from any other thread (including GUI event handlers) is fine.
         """
+        # One at a time. Each call names its texture from a counter it reads at the start and bumps after
+        # creating the texture, so two overlapping calls pick the same name, and DPG refuses the second
+        # ("Alias already exists"). Librarian's startup does overlap two: the avatar settings load
+        # configures the backdrop while the startup resize task does the same.
+        #
+        # Holding the lock across the frame wait inside is safe, because the render thread never calls this
+        # (see above), so the thread being waited on never waits for the lock.
+        with self._backdrop_lock:
+            self._configure_backdrop(new_width, new_height, new_blur_state)
+
+    def _configure_backdrop(self,
+                            new_width: int,
+                            new_height: int,
+                            new_blur_state: bool) -> None:
+        """`configure_backdrop`, with its lock held."""
         if new_blur_state is None:
             raise TypeError("`new_blur_state` is mandatory; got `None`")
         logger.info(f"DPGAvatarRenderer.configure_backdrop: Updating backdrop size to {new_width}x{new_height}, and blur state to {new_blur_state}")

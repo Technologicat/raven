@@ -10,7 +10,9 @@ bookkeeping, not the picture.
 """
 
 import threading
+import time
 
+import PIL.Image
 import pytest
 
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
@@ -152,3 +154,54 @@ def test_it_is_safe_from_two_threads(renderer):
     for thread in threads:
         thread.join()
     assert instance.animator_running in (True, False)  # no exception escaped, which is the assertion
+
+
+@pytest.fixture
+def backdrop_renderer(renderer, monkeypatch):
+    """`renderer`, plus what `configure_backdrop` reads, with texture creation slowed down.
+
+    The slowdown is what makes two calls overlap on every run rather than now and then: each call picks its
+    texture's name before creating it and counts it afterwards, and the creation is where they now linger.
+    """
+    instance, unused_calls, unused_live_image = renderer
+    instance.texture_registry = dpg.add_texture_registry()
+    with dpg.window():
+        dpg.add_drawlist(width=10, height=10, tag="avatar_backdrop_drawlist")  # the renderer addresses it by this tag
+    instance.backdrop_image = PIL.Image.new("RGBA", (32, 32))
+    instance.backdrop_texture_id_counter = 0
+    instance.backdrop_width = instance.backdrop_height = instance.backdrop_blur_state = None
+    instance._backdrop_lock = threading.Lock()  # set by `__init__`, which the fixture bypasses
+
+    create = dpg.add_raw_texture
+
+    def slow_create(*args, **kwargs):
+        time.sleep(0.1)
+        return create(*args, **kwargs)
+    monkeypatch.setattr(avatar_renderer.dpg, "add_raw_texture", slow_create)
+    return instance
+
+
+def test_overlapping_backdrop_configurations_do_not_collide(backdrop_renderer):
+    """Librarian's startup configures the backdrop twice at once: once when the avatar's settings have
+    loaded, and once from the resize task the startup window size triggers. Both used to name their texture
+    `avatar_backdrop_texture_1`, and DPG refused the second, which killed that resize task."""
+    instance = backdrop_renderer
+
+    def overlap(configure) -> list:
+        errors = []
+
+        def run(width):
+            try:
+                configure(width, 16, False)  # no blur, which would go to the server
+            except Exception as exc:
+                errors.append(exc)
+        threads = [threading.Thread(target=run, args=(width,)) for width in (20, 24)]  # different sizes, so both redraw
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        return errors
+
+    assert overlap(instance._configure_backdrop), \
+        "two unserialized calls did not collide, so this fixture cannot show the lock doing anything"
+    assert overlap(instance.configure_backdrop) == []
