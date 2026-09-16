@@ -38,6 +38,17 @@ class TestSmoothValue:
         assert sv.current == 10.0
         assert sv.target == 10.0
 
+    def test_shift_moves_both_ends_and_keeps_the_motion(self):
+        sv = SmoothValue(value=0.0, rate=0.5)
+        sv.target = 10.0
+        sv.update(dt=0.04)
+        midway = sv.current
+        assert 0.0 < midway < 10.0, "the fixture did not leave the value in flight"
+        sv.shift(100.0)
+        assert approx(sv.current, midway + 100.0)
+        assert approx(sv.target, 110.0)
+        assert sv.is_animating()
+
     def test_is_animating(self):
         """is_animating is True when current differs from target."""
         sv = SmoothValue(value=0.0)
@@ -202,6 +213,16 @@ class TestSmoothInt:
             si.update(dt=0.04)
 
         assert si.current == si.target
+
+    def test_shift_moves_both_ends_and_keeps_the_subpixel_position(self):
+        si = SmoothInt(value=0, rate=0.5)
+        si.target = 10
+        si.update(dt=0.04)
+        midway = si.current_exact
+        assert 0.0 < midway < 10.0, "the fixture did not leave the value in flight"
+        si.shift(100)
+        assert approx(si.current_exact, midway + 100.0)
+        assert si.target == 110
 
     def test_subpixel_accumulation(self):
         """Small fractional deltas accumulate rather than being lost to truncation.

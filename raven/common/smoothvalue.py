@@ -266,6 +266,15 @@ class SmoothValue:
         self._current = value
         self._target = value
 
+    def shift(self, delta: float) -> None:
+        """Move both current and target value by `delta`, keeping any animation in flight.
+
+        For a change of coordinates under a value that may be moving: the motion carries on, from and to the
+        same places as before, expressed in the new coordinates.
+        """
+        self._current += delta
+        self._target += delta
+
     def is_animating(self) -> bool:
         """Return True if the value is still animating toward target."""
         return abs(self._target - self._current) > self.EPSILON
@@ -350,6 +359,11 @@ class SmoothInt:
         """Set both current and target value immediately (no animation)."""
         self._current_float = float(value)
         self._target = value
+
+    def shift(self, delta: int) -> None:
+        """Move both current and target value by `delta`, keeping any animation in flight. As for `SmoothValue`."""
+        self._current_float += delta
+        self._target += delta
 
     def is_animating(self) -> bool:
         """Return True if the value is still animating toward target."""

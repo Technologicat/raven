@@ -270,6 +270,123 @@ class TestAnimateViewDecidesWhetherTheViewGlides:
             dpg.delete_item(window)
 
 
+def moved(graph: Graph, dx: float, only: str | None = None) -> Graph:
+    """A rebuild of `graph` with every node — or only the one named `only` — `dx` units to the right."""
+    pen = Pen()
+    nodes = {}
+    for old in graph.nodes:
+        x = old.x + (dx if only in (None, old.internal_name) else 0.0)
+        nodes[old.internal_name] = Node(x=x, y=old.y, w=NODE_W, h=NODE_H, internal_name=old.internal_name,
+                                        shapes=[EllipseShape(pen, x, old.y, NODE_W / 2, NODE_H / 2)])
+    edges = [Edge(nodes[e.src.internal_name], nodes[e.dst.internal_name],
+                  [(nodes[e.src.internal_name].x, e.src.y), (nodes[e.dst.internal_name].x, e.dst.y)],
+                  [LineShape(pen, [(nodes[e.src.internal_name].x, e.src.y),
+                                   (nodes[e.dst.internal_name].x, e.dst.y)])])
+             for e in graph.edges]
+    return Graph(width=graph.width + dx, height=graph.height, nodes=list(nodes.values()), edges=edges)
+
+
+def finish_morph(instance: XDotWidget) -> None:
+    """Wind the morph's clock until it is done. Wound rather than waited; see `TestItReportsWhetherItIsBusy`."""
+    for _ in range(200):
+        instance._morph_progress._last_time -= 0.05
+        instance.update()
+        if instance._morph_source is None:
+            return
+    raise AssertionError("the morph never finished")
+
+
+def screen_position(instance: XDotWidget, name: str) -> tuple[float, float]:
+    """Where `name` is on screen this instant, morph included."""
+    return instance._viewport.graph_to_screen(*instance._picture_now().positions[name])
+
+
+class TestSetGraphCanMorph:
+    """`set_graph(..., animate=True)` changes the picture over several frames, and `anchor_node` holds one
+    node still on screen across the change."""
+
+    def test_off_by_default(self, widget):
+        widget.update()
+        widget.set_graph(moved(chat_shaped_graph(), 50.0))
+        assert not widget.is_animating(), "a plain `set_graph` started a morph"
+
+    def test_asked_for_it_morphs_and_then_rests(self, widget):
+        widget.update()
+        at_rest = drawn(widget)
+        widget.set_graph(moved(chat_shaped_graph(), 50.0, only="b2"), animate=True)
+        assert widget.is_animating()
+        widget.update()
+        assert drawn(widget) > at_rest, "mid-morph draws the old picture and the new, so more than either"
+        finish_morph(widget)
+        widget.update()
+        assert not widget.is_animating()
+
+    def test_a_morph_moves_a_node_gradually(self, widget):
+        widget.set_zoom(1.0, animate=False)
+        widget.update()
+        before = screen_position(widget, "b2")
+        widget.set_graph(moved(chat_shaped_graph(), 200.0, only="b2"), animate=True)
+        assert screen_position(widget, "b2") == pytest.approx(before), "b2 jumped when the morph started"
+        widget._morph_progress._last_time -= 0.05
+        widget.update()
+        partway = screen_position(widget, "b2")[0]
+        assert before[0] < partway < before[0] + 200.0
+        finish_morph(widget)
+        assert screen_position(widget, "b2") == pytest.approx((before[0] + 200.0, before[1]))
+
+    def test_with_nothing_on_screen_the_graph_just_appears(self, dpg_context):
+        with dpg.window() as window:
+            instance = XDotWidget(parent=window, width=600, height=400, animate_graph=True)
+        try:
+            instance.set_graph(chat_shaped_graph())
+            assert not instance.is_animating()
+        finally:
+            instance.destroy()
+            dpg.delete_item(window)
+
+    @pytest.mark.parametrize("animate", [False, True])
+    def test_the_anchor_keeps_its_place_on_screen(self, widget, animate):
+        widget.set_zoom(1.0, animate=False)
+        widget.update()
+        before = screen_position(widget, "b")
+        others_before = screen_position(widget, "a")
+        widget.set_graph(moved(chat_shaped_graph(), 300.0), animate=animate, anchor_node="b")
+        assert screen_position(widget, "b") == pytest.approx(before)
+        if animate:
+            finish_morph(widget)
+            assert screen_position(widget, "b") == pytest.approx(before)
+        # Everything moved together, so everything holds still: the negative control is a node that is not
+        # the anchor, which would have slid 300 px had the view not moved with the layout.
+        assert screen_position(widget, "a") == pytest.approx(others_before)
+
+    def test_without_an_anchor_a_moved_layout_moves_on_screen(self, widget):
+        widget.set_zoom(1.0, animate=False)
+        widget.update()
+        before = screen_position(widget, "b")
+        widget.set_graph(moved(chat_shaped_graph(), 300.0))
+        assert screen_position(widget, "b")[0] == pytest.approx(before[0] + 300.0)
+
+    def test_edges_are_rebuilt_only_while_morphing(self, dpg_context):
+        calls = []
+
+        def edge_between(src, dst):
+            calls.append((src.internal_name, dst.internal_name))
+            return Edge(src, dst, [(src.x, src.y), (dst.x, dst.y)], [LineShape(Pen(), [(src.x, src.y), (dst.x, dst.y)])])
+
+        with dpg.window() as window:
+            instance = XDotWidget(parent=window, width=600, height=400, edge_between=edge_between)
+        try:
+            instance.set_graph(chat_shaped_graph())
+            instance.update()
+            assert calls == [], "edges were rebuilt at rest"
+            instance.set_graph(moved(chat_shaped_graph(), 50.0), animate=True)
+            instance.update()
+            assert ("b", "b2") in calls
+        finally:
+            instance.destroy()
+            dpg.delete_item(window)
+
+
 class TestItReportsWhatItsOwnRedrawsCost:
     """`last_render_time` and `render_count`, which is what an overlay showing "draw: N ms" reads.
 

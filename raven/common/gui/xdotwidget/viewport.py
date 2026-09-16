@@ -204,6 +204,15 @@ class Viewport:
             self.pan_x.set_immediate(self.pan_x.target)
             self.pan_y.set_immediate(self.pan_y.target)
 
+    def shift(self, dx: float, dy: float) -> None:
+        """Move the view by `(dx, dy)` graph units at once, keeping any pan in flight.
+
+        For a change of coordinates rather than a move: when the graph under the view has moved by that
+        much, the same things stay on screen.
+        """
+        self.pan_x.shift(dx)
+        self.pan_y.shift(dy)
+
     def zoom_to(self, new_zoom: float, center_sx: float | None = None,
                 center_sy: float | None = None, animate: bool = True) -> None:
         """Set the zoom, optionally about a point that is to stay where it is on screen.

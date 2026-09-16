@@ -285,6 +285,16 @@ class TestViewport:
         assert approx(vp.pan_x.current, 0)
         assert approx(vp.pan_y.current, 0)
 
+    def test_shift_keeps_a_pan_in_flight(self):
+        """A shift is a change of coordinates, so a pan under way carries on to the same place, moved."""
+        vp = Viewport(width=100, height=100)
+        vp.pan_to_point(75.0, 25.0, animate=True)
+        assert vp.is_animating(), "nothing is in flight, so this fixture cannot tell a shift from a jump"
+        vp.shift(10.0, -20.0)
+        assert (vp.pan_x.current, vp.pan_y.current) == (10.0, -20.0)
+        assert (vp.pan_x.target, vp.pan_y.target) == (85.0, 5.0)
+        assert vp.is_animating()
+
 
 class TestPanClamping:
     """Keeping the view over the graph, so a pan cannot buy empty space the reader must cross back."""

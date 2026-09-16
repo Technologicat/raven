@@ -20,15 +20,17 @@ import dearpygui.dearpygui as dpg
 
 from unpythonic import sym, timer
 
+from ...smoothvalue import SmoothValue
 from .. import animation as gui_animation
 from .. import utils as guiutils
 
+from . import morph
 from .constants import DPGColor, Point
 from .graph import Graph, Node, Edge, Element, PolygonShape, get_highlight_colors
 from .highlight import HighlightState
 from .hitdetect import hit_test_screen
 from .parser import parse_xdot
-from .renderer import render_graph, color_to_dpg, set_dark_mode
+from .renderer import render_graph, render_scene, color_to_dpg, set_dark_mode
 from .search import SearchState
 from .viewport import Viewport
 
@@ -71,6 +73,10 @@ class XDotWidget(gui_animation.Animation):
                  mouse_wheel_zoom_factor: float = 1.25,
                  clamp_pan_to_graph: bool = False,
                  animate_view: bool = True,
+                 animate_graph: bool = False,
+                 animate_graph_rate: float = 0.3,
+                 stand_in: morph.StandIn | None = None,
+                 edge_between: morph.EdgeBetween | None = None,
                  dark_mode: bool = False,
                  dark_bg_color: DPGColor = (45, 45, 48, 255),
                  light_bg_color: DPGColor = (255, 255, 255, 255)):
@@ -117,6 +123,21 @@ class XDotWidget(gui_animation.Animation):
                         an `animate` argument, whose default `None` means this; an explicit `True` or
                         `False` overrides it for that call. The mouse wheel follows it too; a drag always
                         moves the view immediately. A bare attribute, so it can be changed at any time.
+        `animate_graph`: Whether `set_graph` morphs from the picture on screen into the new graph rather than
+                         replacing it between two frames. The default for `set_graph`'s `animate`, as
+                         `animate_view` is for the view methods. A bare attribute.
+
+                         Off by default, since a morph and the camera are one decision: a caller that moves
+                         the view itself after `set_graph` should pass `anchor_node` there instead, or the
+                         picture will be moving under a camera that has already arrived.
+        `animate_graph_rate`: How fast a morph runs, in (0, 1]; as `SmoothValue`'s `rate`.
+        `stand_in`: For a morph. `(name, graph) -> name`: which node drawn in `graph` represents the node
+                    `name`, which `graph` does not draw — for a graph that folds nodes into a summary box,
+                    that box. A node leaving travels to its stand-in, and one arriving starts from its
+                    stand-in; with none, a node fades where it is. See `xdotwidget.morph`.
+        `edge_between`: For a morph. `(src, dst) -> Edge`: an edge between two nodes at arbitrary positions,
+                        so edges stay attached while their endpoints move. The nodes it is given carry a
+                        position, a size and a name, and no shapes. Without one, edges fade where they are.
         `on_open_url`: Callback when a node with a URL is right-clicked.
                         Receives the URL string.
         `dark_mode`: If True, invert graph lightness for dark backgrounds.
@@ -140,6 +161,12 @@ class XDotWidget(gui_animation.Animation):
         self._graph_text_fonts = graph_text_fonts
         self._mouse_wheel_zoom_factor = mouse_wheel_zoom_factor
         self.animate_view = animate_view
+        self.animate_graph = animate_graph
+        self._stand_in = stand_in
+        self._edge_between = edge_between
+        # A morph in progress is the picture it started from plus how far it has got; `None` when at rest.
+        self._morph_source: morph.Picture | None = None
+        self._morph_progress = SmoothValue(1.0, rate=animate_graph_rate)
         self._dark_mode = dark_mode
         self._dark_bg_color = dark_bg_color
         self._light_bg_color = light_bg_color
@@ -244,24 +271,54 @@ class XDotWidget(gui_animation.Animation):
         # Register to Raven's GUI animator. This handles calling the frame update.
         gui_animation.animator.add(self)
 
-    def set_xdotcode(self, xdotcode: str) -> None:
+    def set_xdotcode(self, xdotcode: str, animate: bool | None = None, anchor_node: str | None = None) -> None:
         """Load a graph from xdot format code.
 
         `xdotcode`: The xdot format string (output of GraphViz with xdot format).
+        `animate`, `anchor_node`: As for `set_graph`.
+        """
+        self.set_graph(parse_xdot(xdotcode), animate=animate, anchor_node=anchor_node)
+
+    def set_graph(self, graph: Graph, animate: bool | None = None, anchor_node: str | None = None) -> None:
+        """Set a pre-parsed Graph object.
+
+        `animate`: Whether to morph from the picture on screen into `graph`; `None` takes `animate_graph`.
+                   With nothing on screen yet, `graph` simply appears. Calling this during a morph starts a
+                   new one from wherever the first had got to.
+        `anchor_node`: Internal name of a node to hold still on screen across the change: the view moves by
+                       exactly as much as that node moved in the layout. Applies whether or not the change is
+                       animated, and is ignored unless both the picture on screen and `graph` draw the node.
         """
         with self._render_lock:
-            self._graph = parse_xdot(xdotcode)
-            self._viewport.set_graph_bounds(self._graph.width, self._graph.height)
-            self._search.set_graph(self._graph)
-            self._needs_render = True
+            animate = self.animate_graph if animate is None else animate
+            source = self._picture_now() if self._graph is not None else None
 
-    def set_graph(self, graph: Graph) -> None:
-        """Set a pre-parsed Graph object."""
-        with self._render_lock:
+            if source is not None and anchor_node is not None:
+                was_at = source.positions.get(anchor_node)
+                now = graph.get_node_by_name(anchor_node)
+                if was_at is not None and now is not None:
+                    dx, dy = now.x - was_at[0], now.y - was_at[1]
+                    source = morph.shifted(source, dx, dy)
+                    self._viewport.shift(dx, dy)
+
+            if animate and source is not None:
+                self._morph_source = source
+                self._morph_progress.set_immediate(0.0)
+                self._morph_progress.target = 1.0
+            else:
+                self._morph_source = None
+                self._morph_progress.set_immediate(1.0)
+
             self._graph = graph
             self._viewport.set_graph_bounds(graph.width, graph.height)
             self._search.set_graph(graph)
             self._needs_render = True
+
+    def _picture_now(self) -> morph.Picture:
+        """What is on screen this instant, including any morph partway through. Needs a graph."""
+        if self._morph_source is None:
+            return morph.still(self._graph)
+        return morph.frame(self._morph_source, self._graph, self._morph_progress.current, self._stand_in)
 
     def get_graph(self) -> Graph | None:
         """Return the current Graph, or None."""
@@ -653,8 +710,9 @@ class XDotWidget(gui_animation.Animation):
     # Animation and rendering
 
     def is_animating(self) -> bool:
-        """Return True if any viewport or highlight animation is in progress."""
-        return self._viewport.is_animating() or self._highlight.is_animating()
+        """Return True if any viewport, highlight or graph morph animation is in progress."""
+        return (self._viewport.is_animating() or self._highlight.is_animating() or
+                self._morph_source is not None)
 
     def render_frame(self, t: int) -> sym:
         """Adapter; hook for Raven's GUI animation system.
@@ -696,6 +754,15 @@ class XDotWidget(gui_animation.Animation):
         if self._viewport.update():
             animating = True
             self._needs_render = True
+
+        # Advance a graph morph. Its last step still needs drawing, so a morph that has just finished
+        # renders once more before it is let go.
+        with self._render_lock:
+            if self._morph_source is not None:
+                if not self._morph_progress.update():
+                    self._morph_source = None
+                animating = True
+                self._needs_render = True
 
         # Re-evaluate hover each frame. Needed because several situations
         # change what's under the cursor without a mouse-move event:
@@ -766,15 +833,31 @@ class XDotWidget(gui_animation.Animation):
 
         bg_color = self._dark_bg_color if self._dark_mode else self._light_bg_color
 
-        render_graph(
-            self.drawlist,
-            self._graph,
-            self._viewport,
-            highlight_intensities=highlight_intensities,
-            text_compaction_cb=self._text_compaction_callback,
-            graph_text_fonts=self._graph_text_fonts,
-            background_color=bg_color
-        )
+        if self._morph_source is None:
+            render_graph(
+                self.drawlist,
+                self._graph,
+                self._viewport,
+                highlight_intensities=highlight_intensities,
+                text_compaction_cb=self._text_compaction_callback,
+                graph_text_fonts=self._graph_text_fonts,
+                background_color=bg_color
+            )
+        else:
+            # Edges are rebuilt only mid-morph, where their endpoints are moving. At rest the graph's own
+            # edge objects are drawn, which is what the highlights are keyed by.
+            placed = morph.scene(self._picture_now(), self._edge_between)
+            render_scene(
+                self.drawlist,
+                self._viewport,
+                shapes=placed.shapes,
+                edges=placed.edges,
+                nodes=placed.nodes,
+                highlight_intensities=highlight_intensities,
+                text_compaction_cb=self._text_compaction_callback,
+                graph_text_fonts=self._graph_text_fonts,
+                background_color=bg_color
+            )
 
         # Draw follow-edge indicator ring.
         # Recalculate from current mouse position so the indicator
