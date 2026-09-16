@@ -792,20 +792,12 @@ class HelpWindow:
         sight, so nothing here is drawn where the reader can see it — the caller has already parked it,
         and `settle_offscreen` renews the park per frame.
 
-        **A card whose owner sizes it itself is left alone**, because two things sizing one window would
-        fight. That is what `on_parked` means here.
-
-        The test used to be the page *count*, on the reasoning that a single-screen card is the kind whose
-        owner fits it. That held only because the one self-fitting card happens to have a single page, and
-        it silently cost every *other* single-page card its fitting — Raven-cherrypick's grew past its
-        configured height and dropped its own `F1` row off the bottom, with no warning, because a card has
-        no scrollbar. Asking the question the docstring was already answering fixes that, and costs the
-        self-fitting card nothing.
+        An `on_parked` handler runs after the fit, so an owner sizing its card there has the last word.
 
         The fit is exact in both directions, so a card with room to spare is shrunk to its content. Where a
         page will not answer, the configured height stands as a floor.
         """
-        if self._height_fitted or self.on_parked is not None:
+        if self._height_fitted:
             return
         self._height_fitted = True
 

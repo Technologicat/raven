@@ -102,9 +102,9 @@ def test_showing_a_card_before_the_gui_has_settled_reports_that_it_did_not(reque
 def test_the_two_show_hooks_fire_at_the_moments_they_promise(request, monkeypatch):
     """`on_parked` while the card is parked and unplaced; `on_show` once it is placed and up.
 
-    The order is a contract two callers depend on from opposite ends, and getting it wrong is invisible
-    in a still image. A file dialog measures its card from `on_parked`, which needs the card drawn but
-    not yet placed. `raven.visualizer`'s `enter_modal_mode` runs from `on_show` and asks the GUI what is
+    The order is a contract the two hooks serve from opposite ends, and getting it wrong is invisible
+    in a still image. An owner measuring or resizing its card does so from `on_parked`, which needs the
+    card drawn but not yet placed. `raven.visualizer`'s `enter_modal_mode` runs from `on_show` and asks the GUI what is
     currently visible — *and spends a frame doing it*, so running it while the card is parked draws a
     frame ImGui clamps back inside the viewport, and the card appears at the bottom right before jumping
     to the middle. That is what this pins.
