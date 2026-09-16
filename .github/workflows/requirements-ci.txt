@@ -80,7 +80,7 @@ wosfile==0.7.0
 # each entry already installs. Worth keeping rather than collapsing — it means the suite runs
 # against both majors of each.
 numpy==2.4.6 ; python_version < "3.12"
-numpy==2.5.2 ; python_version >= "3.12"
+numpy==2.5.3 ; python_version >= "3.12"
 # `visualizer.plotter` imports it at module level for its KDTree, so without it `test_plotter.py`
 # `importorskip`s away — 38 tests reporting a skip that reads as a pass.
 scipy==1.17.1 ; python_version < "3.12"
