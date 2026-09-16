@@ -126,7 +126,7 @@ def texts_on(chat_graph: chatgraph.ChatGraph, node_name: str) -> list:
     the three gap refs have no such field -- what a gap says about HEAD exists only on screen.
     """
     node = chat_graph.graph.get_node_by_name(node_name)
-    return [shape.t for shape in node.shapes if isinstance(shape, xdotgraph.TextShape)]
+    return [shape.text for shape in node.shapes if isinstance(shape, xdotgraph.TextShape)]
 
 
 def _width_of(shape) -> float:
@@ -309,7 +309,7 @@ class TestMarkdownInLabels:
         reply = forest.create_node(payload("assistant", text), parent_id=system)
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply))
         node = built.graph.get_node_by_name(reply)
-        drawn = [s.t for s in node.shapes if isinstance(s, xdotgraph.TextShape)]
+        drawn = [s.text for s in node.shapes if isinstance(s, xdotgraph.TextShape)]
         return " ".join(drawn)
 
     def test_emphasis_marks_do_not_reach_the_label(self):
@@ -358,7 +358,7 @@ class TestAMessageWithNoText:
 
     def _texts(self, built, node_id):
         node = built.graph.get_node_by_name(node_id)
-        return [s.t for s in node.shapes if isinstance(s, xdotgraph.TextShape)]
+        return [s.text for s in node.shapes if isinstance(s, xdotgraph.TextShape)]
 
     def _forest(self, message_extras):
         forest = Forest()
@@ -515,7 +515,7 @@ class TestSpeaker:
 
     def _texts(self, built, node_id):
         node = built.graph.get_node_by_name(node_id)
-        return [s.t for s in node.shapes if isinstance(s, xdotgraph.TextShape)]
+        return [s.text for s in node.shapes if isinstance(s, xdotgraph.TextShape)]
 
     def test_a_node_says_who_spoke(self, conversation):
         forest, system, greeting, user, reply = conversation
@@ -929,7 +929,7 @@ class TestRoleGlyphs:
         assert texts, "nothing was drawn, so clearing the glyph says nothing"
         for shape in texts:
             assert shape.get_bounding_box()[0] >= glyph_inner_edge, \
-                f"'{shape.t}' starts under the glyph"
+                f"'{shape.text}' starts under the glyph"
         assert node.get_bounding_box()[0] < glyph_inner_edge, \
             "the glyph does not reach inside the box at all, so clearing it costs nothing to arrange"
 
@@ -1108,7 +1108,7 @@ class TestAttachmentThumbnails:
         assert nearest_card < node.get_bounding_box()[2], \
             "no card reaches inside the box, so there was nothing for the text to run into"
         for shape in texts:
-            assert shape.get_bounding_box()[2] <= nearest_card, f"'{shape.t}' runs under the deck"
+            assert shape.get_bounding_box()[2] <= nearest_card, f"'{shape.text}' runs under the deck"
 
     def test_the_cards_are_drawn_over_the_text_rather_than_under_it(self):
         """The backstop for the gutter above, not a substitute for it. Where a measurement is off by a
@@ -1529,7 +1529,7 @@ class TestPills:
 
         node = built.graph.get_node_by_name(system)
         pill_texts = [s for s in node.shapes
-                      if isinstance(s, xdotgraph.TextShape) and s.t == "SYS"]
+                      if isinstance(s, xdotgraph.TextShape) and s.text == "SYS"]
         assert len(pill_texts) == 1
         # The pill is two coincident polygons — an opaque ground and the outline over it — so this asks
         # for the outline specifically rather than for "the one small box".
@@ -1538,7 +1538,7 @@ class TestPills:
                       and _width_of(s) < chatgraph.LayoutConfig().node_w]
         assert len(pill_boxes) == 1, "expected exactly one outline smaller than the node: the pill"
 
-        text_w = pill_texts[0].w
+        text_w = pill_texts[0].width
         box_w = _width_of(pill_boxes[0])
         assert text_w < box_w, "the label claims the whole box, so it will be drawn off to the left"
         # The text, centred, must clear both rounded caps. Equality is the intent -- the box is built as

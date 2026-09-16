@@ -215,8 +215,8 @@ class TestShapeParsing:
         node_a = graph.get_node_by_name("a")
         ellipses = _shapes_of_type(node_a, EllipseShape)
         e = ellipses[0]
-        assert e.w == 27
-        assert e.h == 18
+        assert e.rx == 27
+        assert e.ry == 18
 
     def test_node_ellipse_not_filled(self):
         """Lowercase 'e' produces an unfilled ellipse."""
@@ -237,11 +237,11 @@ class TestShapeParsing:
         graph = parse_xdot(SIMPLE_XDOT)
         node_a = graph.get_node_by_name("a")
         texts = _shapes_of_type(node_a, TextShape)
-        assert texts[0].t == "a"
+        assert texts[0].text == "a"
 
         node_b = graph.get_node_by_name("b")
         texts = _shapes_of_type(node_b, TextShape)
-        assert texts[0].t == "b"
+        assert texts[0].text == "b"
 
     def test_edge_has_bezier(self):
         """Edge with 'B' draw command produces a BezierShape."""

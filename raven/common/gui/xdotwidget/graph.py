@@ -201,34 +201,34 @@ class TextShape(Shape):
     Attributes:
         pen: Drawing pen.
         x, y: Position (baseline).
-        j: Justification (-1=left, 0=center, 1=right), applied against `w`.
-        w: Expected width (for scaling to fit).
-        t: The text content.
+        justify: `LEFT`, `CENTER` or `RIGHT` (-1, 0, 1), applied against `width`.
+        width: Width of the text, in graph coordinates.
+        text: The text content.
     """
 
     LEFT, CENTER, RIGHT = -1, 0, 1
 
-    def __init__(self, pen: Pen, x: float, y: float, j: int, w: float, t: str):
+    def __init__(self, pen: Pen, x: float, y: float, justify: int, width: float, text: str):
         super().__init__()
         self.pen = pen.copy()
         self.x = x
         self.y = y
-        self.j = j
-        self.w = w
-        self.t = t
+        self.justify = justify
+        self.width = width
+        self.text = text
 
     def get_bounding_box(self) -> tuple[float, float, float, float]:
         # Approximate bounding box based on position and width
         # Height is estimated from font size
         h = self.pen.fontsize
-        if self.j == self.LEFT:
+        if self.justify == self.LEFT:
             x1 = self.x
-            x2 = self.x + self.w
-        elif self.j == self.CENTER:
-            x1 = self.x - self.w / 2
-            x2 = self.x + self.w / 2
+            x2 = self.x + self.width
+        elif self.justify == self.CENTER:
+            x1 = self.x - self.width / 2
+            x2 = self.x + self.width / 2
         else:  # RIGHT
-            x1 = self.x - self.w
+            x1 = self.x - self.width
             x2 = self.x
         y1 = self.y - h
         y2 = self.y
@@ -241,22 +241,22 @@ class EllipseShape(Shape):
     Attributes:
         pen: Drawing pen.
         x0, y0: Center position.
-        w, h: Width and height (radii).
+        rx, ry: Horizontal and vertical radius.
         filled: Whether to fill the ellipse.
     """
 
-    def __init__(self, pen: Pen, x0: float, y0: float, w: float, h: float, filled: bool = False):
+    def __init__(self, pen: Pen, x0: float, y0: float, rx: float, ry: float, filled: bool = False):
         super().__init__()
         self.pen = pen.copy()
         self.x0 = x0
         self.y0 = y0
-        self.w = w
-        self.h = h
+        self.rx = rx
+        self.ry = ry
         self.filled = filled
 
     def get_bounding_box(self) -> tuple[float, float, float, float]:
-        return (self.x0 - self.w, self.y0 - self.h,
-                self.x0 + self.w, self.y0 + self.h)
+        return (self.x0 - self.rx, self.y0 - self.ry,
+                self.x0 + self.rx, self.y0 + self.ry)
 
 
 class PolygonShape(Shape):
@@ -418,7 +418,7 @@ class Element(CompoundShape):
 
     def get_texts(self) -> list[str]:
         """Return text content of any TextShapes in this element."""
-        return [s.t for s in self.shapes if isinstance(s, TextShape)]
+        return [s.text for s in self.shapes if isinstance(s, TextShape)]
 
     def get_drawn_bounding_box(self) -> tuple[float, float, float, float] | None:
         """Return the box enclosing everything this element puts on screen.

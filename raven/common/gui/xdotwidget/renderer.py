@@ -222,19 +222,19 @@ def _render_text_shape(drawlist: int | str,
         return
 
     # Get text content, possibly compacted
-    text = shape.t
-    screen_width = shape.w * zoom
+    text = shape.text
+    screen_width = shape.width * zoom
     if text_compaction_cb is not None and font_size_px < 8:
         text = text_compaction_cb(text, screen_width)
         if not text:
             return
 
     # Calculate position based on justification.
-    # `shape.w` is the text width in graph coordinates (from GraphViz).
+    # `shape.width` is the text width in graph coordinates (from GraphViz).
     # DPG's draw_text is always left-aligned, so we offset manually.
-    if shape.j == TextShape.LEFT:
+    if shape.justify == TextShape.LEFT:
         x = sx
-    elif shape.j == TextShape.CENTER:
+    elif shape.justify == TextShape.CENTER:
         x = sx - screen_width / 2
     else:  # RIGHT
         x = sx - screen_width
@@ -281,8 +281,8 @@ def _render_ellipse_shape(drawlist: int | str,
     zoom = viewport.zoom.current
 
     # Scale radii
-    rx = shape.w * zoom
-    ry = shape.h * zoom
+    rx = shape.rx * zoom
+    ry = shape.ry * zoom
 
     # DPG's draw_ellipse takes a bounding box (pmin, pmax), not center+radius.
     pmin = (cx - rx, cy - ry)

@@ -289,7 +289,7 @@ class TestIterShapes:
         graph = self.populated_graph()
         walked = list(graph.iter_shapes())
         # The nodes' labels are what a walk of `graph.shapes` alone would miss.
-        assert sorted(s.t for s in walked if isinstance(s, TextShape)) == ["dst", "src"]
+        assert sorted(s.text for s in walked if isinstance(s, TextShape)) == ["dst", "src"]
         assert len([s for s in walked if isinstance(s, LineShape)]) == 2, \
             "the backdrop and the edge's own line"
 

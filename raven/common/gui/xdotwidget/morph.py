@@ -278,7 +278,7 @@ def _signature(shape: Shape) -> tuple:
     """
     dash = shape.pen.dash if shape.pen is not None else ()
     if isinstance(shape, TextShape):
-        return (TextShape, shape.j, shape.t, dash)
+        return (TextShape, shape.justify, shape.text, dash)
     if isinstance(shape, EllipseShape):
         return (EllipseShape, shape.filled, dash)
     if isinstance(shape, (PolygonShape, BezierShape)):
@@ -345,11 +345,11 @@ def _shape_between(old: Shape, new: Shape, dx: float, dy: float, t: float) -> Sh
     if isinstance(new, TextShape):
         return TextShape(_pen_between(old.pen, new.pen, t),
                          _lerp_number(old.x + dx, new.x, t), _lerp_number(old.y + dy, new.y, t),
-                         new.j, _lerp_number(old.w, new.w, t), new.t)
+                         new.justify, _lerp_number(old.width, new.width, t), new.text)
     if isinstance(new, EllipseShape):
         return EllipseShape(_pen_between(old.pen, new.pen, t),
                             _lerp_number(old.x0 + dx, new.x0, t), _lerp_number(old.y0 + dy, new.y0, t),
-                            _lerp_number(old.w, new.w, t), _lerp_number(old.h, new.h, t), new.filled)
+                            _lerp_number(old.rx, new.rx, t), _lerp_number(old.ry, new.ry, t), new.filled)
     if isinstance(new, (PolygonShape, BezierShape)):
         return type(new)(_pen_between(old.pen, new.pen, t),
                          [point(p, q) for p, q in zip(old.points, new.points)], new.filled)
