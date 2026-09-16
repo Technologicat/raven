@@ -2552,7 +2552,7 @@ def _clear_the_popup_stack():
 
 
 @pytest.mark.gui
-def test_the_help_card_is_as_tall_as_the_keys_this_dialog_has(mapped_make_dialog, no_frame_wait):
+def test_the_help_card_is_as_tall_as_the_keys_this_dialog_has(mapped_make_dialog, monkeypatch):
     """A dialog offering fewer keys gets a shorter card, and no card is left shorter than its content.
 
     `_HELP_CARD_SIZE` is one constant while the rows are per instance, so without the fit every card is
@@ -2560,10 +2560,19 @@ def test_the_help_card_is_as_tall_as_the_keys_this_dialog_has(mapped_make_dialog
     below its table.
 
     Carries the `gui` marker: a table has no geometry until frames are rendered, and DPG aborts the
-    process if asked to render without a mapped viewport. Frames are rendered here rather than waited
-    for — `no_frame_wait` neuters the waits, this being the thread that would have to render them — so
-    what is checked is the height the fit arrives at, not the placement, which needs a real render loop.
+    process if asked to render without a mapped viewport. The card fits itself inside `show`, waiting a
+    frame per measurement; this being the thread that would have to render those frames, each wait
+    renders one instead. What is checked is the height the fit arrives at, not the placement, which needs
+    a real render loop.
     """
+    def render_instead_of_waiting(**kwargs) -> bool:
+        # Only here. The dialog's own worker threads wait for frames too, and a frame rendered from a
+        # thread without the GL context segfaults; theirs pass, as the other tests' waits do.
+        if not guiutils.is_render_thread():
+            return False
+        dpg.render_dearpygui_frame()
+        return True
+    monkeypatch.setattr(guiutils, "split_frame", render_instead_of_waiting)
     guiutils.setup_default_font(20)
     fullest = mapped_make_dialog(multi_selection=True, filter_list=[".*"], file_filter=".*")
     leanest = mapped_make_dialog(pick="dir-with-contents")
@@ -2575,10 +2584,7 @@ def test_the_help_card_is_as_tall_as_the_keys_this_dialog_has(mapped_make_dialog
         heights = {}
         for name, dialog in (("fullest", fullest), ("leanest", leanest)):
             card = dialog._the_help_card()
-            card.show()  # builds the window; its placement is off, no frame having been rendered for it
-            for _ in range(6):
-                dpg.render_dearpygui_frame()
-            dialog._fit_help_card_to_content()
+            assert card.show(), f"the {name} card was not built"
             for _ in range(6):
                 dpg.render_dearpygui_frame()
 
