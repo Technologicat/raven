@@ -22,13 +22,14 @@ import dataclasses
 import logging
 import threading
 import uuid
+import weakref
 from typing import Callable, Optional, Sequence, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
 import dearpygui.dearpygui as dpg
 
-from unpythonic import almosteq, env, si_prefix, sym, timer
+from unpythonic import env, si_prefix, sym, timer
 
 from ..common import navhistory
 from ..common.running_average import RunningAverage
@@ -182,6 +183,12 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
         self._lock = threading.RLock()
         self._chat_graph: Optional[chatgraph.ChatGraph] = None
+        # Every picture the widget may still be drawing part of, for its transitions to ask what a box
+        # stands for: `Graph` -> `(ChatGraph, {box name: stand-in answer})`. Weak, so a picture is
+        # forgotten once no transition holds it; the answers are cached because a transition asks on every
+        # frame.
+        self._pictures: "weakref.WeakKeyDictionary[xdotgraph.Graph, Tuple[chatgraph.ChatGraph, dict]]" = \
+            weakref.WeakKeyDictionary()
         self._view_state = chatgraph.ViewState(head_node_id=app_state["HEAD"],
                                                new_chat_node_id=app_state.get("new_chat_HEAD"))
         self._layout = chatgraph.LayoutConfig()
@@ -279,6 +286,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
                                   # on nothing -- and so does returning to a HEAD that has no replies
                                   # under it, which is the ordinary case.
                                   clamp_pan_to_graph=True,
+                                  animate_view=gui_config.chat_graph_animate_view,
+                                  animate_graph=gui_config.chat_graph_animate_transitions,
+                                  animate_graph_rate=gui_config.chat_graph_transition_rate,
+                                  stand_in=self._stand_in,
+                                  edge_between=lambda src, dst: chatgraph.edge_between(src, dst, self._layout),
                                   dark_mode=dark_mode,
                                   tag=f"chat_graph_widget_{self.gui_uuid}")  # tag
 
@@ -897,11 +909,6 @@ class DPGChatGraphPanel(gui_animation.Animation):
     def _rebuild(self) -> None:
         """The rebuild itself. Split from `refresh` only so that the timing there wraps all of it."""
         with self._lock:
-            # What is on screen right now, to compare against what this build produces. See the camera
-            # note further down: whether the reader sees the picture *change* is what decides whether the
-            # camera may glide, and the set of drawn boxes is that question.
-            layout_before = self._drawn_layout()
-
             self._view_state.head_node_id = self.app_state["HEAD"]
             self._view_state.new_chat_node_id = self.app_state.get("new_chat_HEAD")
             generation = self.datastore.generation
@@ -937,51 +944,39 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._chat_graph = chat_graph
             self._seen_generation = generation
             self._seen_head = self._view_state.head_node_id
-            self._widget.set_graph(chat_graph.graph)
-            self._measure_picture(chat_graph.graph)
             anchor = (self._cursor_name
                       or self._view_state.focus_node_id
                       or self._view_state.head_node_id)
+            self._pictures[chat_graph.graph] = (chat_graph, {})
+            # The anchor keeps its place on screen across the change: the widget moves the view by exactly
+            # as much as the anchor moved in the layout, so the reader's eye stays where it was while
+            # everything else rearranges around it -- instantly, or as a transition, per the config. Before
+            # the first framing there is nowhere on screen to keep.
+            self._widget.set_graph(chat_graph.graph,
+                                   animate=None if self._framed else False,
+                                   anchor_node=anchor if self._framed else None)
+            self._measure_picture(chat_graph.graph)
 
-        # The first picture is framed; every one after it only follows the anchor.
+        # The first picture is framed; every one after it follows the anchor.
         #
         # Framing means 1:1 on HEAD -- what the crosshair does, and where every other path leaves the
         # zoom. A fitted zoom would be a computed one, so the view would open at a different size for
         # every chat and at a size the reader cannot get back to by any other means. 1:1 is also what the
         # node font is sized for.
         #
-        # And only the first, because `set_graph` leaves pan and zoom alone: an anchor that kept its place
-        # then needs nothing done, and one that moved is followed. That is what keeps the picture still
-        # while a reply is arriving and the tree gains a node per round -- a re-frame on every rebuild
-        # would make it lurch once per turn.
+        # And only the first, or the picture would re-frame itself under a reader once per turn of the
+        # conversation, while a reply arrives and the tree gains a node per round.
         #
-        # **The camera glides only when the picture did not visibly change.**
-        #
-        # `set_graph` replaces the whole picture between one frame and the next. Where that swap is
-        # *visible* — a box appeared or vanished — the anchor is at its new coordinates immediately, and a
-        # camera gliding there over the following second is a camera pointed at the wrong place for that
-        # second: what a reader sees is the graph jumping and *then* being chased. Arriving in the same
-        # frame is what holds the anchor still across the swap, which is the entire point of following it.
-        #
-        # Where the drawn set is unchanged, nothing jumped, and a glide reads as the camera following
-        # rather than chasing. That is the difference between clicking a box on the current branch —
-        # which changes no boxes, only which one is marked — and clicking one off it, which re-lays the
-        # tree out around a different branch.
-        #
-        # **The rebuild and the camera are one decision, and must stay one.** When the topology transition
-        # is animated (brief 16, "Animating a change of topology" — planned as an option, like
-        # `gui_config.smooth_scrolling`), a visible change becomes a motion the camera is *part of* rather
-        # than one it races. What must never happen again is the picture jumping while the camera glides,
-        # which is the bug this comment replaced.
-        looks_unchanged = self._looks_unchanged(layout_before, self._drawn_layout(), anchor)
+        # Following is a glide from where `set_graph` kept the anchor to the middle of the view, so it
+        # never starts with a jump. During a transition the glide and the rearrangement run together.
         if not self._framed:
             self._framed = True
             self._frame_on_head(chat_graph, animate=False)
             self._remember_view()  # the view opened on is the one Back should eventually reach
         elif chat_graph.graph.get_node_by_name(anchor) is not None:
-            self._widget.pan_to_node(anchor, animate=looks_unchanged)
+            self._widget.pan_to_node(anchor)
         else:
-            self._widget.zoom_to_fit(animate=looks_unchanged)
+            self._widget.zoom_to_fit()
 
         # Last, and here rather than at each caller, so that the buttons cannot be left answering a
         # picture that no longer exists. Most rebuilds are nobody's doing -- the poll notices a reply
@@ -997,40 +992,51 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
         Names rather than objects: a rebuild makes all new `Node`s, so identity says nothing, while a name
         is stable across builds — the chat node's id for a message, and for a gap box a name synthesised
-        from what it hides. That is the same correspondence the topology animation will pair two builds by.
+        from what it hides. That is the same correspondence a transition pairs two builds by.
         """
         if self._chat_graph is None:
             return {}
         return {node.internal_name: (node.x, node.y) for node in self._chat_graph.graph.nodes}
 
     @staticmethod
-    def _looks_unchanged(before: dict, after: dict, anchor: Optional[str]) -> bool:
-        """Return whether the reader would see no change, once the camera has followed `anchor`.
+    def _chat_node_meant(ref: Optional[chatgraph.Ref]) -> Optional[str]:
+        """Return the chat node a box stands for, to find what represents it in another picture.
 
-        `before`, `after`: `_drawn_layout` results, from either side of a rebuild.
-        `anchor`: The box the camera follows, or `None` if there is none to follow.
-
-        **Exact rather than a tolerance**, which is what makes this worth doing at all. The question is not
-        "did the layout move a little or a lot" — that would need a number chosen by looking at examples —
-        but "does anything move *relative to the anchor*". The camera cancels the anchor's own motion by
-        construction, so a picture where every box shifted by the same vector comes out pixel-identical,
-        and one where they did not has genuinely changed.
-
-        Both cases occur, and they are not distinguishable by how many boxes moved. Marking a box widens
-        it, which slides every box after it by a constant — measured 5.0 graph units, all six boxes, on
-        acting on a box already on the spine. Acting on one off the spine re-lays the tree out around a
-        different branch: same boxes again, and they move by 108 units on average and by 324 at most.
-        Counting movers says "all of them" for both; the relative test separates them without a threshold.
+        A message box is named for its node. A gap box is named for the first node it hides, and that node
+        is the best answer to "what was this pointing at" once the gap itself is gone. `None` for no box,
+        or a gap hiding nothing.
         """
-        if before.keys() != after.keys():
-            return False  # a box appeared or vanished, which is a change however anything moved
-        if anchor is None or anchor not in before or anchor not in after:
-            return before == after  # nothing cancels the motion, so it has to be still by itself
-        shift_x = after[anchor][0] - before[anchor][0]
-        shift_y = after[anchor][1] - before[anchor][1]
-        return all(almosteq(after[name][0] - before[name][0], shift_x)
-                   and almosteq(after[name][1] - before[name][1], shift_y)
-                   for name in before)
+        if isinstance(ref, chatgraph.ChatNodeRef):
+            return ref.node_id
+        if ref is not None and ref.hidden_node_ids:
+            return ref.hidden_node_ids[0]
+        return None
+
+    def _stand_in(self, name: str, graph: xdotgraph.Graph) -> Optional[str]:
+        """For the widget's transitions: the box in `graph` that stands for the box `name`, which `graph`
+        does not draw — the gap that hides it, or the nearest box drawn for its lineage. `None` if nothing
+        does, or if `graph` is not a picture this panel built.
+
+        Runs on the render thread, as the rebuilds do, so reading the datastore here takes no lock that
+        thread was not taking anyway.
+        """
+        known = self._pictures.get(graph)
+        if known is None:
+            return None
+        chat_graph, answers = known
+        if name not in answers:
+            # The box may have been drawn in any picture still on screen, not only the previous one: a
+            # transition retargeted mid-flight is still drawing parts of the one before that.
+            ref = None
+            for other, _ in list(self._pictures.values()):
+                ref = other.ref_for(name)
+                if ref is not None:
+                    break
+            # With no box by that name anywhere, the name is still a chat node's id if it names a message.
+            meant = self._chat_node_meant(ref) if ref is not None else name
+            answers[name] = (chat_graph.representative_of(meant, datastore=self.datastore)
+                             if meant is not None else None)
+        return answers[name]
 
     def _try_build(self) -> Optional[chatgraph.ChatGraph]:
         """Build the picture, or return `None` if the node it would be drawn around is gone."""
@@ -1666,16 +1672,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
         if name is None or name in chat_graph.refs:
             return
 
-        # Which chat node the cursor *meant*. A message box is named for its node; a gap box is named for
-        # the first node it hides, and that node is the best answer to "what was I pointing at" once the
-        # gap itself is gone.
-        was = self._chat_graph.ref_for(name) if self._chat_graph is not None else None
-        if isinstance(was, chatgraph.ChatNodeRef):
-            stood_for: Optional[str] = was.node_id
-        elif was is not None and was.hidden_node_ids:
-            stood_for = was.hidden_node_ids[0]
-        else:
-            stood_for = None
+        # Which chat node the cursor *meant*.
+        stood_for = self._chat_node_meant(self._chat_graph.ref_for(name) if self._chat_graph is not None else None)
 
         landed = (chat_graph.representative_of(stood_for, datastore=self.datastore)
                   if stood_for is not None else None)

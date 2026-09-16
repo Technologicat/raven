@@ -284,74 +284,101 @@ class TestCommit:
 # Framing
 # ---------------------------------------------------------------------------
 
-class TestTheCameraGlidesOnlyWhenNothingJumped:
-    """The camera may animate exactly when the reader cannot see the picture change.
+def on_screen(built, name: str) -> tuple:
+    """Where the box `name` is drawn on screen this instant, a transition in progress included."""
+    widget = built._widget
+    return widget._viewport.graph_to_screen(*widget._picture_now().positions[name])
 
-    `set_graph` replaces every node object at once. Where that swap is *visible* — a box appeared or
-    vanished — a camera gliding to where the anchor already is spends the glide pointing at the wrong
-    place, and what a reader sees is the graph jumping and then being chased. Where the drawn set is
-    unchanged, nothing jumped, and a glide reads as following rather than chasing.
 
-    That is the difference between acting on a box on the current branch and one off it: the first changes
-    which box is marked, the second re-lays the tree out around a different branch.
+class TestARebuildNeverJumpsTheAnchor:
+    """A rebuild keeps the box the reader is working with where it was on screen, then glides to it.
+
+    `set_graph` replaces every node object at once, and a rebuild can re-lay the whole tree out. The panel
+    names the anchor — the cursor, else the focus, else HEAD — and the widget moves the view by exactly as
+    much as that box moved in the layout, so the swap itself moves nothing the reader is looking at. The
+    camera then glides to centre it. What must never happen is the picture jumping and the camera then
+    chasing it.
     """
 
-    def test_a_visible_change_moves_the_camera_in_the_same_frame(self, panel):
+    def test_new_boxes_do_not_move_the_anchor(self, panel):
         built, forest, app_state, ids, calls = panel
-        viewport = built._widget._viewport
+        anchor = ids["taken_tip"]  # HEAD, with no cursor or focus set
+        before = on_screen(built, anchor)
 
         # New siblings widen a level, so boxes appear and the layout shifts.
         for i in range(4):
             forest.create_node(payload("assistant", f"another branch {i}"), parent_id=ids["user"])
         built.refresh()
 
-        assert not built._widget.is_animating(), \
-            "the camera is still travelling after the picture has already been replaced"
-        # `current` rather than `target`: the point is that the two agree *now*, with no frames in between.
-        assert viewport.pan_x.current == pytest.approx(viewport.pan_x.target)
-        assert viewport.pan_y.current == pytest.approx(viewport.pan_y.target)
+        assert on_screen(built, anchor) == pytest.approx(before)
 
-    def test_marking_a_box_on_the_spine_may_glide(self, panel):
-        """The other half of the rule, and the reason it is a rule rather than "never animate".
-
-        Marking a box widens it, which slides every box after it by the *same* vector. The camera cancels
-        exactly that by following the anchor, so once it has, the picture is pixel-identical — nothing
-        jumped, and the camera is free to travel. That is what makes acting on a box feel like moving
-        rather than teleporting.
-        """
+    def test_a_relayout_leaves_the_clicked_box_where_it_was(self, panel):
+        """Acting on a box off the spine redraws the tree around a different branch."""
         built, forest, app_state, ids, calls = panel
-        click(built, ids["taken"])  # on the current branch, so the tree is not re-laid out around it
-        assert built._widget.is_animating(), \
-            "the camera snapped even though the picture is unchanged once it follows"
+        clicked = ids["not_taken"]
+        layout_before = built._drawn_layout()
+        screen_before = {name: on_screen(built, name) for name in layout_before}
 
-    def test_relaying_the_tree_out_snaps_even_though_the_same_boxes_are_drawn(self, panel):
-        """Why the test is relative motion rather than the set of drawn boxes.
+        click(built, clicked)
 
-        Acting on a box *off* the spine redraws the tree around a different branch. In a tree small enough
-        to be drawn whole — this fixture — that adds and removes nothing, so "did the drawn set change?"
-        answers no, and a camera trusting that would glide through a re-layout. Measured on this fixture:
-        the boxes move 108 graph units on average and 324 at most, against 5.0 for the case above.
-        """
+        layout_after = built._drawn_layout()
+
+        def moved_by(name):
+            return (layout_after[name][0] - layout_before[name][0], layout_after[name][1] - layout_before[name][1])
+        others = [name for name in layout_before
+                  if name in layout_after and moved_by(name) != pytest.approx(moved_by(clicked))]
+        assert others, "every box moved together, so this fixture is not re-laying anything out"
+        assert on_screen(built, clicked) == pytest.approx(screen_before[clicked])
+        # The morph starts from the old picture, so the rearranged boxes are still where they were; they are
+        # on their way, not already moved, and not stuck.
+        assert all(on_screen(built, name) == pytest.approx(screen_before[name]) for name in others)
+
+    def test_then_the_camera_glides(self, panel):
         built, forest, app_state, ids, calls = panel
-        before = set(built._drawn_layout())
-
         click(built, ids["not_taken"])
+        viewport = built._widget._viewport
+        assert viewport.is_animating(), "the camera did not follow the anchor at all, or jumped there"
 
-        assert set(built._drawn_layout()) == before, \
-            "the drawn set changed, so this fixture cannot show that an unchanged set is not enough"
-        assert not built._widget.is_animating(), \
-            "the camera glided through a re-layout, which is the picture jumping and then being chased"
-
-    def test_the_fixture_can_tell_a_glide_from_a_snap(self, panel):
-        """The negative control: an animated move on this same widget *does* leave it animating.
-
-        Without this, a panel whose camera never moves at all would satisfy the first assertion above for
-        the wrong reason, and would go on satisfying it if the follow were removed entirely.
-        """
+    def test_the_transition_follows_its_setting(self, panel):
         built, forest, app_state, ids, calls = panel
-        built._widget.pan_to_point(500.0, 500.0, animate=True)
-        assert built._widget.is_animating(), \
-            "an explicitly animated pan did not animate, so 'not animating' above means nothing"
+        built._widget.animate_graph = True
+        click(built, ids["not_taken"])
+        assert built._widget._morph_source is not None, "a re-layout with transitions on did not morph"
+
+        built._widget.animate_graph = False
+        click(built, ids["taken"])
+        assert built._widget._morph_source is None, "a re-layout with transitions off still morphed"
+
+
+class TestTransitionStandIns:
+    """What the panel tells the widget a box stands for, in a picture that does not draw it."""
+
+    @staticmethod
+    def a_gap(chat_graph):
+        gaps = [(name, ref) for name, ref in chat_graph.refs.items() if ref.hidden_node_ids]
+        assert gaps, "this fixture draws no gap, so there is nothing for anything to be hidden behind"
+        return gaps[0]
+
+    def test_a_hidden_message_is_stood_in_for_by_the_gap_hiding_it(self, wide):
+        built, forest, greeting, chats, calls = wide
+        name, ref = self.a_gap(built._chat_graph)
+        assert built._stand_in(ref.hidden_node_ids[0], built._chat_graph.graph) == name
+
+    def test_a_gap_from_an_earlier_picture_is_looked_up_there(self, wide):
+        """A gap box is a name only its own picture can explain, and the transition asks about it in the next."""
+        built, forest, greeting, chats, calls = wide
+        earlier = built._chat_graph
+        name, ref = self.a_gap(earlier)
+        click(built, name)  # opening the gap redraws the level, and that gap is gone from the new picture
+        later = built._chat_graph
+        assert later.ref_for(name) is None, "the gap survived the redraw, so nothing would ask about it"
+        expected = later.representative_of(ref.hidden_node_ids[0], datastore=forest)
+        assert expected is not None
+        assert built._stand_in(name, later.graph) == expected
+
+    def test_a_picture_the_panel_did_not_build_has_no_stand_ins(self, panel):
+        built, forest, app_state, ids, calls = panel
+        assert built._stand_in(ids["taken"], xdotgraph.Graph()) is None
 
 
 class TestFraming:

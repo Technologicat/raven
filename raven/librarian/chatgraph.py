@@ -36,6 +36,7 @@ __all__ = ["LINE_COLOR",
            "LayoutConfig",
            "ChatGraph",
 
+           "edge_between",
            "build",
 
            "neighbor_of"]
@@ -797,6 +798,7 @@ class ChatGraph:
         self.spine = spine
         self.spine_bbox = spine_bbox
         self.expanded_rounds = expanded_rounds or {}
+        self._hidden_by: Optional[Dict[str, str]] = None  # chat node id -> the box hiding it; built on first use
 
     def ref_for(self, name: str) -> Optional[Ref]:
         """Return what the graph node called `name` stands for, or `None` if there is no such node."""
@@ -847,10 +849,15 @@ class ChatGraph:
         """Return the box that is drawn for `node_id` or that says it stands for it, without any walking."""
         if node_id in self.refs:
             return node_id
-        for name, ref in self.refs.items():
-            if node_id in ref.hidden_node_ids:
-                return name
-        return None
+        if self._hidden_by is None:
+            # The first box claiming a node wins, in `refs` order. A picture is immutable once built, so the
+            # table is built once, and a morph between two pictures asks it on every frame.
+            hidden_by: Dict[str, str] = {}
+            for name, ref in self.refs.items():
+                for hidden in ref.hidden_node_ids:
+                    hidden_by.setdefault(hidden, name)
+            self._hidden_by = hidden_by
+        return self._hidden_by.get(node_id)
 
 
 # --------------------------------------------------------------------------------
@@ -1958,8 +1965,12 @@ def _subtree_below(datastore: chattree.Forest, node_id: str) -> Tuple[Tuple[str,
     return tuple(hidden), (shortest, longest)
 
 
-def _edge_between(src: xdotgraph.Node, dst: xdotgraph.Node, config: LayoutConfig) -> xdotgraph.Edge:
-    """Return an edge from the bottom of `src` to the top of `dst`, with an arrowhead at the destination."""
+def edge_between(src: xdotgraph.Node, dst: xdotgraph.Node, config: LayoutConfig) -> xdotgraph.Edge:
+    """Return an edge from the bottom of `src` to the top of `dst`, with an arrowhead at the destination.
+
+    Uses only the two boxes' positions and sizes, so it also draws an edge between boxes partway through a
+    transition between two pictures.
+    """
     start = (src.x, src.y2)
     end = (dst.x, dst.y1)
 
@@ -2359,8 +2370,8 @@ def build(datastore: chattree.Forest,
                 # is honest either way: these are results, and the depth gap's are not.
                 sub_label="tool results",
                 hides_head=state.head_node_id in round_.results)
-            graph_edges.append(_edge_between(nodes_by_name[round_.owner], tool_gap_nodes[row_index],
-                                             config))
+            graph_edges.append(edge_between(nodes_by_name[round_.owner], tool_gap_nodes[row_index],
+                                            config))
 
         # The inlined children and the subtree gaps, at whichever level was decided for each above. An
         # off-spine sibling with children of its own would otherwise look like a chat that stopped after
@@ -2391,7 +2402,7 @@ def build(datastore: chattree.Forest,
                                sub_label=_depth_label(extra.depth_range),
                                hides_head=(extra.owner in current_branch
                                            and extra.owner != state.head_node_id))
-            graph_edges.append(_edge_between(owner_node, node, config))
+            graph_edges.append(edge_between(owner_node, node, config))
 
         # Which folded round each tool-result node belongs to, for the rows that hang off one.
         round_of_folded = {result: round_ for round_ in tool_rounds if round_.folded
@@ -2423,10 +2434,10 @@ def build(datastore: chattree.Forest,
                 if parent_node is None:
                     continue
             for _slot, graph_node in drawn[row_index]:
-                graph_edges.append(_edge_between(parent_node, graph_node, config))
+                graph_edges.append(edge_between(parent_node, graph_node, config))
 
         for after_index, gap_node in depth_gap_nodes.items():
-            graph_edges.append(_edge_between(nodes_by_name[visible_spine[after_index]], gap_node, config))
+            graph_edges.append(edge_between(nodes_by_name[visible_spine[after_index]], gap_node, config))
 
     # ------------------------------------------------------------------
     # Normalize into the widget's coordinate box, which `zoom_to_fit` reads as (0, 0)-(width, height).

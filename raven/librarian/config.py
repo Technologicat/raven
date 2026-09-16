@@ -615,6 +615,17 @@ gui_config = env(  # ----------------------------------------
                  # legibility, which is why it is a setting.
                  chat_graph_role_icons=True,
                  #
+                 # Motion in the graph view. Off for either makes that change instant, for readers who prefer
+                 # the view not to move, as `smooth_scrolling` does for the chat log.
+                 #
+                 # A change of what is drawn -- stepping to a sibling, opening a gap, a reply arriving --
+                 # morphs from the old picture into the new one: boxes that stay move to their new places,
+                 # boxes that leave travel into whichever gap takes them, and boxes that arrive come out of
+                 # the gap that held them.
+                 chat_graph_animate_transitions=True,
+                 chat_graph_transition_rate=0.3,  # nondimensional, in (0, 1]; higher is faster. See `raven.common.smoothvalue`.
+                 chat_graph_animate_view=True,  # whether pan and zoom glide
+                 #
                  # The largest size, in pixels, an attachment thumbnail is prepared at for the chat graph.
                  # Coarser levels are prepared alongside it as a mip chain and the renderer draws whichever
                  # suits the card's size on screen, so this is not the size a card is *drawn* at -- it is
