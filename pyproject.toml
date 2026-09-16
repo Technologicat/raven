@@ -82,7 +82,7 @@ dependencies = [
     "torch==2.11.0",
     "torchvision==0.26.0",  # raven.common.video
     "torchaudio==2.11.0",  # raven.common.audio.resample (device-agnostic resampler)
-    "unpythonic>=2.4.0",  # `si_prefix(always_separate=...)`, used by `raven.common.filelisting`, arrived in 2.3.0
+    "unpythonic>=2.5.0",  # `mogrify_in_to`, used by `raven.configoverrides`, arrived in 2.5.0; `si_prefix(always_separate=...)`, used by `raven.common.filelisting`, in 2.3.0
     "wordcloud>=1.9.6",  # visualizer
     "wosfile>=0.7.0",  # wos2bib
     "chromadb>=1.5.9",  # RAG semantic search

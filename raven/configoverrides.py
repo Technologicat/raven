@@ -99,14 +99,13 @@ kept. Give each a distinct name, JSON having nothing to say about two keys spell
 
 __all__ = ["OVERRIDES_PATH", "apply"]
 
-from collections.abc import Mapping, MutableMapping, MutableSequence, Sequence
-import dataclasses
+from collections.abc import Mapping, Sequence
 import json
 import logging
 import pathlib
 import sys
 
-from unpythonic import fupdate, sym
+from unpythonic import mogrify_in_to, sym
 
 logger = logging.getLogger(__name__)
 
@@ -299,45 +298,13 @@ def _lookup(container, step: str):
     return None
 
 
-# TODO: once `unpythonic` 2.5.0 is released, replace `_store` and the walk back up in `_apply_one` with
-# `unpythonic.mogrify_in_to(fitted, keys, namespace)` — the same semantics, upstreamed — and raise the
-# `unpythonic` floor in `pyproject.toml`. `_lookup` stays: it resolves JSON's string steps to the real keys.
-def _store(container, key, member):
-    """Store `member` in `container` under `key`. Return the container that now holds it.
-
-    That is `container` itself when it could be updated in place, and a rebuilt copy when it is immutable —
-    which then has to be stored in *its* parent in turn. Raise if neither can be done.
-    """
-    # Same division `unpythonic.mogrify` draws: a mutable container keeps its identity, and only an
-    # immutable one is rebuilt, since there is no in-place update to be had for it. A `NamedTuple` is
-    # genuinely immutable rather than merely lacking an API for it (3.13's `copy.replace` is its `_replace`,
-    # a copy), so rebuilding is the only correct option there, not a shortcut.
-    if isinstance(container, MutableMapping):
-        container[key] = member
-        return container
-    if isinstance(container, Mapping):  # `frozendict`, say
-        return type(container)({**container, key: member})
-    if isinstance(container, MutableSequence):
-        container[key] = member
-        return container
-    if isinstance(container, tuple) and isinstance(key, str):  # a `NamedTuple` field, by name
-        return container._replace(**{key: member})
-    if isinstance(container, Sequence):  # an immutable sequence, by index; `fupdate` rebuilds through `_make` where there is one
-        return fupdate(container, key, member)
-    try:
-        setattr(container, key, member)
-        return container
-    except dataclasses.FrozenInstanceError:
-        return dataclasses.replace(container, **{key: member})
-
-
 def _apply_one(namespace: dict, dotted_name: str, value, module_name: str, path: pathlib.Path) -> bool:
     """Bind one setting, walking `dotted_name` into whatever holds it. Return whether it was applied."""
     where = f"'{dotted_name}' of '{module_name}'"
 
-    # Walk down, keeping each container and the key that led out of it: a rebuilt immutable container has
-    # to be stored back into its parent, and the trail is how the way back up is found.
-    trail = []
+    # Walk down, resolving each of JSON's string steps to the key it names — the mapping's own key, a
+    # sequence's index as an `int`, or an attribute name — which is the form `mogrify_in_to` takes.
+    keys = []
     member = namespace
     for step in dotted_name.split("."):
         found = _lookup(member, step)
@@ -345,23 +312,18 @@ def _apply_one(namespace: dict, dotted_name: str, value, module_name: str, path:
             container_name = "that module" if member is namespace else repr(member)
             logger.warning(f"_apply_one: {where} names nothing: '{step}' is not in {container_name} (from {path}); ignored.")
             return False
-        key, next_member = found
-        trail.append((member, key))
-        member = next_member
+        key, member = found
+        keys.append(key)
 
     fitted = _coerce(member, value, where)
     if fitted is _refused:
         return False
 
-    # Up again, until a container takes the new member in place; everything above that still holds it.
-    # Nothing is mutated before that last store, so a failure anywhere on the way leaves the module as
-    # shipped rather than half-updated.
+    # Every mutable container on the path is updated in place and every immutable one rebuilt into its
+    # parent, and nothing is mutated before the last store — so a failure anywhere on the way leaves the
+    # module as shipped rather than half-updated. The namespace is a `dict`, so it always takes the store.
     try:
-        for container, key in reversed(trail):
-            updated = _store(container, key, fitted)
-            if updated is container:
-                break
-            fitted = updated
+        mogrify_in_to(fitted, keys, namespace)
     except Exception as exc:  # a container this cannot write to; an override file must not stop an app from starting
         logger.warning(f"_apply_one: {where} cannot be set ({type(exc)}: {exc}) (from {path}); ignored, so the shipped default applies.")
         return False
