@@ -1165,8 +1165,8 @@ growable, which the other two deliberately avoid needing.
 
 **What the exhibit needs from this brief is the transition animation** (*Animating a change of topology*,
 under *Out of scope for v1*, where it was filed before being scheduled on 2026-09-09) **and then the look
-check, item 10.** Neither is started. *(The animation landed on 2026-09-16; see the subsections below.
-Item 10 remains.)*
+check, item 10.** Neither is started. *(The animation landed on 2026-09-16, and item 10 was struck the
+same day; see the subsections below.)*
 
 **Item 8, search, moved past Researchers' Night** (Juha, 2026-09-15): it is edge-case-by-edge-case GUI work
 whose real size is the two weeks of finding those, so it cannot be scheduled into what is left. A first
@@ -1221,8 +1221,11 @@ jump-then-chase it was meant to prevent cannot happen, because the anchor never 
 - **The long keyboard jump** (Up from a wide level): the camera's glide alone reads fine. The reserved
   `go_to_head`-style flash is not needed.
 
-The transition animation is therefore done. What the exhibit still needs from this brief is the look check,
-item 10.
+The transition animation is therefore done.
+
+**Item 10, the look check, is struck** (Juha, 2026-09-16): it was done continuously alongside the other
+items rather than as a pass of its own, and the view looks right as it stands. **So nothing in this brief is
+left for Researchers' Night.** It stays open on item 8, search, which is after the event.
 
 
 ## Where this stands, 2026-09-07
