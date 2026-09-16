@@ -62,20 +62,21 @@ class Viewport:
     Where (pan_x, pan_y) is the graph point at the center of the viewport.
     """
 
-    def __init__(self, width: int = 512, height: int = 512):
+    def __init__(self, width: int = 512, height: int = 512, rate: float = 0.3):
         """Initialize viewport.
 
         `width`, `height`: Widget dimensions in pixels.
+        `rate`: How fast pan and zoom glide, in (0, 1]; as `SmoothValue`'s `rate`.
         """
         self.width = width
         self.height = height
 
         # Pan position (center of view in graph coordinates)
-        self.pan_x = SmoothValue(0.0)
-        self.pan_y = SmoothValue(0.0)
+        self.pan_x = SmoothValue(0.0, rate=rate)
+        self.pan_y = SmoothValue(0.0, rate=rate)
 
         # Zoom level (>1 = zoomed in, <1 = zoomed out)
-        self.zoom = SmoothValue(1.0)
+        self.zoom = SmoothValue(1.0, rate=rate)
 
         # Limits
         self.min_zoom = 0.01
@@ -335,18 +336,21 @@ class Viewport:
         self.pan_x.target = _clamp_axis(self.pan_x.target, self._graph_width, 0.5 * self.width / zoom)
         self.pan_y.target = _clamp_axis(self.pan_y.target, self._graph_height, 0.5 * self.height / zoom)
 
-    def update(self) -> bool:
+    def update(self, dt: float | None = None) -> bool:
         """Advance all animations by one frame.
+
+        `dt`: Seconds since the previous frame, or `None` for each value to measure its own; as for
+              `SmoothValue.update`.
 
         Returns True if any animation is still running.
         """
         self.clamp_pan_target()
         animating = False
-        if self.pan_x.update():
+        if self.pan_x.update(dt):
             animating = True
-        if self.pan_y.update():
+        if self.pan_y.update(dt):
             animating = True
-        if self.zoom.update():
+        if self.zoom.update(dt):
             animating = True
         return animating
 

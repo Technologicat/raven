@@ -12,6 +12,8 @@ Nothing maps a window. Creating DPG draw items needs no rendered frame, which is
 assertions run headless; anything about *layout* would not.
 """
 
+import time
+
 import pytest
 
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
@@ -212,8 +214,7 @@ class TestItReportsWhetherItIsBusy:
         # tight loop advances the animation by microseconds per call and it never arrives -- which is what
         # the first version of this test discovered by hanging on its own bound.
         for _ in range(60):
-            for smooth in (widget._viewport.pan_x, widget._viewport.pan_y, widget._viewport.zoom):
-                smooth._last_time -= 0.05
+            widget._last_update_time -= 0.05  # the widget's own clock, which its animations all advance by
             widget.render_frame(0)
             if not widget.is_animating():
                 break
@@ -289,7 +290,8 @@ def moved(graph: Graph, dx: float, only: str | None = None) -> Graph:
 def finish_morph(instance: XDotWidget) -> None:
     """Wind the morph's clock until it is done. Wound rather than waited; see `TestItReportsWhetherItIsBusy`."""
     for _ in range(200):
-        instance._morph_progress._last_time -= 0.05
+        if instance._last_update_time is not None:
+            instance._last_update_time -= 0.05
         instance.update()
         if instance._morph_source is None:
             return
@@ -327,7 +329,7 @@ class TestSetGraphCanMorph:
         before = screen_position(widget, "b2")
         widget.set_graph(moved(chat_shaped_graph(), 200.0, only="b2"), animate=True)
         assert screen_position(widget, "b2") == pytest.approx(before), "b2 jumped when the morph started"
-        widget._morph_progress._last_time -= 0.05
+        widget._last_update_time -= 0.05
         widget.update()
         partway = screen_position(widget, "b2")[0]
         assert before[0] < partway < before[0] + 200.0
@@ -365,6 +367,30 @@ class TestSetGraphCanMorph:
         before = screen_position(widget, "b")
         widget.set_graph(moved(chat_shaped_graph(), 300.0))
         assert screen_position(widget, "b")[0] == pytest.approx(before[0] + 300.0)
+
+    def test_a_morph_started_under_a_moving_camera_keeps_pace_with_it(self, widget):
+        """A camera following a node through a morph holds it still only while the two advance by the same
+        fraction each frame. Restarting a morph under a glide already in flight is the case that broke it:
+        the morph's clock started mid-frame while the glide counted the whole frame, and the followed node
+        slipped backward for a frame — seen when stepping quickly along a wide level."""
+        pan = widget._viewport.pan_x
+        widget.set_zoom(1.0, animate=False)
+        widget.pan_to_point(0.0, 0.0, animate=False)
+        widget.update()
+        widget.pan_to_point(300.0, 0.0, animate=True)  # a glide already in flight
+        widget.update()
+        time.sleep(0.03)
+
+        glide_from = pan.current
+        widget.set_graph(moved(chat_shaped_graph(), 50.0), animate=True)
+        widget.pan_to_point(600.0, 0.0, animate=True)  # retargeted, as following the new anchor does
+        time.sleep(0.03)
+        widget.update()
+
+        glided = (pan.current - glide_from) / (600.0 - glide_from)
+        assert 0.0 < glided < 1.0, "the glide did not move, or finished in one frame; nothing to compare"
+        assert widget._morph_progress.current == pytest.approx(glided, abs=1e-6), \
+            f"the camera advanced by {glided:.3f} of its way and the morph by {widget._morph_progress.current:.3f}"
 
     def test_edges_are_rebuilt_only_while_morphing(self, dpg_context):
         calls = []

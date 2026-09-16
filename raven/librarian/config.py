@@ -623,7 +623,7 @@ gui_config = env(  # ----------------------------------------
                  # boxes that leave travel into whichever gap takes them, and boxes that arrive come out of
                  # the gap that held them.
                  chat_graph_animate_transitions=True,
-                 chat_graph_transition_rate=0.3,  # nondimensional, in (0, 1]; higher is faster. See `raven.common.smoothvalue`.
+                 chat_graph_transition_rate=0.3,  # nondimensional, in (0, 1]; higher is faster. Also the pan and zoom rate, the two moving together. See `raven.common.smoothvalue`.
                  chat_graph_animate_view=True,  # whether pan and zoom glide
                  #
                  # The largest size, in pixels, an attachment thumbnail is prepared at for the chat graph.

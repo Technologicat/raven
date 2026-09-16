@@ -288,7 +288,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                                   clamp_pan_to_graph=True,
                                   animate_view=gui_config.chat_graph_animate_view,
                                   animate_graph=gui_config.chat_graph_animate_transitions,
-                                  animate_graph_rate=gui_config.chat_graph_transition_rate,
+                                  animation_rate=gui_config.chat_graph_transition_rate,
                                   stand_in=self._stand_in,
                                   edge_between=lambda src, dst: chatgraph.edge_between(src, dst, self._layout),
                                   dark_mode=dark_mode,

@@ -11,6 +11,19 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## The chat graph shows a couple of blank frames before its first picture
+
+*Cluster: chat-graph · Cost: S? · Gate: none; only if it starts to bother · Filed: 2026-09-16*
+
+At Librarian startup the chat graph panel appears, then shows a couple of empty frames before the first
+frame with the graph in it. Judged good enough for now (Juha). Hypothesis, not checked: `DPGChatGraphPanel.show`
+refreshes before `show_item`, so the widget has its graph by then, and the gap is between `set_graph` and
+the widget's first redraw — which happens in `XDotWidget.update`, driven by the animator on the next frame(s).
+The first place to look is that `update` after `set_graph`, and whether the panel's container is laid out by
+the frame the drawlist first draws into it.
+
+Noticed right after startup began handing the panel to the graph before the chat view build (2026-09-16).
+
 **When this file stops being readable, that is a trigger.** Bump *Visualizer's importer should read the
 document database* — a semantic map of this backlog is a convergence-detection tool, and it needs the
 importer first. Recorded here rather than in that item because a trigger nobody meets is not a trigger, and

@@ -74,7 +74,7 @@ class XDotWidget(gui_animation.Animation):
                  clamp_pan_to_graph: bool = False,
                  animate_view: bool = True,
                  animate_graph: bool = False,
-                 animate_graph_rate: float = 0.3,
+                 animation_rate: float = 0.3,
                  stand_in: morph.StandIn | None = None,
                  edge_between: morph.EdgeBetween | None = None,
                  dark_mode: bool = False,
@@ -130,7 +130,9 @@ class XDotWidget(gui_animation.Animation):
                          Off by default, since a morph and the camera are one decision: a caller that moves
                          the view itself after `set_graph` should pass `anchor_node` there instead, or the
                          picture will be moving under a camera that has already arrived.
-        `animate_graph_rate`: How fast a morph runs, in (0, 1]; as `SmoothValue`'s `rate`.
+        `animation_rate`: How fast pan, zoom and a morph run, in (0, 1]; as `SmoothValue`'s `rate`. One rate for
+                          all three, since a camera following a node through a morph keeps it still on
+                          screen only while the two advance by the same fraction each frame.
         `stand_in`: For a morph. `(name, graph) -> name`: which node drawn in `graph` represents the node
                     `name`, which `graph` does not draw — for a graph that folds nodes into a summary box,
                     that box. A node leaving travels to its stand-in, and one arriving starts from its
@@ -166,7 +168,7 @@ class XDotWidget(gui_animation.Animation):
         self._edge_between = edge_between
         # A morph in progress is the picture it started from plus how far it has got; `None` when at rest.
         self._morph_source: morph.Picture | None = None
-        self._morph_progress = SmoothValue(1.0, rate=animate_graph_rate)
+        self._morph_progress = SmoothValue(1.0, rate=animation_rate)
         self._dark_mode = dark_mode
         self._dark_bg_color = dark_bg_color
         self._light_bg_color = light_bg_color
@@ -174,7 +176,8 @@ class XDotWidget(gui_animation.Animation):
         set_dark_mode(dark_mode)
 
         self._graph: Graph | None = None
-        self._viewport = Viewport(width, height)
+        self._viewport = Viewport(width, height, rate=animation_rate)
+        self._last_update_time: float | None = None  # `update`'s own clock, shared by everything it advances
         self._viewport.clamp_pan = clamp_pan_to_graph
         self._highlight = HighlightState(fade_duration=highlight_fade_duration)
         self._search = SearchState()
@@ -750,8 +753,17 @@ class XDotWidget(gui_animation.Animation):
         """
         animating = False
 
+        # One time step for the camera and the morph. A camera following a node through a morph holds it
+        # still only while the two advance by the same fraction, and each measuring its own step does not
+        # give that: a morph restarted under a glide already in flight starts its clock mid-frame, the
+        # glide counts the whole frame, and the node slips for a frame. `update` runs every frame, idle
+        # included, so this step is never stale.
+        now = time.monotonic()
+        dt = None if self._last_update_time is None else now - self._last_update_time
+        self._last_update_time = now
+
         # Update viewport animations
-        if self._viewport.update():
+        if self._viewport.update(dt):
             animating = True
             self._needs_render = True
 
@@ -759,7 +771,7 @@ class XDotWidget(gui_animation.Animation):
         # renders once more before it is let go.
         with self._render_lock:
             if self._morph_source is not None:
-                if not self._morph_progress.update():
+                if not self._morph_progress.update(dt):
                     self._morph_source = None
                 animating = True
                 self._needs_render = True
