@@ -60,6 +60,13 @@ judgement in it rather than a `try` around 37 lines.
   user has lost the avatar entirely and does not need a second report per morph. Beware the per-frame ones:
   a warning inside a lipsync loop is a log flood, so these want log-once-per-outage rather than
   log-per-call.
+  - **Two of the three `avatar_load_animator_settings` sites are done** (2026-09-16, ahead of this item):
+    `DPGAvatarController.mark_discontinuity` and its restore, `_end_discontinuity_effect`, now log a warning
+    and give up. Taken early because it was blocking navigation, not merely decoration: every caller moves
+    HEAD, calls it, then rebuilds the chat log, so with the server gone a commit from the chat graph — or a
+    sibling step, a new chat, a reroll — moved HEAD and left the log showing the old branch. The warning is
+    per call rather than once per outage, which is fine here, since it fires once per navigation rather
+    than per frame. The third site, `load_animator_settings` itself, is still open.
 - **`avatar_renderer.imagefx_process_array` and `avatar_result_feed`** — per frame, same caution. The
   result feed already has an error path; it is what surfaced the `pause` bug.
 - **`stt_transcribe_array` in `app.py`.** The user pressed record and is waiting for words. This one needs

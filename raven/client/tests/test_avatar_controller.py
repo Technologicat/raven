@@ -228,6 +228,34 @@ def test_the_ceiling_caps_a_held_key(effect_config):
     assert chain_of(sent[-1]) == ["bloom"], "the ceiling did not end the effect"
 
 
+def test_a_server_that_has_gone_away_does_not_raise(effect_config, monkeypatch):
+    """The effect decorates a change the caller is in the middle of — Librarian moves HEAD, calls this, then
+    rebuilds the chat log — so an exception here stranded the change halfway, with HEAD moved and the log
+    showing the old branch."""
+    controller, config, sent = effect_config
+
+    def refuse(instance_id, settings):
+        raise ConnectionError("server gone")
+    monkeypatch.setattr(avatar_controller.api, "avatar_load_animator_settings", refuse)
+
+    controller.mark_discontinuity(config, floor=10.0)
+    assert config._effect_timer is None, "an effect that never started needs no restore timer"
+    assert config._effect_started_at is None, "a failed start left a run open for the next call to extend"
+
+
+def test_a_server_gone_by_the_restore_does_not_raise(effect_config, monkeypatch):
+    controller, config, sent = effect_config
+    controller.mark_discontinuity(config, floor=10.0)
+    config._effect_timer.cancel()
+    assert len(sent) == 1, "the effect did not start, so there is no restore to fail"
+
+    def refuse(instance_id, settings):
+        raise ConnectionError("server gone")
+    monkeypatch.setattr(avatar_controller.api, "avatar_load_animator_settings", refuse)
+    controller._end_discontinuity_effect(config)  # what the timer would run
+    assert config._effect_timer is None
+
+
 def test_no_settings_loaded_means_no_effect(effect_config):
     """A switch before startup finished has no chain to overlay and nothing to restore, so it declines."""
     controller, config, sent = effect_config

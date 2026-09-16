@@ -730,7 +730,15 @@ class DPGAvatarController:
                 # and handing the same dicts to every call would let one mutation downstream edit the user's
                 # configuration permanently.
                 settings.setdefault("postprocessor_chain", []).extend(copy.deepcopy(effect))
-                api.avatar_load_animator_settings(config.avatar_instance_id, settings)
+                # Decoration on a change the caller is making, so it must not be able to stop the change:
+                # a caller moves HEAD, calls this, then rebuilds, and an exception here left HEAD moved and
+                # the chat log showing the old branch. With the server gone there is no avatar to decorate.
+                try:
+                    api.avatar_load_animator_settings(config.avatar_instance_id, settings)
+                except Exception as exc:
+                    config._effect_started_at = None
+                    logger.warning(f"mark_discontinuity: could not start the effect: {type(exc)}: {exc}")
+                    return
 
             remaining = min(floor, max(0.0, config._effect_started_at + ceiling - now))
             config._effect_timer = threading.Timer(remaining, self._end_discontinuity_effect, args=(config,))
@@ -744,7 +752,10 @@ class DPGAvatarController:
             config._effect_started_at = None
             settings = copy.deepcopy(config._animator_settings) if config._animator_settings is not None else None
         if settings is not None:
-            api.avatar_load_animator_settings(config.avatar_instance_id, settings)
+            try:
+                api.avatar_load_animator_settings(config.avatar_instance_id, settings)
+            except Exception as exc:  # the server may have gone away while the effect was up
+                logger.warning(f"_end_discontinuity_effect: could not restore the settings: {type(exc)}: {exc}")
 
     def start_data_eyes(self, config: env) -> None:
         """Start the scifi "data eyes" cel effect, which says the system is consulting an external source.
