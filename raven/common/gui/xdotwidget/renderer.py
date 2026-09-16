@@ -4,16 +4,19 @@ This module provides rendering functions that draw graph shapes using
 DearPyGUI's drawlist primitives.
 """
 
-__all__ = ["set_dark_mode", "get_dark_mode", "color_to_dpg", "render_graph"]
+__all__ = ["set_dark_mode", "get_dark_mode", "color_to_dpg",
+           "Placement", "IN_PLACE",
+           "render_graph", "render_scene"]
 
 import colorsys
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
+from typing import NamedTuple
 
 import dearpygui.dearpygui as dpg
 
 from .graph import (
-    Graph, Element, Shape, Pen,
+    Graph, Element, Node, Edge, Shape, Pen,
     TextShape, EllipseShape, PolygonShape, LineShape, BezierShape, ImageShape,
     CompoundShape, tessellate_bezier
 )
@@ -73,6 +76,43 @@ def color_to_dpg(color: Color) -> DPGColor:  # TODO: move to a utility module, m
         color = _invert_lightness(color)
     r, g, b, a = color
     return (int(r * 255), int(g * 255), int(b * 255), int(a * 255))
+
+
+class Placement(NamedTuple):
+    """Where, and how visibly, to draw an element, relative to what its shapes say.
+
+    `dx`, `dy`: displacement in graph coordinates, added to every point of every shape.
+    `opacity`: in [0, 1], multiplied into the alpha of everything the element draws.
+
+    This is what lets an element be drawn partway between two layouts without copying its shapes.
+    """
+    dx: float = 0.0
+    dy: float = 0.0
+    opacity: float = 1.0
+
+
+IN_PLACE = Placement()  # where the shapes say, fully opaque
+
+
+class _Displaced:
+    """A viewport as seen by an element drawn `(dx, dy)` graph units away from its own coordinates.
+
+    Offers the two things the shape renderers ask of a viewport, `zoom` and `graph_to_screen`.
+    """
+    def __init__(self, viewport: Viewport, dx: float, dy: float):
+        self.zoom = viewport.zoom
+        self._viewport = viewport
+        self._dx = dx
+        self._dy = dy
+
+    def graph_to_screen(self, gx: float, gy: float) -> Point:
+        return self._viewport.graph_to_screen(gx + self._dx, gy + self._dy)
+
+
+def _ink(color: Color, opacity: float) -> DPGColor:
+    """`color_to_dpg`, with `opacity` multiplied into the alpha."""
+    r, g, b, a = color_to_dpg(color)
+    return (r, g, b, int(a * opacity))
 
 
 def _get_effective_pen(shape: Shape,
@@ -183,7 +223,8 @@ def _render_text_shape(drawlist: int | str,
                        pen: Pen,
                        text_compaction_cb: Callable | None = None,
                        graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
-                       element_fillcolor: Color | None = None) -> None:
+                       element_fillcolor: Color | None = None,
+                       opacity: float = 1.0) -> None:
     """Render a text shape."""
     # Transform position
     sx, sy = viewport.graph_to_screen(shape.x, shape.y)
@@ -231,9 +272,9 @@ def _render_text_shape(drawlist: int | str,
             v = int(_DARK_MODE_L_MIN * 255)
         else:
             v = int(_DARK_MODE_L_MAX * 255)
-        color = (v, v, v, int(pen.color[3] * 255))
+        color = (v, v, v, int(pen.color[3] * opacity * 255))
     else:
-        color = color_to_dpg(pen.color)
+        color = _ink(pen.color, opacity)
 
     # DPG's draw_text size parameter is in pixels
     item = dpg.draw_text((x, y), text, size=font_size_px, color=color, parent=drawlist)
@@ -249,7 +290,8 @@ def _render_text_shape(drawlist: int | str,
 def _render_ellipse_shape(drawlist: int | str,
                           shape: EllipseShape,
                           viewport: Viewport,
-                          pen: Pen) -> None:
+                          pen: Pen,
+                          opacity: float = 1.0) -> None:
     """Render an ellipse shape."""
     # Transform center
     cx, cy = viewport.graph_to_screen(shape.x0, shape.y0)
@@ -264,12 +306,12 @@ def _render_ellipse_shape(drawlist: int | str,
     pmax = (cx + rx, cy + ry)
 
     if shape.filled:
-        fill_color = color_to_dpg(pen.fillcolor)
+        fill_color = _ink(pen.fillcolor, opacity)
         dpg.draw_ellipse(pmin, pmax,
                          color=(0, 0, 0, 0), fill=fill_color,
                          parent=drawlist)
     else:
-        stroke_color = color_to_dpg(pen.color)
+        stroke_color = _ink(pen.color, opacity)
         thickness = max(1, pen.linewidth * zoom)
         dpg.draw_ellipse(pmin, pmax,
                          color=stroke_color, thickness=thickness,
@@ -279,7 +321,8 @@ def _render_ellipse_shape(drawlist: int | str,
 def _render_polygon_shape(drawlist: int | str,
                           shape: PolygonShape,
                           viewport: Viewport,
-                          pen: Pen) -> None:
+                          pen: Pen,
+                          opacity: float = 1.0) -> None:
     """Render a polygon shape."""
     if not shape.points:
         return
@@ -288,11 +331,11 @@ def _render_polygon_shape(drawlist: int | str,
     zoom = viewport.zoom.current
 
     if shape.filled:
-        fill_color = color_to_dpg(pen.fillcolor)
+        fill_color = _ink(pen.fillcolor, opacity)
         dpg.draw_polygon(points, color=(0, 0, 0, 0), fill=fill_color,
                          parent=drawlist)
     else:
-        stroke_color = color_to_dpg(pen.color)
+        stroke_color = _ink(pen.color, opacity)
         thickness = max(1, pen.linewidth * zoom)
         # `draw_polygon` strokes an *open* path -- measured, and it leaves the edge back to the first
         # vertex undrawn -- so the outline is a polyline either way.
@@ -321,7 +364,8 @@ def _render_polygon_shape(drawlist: int | str,
 def _render_line_shape(drawlist: int | str,
                        shape: LineShape,
                        viewport: Viewport,
-                       pen: Pen) -> None:
+                       pen: Pen,
+                       opacity: float = 1.0) -> None:
     """Render a line/polyline shape."""
     if len(shape.points) < 2:
         return
@@ -329,7 +373,7 @@ def _render_line_shape(drawlist: int | str,
     points = _transform_points(shape.points, viewport)
     zoom = viewport.zoom.current
 
-    stroke_color = color_to_dpg(pen.color)
+    stroke_color = _ink(pen.color, opacity)
     thickness = max(1, pen.linewidth * zoom)
 
     if pen.dash:
@@ -346,7 +390,8 @@ def _render_line_shape(drawlist: int | str,
 def _render_bezier_shape(drawlist: int | str,
                          shape: BezierShape,
                          viewport: Viewport,
-                         pen: Pen) -> None:
+                         pen: Pen,
+                         opacity: float = 1.0) -> None:
     """Render a bezier curve shape.
 
     xdot bezier format: [start, ctrl1, ctrl2, end, ctrl1, ctrl2, end, ...]
@@ -360,12 +405,12 @@ def _render_bezier_shape(drawlist: int | str,
         # DPG has no filled bezier support, so tessellate into a polygon.
         tess_graph = tessellate_bezier(shape.points, n=32)
         tess_screen = _transform_points(tess_graph, viewport)
-        fill_color = color_to_dpg(pen.fillcolor)
+        fill_color = _ink(pen.fillcolor, opacity)
         dpg.draw_polygon(tess_screen, color=(0, 0, 0, 0), fill=fill_color,
                          parent=drawlist)
     else:
         zoom = viewport.zoom.current
-        stroke_color = color_to_dpg(pen.color)
+        stroke_color = _ink(pen.color, opacity)
         thickness = max(1, pen.linewidth * zoom)
 
         if pen.dash:
@@ -396,7 +441,8 @@ def _render_bezier_shape(drawlist: int | str,
 
 def _render_image_shape(drawlist: int | str,
                         shape: ImageShape,
-                        viewport: Viewport) -> None:
+                        viewport: Viewport,
+                        opacity: float = 1.0) -> None:
     """Render an image shape.
 
     No pen is involved, so nothing here goes through `color_to_dpg` and dark mode does not touch the
@@ -421,8 +467,11 @@ def _render_image_shape(drawlist: int | str,
         y1, y2 = cy - 0.5 * t * h, cy + 0.5 * t * h
         w, h = x2 - x1, y2 - y1
 
+    # `color` is a tint multiplied into the texture, so white leaves the picture as it is and the alpha
+    # fades it.
     dpg.draw_image(_texture_for_screen_size(shape, w, h), (x1, y1), (x2, y2),
-                   uv_min=(0.0, 0.0), uv_max=(1.0, 1.0), parent=drawlist)
+                   uv_min=(0.0, 0.0), uv_max=(1.0, 1.0),
+                   color=(255, 255, 255, int(255 * opacity)), parent=drawlist)
 
 
 def _texture_for_screen_size(shape: ImageShape, w: float, h: float) -> int | str:
@@ -471,34 +520,37 @@ def _render_shape(drawlist: int | str,
                   highlight_intensities: dict[Element, float],
                   text_compaction_cb: Callable | None,
                   graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
-                  element_fillcolor: Color | None = None) -> None:
+                  element_fillcolor: Color | None = None,
+                  opacity: float = 1.0) -> None:
     """Render a single shape."""
     pen = _get_effective_pen(shape, element, highlight_intensities)
 
     if isinstance(shape, TextShape):
         _render_text_shape(drawlist, shape, viewport, pen,
                            text_compaction_cb, graph_text_fonts,
-                           element_fillcolor=element_fillcolor)
+                           element_fillcolor=element_fillcolor,
+                           opacity=opacity)
     elif isinstance(shape, EllipseShape):
-        _render_ellipse_shape(drawlist, shape, viewport, pen)
+        _render_ellipse_shape(drawlist, shape, viewport, pen, opacity)
     elif isinstance(shape, PolygonShape):
-        _render_polygon_shape(drawlist, shape, viewport, pen)
+        _render_polygon_shape(drawlist, shape, viewport, pen, opacity)
     elif isinstance(shape, LineShape):
-        _render_line_shape(drawlist, shape, viewport, pen)
+        _render_line_shape(drawlist, shape, viewport, pen, opacity)
     elif isinstance(shape, BezierShape):
-        _render_bezier_shape(drawlist, shape, viewport, pen)
+        _render_bezier_shape(drawlist, shape, viewport, pen, opacity)
     elif isinstance(shape, ImageShape):
-        _render_image_shape(drawlist, shape, viewport)
+        _render_image_shape(drawlist, shape, viewport, opacity)
     elif isinstance(shape, CompoundShape):
         for child in shape.shapes:
             _render_shape(drawlist, child, viewport, element,
                           highlight_intensities, text_compaction_cb,
                           graph_text_fonts,
-                          element_fillcolor=element_fillcolor)
+                          element_fillcolor=element_fillcolor,
+                          opacity=opacity)
 
 
-def _is_element_visible(element: Element, viewport: Viewport) -> bool:
-    """Check if an element is visible in the current viewport.
+def _is_element_visible(element: Element, viewport: Viewport, placement: Placement = IN_PLACE) -> bool:
+    """Check if an element is visible in the current viewport, when drawn at `placement`.
 
     Asked of everything the element *draws* rather than of the layout cell it occupies, the two differing
     for a node that carries decorations in its margins — see `Element.get_drawn_bounding_box`. Culling on
@@ -508,7 +560,9 @@ def _is_element_visible(element: Element, viewport: Viewport) -> bool:
     bbox = element.get_drawn_bounding_box()
     if bbox is None:
         return True  # If no bbox, assume visible
-    return viewport.is_visible(*bbox)
+    x1, y1, x2, y2 = bbox
+    dx, dy, _ = placement
+    return viewport.is_visible(x1 + dx, y1 + dy, x2 + dx, y2 + dy)
 
 
 def render_graph(drawlist: int | str,
@@ -531,6 +585,36 @@ def render_graph(drawlist: int | str,
                          to the rendered text size, for sharpest results.
     `background_color`: Optional DPG color for the graph background rectangle.
     """
+    render_scene(drawlist, viewport,
+                 shapes=graph.shapes,
+                 edges=((edge, IN_PLACE) for edge in graph.edges),
+                 nodes=((node, IN_PLACE) for node in graph.nodes),
+                 highlight_intensities=highlight_intensities,
+                 text_compaction_cb=text_compaction_cb,
+                 graph_text_fonts=graph_text_fonts,
+                 background_color=background_color)
+
+
+def render_scene(drawlist: int | str,
+                 viewport: Viewport,
+                 shapes: Iterable[Shape],
+                 edges: Iterable[tuple[Edge, Placement]],
+                 nodes: Iterable[tuple[Node, Placement]],
+                 highlight_intensities: dict[Element, float] | None = None,
+                 text_compaction_cb: Callable | None = None,
+                 graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
+                 background_color: DPGColor | None = None) -> None:
+    """Render elements that need not belong to one graph, each at its own `Placement`.
+
+    `render_graph` is the case of one graph drawn in place. This is what draws a picture partway between
+    two graphs: an element may come from either, displaced from where its shapes say and partly faded.
+
+    `shapes`: background shapes, drawn first and in place.
+    `edges`, `nodes`: `(element, placement)` pairs, drawn in that order and in iteration order within each,
+                      so nodes are on top of edges, and a later node is on top of an earlier one.
+
+    The rest as in `render_graph`.
+    """
     if highlight_intensities is None:
         highlight_intensities = {}
 
@@ -545,24 +629,23 @@ def render_graph(drawlist: int | str,
                            fill=background_color, parent=drawlist)
 
     # Render background shapes
-    for shape in graph.shapes:
+    for shape in shapes:
         _render_shape(drawlist, shape, viewport, None,
                       highlight_intensities, text_compaction_cb, graph_text_fonts)
 
+    def render_element(element: Element, placement: Placement, fillcolor: Color | None) -> None:
+        if placement.opacity <= 0.0 or not _is_element_visible(element, viewport, placement):
+            return
+        seen_from = viewport if placement[:2] == (0.0, 0.0) else _Displaced(viewport, placement.dx, placement.dy)
+        for shape in element.shapes:
+            _render_shape(drawlist, shape, seen_from, element,
+                          highlight_intensities, text_compaction_cb, graph_text_fonts,
+                          element_fillcolor=fillcolor, opacity=placement.opacity)
+
     # Render edges (before nodes so nodes appear on top)
-    for edge in graph.edges:
-        if not _is_element_visible(edge, viewport):
-            continue
-        for shape in edge.shapes:
-            _render_shape(drawlist, shape, viewport, edge,
-                          highlight_intensities, text_compaction_cb, graph_text_fonts)
+    for edge, placement in edges:
+        render_element(edge, placement, None)
 
     # Render nodes
-    for node in graph.nodes:
-        if not _is_element_visible(node, viewport):
-            continue
-        fillcolor = _get_element_fillcolor(node)
-        for shape in node.shapes:
-            _render_shape(drawlist, shape, viewport, node,
-                          highlight_intensities, text_compaction_cb,
-                          graph_text_fonts, element_fillcolor=fillcolor)
+    for node, placement in nodes:
+        render_element(node, placement, _get_element_fillcolor(node))

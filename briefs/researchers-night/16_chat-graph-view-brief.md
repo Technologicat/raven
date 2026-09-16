@@ -1172,6 +1172,32 @@ whose real size is the two weeks of finding those, so it cannot be scheduled int
 working draft before the day is still welcome if time remains. The brief therefore stays open past the
 event, on item 8 alone. `briefs/researchers-night/README.md` → *Decided 2026-09-15* has the rest.
 
+### The transition animation: four open points settled, 2026-09-16
+
+Reading the widget against the 2026-09-02 design left four things it did not say. Juha's calls:
+
+- **Edges come from the app.** The widget takes an optional edge-drawing function (two nodes → an `Edge`),
+  which `chatgraph` supplies from `_edge_between`, so edges are rebuilt exactly from the interpolated
+  endpoints each frame. A caller that supplies none — `raven-xdot-viewer`, whose GraphViz edges are routed
+  splines — gets its edges faded rather than morphed. Considered and not taken: interpolating the points of
+  edges present in both builds, which stays inside the widget but still needs the hook for the appearing
+  and leaving edges, so it never saves it.
+- **The camera holds still because the new build is translated, not because the camera chases.** Before
+  the morph starts, B is shifted so the anchor's position in B equals its position in A. The camera then
+  genuinely does not move, and neither does the anchor. The layout's coordinates are relative already (the
+  panel pans to the anchor after every build), so this is one translation per build. It also retires the
+  panel's "glide only if the drawn set is unchanged" rule: animated or cut becomes a matter of the option.
+- **A survivor whose shapes differ cross-fades them at its moving position.** This happens on every click,
+  because the cursor ring is part of the node's shapes. It needs a per-element opacity in the renderer,
+  which the fades need anyway.
+- **The long keyboard jump (Up across a wide level) is looked at after the morph exists**, live, rather than
+  designed in advance. It changes no topology, so the morph alone does not touch it.
+
+Order: renderer opacity and `XDotWidget(animate_view=...)`; the blend of two graphs at a progress value, as
+pure data with unit tests; the widget driving it over time with retargeting; the panel's wiring (anchor
+alignment, representatives from `hidden_node_ids`, the edge function); the config switch and rate; then a
+live look, which settles the z-order question and the long jump.
+
 ## Where this stands, 2026-09-07
 
 **Items 6, 4 and 5 are done**, all on 2026-09-07. What item 6 shipped is in *How item 6 came out* below;

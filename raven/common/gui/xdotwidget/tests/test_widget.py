@@ -19,6 +19,7 @@ dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed
 from raven.common.gui import animation  # noqa: E402 -- after importorskip by design
 from raven.common.gui.xdotwidget.graph import (Graph, Node, Edge, Pen, ImageShape, MipLevel,  # noqa: E402 -- after importorskip by design
                                                TextShape, EllipseShape, LineShape, PolygonShape)
+from raven.common.gui.xdotwidget.renderer import IN_PLACE, Placement, render_scene  # noqa: E402 -- after importorskip by design
 from raven.common.gui.xdotwidget.widget import XDotWidget  # noqa: E402 -- after importorskip by design
 
 # Drawlist children live in slot 2. Slot 1 holds none and reads as "the renderer drew nothing", which is a
@@ -683,3 +684,63 @@ class TestAStrokedOutlineIsClosedAtItsSeam:
         left_edge_dashes = [d for d in drawn
                             if all(p[0] == pytest.approx(min(xs)) for p in d["points"])]
         assert left_edge_dashes, "nothing was drawn along the closing edge"
+
+
+class TestAnElementIsDrawnAtItsPlacement:
+    """`render_scene` draws each element displaced and faded as its `Placement` says.
+
+    This is what a transition between two layouts is drawn with — an element partway to where it is going,
+    partly faded in or out — so the shapes themselves are never copied or edited.
+    """
+
+    @staticmethod
+    def one_node(texture=None, x: float = 50.0) -> Node:
+        """A 20x20 box centred on `(x, 50)`, filled and outlined, with a label and optionally an image."""
+        pen = Pen()
+        pen.color = (0.0, 0.0, 0.0, 1.0)
+        pen.fillcolor = (1.0, 0.5, 0.0, 1.0)
+        box = [(x - 10.0, 40.0), (x + 10.0, 40.0), (x + 10.0, 60.0), (x - 10.0, 60.0)]
+        shapes = [PolygonShape(pen, box, filled=True),
+                  PolygonShape(pen, box, filled=False),
+                  TextShape(pen, x, 50.0, TextShape.CENTER, 10.0, "x")]
+        if texture is not None:
+            shapes.append(ImageShape(one_level(texture), x - 10.0, 40.0, x + 10.0, 60.0))
+        return Node(x=x, y=50.0, w=20.0, h=20.0, shapes=shapes, internal_name="only")
+
+    @staticmethod
+    def draw(instance: XDotWidget, node: Node, placement: Placement) -> dict[str, dict]:
+        """Render `node` alone at `placement`, at 1:1 centred on (50, 50); return each drawn item's
+        configuration, by item type."""
+        instance.set_zoom(1.0, animate=False)
+        instance.pan_to_point(50.0, 50.0, animate=False)
+        render_scene(instance.drawlist, instance._viewport, shapes=(), edges=(), nodes=[(node, placement)])
+        return {dpg.get_item_type(item).split("::mvDraw")[-1]: dpg.get_item_configuration(item)
+                for item in dpg.get_item_children(instance.drawlist, DRAWLIST_SLOT) or []}
+
+    def test_a_displaced_element_moves_by_its_displacement(self, widget):
+        in_place = self.draw(widget, self.one_node(), IN_PLACE)
+        moved = self.draw(widget, self.one_node(), Placement(dx=30.0, dy=-10.0))
+        for p0, p1 in zip(in_place["Polygon"]["points"], moved["Polygon"]["points"]):  # DPG pads each point to 4D
+            assert (p1[0] - p0[0], p1[1] - p0[1]) == pytest.approx((30.0, -10.0))  # 1:1, so graph units are pixels
+
+    def test_opacity_scales_the_alpha_of_every_kind_of_ink(self, widget, texture):
+        opaque = self.draw(widget, self.one_node(texture), IN_PLACE)
+        faded = self.draw(widget, self.one_node(texture), Placement(opacity=0.5))
+        for kind, key in [("Polygon", "fill"), ("Polyline", "color"), ("Text", "color"), ("Image", "color")]:
+            assert opaque[kind][key][3] == pytest.approx(1.0), \
+                f"the {kind} {key} is not opaque to begin with, so this fixture cannot show it being faded"
+            assert faded[kind][key][3] == pytest.approx(0.5, abs=0.01), f"the {kind} {key} did not fade"
+
+    def test_a_fully_faded_element_draws_nothing(self, widget):
+        assert self.draw(widget, self.one_node(), Placement(opacity=0.0)) == {}
+
+    def test_culling_asks_where_the_element_is_drawn(self, widget):
+        """A node whose shapes lie outside the view, displaced into it, is on screen — and the reverse."""
+        far = 5000.0
+        assert self.draw(widget, self.one_node(), IN_PLACE), "the node in place is not drawn at all"
+        assert self.draw(widget, self.one_node(), Placement(dx=far)) == {}, \
+            "a node displaced far outside the view was still drawn, so culling ignored the placement"
+        assert self.draw(widget, self.one_node(x=50.0 + far), IN_PLACE) == {}, \
+            "a node lying far outside the view was drawn, so this fixture cannot show culling at all"
+        assert self.draw(widget, self.one_node(x=50.0 + far), Placement(dx=-far)), \
+            "a node displaced into the view was culled where its shapes lie"
