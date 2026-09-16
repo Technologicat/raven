@@ -19,23 +19,31 @@ moment holds elements of two graphs, some partly faded. So the source of a chang
 is drawn, where, and how visibly. A graph at rest is the special case `still(graph)`, and the frame of a
 change at any progress is itself a `Picture`, which a new change can start from.
 
-A node present on both sides is drawn twice during the change: the new version underneath, the old copies
-on top of it fading out. Where they look alike the stack is indistinguishable from one box; where they
-differ — a decoration that moved to another node — the difference cross-fades. The new version's opacity
-is chosen so that the stack's *combined* visibility goes linearly from what it was to fully opaque: an
-unchanged box stays fully visible throughout, and a box that was fading out and is wanted back carries on
-from where it was.
+**A node present on both sides changes shape as well as place.** Its old and new shapes are paired, in
+order, by what cannot be interpolated — the kind of shape, whether it is filled, how many points it has,
+its dash pattern, its text, its texture — and each pair is drawn *once*, with geometry, colours, line width
+and font size interpolated between the two. Only shapes without a partner fade: a selection ring moving to
+another box, a label whose text changed. So a box and everything drawn with it read as one item throughout,
+which two whole copies cross-fading would not — alpha is per shape, and a half-faded copy of the box would
+wash over the other copy's decorations wherever they overlap.
+
+Edges present on both sides do cross-fade as two copies, the new one underneath with its opacity chosen so
+the pair's combined visibility runs linearly to fully opaque. An edge has nothing drawn over it for the
+fading copy to wash out.
 """
 
 __all__ = ["Placement", "IN_PLACE",
            "Picture", "Scene",
            "still", "shifted", "frame", "scene"]
 
+import difflib
+import weakref
 from collections.abc import Callable, Mapping
 from typing import NamedTuple
 
 from .constants import Point
-from .graph import Edge, Graph, Node, Shape
+from .graph import (Edge, Graph, Node, Pen, Shape,
+                    BezierShape, CompoundShape, EllipseShape, ImageShape, LineShape, PolygonShape, TextShape)
 
 
 class Placement(NamedTuple):
@@ -152,40 +160,61 @@ def frame(source: Picture, target: Graph, t: float, stand_in: StandIn | None = N
             return None
         return stand_in(name, graph)
 
-    # The opacities each name and each edge is already drawn at, copy by copy.
-    node_opacities: dict[str, list[float]] = {}
-    for node, _, _, opacity in source.nodes:
-        if node.internal_name:
-            node_opacities.setdefault(node.internal_name, []).append(opacity)
+    # For each name the source draws, the index of its most visible copy. That copy is what a survivor
+    # changes shape *from*; any other copies of the name are leftovers of an earlier change, and fade.
+    main_copy: dict[str, int] = {}
+    for index, (node, _, _, opacity) in enumerate(source.nodes):
+        name = node.internal_name
+        if name and (name not in main_copy or opacity > source.nodes[main_copy[name]][3]):
+            main_copy[name] = index
     edge_opacities: dict[tuple[str | None, str | None], list[float]] = {}
     for edge, opacity in source.edges:
         edge_opacities.setdefault(_edge_key(edge), []).append(opacity)
 
     positions: dict[str, Point] = {}
     nodes = []
+    consumed: set[int] = set()  # source copies a survivor has taken over
 
     # The target's nodes, underneath.
     for node in target.nodes:
         name = node.internal_name
         end = (node.x, node.y)
-        start = source.positions.get(name) if name else None
-        if start is None:
-            stand = represented_by(name, source.graph)
-            start = source.positions.get(stand, end) if stand is not None else end
-        x, y = _lerp(start, end, t)
-        nodes.append((node, x, y, _underneath(node_opacities.get(name, []) if name else [], t)))
+
+        index = main_copy.get(name) if name else None
+        if index is not None:  # a survivor: change shape and place together
+            consumed.add(index)
+            old, x0, y0, was = source.nodes[index]
+            x, y = _lerp((x0, y0), end, t)
+            positions[name] = (x, y)
+            paired, old_only, new_only = _pair_shapes(old, node)
+            # Old shapes are in the old node's coordinates; moved into the new one's, they interpolate
+            # against their partners directly, and every part comes out placed relative to `node`.
+            dx, dy = node.x - old.x, node.y - old.y
+            between = [_shape_between(old_shape, new_shape, dx, dy, t) for old_shape, new_shape in paired]
+            nodes.append((_carrier(node, between), x, y, was + (1.0 - was) * t))
+            if new_only:
+                nodes.append((_carrier(node, new_only), x, y, t))
+            if old_only and was * (1.0 - t) > _INVISIBLE:
+                nodes.append((_carrier(old, old_only), x, y, was * (1.0 - t)))
+            continue
+
+        start = None
+        stand = represented_by(name, source.graph)
+        if stand is not None:
+            start = source.positions.get(stand)
+        x, y = _lerp(start if start is not None else end, end, t)
+        nodes.append((node, x, y, t))
         if name:
             positions[name] = (x, y)
 
-    # The source's nodes, on top, fading out.
-    for node, x0, y0, opacity in source.nodes:
-        if opacity * (1.0 - t) <= _INVISIBLE:
+    # The source's nodes a survivor did not take over, on top, fading out.
+    for index, (node, x0, y0, opacity) in enumerate(source.nodes):
+        if index in consumed or opacity * (1.0 - t) <= _INVISIBLE:
             continue
         name = node.internal_name
         end = (x0, y0)
         if name and name in target.nodes_by_name:
-            end = positions[name]  # already interpolated; a survivor's two copies move as one
-            x, y = end
+            x, y = positions[name]  # a leftover copy of a survivor moves with it
         else:
             stand = represented_by(name, target)
             if stand is not None and stand in target.nodes_by_name:
@@ -233,6 +262,109 @@ def scene(picture: Picture, edge_between: EdgeBetween | None = None) -> Scene:
                       Placement(opacity=opacity)))
 
     return Scene(shapes=picture.graph.shapes, edges=edges, nodes=nodes)
+
+
+def _carrier(like: Node, shapes: list[Shape]) -> Node:
+    """A node with `like`'s box, name and coordinates, drawing `shapes` — one part of a node mid-change."""
+    return Node(x=like.x, y=like.y, w=like.x2 - like.x1, h=like.y2 - like.y1, shapes=shapes,
+                url=like.url, internal_name=like.internal_name, tooltip=like.tooltip)
+
+
+def _signature(shape: Shape) -> tuple:
+    """What two shapes must share to be drawn as one shape changing, rather than one fading into another.
+
+    Everything that has no in-between — the kind, fill, point count, dash, text, texture. What does have one
+    (positions, sizes, colours, line width, font size) is left out, since interpolating it is the point.
+    """
+    dash = shape.pen.dash if shape.pen is not None else ()
+    if isinstance(shape, TextShape):
+        return (TextShape, shape.j, shape.t, dash)
+    if isinstance(shape, EllipseShape):
+        return (EllipseShape, shape.filled, dash)
+    if isinstance(shape, (PolygonShape, BezierShape)):
+        return (type(shape), shape.filled, len(shape.points), dash)
+    if isinstance(shape, LineShape):
+        return (LineShape, len(shape.points), dash)
+    if isinstance(shape, ImageShape):
+        return (ImageShape, shape.levels, shape.max_screen_size)
+    if isinstance(shape, CompoundShape):
+        return (type(shape), tuple(_signature(child) for child in shape.shapes))
+    return (type(shape), id(shape))  # a kind this module does not know how to interpolate never pairs
+
+
+# `(old node, new node) -> pairing`. A change asks on every frame about the same two nodes, and the answer
+# depends only on them. Weak both ways, so a pairing goes when either picture does.
+_pairings: "weakref.WeakKeyDictionary[Node, weakref.WeakKeyDictionary]" = weakref.WeakKeyDictionary()
+
+
+def _pair_shapes(old: Node, new: Node) -> tuple[list[tuple[Shape, Shape]], list[Shape], list[Shape]]:
+    """Pair `old`'s shapes with `new`'s: `(pairs, only in old, only in new)`.
+
+    Pairs are matched in order, as the longest common run of `_signature`s, so a shape inserted or removed
+    in the middle of a list — a ring appearing between a box's outline and its label — leaves the shapes on
+    either side of it paired.
+    """
+    by_new = _pairings.get(old)
+    if by_new is None:
+        by_new = _pairings[old] = weakref.WeakKeyDictionary()
+    cached = by_new.get(new)
+    if cached is not None:
+        return cached
+
+    matcher = difflib.SequenceMatcher(None,
+                                      [_signature(shape) for shape in old.shapes],
+                                      [_signature(shape) for shape in new.shapes],
+                                      autojunk=False)
+    pairs, old_only, new_only = [], [], []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            pairs.extend(zip(old.shapes[i1:i2], new.shapes[j1:j2]))
+        else:
+            old_only.extend(old.shapes[i1:i2])
+            new_only.extend(new.shapes[j1:j2])
+    result = (pairs, old_only, new_only)
+    by_new[new] = result
+    return result
+
+
+def _lerp_number(a: float, b: float, t: float) -> float:
+    return a + (b - a) * t
+
+
+def _pen_between(old: Pen, new: Pen, t: float) -> Pen:
+    pen = new.copy()
+    Pen.mix(pen, old, new, t)
+    pen.linewidth = _lerp_number(old.linewidth, new.linewidth, t)
+    pen.fontsize = _lerp_number(old.fontsize, new.fontsize, t)
+    return pen
+
+
+def _shape_between(old: Shape, new: Shape, dx: float, dy: float, t: float) -> Shape:
+    """The shape partway from `old`, moved by `(dx, dy)`, to `new`. The two must share a `_signature`."""
+    def point(p: Point, q: Point) -> Point:
+        return _lerp((p[0] + dx, p[1] + dy), q, t)
+
+    if isinstance(new, TextShape):
+        return TextShape(_pen_between(old.pen, new.pen, t),
+                         _lerp_number(old.x + dx, new.x, t), _lerp_number(old.y + dy, new.y, t),
+                         new.j, _lerp_number(old.w, new.w, t), new.t)
+    if isinstance(new, EllipseShape):
+        return EllipseShape(_pen_between(old.pen, new.pen, t),
+                            _lerp_number(old.x0 + dx, new.x0, t), _lerp_number(old.y0 + dy, new.y0, t),
+                            _lerp_number(old.w, new.w, t), _lerp_number(old.h, new.h, t), new.filled)
+    if isinstance(new, (PolygonShape, BezierShape)):
+        return type(new)(_pen_between(old.pen, new.pen, t),
+                         [point(p, q) for p, q in zip(old.points, new.points)], new.filled)
+    if isinstance(new, LineShape):
+        return LineShape(_pen_between(old.pen, new.pen, t), [point(p, q) for p, q in zip(old.points, new.points)])
+    if isinstance(new, ImageShape):
+        return ImageShape(new.levels,
+                          _lerp_number(old.x1 + dx, new.x1, t), _lerp_number(old.y1 + dy, new.y1, t),
+                          _lerp_number(old.x2 + dx, new.x2, t), _lerp_number(old.y2 + dy, new.y2, t),
+                          new.max_screen_size)
+    if isinstance(new, CompoundShape):
+        return CompoundShape([_shape_between(o, n, dx, dy, t) for o, n in zip(old.shapes, new.shapes)])
+    return new
 
 
 def _moved(node: Node, at: Point) -> Node:

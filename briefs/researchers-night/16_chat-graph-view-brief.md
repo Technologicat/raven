@@ -1229,7 +1229,11 @@ cursor up and down the active branch, attachment cards and role icons turn brief
 the drawing and not measured: a surviving box is drawn twice — new version underneath, old version fading
 on top — and alpha is per shape, so the old copy's half-transparent box fill lands over the new copy's card
 and icon where they straddle the box's edges. A box fading alone (arriving or leaving) has the same flaw:
-its own fill shows through its card. DPG has no group opacity. Options raised, **decision pending (Juha)**:
+its own fill shows through its card. DPG has no group opacity.
+
+**Decided (Juha, 2026-09-16): option 3.** What a box that *stays on screen* looks like mid-transition matters
+more than a box fading alone, so the lone fade keeps its flaw. Option 4 is out because a fading unit would
+cover what is behind it instead of showing it. The options as raised:
 
 1. **Draw a surviving box once, no crossfade.** A few lines in `morph.frame`; the ring and any count change
    inside a box switch instantly, as before 2026-09-16. Does not fix a box fading alone.
@@ -1245,8 +1249,7 @@ its own fill shows through its card. DPG has no group opacity. Options raised, *
    it and is drawn at alpha. Exact on a plain background, and fixes the lone-fade case too. Moderate: a
    couple of hours with tests (renderer mixing, image patch, survivors once in `morph`, the opacity and
    stacking tests rewritten). The trade: a fading unit covers what is behind it instead of showing it —
-   visible mainly where a box travels into a gap and passes over the gap box. Recommended, pending a live
-   look at that case.
+   visible mainly where a box travels into a gap and passes over the gap box.
 
 **Item 10, the look check, is struck** (Juha, 2026-09-16): it was done continuously alongside the other
 items rather than as a pass of its own, and the view looks right as it stands. **So nothing in this brief is

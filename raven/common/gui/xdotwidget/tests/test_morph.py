@@ -2,7 +2,8 @@
 
 import pytest
 
-from raven.common.gui.xdotwidget.graph import Edge, Graph, LineShape, Node, Pen
+from raven.common.gui.xdotwidget.graph import (Edge, Graph, ImageShape, LineShape, MipLevel, Node, Pen,
+                                               PolygonShape, TextShape)
 from raven.common.gui.xdotwidget.morph import Placement, frame, scene, shifted, still
 
 
@@ -48,7 +49,7 @@ class TestTheEnds:
         a = graph(box("r", 0.0, 0.0), box("x", 100.0, 0.0))
         b = graph(box("r", 50.0, 50.0), box("y", 200.0, 0.0))
         at_zero = frame(still(a), b, 0.0)
-        assert visible(at_zero, "r") == [(0.0, 0.0, 1.0), (0.0, 0.0, 1.0)]  # the new copy, the old on top
+        assert visible(at_zero, "r") == [(0.0, 0.0, 1.0)]
         assert visible(at_zero, "x") == [(100.0, 0.0, 1.0)]
         assert visible(at_zero, "y") == [], "a node that is only arriving is already visible at the start"
 
@@ -66,18 +67,114 @@ class TestASurvivor:
         a = graph(box("r", 0.0, 0.0))
         b = graph(box("r", 100.0, 40.0))
         for t in (0.25, 0.5, 0.75):
-            copies = drawn(frame(still(a), b, t), "r")
-            assert len(copies) == 2
-            for x, y, _ in copies:
-                assert (x, y) == pytest.approx((100.0 * t, 40.0 * t)), "a copy left the straight line"
+            assert drawn(frame(still(a), b, t), "r") == [pytest.approx((100.0 * t, 40.0 * t, 1.0))]
 
-    def test_its_new_version_is_opaque_underneath_and_the_old_fades_on_top(self):
-        """Two copies at half opacity each would dim an unchanged box halfway through."""
-        a = graph(box("r", 0.0, 0.0))
-        b = graph(box("r", 100.0, 0.0))
-        (_, _, new), (_, _, old) = drawn(frame(still(a), b, 0.5), "r")
-        assert new == 1.0
-        assert old == pytest.approx(0.5)
+
+def styled_box(name: str, x: float, *extras, width: float = 40.0, color=(0.0, 0.0, 0.0, 1.0)) -> Node:
+    """A box at `(x, 0)`: a fill, an outline and a label, then `extras` — each a function of the box's left
+    edge returning one more shape."""
+    pen = Pen()
+    pen.color = color
+    pen.fillcolor = (0.5, 0.5, 0.5, 1.0)
+    x1, x2 = x - width / 2, x + width / 2
+    corners = [(x1, -5.0), (x2, -5.0), (x2, 5.0), (x1, 5.0)]
+    shapes = [PolygonShape(pen, corners, filled=True),
+              PolygonShape(pen, corners, filled=False),
+              TextShape(pen, x, 0.0, TextShape.CENTER, 20.0, "label")]
+    shapes.extend(make(x1) for make in extras)
+    return Node(x=x, y=0.0, w=width, h=10.0, shapes=shapes, internal_name=name)
+
+
+def ring(x1: float) -> PolygonShape:
+    pen = Pen()
+    pen.dash = (1.0, 2.0)
+    return PolygonShape(pen, [(x1 - 3, -8.0), (x1 + 3, -8.0), (x1 + 3, 8.0)], filled=False)
+
+
+def icon(texture: str):
+    return lambda x1: ImageShape([MipLevel(64, 64, texture)], x1 - 5.0, -5.0, x1 + 5.0, 5.0)
+
+
+def parts(picture, name: str) -> list[tuple[list[str], float]]:
+    """The copies of `name`, each as `(the kinds of shape it draws, its opacity)`."""
+    return [([type(shape).__name__ for shape in node.shapes], opacity)
+            for node, _, _, opacity in picture.nodes if node.internal_name == name]
+
+
+class TestABoxChangesShapeAsOneItem:
+    """A surviving box is drawn once, its shapes paired with their new versions, so the box and its
+    decorations cannot wash over each other mid-change. Only shapes without a partner fade."""
+
+    def test_an_unchanged_box_draws_each_shape_once(self):
+        old, new = styled_box("r", 0.0, icon("glyph")), styled_box("r", 100.0, icon("glyph"))
+        halfway = frame(still(graph(old)), graph(new), 0.5)
+        assert parts(halfway, "r") == [(["PolygonShape", "PolygonShape", "TextShape", "ImageShape"], 1.0)]
+
+    def test_a_ring_arriving_fades_in_and_the_rest_stays_paired(self):
+        """The ring sits between the outline and the icon in drawing order, so this also checks that an
+        insertion in the middle of the list leaves the shapes on either side of it paired."""
+        old = styled_box("r", 0.0, icon("glyph"))
+        new = styled_box("r", 0.0, ring, icon("glyph"))
+        assert parts(frame(still(graph(old)), graph(new), 0.25), "r") == [
+            (["PolygonShape", "PolygonShape", "TextShape", "ImageShape"], 1.0),
+            (["PolygonShape"], 0.25)]
+
+    def test_a_ring_leaving_fades_out(self):
+        old = styled_box("r", 0.0, ring)
+        new = styled_box("r", 0.0)
+        assert parts(frame(still(graph(old)), graph(new), 0.25), "r") == [
+            (["PolygonShape", "PolygonShape", "TextShape"], 1.0),
+            (["PolygonShape"], 0.75)]
+
+    def test_geometry_and_pen_are_interpolated(self):
+        """A box widening as it is marked, and its outline changing colour, both happen gradually."""
+        old = styled_box("r", 0.0, width=40.0, color=(0.0, 0.0, 0.0, 1.0))
+        new = styled_box("r", 0.0, width=80.0, color=(1.0, 0.0, 0.0, 1.0))
+        (node, _, _, _), = frame(still(graph(old)), graph(new), 0.5).nodes
+        fill = node.shapes[0]
+        assert [p[0] for p in fill.points] == pytest.approx([-30.0, 30.0, 30.0, -30.0])
+        assert node.shapes[1].pen.color == pytest.approx((0.5, 0.0, 0.0, 1.0))
+
+    def test_a_moved_box_keeps_its_shapes_where_they_belong(self):
+        """Shapes are paired in the box's own coordinates, so moving the whole box moves them with it."""
+        old, new = styled_box("r", 0.0), styled_box("r", 100.0)
+        placed = scene(frame(still(graph(old)), graph(new), 0.5))
+        (node, placement), = placed.nodes
+        assert [p[0] + placement.dx for p in node.shapes[0].points] == pytest.approx([30.0, 70.0, 70.0, 30.0])
+
+    def test_changed_text_crosses_over_rather_than_morphing(self):
+        old = styled_box("r", 0.0)
+        new = styled_box("r", 0.0)
+        new.shapes[2] = TextShape(Pen(), 0.0, 0.0, TextShape.CENTER, 20.0, "another label")
+        assert parts(frame(still(graph(old)), graph(new), 0.25), "r") == [
+            (["PolygonShape", "PolygonShape"], 1.0),
+            (["TextShape"], 0.25),
+            (["TextShape"], 0.75)]
+
+    def test_an_image_pairs_only_with_the_same_texture(self):
+        old, new = styled_box("r", 0.0, icon("glyph")), styled_box("r", 0.0, icon("another glyph"))
+        assert parts(frame(still(graph(old)), graph(new), 0.25), "r") == [
+            (["PolygonShape", "PolygonShape", "TextShape"], 1.0),
+            (["ImageShape"], 0.25),
+            (["ImageShape"], 0.75)]
+
+    def test_the_ends_match_the_two_pictures(self):
+        old = styled_box("r", 0.0, icon("glyph"))
+        new = styled_box("r", 100.0, ring, icon("glyph"), width=60.0)
+        start = scene(frame(still(graph(old)), graph(new), 0.0))
+        end = scene(frame(still(graph(old)), graph(new), 1.0))
+
+        def drawn_points(placed):
+            return sorted((round(p[0] + placement.dx, 6), round(p[1] + placement.dy, 6))
+                          for node, placement in placed.nodes if placement.opacity > 0.0
+                          for shape in node.shapes if isinstance(shape, PolygonShape)
+                          for p in shape.points)
+
+        def points_of(node):
+            return sorted((round(p[0], 6), round(p[1], 6))
+                          for shape in node.shapes if isinstance(shape, PolygonShape) for p in shape.points)
+        assert drawn_points(start) == points_of(old)
+        assert drawn_points(end) == points_of(new)
 
 
 class TestANodeOnOneSideOnly:
@@ -115,11 +212,7 @@ class TestRetargetingMidFlight:
         assert {(x, y) for x, y, _ in visible(frame(midway, c, 1.0), "r")} == {(100.0, 200.0)}
 
     def test_a_node_fading_out_that_is_wanted_back_resumes_rather_than_pops(self):
-        """What the reader sees of a name is its copies stacked, so that is what must not jump.
-
-        Asserting on any one copy cannot catch this: the old copy is at the right opacity on its own, and a
-        new copy drawn under it at that same opacity makes the stack *more* visible than it was.
-        """
+        """It carries on from the opacity it had faded to, rather than popping back to full."""
         a = graph(box("r", 0.0, 0.0), box("x", 100.0, 0.0))
         b = graph(box("r", 0.0, 0.0))
         midway = frame(still(a), b, 0.5)
@@ -178,14 +271,12 @@ class TestScene:
         a = graph(box("r", 0.0, 0.0))
         b = graph(box("r", 100.0, 0.0))
         placed = scene(frame(still(a), b, 0.5))
-        new, old = [(node.x, placement) for node, placement in placed.nodes]
-        assert new == (100.0, Placement(-50.0, 0.0, 1.0))
-        assert old == (0.0, Placement(50.0, 0.0, pytest.approx(0.5)))
+        assert [(node.x, placement) for node, placement in placed.nodes] == [(100.0, Placement(-50.0, 0.0, 1.0))]
 
     def test_invisible_elements_are_left_out(self):
         a = graph(box("r", 0.0, 0.0))
         b = graph(box("r", 100.0, 0.0), box("y", 0.0, 50.0))
-        assert [node.internal_name for node, _ in scene(frame(still(a), b, 0.0)).nodes] == ["r", "r"]
+        assert [node.internal_name for node, _ in scene(frame(still(a), b, 0.0)).nodes] == ["r"]
 
 
 def test_shifting_a_picture_moves_everything_in_it_and_nothing_else():
