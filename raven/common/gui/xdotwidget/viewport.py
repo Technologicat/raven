@@ -239,12 +239,13 @@ class Viewport:
             self.zoom.set_immediate(new_zoom)
 
     def zoom_by(self, factor: float, center_sx: float | None = None,
-                center_sy: float | None = None) -> None:
+                center_sy: float | None = None, animate: bool = True) -> None:
         """Zoom by a multiplicative factor.
 
         `factor`: Zoom multiplier (>1 = zoom in, <1 = zoom out).
         `center_sx`, `center_sy`: Screen coordinates to zoom toward.
                                    If None, zoom toward viewport center.
+        `animate`: If True, animate the transition. If False, jump immediately.
 
         Where `clamp_pan` is set, this will not zoom out past the point where the whole graph fits the
         view — see `_fit_zoom`.
@@ -258,7 +259,7 @@ class Viewport:
             # inwards. Holding still is the right refusal.
             new_zoom = max(new_zoom, min(self._fit_zoom(), old_zoom))
 
-        self.zoom_to(new_zoom, center_sx, center_sy)
+        self.zoom_to(new_zoom, center_sx, center_sy, animate=animate)
 
     def _fit_zoom(self) -> float:
         """Return the zoom this widget's zoom-out will not go below.

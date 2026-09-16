@@ -70,6 +70,7 @@ class XDotWidget(gui_animation.Animation):
                  graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
                  mouse_wheel_zoom_factor: float = 1.25,
                  clamp_pan_to_graph: bool = False,
+                 animate_view: bool = True,
                  dark_mode: bool = False,
                  dark_bg_color: DPGColor = (45, 45, 48, 255),
                  light_bg_color: DPGColor = (255, 255, 255, 255)):
@@ -112,6 +113,10 @@ class XDotWidget(gui_animation.Animation):
                               two distant parts or simply to have somewhere to put the pointer. Worth
                               switching on where the graph *is* the content, and space beside it is only
                               distance the reader has to pan back across.
+        `animate_view`: Whether pan and zoom glide rather than jump. Every method that moves the view takes
+                        an `animate` argument, whose default `None` means this; an explicit `True` or
+                        `False` overrides it for that call. The mouse wheel follows it too; a drag always
+                        moves the view immediately. A bare attribute, so it can be changed at any time.
         `on_open_url`: Callback when a node with a URL is right-clicked.
                         Receives the URL string.
         `dark_mode`: If True, invert graph lightness for dark backgrounds.
@@ -134,6 +139,7 @@ class XDotWidget(gui_animation.Animation):
         self._text_compaction_callback = text_compaction_callback
         self._graph_text_fonts = graph_text_fonts
         self._mouse_wheel_zoom_factor = mouse_wheel_zoom_factor
+        self.animate_view = animate_view
         self._dark_mode = dark_mode
         self._dark_bg_color = dark_bg_color
         self._light_bg_color = light_bg_color
@@ -271,43 +277,51 @@ class XDotWidget(gui_animation.Animation):
     # -------------------------------------------------------------------------
     # Public API: View control
 
-    def zoom_to_fit(self, animate: bool = True) -> None:
+    def _animate(self, animate: bool | None) -> bool:
+        """Resolve a per-call `animate` argument against `animate_view`."""
+        return self.animate_view if animate is None else animate
+
+    def zoom_to_fit(self, animate: bool | None = None) -> None:
         """Adjust pan/zoom to show the entire graph.
 
-        `animate`: If True, animate the transition.
+        `animate`: Whether to glide there; `None` takes `animate_view`.
         """
         if self._graph is not None:
             self._focus_node_name = None
-            self._viewport.zoom_to_fit(self._graph, animate=animate)
+            self._viewport.zoom_to_fit(self._graph, animate=self._animate(animate))
             self._needs_render = True
 
     def zoom_to_bbox(self, x1: float, y1: float, x2: float, y2: float,
-                     margin: int = 12, animate: bool = True) -> None:
+                     margin: int = 12, animate: bool | None = None) -> None:
         """Adjust pan/zoom to fit a rectangle of the graph, in graph coordinates.
 
         The zoom that fits *both* dimensions is chosen, so a box taller than it is wide -- against a
         widget that is wider than it is tall -- comes out fitted by height with the width free to overflow.
         That is the way to frame one part of a graph too wide to show whole.
+
+        `animate`: As for `zoom_to_fit`.
         """
-        self._viewport.zoom_to_bbox(x1, y1, x2, y2, margin=margin, animate=animate)
+        self._viewport.zoom_to_bbox(x1, y1, x2, y2, margin=margin, animate=self._animate(animate))
         self._needs_render = True
 
-    def pan_to_point(self, gx: float, gy: float, animate: bool = True) -> None:
+    def pan_to_point(self, gx: float, gy: float, animate: bool | None = None) -> None:
         """Centre the view on a point in graph coordinates. Pan only; the zoom is left alone.
 
         `pan_to_node` centres a node; this is for putting something somewhere other than the middle, which
         needs a point the caller has worked out rather than a node.
+
+        `animate`: As for `zoom_to_fit`.
         """
-        self._viewport.pan_to_point(gx, gy, animate=animate)
+        self._viewport.pan_to_point(gx, gy, animate=self._animate(animate))
         self._needs_render = True
 
-    def pan_to_node(self, node_id: str, animate: bool = True) -> None:
+    def pan_to_node(self, node_id: str, animate: bool | None = None) -> None:
         """Pan the view to center on a specific node.
 
         Pan only — does not change the zoom level.
 
         `node_id`: The internal name of the node.
-        `animate`: If True, animate the transition.
+        `animate`: As for `zoom_to_fit`.
         """
         if self._graph is None:
             return
@@ -315,11 +329,11 @@ class XDotWidget(gui_animation.Animation):
         node = self._graph.get_node_by_name(node_id)
         if node is not None:
             self._focus_node_name = node_id
-            self._viewport.pan_to_point(node.x, node.y, animate=animate)
+            self._viewport.pan_to_point(node.x, node.y, animate=self._animate(animate))
             self._needs_render = True
 
     def zoom_in(self, factor: float = 1.2, anchor_node: str | None = None,
-                anchor_padding: float = 0.0) -> None:
+                anchor_padding: float = 0.0, animate: bool | None = None) -> None:
         """Zoom in by a factor.
 
         `anchor_node`: Internal name of a node to zoom about, which then keeps its place on screen while
@@ -331,23 +345,26 @@ class XDotWidget(gui_animation.Animation):
                           it. A selection ring drawn outside a node is the case: the widget knows the
                           node's box and nothing about what a caller has drawn around it, and a decoration
                           in graph units grows with the zoom, so a screen-space margin cannot stand in.
+        `animate`: As for `zoom_to_fit`.
         """
         # TODO: a keyboard cursor may belong in this widget rather than in each caller that wants one --
         # TODO: it is a general want, and drawing it here would give it one appearance everywhere. The
         # TODO: parameter would stay either way: a caller may decorate a node for reasons of its own, and
         # TODO: what it has drawn is genuinely not this widget's business.
-        self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(factor, sx, sy),
-                              anchor_padding=anchor_padding)
+        animate = self._animate(animate)
+        self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(factor, sx, sy, animate=animate),
+                              animate=animate, anchor_padding=anchor_padding)
 
     def zoom_out(self, factor: float = 1.2, anchor_node: str | None = None,
-                 anchor_padding: float = 0.0) -> None:
-        """Zoom out by a factor. `anchor_node` and `anchor_padding` are as for `zoom_in`."""
-        self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(1.0 / factor, sx, sy),
-                              anchor_padding=anchor_padding)
+                 anchor_padding: float = 0.0, animate: bool | None = None) -> None:
+        """Zoom out by a factor. `anchor_node`, `anchor_padding` and `animate` are as for `zoom_in`."""
+        animate = self._animate(animate)
+        self._zoom_about_node(anchor_node, lambda sx, sy: self._viewport.zoom_by(1.0 / factor, sx, sy, animate=animate),
+                              animate=animate, anchor_padding=anchor_padding)
 
     def _zoom_about_node(self, anchor_node: str | None,
                          zoom: Callable[[float | None, float | None], None],
-                         animate: bool = True, anchor_padding: float = 0.0) -> None:
+                         animate: bool, anchor_padding: float = 0.0) -> None:
         """Run a zoom about `anchor_node`, and leave that node whole on screen.
 
         `anchor_node`, `anchor_padding`: As for `zoom_in`.
@@ -488,7 +505,7 @@ class XDotWidget(gui_animation.Animation):
         elif isinstance(element, Edge):
             mx = (element.src.x + element.dst.x) / 2
             my = (element.src.y + element.dst.y) / 2
-            self._viewport.pan_to_point(mx, my, animate=True)
+            self._viewport.pan_to_point(mx, my, animate=self.animate_view)
             self._needs_render = True
         return self.describe_element(element)
 
@@ -520,19 +537,19 @@ class XDotWidget(gui_animation.Animation):
                 self._focus_node_name = None
                 bbox = element.get_bounding_box()
                 if bbox is not None:
-                    self._viewport.zoom_to_bbox(*bbox, animate=True)
+                    self._viewport.zoom_to_bbox(*bbox, animate=self.animate_view)
                 else:
                     mx = (element.src.x + element.dst.x) / 2
                     my = (element.src.y + element.dst.y) / 2
-                    self._viewport.pan_to_point(mx, my, animate=True)
+                    self._viewport.pan_to_point(mx, my, animate=self.animate_view)
             elif self._edge_click_cycle == 1:
                 # Source node
                 self._focus_node_name = element.src.internal_name
-                self._viewport.pan_to_point(element.src.x, element.src.y, animate=True)
+                self._viewport.pan_to_point(element.src.x, element.src.y, animate=self.animate_view)
             else:
                 # Destination node
                 self._focus_node_name = element.dst.internal_name
-                self._viewport.pan_to_point(element.dst.x, element.dst.y, animate=True)
+                self._viewport.pan_to_point(element.dst.x, element.dst.y, animate=self.animate_view)
             self._needs_render = True
         return self.describe_element(element)
 
@@ -592,18 +609,19 @@ class XDotWidget(gui_animation.Animation):
         """Return the current zoom level."""
         return self._viewport.zoom.current
 
-    def set_zoom(self, zoom: float, animate: bool = True, anchor_node: str | None = None,
+    def set_zoom(self, zoom: float, animate: bool | None = None, anchor_node: str | None = None,
                  anchor_padding: float = 0.0) -> None:
         """Set the zoom level.
 
         `zoom`: Target zoom level.
-        `animate`: If True, animate the transition.
+        `animate`: As for `zoom_to_fit`.
         `anchor_node`, `anchor_padding`: As for `zoom_in` — the node to keep in place while the scale
                                          changes around it, and how far its decoration reaches beyond it.
 
         Obeyed as given, where `zoom_in` and `zoom_out` decline to leave the graph behind. A caller naming
         a scale means that scale; the incremental pair is the one being steered by how it looks.
         """
+        animate = self._animate(animate)
         self._zoom_about_node(anchor_node,
                               lambda sx, sy: self._viewport.zoom_to(zoom, sx, sy, animate=animate),
                               animate=animate, anchor_padding=anchor_padding)
@@ -1130,9 +1148,9 @@ class XDotWidget(gui_animation.Animation):
 
         f = self._mouse_wheel_zoom_factor
         if delta > 0:
-            self._viewport.zoom_by(f, sx, sy)
+            self._viewport.zoom_by(f, sx, sy, animate=self.animate_view)
         else:
-            self._viewport.zoom_by(1.0 / f, sx, sy)
+            self._viewport.zoom_by(1.0 / f, sx, sy, animate=self.animate_view)
 
         self._needs_render = True
 

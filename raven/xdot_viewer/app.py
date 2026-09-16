@@ -338,7 +338,7 @@ def _zoom_actual_size(*_args) -> None:
     """Set the zoom to 1:1, leaving the pan where it is."""
     widget = _app_state["widget"]
     if widget is not None:
-        widget.set_zoom(1.0, animate=True)
+        widget.set_zoom(1.0)
 
 
 def _zoom_in(*_args) -> None:

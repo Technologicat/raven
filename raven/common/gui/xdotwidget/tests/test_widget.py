@@ -222,6 +222,53 @@ class TestItReportsWhetherItIsBusy:
         assert animation.animator.transient_count == 0
 
 
+class TestAnimateViewDecidesWhetherTheViewGlides:
+    """`animate_view` is the instance's default for every view move, and a per-call `animate` overrides it."""
+
+    @staticmethod
+    def moves(instance: XDotWidget):
+        """Every way to move the view that takes the switch, each a call that passes on `animate` if given."""
+        return {"pan_to_node": lambda **kw: instance.pan_to_node("b2", **kw),
+                "pan_to_point": lambda **kw: instance.pan_to_point(500.0, 500.0, **kw),
+                "zoom_to_bbox": lambda **kw: instance.zoom_to_bbox(0.0, 0.0, 50.0, 50.0, **kw),
+                "zoom_to_fit": lambda **kw: instance.zoom_to_fit(**kw),
+                "set_zoom": lambda **kw: instance.set_zoom(3.0, **kw),
+                "zoom_in": lambda **kw: instance.zoom_in(**kw),
+                "zoom_out": lambda **kw: instance.zoom_out(**kw)}
+
+    def test_on_by_default_every_move_glides(self, widget):
+        for name, move in self.moves(widget).items():
+            widget.set_zoom(1.0, animate=False)
+            widget.pan_to_point(0.0, 0.0, animate=False)
+            move()
+            assert widget.is_animating(), f"`{name}` jumped with `animate_view` on"
+
+    def test_off_every_move_jumps(self, widget):
+        widget.animate_view = False
+        for name, move in self.moves(widget).items():
+            widget.set_zoom(1.0, animate=False)
+            widget.pan_to_point(0.0, 0.0, animate=False)
+            move()
+            assert not widget.is_animating(), f"`{name}` glided with `animate_view` off"
+
+    def test_a_call_that_says_so_overrides_the_switch(self, widget):
+        widget.animate_view = False
+        for name, move in self.moves(widget).items():
+            widget.set_zoom(1.0, animate=False)
+            widget.pan_to_point(0.0, 0.0, animate=False)
+            move(animate=True)
+            assert widget.is_animating(), f"`{name}` ignored an explicit `animate=True`"
+
+    def test_the_constructor_sets_it(self, dpg_context):
+        with dpg.window() as window:
+            instance = XDotWidget(parent=window, width=600, height=400, animate_view=False)
+        try:
+            assert instance.animate_view is False
+        finally:
+            instance.destroy()
+            dpg.delete_item(window)
+
+
 class TestItReportsWhatItsOwnRedrawsCost:
     """`last_render_time` and `render_count`, which is what an overlay showing "draw: N ms" reads.
 

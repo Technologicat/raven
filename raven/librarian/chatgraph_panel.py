@@ -709,8 +709,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
     def zoom_1_to_1(self) -> None:
         """Set the zoom to 1:1, about the box under the cursor if there is one."""
-        self._widget.set_zoom(1.0, animate=True,
-                              anchor_node=self._zoom_anchor(), anchor_padding=self._ring_padding)
+        self._widget.set_zoom(1.0, anchor_node=self._zoom_anchor(), anchor_padding=self._ring_padding)
 
     def _zoom_anchor(self) -> Optional[str]:
         """Return the box a zoom should turn about, or `None` to turn about the middle of the view.
@@ -735,7 +734,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         with self._lock:
             chat_graph = self._chat_graph
         if chat_graph is not None:
-            self._widget.zoom_to_bbox(*chat_graph.spine_bbox, animate=True)
+            self._widget.zoom_to_bbox(*chat_graph.spine_bbox)
 
     def toggle_dark_mode(self) -> None:
         """Flip the graph between the dark and light palettes, and relabel the button."""
@@ -1075,8 +1074,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
             return None
         return measured[0] * (font_size / atlas_size)
 
-    def _frame_on_head(self, chat_graph: chatgraph.ChatGraph, animate: bool) -> bool:
+    def _frame_on_head(self, chat_graph: chatgraph.ChatGraph, animate: bool | None) -> bool:
         """Put HEAD in the lower third of the panel at 1:1. Returns whether HEAD was there to go to.
+
+        `animate`: As for the widget's view methods; `None` takes its `animate_view`.
 
         HEAD is placed low rather than centred because what a reader wants around it is what came before —
         below HEAD there is at most one row of replies, so centring it spends half the panel on nothing.
@@ -1105,7 +1106,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
         with self._lock:
             chat_graph = self._chat_graph
-        if chat_graph is None or not self._frame_on_head(chat_graph, animate=True):
+        if chat_graph is None or not self._frame_on_head(chat_graph, animate=None):
             return
         # Flash it. The view slides and the zoom changes at the same time, so "the box you were brought
         # back to" is not obvious from the motion alone -- and HEAD is deliberately off-centre here, which
@@ -1286,7 +1287,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             with self._lock:
                 self._view_state.focus_node_id = ref.node_id
         self._set_cursor(ref.node_id)  # redraws, so the branch change above lands with it
-        self._widget.pan_to_node(ref.node_id, animate=True)
+        self._widget.pan_to_node(ref.node_id)
 
         if ref.on_current_branch and self._on_preview is not None:
             self._on_preview(ref.node_id)
@@ -1302,7 +1303,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # it commits — because the alternative needs a second, weaker cursor state that nothing on screen
         # distinguishes, and a ring that sometimes acts and sometimes only arms is a ring that says less.
         self._set_cursor(ref.recenter_on)
-        self._widget.pan_to_node(ref.recenter_on, animate=True)
+        self._widget.pan_to_node(ref.recenter_on)
 
     def _widen_depth_window(self) -> None:
         """Show more of the elided middle of the branch."""
@@ -1568,7 +1569,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             with self._lock:
                 self._view_state.sibling_focus[parent_node_id] = target
         self._set_cursor(target)
-        self._widget.pan_to_node(target, animate=True)
+        self._widget.pan_to_node(target)
         self._remember_view()
 
     def _cursor_sibling_span(self) -> Optional[Tuple[str, str]]:
@@ -1619,7 +1620,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._click_chat_node(ref)
         else:
             self._set_cursor(name)
-            self._widget.pan_to_node(name, animate=True)
+            self._widget.pan_to_node(name)
 
     def _cursor_home(self, chat_graph: chatgraph.ChatGraph) -> Optional[str]:
         """Return where a cursor that is nowhere should appear.
