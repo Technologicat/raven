@@ -1165,7 +1165,8 @@ growable, which the other two deliberately avoid needing.
 
 **What the exhibit needs from this brief is the transition animation** (*Animating a change of topology*,
 under *Out of scope for v1*, where it was filed before being scheduled on 2026-09-09) **and then the look
-check, item 10.** Neither is started.
+check, item 10.** Neither is started. *(The animation landed on 2026-09-16; see the subsections below.
+Item 10 remains.)*
 
 **Item 8, search, moved past Researchers' Night** (Juha, 2026-09-15): it is edge-case-by-edge-case GUI work
 whose real size is the two weeks of finding those, so it cannot be scheduled into what is left. A first
@@ -1199,6 +1200,30 @@ Order: renderer opacity and `XDotWidget(animate_view=...)`; the blend of two gra
 pure data with unit tests; the widget driving it over time with retargeting; the panel's wiring (anchor
 alignment, representatives from `hidden_node_ids`, the edge function); the config switch and rate; then a
 live look, which settles the z-order question and the long jump.
+
+### The transition animation landed, 2026-09-16
+
+All of the above is built (`xdotwidget.morph`, `XDotWidget.set_graph(animate=..., anchor_node=...)`, the
+panel's `_stand_in`, config `chat_graph_animate_transitions` / `chat_graph_transition_rate` /
+`chat_graph_animate_view`).
+
+**The camera question, settled by looking.** With the anchor held still at the swap, the panel's existing
+follow — a glide centring the anchor — still runs, and now runs *alongside* the morph. Three options were
+on the table: no re-centring on a click (keyboard moves pan only when the target would be off screen);
+re-centring deferred until the morph ends; or re-centring simultaneously. Juha chose to judge the
+simultaneous one first, and live it **reads as one motion** ("looks perfect", Juha, 2026-09-16). So the
+camera does *not* hold still during a morph after all, contrary to the a priori call of 2026-09-02; the
+jump-then-chase it was meant to prevent cannot happen, because the anchor never jumps.
+
+**The other two open points, settled in the same live look** (Juha, 2026-09-16):
+
+- **Z-order**: arriving boxes are drawn under the fading old picture. Nothing looked wrong, so it stays.
+- **The long keyboard jump** (Up from a wide level): the camera's glide alone reads fine. The reserved
+  `go_to_head`-style flash is not needed.
+
+The transition animation is therefore done. What the exhibit still needs from this brief is the look check,
+item 10.
+
 
 ## Where this stands, 2026-09-07
 

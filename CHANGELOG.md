@@ -28,6 +28,12 @@
     system prompt starts a new card and the earlier chats stay under the old one, where nothing else in
     either view names them — so until now they could not be opened at all. Your avatar and voice stay as
     configured while you look, and the box wears the *HEAD* pill while you are away from your live chat.
+  - **The graph changes shape as one motion rather than a cut.** When the picture is redrawn — stepping to
+    another branch, opening a gap, going back or forward, a reply arriving — the box you are working with
+    stays where it was on screen, and the rest rearranges around it: boxes that stay slide to their new
+    places, boxes that go out of view travel into the gap that takes them, and new ones come out of the gap
+    that held them. `chat_graph_animate_transitions` switches it off and `chat_graph_transition_rate` sets
+    its speed; `chat_graph_animate_view` does the same for the graph's pan and zoom.
   - <!-- TODO: fill this in when the view settles. Still to come: search. Details worth a reader's time:
       preview-then-commit clicking, the gap boxes and what clicking each one does (the tool round
       included, with Backspace to close it again), the three marks (hover, HEAD, previewed), the
