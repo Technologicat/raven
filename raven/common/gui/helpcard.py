@@ -24,8 +24,8 @@ from . import utils as guiutils
 
 # --------------------------------------------------------------------------------
 
-#: How many frames a page is given to settle before its height is believed. Matches the file dialog's own
-#: fitting pass; a table's column widths, and so which cells wrap, take more than one frame to stop moving.
+#: How many frames a page is given to settle before its height is believed. A table's column widths, and so
+#: which cells wrap, take more than one frame to stop moving.
 _PAGE_FIT_PASSES = 4
 
 #: What the card says about itself. On a paged card it rides at the right end of the toolbar, where it
@@ -781,7 +781,7 @@ class HelpWindow:
         return True
 
     def _fit_height_to_pages(self) -> None:
-        """Grow a card to its tallest page, once per session.
+        """Fit a card to its tallest page, once per session.
 
         The height is the tallest page's rather than each page's own, so that turning a page does not
         resize the window under the reader — which is unpleasant to read and costs the card its placement.
@@ -793,7 +793,7 @@ class HelpWindow:
         and `settle_offscreen` renews the park per frame.
 
         **A card whose owner sizes it itself is left alone**, because two things sizing one window would
-        fight. That is what `on_parked` means here, and `fdialog` is the one card that uses it.
+        fight. That is what `on_parked` means here.
 
         The test used to be the page *count*, on the reasoning that a single-screen card is the kind whose
         owner fits it. That held only because the one self-fitting card happens to have a single page, and
@@ -802,8 +802,8 @@ class HelpWindow:
         no scrollbar. Asking the question the docstring was already answering fixes that, and costs the
         self-fitting card nothing.
 
-        Growing only, note: `tallest` starts at the height it was given, so a card with room to spare keeps
-        it. Nothing here can shrink a card that was sized deliberately.
+        The fit is exact in both directions, so a card with room to spare is shrunk to its content. Where a
+        page will not answer, the configured height stands as a floor.
         """
         if self._height_fitted or self.on_parked is not None:
             return
@@ -815,10 +815,9 @@ class HelpWindow:
         unmeasured = False
         for index in range(len(self._pages)):
             self.page_index = index
-            # Several frames per page, as `fdialog._fit_help_card_to_content` spends: a table's column
-            # widths settle over more frames than one, and which cells wrap to two lines follows from
-            # those widths — so the first answer describes a layout still on its way somewhere. Stop as
-            # soon as it stops moving.
+            # Several frames per page: a table's column widths settle over more frames than one, and which
+            # cells wrap to two lines follows from those widths — so the first answer describes a layout
+            # still on its way somewhere. Stop as soon as it stops moving.
             previous = None
             for _ in range(_PAGE_FIT_PASSES):
                 self.settle_offscreen()
