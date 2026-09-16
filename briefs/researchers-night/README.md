@@ -18,7 +18,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | Brief | What | Status |
 |---|---|---|
 | `markdown-block-rendering-brief.md` | Band-2 item 12: block-level Markdown in the chat view | **After Researchers' Night** — it was the sprint's slack, and the slack is gone (2026-09-15). Steps 1 and 5 landed 2026-08-25; what remains is behind the single-newline split, which is also what fenced code and multi-line lists are waiting on |
-| `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night, and **in progress**. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Items 1–7 are done, and so is the transition animation (2026-09-16); the look check (item 10) was struck the same day, having been done as the work went. **Nothing left for the exhibit**; open on search alone. Search (item 8) moved past the event on 2026-09-15, with a first draft welcome before it; see *Decided 2026-09-15* below |
+| `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night, and **in progress**. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Items 1–7 are done, and so is the transition animation (2026-09-16); the look check (item 10) was struck the same day, having been done as the work went. Open on search alone — **and a search v1 is back on the exhibit path** as of 2026-09-16; see *Decided 2026-09-16* below. Search (item 8) moved past the event on 2026-09-15, with a first draft welcome before it; see *Decided 2026-09-15* below |
 | `12_derived-artifact-store-brief.md` | One keying and regeneration mechanism for everything computed *from* a source artifact | v0.2.10. Does not depend on 13 |
 | `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night. **It precedes `visualizer-keyword-pools-brief.md`'s corpus-level display** (Juha, 2026-09-10): its §2 keeps the corpus frequency stats that window reads, so it is the foundation and goes first |
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, ~~PCA preprocessing~~, ~~cosine-to-medoid outlier assignment~~, Procrustes alignment, and **clustering in high-D**. **Items 2, 3 and 5 were measured on 2026-09-01 and the brief now points at `investigations/highdim-clustering/README.md`, which is the specification** — 2 and 3 are measured harmful and must not be built as written, 5 is settled and ready to implement (agglomerative, not HDBSCAN) | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
@@ -105,6 +105,22 @@ old picture, and the long keyboard jump needs no flash. Brief 16 → *The transi
 detail. **The look check (item 10) is struck** (Juha, same day): it was done continuously as the view was
 built, and the view looks right. So brief 16 has nothing left for the exhibit, and the exhibit path in this
 sprint is clear; what remains open here is past the event.
+
+### Decided 2026-09-16 — search v1 goes back on the exhibit path
+
+With the transition animation and the look check done in one day, **seven workdays remain, and that is
+enough for a v1 of search** (Juha). This revises *Decided 2026-09-15* above, which moved search (brief 16
+item 8, with `14_chat-search-brief.md`) past the event because of its edge-case-by-edge-case nature: the
+v1 is now the plan for the remaining days, and the long tail of edge cases is still what comes after.
+
+**The next session starts on search v1**, in a fresh session. What it starts from: `14_chat-search-brief.md`
+(the match unit is the message) and brief 16's item 8. The transition animation already covers the view
+changing under a search: filtering the drawn nodes is a topology change, and the morph animates it.
+
+Also from 2026-09-16, closed rather than open: a box and its decorations fade as one item (shapes paired and
+interpolated, `xdotwidget.morph`); the graph camera and a morph share one clock and one rate; Librarian opens
+straight onto the chat graph. The blank frames before the graph's first picture at startup are filed in
+`TODO_DEFERRED.md`.
 
 ### ~~Make `IDLE_SLEEP_S` mean what it says~~ — done 2026-09-11, and it grew a tail
 

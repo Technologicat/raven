@@ -1172,6 +1172,8 @@ same day; see the subsections below.)*
 whose real size is the two weeks of finding those, so it cannot be scheduled into what is left. A first
 working draft before the day is still welcome if time remains. The brief therefore stays open past the
 event, on item 8 alone. `briefs/researchers-night/README.md` → *Decided 2026-09-15* has the rest.
+*(Revised 2026-09-16: seven workdays remain and a v1 of search fits in them, so item 8's v1 is back on the
+exhibit path. README → *Decided 2026-09-16*.)*
 
 ### The transition animation: four open points settled, 2026-09-16
 
