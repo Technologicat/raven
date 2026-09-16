@@ -19,7 +19,8 @@ dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed
 from raven.common.gui import animation  # noqa: E402 -- after importorskip by design
 from raven.common.gui.xdotwidget.graph import (Graph, Node, Edge, Pen, ImageShape, MipLevel,  # noqa: E402 -- after importorskip by design
                                                TextShape, EllipseShape, LineShape, PolygonShape)
-from raven.common.gui.xdotwidget.renderer import IN_PLACE, Placement, render_scene  # noqa: E402 -- after importorskip by design
+from raven.common.gui.xdotwidget.morph import IN_PLACE, Placement  # noqa: E402 -- after importorskip by design
+from raven.common.gui.xdotwidget.renderer import render_scene  # noqa: E402 -- after importorskip by design
 from raven.common.gui.xdotwidget.widget import XDotWidget  # noqa: E402 -- after importorskip by design
 
 # Drawlist children live in slot 2. Slot 1 holds none and reads as "the renderer drew nothing", which is a

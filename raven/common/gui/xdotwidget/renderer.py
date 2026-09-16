@@ -5,13 +5,11 @@ DearPyGUI's drawlist primitives.
 """
 
 __all__ = ["set_dark_mode", "get_dark_mode", "color_to_dpg",
-           "Placement", "IN_PLACE",
            "render_graph", "render_scene"]
 
 import colorsys
 import math
 from collections.abc import Callable, Iterable, Sequence
-from typing import NamedTuple
 
 import dearpygui.dearpygui as dpg
 
@@ -21,6 +19,7 @@ from .graph import (
     CompoundShape, tessellate_bezier
 )
 from .constants import Color, DPGColor, Point
+from .morph import IN_PLACE, Placement
 from .viewport import Viewport
 
 
@@ -76,22 +75,6 @@ def color_to_dpg(color: Color) -> DPGColor:  # TODO: move to a utility module, m
         color = _invert_lightness(color)
     r, g, b, a = color
     return (int(r * 255), int(g * 255), int(b * 255), int(a * 255))
-
-
-class Placement(NamedTuple):
-    """Where, and how visibly, to draw an element, relative to what its shapes say.
-
-    `dx`, `dy`: displacement in graph coordinates, added to every point of every shape.
-    `opacity`: in [0, 1], multiplied into the alpha of everything the element draws.
-
-    This is what lets an element be drawn partway between two layouts without copying its shapes.
-    """
-    dx: float = 0.0
-    dy: float = 0.0
-    opacity: float = 1.0
-
-
-IN_PLACE = Placement()  # where the shapes say, fully opaque
 
 
 class _Displaced:

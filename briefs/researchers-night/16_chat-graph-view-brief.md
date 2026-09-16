@@ -1182,11 +1182,13 @@ Reading the widget against the 2026-09-02 design left four things it did not say
   splines — gets its edges faded rather than morphed. Considered and not taken: interpolating the points of
   edges present in both builds, which stays inside the widget but still needs the hook for the appearing
   and leaving edges, so it never saves it.
-- **The camera holds still because the new build is translated, not because the camera chases.** Before
-  the morph starts, B is shifted so the anchor's position in B equals its position in A. The camera then
-  genuinely does not move, and neither does the anchor. The layout's coordinates are relative already (the
-  panel pans to the anchor after every build), so this is one translation per build. It also retires the
-  panel's "glide only if the drawn set is unchanged" rule: animated or cut becomes a matter of the option.
+- **The camera holds still because the picture is translated, not because the camera chases.** When a
+  morph starts, the old picture is shifted by the anchor's displacement between the two layouts and the
+  camera jumps by the same amount in the same frame, so nothing on screen moves at the swap; the anchor then
+  sits at its new position for the whole morph and the camera does not move again. (Settled as "shift B so
+  the anchor matches A"; shifting the old picture instead gives the identical result, and costs positions
+  rather than every shape's coordinates — `xdotwidget.morph.shifted`.) It also retires the panel's "glide
+  only if the drawn set is unchanged" rule: animated or cut becomes a matter of the option.
 - **A survivor whose shapes differ cross-fades them at its moving position.** This happens on every click,
   because the cursor ring is part of the node's shapes. It needs a per-element opacity in the renderer,
   which the fades need anyway.
