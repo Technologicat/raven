@@ -878,8 +878,8 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=1, key="End", action_indent=0, action="Scroll to the bottom", notes="Not while typing"),
                env(key_indent=1, key="Page Up", action_indent=0, action="Scroll up", notes="Also while typing"),
                env(key_indent=1, key="Page Down", action_indent=0, action="Scroll down", notes="Also while typing"),
-               env(key_indent=1, key="Up arrow", action_indent=0, action="Scroll up slightly", notes="Not while typing"),
-               env(key_indent=1, key="Down arrow", action_indent=0, action="Scroll down slightly", notes="Not while typing"),
+               env(key_indent=1, key="Up arrow", action_indent=0, action="Scroll up slightly", notes="Also while typing"),
+               env(key_indent=1, key="Down arrow", action_indent=0, action="Scroll down slightly", notes="Also while typing"),
                # The two auxiliary windows, each led by the key that opens it. The rows under a leader are
                # live only while that window is up, which is what their notes say — the leader itself works
                # from the main window, so the distinction is worth keeping even though the grouping already
@@ -1358,13 +1358,27 @@ def hotkeys_callback(sender, app_data):
             info_panel.scroll_to_prev_cluster()
         elif key == dpg.mvKey_U:
             info_panel.scroll_to_top_of_current_cluster()
-    # Page Up / Page Down scroll the info panel even while the search field has the caret: a one-line field has
-    # no use for them, and reading down the results of what is being typed is exactly when they are wanted.
-    # Raven-librarian's chat log takes them while typing too.
+    # Page Up / Page Down and the vertical arrows scroll the info panel even while the search field has the caret:
+    # a one-line field has no use for them, and reading down the results of what is being typed is exactly when
+    # they are wanted. Home and End stay with the field, which moves its caret with them.
     elif key == dpg.mvKey_Next or key == 518:  # page down — DPG 2.0+ delivers 518; mvKey_Next (267) is a stale 1.x value that no longer arrives. See dpg-notes.md "Keyboard input".
         info_panel.page_down()
     elif key == dpg.mvKey_Prior or key == 517:  # page up — DPG 2.0+ delivers 517; mvKey_Prior (266) is a stale 1.x value that no longer arrives. See dpg-notes.md "Keyboard input".
         info_panel.page_up()
+    elif key == dpg.mvKey_Down:  # arrow down
+        @call
+        def _():
+            current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
+            w_info, h_info = dpg.get_item_rect_size("item_information_panel")  # tag
+            new_y_scroll = current_y_scroll + 0.1 * h_info
+            info_panel.scroll_to_position(new_y_scroll)
+    elif key == dpg.mvKey_Up:  # arrow up
+        @call
+        def _():
+            current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
+            w_info, h_info = dpg.get_item_rect_size("item_information_panel")  # tag
+            new_y_scroll = current_y_scroll - 0.1 * h_info
+            info_panel.scroll_to_position(new_y_scroll)
     # Bare key
     #
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
@@ -1373,20 +1387,6 @@ def hotkeys_callback(sender, app_data):
             info_panel.go_to_top()
         elif key == dpg.mvKey_End:
             info_panel.go_to_bottom()
-        elif key == dpg.mvKey_Down:  # arrow down
-            @call
-            def _():
-                current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
-                w_info, h_info = dpg.get_item_rect_size("item_information_panel")  # tag
-                new_y_scroll = current_y_scroll + 0.1 * h_info
-                info_panel.scroll_to_position(new_y_scroll)
-        elif key == dpg.mvKey_Up:  # arrow up
-            @call
-            def _():
-                current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
-                w_info, h_info = dpg.get_item_rect_size("item_information_panel")  # tag
-                new_y_scroll = current_y_scroll - 0.1 * h_info
-                info_panel.scroll_to_position(new_y_scroll)
 
 # Set up global mouse and keyboard handlers
 with dpg.handler_registry(tag="global_handler_registry"):  # global (whole viewport)
