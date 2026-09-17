@@ -340,6 +340,18 @@ print()
 # constellation keeps them; `_is_busy` below is what reads the second, and the render loop the first.
 
 
+def _fitted_avatar_upscale(avatar_panel_h: int) -> float:
+    """The avatar's upscale factor for a panel `avatar_panel_h` pixels tall: the configured one, or less where that would not fit.
+
+    The image is anchored 8 px above the panel's bottom, and the panel has 8 px of border at the top, so it fits
+    in `avatar_panel_h - 16`. The factor is a whole number of pixels over the source size: the server makes the
+    frame `int(upscale * source_image_size)` pixels, and a pixel count over 512 is exact in floating point, so the
+    texture is exactly that size.
+    """
+    source = librarian_config.avatar_config.source_image_size
+    configured = int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * source)
+    return min(configured, avatar_panel_h - 16) / source
+
 # The search field's width before the row has been laid out, when the controls beside it cannot be measured yet.
 # Chosen rather than measured: `_resize_search_row` replaces it with the width that fills the row.
 _SEARCH_FIELD_ESTIMATED_W = 480
@@ -1654,7 +1666,7 @@ with timer() as tim:
                                                             paused_text="[Video is off]",
                                                             executor=bg)
                     # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
-                    _initial_image_size = int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * librarian_config.avatar_config.source_image_size)
+                    _initial_image_size = int(_fitted_avatar_upscale(avatar_panel_h) * librarian_config.avatar_config.source_image_size)
                     dpg_avatar_renderer.configure_live_texture(_initial_image_size, _initial_image_size)
 
                     # Status indicators stack top-down via a vertical parent group anchored at (16, 16).
@@ -2562,7 +2574,15 @@ def _resize_panels() -> None:
                                            new_height=avatar_panel_h - 16,
                                            new_blur_state=blur_state)
 
-    # TODO: change upscale factor too? (need to update "upscale" in `librarian_config.avatar_config.animator_settings_overrides` and send config to server)
+    # The avatar's size follows the panel's height: the configured upscale where it fits, and less where it would
+    # not. Sent only when it changes, since a new size reconfigures the server's upscaler.
+    upscale = _fitted_avatar_upscale(avatar_panel_h)
+    if _animator_settings is not None and upscale != _animator_settings["upscale"]:
+        logger.info(f"_resize_panels: avatar upscale {_animator_settings['upscale']} -> {upscale}, to fit a panel {avatar_panel_h} px tall.")
+        _animator_settings["upscale"] = upscale
+        avatar_controller.load_animator_settings(avatar_record, _animator_settings)
+        image_size = int(upscale * librarian_config.avatar_config.source_image_size)
+        dpg_avatar_renderer.configure_live_texture(image_size, image_size)
 
 def _resize_gui_task(task_env: env) -> None:
     """We run this in the background. Expensive parts of the GUI update benefit from the "there can be only one" mechanism."""
@@ -3326,6 +3346,12 @@ def _load_initial_animator_settings() -> None:
         sys.exit(255)
 
     animator_settings.update(librarian_config.avatar_config.animator_settings_overrides)
+    # Sized to the panel from the start, so the server is not first set up at a size the resize below would change.
+    # The panel as it is laid out now rather than at its design size: this runs deferred, once frames have
+    # rendered, and by then the window has its real size.
+    main_window_w, main_window_h = guiutils.get_widget_size(main_window)
+    animator_settings["upscale"] = _fitted_avatar_upscale(_get_avatar_panel_size(main_window_w=main_window_w,
+                                                                                 main_window_h=main_window_h)[1])
 
     # Re-check after the (possibly slow) JSON load: this callback runs on DPG's callback thread, so the user
     # may have closed the window while we were here. Everything below starts the avatar and creates DPG widgets
