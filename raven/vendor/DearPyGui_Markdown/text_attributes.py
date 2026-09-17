@@ -2,6 +2,7 @@ from typing import Callable
 
 from . import get_text_size
 from .attribute_types import Attribute, AttributeConnector, CallInNextFrame, HoverAttribute
+from .font_attributes import parse_color
 
 import dearpygui.dearpygui as dpg
 
@@ -9,6 +10,7 @@ from ...common.gui import utils as guiutils
 
 __all__ = ["set_url_secondary_action", "render_url_secondary_action_icon",
 
+           "Highlight",
            "Underline", "Strike", "Code", "Pre", "Url"]
 
 
@@ -85,6 +87,12 @@ def render_url_secondary_action_icon(url_attribute: "Url", parent: int | str, bo
         gap = dpg.add_text(chr(0x00A0), parent=parent)
         if body_font is not None:
             dpg.bind_item_font(gap, body_font)
+
+
+class Highlight(Attribute):
+    """A search match: its colour wins over every other colour the run would take, a link's included."""
+    def __init__(self, color: str | list | tuple):
+        self.color = parse_color(color)
 
 
 class Underline(Attribute):
@@ -238,12 +246,18 @@ class Url(HoverAttribute):
         self.underline_objects = []
         self.now_hover_item = None
 
-    def render(self, dpg_text, font=None, parent=0):
+    def render(self, dpg_text, font=None, parent=0, highlighted=False):
+        '''
+        :param highlighted: Whether this run of the link is a search match. It then keeps the match's colour,
+                            now and on hover, and is still clickable.
+        '''
         super().render()
         self.add_item_to_handler(dpg_text)
-        self.dpg_text_objects.append(dpg_text)
+        if not highlighted:
+            self.dpg_text_objects.append(dpg_text)  # the runs `hover` and `unhover` recolour
         with guiutils.nonexistent_ok(parent_gone_ok=True) as nok:  # see `Underline.render`
-            dpg.configure_item(dpg_text, color=self.color)
+            if not highlighted:
+                dpg.configure_item(dpg_text, color=self.color)
             # Raven customization: show the linked URL as a tooltip
             url_tooltip = dpg.add_tooltip(parent=dpg_text)
             dpg.add_text(self.url, parent=url_tooltip)

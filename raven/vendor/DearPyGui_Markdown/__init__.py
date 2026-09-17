@@ -1,8 +1,9 @@
 import logging
+import re
 import threading
 import time
 import traceback
-from typing import List, Any, Callable, Union, Tuple
+from typing import List, Any, Callable, Iterable, Union, Tuple
 
 import dearpygui.dearpygui as dpg
 
@@ -266,6 +267,31 @@ from .font_attributes import set_font
 from .text_attributes import set_url_secondary_action
 
 
+def _highlight_entities(clear_text: str,
+                        highlight: Iterable[re.Pattern | None],
+                        color: str | list | tuple,
+                        bold: bool) -> list[parser.MessageEntity]:
+    """Entities marking every match of the regexes in `highlight` in `clear_text`, the text as displayed.
+
+    Offsets are plain string indices, which is what `parser.parse`'s offsets are too.
+
+    Matches of different regexes may overlap, and each gets its own entities. A segment covered twice is
+    still rendered once: `AttributeController` keeps one `Bold`, and both highlights carry the same colour.
+    """
+    entities = []
+    for maybe_regex in highlight:
+        if maybe_regex is None:
+            continue
+        for match in maybe_regex.finditer(clear_text):
+            start, end = match.span()
+            if end <= start:  # an empty match highlights nothing, and a zero-length entity breaks segmenting
+                continue
+            entities.append(parser.MessageEntityHighlight(offset=start, length=end - start, color=color))
+            if bold:
+                entities.append(parser.MessageEntityBold(offset=start, length=end - start))
+    return entities
+
+
 def wrap_text_entity(text: text_entities.StrEntity | text_entities.TextEntity, width: int | float = -1) -> text_entities.LineEntity:
     def get_width(str_entity: text_entities.StrEntity | text_entities.TextEntity) -> int | float:
         return text_entities.LineEntity.get_width(str_entity)
@@ -364,6 +390,8 @@ class _ConvertedMessageEntity:
             case parser.MessageEntityFont:
                 return font_attributes.Font(self.entity.color,
                                             self.entity.size)
+            case parser.MessageEntityHighlight:
+                return text_attributes.Highlight(self.entity.color)
             case parser.MessageEntityBlockquote:
                 return line_attributes.Blockquote(self.entity.depth,
                                                  attribute_connector=self.entity.attribute_connector)
@@ -410,13 +438,26 @@ class _ConvertedMessageEntity:
 class MarkdownText:
     text_entity: text_entities.TextEntity | text_entities.StrEntity
 
-    def __init__(self, markdown_text: str, color: str | list | tuple | None = None):
+    def __init__(self,
+                 markdown_text: str,
+                 color: str | list | tuple | None = None,
+                 highlight: Iterable[re.Pattern | None] | None = None,
+                 highlight_color: str | list | tuple = (255, 0, 0, 255),
+                 highlight_bold: bool = True):
         '''
         :param markdown_text: The Markdown source to render.
         :param color: Colour for text the source does not colour itself, in any spelling a `<font
                       color=...>` attribute accepts. `None` keeps the renderer's white.
+        :param highlight: Compiled regexes whose matches to highlight, e.g. search terms. `None` entries are
+                          skipped, so a pair of maybe-regexes can be passed as is. Matched against the text
+                          as displayed, markup removed, so a match can span styling (`**las**er`) and cannot
+                          match inside a link target or the markup itself.
+        :param highlight_color: Colour of the highlighted text. Wins over every other colour, a link's included.
+        :param highlight_bold: Whether highlighted text is also bold.
         '''
         clear_text, attributes = parser.parse(markdown_text)
+        if highlight is not None and clear_text:
+            attributes.extend(_highlight_entities(clear_text, highlight, highlight_color, highlight_bold))
         for i in range(len(attributes)):
             attributes[i] = _ConvertedMessageEntity(attributes[i])
 
@@ -486,26 +527,39 @@ class MarkdownText:
             text_entities.set_default_text_color(self.text_entity,
                                                  font_attributes.parse_color(color))
 
-    def add(self, wrap: int | float = -1, parent: int | str = 0, tag: int | str = 0):
+    def add(self, wrap: int | float = -1, parent: int | str = 0, tag: int | str = 0, before: int | str = 0):
         '''
         :param wrap: Number of pixels from the start of the item until wrapping starts.
         :param parent: Parent to add this item to. (runtime adding)
         :param tag: DPG tag/alias for the top-level group of the rendered Markdown.
+        :param before: Item to insert the rendered Markdown before, among `parent`'s children.
         :return: group with rendered text
+
+        Afterwards, `rows` holds `(height, is_rule)` for each row laid out, or `None` if rendering was
+        deferred until DPG has started. See `rows`.
         '''
         print_text: text_entities.LineEntity = wrap_text_entity(self.text_entity, width=wrap)
 
-        group = dpg.add_group(parent=parent, horizontal=True, tag=tag)
+        group = dpg.add_group(parent=parent, before=before, horizontal=True, tag=tag)
         text_group = dpg.add_group(parent=group)
         attributes_group = dpg.add_group(parent=group)
 
         if not CallWhenDPGStarted.STARTUP_DONE:
             CallWhenDPGStarted.append(dpg.bind_item_theme, group, text_entities.AttributeController.dpg_group_theme)
             CallWhenDPGStarted.append(print_text.render, parent=text_group, attributes_group=attributes_group)
+            self.rows = None
         else:
             dpg.bind_item_theme(group, text_entities.AttributeController.dpg_group_theme)
             print_text.render(parent=text_group, attributes_group=attributes_group)
+            self.rows = print_text.rows
         return group
+
+    # What `add` laid out, for predicting the rendered height before a frame has laid it out. Measured
+    # 2026-09-17 over 3923 builds (`investigations/chat-search-highlight/`): every row of text came out exactly
+    # 6 px taller than its height here, and the nine rule-like lines in the sample came out exactly as tall.
+    # The 6 px was not traced to its source, which is why this reports rows rather than a height with an offset
+    # baked in: a caller calibrates the offset against a paragraph that is already laid out.
+    rows: list[tuple[float | int, bool]] | None = None
 
 
 def add_text(markdown_text: str,
@@ -513,7 +567,11 @@ def add_text(markdown_text: str,
              parent: int | str = 0,
              pos: list[int | float, int | float] | tuple[int | float, int | float] | None = None,
              tag: int | str = 0,
-             color: str | list | tuple | None = None) -> int:
+             color: str | list | tuple | None = None,
+             before: int | str = 0,
+             highlight: Iterable[re.Pattern | None] | None = None,
+             highlight_color: str | list | tuple = (255, 0, 0, 255),
+             highlight_bold: bool = True) -> int:
     ''' Adds Markdown text.
     :param wrap: Number of pixels from the start of the item until wrapping starts.
     :param parent: Parent to add this item to. (runtime adding)
@@ -524,9 +582,13 @@ def add_text(markdown_text: str,
                   wrapping the source in a `<font>` tag: an open tag on the same line as the content
                   makes the whole thing one paragraph as far as CommonMark is concerned, and a heading
                   cannot occur inside a paragraph.
+    :param before: Item to insert the rendered Markdown before, among `parent`'s children.
+    :param highlight, highlight_color, highlight_bold: See `MarkdownText`.
     :return: group with rendered Markdown text
     '''
-    rendered_group = MarkdownText(markdown_text=markdown_text, color=color).add(wrap=wrap, parent=parent, tag=tag)
+    markdown = MarkdownText(markdown_text=markdown_text, color=color,
+                            highlight=highlight, highlight_color=highlight_color, highlight_bold=highlight_bold)
+    rendered_group = markdown.add(wrap=wrap, parent=parent, tag=tag, before=before)
     if pos is not None:
         dpg.set_item_pos(rendered_group, pos)
     return rendered_group

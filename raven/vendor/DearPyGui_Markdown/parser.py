@@ -16,7 +16,7 @@ from .attribute_types import AttributeConnector
 
 __all__ = ["MessageEntity",
 
-           "MessageEntityFont",
+           "MessageEntityFont", "MessageEntityHighlight",
            "MessageEntityBold", "MessageEntityItalic", "MessageEntityStrike", "MessageEntityUnderline",
            "MessageEntitySpoiler",
            "MessageEntityBlockquote",
@@ -47,6 +47,16 @@ class MessageEntity:
 class MessageEntityFont(MessageEntity):
     color: str | list[int, int, int, int] = field(default_factory=lambda: [255, 255, 255, 255])
     size: int | None = None
+
+
+@dataclass(kw_only=True)
+class MessageEntityHighlight(MessageEntity):
+    """A search match. Never produced by `parse`: `MarkdownText` adds these over the parsed text.
+
+    Colour only, and deliberately not a `MessageEntityFont`: a font span carries a size, and its absence
+    resets the run to body size, which inside a heading shrinks the match.
+    """
+    color: str | list[int, int, int, int] = field(default_factory=lambda: [255, 0, 0, 255])
 
 
 class MessageEntityBold(MessageEntity): ...

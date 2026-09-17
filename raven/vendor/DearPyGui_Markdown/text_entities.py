@@ -7,7 +7,7 @@ from . import CallInNextFrame
 from . import get_text_size
 from .font_attributes import Attribute, Bold, BoldItalic, Default, Font, Italic, H1, H2, H3, H4, H5, H6
 from .line_attributes import Blockquote, List, Separator
-from .text_attributes import Code, Pre, Strike, Underline, Url, render_url_secondary_action_icon
+from .text_attributes import Code, Highlight, Pre, Strike, Underline, Url, render_url_secondary_action_icon
 
 from ...common.gui import utils as guiutils
 
@@ -89,6 +89,10 @@ class AttributeController(list[Attribute]):
         if Url in self:
             _Url: Url = self[self.index(Url)]  # noqa
             self.text_color = _Url.color
+
+        if Highlight in self:  # last, so that a search match wins over everything above
+            _Highlight: Highlight = self[self.index(Highlight)]  # noqa
+            self.text_color = _Highlight.color
         return self.text_color
 
     def get_height(self) -> float | int:
@@ -152,7 +156,7 @@ class AttributeController(list[Attribute]):
             with guiutils.nonexistent_ok():
                 dpg.configure_item(underline_line, color=url_attribute.line_color)
 
-            url_attribute.render(dpg_text, font=font, parent=attributes_group)
+            url_attribute.render(dpg_text, font=font, parent=attributes_group, highlighted=Highlight in self)
 
         if Code in self:
             Code.render(dpg_text_group)
@@ -420,13 +424,21 @@ class LineEntity(TextEntity):
         return width
 
     def render(self, parent=0, attributes_group=0):  # noqa
+        """Lay the lines out as rows under `parent`.
+
+        Records `rows`: `(height, is_rule)` per row, `height` being what the row is rendered to. Known before
+        any layout, and see `MarkdownText.rows` for what it is good for.
+        """
         self.post_render_queue = list()
+        self.rows = []
         for item in self:
             group = dpg.add_group(horizontal=True, parent=parent)
             self.render_attributes(item, parent=group, attributes_group=attributes_group)
+            height = item.get_height()
+            self.rows.append((height, Separator in item.get_all_attributes()))
             item.render(parent=group,
                         attributes_group=attributes_group,
-                        max_text_height=item.get_height())
+                        max_text_height=height)
 
             dpg.bind_item_theme(group, AttributeController.dpg_group_theme)
 
