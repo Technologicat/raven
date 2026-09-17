@@ -2669,8 +2669,15 @@ def _give_keyboard_to_graph() -> None:
 
     Release everything, then claim: the shape every claimant here uses, so that adding a pane with a flag
     of its own means editing `_release_manual_keyboard_claims` and nothing else.
+
+    Waits for frames while a text field lets go of the caret, so call it off the render thread.
     """
     dpg.focus_item("chat_send_button")  # tag
+    # Claimed only once neither field holds the caret. A field takes a couple of frames to let go, and the
+    # per-frame check that hands the keys back when the composer is clicked into cannot tell a composer still
+    # letting go from one just entered: claiming at once, as Tab from the composer did, was revoked on arrival.
+    for field in ("chat_field", "search_field"):  # tag
+        guiutils.release_caret(field, park_focus_on="chat_send_button")  # tag
     _release_manual_keyboard_claims()
     chat_graph_panel.has_keyboard = True
 

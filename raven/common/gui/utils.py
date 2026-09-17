@@ -33,7 +33,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "wait_for_resize",
            "park_offscreen", "recenter_window",
 
-           "snap_slider", "toggle_checkbox", "set_input_text",
+           "snap_slider", "toggle_checkbox", "release_caret", "set_input_text",
            "add_section_separator", "add_toolbar_separator",
 
            "get_pixels_per_plotter_data_unit"]
@@ -1107,6 +1107,38 @@ def toggle_checkbox(widget: str | int, callback: Callable | None = None) -> bool
 #: would be no more correct at ten.
 _INPUT_TEXT_DEACTIVATION_FRAME_LIMIT = 4
 
+def release_caret(field: str | int, *, park_focus_on: str | int) -> bool:
+    """Take the caret out of the text field `field` (DPG tag or ID), and wait until it has let go.
+
+    `park_focus_on`: a widget to move focus to — a button is the safe choice.
+
+    Returns whether the field no longer holds the caret. Does nothing, and returns `True` at once, if it did not
+    hold it to begin with.
+
+    Waits for frames while the field gives up the caret, so call it off the render thread: from a callback or a
+    hotkey handler, not from the render loop.
+    """
+    # Focus parks on a real widget rather than on a panel: `dpg.focus_item` cannot focus a child window, and asked
+    # to, it activates the enclosing window's first navigable item — which may well be the very field being
+    # left. A focused button is inert, DPG leaving ImGui's keyboard-nav activation off.
+    #
+    # See `dpg-notes.md`, "Keyboard input", and `investigations/dpg-focus/`.
+    if dpg.is_item_active(field):
+        dpg.focus_item(park_focus_on)
+        # Wait for the deactivation rather than counting frames to it. Measured 2026-09-10 it takes two —
+        # `focus_item` lands on the next frame, and the field gives up the caret on the one after — but a number
+        # measured today is a number the next DPG release may falsify silently, where a wait cannot be wrong.
+        for _ in range(_INPUT_TEXT_DEACTIVATION_FRAME_LIMIT):
+            split_frame(operation="taking the caret out of a text field", required=True)
+            if not dpg.is_item_active(field):
+                break
+        else:
+            logger.warning(f"release_caret: '{field}' still holds the caret after "
+                           f"{_INPUT_TEXT_DEACTIVATION_FRAME_LIMIT} frames.")
+            return False
+    return True
+
+
 def set_input_text(field: str | int, value: str, *, park_focus_on: str | int) -> None:
     """Write `value` into the text field `field` (DPG tag or ID), even while it holds the caret.
 
@@ -1121,26 +1153,10 @@ def set_input_text(field: str | int, value: str, *, park_focus_on: str | int) ->
     # doing it, so a cleared search would come back rather than merely failing to clear. `configure_item
     # (default_value=...)` does not get around it either. There is no spelling of the write that survives, so the
     # field has to be deactivated first, and only then written.
-    #
-    # Focus parks on a real widget rather than on a panel: `dpg.focus_item` cannot focus a child window, and asked
-    # to, it activates the enclosing window's first navigable item — which may well be the very field being
-    # written. A focused button is inert, DPG leaving ImGui's keyboard-nav activation off.
-    #
-    # See `dpg-notes.md`, "Keyboard input", and `investigations/dpg-focus/`.
-    if dpg.is_item_active(field):
-        dpg.focus_item(park_focus_on)
-        # Wait for the deactivation rather than counting frames to it. Measured 2026-09-10 it takes two —
-        # `focus_item` lands on the next frame, and the field gives up the caret on the one after — but a number
-        # measured today is a number the next DPG release may falsify silently, where a wait cannot be wrong.
-        for _ in range(_INPUT_TEXT_DEACTIVATION_FRAME_LIMIT):
-            split_frame(operation="deactivating a text field before writing into it", required=True)
-            if not dpg.is_item_active(field):
-                break
-        else:
-            # Never silently: a write from here is about to be reverted, and the visible result is a write that
-            # did nothing — which is a long way from its cause.
-            logger.warning(f"set_input_text: '{field}' still holds the caret after "
-                           f"{_INPUT_TEXT_DEACTIVATION_FRAME_LIMIT} frames; writing into it will not take.")
+    if not release_caret(field, park_focus_on=park_focus_on):
+        # Never silently: a write from here is about to be reverted, and the visible result is a write that did
+        # nothing — which is a long way from its cause.
+        logger.warning(f"set_input_text: '{field}' still holds the caret; writing into it will not take.")
     dpg.set_value(field, value)
 
 def add_section_separator(*,
