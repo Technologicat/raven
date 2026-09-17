@@ -189,6 +189,8 @@ _current_item_mark = None  # keyboardmark.Mark, created lazily by `_get_current_
 _scroll_animation = None  # reference to the current info panel scroll animation (if any), so we can stop only this animation.
 _scroll_animation_lock = threading.RLock()
 
+_search_jump = None  # `(display_idx, target_y_scroll)` of the last jump to a search match, while it may still say where the reader is; see `_search_jump_holds`.
+
 _copy_report_tooltip = None  # gui_tooltip.Tooltip on the copy-report button, created in `build_header`.
                              # A `Tooltip` rather than a plain `dpg.tooltip`, because the copy
                              # acknowledgment rewrites the caption and a `dpg.tooltip` would draw one
@@ -754,11 +756,45 @@ def _show_no_current_search_result():
     dpg.show_item("item_information_search_controls_current_item")  # tag
 
 
+def _search_jump_holds():
+    """Whether the last jump to a search match still says which match is current.
+
+    It does while the panel is gliding to where the jump sent it, or resting there. Once the reader scrolls
+    elsewhere, the position of the view takes over again.
+    """
+    maybe_jump = _search_jump  # one read: the navigation handlers replace the tuple from another thread
+    if maybe_jump is None:
+        return False
+    display_idx, target_y_scroll = maybe_jump
+    if display_idx >= len(search_result_widgets):
+        return False
+    maybe_animation = gui_animation.SmoothScrolling.instances.get("item_information_panel")  # tag
+    if maybe_animation is not None and maybe_animation.target_y_scroll == target_y_scroll:
+        return True
+    return abs(dpg.get_y_scroll("item_information_panel") - target_y_scroll) <= 1  # tag
+
+
+def _show_search_result_position(display_idx):
+    """Show `display_idx` as the current match in the [x/x] indicator, and enable next/previous by what is left."""
+    num = len(search_result_widgets)
+    if display_idx > 0:
+        dpg.enable_item("prev_search_match_button")  # tag
+    else:
+        dpg.disable_item("prev_search_match_button")  # tag
+    if display_idx < num - 1:
+        dpg.enable_item("next_search_match_button")  # tag
+    else:
+        dpg.disable_item("next_search_match_button")  # tag
+    dpg.set_value("item_information_search_controls_current_item", f"[{1 + display_idx}/{num}]")  # tag  # 1-based for humans
+    dpg.show_item("item_information_search_controls_current_item")  # tag
+
+
 def update_current_search_result_status():
     """Update the [x/x] indicator in the info panel, and highlight the current item.
 
     Runs every frame, so keep it minimal and exit as early as possible.
     """
+    global _search_jump
     if not scroll_position_changed():
         return
 
@@ -778,36 +814,37 @@ def update_current_search_result_status():
             dpg.hide_item("item_information_search_controls_current_item")  # tag
             return
 
+        # The last few matches cannot be scrolled to the top of the panel, so after a jump to one of them the
+        # position of the view would name an earlier match. The jump says which one the reader went to.
+        # Both writers of `_search_jump` hold `content_lock`, as we do, so it cannot change under us here.
+        if _search_jump_holds():
+            _show_search_result_position(_search_jump[0])
+            return
+        _search_jump = None
+
         # Find the topmost search result below the top of the content area.
         search_result_item = _find_next_or_prev_item(widgets=search_result_widgets, kluge=False)
         if search_result_item is None:  # all matches are above the visible area
             _show_no_current_search_result()
             dpg.enable_item("prev_search_match_button")  # tag
+            dpg.disable_item("next_search_match_button")  # tag
             return
         search_result_display_idx = search_result_widget_to_display_idx[search_result_item]
-
-        # Update the next/prev buttons too — the scroll may have moved regardless of search.
-        if search_result_display_idx == 0:
-            dpg.disable_item("prev_search_match_button")  # tag
-        else:
-            dpg.enable_item("prev_search_match_button")  # tag
-
-        if search_result_display_idx == len(search_result_widgets) - 1:
-            dpg.disable_item("next_search_match_button")  # tag
-        else:
-            dpg.enable_item("next_search_match_button")  # tag
 
         # Is the search result on screen?
         x0_search_result_item, y0_search_result_item = dpg.get_item_rect_min(search_result_item)
         _, y0_content = _get_content_area_start_pos()
         _, h_content = _get_content_area_size()
         # 8px outer padding + 3px inner padding
-        if y0_search_result_item >= y0_content + h_content - 8 - 3:  # below the visible area
+        if y0_search_result_item >= y0_content + h_content - 8 - 3:  # below the visible area, so it is still ahead
             _show_no_current_search_result()
-            dpg.enable_item("next_search_match_button")  # tag  # unstick in case the above check disabled it (one-result case)
+            if search_result_display_idx > 0:
+                dpg.enable_item("prev_search_match_button")  # tag
+            else:
+                dpg.disable_item("prev_search_match_button")  # tag
+            dpg.enable_item("next_search_match_button")  # tag
             return
-        dpg.set_value("item_information_search_controls_current_item", f"[{1 + search_result_display_idx}/{len(search_result_widgets)}]")  # tag  # 1-based for humans
-        dpg.show_item("item_information_search_controls_current_item")  # tag
+        _show_search_result_position(search_result_display_idx)
     finally:
         content_lock.release()
 
@@ -843,9 +880,7 @@ def scroll_to_next_search_match():
     # does not always suffice. For now we silence — we just miss one click from the hammering.
     # `update_current_search_result_status` will update the nav buttons at the next frame.
     try:
-        with content_lock:
-            if (next_match := _find_next_or_prev_item(widgets=search_result_widgets)) is not None:
-                scroll_to_item(next_match)
+        _step_search_match(_next=True)
     except RuntimeError:
         pass
 
@@ -853,11 +888,29 @@ def scroll_to_next_search_match():
 def scroll_to_prev_search_match():
     """Scroll the info panel to the previous item matching the current search."""
     try:
-        with content_lock:
-            if (prev_match := _find_next_or_prev_item(widgets=search_result_widgets, _next=False)) is not None:
-                scroll_to_item(prev_match)
+        _step_search_match(_next=False)
     except RuntimeError:
         pass
+
+
+def _step_search_match(*, _next):
+    """Scroll to the next or previous search match, from the last jump if it still holds, else from the view."""
+    global _search_jump
+    with content_lock:
+        if _search_jump_holds():
+            display_idx = _search_jump[0] + (1 if _next else -1)
+            if not 0 <= display_idx < len(search_result_widgets):
+                return
+            match = search_result_widgets[display_idx]
+        else:
+            if (match := _find_next_or_prev_item(widgets=search_result_widgets, _next=_next)) is None:
+                return
+            display_idx = search_result_widget_to_display_idx[match]
+        target_y_scroll = scroll_to_item(match)
+        _search_jump = (display_idx, target_y_scroll)
+        # A jump the panel cannot scroll for (the last matches, at the bottom already) moves nothing, and
+        # the indicator updates only when the position changes.
+        scroll_position_changed(reset=True)
 
 
 # --------------------------------------------------------------------------------
@@ -1106,6 +1159,7 @@ def _update_info_panel(*, task_env=None, env=None):
     global _content_group
     global build_number
     global _scroll_animation
+    global _search_jump
 
     info_panel_content_target = None  # DPG widget for building new content, initialized later
     new_content_swapped_in = False
@@ -1641,6 +1695,7 @@ def _update_info_panel(*, task_env=None, env=None):
                 search_result_widgets.extend(search_result_widgets_new)
                 search_result_widget_to_display_idx.clear()
                 search_result_widget_to_display_idx.update(search_result_widget_to_display_idx_new)
+                _search_jump = None  # an index into the old matches
 
                 logger.debug(f"_update_info_panel: {task_env.task_name}: Content swapping complete.")
 

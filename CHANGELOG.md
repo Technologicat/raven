@@ -568,6 +568,8 @@
 
 - **search highlighting now marks what was typed when it contains `+`, `*`, `?`, `|`, `^`, `$` or a backslash.** These were read as regex syntax: `C++` highlighted just the `C`, `a|b` every `a` and every `b`, and `^` or a backslash nothing at all. Which titles *match* was never affected, only the red marking inside them.
 
+- **the info panel's search counter and next button are right after going to one of the last matches.** Those matches cannot be scrolled to the top of the panel, so the counter named an earlier match that was still on screen, and *next* stayed enabled while doing nothing. The match you went to is now the current one until you scroll away. Likewise, *next* is now disabled when every match is above the view.
+
 - **Raven-visualizer starts even when the LLM backend is down.** With cluster keywords set to `"llm"` (or summaries on), the app used to exit at startup — no window, no message, exit status 255 — if the configured LLM backend did not answer. A feature that matters only while importing was killing every session, including the ones that never import anything. The check now runs when the importer window is opened; the app opens as usual and says nothing about a backend it is not going to use.
   - `raven-importer` still stops rather than starting, which is the right answer for a batch tool: the check runs before any of the expensive stages, so nothing is lost, and finishing with frequency keywords where LLM ones were asked for would write a dataset quietly worse than the one requested. It now names what needs the backend and exits **2**.
   - **A failed import exits nonzero at all now.** Any error used to be logged as a warning and the process then exited **0**, so an import that failed reported success to whatever ran it.
