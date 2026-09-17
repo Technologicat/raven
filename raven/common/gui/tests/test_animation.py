@@ -1,4 +1,4 @@
-"""Tests for `raven.common.gui.animation`'s `WidgetFlash` and `SmoothScrolling`.
+"""Tests for `raven.common.gui.animation`'s `WidgetFlash`, `SmoothScrolling` and `WidgetSwap`, and the animator.
 
 Most of this package is DPG glue and untested, but `WidgetFlash` carries two things worth
 asserting: it *restores* what it borrowed (a widget's color or theme), and it has a de-duplication state
@@ -1262,3 +1262,154 @@ class TestTheRegistrySurvivesBeingMutatedFromInsideAFrame:
             assert not _is_registered(suicide), "a cancelled animation came back as a survivor"
         finally:
             animation.animator.clear()
+
+
+# --------------------------------------------------------------------------------
+# WidgetSwap: the scroll correction goes in a frame before the swap it compensates for
+#
+# Headless DPG has no layout, and its `get_y_scroll` ignores writes, so positions and the scroll are stubbed:
+# what these assert is the protocol — which frame writes what, what is batched, how a glide is shifted.
+# Whether the view actually holds still was measured with a mapped window, in
+# `investigations/chat-search-highlight/`.
+
+VIEWPORT_TOP = 100
+
+
+@pytest.fixture
+def swap_scene(dpg_context, monkeypatch):
+    """A child window of paragraphs with stubbed positions, and a recording scroll."""
+    with dpg.window() as window:
+        with dpg.child_window(width=80, height=40) as child:
+            paragraphs = [dpg.add_group() for _ in range(4)]
+            with dpg.group(show=False):  # a collapsed container, like a closed thinking trace
+                hidden_paragraph = dpg.add_group()
+    positions = {child: (0, VIEWPORT_TOP),
+                 paragraphs[0]: (0, VIEWPORT_TOP - 300),  # scrolled out above the top
+                 paragraphs[1]: (0, VIEWPORT_TOP - 150),
+                 paragraphs[2]: (0, VIEWPORT_TOP + 50),  # on screen
+                 paragraphs[3]: (0, VIEWPORT_TOP + 200),
+                 hidden_paragraph: (0, VIEWPORT_TOP - 200)}
+    scroll = {"y": 500, "writes": []}
+
+    def set_y_scroll(item, value):
+        scroll["writes"].append(value)
+        scroll["y"] = value
+
+    monkeypatch.setattr(animation.guiutils, "get_widget_pos", lambda item: positions[item])
+    monkeypatch.setattr(dpg, "get_y_scroll", lambda item: scroll["y"])
+    monkeypatch.setattr(dpg, "set_y_scroll", set_y_scroll)
+    animation.WidgetSwap.instances.clear()
+    animation.SmoothScrolling.instances.clear()
+    yield {"child": child, "paragraphs": paragraphs, "hidden_paragraph": hidden_paragraph, "scroll": scroll}
+    animation.animator.clear()
+    animation.WidgetSwap.instances.clear()
+    animation.SmoothScrolling.instances.clear()
+    dpg.delete_item(window)
+
+
+def _replacement_for(old):
+    """A hidden replacement, placed where `old` is — the shape `WidgetSwap.swap` is given."""
+    return dpg.add_group(parent=dpg.get_item_parent(old), before=old, show=False)
+
+
+def _frame():
+    animation.animator.render_frame()
+
+
+class TestWidgetSwap:
+    def test_below_the_top_the_swap_happens_at_once_and_the_scroll_is_left_alone(self, swap_scene):
+        old = swap_scene["paragraphs"][2]
+        new = _replacement_for(old)
+        animation.WidgetSwap.swap(swap_scene["child"], old, new, height_change=26)
+
+        _frame()
+
+        assert not dpg.does_item_exist(old)
+        assert dpg.is_item_shown(new)
+        assert swap_scene["scroll"]["writes"] == []
+        assert swap_scene["child"] not in animation.WidgetSwap.instances
+
+    def test_above_the_top_the_correction_is_written_a_frame_before_the_swap(self, swap_scene):
+        old = swap_scene["paragraphs"][0]
+        new = _replacement_for(old)
+        commanded = box(None)
+        animation.WidgetSwap.swap(swap_scene["child"], old, new, height_change=26, commanded_y_scroll=commanded)
+
+        _frame()
+        assert swap_scene["scroll"]["writes"] == [526]
+        assert dpg.does_item_exist(old) and not dpg.is_item_shown(new), "swapped in the same frame as the correction"
+        assert unbox(commanded) == 526, "a correction the caller has no record of reads as the user scrolling"
+
+        _frame()
+        assert not dpg.does_item_exist(old)
+        assert dpg.is_item_shown(new)
+        assert swap_scene["scroll"]["writes"] == [526, 526], "the position is re-asserted with the swap"
+        assert swap_scene["child"] not in animation.WidgetSwap.instances
+
+    def test_requests_before_the_next_frame_share_one_correction(self, swap_scene):
+        p = swap_scene["paragraphs"]
+        for old, change in ((p[0], 10), (p[1], -4), (p[2], 100)):  # the last is on screen, and counts nothing
+            animation.WidgetSwap.swap(swap_scene["child"], old, _replacement_for(old), height_change=change)
+
+        _frame()
+        assert swap_scene["scroll"]["writes"] == [506]
+        _frame()
+        assert not any(dpg.does_item_exist(old) for old in p[:3])
+
+    def test_a_widget_in_a_hidden_container_counts_nothing(self, swap_scene):
+        old = swap_scene["hidden_paragraph"]
+        animation.WidgetSwap.swap(swap_scene["child"], old, _replacement_for(old), height_change=50)
+
+        _frame()
+
+        assert swap_scene["scroll"]["writes"] == []
+        assert not dpg.does_item_exist(old)
+
+    def test_a_replacement_whose_original_is_gone_is_discarded(self, swap_scene):
+        old = swap_scene["paragraphs"][2]
+        new = _replacement_for(old)
+        animation.WidgetSwap.swap(swap_scene["child"], old, new, height_change=0)
+        dpg.delete_item(old)  # a rebuild got there first
+
+        _frame()
+
+        assert not dpg.does_item_exist(new)
+
+    def test_a_request_arriving_after_the_last_frame_starts_a_new_instance(self, swap_scene):
+        p = swap_scene["paragraphs"]
+        first = animation.WidgetSwap.swap(swap_scene["child"], p[2], _replacement_for(p[2]), height_change=0)
+        _frame()
+        assert swap_scene["child"] not in animation.WidgetSwap.instances, "the finished instance is still registered"
+
+        second = animation.WidgetSwap.swap(swap_scene["child"], p[3], _replacement_for(p[3]), height_change=0)
+        assert second is not first
+        _frame()
+        assert not dpg.does_item_exist(p[3]), "the late request was joined to an instance that had already stopped"
+
+    def test_a_glide_in_flight_is_shifted_rather_than_overwritten(self, swap_scene):
+        glide = _scroll(swap_scene["child"], target_y_scroll=900)
+        glide.prev_frame_new_y_scroll = 600  # as if its last frame had written 600
+        glide._sv.set_immediate(600)
+        glide._sv.target = 900
+        old = swap_scene["paragraphs"][0]
+        animation.WidgetSwap.swap(swap_scene["child"], old, _replacement_for(old), height_change=26)
+
+        _frame()
+
+        assert glide.target_y_scroll == 926
+        assert glide._sv.target == 926 and glide._sv.current == 626
+        assert glide.prev_frame_new_y_scroll == 626, "its applied-write check would stall on a stale value"
+        assert swap_scene["scroll"]["writes"] == [626], "the correction was written from the view, not the glide"
+
+
+class TestSmoothScrollingShift:
+    def test_with_no_scroll_running_there_is_nothing_to_shift(self, scroll_target):
+        assert animation.SmoothScrolling.shift(scroll_target, 26) is None
+
+    def test_a_scroll_that_has_not_started_has_its_target_moved(self, scroll_target, monkeypatch):
+        monkeypatch.setattr(dpg, "get_y_scroll", lambda item: 500)
+        glide = _scroll(scroll_target, target_y_scroll=900)
+
+        assert animation.SmoothScrolling.shift(scroll_target, 26) == 526
+        assert glide.target_y_scroll == 926
+        assert glide.prev_frame_new_y_scroll is None, "an unstarted scroll must still read its start from DPG"

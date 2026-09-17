@@ -6,7 +6,7 @@ __all__ = ["action_continue", "action_finish", "action_cancel",  # return values
            "Dimmer",  # overlays
            "WidgetFlash", "flash_button", "highlight_widget", "set_text_under_flash",  # the flash animation, its two conveniences, and writing to a widget one has borrowed
            "CaretRequest", "give_caret",  # putting the caret in a text field, against whatever else claims focus
-           "SmoothScrolling",  # animations
+           "SmoothScrolling", "WidgetSwap",  # animations: a glide, and a swap that holds the view still
            "pulsating_alpha", "pulsation_envelope",  # utilities: the alpha a pulsating animation yields, and the curve it follows
            "PulsatingColor",  # ...which this one uses
            "WHEEL_SETTLE_FRAMES", "ScrollEndFlasher"]  # the wheel-settle delay, and the animated overlay that uses it
@@ -1123,6 +1123,34 @@ class SmoothScrolling(Animation):
             if instance is not None:
                 animator.cancel(instance)
 
+    @classmethod
+    def shift(cls, target_child_window: Union[str, int], delta: int) -> int | None:
+        """Move a scroll running on `target_child_window`, if any, by `delta` pixels — its target and where it is.
+
+        For content changing height above the viewport while a glide is in flight: the glide carries on toward
+        where its target has moved to, keeping its subpixel position, instead of undoing the move. The same
+        operation as `SmoothInt.shift`, one level up.
+
+        Returns the position the view should now be written to, or `None` if no scroll is running there, in
+        which case moving the view is entirely the caller's. **This does not write the position itself**: the
+        caller does, so that the write can be timed against whatever it is compensating for.
+
+        A scroll that has not rendered its first frame yet reads the position from DPG when it does, so what it
+        gets depends on whether the caller's write has been applied by then. Its target is shifted either way.
+        """
+        with cls.class_lock:
+            instance = cls.instances.get(target_child_window)
+            if instance is None:
+                return None
+            with instance.instance_lock:
+                instance.target_y_scroll += delta
+                instance._sv.shift(delta)
+                if instance.prev_frame_new_y_scroll is None:
+                    return int(dpg.get_y_scroll(target_child_window)) + delta
+                # Shifted too, or the "has DPG applied my last write?" check would never pass again.
+                instance.prev_frame_new_y_scroll += delta
+                return instance.prev_frame_new_y_scroll
+
     def _set_y_scroll(self, new_y_scroll: int) -> None:
         """Move the scrollbar, and record where we put it.
 
@@ -1323,6 +1351,148 @@ class SmoothScrolling(Animation):
                     callback()
                 except Exception as exc:
                     logger.warning(f"SmoothScrolling.finish: instance for '{self.target_child_window}': finish callback {callback} raised, continuing teardown: {type(exc)}: {exc}")
+
+class WidgetSwap(Animation):
+    class_lock = threading.RLock()
+    instances = {}  # DPG tag or ID (of `child_window`) -> animation instance
+
+    def __init__(self,
+                 child_window: Union[str, int],
+                 commanded_y_scroll: Optional[box] = None):
+        """Replace widgets in a scrollable child window with already-built replacements, without the view moving.
+
+        **Use the `swap` classmethod**, which is the supported way to start one of these.
+
+        A replacement is built hidden, just before the widget it replaces, and handed over here. Showing it and
+        deleting the old one changes the content's height by however much the two differ — which is invisible
+        below the top of the viewport, where content simply reflows, and a jump above it, where everything on
+        screen is pushed along. So for a widget above the top, the scroll is moved by the height change first,
+        **one frame before** the swap: a scroll written in some frame is applied a frame later than a change to
+        the widget tree made at the same moment (measured, `investigations/chat-search-highlight/`), so writing
+        it early is what lands the two together.
+
+        The height change has to be known before the replacement is laid out, which is the caller's business —
+        a hidden widget measures nothing. For Markdown, `dpg_markdown.MarkdownText.rows` predicts it.
+
+        Requests for the same child window made before its next frame are batched into one correction and
+        swapped together; later ones wait for the next cycle.
+
+        `child_window`: DPG tag or ID of the scrolling child window.
+        `commanded_y_scroll`: `unpythonic.box`, optional. Receives every scroll position this writes, like
+                              `SmoothScrolling`'s parameter of the same name — pass the same box, so that a
+                              correction does not read as the user scrolling.
+
+        If a `SmoothScrolling` is running on the same window, it is shifted by the correction, so the glide
+        carries on toward where its target has moved to rather than undoing the correction.
+        """
+        super().__init__()
+        self.child_window = child_window
+        self.commanded_y_scroll = commanded_y_scroll
+        self.pending = []  # [(old, new, height_change), ...], appended by `swap`, taken by `render_frame`
+        self.in_flight = []  # the batch whose correction has been written, to be swapped on the next frame
+        self.corrected_y_scroll = None  # the position that correction wrote, re-asserted as the batch is swapped
+
+    @classmethod
+    def swap(cls,
+             child_window: Union[str, int],
+             old: Union[str, int],
+             new: Union[str, int],
+             height_change: int,
+             commanded_y_scroll: Optional[box] = None) -> "WidgetSwap":
+        """Show `new` and delete `old` on a coming frame, holding the view still. Callable from any thread.
+
+        `new`: the replacement, built with `show=False` and placed where `old` is (`before=old`).
+        `height_change`: laid-out height of `new` minus that of `old`, in pixels.
+
+        Returns the animation that will do it, which serves every request for `child_window` until it has none.
+        """
+        with cls.class_lock:
+            instance = cls.instances.get(child_window)
+            if instance is None:
+                instance = cls.instances[child_window] = cls(child_window, commanded_y_scroll=commanded_y_scroll)
+                instance.pending.append((old, new, height_change))
+                return animator.add(instance)
+            if commanded_y_scroll is not None:
+                instance.commanded_y_scroll = commanded_y_scroll
+            instance.pending.append((old, new, height_change))
+            return instance
+
+    def render_frame(self, t: int) -> sym:
+        with type(self).class_lock:
+            if self.in_flight:  # the correction went in on the previous frame
+                self._swap_batch(self.in_flight)
+                if self.corrected_y_scroll is not None:
+                    # Re-asserted, because DPG clamps a write to the scroll range as it stood: a correction for
+                    # content growing above the viewport, written near the end, is cut short until the new
+                    # content has raised the range.
+                    with guiutils.nonexistent_ok():
+                        self._set_y_scroll(self.corrected_y_scroll)
+                self.in_flight = []
+                self.corrected_y_scroll = None
+                return self._continue_or_finish()
+
+            batch, self.pending = self.pending, []
+            correction = self._correction_for(batch)
+            if correction == 0:
+                self._swap_batch(batch)
+                return self._continue_or_finish()
+            self._shift_scroll(correction)
+            self.in_flight = batch
+            return action_continue
+
+    def _continue_or_finish(self) -> sym:
+        """Keep going if more requests arrived, else deregister now. Called holding `class_lock`.
+
+        Deregistering here rather than in `finish` is what keeps a request from being lost: `finish` runs after
+        the animator has seen this frame's answer, and a `swap` arriving in between would join an instance that
+        has already decided to stop.
+        """
+        if self.pending:
+            return action_continue
+        if type(self).instances.get(self.child_window) is self:
+            type(self).instances.pop(self.child_window)
+        return action_finish
+
+    def _correction_for(self, batch) -> int:
+        """How far to move the scroll so that nothing on screen moves: the height changes above the viewport's top.
+
+        "Above" means the widget's top is: a widget straddling the top has its visible lower part held in place,
+        and reflows within it. A widget inside a hidden container occupies no height either way, and counts
+        nothing.
+        """
+        with guiutils.nonexistent_ok():
+            viewport_top = guiutils.get_widget_pos(self.child_window)[1]
+            total = 0
+            for old, new, height_change in batch:
+                if not dpg.does_item_exist(old) or not _shown_all_the_way_up(old):
+                    continue
+                if guiutils.get_widget_pos(old)[1] < viewport_top:
+                    total += height_change
+            return total
+        return 0  # the child window itself is gone
+
+    def _swap_batch(self, batch) -> None:
+        for old, new, height_change in batch:
+            with guiutils.nonexistent_ok():
+                if dpg.does_item_exist(old):
+                    dpg.show_item(new)
+                    dpg.delete_item(old)
+                else:  # rebuilt away under us: the replacement has nothing left to replace
+                    dpg.delete_item(new)
+
+    def _shift_scroll(self, delta: int) -> None:
+        with guiutils.nonexistent_ok():
+            maybe_position = SmoothScrolling.shift(self.child_window, delta)
+            if maybe_position is None:  # no glide running
+                maybe_position = int(dpg.get_y_scroll(self.child_window)) + delta
+            self.corrected_y_scroll = maybe_position
+            self._set_y_scroll(maybe_position)
+
+    def _set_y_scroll(self, y_scroll: int) -> None:
+        """Move the scrollbar, and record where we put it. Box first, for the reason `SmoothScrolling._set_y_scroll` gives."""
+        if self.commanded_y_scroll is not None:
+            self.commanded_y_scroll << y_scroll
+        dpg.set_y_scroll(self.child_window, y_scroll)
 
 # The FPS-corrected exponential decay math lives in `raven.common.smoothvalue`, and the full derivation —
 # Newton's law of cooling, solved for the per-frame step — is in the comments of its `fps_corrected_step`.
