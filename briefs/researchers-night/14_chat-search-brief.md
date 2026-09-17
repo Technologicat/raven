@@ -96,20 +96,21 @@ that wait while their text is hidden. The streaming message is included: it is h
 
 **Where the field lives** (Juha):
 
-- **A row at the top of the chat column, above the chat log**, holding the field, the `[x/y]` counter,
-  previous/next and clear — `Ctrl+F`, `Ctrl+Shift+F`, `F3`, `Shift+F3`. The chat panel shrinks by the row's
-  height; the avatar/graph panel keeps its own. "At least for now."
-- **One search field for the whole app, not one per view.** When the graph gets its tree-wide search, it reads
-  the same terms and adds only its own previous/next buttons, in the toolbar it already has at its top. Two text
-  fields would be confusing, particularly with the composer as a third.
+- **One search field for the whole app, not one per view.** Two text fields would be confusing, particularly
+  with the composer as a third.
+- **So the row spans the whole window, at the top**, and both panels shrink by its height. Left to right: the
+  field, clear, and the two checkboxes below; then, at the right end of the chat half, the chat's `[x/y]` counter
+  and previous/next. `Ctrl+F`, `Ctrl+Shift+F`, `F3`, `Shift+F3`.
+- **Each view's navigation sits in the part of the row above that view.** The graph half stays empty until the
+  graph's tree-wide search lands, when its own `[x/y]` and previous/next go there. (Revised the same afternoon:
+  a row above the chat column only, with the graph's buttons in its own toolbar, was chosen first, and dropped
+  because a shared field above one view reads as that view's.)
 
 **What counts as a match** (Juha):
 
-- **Tool results are searched like any message.** They are text parts like the rest, and "what did that page say
-  about X" is the commonest reason to search.
-- **Thinking traces count, and a jump to a match inside a collapsed one opens it.** Whether traces are searched at
-  all is a **checkbox in the search row**, since a reader after the conversation proper does not want every
-  passing thought counted.
+- **Tool results are searched like any message**, by default.
+- **Thinking traces count, and a jump to a match inside a collapsed one opens it.**
+- **Both are checkboxes in the search row**: whether thinking traces are searched, and whether tool messages are.
 
 **Every search length highlights**, `e` included, if it is fast enough: a screenful costs roughly 150–250 ms at
 the one-letter rate, and whether that feels acceptable is to be judged live (Juha).
