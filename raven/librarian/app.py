@@ -2266,7 +2266,6 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+T", action_indent=0, action="Thinking trace of marked message", notes="For thinking models"),
                env(key_indent=0, key="Ctrl+S", action_indent=0, action="Start/stop AI speaking", notes="The blue mark shows which message"),
-               env(key_indent=0, key="Ctrl+P", action_indent=0, action="Ping the avatar", notes="Wakes it; it takes notice"),
                env(key_indent=0, key="Ctrl+Right / Ctrl+Left", action_indent=0, action="Next / previous sibling", notes="Of the marked message"),
                env(key_indent=1, key="Ctrl+Shift+Right / Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
                env(key_indent=1, key="Ctrl+End / Ctrl+Home", action_indent=1, action="Same, but to the last / first", notes=""),
@@ -2277,6 +2276,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start a new chat", notes=""),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+Shift+G", action_indent=0, action="Give the keyboard to the graph", notes="Shows it first if switched off"),
+               env(key_indent=0, key="Ctrl+P", action_indent=0, action="Ping the avatar", notes="Wakes it; it takes notice"),
                helpcard.hotkey_new_column,
                # The graph's own keyboard has a page of its own; this page carries only the ways into it, Tab
                # below and Ctrl+Shift+G at the foot of the first column.
