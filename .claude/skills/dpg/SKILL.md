@@ -93,12 +93,15 @@ commentary in a trailing `(…)`. `·` separates targets. That shape is not deco
 | reach for `dpg.mutex()` | *Threading* → `dpg.mutex()` — the atomicity tool that Raven cannot currently use |
 | upload, replace or delete a texture | *Threading* → Texture upload ordering · *Raven DPG app structure* → Textures |
 | build a widget that will later be rebuilt or swapped | *Raven DPG app structure* → DPG item management (version-counted tags; alias rebinding) |
+| swap one widget inside a scrolled view without anything on screen moving | *Raven DPG app structure* → DPG item management (`WidgetSwap`, and the scroll write that lands a frame late) |
+| do something that needs a widget laid out, when an ancestor may be hidden — measuring it, decorating it | *Window sizing* → An autosize window is one frame behind its content — and whether that shows depends on the window's age (`find_hidden_ancestor`, `WaitUntilShown`) |
 | set a widget's value from code | *Raven DPG app structure* → DPG item management (no callback fires; `configure_item` vs `set_value`) |
 | add or change a hotkey | *Keyboard input* → `mvKey_*` constants vs. runtime codes (the 517/518 trap) · *Keyboard input* → Same-frame dispatch is by keycode, not press order |
 | gate a hotkey on a text field having the caret | *Keyboard input* → Focus is not the same as the caret: gate hotkeys on `is_item_active` (mind the commit-chord exception) |
 | define what Tab does, or keep your own "which control has the keys" state | *Keyboard input* → Tab reaches a global handler and still moves ImGui's nav, after a programmatic focus (the activate/deactivate pair nobody asked for) |
 | park focus on a panel or child window | *Keyboard input* → `focus_item` cannot focus a child window — and does harm when asked to |
 | scroll programmatically, or follow a growing log | *Scrolling* → Three input paths move a scroll position, and DPG surfaces them differently · *Scrolling* → `max_y_scroll` moves when content is added |
+| move a scroll that may still be gliding, because content above the view changed height | *Scrolling* → Three input paths move a scroll position, and DPG surfaces them differently (`SmoothScrolling.shift`) |
 | set a window's size, or a tooltip's padding, or fight z-order | *Window sizing* (all of it) |
 | park a window offscreen to measure it before placing it | *Window sizing* → An offscreen park lasts exactly one frame — ImGui pulls the window back (re-park per frame; a modal comes back *fully* on screen) |
 | give a widget a tooltip at all — which of `dpg.add_tooltip` and `raven.common.gui.tooltip.Tooltip` — or wonder why one flickers when its text changes | *Window sizing* → An autosize window is one frame behind its content — and whether that shows depends on the window's age (short version: changing text wants the class, a caption written once wants plain DPG, and a modal cannot have the class at all) · *Drawlists* → A drawlist cannot carry a tooltip — wrap it in a group (if the target is drawn rather than a widget) |

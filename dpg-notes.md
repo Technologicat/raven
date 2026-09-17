@@ -623,6 +623,14 @@ It then `split_frame()`s so layout catches up, reads the now-correct size, posit
 `split_frame()`s again — the standard shape for needing a size before you can place something, subject to
 `split_frame` not being callable from the render thread (see *Threading*).
 
+**Work that needs a laid-out widget which may sit under a hidden ancestor** — text inside a collapsed thinking
+trace, a help card's page not yet turned to — has helpers. `raven.common.gui.utils.find_hidden_ancestor` names
+the item doing the hiding, and `is_shown_all_the_way_up` answers whether there is one. For deferring the work,
+`DearPyGui_Markdown.WaitUntilShown.call_when_shown` holds it until that item is shown, asking each hidden
+ancestor once per frame rather than each waiting job, which is what keeps hundreds of them cheap
+(`investigations/dpg-markdown-decorations/`). **A widget that is shown but clipped out of view *is* laid out**,
+so it needs neither (`investigations/chat-search-highlight/`).
+
 **Raven's own answer, arrived at twice independently, is not to use `dpg.tooltip` for anything whose
 contents change.** A tooltip is a window with no title bar, and an app-owned window can be positioned —
 which is the whole difference, because it makes the offscreen settle available. `raven.visualizer.annotation`
@@ -1003,6 +1011,14 @@ Reference patterns for building DearPyGui apps in Raven (Librarian as primary re
   - Deleting the old container is a third step, after a `split_frame` (Visualizer, which always runs off the
     render thread) or after a tick (the grid, which cannot assume that — Cherrypick drives its `update`
     *from* the render loop, where waiting for a frame can never succeed).
+  - **Swapping one widget inside a scrolled view, with nothing on screen moving, is
+    `raven.common.gui.animation.WidgetSwap.swap`.** The view has to be corrected by the height change, and
+    **a `set_y_scroll` takes effect one frame later than a tree change made at the same moment** — written in
+    the same frame as the swap, the view jumps for a frame and back. So the correction goes out a frame before
+    the swap, which means knowing the height change before the new widget is laid out, and a hidden build
+    cannot measure it. For Markdown, `DearPyGui_Markdown.predict_height_change` computes it from the old
+    render instead: every laid-out row is 6 px taller than the font's line height. Raven-librarian's search
+    highlighting swaps paragraphs this way. Measured in `investigations/chat-search-highlight/`.
 
 ## Textures
 
@@ -1469,6 +1485,8 @@ Compare the position against **the position you last commanded** instead. Conten
   **`raven.common.gui.animation.SmoothScrolling` is the reference implementation, and it already encodes this** — it was found there first, during that class's development, and rediscovered later the expensive way. Its per-frame guard is literally the pattern: it keeps `prev_frame_new_y_scroll` (the last value it wrote) and refuses to advance until `dpg.get_y_scroll` reports that value back, *"Only proceed if DPG has actually applied our previous update. This prevents stuttering, as well as keeps our subpixel calculations correct."* The give-up bound is `update_pending_frames` counted against `update_pending_threshold = 4`, whose comment names the trade-off directly: *"Smaller threshold looks better, but may fire prematurely if a GUI update takes too many frames."*
 
   Two consequences worth carrying: read that class before writing anything that sets a scroll position, because the lag is not something you can find by reading the DPG docs; and note that "remember the value you wrote, wait for it to be reported back" is the *same* device whether you are animating a scroll or deciding whether a reader has scrolled away. Raven's chat view calls it `_commanded_y_scroll`; `SmoothScrolling` calls it `prev_frame_new_y_scroll`. Convergent, which is a good sign for composing the two.
+
+  **To move a scroll that may still be gliding** — content above the view changed height mid-glide — use `SmoothScrolling.shift`. It moves the glide's position and its target together, so the glide carries on rather than undoing the move, and it leaves the write itself to the caller, whose timing it is (`WidgetSwap` writes a frame before its swap).
 
   This is worth handling rather than shrugging at, because anything comparing the position against what it commanded — follow-the-tail logic does — reads its own in-flight command as a discrepancy, which is indistinguishable from the user having scrolled away. Diagnosed the hard way: a `NEAR MISS` reporting `gap=52.0px ... drifted 52.0px from the 533.0 we last commanded` was simply the position not having caught up, and the earlier hypothesis that DPG had clamped the command to a momentarily smaller content height did not survive the log — the very first retry in the session read a position of `0.0` against a maximum of `692.0`, where nothing had shrunk.
 
