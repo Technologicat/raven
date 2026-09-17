@@ -5,7 +5,11 @@ paragraph's size, and how a re-rendered paragraph can replace the old one withou
 groundwork for search v1 in Raven-librarian (`briefs/researchers-night/14_chat-search-brief.md`, brief 16
 item 8). Measured 2026-09-17, DPG 2.3.1, font size 20, wrap width 850 px.
 
-## The script
+## The scripts
+
+**`probe_height_prediction.py`** — whether a paragraph's laid-out height can be computed before it is laid
+out, from the line breaks the renderer settles itself. Imports `probe_highlight.py` for its highlight
+prototype. See *Predicting the height* below.
 
 **`probe_highlight.py`** — one mapped window, three parts. Samples 200 paragraphs (one per non-blank line,
 which is the unit `DPGChatMessage._render_text` builds one widget for) from the Librarian chat datastore, and
@@ -106,10 +110,37 @@ a paragraph deleted while its decorations are still queued prints a `[1011] Pare
 traceback from the worker. Two to five per run here, from the view being rebuilt between cases. Harmless, but
 a search that swaps many paragraphs would produce them routinely.
 
+### Predicting the height
+
+`wrap_text_entity` fixes a paragraph's line breaks before any layout, and `LineEntity.render` gives each line
+a row as tall as `line.get_height()`. Compared against the laid-out height for 1125 paragraphs: 400 sampled
+at random, plus every heading, list item, quote, fence, table and rule line in the datastore, since a random
+sample holds few of those. Each was built plain, and highlighted in colour and in bold for `e` and `the`.
+The negative control, building each paragraph plain twice, disagreed 0 times.
+
+- **Every row is laid out exactly 6 px taller than `line.get_height()`.** The residual divided by the line
+  count was 6.0 for all 2798 highlighted builds and for 1116 of the 1125 plain ones. Where the 6 px comes
+  from was not established.
+- **The exceptions are 9 rule-like lines**, residual 0, so presumably rows that render no text
+  (`AttributeController.render` returns early for a `Separator`). That was not checked individually.
+- **With the 6 px added per row, the prediction is exact** for every highlighted build, and for every
+  height *change* against plain: all 1399, including the 13 where the highlight added a line.
+
+**So the height change is available before the swap, and a hidden build plus a scroll correction set one
+frame early keeps the view still**, with the decorations intact provided the swap follows the build
+promptly.
+
+The wrap alone costs a median of 1.1 ms, p90 6.7 ms, max 100 ms. That is the part a separate prediction
+would repeat, so the prediction wants to come out of the build's own wrap rather than a second one.
+
+### A highlight inside a heading loses the heading's size
+
+In 180 of 185 highlighted headings, the red run was bound to a font no other run in the same heading uses.
+A highlight is a `MessageEntityFont` with no size, and `AttributeController.get_font` takes the size from a
+`Font` attribute whenever one is present, `None` included. The heights above were still predicted exactly,
+the prediction going through the same code. The real highlight must not carry size semantics.
+
 ## Open
 
-- Whether the renderer's own wrap (`wrap_text_entity`, which fixes the line breaks before layout) predicts a
-  paragraph's rendered height exactly. If it does, Δ is available for a hidden build and the staging window is
-  unnecessary.
 - The colour precedence when a match falls inside a span that already has a colour of its own, such as a URL.
 - Offsets: the prototype uses Python string offsets, and the parser's disagree outside the BMP.
