@@ -2284,7 +2284,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                # rows that do the grouping, or splitting the page.
                env(key_indent=0, key="Tab / Shift+Tab", action_indent=0, action="Move the keyboard between panes", notes="Composer, chat log, chat graph"),
                env(key_indent=0, key="Page Up / Page Down", action_indent=0, action="Scroll the chat a page", notes="Also while typing"),
-               env(key_indent=1, key="Up / Down", action_indent=1, action="Same, but five lines", notes="Not while typing"),
+               env(key_indent=1, key="Up / Down", action_indent=1, action="Same, but five lines", notes="Not while writing a message"),
                env(key_indent=0, key="Home / End", action_indent=0, action="Jump to the start / latest message", notes="Not while typing"),
                helpcard.hotkey_blank_entry,
                # The Visualizer's words for these keys, where there is room for them; what differs here goes in the
@@ -3049,7 +3049,10 @@ def librarian_hotkeys_callback(sender, app_data):
         # the state that actually means "this field owns the caret": measured False when merely auto-focused
         # and after Escape, True from the click that enters the field until it is left. That is exactly the
         # condition under which these keys belong to the widget rather than to the log.
-        elif dpg.is_item_active("chat_field") or dpg.is_item_active("search_field"):  # tag
+        # The search field is one line, so of these it wants only Home and End; Up and Down fall through and scroll
+        # the log from there, which is where the matches being typed for are.
+        elif dpg.is_item_active("chat_field") or (dpg.is_item_active("search_field")  # tag
+                                                  and key in (dpg.mvKey_Home, dpg.mvKey_End)):
             # Empty on purpose, and load-bearing: this branch exists to *withhold* the log-navigation keys
             # below while someone is typing. Every key it would claim belongs to the widget instead.
             #
@@ -3513,10 +3516,10 @@ def _finish_startup(sender, app_data) -> None:
     # and waits an interval before its first probe.
     _start_server_status_poll(delay_first_probe=True)
 
-    # The blue that says where the keyboard is, on the composer. A *caret* follower, not a focus one:
-    # ImGui gives nav focus to the first navigable item of a window by itself, so the composer reports
-    # focused from the first frame and a focus-driven mark would be lit before anyone had touched it.
-    keyboardmark.install_caret_follower(["chat_field"])  # tag
+    # The blue that says where the keyboard is, on the composer and on the search field. A *caret* follower,
+    # not a focus one: ImGui gives nav focus to the first navigable item of a window by itself, so the composer
+    # reports focused from the first frame and a focus-driven mark would be lit before anyone had touched it.
+    keyboardmark.install_caret_follower(["chat_field", "search_field"])  # tag
 # Frame 2: after the GUI has been rendered at least once, so that a problem while loading could open a modal
 # dialog. (Loading does not currently open one.)
 dpg.set_frame_callback(2, _finish_startup)

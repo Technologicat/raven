@@ -726,8 +726,10 @@ the blue mark shows where it went.
 
 ### Chat log
 
-Live whenever the message field does not hold the caret, except the two paging keys, which work from
-inside it as well — looking back at what you are replying to is something you do *while* typing.
+Live whenever neither text field holds the caret, with two exceptions. The paging keys work from inside
+both — looking back at what you are replying to is something you do *while* typing. And `Up` / `Down` work
+from inside the search field, which is one line and has no use for them, so the matches can be scrolled
+through as they are typed for.
 
 | Key | Action |
 |---|---|

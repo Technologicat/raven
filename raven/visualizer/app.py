@@ -106,6 +106,7 @@ with timer() as tim:
 
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
+    from ..common.gui import keyboardmark
     from ..common.gui import messagebox
     from ..common.gui import filedrop
     from ..common.gui import qroverlay
@@ -1484,6 +1485,11 @@ filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_ext
                                       reference_window=main_window,
                                       what="Raven-visualizer",
                                       blocked=is_any_modal_window_visible))
+
+# The blue frame that says the search field has the keyboard. A *caret* follower, not a focus one: ImGui gives
+# nav focus to the first navigable item of a window by itself, so the field reports focused from the first
+# frame, and a focus-driven mark would be lit before anyone had touched it.
+keyboardmark.install_caret_follower(["search_field"])  # tag
 
 # Load the file optionally provided on the command line
 if opts.filename:
