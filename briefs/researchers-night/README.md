@@ -131,7 +131,7 @@ straight onto the chat graph. The blank frames before the graph's first picture 
 **Tried live 2026-09-17** (Juha): *next* disables on the last match near the end of a chat, the field's hint
 fits, and switching the active chat during a search works — the match count climbs as the log rebuilds.
 
-**Built afterwards, not yet tried live**: the Visualizer's jump memory (item 1, which held this list's first
+**Built afterwards, and tried live the same day** (Juha): the Visualizer's jump memory (item 1, which held this list's first
 place), Librarian's jump now released by a keyboard scroll as well as by the wheel, `Alt+H` / `Alt+R` for the
 search checkboxes (`Alt+T` stays the AI's Thinking switch), the help card's mirrored keys paired on both pages,
 and a surviving edge drawn once in the graph morph — the arrows flashed at each step through the branch.
