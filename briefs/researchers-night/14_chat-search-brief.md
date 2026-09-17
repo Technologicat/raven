@@ -103,5 +103,13 @@ that wait while their text is hidden. The streaming message is included: it is h
   the same terms and adds only its own previous/next buttons, in the toolbar it already has at its top. Two text
   fields would be confusing, particularly with the composer as a third.
 
+**What counts as a match** (Juha):
+
+- **Tool results are searched like any message.** They are text parts like the rest, and "what did that page say
+  about X" is the commonest reason to search.
+- **Thinking traces count, and a jump to a match inside a collapsed one opens it.** Whether traces are searched at
+  all is a **checkbox in the search row**, since a reader after the conversation proper does not want every
+  passing thought counted.
+
 **Every search length highlights**, `e` included, if it is fast enough: a screenful costs roughly 150–250 ms at
 the one-letter rate, and whether that feels acceptable is to be judged live (Juha).
