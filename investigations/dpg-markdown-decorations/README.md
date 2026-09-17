@@ -64,10 +64,11 @@ and the worker asks each blocker once per frame whether it has been shown. `prob
 
 **Polling per blocker rather than per decoration is what makes waiting cheap enough.** A first version asked
 every waiting decoration each frame, and measured about 0.1 ms per check from the worker thread — 65 checks
-fit in a frame's worth of its time, so 900 never finished a sweep. How often a real app hits this was counted
-before choosing: collapsed thinking traces are built hidden on every chat load, and one maintainer's whole
-chat datastore holds 31 decorated lines inside them. Tens of waiting decorations per app, standing for as
-long as a trace stays collapsed.
+fit in a frame's worth of its time, so 900 never finished a sweep. And the load is standing rather than
+occasional: collapsed thinking traces are built hidden on every chat load, and their decorations wait for as
+long as each trace stays collapsed. A small development datastore held 31 decorated lines inside traces, and
+real use grows well past that. Per blocker, the cost follows the number of collapsed containers in the
+branch on screen — one per trace, one per hidden help-card page — however many decorations they hold.
 
 Fixed rate polling (every 100 ms, which reads as instant) is the recorded fallback if per-blocker polling
 ever proves not to be enough.
