@@ -93,7 +93,10 @@ class Underline(Attribute):
         '''
         :return: [drawlist, draw_line]
         '''
-        with guiutils.nonexistent_ok() as nok:
+        # `parent_gone_ok` at every decoration site: this runs on the worker a frame after the text was
+        # built, and `parent` is a container the paragraph's own build handed over, which a rebuild or a
+        # swap can delete in between. An `add_*` into a deleted parent says [1011], not "item not found".
+        with guiutils.nonexistent_ok(parent_gone_ok=True) as nok:
             pos = dpg.get_item_pos(dpg_text_group)
             x, y = pos
             group_width, group_height = dpg.get_item_rect_size(dpg_text_group)
@@ -115,7 +118,7 @@ class Strike(Attribute):
         '''
         :return: [drawlist, draw_line]
         '''
-        with guiutils.nonexistent_ok() as nok:
+        with guiutils.nonexistent_ok(parent_gone_ok=True) as nok:  # see `Underline.render`
             pos = dpg.get_item_pos(dpg_text_group)
             x, y = pos
             group_width, group_height = dpg.get_item_rect_size(dpg_text_group)
@@ -137,7 +140,7 @@ class Code(Attribute):
 
     @classmethod
     def render(cls, dpg_text_group: int):
-        with guiutils.nonexistent_ok() as nok:
+        with guiutils.nonexistent_ok(parent_gone_ok=True) as nok:  # see `Underline.render`
             width, height = dpg.get_item_rect_size(dpg_text_group)
             pos = dpg.get_item_pos(dpg_text_group)
             child = dpg.get_item_children(dpg_text_group, 1)[0]
@@ -189,7 +192,7 @@ class Pre(Attribute):
 
     @CallInNextFrame
     def post_render(self, attributes_group=0):
-        with guiutils.nonexistent_ok() as nok:
+        with guiutils.nonexistent_ok(parent_gone_ok=True) as nok:  # see `Underline.render`
             width, height = dpg.get_item_rect_size(self.dpg_text_group)
             pos = dpg.get_item_pos(self.dpg_text_group)
             child = dpg.get_item_children(self.dpg_text_group, 1)[0]
@@ -239,7 +242,7 @@ class Url(HoverAttribute):
         super().render()
         self.add_item_to_handler(dpg_text)
         self.dpg_text_objects.append(dpg_text)
-        with guiutils.nonexistent_ok() as nok:
+        with guiutils.nonexistent_ok(parent_gone_ok=True) as nok:  # see `Underline.render`
             dpg.configure_item(dpg_text, color=self.color)
             # Raven customization: show the linked URL as a tooltip
             url_tooltip = dpg.add_tooltip(parent=dpg_text)
