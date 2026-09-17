@@ -487,12 +487,24 @@ class TestStartAutosave:
             time.sleep(0.01)
         return False
 
+    @staticmethod
+    def _saved(path, text):
+        """Whether `text` is in the file at `path` yet. For polling while the autosave is still running.
+
+        On Windows a file being replaced by an atomic write cannot be opened for that instant, and a read then
+        raises `PermissionError`; that means "not yet", like a read of the previous content does.
+        """
+        try:
+            return text in path.read_text(encoding="utf-8")
+        except PermissionError:
+            return False
+
     def test_a_change_is_saved_and_stopping_ends_the_saving(self, tmp_path, llm_settings):
         datastore, state, datastore_path, state_path = _load(tmp_path, llm_settings)
         stop = appstate.start_autosave(datastore, state_path, state, interval=0.02)
         try:
             first = datastore.create_node({"role": "user", "content": "during the session"}, parent_id=state["HEAD"])
-            assert self._wait_for(lambda: first in datastore_path.read_text(encoding="utf-8")), \
+            assert self._wait_for(lambda: self._saved(datastore_path, first)), \
                 "a change made during the session was never saved"
         finally:
             stop(wait=True)
@@ -515,7 +527,7 @@ class TestStartAutosave:
         stop = appstate.start_autosave(datastore, state_path, state, interval=0.02)
         try:
             node = datastore.create_node({"role": "user", "content": "saved on the retry"}, parent_id=state["HEAD"])
-            assert self._wait_for(lambda: node in datastore_path.read_text(encoding="utf-8")), \
+            assert self._wait_for(lambda: self._saved(datastore_path, node)), \
                 "saving stopped after the first failure"
         finally:
             stop(wait=True)
