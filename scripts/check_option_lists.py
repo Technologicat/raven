@@ -168,7 +168,10 @@ def read_option_names(path: pathlib.Path, name: str, shape: str) -> Tuple[List[s
                     continue
                 if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
                     if keyword.value.value:  # a blank entry is a spacer row
-                        names.append(keyword.value.value)
+                        # A cell may name a pair, `"F3 / Shift+F3"`, as `check_hotkey_tooltips` also knows; each
+                        # key is checked on its own. Split on the spaced slash only, so a key such as `Numpad /`
+                        # stays whole.
+                        names.extend(keyword.value.value.split(" / "))
                 else:
                     unresolved.append(ast.unparse(keyword.value))
     else:
