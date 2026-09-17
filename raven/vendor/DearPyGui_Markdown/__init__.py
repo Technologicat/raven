@@ -21,7 +21,7 @@ __all__ = ["get_text_size", "shutdown",
 
            "set_font_registry", "set_add_font_function", "set_font", "set_url_secondary_action",
 
-           "wrap_text_entity", "MarkdownText",
+           "wrap_text_entity", "MarkdownText", "predict_height_change",
 
            "add_text",
            "add_text_italic", "add_text_bold", "add_text_bold_italic"]
@@ -621,6 +621,30 @@ class MarkdownText:
     # The 6 px was not traced to its source, which is why this reports rows rather than a height with an offset
     # baked in: a caller calibrates the offset against a paragraph that is already laid out.
     rows: list[tuple[float | int, bool]] | None = None
+
+
+def predict_height_change(old_rows: list[tuple[float | int, bool]] | None,
+                          old_height: float | int,
+                          new_rows: list[tuple[float | int, bool]] | None) -> int:
+    """How much taller, in pixels, Markdown laid out as `new_rows` will be than the laid-out `old_height`.
+
+    `old_rows`, `new_rows`: `MarkdownText.rows` of the two renders.
+    `old_height`: the laid-out height of the old render, as `dpg.get_item_rect_size` reports it.
+
+    The extra height a laid-out row of text has over its `rows` entry is read off the old render rather than
+    assumed. Returns 0 where there is nothing to calibrate from — either render's rows unknown, the old one not
+    laid out (hidden, or not yet drawn), or no rows of text in it — which is also the right answer for a render
+    whose height does not matter because it is not shown.
+    """
+    if old_rows is None or new_rows is None or old_height <= 0:
+        return 0
+    old_text_rows = sum(1 for height, is_rule in old_rows if not is_rule)
+    if old_text_rows == 0:
+        return 0
+    per_row_extra = (old_height - sum(height for height, is_rule in old_rows)) / old_text_rows
+    new_text_rows = sum(1 for height, is_rule in new_rows if not is_rule)
+    predicted = sum(height for height, is_rule in new_rows) + per_row_extra * new_text_rows
+    return round(predicted - old_height)
 
 
 def add_text(markdown_text: str,
