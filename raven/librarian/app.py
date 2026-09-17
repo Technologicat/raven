@@ -2580,7 +2580,7 @@ def _resize_panels() -> None:
         blur_state = _animator_settings["backdrop_blur"]
         logger.info(f"_resize_panels: `_animator_settings` exists, got `backdrop_blur={blur_state}`.")
     else:
-        logger.warning("_resize_panels: `_animator_settings` not initialized, assuming `backdrop_blur=True`. Maybe GUI was resized before the app has finished booting up?")
+        logger.debug("_resize_panels: `_animator_settings` not initialized yet, assuming `backdrop_blur=True`.")
         blur_state = True
     dpg_avatar_renderer.configure_backdrop(new_width=avatar_panel_w - 16,
                                            new_height=avatar_panel_h - 16,
