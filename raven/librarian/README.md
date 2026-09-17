@@ -735,6 +735,19 @@ inside it as well — looking back at what you are replying to is something you 
 | `Up` / `Down` | Scroll the log |
 | `Home` / `End` | Top / bottom of the log — `End` is the quickest way to put the mark on the newest reply |
 
+### Search
+
+The search field across the top of the window searches the branch on screen as you type, and marks the matches
+in red. The **Thinking** and **Tool results** checkboxes beside it say whether thinking traces and tool
+results are searched too.
+
+| Key | Action |
+|---|---|
+| `Ctrl+F` | Put the caret in the search field |
+| `Ctrl+Shift+F` | Clear the search |
+| `F3` | Scroll to the next matching message below what is on screen — also `Enter`, in the search field |
+| `Shift+F3` | ...the previous one above it — also `Shift+Enter`, in the search field |
+
 ### The marked message
 
 The blue dot says which message these act on: the bottommost one whose whole button row is on screen.

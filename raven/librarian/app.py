@@ -2278,14 +2278,23 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                # One row for a keyboard that has a dozen keys. Tab is the row that pays: it is the way
                # *into* the graph, and from inside it the arrows, Enter and Esc are what a reader tries
                # first. The rest are in the Chat graph section of the README.
-               env(key_indent=0, key="Tab", action_indent=0, action="Move the keyboard between panes", notes="Composer, chat log, chat graph"),
-               env(key_indent=1, key="Shift+Tab", action_indent=1, action="Same, but backwards", notes=""),
-               env(key_indent=0, key="Page Up", action_indent=0, action="Scroll the chat up one page", notes="Also while typing"),
-               env(key_indent=0, key="Page Down", action_indent=0, action="Scroll the chat down one page", notes="Also while typing"),
-               env(key_indent=1, key="Up", action_indent=1, action="Same, but five lines", notes="Not while typing"),
-               env(key_indent=1, key="Down", action_indent=1, action="Same, but five lines", notes="Not while typing"),
+               # Four rows below pair two keys each, where the second only reverses the first: the page is a
+               # screenshot of the whole keyboard, and on a 1080p screen it holds 29 rows a column, which search
+               # overran. Pairing cost a row apiece and no information; the alternatives were dropping the blank
+               # rows that do the grouping, or splitting the page.
+               env(key_indent=0, key="Tab / Shift+Tab", action_indent=0, action="Move the keyboard between panes", notes="Composer, chat log, chat graph"),
+               env(key_indent=0, key="Page Up / Page Down", action_indent=0, action="Scroll the chat a page", notes="Also while typing"),
+               env(key_indent=1, key="Up / Down", action_indent=1, action="Same, but five lines", notes="Not while typing"),
                env(key_indent=0, key="Home", action_indent=0, action="Jump to the start of the chat", notes="Not while typing"),
                env(key_indent=0, key="End", action_indent=0, action="Jump to the latest message", notes="Not while typing"),
+               helpcard.hotkey_blank_entry,
+               # The Visualizer's words for these keys, where there is room for them; what differs here goes in the
+               # notes. There is no prose on search: the field's hint gives the matching rules and each checkbox's
+               # tooltip says what it adds, so the one fact left over — that it searches the branch on screen — is
+               # this row's note.
+               env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus the search field", notes="Searches this branch as you type"),
+               env(key_indent=0, key="Ctrl+Shift+F", action_indent=0, action="Clear the search", notes=""),
+               env(key_indent=0, key="F3 / Shift+F3", action_indent=0, action="Next / previous search match", notes="Or (Shift+)Enter in the field"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+G", action_indent=0, action="Stop the AI's text generation", notes="While the AI is writing"),
                # These three notes are a set, and are worded to be read as one: sending an empty message
@@ -2328,7 +2337,7 @@ chat_graph_hotkey_info = (env(key_indent=0, key="Tab", action_indent=0, action="
                           env(key_indent=1, key="Down", action_indent=1, action="Same, the other way", notes=""),
                           env(key_indent=1, key="Left", action_indent=1, action="Move it along the siblings", notes="Left and right stay on one level"),
                           env(key_indent=1, key="Right", action_indent=1, action="Same, the other way", notes=""),
-                          env(key_indent=0, key="Enter", action_indent=0, action="Look at it", notes="Again to switch to it. A gap opens what it hides"),
+                          env(key_indent=0, key="Enter", action_indent=0, action="Look at it", notes="Again to switch. Opens a gap box"),
                           env(key_indent=0, key="Esc", action_indent=0, action="Put the cursor away", notes="Without going anywhere"),
                           env(key_indent=0, key="Backspace", action_indent=0, action="Fold an opened tool round back up", notes="From anywhere inside the round"),
                           helpcard.hotkey_blank_entry,
@@ -2369,11 +2378,11 @@ def render_chat_graph_help(self: helpcard.HelpWindow,
     self.prose_columns(
         gui_parent,
         [helpcard.section(
-            None,
+            "**The chat graph**",
             "The graph draws the **whole chat tree**: the branch you are on runs down the middle, with a few of its siblings either side at each level. One of those levels is every chat ever started under the current character card, which is as close as this format comes to a list of recent chats.",
             "**Clicking is two steps, and the first changes nothing.** Click a message to look at it — the graph redraws around it if it is on another branch — and click it again to move the conversation there. Colour says where you *are* rather than what you are looking at, so the point where a branch you are considering left the one you are on stays visible.")],
         [helpcard.section(
-            None,
+            "**What is left out**",
             f'Anything left out is drawn as a dashed {self.c_hig}**...N more**{self.c_end} box, so a box with no visible links means the tree really does end there. Clicking one navigates: between siblings it jumps to the middle of what it hides, under an off-branch message it opens what continues below, and a round of three or more tool results opens into its own boxes.',
             f'The one at the very top walks through the *other* character cards — the only route to chats you held under an earlier system prompt. It wears the {self.c_hig}**HEAD**{self.c_end} pill while the chat you are actually in is behind it.')])
     dpg.add_spacer(height=themes_and_fonts.font_size, parent=gui_parent)
