@@ -1330,11 +1330,11 @@ with timer() as tim:
                         dpg.add_checkbox(label="Thinking", tag="search_thinking_checkbox", default_value=app_state["search_thinking"],
                                          callback=search_changed_callback)
                         with dpg.tooltip("search_thinking_checkbox"):  # tag
-                            dpg.add_text("Search thinking traces too.\nGoing to a match inside one opens the trace.")
+                            dpg.add_text("Search thinking traces too. [Alt+H]\nGoing to a match inside one opens the trace.")
                         dpg.add_checkbox(label="Tool results", tag="search_tools_checkbox", default_value=app_state["search_tools"],
                                          callback=search_changed_callback)
                         with dpg.tooltip("search_tools_checkbox"):  # tag
-                            dpg.add_text("Search what tools returned: web pages, search results, documents.")
+                            dpg.add_text("Search what tools returned: web pages, search results, documents. [Alt+R]")
                         dpg.add_button(label=fa.ICON_CIRCLE_UP, callback=lambda: chat_controller.step_search(-1),  # the Visualizer's glyphs for the same verb
                                        width=gui_config.toolbutton_w, enabled=False, tag="search_prev_button")
                         dpg.bind_item_font("search_prev_button", themes_and_fonts.icon_font_solid)  # tag
@@ -2266,12 +2266,9 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="Ctrl+T", action_indent=0, action="Thinking trace of marked message", notes="For thinking models"),
                env(key_indent=0, key="Ctrl+S", action_indent=0, action="Start/stop AI speaking", notes="The blue mark shows which message"),
                env(key_indent=0, key="Ctrl+P", action_indent=0, action="Ping the avatar", notes="Wakes it; it takes notice"),
-               env(key_indent=0, key="Ctrl+Right", action_indent=0, action="Next sibling of marked message", notes=""),
-               env(key_indent=1, key="Ctrl+Shift+Right", action_indent=1, action="Same, but jump 10", notes=""),
-               env(key_indent=1, key="Ctrl+End", action_indent=1, action="Same, but to the last", notes=""),
-               env(key_indent=0, key="Ctrl+Left", action_indent=0, action="Previous sibling of marked message", notes=""),
-               env(key_indent=1, key="Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
-               env(key_indent=1, key="Ctrl+Home", action_indent=1, action="Same, but to the first", notes=""),
+               env(key_indent=0, key="Ctrl+Right / Ctrl+Left", action_indent=0, action="Next / previous sibling", notes="Of the marked message"),
+               env(key_indent=1, key="Ctrl+Shift+Right / Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
+               env(key_indent=1, key="Ctrl+End / Ctrl+Home", action_indent=1, action="Same, but to the last / first", notes=""),
                env(key_indent=0, key="Ctrl+Down", action_indent=0, action="Show the chat continuation", notes="If any exists in chat datastore"),
                env(key_indent=0, key="Ctrl+B", action_indent=0, action="Branch the chat here", notes="Rolls back. Not while typing"),
                env(key_indent=0, key="Ctrl+Shift+Delete", action_indent=0, action="Delete it and all below it", notes="Twice to confirm. No undo"),
@@ -2281,15 +2278,14 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                # One row for a keyboard that has a dozen keys. Tab is the row that pays: it is the way
                # *into* the graph, and from inside it the arrows, Enter and Esc are what a reader tries
                # first. The rest are in the Chat graph section of the README.
-               # Four rows below pair two keys each, where the second only reverses the first: the page is a
+               # Several rows below pair two keys each, where the second only reverses the first: the page is a
                # screenshot of the whole keyboard, and on a 1080p screen it holds 29 rows a column, which search
                # overran. Pairing cost a row apiece and no information; the alternatives were dropping the blank
                # rows that do the grouping, or splitting the page.
                env(key_indent=0, key="Tab / Shift+Tab", action_indent=0, action="Move the keyboard between panes", notes="Composer, chat log, chat graph"),
                env(key_indent=0, key="Page Up / Page Down", action_indent=0, action="Scroll the chat a page", notes="Also while typing"),
                env(key_indent=1, key="Up / Down", action_indent=1, action="Same, but five lines", notes="Not while typing"),
-               env(key_indent=0, key="Home", action_indent=0, action="Jump to the start of the chat", notes="Not while typing"),
-               env(key_indent=0, key="End", action_indent=0, action="Jump to the latest message", notes="Not while typing"),
+               env(key_indent=0, key="Home / End", action_indent=0, action="Jump to the start / latest message", notes="Not while typing"),
                helpcard.hotkey_blank_entry,
                # The Visualizer's words for these keys, where there is room for them; what differs here goes in the
                # notes. There is no prose on search: the field's hint gives the matching rules and each checkbox's
@@ -2298,6 +2294,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus the search field", notes="Searches this branch as you type"),
                env(key_indent=0, key="Ctrl+Shift+F", action_indent=0, action="Clear the search", notes=""),
                env(key_indent=0, key="F3 / Shift+F3", action_indent=0, action="Next / previous search match", notes="Or (Shift+)Enter in the field"),
+               env(key_indent=0, key="Alt+H / Alt+R", action_indent=0, action="Search thinking / tool results", notes="The checkboxes by the field"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+G", action_indent=0, action="Stop the AI's text generation", notes="While the AI is writing"),
                # These three notes are a set, and are worded to be read as one: sending an empty message
@@ -2336,35 +2333,26 @@ chat_graph_hotkey_info = (env(key_indent=0, key="Tab", action_indent=0, action="
                           # a reader whose first press "did nothing" is looking straight at the key that
                           # worked, and the rows below would have them pressing it again to no effect.
                           env(key_indent=0, key="Any arrow", action_indent=0, action="Show the cursor, on HEAD", notes="The first press only"),
-                          env(key_indent=1, key="Up", action_indent=1, action="Then: move it up the conversation", notes="Up and down follow the branch"),
-                          env(key_indent=1, key="Down", action_indent=1, action="Same, the other way", notes=""),
-                          env(key_indent=1, key="Left", action_indent=1, action="Move it along the siblings", notes="Left and right stay on one level"),
-                          env(key_indent=1, key="Right", action_indent=1, action="Same, the other way", notes=""),
+                          env(key_indent=1, key="Up / Down", action_indent=1, action="Then: move it along the branch", notes="Up the conversation, or down"),
+                          env(key_indent=1, key="Left / Right", action_indent=1, action="Move it along the siblings", notes="Staying on one level"),
                           env(key_indent=0, key="Enter", action_indent=0, action="Look at it", notes="Again to switch. Opens a gap box"),
                           env(key_indent=0, key="Esc", action_indent=0, action="Put the cursor away", notes="Without going anywhere"),
                           env(key_indent=0, key="Backspace", action_indent=0, action="Fold an opened tool round back up", notes="From anywhere inside the round"),
                           helpcard.hotkey_blank_entry,
-                          env(key_indent=0, key="Ctrl+Right", action_indent=0, action="Next sibling, drawn or not", notes="Slides the window to follow"),
-                          env(key_indent=1, key="Ctrl+Shift+Right", action_indent=1, action="Same, but jump 10", notes=""),
-                          env(key_indent=1, key="Ctrl+End", action_indent=1, action="Same, but to the last", notes=""),
-                          env(key_indent=0, key="Ctrl+Left", action_indent=0, action="Previous sibling, drawn or not", notes=""),
-                          env(key_indent=1, key="Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
-                          env(key_indent=1, key="Ctrl+Home", action_indent=1, action="Same, but to the first", notes=""),
+                          env(key_indent=0, key="Ctrl+Right / Ctrl+Left", action_indent=0, action="Next / previous sibling", notes="Drawn or not; the window follows"),
+                          env(key_indent=1, key="Ctrl+Shift+Right / Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
+                          env(key_indent=1, key="Ctrl+End / Ctrl+Home", action_indent=1, action="Same, but to the last / first", notes=""),
                           helpcard.hotkey_new_column,
-                          env(key_indent=0, key="Shift+Up", action_indent=0, action="Pan the view", notes="The mouse drags; the wheel zooms"),
-                          env(key_indent=1, key="Shift+Down", action_indent=1, action="Same, the other way", notes=""),
-                          env(key_indent=0, key="Shift+Left", action_indent=0, action="Pan the view sideways", notes=""),
-                          env(key_indent=1, key="Shift+Right", action_indent=1, action="Same, the other way", notes=""),
+                          env(key_indent=0, key="Shift+Up / Shift+Down", action_indent=0, action="Pan the view", notes="The mouse drags; the wheel zooms"),
+                          env(key_indent=0, key="Shift+Left / Shift+Right", action_indent=0, action="Pan the view sideways", notes=""),
                           helpcard.hotkey_blank_entry,
                           env(key_indent=0, key="F", action_indent=0, action="Zoom to fit the whole tree", notes=""),
                           env(key_indent=0, key="B", action_indent=0, action="Fit the current branch", notes=""),
                           env(key_indent=0, key="1", action_indent=0, action="Actual size (1:1)", notes="Main row or numpad"),
-                          env(key_indent=0, key="Numpad +", action_indent=0, action="Zoom in", notes=""),
-                          env(key_indent=0, key="Numpad -", action_indent=0, action="Zoom out", notes=""),
+                          env(key_indent=0, key="Numpad + / Numpad -", action_indent=0, action="Zoom in / out", notes=""),
                           helpcard.hotkey_blank_entry,
                           env(key_indent=0, key="Home", action_indent=0, action="Back to where you are", notes="Takes you to HEAD"),
-                          env(key_indent=0, key="Alt+Left", action_indent=0, action="Back to the previous view", notes=""),
-                          env(key_indent=0, key="Alt+Right", action_indent=0, action="Forward again", notes=""),
+                          env(key_indent=0, key="Alt+Left / Alt+Right", action_indent=0, action="Back / forward in view history", notes=""),
                           # The app's own key, listed here because from this view it is another way of moving:
                           # it takes you to the box wearing the NEW pill. The graph does not bind it — an
                           # unhandled key falls through to the app — so this is a signpost, not a second binding.
@@ -2952,6 +2940,11 @@ def librarian_hotkeys_callback(sender, app_data):
             guiutils.toggle_checkbox("speech_enabled_checkbox")  # tag
         elif key == dpg.mvKey_C:  # C for captions; S is taken by Speech, which this one qualifies
             guiutils.toggle_checkbox("avatar_subtitles_checkbox")  # tag
+        # The search row's two: t**H**inking and tool **R**esults, because T belongs to the AI's Thinking switch.
+        elif key == dpg.mvKey_H:
+            guiutils.toggle_checkbox("search_thinking_checkbox")  # tag
+        elif key == dpg.mvKey_R:
+            guiutils.toggle_checkbox("search_tools_checkbox")  # tag
 
     # Tab moves the keyboard between the panes, Shift+Tab the other way. Above the Ctrl branch and above
     # the composer's own branch, because it has to be reachable *from* the composer: Tab types nothing

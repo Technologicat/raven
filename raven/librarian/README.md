@@ -747,6 +747,8 @@ results are searched too.
 | `Ctrl+Shift+F` | Clear the search |
 | `F3` | Scroll to the next matching message below what is on screen — also `Enter`, in the search field |
 | `Shift+F3` | ...the previous one above it — also `Shift+Enter`, in the search field |
+| `Alt+H` | Search thinking traces too — the **Thinking** checkbox, on t**h**inking, since `Alt+T` is the AI's own Thinking switch |
+| `Alt+R` | Search tool results too — the **Tool results** checkbox |
 
 ### The marked message
 
