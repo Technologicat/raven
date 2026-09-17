@@ -50,7 +50,11 @@ _DEFAULT_FLAGS = {# Whether a thinking model may reason before it answers. On by
                   "show_thinking": False,
                   # Whether the chat graph occupies the right-hand panel instead of the avatar. Off by
                   # default: the avatar is what the app looks like, and the graph is a tool you reach for.
-                  "chat_graph_shown": False}
+                  "chat_graph_shown": False,
+                  # What the chat search looks in, besides message text. Thinking traces are left out by
+                  # default, since most of the time a reader is after the conversation proper; tool results are in.
+                  "search_thinking": False,
+                  "search_tools": True}
 
 # Per-app settings that are numbers rather than toggles, and whose defaults come from the user's
 # configuration rather than from a literal here. Kept apart from the flags above so that "flags"

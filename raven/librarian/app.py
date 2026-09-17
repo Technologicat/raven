@@ -340,6 +340,12 @@ print()
 # constellation keeps them; `_is_busy` below is what reads the second, and the render loop the first.
 
 
+# The search field's width before the row has been laid out, when the controls beside it cannot be measured yet.
+# Chosen rather than measured: `_resize_search_row` replaces it with the width that fills the row.
+_SEARCH_FIELD_ESTIMATED_W = 480
+# The widest the search counter is given room for: four digits a side, which a chat branch does not outgrow.
+_SEARCH_COUNTER_WIDEST = "[8888/8888]"
+
 # The AI-disclosure notice shown below the avatar. Module-level because both the widget that renders it and
 # `_center_ai_warning`, which measures it to place it, need the exact same string.
 _AI_WARNING_TEXT = "You are interacting with an AI system. Response quality and factual accuracy depend on the connected AI — always verify important facts independently."
@@ -1225,6 +1231,7 @@ with timer() as tim:
         def _get_chat_panel_base_size() -> tuple[int, int]:  # at initial view, with the window at its design size
             w = gui_config.chat_panel_w + 16  # 16 = round border (8 on each side)
             h = gui_config.main_window_h - (gui_config.ai_warning_h + 16) - (gui_config.chat_controls_h + 16) + 8
+            h -= gui_config.search_row_h + 4  # the search row across the top, and the item spacing below it
             return w, h
         def _get_chat_panel_size(main_window_w: int, main_window_h: int) -> tuple[int, int]:  # at current window size
             extra_w = main_window_w - gui_config.main_window_w
@@ -1266,6 +1273,68 @@ with timer() as tim:
             w = base_w + extra_w
             h = base_h + extra_h
             return w, h
+
+        # The search row, across the top of both panels. One field for the whole app, because a second one for
+        # the graph would be a third text field on screen beside the composer. Each view's own navigation goes in
+        # the part of the row above it: the chat's counter and previous/next at the right end of the chat half,
+        # and the graph half kept for the graph's, when it has a search.
+        with dpg.group(horizontal=True):
+            with dpg.child_window(tag="search_row",
+                                  width=_get_chat_panel_base_size()[0],
+                                  height=gui_config.search_row_h,
+                                  no_scrollbar=True,
+                                  no_scroll_with_mouse=True):
+                with dpg.group(horizontal=True):
+                    def search_changed_callback() -> None:
+                        app_state["search_thinking"] = dpg.get_value("search_thinking_checkbox")  # tag
+                        app_state["search_tools"] = dpg.get_value("search_tools_checkbox")  # tag
+                        chat_controller.set_search(dpg.get_value("search_field"),  # tag
+                                                   include_thinking=app_state["search_thinking"],
+                                                   include_tools=app_state["search_tools"])
+
+                    def clear_search_callback() -> None:
+                        """Empty the search field and end the search. The button and Ctrl+Shift+F, caret or no caret."""
+                        guiutils.set_input_text("search_field", "", park_focus_on="search_clear_button")  # tag
+                        search_changed_callback()
+                        gui_animation.give_caret("search_field")  # tag
+
+                    dpg.add_button(label=fa.ICON_X, callback=clear_search_callback, width=gui_config.toolbutton_w,
+                                   tag="search_clear_button")
+                    dpg.bind_item_font("search_clear_button", themes_and_fonts.icon_font_solid)  # tag
+                    with dpg.tooltip("search_clear_button"):  # tag
+                        dpg.add_text("Clear the search [Ctrl+Shift+F]")
+                    dpg.add_input_text(tag="search_field",
+                                       hint="Search the chat [Ctrl+F]: 'cat photo' finds 'photocatalytic'; lowercase ignores case",
+                                       width=_SEARCH_FIELD_ESTIMATED_W,  # corrected by `_resize_search_row` once laid out
+                                       callback=search_changed_callback)
+                    with dpg.group(horizontal=True, tag="search_controls_group"):  # tag  # measured, for the field's width
+                        dpg.add_checkbox(label="Thinking", tag="search_thinking_checkbox", default_value=app_state["search_thinking"],
+                                         callback=search_changed_callback)
+                        with dpg.tooltip("search_thinking_checkbox"):  # tag
+                            dpg.add_text("Search thinking traces too.\nGoing to a match inside one opens the trace.")
+                        dpg.add_checkbox(label="Tool results", tag="search_tools_checkbox", default_value=app_state["search_tools"],
+                                         callback=search_changed_callback)
+                        with dpg.tooltip("search_tools_checkbox"):  # tag
+                            dpg.add_text("Search what tools returned: web pages, search results, documents.")
+                        dpg.add_button(label=fa.ICON_ANGLE_UP, callback=lambda: chat_controller.step_search(-1),
+                                       width=gui_config.toolbutton_w, enabled=False, tag="search_prev_button")
+                        dpg.bind_item_font("search_prev_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_theme("search_prev_button", "disablable_widget_theme")  # tag
+                        with dpg.tooltip("search_prev_button"):  # tag
+                            dpg.add_text("Go to the previous matching message [Shift+F3]")
+                        dpg.add_button(label=fa.ICON_ANGLE_DOWN, callback=lambda: chat_controller.step_search(+1),
+                                       width=gui_config.toolbutton_w, enabled=False, tag="search_next_button")
+                        dpg.bind_item_font("search_next_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_theme("search_next_button", "disablable_widget_theme")  # tag
+                        with dpg.tooltip("search_next_button"):  # tag
+                            dpg.add_text("Go to the next matching message [F3]")
+                    # Last in the row, so that its width changing as the count does moves nothing.
+                    dpg.add_text("", tag="search_counter_text", color=(160, 160, 160))
+            dpg.add_child_window(tag="graph_search_row",  # kept for the graph's search navigation
+                                 width=_get_avatar_panel_base_size()[0],
+                                 height=gui_config.search_row_h,
+                                 no_scrollbar=True,
+                                 no_scroll_with_mouse=True)
 
         with dpg.group(horizontal=True):
             with dpg.group():  # left column: linearized chat view
@@ -2415,6 +2484,37 @@ def _center_ai_warning(avatar_panel_w: int) -> None:
     dpg.set_item_width("ai_warning_centering_spacer", max(0, int((content_w - block_w) / 2) - _AI_WARNING_CENTERING_BIAS))  # tag
 
 
+def _resize_search_row(search_row_w: int) -> None:
+    """Give the search field whatever width the row has left beside its button and controls.
+
+    `search_row_w`: current outer width of the search row, in pixels.
+
+    The controls are measured rather than added up, as the AI-disclosure label is in `_center_ai_warning`: their
+    width depends on the checkbox labels and the counter's text. Before the first frame they have no size, and
+    the field keeps its estimate until the next resize pass.
+    """
+    controls_w, _ = guiutils.get_widget_size("search_controls_group")  # tag
+    if not controls_w:
+        return
+    # Room for the counter at its widest, so the field does not change width as the count does.
+    counter_w, _ = dpg.get_text_size(_SEARCH_COUNTER_WIDEST)
+    spacing_x = 8  # DPG's default ItemSpacing, between the members of the row's horizontal group
+    content_w = search_row_w - 2 * guiutils.DPG_WINDOW_PADDING
+    field_w = content_w - gui_config.toolbutton_w - controls_w - counter_w - 3 * spacing_x
+    dpg.set_item_width("search_field", max(100, int(field_w)))  # tag
+
+def _update_search_row() -> None:
+    """Redraw the chat search's counter and previous/next buttons from the controller. Callable from any thread."""
+    matches, maybe_index = chat_controller.search_matches, chat_controller.search_match_index
+    if chat_controller.search_query is None:
+        counter = ""
+    else:
+        counter = f"[{maybe_index + 1 if maybe_index is not None else '–'}/{len(matches)}]"
+    with guiutils.nonexistent_ok():
+        dpg.set_value("search_counter_text", counter)  # tag
+        for button in ("search_prev_button", "search_next_button"):  # tag
+            (dpg.enable_item if matches else dpg.disable_item)(button)
+
 def _resize_panels() -> None:
     """Resize the panels in the main window RIGHT NOW, based on main window size."""
     global _animator_settings  # noqa: F824 -- intent only; loaded during app startup, never rebound here
@@ -2431,9 +2531,12 @@ def _resize_panels() -> None:
     dpg.set_item_width("chat_field", chat_field_w)  # tag
 
     dpg.set_item_width("chat_global_buttons", chat_panel_w)  # tag
+    dpg.set_item_width("search_row", chat_panel_w)  # tag
+    _resize_search_row(chat_panel_w)
 
     avatar_panel_w, avatar_panel_h = _get_avatar_panel_size(main_window_w=w, main_window_h=h)
     dpg.set_item_width("ai_warning_panel", avatar_panel_w)  # tag
+    dpg.set_item_width("graph_search_row", avatar_panel_w)  # tag
     _center_ai_warning(avatar_panel_w)
     avatar_controller.subtitle_bottom_y0 = _get_subtitle_bottom_y0(avatar_panel_h)  # takes effect from next subtitle shown
     avatar_controller.reposition_subtitle()  # apply new position to current subtitle, if any
@@ -2700,6 +2803,13 @@ def librarian_hotkeys_callback(sender, app_data):
     elif key == dpg.mvKey_F1:  # de facto standard hotkey for help
         help_window.show()
 
+    # Enter in the search field goes to the next matching message, and Shift+Enter to the previous one. Above
+    # every other Enter below — the graph's commit and the composer's send — since the reader's attention is in
+    # the field. *Focused*, not *active*: committing a single-line field is what Enter does, so by the time this
+    # runs the field has already given up the caret, and only focus still says the key was typed there.
+    elif key == dpg.mvKey_Return and dpg.is_item_focused("search_field"):  # tag
+        chat_controller.step_search(-1 if shift_pressed else +1)
+
     # The audio input panel is not modal, so it cannot claim the keyboard the way a dialog does — it
     # takes the keys only while the focus is on one of its own controls, and passes on anything else.
     # That is what lets it use bare letters without stealing them from the composer.
@@ -2722,11 +2832,14 @@ def librarian_hotkeys_callback(sender, app_data):
     # switching branch instead of sending. Tested here rather than relied upon to have been cleared,
     # because a click and a keypress can land in one frame and the poll runs between frames.
     elif (not dpg.is_item_active("chat_field")  # tag
+          and not dpg.is_item_active("search_field")  # tag  # the graph binds bare letters, which are being typed there
           and chat_graph_panel.has_keyboard
           and chat_graph_panel.handle_key(key, ctrl=ctrl_pressed, shift=shift_pressed, alt=alt_pressed)):
         pass
 
     # Hotkeys for main window, while no modal window is shown
+    elif key == dpg.mvKey_F3:  # the de facto "find next", and Shift+F3 "find previous"
+        chat_controller.step_search(-1 if shift_pressed else +1)
     elif key == dpg.mvKey_F9:  # a bare key, because it is reached with a microphone in one hand
         _toggle_audio_input_panel()
     elif key == dpg.mvKey_F8:  # NOTE: Shift is a modifier here
@@ -2755,6 +2868,8 @@ def librarian_hotkeys_callback(sender, app_data):
         # one hotkey in the app that destroys data. It still asks for the second press the button does.
         elif key == dpg.mvKey_Delete:
             fire_event_if_exists("delete")
+        elif key == dpg.mvKey_F:  # Ctrl+F puts the caret in the search field; this, with Shift, empties it
+            clear_search_callback()
 
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         elif key == dpg.mvKey_M:
@@ -2809,6 +2924,8 @@ def librarian_hotkeys_callback(sender, app_data):
     elif ctrl_pressed:
         if key == dpg.mvKey_Spacebar:
             gui_animation.give_caret("chat_field")  # tag
+        elif key == dpg.mvKey_F:
+            gui_animation.give_caret("search_field")  # tag
         # The send chord, when it is the composer that is *not* holding the caret. While it is, the field
         # commits and this fires on the same keypress; `_request_send` is what makes that one send.
         elif key == dpg.mvKey_Return and librarian_config.send_message_key == "ctrl+enter":
@@ -2900,7 +3017,7 @@ def librarian_hotkeys_callback(sender, app_data):
         # the state that actually means "this field owns the caret": measured False when merely auto-focused
         # and after Escape, True from the click that enters the field until it is left. That is exactly the
         # condition under which these keys belong to the widget rather than to the log.
-        elif dpg.is_item_active("chat_field"):  # tag
+        elif dpg.is_item_active("chat_field") or dpg.is_item_active("search_field"):  # tag
             # Empty on purpose, and load-bearing: this branch exists to *withhold* the log-navigation keys
             # below while someone is typing. Every key it would claim belongs to the widget instead.
             #
@@ -3021,6 +3138,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     # returns, and the graph steps aside with the captions visible again.
                                     avatar_panel_covered=(lambda: app_state["chat_graph_shown"]),
                                     executor=bg)
+chat_controller.on_search_results_changed = _update_search_row
 
 def _get_cleanup_roots() -> tuple[str, ...]:
     """The node IDs a cleanup must keep everything reachable from: **every** root, each of which is a system

@@ -556,6 +556,7 @@ gui_config = env(  # ----------------------------------------
                  # the same arithmetic as a toolbutton, plus item_spacing_y(4) for the gap to the field.
                  chat_backend_pill_h=30,
                  chat_controls_h=174,  # = chat_field_h(128) + item_spacing_y(4) + toolbutton_h(26) + child_padding(16)
+                 search_row_h=42,  # the search row across the top: one line of widgets, 26, plus child_padding(16)
                  chat_panel_w=(1920 // 2),  # net width 960 -> gross width with borders = this + 2 * 8 = 976
                  vu_meter_w=8,  # mic VU meter ("voltage units", audio input level)
                  vu_meter_h=26,  # same height as toolbuttons

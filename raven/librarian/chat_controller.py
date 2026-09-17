@@ -87,6 +87,7 @@ from ..common.gui import tooltip as gui_tooltip
 from ..common.gui import utils as guiutils
 from ..common.gui import widgetfinder
 
+from . import chatsearch
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
@@ -518,6 +519,10 @@ def _get_all_greeting_node_ids(datastore: chattree.Forest) -> list[str]:
                 greeting_node_ids.append(node_id)
     return greeting_node_ids
 
+def _highlights_anything(text: str, maybe_highlight: tuple | None) -> bool:
+    """Whether search highlighting `maybe_highlight` (a `chatsearch.SearchQuery.highlight`, or `None`) marks anything in `text`."""
+    return maybe_highlight is not None and common_utils.has_search_highlight(text, *maybe_highlight)
+
 # --------------------------------------------------------------------------------
 # --------------------------------------------------------------------------------
 
@@ -545,6 +550,9 @@ class DPGChatMessage:
         self.persona = None  # populated by `build`
         self.paragraphs = []  # [{"text": ..., "rendered": True}, ...]
         self.paragraphs_lock = threading.RLock()
+        # Counts paragraph widgets ever built by this instance, for their tags: a paragraph re-rendered for a
+        # search highlight is built while the old widget still exists, and DPG frees deleted tags lazily.
+        self.paragraph_build_count = 0
         # System message only: the two kinds of per-turn system inject, as last drawn.
         self.rendered_system_preamble = None
         self.rendered_system_postamble = None
@@ -1049,6 +1057,12 @@ class DPGChatMessage:
                                        exact=thinking.get("tokens_exact", False),
                                        label="Thought for")
 
+    def show_thinking_trace(self) -> None:
+        """Open this message's thinking trace, if it has one and it is collapsed."""
+        with guiutils.nonexistent_ok():
+            if self.gui_thought_group is not None:
+                dpg.show_item(self.gui_thought_group)
+
     def _thought_bubble(self) -> str | int:
         """The container the thinking trace renders into, built on first use. Returns its DPG ID.
 
@@ -1148,9 +1162,6 @@ class DPGChatMessage:
                 logger.debug(f"DPGChatMessage._render_text: no text group for chat node '{self.node_id}'; nothing to render into.")
                 return
             # dpg.delete_item(self.gui_text_group, children_only=True)  # how to clear all old text if we ever need to
-            role = self.role
-            role_color = role_to_colors[role]["front"] if role in role_to_colors else "#ffffff"
-            think_color = librarian_config.gui_config.chat_color_think_front
             for idx, paragraph in enumerate(self.paragraphs):
                 if paragraph["rendered"]:
                     continue
@@ -1170,27 +1181,89 @@ class DPGChatMessage:
                     text = text.replace("</tool_call>", "**<<<Tool call<<<**")
                     text = text.replace("<think>", "**>>>Thinking>>>**")
                     text = text.replace("</think>", "**<<<Thinking<<<**")
-                    # Passed to the renderer rather than wrapped around the text as a `<font>` tag. An open
-                    # tag on the same line as the content makes the whole paragraph inline raw HTML as far
-                    # as CommonMark is concerned, and a heading is a block construct that cannot occur
-                    # inside a paragraph - so `### Heading` came through with its markers intact.
-                    color = think_color if paragraph["is_thought"] else role_color
 
                     chat_text_w = self.get_chat_text_width()
-
+                    paragraph["display_text"] = text
                     if paragraph["is_thought"]:
-                        widget = dpg_markdown.add_text(text,
-                                                       wrap=chat_text_w - gui_config.toolbutton_w,
-                                                       parent=self._thought_bubble(),
-                                                       color=color)
+                        paragraph["wrap"] = chat_text_w - gui_config.toolbutton_w
+                        parent = self._thought_bubble()
                     else:
-                        widget = dpg_markdown.add_text(text,
-                                                       wrap=chat_text_w,
-                                                       parent=self.gui_text_group,
-                                                       color=color)
-                    paragraph["widget"] = widget
-                    dpg.set_item_alias(widget, f"chat_message_text_{role}_paragraph_{idx}_{self.gui_uuid}")  # tag
+                        paragraph["wrap"] = chat_text_w
+                        parent = self.gui_text_group
+                    paragraph["widget"] = self._build_paragraph_widget(idx, paragraph, parent=parent)
                 paragraph["rendered"] = True
+
+    def _build_paragraph_widget(self, idx: int, paragraph: dict, *,
+                                parent: str | int, before: str | int = 0, show: bool = True) -> int:
+        """Render `paragraph` (index `idx`) as Markdown into `parent`, with the current search highlighting. Returns the widget.
+
+        The paragraph's `display_text` and `wrap` must be set. Records in it the `rows` laid out and the
+        `highlight` drawn, which is what a later re-highlight compares against. Call holding `paragraphs_lock`.
+        """
+        role_color = role_to_colors[self.role]["front"] if self.role in role_to_colors else "#ffffff"
+        # Passed to the renderer rather than wrapped around the text as a `<font>` tag. An open tag on the same
+        # line as the content makes the whole paragraph inline raw HTML as far as CommonMark is concerned, and a
+        # heading is a block construct that cannot occur inside a paragraph - so `### Heading` came through with
+        # its markers intact.
+        color = gui_config.chat_color_think_front if paragraph["is_thought"] else role_color
+        maybe_highlight = self._paragraph_highlight(paragraph)
+        markdown = dpg_markdown.MarkdownText(paragraph["display_text"],
+                                             color=color,
+                                             highlight=maybe_highlight,
+                                             highlight_color=guiutils.SEARCH_HIGHLIGHT_COLOR)
+        self.paragraph_build_count += 1
+        widget = markdown.add(wrap=paragraph["wrap"],
+                              parent=parent,
+                              before=before,
+                              show=show,
+                              tag=f"chat_message_text_{self.role}_paragraph_{idx}_{self.gui_uuid}_build{self.paragraph_build_count}")
+        paragraph["rows"] = markdown.rows
+        paragraph["highlight"] = maybe_highlight
+        return widget
+
+    def _paragraph_highlight(self, paragraph: dict) -> tuple | None:
+        """The search highlighting `paragraph` should be drawn with now: the query's regex pair, or `None`."""
+        maybe_query = self.parent_view.chat_controller.search_query
+        if maybe_query is None:
+            return None
+        if paragraph["is_thought"] and not maybe_query.include_thinking:
+            return None
+        if self.role == "tool" and not maybe_query.include_tools:
+            return None
+        return maybe_query.highlight
+
+    def rehighlight(self, task_env: env) -> None:
+        """Re-render the paragraphs whose search highlighting has changed, each swapped in without moving the view.
+
+        A paragraph that matches neither the search it was drawn with nor the current one is left as it is, and
+        only has its record updated. Takes `paragraphs_lock` per paragraph rather than for the whole message, so a
+        reply still streaming into this message is held up for one paragraph at a time. Stops when `task_env` is
+        cancelled.
+        """
+        idx = 0
+        while not task_env.cancelled:
+            with guiutils.nonexistent_ok(parent_gone_ok=True), self.paragraphs_lock:
+                if idx >= len(self.paragraphs):
+                    return
+                paragraph = self.paragraphs[idx]
+                idx += 1
+                old = paragraph.get("widget")
+                if old is None or not paragraph["rendered"]:
+                    continue
+                wanted = self._paragraph_highlight(paragraph)
+                drawn = paragraph["highlight"]
+                if wanted is drawn:
+                    continue
+                if not (_highlights_anything(paragraph["display_text"], drawn) or
+                        _highlights_anything(paragraph["display_text"], wanted)):
+                    paragraph["highlight"] = wanted
+                    continue
+                old_rows, old_height = paragraph["rows"], dpg.get_item_rect_size(old)[1]
+                new = self._build_paragraph_widget(idx - 1, paragraph, parent=dpg.get_item_parent(old), before=old, show=False)
+                paragraph["widget"] = new
+                gui_animation.WidgetSwap.swap(self.parent_view.gui_parent, old, new,
+                                              height_change=dpg_markdown.predict_height_change(old_rows, old_height, paragraph["rows"]),
+                                              commanded_y_scroll=self.parent_view._commanded_y_scroll)
 
     def add_tool_call_invocation(self, index: int, name: str, arguments: str,
                                  tool_call_id: str | None = None) -> None:
@@ -3749,6 +3822,7 @@ class DPGLinearizedChatView:
                     dpg.disable_item(f"message_continue_button_{dpg_old_message.gui_uuid}")
                 dpg.disable_item(f"message_show_chat_continuation_button_{dpg_old_message.gui_uuid}")
 
+        self.chat_controller.add_search_matches_for(node_id)
         if scroll_view:
             self.scroll_view()
         return dpg_chat_message
@@ -3781,6 +3855,7 @@ class DPGLinearizedChatView:
         node_id_history = self.chat_controller.datastore.linearize_up(head_node_id)
         with self.chat_controller.current_chat_history_lock:
             self.chat_controller.current_chat_history.clear()
+            self.chat_controller.clear_search_matches()  # refilled message by message, as the branch is added below
             dpg.delete_item(self.chat_messages_container_group_widget,
                             children_only=True)  # clear old content from GUI
             for node_id in node_id_history:
@@ -4091,6 +4166,17 @@ class DPGChatController:
         self.current_chat_history = []
         self.current_chat_history_lock = threading.RLock()
 
+        # Search. `search_query` is what paragraphs are highlighted with as they render, so it is rebound whole and
+        # read without a lock: a render sees either the old query or the new one, and the re-highlight that follows
+        # a change catches up whatever rendered in between. `search_matches` is `chatsearch.find_matches`' answer
+        # for the branch on screen, and `search_match_index` the match last jumped to, if any.
+        self.search_query = None
+        self.search_matches = []
+        self.search_match_index = None
+        # Called with no arguments whenever `search_matches` or `search_match_index` changes, so the app can
+        # redraw its counter. Set by the app; `None` until then.
+        self.on_search_results_changed = None
+
         # The keyboard mark on the current message's button row, built on first use by
         # `update_current_message_mark`. One mark that moves, rather than one per message: a chat has as
         # many messages as the user has written, so a theme apiece would grow with the conversation.
@@ -4137,6 +4223,9 @@ class DPGChatController:
         self.context_prefill_task_manager = bgtask.TaskManager(name="librarian_chat_controller_context_prefill",  # its own manager so a HEAD change cancels just the prefill
                                                                mode="sequential",  # only the latest HEAD's prefill matters; submitting a new one auto-cancels the previous
                                                                executor=executor)  # same thread pool
+        self.search_task_manager = bgtask.TaskManager(name="librarian_chat_controller_search",
+                                                      mode="sequential",  # a new search's re-highlight cancels the previous one's
+                                                      executor=executor)  # same thread pool
         # The debounced idle context-prefill. `ManagedTask` supplies the pending-wait debounce (cancellable in
         # `running_poll_interval` chunks) and the single-in-flight guarantee; we just submit one per HEAD change.
         # Created only when the feature is enabled (`config.context_prefill_idle_delay is not None`).
@@ -4204,6 +4293,129 @@ class DPGChatController:
                     return dpg_chat_message
         return None
 
+    def set_search(self, search_string: str, *, include_thinking: bool, include_tools: bool) -> None:
+        """Search the branch on screen for `search_string`, and re-highlight the chat log to match. Callable from any thread.
+
+        An empty `search_string` ends the search. `include_thinking` and `include_tools`: whether thinking traces,
+        and tool messages, are searched.
+
+        Returns at once. Finding the matches and re-highlighting run in the background, messages nearest the view
+        first, and a newer search cancels both — so a caller on DPG's callback thread, a keystroke's, is not held up
+        by a long branch.
+        """
+        self.search_query = chatsearch.make_query(search_string, include_thinking=include_thinking, include_tools=include_tools)
+        self.search_match_index = None
+        if self.gui_updates_safe:
+            self.search_task_manager.submit(self._search_task, env())
+
+    def clear_search_matches(self) -> None:
+        """Forget the matches, for a view about to be rebuilt; `add_search_matches_for` refills them as it is."""
+        self.search_matches = []
+        self.search_match_index = None
+        self._notify_search_results_changed()
+
+    def add_search_matches_for(self, node_id: str) -> None:
+        """Test one message just added to the end of the branch on screen against the search, and count it if it matches.
+
+        Per message, so that a view rebuilt message by message tests each once.
+        """
+        maybe_query = self.search_query
+        if maybe_query is None:
+            return
+        new_matches = chatsearch.find_matches(self.datastore, [node_id], maybe_query)
+        if new_matches:
+            self.search_matches = self.search_matches + new_matches  # rebound whole, never mutated: readers take no lock
+            self._notify_search_results_changed()
+
+    def refresh_search_matches(self) -> None:
+        """Recompute which messages of the branch on screen match the current search, all of them.
+
+        The match last jumped to stays the current one if it still matches.
+        """
+        maybe_query = self.search_query
+        with self.current_chat_history_lock:
+            node_ids = [message.node_id for message in self.current_chat_history if message.node_id is not None]
+        matches = chatsearch.find_matches(self.datastore, node_ids, maybe_query)
+        maybe_current = self._current_search_match()
+        self.search_matches = matches
+        self.search_match_index = next((index for index, (node_id, where) in enumerate(matches)
+                                        if maybe_current is not None and node_id == maybe_current[0]),
+                                       None)
+        self._notify_search_results_changed()
+
+    def step_search(self, direction: int) -> None:
+        """Jump to the next (`direction=+1`) or previous (`-1`) message matching the search, wrapping around.
+
+        The first step of a search starts from where the reader is: the first match at or below the top of the
+        view going forward, the last one above it going back. A message whose thinking trace matched has its
+        trace opened, whether or not its text matched too, so that every match the search counted is on screen.
+        """
+        matches = self.search_matches
+        if not matches:
+            return
+        if self.search_match_index is None:
+            index = self._first_search_match_from_view(direction)
+        else:
+            index = (self.search_match_index + direction) % len(matches)
+        self.search_match_index = index
+        node_id, where = matches[index]
+        if "thinking" in where and (message := self.view.find_message(node_id)) is not None:
+            message.show_thinking_trace()
+        self.view.jump_to_node(node_id)
+        self._notify_search_results_changed()
+
+    def _current_search_match(self) -> tuple[str, frozenset] | None:
+        index, matches = self.search_match_index, self.search_matches
+        if index is None or index >= len(matches):
+            return None
+        return matches[index]
+
+    def _first_search_match_from_view(self, direction: int) -> int:
+        """Index of the first match at or below the view's top (`direction=+1`), or the last above it (`-1`)."""
+        matches = self.search_matches
+        with guiutils.nonexistent_ok():
+            view_top = guiutils.get_widget_pos(self.view.gui_parent)[1]
+            tops = []
+            for node_id, where in matches:
+                maybe_message = self.view.find_message(node_id)
+                tops.append(guiutils.get_widget_pos(maybe_message.gui_container_group)[1] if maybe_message is not None else None)
+            if direction > 0:
+                return next((index for index, top in enumerate(tops) if top is not None and top >= view_top), 0)
+            return next((index for index, top in reversed(list(enumerate(tops))) if top is not None and top < view_top),
+                        len(matches) - 1)
+        return 0 if direction > 0 else len(matches) - 1
+
+    def _notify_search_results_changed(self) -> None:
+        if self.on_search_results_changed is not None:
+            self.on_search_results_changed()
+
+    def _search_task(self, task_env: env) -> None:
+        self.refresh_search_matches()
+        if task_env.cancelled:
+            return
+        with self.current_chat_history_lock:
+            messages = list(self.current_chat_history)
+        for message in self._nearest_the_view_first(messages):
+            if task_env.cancelled or not self.gui_updates_safe:
+                return
+            message.rehighlight(task_env)
+
+    def _nearest_the_view_first(self, messages: list[DPGChatMessage]) -> list[DPGChatMessage]:
+        """`messages`, ordered by how far each is from the view: those on screen first, then outwards.
+
+        Left in their order if the view cannot be measured, which only costs the order.
+        """
+        with guiutils.nonexistent_ok():
+            view_top = guiutils.get_widget_pos(self.view.gui_parent)[1]
+            view_bottom = view_top + guiutils.get_widget_size(self.view.gui_parent)[1]
+
+            def distance(message: DPGChatMessage) -> int:
+                top = guiutils.get_widget_pos(message.gui_container_group)[1]
+                bottom = top + guiutils.get_widget_size(message.gui_container_group)[1]
+                return max(0, view_top - bottom, top - view_bottom)
+            return sorted(messages, key=distance)
+        return messages
+
     def disable_gui_updates(self) -> None:
         """Stop the controller from firing GUI events.
 
@@ -4243,6 +4455,7 @@ class DPGChatController:
         self.chat_exchange_task_manager.clear(wait=False)  # before the AI turns, since an exchange submits one
         self.ai_turn_task_manager.clear(wait=False)
         self.context_prefill_task_manager.clear(wait=False)
+        self.search_task_manager.clear(wait=False)
 
     def shutdown(self):
         """Prepare module for app shutdown.
@@ -4256,6 +4469,7 @@ class DPGChatController:
         self.chat_exchange_task_manager.clear(wait=True)  # before the AI turns, since an exchange submits one
         self.ai_turn_task_manager.clear(wait=True)
         self.context_prefill_task_manager.clear(wait=True)
+        self.search_task_manager.clear(wait=True)
 
     def _on_indexing_start(self) -> None:
         """Show the INDEXING indicator. Called from `HybridIR.commit()`'s worker thread."""

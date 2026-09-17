@@ -6,6 +6,11 @@
 
 *Raven-librarian*
 
+- **search in the chat log.** A search row across the top of the window: `Ctrl+F` to type, and the matches turn red and bold in the chat as you do. `F3` and `Shift+F3` — or `Enter` and `Shift+Enter` in the field, or the arrow buttons — go to the next and previous matching message, and a counter says which of how many. `Ctrl+Shift+F` clears it.
+  - **The same search as the Visualizer's**: every word you type must occur, in any order, and a word with a capital letter in it matches case exactly. `cat photo` finds *photocatalytic*.
+  - **Two checkboxes say where to look besides the messages themselves**: *Thinking* searches the reasoning traces too, and going to a match inside a collapsed trace opens it; *Tool results* searches what tools returned — web pages, search results, documents. Traces are off to begin with and tool results on, and both are remembered.
+  - **The chat does not move under you while the highlighting updates**, including for text scrolled out of view above.
+
 - **a chat graph view**, showing the chat multiverse itself: every branch you have ever taken, drawn as a
   tree, with the conversation you are in running down the middle of it. Toggle it with the *Chat graph*
   checkbox below the avatar.
