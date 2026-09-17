@@ -502,7 +502,9 @@ it, and Ctrl+Shift intersects with it. The tables below spell each combination o
 
 ### Moving around the info panel
 
-Live whenever the search field does not hold the caret.
+`Home`, `End` and the arrows are live whenever the search field does not hold the caret, since the field uses
+them itself. The rest work while typing too — `Page Up` and `Page Down` included, so the results of a search
+can be read down without leaving the field.
 
 | Key | Action |
 |---|---|
