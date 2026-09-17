@@ -1,6 +1,6 @@
 from typing import Callable
 
-from . import get_text_size
+from . import get_text_size, WaitUntilShown
 from .attribute_types import Attribute, AttributeConnector, CallInNextFrame, HoverAttribute
 from .font_attributes import parse_color
 
@@ -200,6 +200,13 @@ class Pre(Attribute):
 
     @CallInNextFrame
     def post_render(self, attributes_group=0):
+        # `render` fills in the bounds read below, and it runs from `AttributeController.render_attributes`,
+        # which waits while its text is hidden. This was queued separately, so it waits for the same thing —
+        # `attributes_group` sits in the same subtree as the text — and then, should the two have been released
+        # in different passes, for `render` to have run.
+        if self.attribute_connector.x0 is None:
+            WaitUntilShown.call_when_shown(attributes_group, self.post_render, attributes_group=attributes_group)
+            return
         with guiutils.nonexistent_ok(parent_gone_ok=True) as nok:  # see `Underline.render`
             width, height = dpg.get_item_rect_size(self.dpg_text_group)
             pos = dpg.get_item_pos(self.dpg_text_group)

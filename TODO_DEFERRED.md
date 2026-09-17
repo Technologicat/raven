@@ -6134,6 +6134,10 @@ answer is more likely "draw it, then correct it on a later frame" than "measure 
 **There are two faults here, not one, and only this item's original subject is a timing race.** Measured
 2026-09-14; apparatus and the full table in `investigations/dpg-markdown-decorations/`.
 
+**The second fault is fixed (2026-09-17)**: decorations now wait while their text is hidden
+(`DearPyGui_Markdown.WaitUntilShown`; measurements in `investigations/dpg-markdown-decorations/`). What follows
+is kept for the first fault, which is still open and may share a remedy. When that one is fixed, this item goes.
+
 **The second fault: a decoration on a hidden widget is built with zero area.** `Code.render` sizes its quad
 from `dpg.get_item_rect_size` of the text group, a widget DPG has not laid out has no metrics, and the read
 comes back `[0, 0]`. The quad is created — three items per span — and covers no pixels. Revealing the widget

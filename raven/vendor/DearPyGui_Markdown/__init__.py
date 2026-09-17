@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # The setup functions are re-exported from the submodules further down, so that a caller configures the
 # renderer through the package it imported rather than having to know which module owns which setter.
 __all__ = ["get_text_size", "shutdown",
-           "CallInNextFrame", "CallWhenDPGStarted",
+           "CallInNextFrame", "WaitUntilShown", "CallWhenDPGStarted",
 
            "set_font_registry", "set_add_font_function", "set_font", "set_url_secondary_action",
 
@@ -172,7 +172,7 @@ class CallInNextFrame:
     @classmethod
     def _worker(cls):
         while not _stopping.is_set():
-            if len(cls.now_frame_queue) == 0:
+            if len(cls.now_frame_queue) == 0 and not WaitUntilShown.is_waiting():
                 # Waited on rather than slept through, so `shutdown` gets this thread out of the way at
                 # once instead of after up to one interval.
                 _work_ready.wait(0.015)
@@ -194,6 +194,7 @@ class CallInNextFrame:
                 # exception escaped, and the thread died with a traceback. Same outcome, on purpose and
                 # quietly, with `split_frame` naming the reason in the log.
                 return
+            WaitUntilShown.release_shown()  # queues what the frame just rendered has revealed, for the next pass
             for func, args, kwargs in next_frame_queue:
                 if _stopping.is_set():
                     # Teardown began while this thread was waiting for its frame. Every remaining call in
@@ -203,6 +204,60 @@ class CallInNextFrame:
                     func(*args, **kwargs)
                 except Exception:
                     traceback.print_exc()
+
+
+class WaitUntilShown:
+    """Deferred render work that needs its widget laid out, held until the widget is shown.
+
+    A hidden widget is not laid out, so anything sized from it measures `[0, 0]` — decorations in particular.
+    Work that finds its widget hidden is registered here under the widget's *blocker*, the first hidden item
+    at or above it, and leaves the queue. Once per frame the worker asks each blocker, not each piece of work,
+    whether it has been shown: a collapsed section holding many decorations costs one DPG call per frame.
+    A shown blocker's work is queued again, and re-registers under a further blocker if there is one; a
+    deleted blocker's work is dropped, its widgets having gone with it.
+
+    Off screen is not hidden: an item scrolled out of view is laid out, and never waits here.
+    """
+    _lock = threading.Lock()
+    _by_blocker = {}  # blocker (DPG ID) -> [(func, args, kwargs), ...]
+
+    @classmethod
+    def call_when_shown(cls, item, func, *args, **kwargs) -> None:
+        """Call `func(*args, **kwargs)` on the worker once `item` (DPG tag or ID) is shown all the way up.
+
+        If it is shown already, that is the next frame. If `item` is gone, never. Call from the worker, which is
+        where the work that needs this runs.
+        """
+        from ...common.gui import utils as guiutils  # local import: see the note beside the imports
+        with guiutils.nonexistent_ok() as nok:
+            maybe_blocker = guiutils.find_hidden_ancestor(item)
+        if nok.errored:
+            return
+        if maybe_blocker is None:  # shown all the way up
+            CallInNextFrame.append(func, *args, **kwargs)
+            return
+        with cls._lock:
+            cls._by_blocker.setdefault(maybe_blocker, []).append((func, args, kwargs))
+
+    @classmethod
+    def is_waiting(cls) -> bool:
+        return bool(cls._by_blocker)
+
+    @classmethod
+    def release_shown(cls) -> None:
+        """Queue the work of every blocker that has been shown, and drop that of every blocker that is gone."""
+        from ...common.gui import utils as guiutils  # local import: see the note beside the imports
+        with cls._lock:
+            released = []
+            for blocker in list(cls._by_blocker):
+                with guiutils.nonexistent_ok() as nok:
+                    still_hidden = not dpg.is_item_shown(blocker)
+                if nok.errored:
+                    cls._by_blocker.pop(blocker)
+                elif not still_hidden:
+                    released.extend(cls._by_blocker.pop(blocker))
+        for func, args, kwargs in released:
+            CallInNextFrame.append(func, *args, **kwargs)
 
 
 class CallWhenDPGStarted:

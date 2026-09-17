@@ -50,9 +50,31 @@ of its text. That one is visible-but-wrong rather than absent, and re-rendering 
 says premature measurement rather than no measurement. **So there are two faults in `text_attributes.py`,
 not one**, and only the second is the settling race that `TODO_DEFERRED.md` describes.
 
-## What would fix it
+## What fixed it: decorations wait while their text is hidden (2026-09-17)
 
-Not measured, so treat as candidates rather than a plan:
+The first candidate below, chosen with the maintainer after measuring. `DearPyGui_Markdown.WaitUntilShown`
+holds deferred work whose widget is hidden, keyed by its *blocker* — the first hidden item at or above it —
+and the worker asks each blocker once per frame whether it has been shown. `probe_waiting.py` checks it:
+
+| question | result |
+|---|---|
+| code spans and a fenced block, built hidden and revealed 300 frames later | drawn at exactly the sizes of a build that was shown |
+| a paragraph deleted while hidden | its 5 waiting decorations leave the waiting room |
+| 900 decorations waiting under one collapsed container | 0.067 ms per frame (max 0.11) |
+
+**Polling per blocker rather than per decoration is what makes waiting cheap enough.** A first version asked
+every waiting decoration each frame, and measured about 0.1 ms per check from the worker thread — 65 checks
+fit in a frame's worth of its time, so 900 never finished a sweep. How often a real app hits this was counted
+before choosing: collapsed thinking traces are built hidden on every chat load, and one maintainer's whole
+chat datastore holds 31 decorated lines inside them. Tens of waiting decorations per app, standing for as
+long as a trace stays collapsed.
+
+Fixed rate polling (every 100 ms, which reads as instant) is the recorded fallback if per-blocker polling
+ever proves not to be enough.
+
+## The candidates that were considered
+
+Not measured at the time, so recorded as candidates rather than a plan:
 
 - **Do not decorate a hidden widget** — defer until it is shown, which needs something to notice that it
   has been. The one chance to measure is the problem, not where the measurement goes.
@@ -83,9 +105,14 @@ Two things the choice turns on, and only the first is a measurement:
 
 ```bash
 python investigations/dpg-markdown-decorations/probe_nesting.py
+python investigations/dpg-markdown-decorations/probe_waiting.py
 ```
 
-Needs a display, and maps a window for a few seconds. Prints to stdout — **do not pipe it**, and note it
+`probe_nesting.py` is the original question, which is why a hidden case there now reports a real size; run
+against the renderer as it was before the fix, it reports `[0, 0]`. `probe_waiting.py` is the fix's four
+checks, above.
+
+Both need a display, and map a window for a few seconds. Prints to stdout — **do not pipe it**, and note it
 leaves via `os._exit`, the renderer's worker thread not participating in DPG teardown.
 
 ## A second finding, which this probe fell into first

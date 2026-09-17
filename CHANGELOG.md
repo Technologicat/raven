@@ -596,6 +596,8 @@
 
 *Constellation-wide*
 
+- **code backgrounds, underlines and code-block borders now appear in text that was hidden when it was drawn** — a collapsed thinking trace once expanded, and a help card's pages past the first. Such text used to be decorated while hidden, which draws nothing, and nothing redrew it.
+
 - **Markdown styling no longer lands beside its text after an emoji.** Each emoji — or any other character outside the Basic Multilingual Plane, such as mathematical letters — before a bold, italic, code or link span shifted that span one character to the right: in `😀 **bold** end`, the bold fell on "old " instead of "bold", and a link's colour sat one character off the same way. The emoji itself is still drawn as a missing-glyph box, the renderer having no emoji font yet. This affected chat messages and help cards alike.
 
 - **closing an app no longer risks a crash on the way out.** The Markdown renderer runs background threads that keep drawing after the window is gone, and they were not stopped before the GUI was torn down — so on an unlucky close the app died with a segfault instead of exiting. Most likely while a message full of links was still being drawn, which is why it showed up when closing Raven-librarian during startup, but every app that renders Markdown could hit it, including ones that only ever show a help card. They are now stopped and waited for before teardown.

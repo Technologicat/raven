@@ -3,7 +3,7 @@ from typing import TypeVar
 
 import dearpygui.dearpygui as dpg  # noqa
 
-from . import CallInNextFrame
+from . import CallInNextFrame, WaitUntilShown
 from . import get_text_size
 from .font_attributes import Attribute, Bold, BoldItalic, Default, Font, Italic, H1, H2, H3, H4, H5, H6
 from .line_attributes import Blockquote, List, Separator
@@ -125,6 +125,17 @@ class AttributeController(list[Attribute]):
 
     @CallInNextFrame
     def render_attributes(self, dpg_text, dpg_text_group, font=None, attributes_group=0):
+        if not any(attribute in self for attribute in (Strike, Underline, Url, Code, Pre)):
+            return
+        # Every decoration is sized and placed from the laid-out text, and a hidden widget is not laid out: it
+        # measures `[0, 0]`, and a decoration built from that covers nothing, then or ever. So while the text is
+        # hidden — a collapsed section, a help card's other pages, a replacement not yet swapped in — the
+        # decorations wait for it to be shown.
+        WaitUntilShown.call_when_shown(dpg_text_group, self._render_attributes_now,
+                                       dpg_text=dpg_text, dpg_text_group=dpg_text_group,
+                                       font=font, attributes_group=attributes_group)
+
+    def _render_attributes_now(self, dpg_text, dpg_text_group, font=None, attributes_group=0):
         strike_drawlist, strike_line = None, None
         if Strike in self:
             strike_drawlist, strike_line = Strike.render(dpg_text, dpg_text_group,
