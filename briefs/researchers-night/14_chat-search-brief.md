@@ -112,6 +112,7 @@ that wait while their text is hidden. The streaming message is included: it is h
 - **Thinking traces count, and a jump to a message whose trace matched opens the trace** — also when its visible
   text matched too, so that searching traces behaves transparently: every match counted is on screen.
 - **Both are checkboxes in the search row**: whether thinking traces are searched, and whether tool messages are.
+  Traces start **off** — most of the time a reader wants the conversation proper — and tool messages on.
 
 **Every search length highlights**, `e` included, if it is fast enough: a screenful costs roughly 150–250 ms at
 the one-letter rate, and whether that feels acceptable is to be judged live (Juha).

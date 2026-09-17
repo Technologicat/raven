@@ -39,8 +39,11 @@ class SearchQuery:
     matches: Callable[[str], bool]
 
 
-def make_query(search_string: str, *, include_thinking: bool = True, include_tools: bool = True) -> SearchQuery | None:
-    """Compile `search_string`. Returns `None` for an empty or blank one, which is no search running."""
+def make_query(search_string: str, *, include_thinking: bool = False, include_tools: bool = True) -> SearchQuery | None:
+    """Compile `search_string`. Returns `None` for an empty or blank one, which is no search running.
+
+    The defaults are the search row's: thinking traces left out, tool messages searched.
+    """
     if not search_string.strip():
         return None
     return SearchQuery(search_string=search_string,

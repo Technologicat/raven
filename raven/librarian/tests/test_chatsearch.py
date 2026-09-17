@@ -32,6 +32,8 @@ def branch():
 
 
 def find(branch, search_string, **options):
+    """Search `branch` with thinking traces included unless told otherwise, since most of these tests are about them."""
+    options.setdefault("include_thinking", True)
     forest, node_ids = branch
     return chatsearch.find_matches(forest, node_ids, chatsearch.make_query(search_string, **options))
 
@@ -42,7 +44,7 @@ class TestMakeQuery:
         assert chatsearch.make_query(search_string) is None
 
     def test_the_highlighters_follow_the_case_rule(self):
-        query = chatsearch.make_query("Light photo")
+        query = chatsearch.make_query("Light photo")  # one fragment of each case kind
         maybe_case_sensitive, maybe_case_insensitive = query.highlight
         assert maybe_case_sensitive.pattern and maybe_case_insensitive.pattern
 
@@ -73,16 +75,24 @@ class TestFindMatches:
 
     def test_thinking_traces_can_be_left_out(self, branch):
         _, (question, tool, reply) = branch
-        assert (reply, THINKING) in find(branch, "summarize"), "the control: the trace is searched by default"
+        assert (reply, THINKING) in find(branch, "summarize"), "the control: the trace is searched when asked"
         assert find(branch, "summarize", include_thinking=False) == []
         assert (reply, CONTENT) in find(branch, "the", include_thinking=False), "left out, a trace does not add to where"
 
+    def test_by_default_traces_are_left_out_and_tool_messages_searched(self, branch):
+        forest, node_ids = branch
+        _, tool, _ = node_ids
+        query = chatsearch.make_query("summarize")
+        assert (query.include_thinking, query.include_tools) == (False, True)
+        assert chatsearch.find_matches(forest, node_ids, query) == [], "the trace-only match is left out"
+        assert chatsearch.find_matches(forest, node_ids, chatsearch.make_query("wikipedia")) == [(tool, CONTENT)]
+
     def test_tool_messages_can_be_left_out(self, branch):
         _, (question, tool, reply) = branch
-        assert (tool, CONTENT) in find(branch, "wikipedia"), "the control: tool messages are searched by default"
+        assert (tool, CONTENT) in find(branch, "wikipedia"), "the control: tool messages are searched when asked"
         assert find(branch, "wikipedia", include_tools=False) == []
 
     def test_the_text_is_normalized_as_the_query_is(self):
         forest = Forest()
-        node = forest.create_node(payload=payload("assistant", "Oxygen is O₂."), parent_id=None)
+        node = forest.create_node(payload=payload("assistant", "Oxygen is O₂."), parent_id=None)  # content only, so defaults suffice
         assert chatsearch.find_matches(forest, [node], chatsearch.make_query("o2")) == [(node, CONTENT)]
