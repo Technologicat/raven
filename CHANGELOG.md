@@ -349,6 +349,8 @@
 
 - **the info panel shows each item's authors and year on a line of their own, above the title.**
 
+- **the info panel's search counter stays up when no match is on screen**, reading `[–/N]`, so the count is there wherever the panel is scrolled. It used to disappear. Raven-librarian's chat search counter reads the same way.
+
 - **keyword extraction now counts nouns and proper nouns, and leaves the verbs out.** A topic keyword is nearly always a noun, while the verbs of academic prose — *provide*, *improve*, *develop*, *investigate*, *identify*, *propose* — describe what a paper **does**, are the same in every field, and were crowding the head of the frequency list without saying anything. Measured on a corpus about AI in education: dropping them lifts *chatbot*, *agent*, *interaction*, *language* and *task* into the top of the list instead, and removes about a third of the distinct words.
   - This is why *learning* and *learn* are counted separately, and should be: as a noun it is the topic, as a verb it is prose, and they are different words. The verb sense is now dropped along with the rest.
   - Affects the word cloud, the per-entry keywords and the frequency-based cluster keywords, for datasets imported from now on. `nlptools.count_frequencies` takes `accepted_pos=None` for the old, wider behavior.

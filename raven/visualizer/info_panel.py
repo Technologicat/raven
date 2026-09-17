@@ -744,6 +744,16 @@ def scroll_position_changed(*, site_tag=None, reset=False, env):
     return result
 
 
+def _show_no_current_search_result():
+    """Show the [x/x] indicator as `[–/N]`: matches exist in the info panel, and none of them is on screen.
+
+    Shown rather than hidden, so the count stays readable wherever the panel is scrolled — which is also how
+    Raven-librarian's search counter reads, and the two should stay alike.
+    """
+    dpg.set_value("item_information_search_controls_current_item", f"[–/{len(search_result_widgets)}]")  # tag
+    dpg.show_item("item_information_search_controls_current_item")  # tag
+
+
 def update_current_search_result_status():
     """Update the [x/x] indicator in the info panel, and highlight the current item.
 
@@ -771,7 +781,7 @@ def update_current_search_result_status():
         # Find the topmost search result below the top of the content area.
         search_result_item = _find_next_or_prev_item(widgets=search_result_widgets, kluge=False)
         if search_result_item is None:  # all matches are above the visible area
-            dpg.hide_item("item_information_search_controls_current_item")  # tag
+            _show_no_current_search_result()
             dpg.enable_item("prev_search_match_button")  # tag
             return
         search_result_display_idx = search_result_widget_to_display_idx[search_result_item]
@@ -793,7 +803,7 @@ def update_current_search_result_status():
         _, h_content = _get_content_area_size()
         # 8px outer padding + 3px inner padding
         if y0_search_result_item >= y0_content + h_content - 8 - 3:  # below the visible area
-            dpg.hide_item("item_information_search_controls_current_item")  # tag
+            _show_no_current_search_result()
             dpg.enable_item("next_search_match_button")  # tag  # unstick in case the above check disabled it (one-result case)
             return
         dpg.set_value("item_information_search_controls_current_item", f"[{1 + search_result_display_idx}/{len(search_result_widgets)}]")  # tag  # 1-based for humans
