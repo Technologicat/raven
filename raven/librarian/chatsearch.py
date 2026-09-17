@@ -50,11 +50,11 @@ def make_query(search_string: str, *, include_thinking: bool = True, include_too
                        matches=common_utils.make_search_matcher(search_string))
 
 
-def find_matches(datastore: chattree.Forest, node_ids: list[str], query: SearchQuery | None) -> list[tuple[str, str]]:
+def find_matches(datastore: chattree.Forest, node_ids: list[str], query: SearchQuery | None) -> list[tuple[str, frozenset]]:
     """Return the messages among `node_ids` that match `query`, in the order given, as `(node_id, where)`.
 
-    `where` is `"content"` when the message text matches, else `"thinking"` when only its thinking trace does —
-    which a caller showing the match needs to know, a trace being collapsed by default.
+    `where` is the set of the message's texts that match: `"content"` for the message text, `"thinking"` for its
+    thinking trace, or both. A caller showing the match needs to know, a trace being collapsed by default.
 
     `query=None` (no search running) matches nothing, so "no search" and "nothing matched" look the same here;
     the caller knows which it asked.
@@ -63,21 +63,22 @@ def find_matches(datastore: chattree.Forest, node_ids: list[str], query: SearchQ
         return []
     result = []
     for node_id in node_ids:
-        maybe_where = _where_it_matches(datastore.get_payload(node_id), query)
-        if maybe_where is not None:
-            result.append((node_id, maybe_where))
+        where = _where_it_matches(datastore.get_payload(node_id), query)
+        if where:
+            result.append((node_id, where))
     return result
 
 
-def _where_it_matches(payload: dict, query: SearchQuery) -> str | None:
+def _where_it_matches(payload: dict, query: SearchQuery) -> frozenset:
     message = payload["message"]
     if message["role"] == "tool" and not query.include_tools:
-        return None
+        return frozenset()
     # Matched in the normalized form, which is what the query is normalized to — otherwise "O2" would not find "O₂".
+    where = set()
     if query.matches(common_utils.normalize_search_string(chatutil.content_to_text(message["content"]))):
-        return "content"
+        where.add("content")
     if query.include_thinking:
         reasoning = message.get("reasoning_content") or ""
         if reasoning and query.matches(common_utils.normalize_search_string(reasoning)):
-            return "thinking"
-    return None
+            where.add("thinking")
+    return frozenset(where)
