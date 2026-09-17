@@ -3322,8 +3322,10 @@ class DPGLinearizedChatView:
                     return dpg_chat_message
         return None
 
-    def jump_to_node(self, node_id: str) -> bool:
-        """Scroll to the message showing chat node `node_id` and flash it. Returns whether it was found.
+    def jump_to_node(self, node_id: str) -> int | None:
+        """Scroll to the message showing chat node `node_id` and flash it.
+
+        Returns the scroll position the view is heading for, or `None` if `node_id` is not in this view.
 
         The pair `_make_jump_to_tool_call` uses, for a whole message rather than a sub-element: scrolling
         alone lands the reader somewhere without saying which of the messages now on screen was the answer.
@@ -3331,18 +3333,21 @@ class DPGLinearizedChatView:
         message = self.find_message(node_id)
         if message is None:
             logger.info(f"DPGLinearizedChatView.jump_to_node: chat node '{node_id}' is not in this view")
-            return False
-        self.scroll_view(scroll_target_node_id=node_id, user_initiated=True)
+            return None
+        y_scroll = self.scroll_view(scroll_target_node_id=node_id, user_initiated=True)
         gui_animation.highlight_widget(widget=f"chat_message_timestamp_{message.gui_uuid}",  # tag
                                        duration=gui_config.acknowledgment_duration)
-        return True
+        return y_scroll
 
     def scroll_view(self,
                     max_wait_frames: int = 10,
                     scroll_target_node_id: str | None = None,
                     user_initiated: bool = False,
-                    abort_if_reader_scrolled_since: TailFollowSample | None = None) -> None:
+                    abort_if_reader_scrolled_since: TailFollowSample | None = None) -> int | None:
         """Scroll this linearized chat view to the end.
+
+        Returns the scroll position the view is heading for, or `None` if the scroll was abandoned (see
+        `abort_if_reader_scrolled_since`).
 
         `abort_if_reader_scrolled_since`: A sample whose currency is re-checked at the last moment, just
                                           before the scroll is committed, and which cancels the scroll if a
@@ -3460,7 +3465,7 @@ class DPGLinearizedChatView:
         # Last check before the write, with no wait left between the two. Everything above this line — the
         # settle wait especially — is time in which a keypress can arrive.
         if abort_if_reader_scrolled_since is not None and self._reader_scrolled_since(abort_if_reader_scrolled_since):
-            return
+            return None
 
         self._set_y_scroll(y_scroll, to_end=to_end, user_initiated=user_initiated)
 
@@ -3497,6 +3502,7 @@ class DPGLinearizedChatView:
         # The consequence to protect: `follow_tail`'s retarget is now load-bearing for *correctness*, not only
         # for smoothness. Rate-limiting it, or gating it on the view having visibly moved, would silently bring
         # back the last two failures.
+        return y_scroll
 
     # ------------------------------------------------------------
     # Reader-driven scrolling (hotkeys, and later the on-screen controls)
@@ -4178,7 +4184,7 @@ class DPGChatController:
         self.search_can_go_forward = False
         self._search_position_y_scroll = None
         self._search_position_stale = True
-        self._search_jumped_index = None  # see `_search_jump_holds`
+        self._search_jump = None  # `(index, target_y_scroll)`; see `_search_jump_holds`
         # Called with no arguments whenever any of the four above changes, so the app can redraw its search row.
         # Set by the app; `None` until then.
         self.on_search_results_changed = None
@@ -4351,8 +4357,9 @@ class DPGChatController:
         Stops at either end rather than wrapping around. A message whose thinking trace matched has its trace
         opened, whether or not its text matched too, so that every match the search counted is on screen.
         """
-        if self._search_jump_holds():
-            maybe_index = self._search_jumped_index + (1 if direction > 0 else -1)
+        maybe_jump = self._search_jump  # one read: the render thread may clear it meanwhile
+        if self._search_jump_holds(maybe_jump):
+            maybe_index = maybe_jump[0] + (1 if direction > 0 else -1)
             if not 0 <= maybe_index < len(self.search_matches):
                 return
         else:
@@ -4362,29 +4369,31 @@ class DPGChatController:
         node_id, where = self.search_matches[maybe_index]
         if "thinking" in where and (message := self.view.find_message(node_id)) is not None:
             message.show_thinking_trace()
-        self.view.jump_to_node(node_id)
+        maybe_y_scroll = self.view.jump_to_node(node_id)
         # Recorded once the scroll has started, so that `_search_jump_holds` finds it gliding rather than finding the
         # view not yet where it is going.
-        self._search_jumped_index = maybe_index
+        self._search_jump = (maybe_index, maybe_y_scroll) if maybe_y_scroll is not None else None
         self._search_position_stale = True
 
     # Position alone cannot say where the reader is after a jump near the end of the chat: the last few messages
     # cannot be scrolled up to the top of the view, there being nothing below them to scroll into, so the topmost
     # match on screen is still an earlier one. So the match a jump went to is current for as long as the view is
-    # where the jump put it — gliding there, or resting at the position the program last wrote — and the position
-    # rules take over again the moment the reader scrolls.
+    # where the jump sent it — gliding there, or resting there — and the position rules take over again the moment
+    # the reader scrolls anywhere else, by wheel or by key.
 
-    def _search_jump_holds(self) -> bool:
-        """Whether the last jump still says where the reader is. Lock-free, for the render thread."""
-        maybe_index = self._search_jumped_index
-        if maybe_index is None or maybe_index >= len(self.search_matches):
+    def _search_jump_holds(self, maybe_jump: tuple[int, int] | None) -> bool:
+        """Whether `maybe_jump`, a value of `_search_jump`, still says where the reader is. Lock-free, for the render thread."""
+        if maybe_jump is None:
             return False
-        if self.view.gui_parent in gui_animation.SmoothScrolling.instances:
+        index, target_y_scroll = maybe_jump
+        if index >= len(self.search_matches):
+            return False
+        maybe_animation = gui_animation.SmoothScrolling.instances.get(self.view.gui_parent)
+        if maybe_animation is not None and maybe_animation.target_y_scroll == target_y_scroll:
             return True
-        maybe_commanded = unbox(self.view._commanded_y_scroll)
         with guiutils.nonexistent_ok() as nok:
             y_scroll = dpg.get_y_scroll(self.view.gui_parent)
-        return not nok.errored and maybe_commanded is not None and abs(y_scroll - maybe_commanded) <= 1
+        return not nok.errored and abs(y_scroll - target_y_scroll) <= 1
 
     def update_search_position(self) -> None:
         """Recompute which match is current and whether next and previous have anywhere to go. Call once per frame.
@@ -4398,11 +4407,12 @@ class DPGChatController:
             return
         self._search_position_y_scroll = y_scroll
         self._search_position_stale = False
-        if self._search_jump_holds():
-            jumped = self._search_jumped_index
+        maybe_jump = self._search_jump  # one read: a navigation handler may replace it meanwhile
+        if self._search_jump_holds(maybe_jump):
+            jumped = maybe_jump[0]
             self._set_search_position(jumped, jumped > 0, jumped < len(self.search_matches) - 1)
             return
-        self._search_jumped_index = None
+        self._search_jump = None
         maybe_index = self._find_search_match(forward=True, beyond_a_line=False)
         if maybe_index is not None:
             with guiutils.nonexistent_ok() as nok:
@@ -4425,7 +4435,7 @@ class DPGChatController:
                 self.on_search_results_changed()
 
     def _search_matches_changed(self) -> None:
-        self._search_jumped_index = None  # an index into the old matches
+        self._search_jump = None  # an index into the old matches
         self._search_position_stale = True
         if self.on_search_results_changed is not None:  # the count, at once; the position follows on the next frame
             self.on_search_results_changed()
