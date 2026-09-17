@@ -147,6 +147,9 @@ class CallInNextFrame:
     __started = False
     worker_thread = None
     now_frame_queue = []
+    # Taken by `append` and by the worker's hand-off of the queue. Without it, work appended by another thread
+    # between the worker copying the queue and clearing it is dropped unseen.
+    _queue_lock = threading.Lock()
 
     def __new__(cls, func):
         def decorator(*args, **kwargs):
@@ -164,9 +167,8 @@ class CallInNextFrame:
             cls.worker_thread = threading.Thread(target=cls._worker, daemon=True,
                                                  name="DearPyGui_Markdown.CallInNextFrame")
             cls.worker_thread.start()
-        cls.now_frame_queue.append(
-            [func, args, kwargs]
-        )
+        with cls._queue_lock:
+            cls.now_frame_queue.append([func, args, kwargs])
         _work_ready.set()
 
     @classmethod
@@ -178,8 +180,9 @@ class CallInNextFrame:
                 _work_ready.wait(0.015)
                 _work_ready.clear()
                 continue
-            next_frame_queue = cls.now_frame_queue.copy()
-            cls.now_frame_queue.clear()
+            with cls._queue_lock:
+                next_frame_queue = cls.now_frame_queue.copy()
+                cls.now_frame_queue.clear()
             # A bare `dpg.split_frame()` *raises* where no render loop is running — before one starts, and
             # after one exits — and on this thread the exception escapes and takes the worker with it.
             from ...common.gui import utils as guiutils  # local import: see the note beside the imports
