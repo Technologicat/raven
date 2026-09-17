@@ -498,6 +498,7 @@ it, and Ctrl+Shift intersects with it. The tables below spell each combination o
 | `Enter` | Select the search matches and leave the field |
 | `Shift+Enter` / `Ctrl+Enter` / `Ctrl+Shift+Enter` | ...adding to / subtracting from / intersecting with the selection |
 | `Esc` | Cancel the edit and leave the field |
+| `Tab` / `Shift+Tab` | Move the keyboard between the search field and the info panel, keeping what is typed |
 | `F3` / `Shift+F3` | Scroll to the next / previous search match |
 
 ### Moving around the info panel

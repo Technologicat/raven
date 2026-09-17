@@ -71,6 +71,7 @@ SIGNED_OFF: Dict[str, Dict[str, str]] = {
         "Esc": "cancels the edit inside the search field; no widget does that",
         "Up arrow": "scrolls the info panel slightly; its buttons are top/bottom and page, not 'a little'",
         "Down arrow": "as Up arrow",
+        "Tab": "moves the keyboard between the search field and the info panel; no widget does that",
     },
     # A full-screen countdown with one `add_text` and one key handler — no buttons at all, so there is
     # nothing anywhere for a key to be named on. It reads as this checker's worst app and is its cleanest.

@@ -863,6 +863,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                # Alone: loading a dataset is the one thing here that is not about a dataset already loaded.
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus the search field", notes=""),
+               env(key_indent=1, key="Tab", action_indent=0, action="Search field or info panel", notes="Keeps what is typed"),
                env(key_indent=1, key="Enter", action_indent=0, action="Select the matches, and unfocus", notes="While typing in the search field"),
                env(key_indent=2, key="Shift+Enter", action_indent=1, action="Same, but add to the selection", notes="While typing in the search field"),
                env(key_indent=2, key="Ctrl+Enter", action_indent=1, action="Same, but subtract from it", notes="While typing in the search field"),
@@ -1293,6 +1294,14 @@ def hotkeys_callback(sender, app_data):
         # A focused button is inert here (DPG leaves ImGui's keyboard-nav activation off, so it ignores Space
         # and Enter), which is what makes it a safe place to park.
         dpg.focus_item("clear_search_button")  # tag
+    # Tab moves the keyboard between the search field and the info panel, keeping what is typed, and Shift+Tab
+    # does the same: with two places to be, both directions are the other one. Leaving parks focus where Enter
+    # does, for the reason given there.
+    elif key == dpg.mvKey_Tab and not ctrl_pressed:
+        if dpg.is_item_active("search_field"):  # tag
+            dpg.focus_item("clear_search_button")  # tag
+        else:
+            gui_animation.give_caret("search_field")  # tag
     # Escape needs no branch of its own: ImGui's `InputText` cancels the edit *and* deactivates itself, and
     # deactivated is exactly what the bare-key branch below tests for. The handler that used to be here
     # existed only to repair the keyboard focus afterwards, which was both unnecessary and — aimed at a child
