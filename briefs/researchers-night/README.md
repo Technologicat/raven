@@ -128,19 +128,17 @@ straight onto the chat graph. The blank frames before the graph's first picture 
 `F3`/`Enter` navigation, the Thinking and Tool results checkboxes, the help card and README. Brief 14 →
 *Settled 2026-09-17* has the decisions; `investigations/chat-search-highlight/` the measurements.
 
-**The next session starts here**, in this order:
+**Tried live 2026-09-17** (Juha): *next* disables on the last match near the end of a chat, the field's hint
+fits, and switching the active chat during a search works — the match count climbs as the log rebuilds.
 
-1. **Try the last commit live** (`689d0860`): after jumping to the last match near the end of a chat, *next* must
-   now be disabled, and the field's hint must fit. Neither has been seen running.
-2. **Try switching the active chat while a search is running** (Juha has not yet): a branch switch rebuilds the
-   view, the matches are refilled message by message, and new paragraphs render with the search — expected to
-   work, not yet tried.
-3. **Give the Visualizer's info panel the same jump memory** (decided, Juha). Its navigation is position-based,
+**What remains**, in this order:
+
+1. **Give the Visualizer's info panel the same jump memory** (decided, Juha). Its navigation is position-based,
    and its last few matches cannot scroll up to the top of the panel either, so after a jump to one the current
    match and the next button are wrong in the same way. Librarian's fix is `DPGChatController._search_jump_holds`:
    the match a jump went to stays current while the view is gliding there or resting where the program last put
    it, and position takes over when the reader scrolls. The two apps' navigation is meant to stay alike.
-4. **Then the graph half of search** (brief 16 item 8): the graph reads the same search field, with its own
+2. **Then the graph half of search** (brief 16 item 8): the graph reads the same search field, with its own
    `[x/y]` and previous/next in the graph half of the search row, which is already laid out and empty.
 
 ### Decided 2026-09-17 — a hygiene sweep follows search v1 directly
