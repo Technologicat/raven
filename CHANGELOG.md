@@ -19,6 +19,7 @@
     stands in whenever the avatar has nothing to show — while its video starts up, and once it has switched
     itself off after a spell of quiet — so the panel no longer sits on *[Video is off]*, and the checkbox is
     a preference for what to show when there is a choice.
+    - **A heading above the panel says which of the two it is showing**: the character's name, or *Chat graph*.
     - **A reply does not speak itself while the graph is up and *Subtitles* is on.** Subtitles are drawn in
       the avatar's rect, so the graph covers them, and speech whose captions are missing is the one thing
       that switch says you cannot use. With *Subtitles* off, replies speak as usual. `Ctrl+S` and a

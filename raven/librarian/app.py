@@ -1349,11 +1349,17 @@ with timer() as tim:
                             dpg.add_text("Go to the next matching message [F3]")
                     # Last in the row, so that its width changing as the count does moves nothing.
                     dpg.add_text("", tag="search_counter_text", color=(160, 160, 160))
-            dpg.add_child_window(tag="graph_search_row",  # kept for the graph's search navigation
-                                 width=_get_avatar_panel_base_size()[0],
-                                 height=gui_config.search_row_h,
-                                 no_scrollbar=True,
-                                 no_scroll_with_mouse=True)
+            with dpg.child_window(tag="graph_search_row",  # the graph's search navigation goes here too, to the right
+                                  width=_get_avatar_panel_base_size()[0],
+                                  height=gui_config.search_row_h,
+                                  no_scrollbar=True,
+                                  no_scroll_with_mouse=True):
+                # What the panel below is showing. Both are built once, and `_apply_panel_occupancy` shows the one
+                # that matches the occupant.
+                dpg_markdown.add_text(f"**{llm_settings.char}**", tag="panel_heading_avatar",  # tag
+                                      show=not app_state["chat_graph_shown"])
+                dpg_markdown.add_text("**Chat graph**", tag="panel_heading_graph",  # tag
+                                      show=app_state["chat_graph_shown"])
 
         with dpg.group(horizontal=True):
             with dpg.group():  # left column: linearized chat view
@@ -3481,6 +3487,11 @@ def _apply_panel_occupancy() -> None:
             # when the graph took the panel — and it is placed by measuring itself. Re-measure now that it
             # renders again, or a caption spoken while the graph was up comes back at the wrong height.
             avatar_controller.reposition_subtitle()
+
+        # The heading above the panel follows the occupant. Outside the swap, so that it is right from the first call
+        # whatever state the panel started in; showing an item already shown costs nothing.
+        dpg.configure_item("panel_heading_graph", show=show_graph)  # tag
+        dpg.configure_item("panel_heading_avatar", show=not show_graph)  # tag
 
         # Last, and outside the swap: the occupant can stay the same while this changes. A stream
         # finishing its warmup under a graph the user asked for is exactly that case.
