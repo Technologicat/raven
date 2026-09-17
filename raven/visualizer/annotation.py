@@ -334,15 +334,11 @@ def _render_worker(*, task_env, env=None):
                             mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=marks.search_mark_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_search_mark_build{env.internal_build_number}", parent=item_group)
                             dpg.bind_item_font(mark_widget, app_state.themes_and_fonts.icon_font_solid)
 
-                        # Per-fragment search highlighting in the title (when matched). Shared with the
-                        # info panel, which renders the same markup for the same titles.
-                        entry_title_text = entry_renderer.apply_search_highlight(entry.title,
-                                                                                 maybe_regex_case_sensitive,
-                                                                                 maybe_regex_case_insensitive)
-                        if entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
-                            # Title colour to the renderer rather than into a `<font>` tag around the
-                            # source; see the same call in `info_panel`.
-                            dpg_markdown.add_text(entry_title_text, wrap=gui_config.annotation_tooltip_w, parent=item_group, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", color=title_color)  # MD renderer renders into its own group
+                        # Per-fragment search highlighting in the title (when matched), the same as in the info panel.
+                        if entry_renderer.has_search_highlight(entry.title, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
+                            dpg_markdown.add_text(entry.title, wrap=gui_config.annotation_tooltip_w, parent=item_group, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", color=title_color,  # MD renderer renders into its own group
+                                                  highlight=(maybe_regex_case_sensitive, maybe_regex_case_insensitive),
+                                                  highlight_color=entry_renderer.SEARCH_HIGHLIGHT_COLOR)
                         else:  # plain text (much faster) when no highlighting needed
                             dpg.add_text(entry.title, color=title_color, wrap=0, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", parent=item_group)  # "A study of stuff..."
 

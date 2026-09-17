@@ -37,7 +37,7 @@ tests/test_info_panel.py      (47) — hotkey decisions, the clipboard, cluster 
 tests/test_selection.py       (39) — the four combine modes, undo/redo, scroll anchors, modifier keys
 tests/test_plotter.py         (38) — the cluster sort, and the plotter-space queries
 tests/test_importer_gui.py    (36) — the filename tables, the start/stop decision table, the dialogs
-tests/test_entry_renderer.py  (33) — grouping, the `max_n` budget, search highlighter compile and apply
+tests/test_entry_renderer.py  (33) — grouping, the `max_n` budget, compiling the search highlighters
 tests/test_annotation.py      (30) — the item decoration table, and the guards on showing a tooltip
 tests/test_word_cloud.py      (28) — the two render guards, keyword summing, cancellation, saving
 tests/test_search.py          (20) — what counts as a match, and the three GUI elements reporting it

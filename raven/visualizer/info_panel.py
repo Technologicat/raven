@@ -1486,21 +1486,21 @@ def _update_info_panel(*, task_env=None, env=None):
                              parent=b_tooltip)
                 dpg.set_item_callback(b, make_select_cluster(cluster_id))
 
-                # Item authors, year, title (with search result highlight, if any)
-                entry_title_text = entry_renderer.apply_search_highlight(entry.title,
-                                                                         maybe_regex_case_sensitive,
-                                                                         maybe_regex_case_insensitive)
-                if entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
-                    header = f"{entry.author} ({entry.year}): {entry_title_text}"
-                    # The title colour goes to the renderer rather than into a `<font>` tag around the
-                    # source: an open tag on the same line as the content makes the whole thing one
-                    # CommonMark paragraph, and the highlight spans still win where they apply.
-                    entry_title_group = dpg_markdown.add_text(header, wrap=gui_config.title_wrap_w, parent=entry_title_container_group, tag=f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}", color=title_color)  # MD renderer renders into its own group
+                # Item authors and year, on a line of their own: the search looks at titles only, and a
+                # prefix rendered in the same Markdown as the title would have its fragments highlighted too.
+                # The container is a row (the button columns, then this), so the byline and title share a column.
+                entry_heading_column_group = dpg.add_group(horizontal=False, tag=f"cluster_{cluster_id}_entry_{data_idx}_heading_column_group_build{env.internal_build_number}", parent=entry_title_container_group)
+                dpg.add_text(f"{entry.author} ({entry.year})", color=title_color, wrap=gui_config.title_wrap_w, tag=f"cluster_{cluster_id}_entry_{data_idx}_byline_build{env.internal_build_number}", parent=entry_heading_column_group)
+
+                # Item title (with search result highlight, if any)
+                if entry_renderer.has_search_highlight(entry.title, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
+                    entry_title_group = dpg_markdown.add_text(entry.title, wrap=gui_config.title_wrap_w, parent=entry_heading_column_group, tag=f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}", color=title_color,  # MD renderer renders into its own group
+                                                              highlight=(maybe_regex_case_sensitive, maybe_regex_case_insensitive),
+                                                              highlight_color=entry_renderer.SEARCH_HIGHLIGHT_COLOR)
                     if is_search_match:
                         search_result_widgets_new.append(entry_title_container_group)
                         search_result_widget_to_display_idx_new[entry_title_container_group] = len(search_result_widgets_new) - 1
                 else:  # search not active, or no match in this title -> render as plain text (much faster)
-                    header = f"{entry.author} ({entry.year}): {entry_title_text}"
                     # Match the MD renderer's line spacing for visual consistency. Before scroll
                     # anchoring was introduced, line-height differences caused big scroll jumps
                     # near the end of a large dataset when toggling match/non-match state.
@@ -1513,10 +1513,10 @@ def _update_info_panel(*, task_env=None, env=None):
                     #
                     # 1) Wrap with the MD renderer (DPG lacks a text-wrap utility). A bit slow —
                     #    it's a Python-level low-level utility — but meh.
-                    entity = dpg_markdown.text_entities.StrEntity(header)
+                    entity = dpg_markdown.text_entities.StrEntity(entry.title)
                     entity = dpg_markdown.wrap_text_entity(entity, width=gui_config.title_wrap_w)  # -> iterable of lines
                     # 2) Render line by line, controlling vertical spacing explicitly with a spacer.
-                    entry_title_group = dpg.add_group(horizontal=False, tag=f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}", parent=entry_title_container_group)
+                    entry_title_group = dpg.add_group(horizontal=False, tag=f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}", parent=entry_heading_column_group)
                     for lineno, line_content in enumerate(entity):
                         last_line = (lineno == len(entity) - 1)
                         dpg.add_text(line_content, color=title_color, parent=entry_title_group)

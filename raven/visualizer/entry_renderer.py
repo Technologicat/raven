@@ -18,9 +18,11 @@ Public API:
     more)` for a given cluster ID.
   - `order_cluster_ids(cluster_ids)` — sort ascending with the misc group
     (cluster `-1`) moved to the end.
-  - `apply_search_highlight(text, ...)` — mark up the fragments those regexes
-    match, for the Markdown renderer. Both consumers highlight titles the same
-    way, so the markup lives here with the regexes rather than in each of them.
+  - `has_search_highlight(text, ...)` — whether those regexes match anything in
+    `text`, which decides between plain text and the Markdown renderer. The
+    renderer marks the matches itself: pass the regexes as
+    `dpg_markdown.add_text(..., highlight=..., highlight_color=SEARCH_HIGHLIGHT_COLOR)`.
+    `SEARCH_HIGHLIGHT_COLOR` is here so both consumers agree on it.
 
   - `compile_search_highlight_regexes(search_string)` — split the search string
     into case-sensitive and case-insensitive fragment groups, compile each
@@ -40,7 +42,7 @@ Cross-module state read via `app_state`:
 __all__ = ["get_entries_for_selection",
            "order_cluster_ids",
            "compile_search_highlight_regexes",
-           "apply_search_highlight"]
+           "SEARCH_HIGHLIGHT_COLOR", "has_search_highlight"]
 
 import collections
 import math
@@ -133,12 +135,10 @@ def compile_search_highlight_regexes(search_string):
     Same approach as SillyTavern-Timelines: sort fragments so the longest matches first
     (prefers longest match when fragments share substrings, e.g. "laser las").
 
-    All fragments must match simultaneously, to avoid e.g. "col" matching the "<font color=...>"
-    inserted by the highlighter when it first highlights "col".
-
     Returns `(maybe_regex_case_sensitive, maybe_regex_case_insensitive)`. Each entry is either a compiled
-    `re.Pattern` (truthy) ready to feed into `re.sub`, or `None` (falsy) if no fragments of
-    that kind exist — including when `search_string` is empty, in which case both are `None`.
+    `re.Pattern` (truthy), or `None` (falsy) if no fragments of that kind exist — including when
+    `search_string` is empty, in which case both are `None`. The pair can be passed as is to
+    `has_search_highlight`, and to `dpg_markdown.add_text(..., highlight=...)`, which skips a `None`.
     """
     if not search_string:
         return None, None
@@ -158,32 +158,19 @@ def compile_search_highlight_regexes(search_string):
     return maybe_regex_case_sensitive, maybe_regex_case_insensitive
 
 
-_search_highlight_color = "#ff0000"  # what a matched fragment is drawn in, inside an otherwise normally coloured title
+SEARCH_HIGHLIGHT_COLOR = "#ff0000"  # what a matched fragment is drawn in, inside an otherwise normally coloured title
 
 
-def apply_search_highlight(text, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
-    """Mark up the search-match fragments inside `text`, for the Markdown renderer.
+def has_search_highlight(text, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
+    """Whether any search-match fragment occurs in `text`.
 
-    `text`: the title, as it should read when nothing matches.
+    `text`: the title.
     `maybe_regex_case_sensitive`, `maybe_regex_case_insensitive`: from `compile_search_highlight_regexes`,
-        which see. Either may be `None`, and both are when no search is active — in which case `text`
-        comes back unchanged, so no caller needs a special case for "no search".
+        which see. Either may be `None`, and both are when no search is active, in which case this is False.
 
-    The colour of the *surrounding* text is not this function's business: pass it to the renderer as
-    `dpg_markdown.add_text(..., color=...)`, which colours whatever the markup does not, so the spans
-    inserted here still win where they apply.
-
-    Returns the marked-up text. Comparing it against `text` says whether anything matched, which is
-    worth doing: an unhighlighted title renders as plain text, which is much faster than Markdown.
+    Worth asking before rendering: an unhighlighted title renders as plain text, which is much faster
+    than Markdown.
     """
-    # The case-insensitive pass runs first. Its fragments are the all-lowercase ones (a fragment carrying
-    # an uppercase letter is matched case-sensitively), so a fragment like "col" would otherwise match
-    # inside a `<font color=...>` that an earlier substitution had inserted. Going this way round, the
-    # only pass that sees inserted markup is the case-sensitive one, and its fragments cannot match
-    # all-lowercase markup.
-    for maybe_regex in (maybe_regex_case_insensitive, maybe_regex_case_sensitive):
-        if maybe_regex:
-            text = re.sub(maybe_regex,
-                          f"**<font color='{_search_highlight_color}'>\\1</font>**",
-                          text)
-    return text
+    return any(maybe_regex.search(text)
+               for maybe_regex in (maybe_regex_case_sensitive, maybe_regex_case_insensitive)
+               if maybe_regex)

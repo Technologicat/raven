@@ -274,61 +274,37 @@ def test_a_digit_in_a_fragment_also_matches_its_sub_and_superscript_forms():
 
 
 # --------------------------------------------------------------------------------
-# Applying the highlighters
+# Deciding whether a title needs the Markdown renderer
 #
-# The markup the tooltip and the info panel both wrap a matched fragment in. It was written twice,
-# identically, before it lived here -- so these are the first assertions about it.
+# The renderer marks the matches itself (`dpg_markdown`'s own tests cover that); what is left here is the
+# question both consumers ask first, since an unhighlighted title renders as plain text, much faster.
 
 
-def highlighted(text, search_string):
+def has_highlight(text, search_string):
     case_sensitive, case_insensitive = entry_renderer.compile_search_highlight_regexes(search_string)
-    return entry_renderer.apply_search_highlight(text, case_sensitive, case_insensitive)
+    return entry_renderer.has_search_highlight(text, case_sensitive, case_insensitive)
 
 
-def test_a_title_with_no_search_running_is_left_exactly_as_it_was():
-    # Which is what lets a caller skip the Markdown renderer: an unchanged title renders as plain text,
-    # and that is the overwhelmingly common case.
-    assert highlighted("Laser ablation of steel", "") == "Laser ablation of steel"
+def test_a_title_with_no_search_running_has_nothing_to_highlight():
+    assert not has_highlight("Laser ablation of steel", "")
 
 
-def test_a_title_that_matches_nothing_is_left_exactly_as_it_was():
-    # Negative control for the test above: a search *is* running, and the title still comes back
-    # untouched, so the caller's "did anything change?" test means "did anything match".
-    assert highlighted("Laser ablation of steel", "photocatalysis") == "Laser ablation of steel"
+def test_a_title_that_matches_nothing_has_nothing_to_highlight():
+    assert not has_highlight("Laser ablation of steel", "photocatalysis")
 
 
-def test_a_matched_fragment_is_wrapped_in_its_own_colour():
-    marked = highlighted("Laser ablation", "ablation")
-    assert "<font color='#ff0000'>ablation</font>" in marked
+def test_a_title_matching_a_fragment_of_either_kind_has_a_highlight():
+    # The control for the two above: the same title, with a search that does match it.
+    assert has_highlight("Laser ablation of steel", "ablation")
+    assert has_highlight("Laser ablation of steel", "Laser")
 
 
-def test_the_markup_touches_only_the_matched_fragment():
-    # The surrounding text is left alone entirely: its colour reaches the renderer as
-    # `dpg_markdown.add_text(..., color=...)`, which colours whatever the markup does not. So there is no
-    # enclosing tag to close and reopen, and nothing outside the match may be rewritten.
-    marked = highlighted("Laser ablation", "ablation")
-    assert marked.startswith("Laser "), "the text before the match is untouched"
-    assert marked.endswith("**"), "the markup ends with the highlight, adding no trailing tag"
-    assert "</font>**<font" not in marked, "the close-and-reopen dance is gone"
-    assert marked.count("<font") == 1, "one span, for the match alone"
+def test_a_case_sensitive_fragment_in_the_wrong_case_is_no_highlight():
+    assert not has_highlight("laser ablation", "Laser")
 
 
-def test_a_short_lowercase_fragment_does_not_match_the_markup_a_highlight_inserted():
-    # "col" is a prefix of the `<font color=...>` that highlighting inserts, so the order of the two
-    # passes is load-bearing: the all-lowercase fragments go first, and the only pass that then sees
-    # inserted markup is the case-sensitive one, whose fragments all carry an uppercase letter.
-    marked = highlighted("Colorimetric Laser assay", "col Laser")
-    assert marked.count("#ff0000") == 2, "one highlight for 'Col', one for 'Laser', and none inside the markup"
-
-
-def test_both_kinds_of_fragment_are_highlighted():
-    marked = highlighted("Laser ablation", "Laser ablation")
-    assert "<font color='#ff0000'>Laser</font>" in marked
-    assert "<font color='#ff0000'>ablation</font>" in marked
-
-
-def test_the_compiled_highlighters_are_regexes_ready_for_re_sub():
-    # The contract the docstring states, and what the callers' truthiness test relies on.
+def test_the_compiled_highlighters_are_regexes():
+    # The contract the docstring states, and what `has_search_highlight`'s truthiness test relies on.
     case_sensitive, case_insensitive = entry_renderer.compile_search_highlight_regexes("Laser ablation")
     assert isinstance(case_sensitive, re.Pattern)
     assert isinstance(case_insensitive, re.Pattern)
