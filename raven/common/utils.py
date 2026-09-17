@@ -682,14 +682,9 @@ def make_search_matcher(s):
 
 def search_fragment_to_highlight_regex_fragment(s):
     """Make a search fragment usable in a regex for search highlighting."""
-    # Escape regex special characters.  TODO: ^, $, others?
-    s = s.replace("(", r"\(")
-    s = s.replace(")", r"\)")
-    s = s.replace("[", r"\[")
-    s = s.replace("]", r"\]")
-    s = s.replace("{", r"\{")
-    s = s.replace("}", r"\}")
-    s = s.replace(".", r"\.")
+    # Every metacharacter, since users type `C++`, `a|b` and `x*`. `re.escape` leaves digits alone, so the
+    # expansion below still finds them.
+    s = re.escape(s)
     # Look also for superscript and subscript variants of numbers.
     # We can't do this for letters, because there are simply too many letters in each item title. :)
     for digit in "0123456789":

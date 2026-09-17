@@ -615,6 +615,14 @@ class TestSearchFragmentToHighlightRegex:
         # Should compile without error
         re.compile(result)
 
+    @pytest.mark.parametrize("fragment", ["c++", "a|b", "why?", "x*", "back\\slash", "^caret$", "{2}"])
+    def test_every_metacharacter_is_matched_literally(self, fragment):
+        # Unescaped, these compile — `++` is a possessive quantifier — and match something else: `c++` marks
+        # the `c` alone, `a|b` every `a` and `b`, and `x*` the empty string everywhere.
+        regex = re.compile(utils.search_fragment_to_highlight_regex_fragment(fragment))
+        haystack = f"a b c {fragment} end"
+        assert [m.group(0) for m in regex.finditer(haystack)] == [fragment]
+
 
 # ---------------------------------------------------------------------------
 # Search highlighting
