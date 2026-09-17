@@ -131,3 +131,13 @@ def test_before_inserts_among_the_parent_s_children(dpg_context, monkeypatch):
         last = dpg.add_text("last")
     group = dpg_markdown.add_text("middle", parent=window, before=last)
     assert dpg.get_item_children(window, 1) == [first, group, last]
+
+
+def test_show_false_hides_the_group_from_the_moment_it_exists(dpg_context, monkeypatch):
+    monkeypatch.setattr(dpg_markdown.CallWhenDPGStarted, "append", classmethod(lambda cls, *args, **kwargs: None))  # see above
+    with dpg.window() as window:
+        pass
+    hidden = dpg_markdown.add_text("hidden", parent=window, show=False)
+    shown = dpg_markdown.add_text("shown", parent=window)
+    assert not dpg.is_item_shown(hidden)
+    assert dpg.is_item_shown(shown), "the control: the default still shows"

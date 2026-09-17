@@ -585,12 +585,15 @@ class MarkdownText:
             text_entities.set_default_text_color(self.text_entity,
                                                  font_attributes.parse_color(color))
 
-    def add(self, wrap: int | float = -1, parent: int | str = 0, tag: int | str = 0, before: int | str = 0):
+    def add(self, wrap: int | float = -1, parent: int | str = 0, tag: int | str = 0, before: int | str = 0,
+            show: bool = True):
         '''
         :param wrap: Number of pixels from the start of the item until wrapping starts.
         :param parent: Parent to add this item to. (runtime adding)
         :param tag: DPG tag/alias for the top-level group of the rendered Markdown.
         :param before: Item to insert the rendered Markdown before, among `parent`'s children.
+        :param show: Whether the rendered Markdown is shown. `False` hides it from the moment its group exists,
+                     so no frame can draw it half built. Its decorations wait until it is shown.
         :return: group with rendered text
 
         Afterwards, `rows` holds `(height, is_rule)` for each row laid out, or `None` if rendering was
@@ -598,7 +601,7 @@ class MarkdownText:
         '''
         print_text: text_entities.LineEntity = wrap_text_entity(self.text_entity, width=wrap)
 
-        group = dpg.add_group(parent=parent, before=before, horizontal=True, tag=tag)
+        group = dpg.add_group(parent=parent, before=before, horizontal=True, tag=tag, show=show)
         text_group = dpg.add_group(parent=group)
         attributes_group = dpg.add_group(parent=group)
 
@@ -627,6 +630,7 @@ def add_text(markdown_text: str,
              tag: int | str = 0,
              color: str | list | tuple | None = None,
              before: int | str = 0,
+             show: bool = True,
              highlight: Iterable[re.Pattern | None] | None = None,
              highlight_color: str | list | tuple = (255, 0, 0, 255),
              highlight_bold: bool = True) -> int:
@@ -640,13 +644,13 @@ def add_text(markdown_text: str,
                   wrapping the source in a `<font>` tag: an open tag on the same line as the content
                   makes the whole thing one paragraph as far as CommonMark is concerned, and a heading
                   cannot occur inside a paragraph.
-    :param before: Item to insert the rendered Markdown before, among `parent`'s children.
+    :param before, show: See `MarkdownText.add`.
     :param highlight, highlight_color, highlight_bold: See `MarkdownText`.
     :return: group with rendered Markdown text
     '''
     markdown = MarkdownText(markdown_text=markdown_text, color=color,
                             highlight=highlight, highlight_color=highlight_color, highlight_bold=highlight_bold)
-    rendered_group = markdown.add(wrap=wrap, parent=parent, tag=tag, before=before)
+    rendered_group = markdown.add(wrap=wrap, parent=parent, tag=tag, before=before, show=show)
     if pos is not None:
         dpg.set_item_pos(rendered_group, pos)
     return rendered_group
