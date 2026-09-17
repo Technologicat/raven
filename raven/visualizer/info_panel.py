@@ -111,6 +111,7 @@ from unpythonic.env import env as envcls
 
 from ..common import bgtask
 from ..common import numutils
+from ..common import utils as common_utils
 
 from ..common.gui import animation as gui_animation
 from ..common.gui import keyboardmark
@@ -1111,7 +1112,7 @@ def _update_info_panel(*, task_env=None, env=None):
     selection_data_idxs = unbox(app_state.selection_data_idxs_box)
     search_result_data_idxs = unbox(app_state.search_result_data_idxs_box)
     search_string = unbox(app_state.search_string_box)
-    maybe_regex_case_sensitive, maybe_regex_case_insensitive = entry_renderer.compile_search_highlight_regexes(search_string)
+    maybe_regex_case_sensitive, maybe_regex_case_insensitive = common_utils.compile_search_highlight_regexes(search_string)
 
     # --------------------------------------------------------------------------------
     # Preserve scroll position across the update when possible.
@@ -1493,10 +1494,10 @@ def _update_info_panel(*, task_env=None, env=None):
                 dpg.add_text(f"{entry.author} ({entry.year})", color=title_color, wrap=gui_config.title_wrap_w, tag=f"cluster_{cluster_id}_entry_{data_idx}_byline_build{env.internal_build_number}", parent=entry_heading_column_group)
 
                 # Item title (with search result highlight, if any)
-                if entry_renderer.has_search_highlight(entry.title, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
+                if common_utils.has_search_highlight(entry.title, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
                     entry_title_group = dpg_markdown.add_text(entry.title, wrap=gui_config.title_wrap_w, parent=entry_heading_column_group, tag=f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}", color=title_color,  # MD renderer renders into its own group
                                                               highlight=(maybe_regex_case_sensitive, maybe_regex_case_insensitive),
-                                                              highlight_color=entry_renderer.SEARCH_HIGHLIGHT_COLOR)
+                                                              highlight_color=guiutils.SEARCH_HIGHLIGHT_COLOR)
                     if is_search_match:
                         search_result_widgets_new.append(entry_title_container_group)
                         search_result_widget_to_display_idx_new[entry_title_container_group] = len(search_result_widgets_new) - 1

@@ -19,7 +19,7 @@ plotter.py        (~420)  — the scatter plot: dataset loading, plotter-space q
 importer_gui.py   (~550)  — the importer's window, its two file dialogs, and its start/stop lifecycle
 selection.py      (~250)  — selection state and the lasso/wand tools
 word_cloud.py     (~270)  — word cloud rendering
-entry_renderer.py (~190)  — per-entry rendering shared by panel and tooltip
+entry_renderer.py (~110)  — per-entry rendering shared by panel and tooltip
 search.py         (~150)  — the title scan, and the three GUI elements reporting its result
 importer_cli.py   (~110)  — `raven-importer` entry point
 app_state.py       (~62)  — top-level app state containers
@@ -37,7 +37,7 @@ tests/test_info_panel.py      (47) — hotkey decisions, the clipboard, cluster 
 tests/test_selection.py       (39) — the four combine modes, undo/redo, scroll anchors, modifier keys
 tests/test_plotter.py         (38) — the cluster sort, and the plotter-space queries
 tests/test_importer_gui.py    (36) — the filename tables, the start/stop decision table, the dialogs
-tests/test_entry_renderer.py  (33) — grouping, the `max_n` budget, compiling the search highlighters
+tests/test_entry_renderer.py  (19) — grouping, and the `max_n` budget
 tests/test_annotation.py      (30) — the item decoration table, and the guards on showing a tooltip
 tests/test_word_cloud.py      (28) — the two render guards, keyword summing, cancellation, saving
 tests/test_search.py          (20) — what counts as a match, and the three GUI elements reporting it

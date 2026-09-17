@@ -10,7 +10,7 @@ __all__ = ["absolutize_filename", "canonical_path",
            "normalize_whitespace", "normalize_unicode",
            "unicodize_basic_markup",
            "normalize_search_string", "search_string_to_fragments", "make_search_matcher",
-           "search_fragment_to_highlight_regex_fragment",
+           "search_fragment_to_highlight_regex_fragment", "compile_search_highlight_regexes", "has_search_highlight",
            "chunkify_text"]
 
 import logging
@@ -695,6 +695,47 @@ def search_fragment_to_highlight_regex_fragment(s):
     for digit in "0123456789":
         s = s.replace(digit, f"({digit}|{stringmaps.regular_to_subscript_numbers[digit]}|{stringmaps.regular_to_superscript_numbers[digit]})")
     return s
+
+def compile_search_highlight_regexes(search_string):
+    """Compile alternation regexes for highlighting the fragments of `search_string` in text.
+
+    Same approach as SillyTavern-Timelines: sort fragments so the longest matches first
+    (prefers longest match when fragments share substrings, e.g. "laser las").
+
+    Returns `(maybe_regex_case_sensitive, maybe_regex_case_insensitive)`. Each entry is either a compiled
+    `re.Pattern` (truthy), or `None` (falsy) if no fragments of that kind exist — including when
+    `search_string` is empty, in which case both are `None`. The pair can be passed as is to
+    `has_search_highlight`, and to `dpg_markdown.add_text(..., highlight=...)`, which skips a `None`.
+    """
+    if not search_string:
+        return None, None
+
+    case_sensitive_fragments, case_insensitive_fragments = search_string_to_fragments(search_string, sort=True)
+
+    case_sensitive_fragments = [search_fragment_to_highlight_regex_fragment(x) for x in case_sensitive_fragments]
+    case_insensitive_fragments = [search_fragment_to_highlight_regex_fragment(x) for x in case_insensitive_fragments]
+
+    maybe_regex_case_sensitive = None
+    maybe_regex_case_insensitive = None
+    if case_sensitive_fragments:
+        maybe_regex_case_sensitive = re.compile(f"({'|'.join(case_sensitive_fragments)})")
+    if case_insensitive_fragments:
+        maybe_regex_case_insensitive = re.compile(f"({'|'.join(case_insensitive_fragments)})", re.IGNORECASE)
+
+    return maybe_regex_case_sensitive, maybe_regex_case_insensitive
+
+def has_search_highlight(text, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
+    """Whether any search-match fragment occurs in `text`.
+
+    `maybe_regex_case_sensitive`, `maybe_regex_case_insensitive`: from `compile_search_highlight_regexes`,
+        which see. Either may be `None`, and both are when no search is active, in which case this is False.
+
+    Worth asking before rendering: text with nothing to highlight renders as plain text, which is much
+    faster than Markdown.
+    """
+    return any(maybe_regex.search(text)
+               for maybe_regex in (maybe_regex_case_sensitive, maybe_regex_case_insensitive)
+               if maybe_regex)
 
 def chunkify_text(text: str, chunk_size: int, overlap: int, extra: float, trimmer: Optional[Callable] = None) -> List[Dict]:
     """Sliding-window text chunker with overlap, e.g. for chunking documents for fine-grained search.

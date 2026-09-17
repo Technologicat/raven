@@ -49,6 +49,7 @@ from unpythonic import dlet, sym, unbox
 from unpythonic.env import env as envcls
 
 from ..common import bgtask
+from ..common import utils as common_utils
 from ..common.gui import utils as guiutils
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
@@ -297,7 +298,7 @@ def _render_worker(*, task_env, env=None):
             search_string = unbox(app_state.search_string_box)
             search_result_data_idxs = unbox(app_state.search_result_data_idxs_box)
             selection_data_idxs = unbox(app_state.selection_data_idxs_box)
-            maybe_regex_case_sensitive, maybe_regex_case_insensitive = entry_renderer.compile_search_highlight_regexes(search_string)
+            maybe_regex_case_sensitive, maybe_regex_case_insensitive = common_utils.compile_search_highlight_regexes(search_string)
 
             # Actual content
             entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(at_mouse, max_n=gui_config.max_titles_in_tooltip, dataset=ds)
@@ -335,10 +336,10 @@ def _render_worker(*, task_env, env=None):
                             dpg.bind_item_font(mark_widget, app_state.themes_and_fonts.icon_font_solid)
 
                         # Per-fragment search highlighting in the title (when matched), the same as in the info panel.
-                        if entry_renderer.has_search_highlight(entry.title, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
+                        if common_utils.has_search_highlight(entry.title, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
                             dpg_markdown.add_text(entry.title, wrap=gui_config.annotation_tooltip_w, parent=item_group, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", color=title_color,  # MD renderer renders into its own group
                                                   highlight=(maybe_regex_case_sensitive, maybe_regex_case_insensitive),
-                                                  highlight_color=entry_renderer.SEARCH_HIGHLIGHT_COLOR)
+                                                  highlight_color=guiutils.SEARCH_HIGHLIGHT_COLOR)
                         else:  # plain text (much faster) when no highlighting needed
                             dpg.add_text(entry.title, color=title_color, wrap=0, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", parent=item_group)  # "A study of stuff..."
 

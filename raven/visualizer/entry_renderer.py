@@ -1,8 +1,9 @@
 """Shared rendering vocabulary for the annotation tooltip and the info panel.
 
 The annotation tooltip (`annotation.py`) and the item information panel
-(`info_panel.py`) share the data-gathering and search-highlighting layer;
-this module collects what they have in common.
+(`info_panel.py`) share the data-gathering layer; this module collects what
+they have in common. The search highlighting they also share is not
+Visualizer-specific, and lives in `raven.common.utils`.
 
 The two consumers diverge on *what* they render per item — the tooltip shows
 compact icon-decorated titles, the info panel shows full per-item button rows
@@ -18,21 +19,6 @@ Public API:
     more)` for a given cluster ID.
   - `order_cluster_ids(cluster_ids)` — sort ascending with the misc group
     (cluster `-1`) moved to the end.
-  - `has_search_highlight(text, ...)` — whether those regexes match anything in
-    `text`, which decides between plain text and the Markdown renderer. The
-    renderer marks the matches itself: pass the regexes as
-    `dpg_markdown.add_text(..., highlight=..., highlight_color=SEARCH_HIGHLIGHT_COLOR)`.
-    `SEARCH_HIGHLIGHT_COLOR` is here so both consumers agree on it.
-
-  - `compile_search_highlight_regexes(search_string)` — split the search string
-    into case-sensitive and case-insensitive fragment groups, compile each
-    group into a single alternation regex. Returns
-    `(maybe_regex_case_sensitive, maybe_regex_case_insensitive)`: each entry
-    is either a compiled `re.Pattern` (truthy) ready for `re.sub`, or
-    `None` (falsy) if there are no fragments of that kind. The empty/no-search
-    case returns `(None, None)`. Caller can check with `if maybe_regex_case_xxx:`
-    — "do we have a highlighter for this case?" — this is equivalent to an
-    "are there fragments?" test, since the regex is built iff fragments exist.
 
 Cross-module state read via `app_state`:
   `dataset` (for `sorted_entries`, `file_content.keywords_available`, and
@@ -40,15 +26,10 @@ Cross-module state read via `app_state`:
 """
 
 __all__ = ["get_entries_for_selection",
-           "order_cluster_ids",
-           "compile_search_highlight_regexes",
-           "SEARCH_HIGHLIGHT_COLOR", "has_search_highlight"]
+           "order_cluster_ids"]
 
 import collections
 import math
-import re
-
-from ..common import utils as common_utils
 
 from .app_state import app_state
 
@@ -127,50 +108,3 @@ def order_cluster_ids(cluster_ids):
     if out and out[0] == -1:  # move the misc group (if any) to the end
         out = out[1:] + [-1]
     return out
-
-
-def compile_search_highlight_regexes(search_string):
-    """Compile alternation regexes for highlighting search-match fragments inside item titles.
-
-    Same approach as SillyTavern-Timelines: sort fragments so the longest matches first
-    (prefers longest match when fragments share substrings, e.g. "laser las").
-
-    Returns `(maybe_regex_case_sensitive, maybe_regex_case_insensitive)`. Each entry is either a compiled
-    `re.Pattern` (truthy), or `None` (falsy) if no fragments of that kind exist — including when
-    `search_string` is empty, in which case both are `None`. The pair can be passed as is to
-    `has_search_highlight`, and to `dpg_markdown.add_text(..., highlight=...)`, which skips a `None`.
-    """
-    if not search_string:
-        return None, None
-
-    case_sensitive_fragments, case_insensitive_fragments = common_utils.search_string_to_fragments(search_string, sort=True)
-
-    case_sensitive_fragments = [common_utils.search_fragment_to_highlight_regex_fragment(x) for x in case_sensitive_fragments]
-    case_insensitive_fragments = [common_utils.search_fragment_to_highlight_regex_fragment(x) for x in case_insensitive_fragments]
-
-    maybe_regex_case_sensitive = None
-    maybe_regex_case_insensitive = None
-    if case_sensitive_fragments:
-        maybe_regex_case_sensitive = re.compile(f"({'|'.join(case_sensitive_fragments)})")
-    if case_insensitive_fragments:
-        maybe_regex_case_insensitive = re.compile(f"({'|'.join(case_insensitive_fragments)})", re.IGNORECASE)
-
-    return maybe_regex_case_sensitive, maybe_regex_case_insensitive
-
-
-SEARCH_HIGHLIGHT_COLOR = "#ff0000"  # what a matched fragment is drawn in, inside an otherwise normally coloured title
-
-
-def has_search_highlight(text, maybe_regex_case_sensitive, maybe_regex_case_insensitive):
-    """Whether any search-match fragment occurs in `text`.
-
-    `text`: the title.
-    `maybe_regex_case_sensitive`, `maybe_regex_case_insensitive`: from `compile_search_highlight_regexes`,
-        which see. Either may be `None`, and both are when no search is active, in which case this is False.
-
-    Worth asking before rendering: an unhighlighted title renders as plain text, which is much faster
-    than Markdown.
-    """
-    return any(maybe_regex.search(text)
-               for maybe_regex in (maybe_regex_case_sensitive, maybe_regex_case_insensitive)
-               if maybe_regex)

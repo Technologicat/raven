@@ -11,6 +11,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
 
            "DISABLED_TEXT_COLOR", "DEFAULT_TEXT_COLOR", "DEFAULT_BUTTON_BG_COLOR",  # what the default theme draws
            "CAUTION_COLOR",  # "read this, but nothing has gone wrong"
+           "SEARCH_HIGHLIGHT_COLOR",  # a search match, inside otherwise normally coloured text
            "SECTION_SEPARATOR_SPACING",  # the constellation's vertical rhythm
            "DEBUG_OVERLAY_COLOR", "DEBUG_OVERLAY_FONT_SIZE", "DEBUG_OVERLAY_INSET",  # how a numbers overlay looks
 
@@ -98,6 +99,9 @@ DEFAULT_BUTTON_BG_COLOR = (51, 51, 55)
 # an error — each wants reading before the user does anything else — and they are meant to be recognizably
 # the same voice across the apps, which a value copied per app stays only until one of them is adjusted.
 CAUTION_COLOR = (255, 180, 120)
+
+# What a search match is drawn in, inside otherwise normally coloured text, in every app that highlights one.
+SEARCH_HIGHLIGHT_COLOR = (255, 0, 0)
 
 # Blank space above and below a horizontal rule that divides one block of GUI from the next.
 #

@@ -617,6 +617,83 @@ class TestSearchFragmentToHighlightRegex:
 
 
 # ---------------------------------------------------------------------------
+# Search highlighting
+# ---------------------------------------------------------------------------
+
+class TestSearchHighlight:
+    @staticmethod
+    def highlight(maybe_regex, text):
+        """Apply a highlighter the way the consumers do, marking matches so they are visible in an assertion."""
+        return maybe_regex.sub(r"<\1>", text)
+
+    def test_no_search_means_no_highlighters(self):
+        assert utils.compile_search_highlight_regexes("") == (None, None)
+
+    def test_a_lowercase_fragment_highlights_case_insensitively(self):
+        case_sensitive, case_insensitive = utils.compile_search_highlight_regexes("laser")
+        assert case_sensitive is None, "a lowercase fragment asks for no case-sensitive highlighting"
+        assert self.highlight(case_insensitive, "Laser ablation") == "<Laser> ablation"
+
+    def test_a_fragment_carrying_a_capital_highlights_case_sensitively(self):
+        case_sensitive, case_insensitive = utils.compile_search_highlight_regexes("Laser")
+        assert case_insensitive is None
+        assert self.highlight(case_sensitive, "Laser laser") == "<Laser> laser"
+
+    def test_the_two_kinds_of_fragment_are_compiled_separately(self):
+        case_sensitive, case_insensitive = utils.compile_search_highlight_regexes("Laser ablation")
+        assert self.highlight(case_sensitive, "Laser Ablation") == "<Laser> Ablation"
+        assert self.highlight(case_insensitive, "Laser Ablation") == "Laser <Ablation>"
+
+    def test_the_longest_matching_fragment_wins(self):
+        # Fragments share substrings all the time while a search is being typed ("las" is a prefix of
+        # "laser"), and an alternation takes the first branch that matches -- so the order they are joined
+        # in decides whether the reader sees the whole word marked or just its first three letters.
+        _, case_insensitive = utils.compile_search_highlight_regexes("las laser")
+        assert self.highlight(case_insensitive, "laser") == "<laser>"
+
+    def test_regex_metacharacters_in_a_fragment_are_matched_literally(self):
+        # Search strings are typed by users, and titles are full of parentheses and dots. Unescaped, "f(x)"
+        # would compile to a group matching a bare "f", so the highlight would land on the wrong span.
+        _, case_insensitive = utils.compile_search_highlight_regexes("f(x)")
+        assert self.highlight(case_insensitive, "f(x) and f alone") == "<f(x)> and f alone"
+
+    def test_a_digit_in_a_fragment_also_matches_its_sub_and_superscript_forms(self):
+        # Chemical formulae and exponents reach the corpus in both spellings, so a search for "co2" has to
+        # find "CO₂" -- the entry the reader was looking at when they typed it.
+        _, case_insensitive = utils.compile_search_highlight_regexes("co2")
+        assert self.highlight(case_insensitive, "CO₂ capture") == "<CO₂> capture"
+        assert self.highlight(case_insensitive, "CO2 capture") == "<CO2> capture"
+
+    # Deciding whether text needs the Markdown renderer. The renderer marks the matches itself
+    # (`dpg_markdown`'s own tests cover that); what is left here is the question callers ask first, since
+    # text with nothing to highlight renders as plain text, much faster.
+    @staticmethod
+    def has_highlight(text, search_string):
+        case_sensitive, case_insensitive = utils.compile_search_highlight_regexes(search_string)
+        return utils.has_search_highlight(text, case_sensitive, case_insensitive)
+
+    def test_a_title_with_no_search_running_has_nothing_to_highlight(self):
+        assert not self.has_highlight("Laser ablation of steel", "")
+
+    def test_a_title_that_matches_nothing_has_nothing_to_highlight(self):
+        assert not self.has_highlight("Laser ablation of steel", "photocatalysis")
+
+    def test_a_title_matching_a_fragment_of_either_kind_has_a_highlight(self):
+        # The control for the two above: the same title, with a search that does match it.
+        assert self.has_highlight("Laser ablation of steel", "ablation")
+        assert self.has_highlight("Laser ablation of steel", "Laser")
+
+    def test_a_case_sensitive_fragment_in_the_wrong_case_is_no_highlight(self):
+        assert not self.has_highlight("laser ablation", "Laser")
+
+    def test_the_compiled_highlighters_are_regexes(self):
+        # The contract the docstring states, and what `has_search_highlight`'s truthiness test relies on.
+        case_sensitive, case_insensitive = utils.compile_search_highlight_regexes("Laser ablation")
+        assert isinstance(case_sensitive, re.Pattern)
+        assert isinstance(case_insensitive, re.Pattern)
+
+
+# ---------------------------------------------------------------------------
 # Text chunking
 # ---------------------------------------------------------------------------
 
