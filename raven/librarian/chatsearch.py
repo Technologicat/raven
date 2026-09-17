@@ -54,7 +54,8 @@ def find_matches(datastore: chattree.Forest, node_ids: list[str], query: SearchQ
     """Return the messages among `node_ids` that match `query`, in the order given, as `(node_id, where)`.
 
     `where` is the set of the message's texts that match: `"content"` for the message text, `"thinking"` for its
-    thinking trace, or both. A caller showing the match needs to know, a trace being collapsed by default.
+    thinking trace, or both. A caller showing the match needs to know, a trace being collapsed by default and
+    wanting opening to show one.
 
     `query=None` (no search running) matches nothing, so "no search" and "nothing matched" look the same here;
     the caller knows which it asked.

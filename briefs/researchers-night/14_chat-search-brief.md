@@ -109,7 +109,8 @@ that wait while their text is hidden. The streaming message is included: it is h
 **What counts as a match** (Juha):
 
 - **Tool results are searched like any message**, by default.
-- **Thinking traces count, and a jump to a match inside a collapsed one opens it.**
+- **Thinking traces count, and a jump to a message whose trace matched opens the trace** — also when its visible
+  text matched too, so that searching traces behaves transparently: every match counted is on screen.
 - **Both are checkboxes in the search row**: whether thinking traces are searched, and whether tool messages are.
 
 **Every search length highlights**, `e` included, if it is fast enough: a screenful costs roughly 150–250 ms at

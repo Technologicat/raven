@@ -66,7 +66,7 @@ class TestFindMatches:
         assert find(branch, "Photo") == [(tool, CONTENT)]
 
     def test_a_message_matching_in_both_texts_says_so(self, branch):
-        """Distinct from either alone: a caller opens a collapsed trace only when nothing visible matched."""
+        """Distinct from either alone, so a caller can tell a trace match from a visible one whichever else matched."""
         _, (question, tool, reply) = branch
         assert (reply, BOTH) in find(branch, "the")
         assert (reply, THINKING) in find(branch, "summarize"), "the control: a trace-only match is not reported as both"
