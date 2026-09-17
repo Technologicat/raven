@@ -63,7 +63,7 @@ _TOOLBAR_H = 34  # pixels, the row of view controls above the graph
 # A blank line between, because the two are addressed to different questions: what the button does, and
 # what is stopping the key.
 _KEY_HINT_SEPARATOR = "\n\n"
-_KEY_HINT = "The keys work while the graph has the keyboard.\nClick the graph, or press Tab, to send it here."
+_KEY_HINT = "The keys work while the graph has the keyboard.\nClick the graph, or press Ctrl+Shift+G, to send it here."
 
 
 def _toolbar_tooltip_text(caption: str) -> str:

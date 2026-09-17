@@ -1332,11 +1332,11 @@ class TestKeyHints:
     def test_a_caption_naming_a_key_says_what_the_key_needs(self):
         composed = chatgraph_panel._toolbar_tooltip_text("Fit the current branch [B]")
         assert composed.startswith("Fit the current branch [B]")
-        assert "press Tab" in composed
+        assert "press Ctrl+Shift+G" in composed
 
     def test_a_caption_naming_no_key_carries_no_condition(self):
         # The control. The dark-mode toggle promises nothing about the keyboard, and telling its reader
-        # about Tab would answer a question they did not ask.
+        # how to give the graph the keys would answer a question they did not ask.
         assert chatgraph_panel._toolbar_tooltip_text("Switch to light mode") == "Switch to light mode"
 
     def test_the_branch_button_names_its_key(self, panel):
@@ -1346,7 +1346,7 @@ class TestKeyHints:
         built, forest, app_state, ids, calls = panel
         caption = built._toolbar_captions[built._commit_button_tag]
         assert "[Enter]" in caption
-        assert "press Tab" in chatgraph_panel._toolbar_tooltip_text(caption)
+        assert "press Ctrl+Shift+G" in chatgraph_panel._toolbar_tooltip_text(caption)
 
     def test_every_toolbar_caption_that_names_a_key_gets_the_condition(self, panel):
         # Over the real captions rather than invented ones, so a caption added later without a key — or
@@ -1355,8 +1355,8 @@ class TestKeyHints:
         with_keys = [c for c in built._toolbar_captions.values() if "[" in c]
         without = [c for c in built._toolbar_captions.values() if "[" not in c]
         assert with_keys and without, "the toolbar is all one kind, so this compares nothing"
-        assert all("press Tab" in chatgraph_panel._toolbar_tooltip_text(c) for c in with_keys)
-        assert all("press Tab" not in chatgraph_panel._toolbar_tooltip_text(c) for c in without)
+        assert all("press Ctrl+Shift+G" in chatgraph_panel._toolbar_tooltip_text(c) for c in with_keys)
+        assert all("press Ctrl+Shift+G" not in chatgraph_panel._toolbar_tooltip_text(c) for c in without)
 
 
 class TestClickToFocus:

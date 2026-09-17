@@ -712,7 +712,8 @@ the blue mark shows where it went.
 | `F8` | Copy the linearized chatlog to the clipboard |
 | `Shift+F8` | ...with node IDs and metadata included |
 | `F9` | Audio input panel |
-| `Tab` / `Shift+Tab` | Move the keyboard to the next / previous pane |
+| `Tab` / `Shift+Tab` | Move the keyboard to the next / previous pane, in screen order: the search field, the chat log, the message field, and the chat graph when shown |
+| `Ctrl+Shift+G` | Give the keyboard to the chat graph, showing it first if it is switched off |
 | `Ctrl+Space` | Put the caret in the message field |
 | `Ctrl+N` | Start a new chat |
 | `Ctrl+G` | Stop the AI's text generation |
@@ -802,7 +803,7 @@ the keys only while the focus is on one of its own controls, and passes everythi
 
 ### Chat graph
 
-**Live only while the graph holds the keyboard — press `Tab` to send it there, or click the graph.** It
+**Live only while the graph holds the keyboard — press `Ctrl+Shift+G` to send it there, or `Tab` round to it, or click the graph.** It
 passes on anything it does not claim, so `F1` and the rest still work from inside it.
 
 | Key | Action |

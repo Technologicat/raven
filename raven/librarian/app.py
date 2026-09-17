@@ -1863,7 +1863,8 @@ with timer() as tim:
                         dpg.add_text("Show the chat tree in place of the avatar. [Alt+G]\n\n"
                                      "Every chat ever started is in there, branching. Clicking a message\n"
                                      "shows it; clicking it again switches the conversation to it, so you\n"
-                                     "can look around without changing anything.\n\n"
+                                     "can look around without changing anything. To steer it from the\n"
+                                     "keyboard, give it the keys. [Ctrl+Shift+G]\n\n"
                                      "The avatar's video pauses while it is covered, and switching this\n"
                                      "off wakes it, even if it had gone to sleep meanwhile. With this off,\n"
                                      "the graph still stands in whenever the avatar has nothing to show:\n"
@@ -2274,15 +2275,16 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="Ctrl+Shift+Delete", action_indent=0, action="Delete it and all below it", notes="Twice to confirm. No undo"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start a new chat", notes=""),
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="Ctrl+Shift+G", action_indent=0, action="Give the keyboard to the graph", notes="Shows it first if switched off"),
                helpcard.hotkey_new_column,
-               # One row for a keyboard that has a dozen keys. Tab is the row that pays: it is the way
-               # *into* the graph, and from inside it the arrows, Enter and Esc are what a reader tries
-               # first. The rest are in the Chat graph section of the README.
+               # The graph's own keyboard has a page of its own; this page carries only the ways into it, Tab
+               # below and Ctrl+Shift+G at the foot of the first column.
                # Several rows below pair two keys each, where the second only reverses the first: the page is a
                # screenshot of the whole keyboard, and on a 1080p screen it holds 29 rows a column, which search
                # overran. Pairing cost a row apiece and no information; the alternatives were dropping the blank
                # rows that do the grouping, or splitting the page.
-               env(key_indent=0, key="Tab / Shift+Tab", action_indent=0, action="Move the keyboard between panes", notes="Composer, chat log, chat graph"),
+               env(key_indent=0, key="Tab / Shift+Tab", action_indent=0, action="Move the keyboard between panes", notes="Search, chat log, composer, graph"),
                env(key_indent=0, key="Page Up / Page Down", action_indent=0, action="Scroll the chat a page", notes="Also while typing"),
                env(key_indent=1, key="Up / Down", action_indent=1, action="Same, but five lines", notes="Not while writing a message"),
                env(key_indent=0, key="Home / End", action_indent=0, action="Jump to the start / latest message", notes="Not while typing"),
@@ -2327,7 +2329,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
 # The graph is a keyboard of its own — nineteen keys against the main page's forty — so it gets a page
 # rather than a corner of one. Two-thirds of these are unreachable from anywhere else in the app, and
 # until the card had pages they lived only in the README, which is not open while you are using the graph.
-chat_graph_hotkey_info = (env(key_indent=0, key="Tab", action_indent=0, action="Move the keyboard to the graph", notes="Or click anywhere in it"),
+chat_graph_hotkey_info = (env(key_indent=0, key="Ctrl+Shift+G", action_indent=0, action="Move the keyboard to the graph", notes="Or Tab, or click anywhere in it"),
                           # The cursor has to be conjured before it can be moved, and the first arrow press
                           # is what does it — planting it on HEAD rather than stepping. Its own row, because
                           # a reader whose first press "did nothing" is looking straight at the key that
@@ -2722,9 +2724,9 @@ def _toggle_audio_input_panel() -> None:
 def _cycle_keyboard_home(backwards: bool = False) -> None:
     """Move the keyboard to the next pane, or the previous one. What Tab and Shift+Tab do.
 
-    Three panes at one level — the composer, the chat log, and the graph while it is on screen — so Tab
-    cycles rather than descending into anything, and Shift+Tab is worth having because with three of them
-    "the one before" is otherwise two presses away.
+    Four places at one level — the search field, the chat log, the composer, and the graph while it is on
+    screen — so Tab cycles rather than descending into anything, and Shift+Tab is worth having because with
+    several of them "the one before" is otherwise a lap away.
 
     **The current home is derived, not stored**, and that is deliberate: the composer can be entered by
     clicking it or with Ctrl+Space, neither of which goes through here, so a stored answer would be wrong
@@ -2739,10 +2741,15 @@ def _cycle_keyboard_home(backwards: bool = False) -> None:
     TODO: `TODO_DEFERRED.md`, "Nothing owns 'which pane has the keyboard'".
     """
     graph_available = chat_graph_panel.is_shown
-    homes = ["composer", "log"] + (["graph"] if graph_available else [])
+    # In screen order: the search row across the top, then down the left column, then the graph on the right.
+    # Each place also has a key of its own (Ctrl+F, Ctrl+Space, Ctrl+Shift+G), so the order need not favour a
+    # particular hop.
+    homes = ["search", "log", "composer"] + (["graph"] if graph_available else [])
 
     if dpg.is_item_active("chat_field"):  # tag
         current = "composer"
+    elif dpg.is_item_active("search_field"):  # tag
+        current = "search"
     elif graph_available and chat_graph_panel.has_keyboard:
         current = "graph"
     else:
@@ -2763,6 +2770,9 @@ def _cycle_keyboard_home(backwards: bool = False) -> None:
     # navigation activation off, so a focused button ignores Space and Enter rather than pressing itself.
     if target == "composer":
         gui_animation.give_caret("chat_field")  # tag
+        chat_graph_panel.has_keyboard = False
+    elif target == "search":
+        gui_animation.give_caret("search_field")  # tag
         chat_graph_panel.has_keyboard = False
     elif target == "graph":
         _give_keyboard_to_graph()
@@ -2897,6 +2907,13 @@ def librarian_hotkeys_callback(sender, app_data):
             fire_event_if_exists("delete")
         elif key == dpg.mvKey_F:  # Ctrl+F puts the caret in the search field; this, with Shift, empties it
             clear_search_callback()
+        # The graph's own key, as Ctrl+Space is the composer's and Ctrl+F the search field's. Shows the graph first
+        # if it is switched off, since keys sent to a hidden graph would go nowhere.
+        elif key == dpg.mvKey_G:
+            if not dpg.get_value("chat_graph_checkbox"):  # tag
+                guiutils.toggle_checkbox("chat_graph_checkbox")  # tag
+            if chat_graph_panel.is_shown:
+                _give_keyboard_to_graph()
 
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         elif key == dpg.mvKey_M:
