@@ -1465,12 +1465,18 @@ class WidgetSwap(Animation):
 
     def _swap_batch(self, batch) -> None:
         for old, new, height_change in batch:
+            # Whichever of the two is gone, the other goes too. A missing original was rebuilt away, so the
+            # replacement has nothing left to replace; a missing replacement was superseded by its owner — a
+            # streaming message re-rendering its last paragraph, say — which has already drawn a fresh one,
+            # and the original, handed over here, has no owner left to delete it.
             with guiutils.nonexistent_ok():
-                if dpg.does_item_exist(old):
+                if dpg.does_item_exist(old) and dpg.does_item_exist(new):
                     dpg.show_item(new)
                     dpg.delete_item(old)
-                else:  # rebuilt away under us: the replacement has nothing left to replace
-                    dpg.delete_item(new)
+                    continue
+            for item in (old, new):
+                with guiutils.nonexistent_ok():
+                    dpg.delete_item(item)
 
     def _shift_scroll(self, delta: int) -> None:
         with guiutils.nonexistent_ok():

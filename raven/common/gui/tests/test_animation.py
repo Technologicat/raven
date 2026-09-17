@@ -1375,6 +1375,17 @@ class TestWidgetSwap:
 
         assert not dpg.does_item_exist(new)
 
+    def test_an_original_whose_replacement_is_gone_goes_too(self, swap_scene):
+        """The replacement's owner superseded it and drew another; left in place, the original is a duplicate."""
+        old = swap_scene["paragraphs"][2]
+        new = _replacement_for(old)
+        animation.WidgetSwap.swap(swap_scene["child"], old, new, height_change=0)
+        dpg.delete_item(new)
+
+        _frame()
+
+        assert not dpg.does_item_exist(old)
+
     def test_a_request_arriving_after_the_last_frame_starts_a_new_instance(self, swap_scene):
         p = swap_scene["paragraphs"]
         first = animation.WidgetSwap.swap(swap_scene["child"], p[2], _replacement_for(p[2]), height_change=0)
