@@ -105,6 +105,14 @@ that wait while their text is hidden. The streaming message is included: it is h
   graph's tree-wide search lands, when its own `[x/y]` and previous/next go there. (Revised the same afternoon:
   a row above the chat column only, with the graph's buttons in its own toolbar, was chosen first, and dropped
   because a shared field above one view reads as that view's.)
+- **The graph half is used in both of the panel's states** (Juha, 2026-09-17):
+  - **Its `[x/y]` counter stays up while the avatar holds the panel**, counting matches over the whole tree —
+    the one thing the row can say that nothing else on screen does, the chat's counter covering only the branch
+    on screen. Previous/next then switch the panel to the graph and go to the match.
+  - **A heading at its left, bold, naming what the panel is showing**: the character's name while the avatar is
+    up, *Chat graph* while the graph is. The counter and its buttons do not need the whole half.
+  - **The graph's own toolbar stays inside the graph view.** Moving it up into this row was considered and
+    rejected: its controls mean nothing for anything but the graph.
 
 **What counts as a match** (Juha):
 

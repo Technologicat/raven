@@ -144,7 +144,10 @@ and a surviving edge drawn once in the graph morph — the arrows flashed at eac
    the match a jump went to stays current while the view is gliding there or resting where the program last put
    it, and position takes over when the reader scrolls. The two apps' navigation is meant to stay alike.
 2. **Then the graph half of search** (brief 16 item 8): the graph reads the same search field, with its own
-   `[x/y]` and previous/next in the graph half of the search row, which is already laid out and empty.
+   `[x/y]` and previous/next in the graph half of the search row, which is already laid out and empty. Decided
+   the same day for that half, in brief 14 → *Where the field lives*: the counter stays up over the whole tree
+   while the avatar is shown, and a bold heading at the left names what the panel shows — the character's name,
+   or *Chat graph*. The graph's toolbar stays in the graph view.
 
 ### Decided 2026-09-17 — a hygiene sweep follows search v1 directly
 
