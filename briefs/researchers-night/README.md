@@ -146,8 +146,9 @@ and a surviving edge drawn once in the graph morph — the arrows flashed at eac
 2. **Then the graph half of search** (brief 16 item 8): the graph reads the same search field, with its own
    `[x/y]` and previous/next in the graph half of the search row, which is already laid out and empty. Decided
    the same day for that half, in brief 14 → *Where the field lives*: the counter stays up over the whole tree
-   while the avatar is shown, and a bold heading at the left names what the panel shows — the character's name,
-   or *Chat graph*. The graph's toolbar stays in the graph view.
+   while the avatar is shown, and the graph's toolbar stays in the graph view. The bold heading at the row's left
+   naming what the panel shows — the character's name, or *Chat graph* — was built the same day, so the
+   navigation takes the right-hand side.
 
 ### Decided 2026-09-17 — a hygiene sweep follows search v1 directly
 
