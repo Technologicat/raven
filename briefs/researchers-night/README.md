@@ -131,9 +131,14 @@ straight onto the chat graph. The blank frames before the graph's first picture 
 **Tried live 2026-09-17** (Juha): *next* disables on the last match near the end of a chat, the field's hint
 fits, and switching the active chat during a search works — the match count climbs as the log rebuilds.
 
+**Built afterwards, not yet tried live**: the Visualizer's jump memory (item 1, which held this list's first
+place), Librarian's jump now released by a keyboard scroll as well as by the wheel, `Alt+H` / `Alt+R` for the
+search checkboxes (`Alt+T` stays the AI's Thinking switch), the help card's mirrored keys paired on both pages,
+and a surviving edge drawn once in the graph morph — the arrows flashed at each step through the branch.
+
 **What remains**, in this order:
 
-1. **Give the Visualizer's info panel the same jump memory** (decided, Juha). Its navigation is position-based,
+1. ~~**Give the Visualizer's info panel the same jump memory**~~ — built 2026-09-17 (decided, Juha). Its navigation is position-based,
    and its last few matches cannot scroll up to the top of the panel either, so after a jump to one the current
    match and the next button are wrong in the same way. Librarian's fix is `DPGChatController._search_jump_holds`:
    the match a jump went to stays current while the view is gliding there or resting where the program last put
