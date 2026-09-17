@@ -181,18 +181,6 @@ def _is_busy() -> bool:
     return gui_animation.animator.transient_count > 0
 
 
-#: How many frames `clear_search` will wait for the search field to give up the caret before giving up on it.
-#: Two is what it takes (measured 2026-09-10); the rest is headroom, so that a change in DPG costs a log line
-#: rather than a hang.
-#:
-#: **A bound, not a pass count**, which is what separates it from the constellation's other settle numbers —
-#: `helpcard._PAGE_FIT_PASSES`, `tooltip._SETTLE_FRAMES`, `chat_controller._SCROLL_SETTLE_FRAMES`. Those say
-#: how many frames a thing *takes*, so each has to be right, and each was measured for its own mechanism
-#: (column widths, autosize reporting, scroll position — this one is focus). This one only has to be
-#: generous, the loop exiting on the state rather than on the count. Four for the family resemblance; it
-#: would be no more correct at ten.
-_SEARCH_FIELD_DEACTIVATION_FRAME_LIMIT = 4
-
 # --------------------------------------------------------------------------------
 # Selection management subsystem wire-up
 selection.reset_undo_history(_update_gui=False)  # GUI not initialized yet. This is the only time the flag should be set to `False`!
@@ -755,36 +743,7 @@ with timer() as tim:
                         between the two callers: a click has already moved focus off the field, and the
                         hotkey can arrive mid-word with the caret still in it.
                         """
-                        # ImGui keeps its own edit buffer for an *active* `InputText`, and that buffer wins:
-                        # a `set_value` on a field holding the caret is written back from the buffer on the
-                        # next frame — and fires the edit callback while doing it, so the search would come
-                        # back rather than merely failing to clear. `configure_item(default_value=...)` does
-                        # not get around it either. There is no spelling of the write that survives, so the
-                        # field has to be deactivated first, and only then written.
-                        #
-                        # Focus parks on this button rather than on the panel: `dpg.focus_item` cannot focus
-                        # a child window, and asked to, it activates the enclosing window's first navigable
-                        # item — which here is the very field being cleared. A focused button is inert, DPG
-                        # leaving ImGui's keyboard-nav activation off.
-                        #
-                        # See `dpg-notes.md`, "Keyboard input", and `investigations/dpg-focus/`.
-                        if dpg.is_item_active("search_field"):  # tag
-                            dpg.focus_item("clear_search_button")  # tag
-                            # Wait for the deactivation rather than counting frames to it. Measured
-                            # 2026-09-10 it takes two — `focus_item` lands on the next frame, and the field
-                            # gives up the caret on the one after — but a number measured today is a number
-                            # the next DPG release may falsify silently, where a wait cannot be wrong.
-                            for _ in range(_SEARCH_FIELD_DEACTIVATION_FRAME_LIMIT):
-                                guiutils.split_frame(operation="deactivating the search field before clearing it",
-                                                     required=True)
-                                if not dpg.is_item_active("search_field"):  # tag
-                                    break
-                            else:
-                                # Never silently: a write from here is about to be reverted, and the visible
-                                # result is a clear that did nothing — which is a long way from its cause.
-                                logger.warning(f"clear_search: the search field still holds the caret after "
-                                               f"{_SEARCH_FIELD_DEACTIVATION_FRAME_LIMIT} frames; clearing it will not take.")
-                        dpg.set_value("search_field", "")  # tag
+                        guiutils.set_input_text("search_field", "", park_focus_on="clear_search_button")  # tag
                         search.update()  # we should wait, because this button may get hammered.
                         gui_animation.give_caret("search_field")  # tag
                     dpg.add_button(label=fa.ICON_X, callback=clear_search, tag="clear_search_button")

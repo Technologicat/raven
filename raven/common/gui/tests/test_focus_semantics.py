@@ -212,9 +212,10 @@ def test_a_write_to_a_text_field_holding_the_caret_is_reverted(widgets, single_l
 def test_parking_focus_on_a_button_takes_two_frames_to_release_the_caret(widgets, single_line_field):
     """How long a caller must wait after `focus_item` before a write to the field will stick.
 
-    `raven.visualizer.app.clear_search` is the caller this exists for: its hotkey can arrive with the caret
-    in the search field, so it parks focus on a button and waits for the field to let go. It waits on the
-    *state* rather than counting to two, but if that number changes this test is where it is noticed.
+    `raven.common.gui.utils.set_input_text` is the caller this exists for — a search being cleared by a hotkey
+    that can arrive with the caret in the field — so it parks focus on a button and waits for the field to let
+    go. It waits on the *state* rather than counting to two, but if that number changes this test is where it
+    is noticed.
     """
     _activate(single_line_field, widgets)
     assert dpg.is_item_active(single_line_field) is True, "precondition: the field must hold the caret"

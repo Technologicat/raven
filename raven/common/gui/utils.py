@@ -33,7 +33,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "wait_for_resize",
            "park_offscreen", "recenter_window",
 
-           "snap_slider", "toggle_checkbox",
+           "snap_slider", "toggle_checkbox", "set_input_text",
            "add_section_separator", "add_toolbar_separator",
 
            "get_pixels_per_plotter_data_unit"]
@@ -1094,6 +1094,54 @@ def toggle_checkbox(widget: str | int, callback: Callable | None = None) -> bool
         n_parameters = len(inspect.signature(callback).parameters)
         callback(*available[:n_parameters])
     return value
+
+#: How many frames `set_input_text` will wait for a text field to give up the caret before giving up on it.
+#: Two is what it takes (measured 2026-09-10); the rest is headroom, so that a change in DPG costs a log line
+#: rather than a hang.
+#:
+#: **A bound, not a pass count**, which is what separates it from the constellation's other settle numbers —
+#: `helpcard._PAGE_FIT_PASSES`, `tooltip._SETTLE_FRAMES`, `chat_controller._SCROLL_SETTLE_FRAMES`. Those say
+#: how many frames a thing *takes*, so each has to be right, and each was measured for its own mechanism
+#: (column widths, autosize reporting, scroll position — this one is focus). This one only has to be
+#: generous, the loop exiting on the state rather than on the count. Four for the family resemblance; it
+#: would be no more correct at ten.
+_INPUT_TEXT_DEACTIVATION_FRAME_LIMIT = 4
+
+def set_input_text(field: str | int, value: str, *, park_focus_on: str | int) -> None:
+    """Write `value` into the text field `field` (DPG tag or ID), even while it holds the caret.
+
+    `park_focus_on`: a widget to move focus to while the field is deactivated — a button is the safe choice.
+
+    Waits for frames while the field gives up the caret, so call it off the render thread: from a callback or a
+    hotkey handler, not from the render loop. Fires no callback, as `dpg.set_value` does not; call whatever the
+    field's edit should trigger afterwards.
+    """
+    # ImGui keeps its own edit buffer for an *active* `InputText`, and that buffer wins: a `set_value` on a field
+    # holding the caret is written back from the buffer on the next frame — and fires the edit callback while
+    # doing it, so a cleared search would come back rather than merely failing to clear. `configure_item
+    # (default_value=...)` does not get around it either. There is no spelling of the write that survives, so the
+    # field has to be deactivated first, and only then written.
+    #
+    # Focus parks on a real widget rather than on a panel: `dpg.focus_item` cannot focus a child window, and asked
+    # to, it activates the enclosing window's first navigable item — which may well be the very field being
+    # written. A focused button is inert, DPG leaving ImGui's keyboard-nav activation off.
+    #
+    # See `dpg-notes.md`, "Keyboard input", and `investigations/dpg-focus/`.
+    if dpg.is_item_active(field):
+        dpg.focus_item(park_focus_on)
+        # Wait for the deactivation rather than counting frames to it. Measured 2026-09-10 it takes two —
+        # `focus_item` lands on the next frame, and the field gives up the caret on the one after — but a number
+        # measured today is a number the next DPG release may falsify silently, where a wait cannot be wrong.
+        for _ in range(_INPUT_TEXT_DEACTIVATION_FRAME_LIMIT):
+            split_frame(operation="deactivating a text field before writing into it", required=True)
+            if not dpg.is_item_active(field):
+                break
+        else:
+            # Never silently: a write from here is about to be reverted, and the visible result is a write that
+            # did nothing — which is a long way from its cause.
+            logger.warning(f"set_input_text: '{field}' still holds the caret after "
+                           f"{_INPUT_TEXT_DEACTIVATION_FRAME_LIMIT} frames; writing into it will not take.")
+    dpg.set_value(field, value)
 
 def add_section_separator(*,
                           spacing: int = SECTION_SEPARATOR_SPACING,
