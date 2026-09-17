@@ -85,3 +85,23 @@ Wanted, and deferred rather than dropped (Juha, 2026-08-03).
 3. Case sensitivity, and whether to offer regex.
 4. Whether matches survive a branch switch or a rebuild, or are recomputed.
 5. The hammering race above.
+
+## Settled 2026-09-17
+
+**In-text highlighting is in v1 after all**, red and bold like the Visualizer's, re-rendered paragraph by paragraph
+without the view moving. The mechanism was measured before it was built: `investigations/chat-search-highlight/`.
+The pieces are `dpg_markdown`'s `highlight=` (matches marked after parsing, never spliced into the source),
+`MarkdownText.rows` for predicting a paragraph's height, `gui_animation.WidgetSwap` for the swap, and decorations
+that wait while their text is hidden. The streaming message is included: it is highlighted as it renders.
+
+**Where the field lives** (Juha):
+
+- **A row at the top of the chat column, above the chat log**, holding the field, the `[x/y]` counter,
+  previous/next and clear — `Ctrl+F`, `Ctrl+Shift+F`, `F3`, `Shift+F3`. The chat panel shrinks by the row's
+  height; the avatar/graph panel keeps its own. "At least for now."
+- **One search field for the whole app, not one per view.** When the graph gets its tree-wide search, it reads
+  the same terms and adds only its own previous/next buttons, in the toolbar it already has at its top. Two text
+  fields would be confusing, particularly with the composer as a third.
+
+**Every search length highlights**, `e` included, if it is fast enough: a screenful costs roughly 150–250 ms at
+the one-letter rate, and whether that feels acceptable is to be judged live (Juha).
