@@ -2343,7 +2343,7 @@ chat_graph_hotkey_info = (env(key_indent=0, key="Tab", action_indent=0, action="
                           env(key_indent=1, key="Ctrl+Shift+Right / Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
                           env(key_indent=1, key="Ctrl+End / Ctrl+Home", action_indent=1, action="Same, but to the last / first", notes=""),
                           helpcard.hotkey_new_column,
-                          env(key_indent=0, key="Shift+Up / Shift+Down", action_indent=0, action="Pan the view", notes="The mouse drags; the wheel zooms"),
+                          env(key_indent=0, key="Shift+Up / Shift+Down", action_indent=0, action="Pan the view vertically", notes="The mouse drags; the wheel zooms"),
                           env(key_indent=0, key="Shift+Left / Shift+Right", action_indent=0, action="Pan the view sideways", notes=""),
                           helpcard.hotkey_blank_entry,
                           env(key_indent=0, key="F", action_indent=0, action="Zoom to fit the whole tree", notes=""),
