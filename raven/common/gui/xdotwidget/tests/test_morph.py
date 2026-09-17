@@ -237,17 +237,57 @@ class TestRetargetingMidFlight:
         assert drawn(frame(done, b, 0.0), "x") == [], "a fully faded node is still being carried along"
 
 
+def edge_copies(picture_or_scene, src: str, dst: str) -> list:
+    """Every copy of the edge `src -> dst`, as `(edge, opacity)`, whether given a `Picture` or a `Scene`."""
+    return [(edge, getattr(opacity, "opacity", opacity)) for edge, opacity in picture_or_scene.edges
+            if (edge.src.internal_name, edge.dst.internal_name) == (src, dst)]
+
+
 class TestEdges:
     def test_opacity_follows_whether_the_edge_is_arriving_staying_or_leaving(self):
         a = graph(box("r", 0.0, 0.0), box("x", 0.0, 50.0), box("y", 50.0, 50.0), edges=(("r", "x"), ("r", "y")))
         b = graph(box("r", 0.0, 0.0), box("x", 0.0, 50.0), box("z", 90.0, 50.0), edges=(("r", "x"), ("r", "z")))
-        halfway = frame(still(a), b, 0.25)
-        by_key = {}
-        for edge, opacity in halfway.edges:
-            by_key.setdefault((edge.src.internal_name, edge.dst.internal_name), []).append(opacity)
-        assert by_key[("r", "x")] == [1.0, pytest.approx(0.75)]  # the new copy, the old fading on top
-        assert by_key[("r", "z")] == [pytest.approx(0.25)]
-        assert by_key[("r", "y")] == [pytest.approx(0.75)]
+        quarter = frame(still(a), b, 0.25)
+        assert [opacity for _, opacity in edge_copies(quarter, "r", "x")] == [1.0]
+        assert [opacity for _, opacity in edge_copies(quarter, "r", "z")] == [pytest.approx(0.25)]
+        assert [opacity for _, opacity in edge_copies(quarter, "r", "y")] == [pytest.approx(0.75)]
+
+    def test_a_surviving_edge_is_drawn_once_throughout(self):
+        """Two copies of one edge would stack their anti-aliased strokes, and the line would flash heavy."""
+        a = graph(box("r", 0.0, 0.0), box("x", 0.0, 50.0), box("y", 50.0, 50.0), edges=(("r", "x"),))
+        b = graph(box("r", 0.0, 0.0), box("x", 0.0, 50.0), box("y", 50.0, 50.0), edges=(("r", "x"), ("r", "y")))
+        for t in (0.0, 0.3, 0.7, 1.0):
+            picture = frame(still(a), b, t)
+            assert len(edge_copies(picture, "r", "y")) == 1, "the fixture has no arriving edge to count against"
+            assert [opacity for _, opacity in edge_copies(picture, "r", "x")] == [1.0], f"at t = {t}"
+
+    def test_without_a_builder_a_surviving_edge_moves_between_its_stored_points(self):
+        """No jump and no second copy, and the stored points of neither graph are touched."""
+        a = graph(box("r", 0.0, 0.0), box("x", 0.0, 50.0), edges=(("r", "x"),))
+        b = graph(box("r", 0.0, 0.0), box("x", 100.0, 50.0), edges=(("r", "x"),))
+        placed = scene(frame(still(a), b, 0.5))
+        [(edge, opacity)] = edge_copies(placed, "r", "x")
+        [line] = edge.shapes
+        assert (line.points, opacity) == ([(0.0, 5.0), (50.0, 45.0)], 1.0)
+        assert a.edges[0].shapes[0].points == [(0.0, 5.0), (0.0, 45.0)], "the old graph's edge was edited"
+        assert b.edges[0].shapes[0].points == [(0.0, 5.0), (100.0, 45.0)], "the new graph's edge was edited"
+
+    def test_shapes_that_cannot_be_interpolated_cross_fade(self):
+        """A path whose point count changed has no in-between."""
+        r, x = box("r", 0.0, 0.0), box("x", 0.0, 50.0)
+        a = Graph(width=1000.0, height=1000.0, nodes=[r, x],
+                  edges=[Edge(r, x, [], [LineShape(Pen(), [(0.0, 5.0), (0.0, 45.0)])])])
+        b = Graph(width=1000.0, height=1000.0, nodes=[r, x],
+                  edges=[Edge(r, x, [], [LineShape(Pen(), [(0.0, 5.0), (10.0, 25.0), (0.0, 45.0)])])])
+        quarter = frame(still(a), b, 0.25)
+        assert sorted((len(edge.shapes[0].points), opacity) for edge, opacity in edge_copies(quarter, "r", "x")
+                      if edge.shapes) == [(2, pytest.approx(0.75)), (3, pytest.approx(0.25))]
+
+    def test_parallel_edges_each_take_over_a_copy_of_their_own(self):
+        r, x = box("r", 0.0, 0.0), box("x", 0.0, 50.0)
+        both = graph(r, x, edges=(("r", "x"), ("r", "x")))
+        halfway = frame(still(both), both, 0.5)
+        assert [opacity for edge, opacity in edge_copies(halfway, "r", "x") if edge.shapes] == [1.0, 1.0]
 
     def test_given_a_builder_edges_stay_attached_to_moving_nodes(self):
         a = graph(box("r", 0.0, 0.0), box("x", 0.0, 50.0), edges=(("r", "x"),))
@@ -262,12 +302,13 @@ class TestEdges:
         assert calls and all(call == ("r", 0.0, 0.0, "x", 50.0, 50.0) for call in calls)
         assert all(edge.dst.x == 50.0 for edge, _ in placed.edges)
 
-    def test_without_a_builder_an_edge_stays_where_its_points_say(self):
+    def test_given_a_builder_copies_of_one_edge_are_drawn_once_at_their_combined_opacity(self):
         a = graph(box("r", 0.0, 0.0), box("x", 0.0, 50.0), edges=(("r", "x"),))
-        b = graph(box("r", 0.0, 0.0), box("x", 100.0, 50.0), edges=(("r", "x"),))
-        placed = scene(frame(still(a), b, 0.5))
-        assert {(edge.dst.x, placement[:2]) for edge, placement in placed.edges} == {(100.0, (0.0, 0.0)),
-                                                                                     (0.0, (0.0, 0.0))}
+        [edge] = a.edges
+        layered = still(a)._replace(edges=((edge, 0.5), (edge, 0.5)))
+        assert len(edge_copies(scene(layered), "r", "x")) == 2, "the fixture does not hold two copies"
+        assert [opacity for _, opacity in edge_copies(scene(layered, edge_between=link), "r", "x")] == \
+            [pytest.approx(0.75)]
 
 
 class TestScene:

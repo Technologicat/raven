@@ -27,9 +27,13 @@ another box, a label whose text changed. So a box and everything drawn with it r
 which two whole copies cross-fading would not — alpha is per shape, and a half-faded copy of the box would
 wash over the other copy's decorations wherever they overlap.
 
-Edges present on both sides do cross-fade as two copies, the new one underneath with its opacity chosen so
-the pair's combined visibility runs linearly to fully opaque. An edge has nothing drawn over it for the
-fading copy to wash out.
+**An edge present on both sides is drawn once, the same way**, its shapes paired and interpolated. Two
+copies cross-fading would stack two anti-aliased strokes on the same pixels, which draws the line visibly
+heavier until the old copy has faded. An edge between the same two names is the same edge, matched in
+order where a graph has several.
+
+Where the caller rebuilds edges between wherever their endpoints are drawn (`scene`'s `edge_between`), every
+copy of one edge comes out the same, so the copies are drawn once, at their combined opacity.
 """
 
 __all__ = ["Placement", "IN_PLACE",
@@ -42,7 +46,7 @@ from collections.abc import Callable, Mapping
 from typing import NamedTuple
 
 from .constants import Point
-from .graph import (Edge, Graph, Node, Pen, Shape,
+from .graph import (Edge, Element, Graph, Node, Pen, Shape,
                     BezierShape, CompoundShape, EllipseShape, ImageShape, LineShape, PolygonShape, TextShape)
 
 
@@ -130,23 +134,6 @@ def _coverage(opacities: list[float]) -> float:
     return 1.0 - uncovered
 
 
-def _underneath(was: list[float], t: float) -> float:
-    """Opacity for the new version of an element whose old copies, at opacities `was`, fade out over it.
-
-    Chosen so the stack's combined opacity is `C = a + (1 - a) t`, linear from the old copies' combined
-    opacity `a` to 1. The old copies fading as `was_i (1 - t)` combine to `G`, and a layer `n` under them
-    gives `1 - (1 - n)(1 - G)`; setting that equal to `C` gives `n = 1 - (1 - C) / (1 - G)`.
-
-    `was = []` gives `n = t`, a plain fade-in. Any old copy fully opaque gives `n = 1` from the first frame
-    on: the stack is then opaque throughout, which is what keeps an unchanged box from dimming mid-change.
-    """
-    a = _coverage(was)
-    covered = _coverage([opacity * (1.0 - t) for opacity in was])
-    if covered >= 1.0:  # an opaque old copy hides whatever is underneath; be ready for when it fades
-        return 1.0
-    return min(1.0, max(0.0, 1.0 - (1.0 - (a + (1.0 - a) * t)) / (1.0 - covered)))
-
-
 def frame(source: Picture, target: Graph, t: float, stand_in: StandIn | None = None) -> Picture:
     """The picture at progress `t` in [0, 1] of the change from `source` to `target`.
 
@@ -167,9 +154,13 @@ def frame(source: Picture, target: Graph, t: float, stand_in: StandIn | None = N
         name = node.internal_name
         if name and (name not in main_copy or opacity > source.nodes[main_copy[name]][3]):
             main_copy[name] = index
-    edge_opacities: dict[tuple[str | None, str | None], list[float]] = {}
-    for edge, opacity in source.edges:
-        edge_opacities.setdefault(_edge_key(edge), []).append(opacity)
+    # Likewise for edges, where a name pair can occur more than once: each target edge takes over the most
+    # visible copy of its pair that no earlier one has taken.
+    edge_copies: dict[tuple[str | None, str | None], list[int]] = {}
+    for index, (edge, _) in enumerate(source.edges):
+        edge_copies.setdefault(_edge_key(edge), []).append(index)
+    for indices in edge_copies.values():
+        indices.sort(key=lambda index: source.edges[index][1], reverse=True)
 
     positions: dict[str, Point] = {}
     nodes = []
@@ -226,10 +217,24 @@ def frame(source: Picture, target: Graph, t: float, stand_in: StandIn | None = N
         nodes.append((node, x, y, opacity * (1.0 - t)))
 
     edges = []
+    consumed_edges: set[int] = set()
     for edge in target.edges:
-        edges.append((edge, _underneath(edge_opacities.get(_edge_key(edge), []), t)))
-    for edge, opacity in source.edges:
-        if opacity * (1.0 - t) > _INVISIBLE:
+        copies = edge_copies.get(_edge_key(edge))
+        if not copies:
+            edges.append((edge, t))
+            continue
+        index = copies.pop(0)
+        consumed_edges.add(index)
+        old, was = source.edges[index]
+        paired, old_only, new_only = _pair_shapes(old, edge)
+        between = [_shape_between(old_shape, new_shape, 0.0, 0.0, t) for old_shape, new_shape in paired]
+        edges.append((Edge(edge.src, edge.dst, edge.points, between), was + (1.0 - was) * t))
+        if new_only:
+            edges.append((Edge(edge.src, edge.dst, edge.points, new_only), t))
+        if old_only and was * (1.0 - t) > _INVISIBLE:
+            edges.append((Edge(old.src, old.dst, old.points, old_only), was * (1.0 - t)))
+    for index, (edge, opacity) in enumerate(source.edges):
+        if index not in consumed_edges and opacity * (1.0 - t) > _INVISIBLE:
             edges.append((edge, opacity * (1.0 - t)))
 
     return Picture(graph=target, nodes=tuple(nodes), edges=tuple(edges), positions=positions)
@@ -247,6 +252,7 @@ def scene(picture: Picture, edge_between: EdgeBetween | None = None) -> Scene:
              if opacity > 0.0]
 
     edges = []
+    rebuilt: dict[tuple[str | None, str | None], tuple[Edge, list[float]]] = {}  # in first-seen order
     for edge, opacity in picture.edges:
         if opacity <= 0.0:
             continue
@@ -258,8 +264,12 @@ def scene(picture: Picture, edge_between: EdgeBetween | None = None) -> Scene:
         if src_at is None or dst_at is None:  # an endpoint with no name has nowhere to be looked up
             edges.append((edge, Placement(opacity=opacity)))
             continue
-        edges.append((edge_between(_moved(edge.src, src_at), _moved(edge.dst, dst_at)),
-                      Placement(opacity=opacity)))
+        key = _edge_key(edge)
+        if key not in rebuilt:
+            rebuilt[key] = (edge_between(_moved(edge.src, src_at), _moved(edge.dst, dst_at)), [])
+        rebuilt[key][1].append(opacity)
+    # Every copy of one name pair rebuilds to the same edge, so each is drawn once rather than stacked.
+    edges.extend((edge, Placement(opacity=_coverage(opacities))) for edge, opacities in rebuilt.values())
 
     return Scene(shapes=picture.graph.shapes, edges=edges, nodes=nodes)
 
@@ -292,12 +302,12 @@ def _signature(shape: Shape) -> tuple:
     return (type(shape), id(shape))  # a kind this module does not know how to interpolate never pairs
 
 
-# `(old node, new node) -> pairing`. A change asks on every frame about the same two nodes, and the answer
-# depends only on them. Weak both ways, so a pairing goes when either picture does.
-_pairings: "weakref.WeakKeyDictionary[Node, weakref.WeakKeyDictionary]" = weakref.WeakKeyDictionary()
+# `(old element, new element) -> pairing`. A change asks on every frame about the same two nodes or edges,
+# and the answer depends only on them. Weak both ways, so a pairing goes when either picture does.
+_pairings: "weakref.WeakKeyDictionary[Element, weakref.WeakKeyDictionary]" = weakref.WeakKeyDictionary()
 
 
-def _pair_shapes(old: Node, new: Node) -> tuple[list[tuple[Shape, Shape]], list[Shape], list[Shape]]:
+def _pair_shapes(old: Element, new: Element) -> tuple[list[tuple[Shape, Shape]], list[Shape], list[Shape]]:
     """Pair `old`'s shapes with `new`'s: `(pairs, only in old, only in new)`.
 
     Pairs are matched in order, as the longest common run of `_signature`s, so a shape inserted or removed

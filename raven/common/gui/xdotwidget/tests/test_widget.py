@@ -314,14 +314,15 @@ class TestSetGraphCanMorph:
 
     def test_asked_for_it_morphs_and_then_rests(self, widget):
         widget.update()
-        at_rest = drawn(widget)
         widget.set_graph(moved(chat_shaped_graph(), 50.0, only="b2"), animate=True)
         assert widget.is_animating()
         widget.update()
-        assert drawn(widget) > at_rest, "mid-morph draws the old picture and the new, so more than either"
+        mid_morph = drawn(widget)
         finish_morph(widget)
         widget.update()
         assert not widget.is_animating()
+        # The new graph's boxes have no labels, so the old ones are fading out while the morph runs.
+        assert mid_morph > drawn(widget), "mid-morph drew no more than the new graph at rest"
 
     def test_a_morph_moves_a_node_gradually(self, widget):
         widget.set_zoom(1.0, animate=False)
