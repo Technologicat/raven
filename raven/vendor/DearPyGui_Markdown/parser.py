@@ -410,4 +410,28 @@ def parse(html_text: str) -> [str, list[MessageEntity]]:
     parser = _HTMLToParser()
     parser.feed(_add_surrogate(html_text))
     text = _strip_text(parser.text, parser.entities)
+    _to_code_point_offsets(text, parser.entities)
     return _del_surrogate(text), parser.entities
+
+
+def _to_code_point_offsets(surrogate_text: str, entities: list[MessageEntity]) -> None:
+    """Convert `entities`' offsets and lengths, in place, from UTF-16 code units to code points.
+
+    The parser counts in code units — it runs on text where each character outside the BMP has been
+    expanded to a surrogate pair, the arithmetic Telegram's entities use — while `parse` returns the text
+    with the pairs joined again, and everything downstream slices *that* with these offsets. Unconverted,
+    each emoji before a styled span shifts the span one character to the right.
+    """
+    if not any(0xD800 <= ord(char) <= 0xDBFF for char in surrogate_text):
+        return  # BMP only: the two counts agree
+    code_point_at_unit = []  # code unit index -> code point index, with one entry past the end
+    code_point = 0
+    for char in surrogate_text:
+        code_point_at_unit.append(code_point)
+        if not 0xD800 <= ord(char) <= 0xDBFF:  # a high surrogate shares its code point with the low one after it
+            code_point += 1
+    code_point_at_unit.append(code_point)
+    for entity in entities:
+        end = code_point_at_unit[entity.offset + entity.length]
+        entity.offset = code_point_at_unit[entity.offset]
+        entity.length = end - entity.offset

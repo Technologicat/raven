@@ -6165,6 +6165,10 @@ third option is explicitly a judgement from reading, with nothing tried.
 widget it was given and positions nothing, so a colour landing on the wrong character means the *text* was
 split into the wrong widgets, which is a segmentation problem and a different fault. Worth re-checking
 whether that one still reproduces at all, the colour path having been reworked since (Juha, 2026-08-27).
+**A segmentation fault of exactly that shape was found and fixed on 2026-09-17**: the parser's entity offsets
+counted UTF-16 code units, so every styled span — links included — sat one character to the right per emoji
+before it. Juha's reading is that this was the observed case — it shows only when an emoji precedes the link,
+which would look intermittent. If the URL colour is not seen off again, drop this paragraph.
 The URL *underline*, on the other hand, is one of the six sites above and belongs to this item.
 
 ## Nothing remembers which sibling the reader was on
