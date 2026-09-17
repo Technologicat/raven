@@ -898,14 +898,6 @@ def set_text_under_flash(widget: Union[str, int, object], text: str) -> None:
 # three frames to land when re-issued, so this leaves plenty of room without asking forever.
 _CARET_REQUEST_MAX_FRAMES = 10
 
-def _shown_all_the_way_up(item: str | int) -> bool:
-    """Whether `item` and every container above it, up to its window, is shown."""
-    while item:
-        if not dpg.is_item_shown(item):
-            return False
-        item = dpg.get_item_parent(item)
-    return True
-
 class CaretRequest(Animation):
     """Give a text field the caret, and keep asking each frame until it has it. See `give_caret`."""
 
@@ -923,7 +915,7 @@ class CaretRequest(Animation):
                 return action_cancel
             # Hidden since the request was made: asking again would only pull focus toward a window nobody
             # can see.
-            if not _shown_all_the_way_up(self.field):
+            if not guiutils.is_shown_all_the_way_up(self.field):
                 logger.debug(f"CaretRequest.render_frame: gave up giving '{self.field}' the caret: it is no longer shown.")
                 return action_cancel
             self.frames_left -= 1
@@ -946,7 +938,7 @@ def give_caret(field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) ->
     # `investigations/dpg-focus/focus_request_vs_tooltip_probe.py`.
     with guiutils.nonexistent_ok():
         dpg.focus_item(field)
-        if _shown_all_the_way_up(field):
+        if guiutils.is_shown_all_the_way_up(field):
             return animator.add(CaretRequest(field, max_frames=max_frames))
     return None
 
@@ -1464,7 +1456,7 @@ class WidgetSwap(Animation):
             viewport_top = guiutils.get_widget_pos(self.child_window)[1]
             total = 0
             for old, new, height_change in batch:
-                if not dpg.does_item_exist(old) or not _shown_all_the_way_up(old):
+                if not dpg.does_item_exist(old) or not guiutils.is_shown_all_the_way_up(old):
                     continue
                 if guiutils.get_widget_pos(old)[1] < viewport_top:
                     total += height_change

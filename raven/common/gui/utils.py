@@ -19,7 +19,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "setup_default_font", "setup_icon_fonts", "setup_markdown", "setup_themes",  # granular low-level app bootup API
 
            "nonexistent_ok",
-           "maybe_delete_item", "has_child_items", "item_identifiers", "describe_item",
+           "maybe_delete_item", "has_child_items", "find_hidden_ancestor", "is_shown_all_the_way_up", "item_identifiers", "describe_item",
 
            "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y", "DPG_SCROLLBAR_SIZE",  # default-theme metrics Raven has to know
 
@@ -583,6 +583,27 @@ def maybe_delete_item(item: str | int) -> None:
 def has_child_items(widget: str | int) -> bool:
     """Return whether `widget` (DPG tag or ID) has child items in any of its slots."""
     return any(len(dpg.get_item_children(widget, slot=slot)) for slot in range(4))
+
+def find_hidden_ancestor(item: str | int) -> str | int | None:
+    """Return the first item at or above `item` (DPG tag or ID), up to its window, that is hidden; `None` if none is.
+
+    What keeps `item` from being laid out, if anything: a hidden item is not laid out, so its size and position
+    cannot be read. Being off screen does not count — an item scrolled out of view is still laid out.
+
+    Raises DPG's error if `item` does not exist.
+    """
+    while item:
+        if not dpg.is_item_shown(item):
+            return item
+        item = dpg.get_item_parent(item)
+    return None
+
+def is_shown_all_the_way_up(item: str | int) -> bool:
+    """Return whether `item` (DPG tag or ID) and every container above it, up to its window, is shown.
+
+    Which is whether DPG lays it out; see `find_hidden_ancestor`. Raises DPG's error if `item` does not exist.
+    """
+    return find_hidden_ancestor(item) is None
 
 def item_identifiers(widget: str | int) -> set:
     """Return every name DPG may answer with for `widget` — its tag and its numeric ID, whichever exist.
