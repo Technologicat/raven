@@ -442,6 +442,8 @@
 
 *Raven-librarian*
 
+- **on Windows, saving the chat no longer fails because another program has the file open for a moment** — an antivirus scanner checking what was just written, a search indexer, a sync client. The save is now tried again for up to ten seconds. This matters most at exit, where the chat is saved once with no later save to fall back on.
+
 - **startup no longer sometimes fails its first resize with "Alias already exists".** Loading the avatar's settings and the startup resize could set up the avatar's backdrop at the same moment, and the resize that lost aborted before re-laying out the chat log for the window's size.
 
 - **the avatar's expression is no longer lost when it changes while the avatar is asleep.** Switching to another chat sets the avatar's emotion from the message now on screen, and if the idle timeout had switched the video off, the change happened out of sight. The avatar now wakes and takes the expression once its video is back.

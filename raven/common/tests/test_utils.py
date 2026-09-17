@@ -136,6 +136,56 @@ class TestAtomicWrite:
         assert target.read_text(encoding="utf-8") == "previous"
         assert list(tmp_path.iterdir()) == [target], f"a temp file was left behind: {list(tmp_path.iterdir())}"
 
+    @staticmethod
+    def _held_open(monkeypatch, refusals: int) -> list:
+        """Make `os.replace` refuse the first `refusals` calls, as Windows does while another program has the file
+        open. Returns the list of attempts made, which grows as they happen."""
+        real_replace = os.replace
+        attempts = []
+        def replace(source, destination):
+            attempts.append(destination)
+            if len(attempts) <= refusals:
+                raise PermissionError(13, "The process cannot access the file because it is being used by another process")
+            real_replace(source, destination)
+        monkeypatch.setattr(utils.os, "replace", replace)
+        monkeypatch.setattr(utils, "_REPLACE_RETRY_FIRST_DELAY", 0.001)
+        monkeypatch.setattr(utils, "_REPLACE_RETRY_MAX_DELAY", 0.001)
+        return attempts
+
+    def test_on_windows_a_replace_refused_while_the_file_is_held_open_is_tried_again(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(utils, "_RETRY_REPLACE_ON_PERMISSION_ERROR", True)
+        attempts = self._held_open(monkeypatch, refusals=2)
+        target = tmp_path / "chat.json"
+        target.write_text("previous", encoding="utf-8")
+        with utils.atomic_write(target) as f:
+            f.write("new")
+        assert len(attempts) == 3, "the fixture did not refuse the replace, so this tests nothing"
+        assert target.read_text(encoding="utf-8") == "new"
+        assert list(tmp_path.iterdir()) == [target], f"a temp file was left behind: {list(tmp_path.iterdir())}"
+
+    def test_on_windows_a_file_held_open_for_too_long_still_fails_and_keeps_the_previous_content(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(utils, "_RETRY_REPLACE_ON_PERMISSION_ERROR", True)
+        attempts = self._held_open(monkeypatch, refusals=10**9)
+        monkeypatch.setattr(utils, "_REPLACE_RETRY_BUDGET", 0.05)
+        target = tmp_path / "chat.json"
+        target.write_text("previous", encoding="utf-8")
+        with pytest.raises(PermissionError):
+            with utils.atomic_write(target) as f:
+                f.write("new")
+        assert len(attempts) > 1, "the replace was not tried again before the budget ran out"
+        assert target.read_text(encoding="utf-8") == "previous"
+        assert list(tmp_path.iterdir()) == [target], f"a temp file was left behind: {list(tmp_path.iterdir())}"
+
+    def test_elsewhere_a_permission_error_is_not_waited_out(self, tmp_path, monkeypatch):
+        """There it means the permissions really are wrong, and a second of retrying would only delay the error."""
+        monkeypatch.setattr(utils, "_RETRY_REPLACE_ON_PERMISSION_ERROR", False)
+        attempts = self._held_open(monkeypatch, refusals=1)
+        target = tmp_path / "chat.json"
+        with pytest.raises(PermissionError):
+            with utils.atomic_write(target) as f:
+                f.write("new")
+        assert len(attempts) == 1
+
     def test_a_symlink_has_its_target_replaced(self, tmp_path):
         real = tmp_path / "real.json"
         real.write_text("old", encoding="utf-8")

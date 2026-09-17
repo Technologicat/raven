@@ -26,6 +26,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from typing import IO, Any, Callable, Dict, Iterator, List, NoReturn, Optional, Union
 import unicodedata
 
@@ -111,6 +112,32 @@ def create_directory(path: Union[str, pathlib.Path]) -> None:
     p = pathlib.Path(path).expanduser().resolve()
     pathlib.Path.mkdir(p, parents=True, exist_ok=True)
 
+# On Windows, a file another program holds open — an antivirus scanner looking at what was just written, a search
+# indexer, a sync client — cannot be replaced for as long as it is held, and `os.replace` raises `PermissionError`.
+# So the replace is tried again, waiting twice as long each time up to a second between tries, and the error is let
+# through only once the budget is spent. A scan of a large file can take seconds, which is what sizes the budget.
+# Not on other platforms, where a `PermissionError` means the permissions really are wrong and waiting cannot help.
+_RETRY_REPLACE_ON_PERMISSION_ERROR = (os.name == "nt")
+_REPLACE_RETRY_FIRST_DELAY = 0.1  # seconds
+_REPLACE_RETRY_MAX_DELAY = 1.0  # seconds
+_REPLACE_RETRY_BUDGET = 10.0  # seconds
+
+def _replace_retrying_a_sharing_violation(source: str, destination: Union[str, pathlib.Path]) -> None:
+    deadline = time.monotonic() + _REPLACE_RETRY_BUDGET
+    delay = _REPLACE_RETRY_FIRST_DELAY
+    attempt = 1
+    while True:
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError as exc:
+            if not _RETRY_REPLACE_ON_PERMISSION_ERROR or time.monotonic() + delay > deadline:
+                raise
+            logger.debug(f"atomic_write: replacing '{destination}' failed on attempt {attempt}, trying again in {delay:0.1f} seconds: {type(exc)}: {exc}")
+            time.sleep(delay)
+            delay = min(2 * delay, _REPLACE_RETRY_MAX_DELAY)
+            attempt += 1
+
 @contextlib.contextmanager
 def atomic_write(path: Union[str, pathlib.Path],
                  mode: str = "w",
@@ -123,7 +150,8 @@ def atomic_write(path: Union[str, pathlib.Path],
             json.dump(data, f)
 
     The file is replaced only when the block exits normally. If it raises, the previous content stays as it
-    was, and the exception propagates.
+    was, and the exception propagates. On Windows, a replace refused because another program has the file open
+    is tried again for up to ten seconds.
 
     `path`: The file to write. A symlink is followed, so its target is what gets replaced. The directory must
             exist.
@@ -152,7 +180,7 @@ def atomic_write(path: Union[str, pathlib.Path],
             yield f
             f.flush()
             os.fsync(f.fileno())  # the bytes must be on disk before the name points at them
-        os.replace(temporary_file.name, absolute_path)
+        _replace_retrying_a_sharing_violation(temporary_file.name, absolute_path)
     except BaseException:
         # Includes KeyboardInterrupt and SystemExit: saves run at interpreter exit, where those are live
         # possibilities, and leaving a stray `*.tmp` behind on every one of them would accumulate beside the file.
