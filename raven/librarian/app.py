@@ -1320,9 +1320,12 @@ with timer() as tim:
                     with dpg.tooltip("search_clear_button"):  # tag
                         dpg.add_text("Clear the search [Ctrl+Shift+F]")
                     dpg.add_input_text(tag="search_field",
-                                       hint="Search the chat [Ctrl+F]: 'cat photo' finds 'photocatalytic'; lowercase ignores case",
+                                       hint="Search [Ctrl+F]: 'cat photo' finds 'photocatalytic'",
                                        width=_SEARCH_FIELD_ESTIMATED_W,  # corrected by `_resize_search_row` once laid out
                                        callback=search_changed_callback)
+                    with dpg.tooltip("search_field"):  # tag  # the rules the hint has no room for
+                        dpg.add_text("Every word must occur in one message, in any order.\n"
+                                     "A word with a capital letter in it matches case exactly.")
                     with dpg.group(horizontal=True, tag="search_controls_group"):  # tag  # measured, for the field's width
                         dpg.add_checkbox(label="Thinking", tag="search_thinking_checkbox", default_value=app_state["search_thinking"],
                                          callback=search_changed_callback)
