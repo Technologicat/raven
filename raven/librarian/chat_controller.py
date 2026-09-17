@@ -4169,12 +4169,17 @@ class DPGChatController:
         # Search. `search_query` is what paragraphs are highlighted with as they render, so it is rebound whole and
         # read without a lock: a render sees either the old query or the new one, and the re-highlight that follows
         # a change catches up whatever rendered in between. `search_matches` is `chatsearch.find_matches`' answer
-        # for the branch on screen, and `search_match_index` the match last jumped to, if any.
+        # for the branch on screen. The rest is where the view is among them, kept by `update_search_position`:
+        # the current match's index, if one is on screen, and whether previous and next have anywhere to go.
         self.search_query = None
         self.search_matches = []
         self.search_match_index = None
-        # Called with no arguments whenever `search_matches` or `search_match_index` changes, so the app can
-        # redraw its counter. Set by the app; `None` until then.
+        self.search_can_go_back = False
+        self.search_can_go_forward = False
+        self._search_position_y_scroll = None
+        self._search_position_stale = True
+        # Called with no arguments whenever any of the four above changes, so the app can redraw its search row.
+        # Set by the app; `None` until then.
         self.on_search_results_changed = None
 
         # The keyboard mark on the current message's button row, built on first use by
@@ -4304,15 +4309,13 @@ class DPGChatController:
         by a long branch.
         """
         self.search_query = chatsearch.make_query(search_string, include_thinking=include_thinking, include_tools=include_tools)
-        self.search_match_index = None
         if self.gui_updates_safe:
             self.search_task_manager.submit(self._search_task, env())
 
     def clear_search_matches(self) -> None:
         """Forget the matches, for a view about to be rebuilt; `add_search_matches_for` refills them as it is."""
         self.search_matches = []
-        self.search_match_index = None
-        self._notify_search_results_changed()
+        self._search_matches_changed()
 
     def add_search_matches_for(self, node_id: str) -> None:
         """Test one message just added to the end of the branch on screen against the search, and count it if it matches.
@@ -4325,69 +4328,110 @@ class DPGChatController:
         new_matches = chatsearch.find_matches(self.datastore, [node_id], maybe_query)
         if new_matches:
             self.search_matches = self.search_matches + new_matches  # rebound whole, never mutated: readers take no lock
-            self._notify_search_results_changed()
+            self._search_matches_changed()
 
     def refresh_search_matches(self) -> None:
-        """Recompute which messages of the branch on screen match the current search, all of them.
-
-        The match last jumped to stays the current one if it still matches.
-        """
+        """Recompute which messages of the branch on screen match the current search, all of them."""
         maybe_query = self.search_query
         with self.current_chat_history_lock:
             node_ids = [message.node_id for message in self.current_chat_history if message.node_id is not None]
-        matches = chatsearch.find_matches(self.datastore, node_ids, maybe_query)
-        maybe_current = self._current_search_match()
-        self.search_matches = matches
-        self.search_match_index = next((index for index, (node_id, where) in enumerate(matches)
-                                        if maybe_current is not None and node_id == maybe_current[0]),
-                                       None)
-        self._notify_search_results_changed()
+        self.search_matches = chatsearch.find_matches(self.datastore, node_ids, maybe_query)
+        self._search_matches_changed()
+
+    # Where the reader is, in the matches, is read off the view rather than remembered: the current match is the
+    # topmost one at or below the top of the view, and next and previous are the nearest matches more than a line
+    # below and above it. So scrolling by hand moves the counter, and a jump goes from what is on screen rather
+    # than from wherever the last jump went. The Visualizer's info panel works the same way, and the two should
+    # stay alike.
 
     def step_search(self, direction: int) -> None:
-        """Jump to the next (`direction=+1`) or previous (`-1`) message matching the search, wrapping around.
+        """Jump to the next (`direction=+1`) or previous (`-1`) matching message, relative to the top of the view.
 
-        The first step of a search starts from where the reader is: the first match at or below the top of the
-        view going forward, the last one above it going back. A message whose thinking trace matched has its
-        trace opened, whether or not its text matched too, so that every match the search counted is on screen.
+        Stops at either end rather than wrapping around. A message whose thinking trace matched has its trace
+        opened, whether or not its text matched too, so that every match the search counted is on screen.
         """
-        matches = self.search_matches
-        if not matches:
+        maybe_index = self._find_search_match(forward=(direction > 0), beyond_a_line=True)
+        if maybe_index is None:
             return
-        if self.search_match_index is None:
-            index = self._first_search_match_from_view(direction)
-        else:
-            index = (self.search_match_index + direction) % len(matches)
-        self.search_match_index = index
-        node_id, where = matches[index]
+        node_id, where = self.search_matches[maybe_index]
         if "thinking" in where and (message := self.view.find_message(node_id)) is not None:
             message.show_thinking_trace()
         self.view.jump_to_node(node_id)
-        self._notify_search_results_changed()
 
-    def _current_search_match(self) -> tuple[str, frozenset] | None:
-        index, matches = self.search_match_index, self.search_matches
-        if index is None or index >= len(matches):
+    def update_search_position(self) -> None:
+        """Recompute which match is current and whether next and previous have anywhere to go. Call once per frame.
+
+        Does nothing unless the view has scrolled or the matches have changed since the last call, and tells
+        `on_search_results_changed` only when the answer differs.
+        """
+        with guiutils.nonexistent_ok() as nok:
+            y_scroll = dpg.get_y_scroll(self.view.gui_parent)
+        if nok.errored or (y_scroll == self._search_position_y_scroll and not self._search_position_stale):
+            return
+        self._search_position_y_scroll = y_scroll
+        self._search_position_stale = False
+        maybe_index = self._find_search_match(forward=True, beyond_a_line=False)
+        if maybe_index is not None:
+            with guiutils.nonexistent_ok() as nok:
+                view_bottom = guiutils.get_widget_pos(self.view.gui_parent)[1] + guiutils.get_widget_size(self.view.gui_parent)[1]
+                indices, containers = self._search_match_containers()  # not `view.find_message`, which takes the lock
+                if maybe_index not in indices or guiutils.get_widget_pos(containers[indices.index(maybe_index)])[1] >= view_bottom:
+                    maybe_index = None  # the topmost match below the top is not on screen, so none is current
+            if nok.errored:
+                self._search_position_stale = True  # the view changed under the read; try again next frame
+                return
+        position = (maybe_index,
+                    self._find_search_match(forward=False, beyond_a_line=True) is not None,
+                    self._find_search_match(forward=True, beyond_a_line=True) is not None)
+        if position != (self.search_match_index, self.search_can_go_back, self.search_can_go_forward):
+            self.search_match_index, self.search_can_go_back, self.search_can_go_forward = position
+            if self.on_search_results_changed is not None:
+                self.on_search_results_changed()
+
+    def _search_matches_changed(self) -> None:
+        self._search_position_stale = True
+        if self.on_search_results_changed is not None:  # the count, at once; the position follows on the next frame
+            self.on_search_results_changed()
+
+    def _search_match_containers(self) -> tuple[list[int], list]:
+        """`(indices, containers)`: each matching message on screen, as its index into `search_matches` and its container widget.
+
+        In branch order. A match with no widget — the view mid-rebuild — is left out of both lists together.
+
+        Read without `current_chat_history_lock`, since this runs on the render thread every frame the view scrolls,
+        and `build` holds that lock from another thread across frames. `tuple` copies the list in one step; a
+        widget that has gone by the time it is read raises, and callers treat that as "try again next frame".
+        """
+        containers_by_node_id = {message.node_id: message.gui_container_group
+                                 for message in tuple(self.current_chat_history)}
+        indices, containers = [], []
+        for index, (node_id, where) in enumerate(self.search_matches):
+            if node_id in containers_by_node_id:
+                indices.append(index)
+                containers.append(containers_by_node_id[node_id])
+        return indices, containers
+
+    def _find_search_match(self, *, forward: bool, beyond_a_line: bool) -> int | None:
+        """Index into `search_matches` of the nearest match below (`forward`) or above the top of the view, or `None`.
+
+        `beyond_a_line`: whether the match must be more than a line of text past the top — true for next and
+                         previous, so that the match already at the top is neither. Without it, forward finds the
+                         topmost match at or below the top, which is the current one.
+        """
+        indices, containers = self._search_match_containers()
+        if not containers:
             return None
-        return matches[index]
-
-    def _first_search_match_from_view(self, direction: int) -> int:
-        """Index of the first match at or below the view's top (`direction=+1`), or the last above it (`-1`)."""
-        matches = self.search_matches
         with guiutils.nonexistent_ok():
             view_top = guiutils.get_widget_pos(self.view.gui_parent)[1]
-            tops = []
-            for node_id, where in matches:
-                maybe_message = self.view.find_message(node_id)
-                tops.append(guiutils.get_widget_pos(maybe_message.gui_container_group)[1] if maybe_message is not None else None)
-            if direction > 0:
-                return next((index for index, top in enumerate(tops) if top is not None and top >= view_top), 0)
-            return next((index for index, top in reversed(list(enumerate(tops))) if top is not None and top < view_top),
-                        len(matches) - 1)
-        return 0 if direction > 0 else len(matches) - 1
+            line = gui_config.font_size if beyond_a_line else 0
+            target_y = view_top + (line if forward else -line)
 
-    def _notify_search_results_changed(self) -> None:
-        if self.on_search_results_changed is not None:
-            self.on_search_results_changed()
+            def is_completely_below(widget):
+                return widgetfinder.is_completely_below_target_y(widget, target_y=target_y)
+            maybe_widget = widgetfinder.binary_search_widget(widgets=containers, accept=is_completely_below,
+                                                             consider=None, direction=("right" if forward else "left"))
+            return indices[containers.index(maybe_widget)] if maybe_widget is not None else None
+        return None
 
     def _search_task(self, task_env: env) -> None:
         self.refresh_search_matches()

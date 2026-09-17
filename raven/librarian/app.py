@@ -1301,6 +1301,10 @@ with timer() as tim:
                     dpg.add_button(label=fa.ICON_X, callback=clear_search_callback, width=gui_config.toolbutton_w,
                                    tag="search_clear_button")
                     dpg.bind_item_font("search_clear_button", themes_and_fonts.icon_font_solid)  # tag
+                    with dpg.theme(tag="search_clear_theme"):  # tag
+                        with dpg.theme_component(dpg.mvAll):
+                            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))  # a red ✕, as the Visualizer's is
+                    dpg.bind_item_theme("search_clear_button", "search_clear_theme")  # tag
                     with dpg.tooltip("search_clear_button"):  # tag
                         dpg.add_text("Clear the search [Ctrl+Shift+F]")
                     dpg.add_input_text(tag="search_field",
@@ -1316,13 +1320,13 @@ with timer() as tim:
                                          callback=search_changed_callback)
                         with dpg.tooltip("search_tools_checkbox"):  # tag
                             dpg.add_text("Search what tools returned: web pages, search results, documents.")
-                        dpg.add_button(label=fa.ICON_ANGLE_UP, callback=lambda: chat_controller.step_search(-1),
+                        dpg.add_button(label=fa.ICON_CIRCLE_UP, callback=lambda: chat_controller.step_search(-1),  # the Visualizer's glyphs for the same verb
                                        width=gui_config.toolbutton_w, enabled=False, tag="search_prev_button")
                         dpg.bind_item_font("search_prev_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("search_prev_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("search_prev_button"):  # tag
                             dpg.add_text("Go to the previous matching message [Shift+F3]")
-                        dpg.add_button(label=fa.ICON_ANGLE_DOWN, callback=lambda: chat_controller.step_search(+1),
+                        dpg.add_button(label=fa.ICON_CIRCLE_DOWN, callback=lambda: chat_controller.step_search(+1),
                                        width=gui_config.toolbutton_w, enabled=False, tag="search_next_button")
                         dpg.bind_item_font("search_next_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("search_next_button", "disablable_widget_theme")  # tag
@@ -2196,6 +2200,8 @@ def update_animations():
     # Which message the per-message hotkeys act on follows the scroll position, and is polled for the same
     # reason the pill is: nothing raises an event when the reader wheels the panel.
     chat_controller.update_current_message_mark()
+    # The search counter follows the scroll position too, for the same reason.
+    chat_controller.update_search_position()
     # Whether a turn is in flight gates sending, and is polled for the same reason: the turn starts and
     # finishes on a background task, which raises nothing this module hooks. The call is a comparison
     # unless the answer actually changed.
@@ -2512,8 +2518,9 @@ def _update_search_row() -> None:
         counter = f"[{maybe_index + 1 if maybe_index is not None else '–'}/{len(matches)}]"
     with guiutils.nonexistent_ok():
         dpg.set_value("search_counter_text", counter)  # tag
-        for button in ("search_prev_button", "search_next_button"):  # tag
-            (dpg.enable_item if matches else dpg.disable_item)(button)
+        for button, has_somewhere_to_go in (("search_prev_button", chat_controller.search_can_go_back),  # tag
+                                            ("search_next_button", chat_controller.search_can_go_forward)):  # tag
+            (dpg.enable_item if has_somewhere_to_go else dpg.disable_item)(button)
 
 def _resize_panels() -> None:
     """Resize the panels in the main window RIGHT NOW, based on main window size."""
