@@ -122,6 +122,14 @@ interpolated, `xdotwidget.morph`); the graph camera and a morph share one clock 
 straight onto the chat graph. The blank frames before the graph's first picture at startup are filed in
 `TODO_DEFERRED.md`.
 
+### Decided 2026-09-17 — a hygiene sweep follows search v1 directly
+
+**When search v1 lands, the next task is the whitespace and test-style sweep** (Juha), before anything else is
+picked up: flake8 across the tree, and the Visualizer's test modules regrouped into classes as the style guide
+asks. The detail is in `TODO_DEFERRED.md`, *"A whitespace and test-style sweep, straight after search v1"*. It
+is recorded here as well because an item in that file is otherwise easy to forget, and this README is what a
+session reads first.
+
 ### ~~Make `IDLE_SLEEP_S` mean what it says~~ — done 2026-09-11, and it grew a tail
 
 *Hammerspace*, and of the low-density kind: the work is behind a fixed interface — one loop per app, one

@@ -411,6 +411,12 @@ result that differs rather than arrives late. Ask which shape it has before assu
 
 ### Naming and placing a test module
 
+**Before writing a new test module, or a test in a module you have not read, read `raven-style-guide.md` →
+*Testing*.** It is short, and it sets the shape: fixtures for common setups, tests grouped in classes by feature
+area, the public API rather than internal state. It does not load itself — the task arrives as "add a test for
+X", which reads as test plumbing rather than as style — so the trigger is creating the file. Eight of the
+Visualizer's eleven test modules were written as module-level functions without it (found 2026-09-17).
+
 **`test_X.py` tests the module `X.py`, and lives in the `tests/` directory of X's own package.** So
 `raven/common/text/normalize.py` is tested by `raven/common/text/tests/test_normalize.py`. Every subpackage
 carries its own `tests/` (`audio/`, `gui/`, `image/`, `text/`, `video/`, …); `raven/common/tests/` is for the

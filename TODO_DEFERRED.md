@@ -11,6 +11,28 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## A whitespace and test-style sweep, straight after search v1
+
+*Cluster: code-hygiene · Cost: S · Gate: search v1 lands · Filed: 2026-09-17 · See also: `briefs/researchers-night/README.md` → Decided 2026-09-17*
+
+Two mechanical passes, both found while moving the search-highlight tests into `raven/common/tests/test_utils.py`.
+
+- **flake8 across `raven`, `scripts` and `investigations`**: 125 findings in 30 files on 2026-09-17, 55 of them
+  in `raven/vendor`. Always `flake8 --config ~/.config/flake8`.
+  - **Fix**: plain whitespace mistakes, about 40 — `E303`, `W292`/`W391`, `E128`/`E131`, `E114`/`E116`,
+    `E261`/`E262`, `E272`.
+  - **Look at each**: `E241`, `E226`, `E231`, about 40. Often a hand-aligned table, which wants a `# noqa` rather
+    than a fix.
+  - **Leave**: the 15 `E701`s, all one-line `class MessageEntityX(MessageEntity): ...` declarations in the
+    vendored parser.
+  - **Read, do not delete**: the 2 `F841` unused variables.
+  - **The check that makes it safe**: whitespace-only edits leave the AST unchanged, so `ast.dump` of every
+    touched file before and after must match exactly.
+- **Test classes in `raven/visualizer/tests/`**: 8 of its 11 modules are module-level functions under section
+  comments, where `raven-style-guide.md` → *Testing* groups tests in classes by feature area. The conversion is
+  indenting into a class and adding `self`; the check is that undoing it reproduces the original, and that
+  every test name appears exactly once afterwards.
+
 ## The chat graph shows a couple of blank frames before its first picture
 
 *Cluster: chat-graph · Cost: S? · Gate: none; only if it starts to bother · Filed: 2026-09-16*
