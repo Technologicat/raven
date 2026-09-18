@@ -13,17 +13,34 @@ hides a decision that was never taken, which is how four entries ended up mis-fi
 
 ## Widening the window feeds the chat log, which is the pane that wants it least
 
-*Cluster: chat-graph-view · Cost: M · Gate: none · Filed: 2026-09-18 · See also: `briefs/researchers-night/16_chat-graph-view-brief.md` → Panel sizing on a wide screen, and the constraint underneath it*
+*Cluster: chat-graph-view · Cost: M · Gate: none · Filed: 2026-09-18*
 
 Confirmed in use, 2026-09-18: made larger, the window spends its new width on the chat log, which becomes
 too wide to read comfortably — past the measure the eye can track from the end of one line to the start of
 the next. The graph would use that width better, having a picture that grows rather than prose that does not.
 
-**The design work is already in the brief**, which names three compatible directions and reports one of them
-free: the avatar's cost follows `avatar_config`'s `upscale` rather than its rect, so panel size and avatar
-cost are already decoupled and a growable panel needs nothing built. What is left is choosing among them
-and settling the numbers, and that is test-and-tune against real windows rather than a decision anyone can
-make on paper — which is what makes it an item rather than a brief edit.
+Written out in full here rather than cited, because the design lives in the chat graph brief and search is
+that brief's last open item — so it is archived about when this is picked up.
+
+The obstacle was that the graph shares its rect with the avatar, and the avatar cannot simply grow: its
+cost is O(pixels), so a bigger panel is a bigger per-frame bill for the same character. Three directions,
+the first two compatible with each other and the third **already true**:
+
+- **Cap the chat log's width.** Worth doing on its own merits rather than as a way to feed the graph: a
+  chat log 1800 px wide is harder to read than one at 900, which is why typography has a measure at all.
+  Surplus width then goes right by default.
+- **Let the rect's two occupants be different sizes.** They are alternatives, never both on screen, so
+  nothing forces the graph to inherit the avatar's dimensions; the split could move when the graph is shown.
+- **Cap what the avatar renders and letterbox it**, which is how it already works — checked 2026-09-01:
+  `DPGAvatarRenderer` positions the character bottom-centred in whatever rect it is handed, and the
+  character's pixel size follows `avatar_config`'s `upscale` rather than the rect. So panel size and avatar
+  cost are already decoupled and a growable panel costs nothing to adopt. The backdrop too:
+  `configure_backdrop` rescales with Lanczos and crops to the aspect ratio, so widening re-crops rather
+  than stretches — but it waits for a frame, so wire it from the debounced resize task rather than the
+  render thread, as `app.py` already does.
+
+What is left is choosing among them and settling the numbers, which is test-and-tune against real windows
+rather than a decision anyone can make on paper.
 
 Raised again while live-testing the chat graph's search (2026-09-18); Juha asked for it early the following
 week.
