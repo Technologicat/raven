@@ -27,7 +27,7 @@ from raven.librarian.chattree import Forest
 # Fixtures
 # ---------------------------------------------------------------------------
 
-def payload(role: str, text: str, tool_calls=None, images=(), documents=()) -> dict:
+def payload(role: str, text: str, tool_calls=None, images=(), documents=(), reasoning=None) -> dict:
     """A chat node payload of the shape `chatutil` writes, with only the fields this module reads.
 
     The timestamp is real data rather than filler: `chatutil.descend_to_latest` orders siblings by it, so
@@ -43,6 +43,8 @@ def payload(role: str, text: str, tool_calls=None, images=(), documents=()) -> d
     message = {"role": role, "content": content}
     if tool_calls is not None:
         message["tool_calls"] = tool_calls
+    if reasoning is not None:
+        message["reasoning_content"] = reasoning
     return {"message": message,
             "general_metadata": {"persona": None, "timestamp": _payload_serial}}
 
@@ -2943,3 +2945,139 @@ class TestTolerance:
         forest.create_node(payload("system", "you are helpful"), parent_id=None)
         with pytest.raises(KeyError):
             chatgraph.build(forest, chatgraph.ViewState(head_node_id="no-such-node"))
+
+
+class TestSearchSnippets:
+    """What a box that matched the running search *says*, as against merely whether it matched.
+
+    The opening of a message answers "what is this"; a reader with a search running is asking "why is this
+    on screen", and only the match answers that. So a matching box quotes the match, paints it as the chat
+    log paints one, and says by its colour which of the message's texts the hit came out of.
+    """
+
+    QUOTE = "Photocatalysis speeds up a reaction using light, and splits water into hydrogen."
+    THOUGHT = "The user is asking about photocatalysis in hydrogen production, so mention water splitting."
+
+    @pytest.fixture
+    def searchable(self):
+        forest = Forest()
+        system = forest.create_node(payload("system", "the card"), parent_id=None)
+        asked = forest.create_node(payload("user", "tell me about it"), parent_id=system)
+        answered = forest.create_node(payload("assistant", self.QUOTE, reasoning=self.THOUGHT),
+                                      parent_id=asked)
+        return forest, system, asked, answered
+
+    def _built(self, forest, head, search_string, **options):
+        query = chatsearch.make_query(search_string, **options)
+        node_ids = list(forest.nodes.keys())
+        counts = dict(chatsearch.find_matches(forest, node_ids, query))
+        return chatgraph.build(forest, chatgraph.ViewState(head_node_id=head,
+                                                           search_query=query,
+                                                           match_counts=counts))
+
+    @staticmethod
+    def _label_shapes(built, node_id, config=None):
+        """The label's text shapes, in drawing order — the speaker line and any pills left out by size."""
+        config = config or chatgraph.LayoutConfig()
+        node = built.graph.get_node_by_name(node_id)
+        return [shape for shape in node.shapes
+                if isinstance(shape, xdotgraph.TextShape) and shape.pen.fontsize == config.font_size]
+
+    def _label_text(self, built, node_id):
+        return "".join(shape.text for shape in self._label_shapes(built, node_id))
+
+    def test_a_matching_box_quotes_the_match_rather_than_the_opening(self, searchable):
+        forest, _system, _asked, answered = searchable
+        opening = self._label_text(chatgraph.build(forest, chatgraph.ViewState(head_node_id=answered)),
+                                   answered)
+        assert "hydrogen" not in opening, "the fixture's opening already reaches the word, so this proves nothing"
+        quoted = self._label_text(self._built(forest, answered, "hydrogen"), answered)
+        assert "hydrogen" in quoted
+        assert quoted.startswith("…"), "the quote begins mid-message and has to say so"
+
+    def test_the_match_is_painted_and_the_rest_of_the_line_is_not(self, searchable):
+        forest, _system, _asked, answered = searchable
+        config = chatgraph.LayoutConfig()
+        shapes = self._label_shapes(self._built(forest, answered, "hydrogen"), answered)
+        painted = [shape for shape in shapes if shape.pen.bold]
+        assert [shape.text for shape in painted] == ["hydrogen"]
+        assert all(shape.pen.color == config.search_match_color for shape in painted)
+        assert any(not shape.pen.bold for shape in shapes), \
+            "every run is painted, so this fixture cannot tell a marked match from a marked label"
+
+    def test_a_trace_only_match_quotes_the_trace_in_the_trace_colour(self, searchable):
+        forest, _system, _asked, answered = searchable
+        config = chatgraph.LayoutConfig()
+        built = self._built(forest, answered, "production", include_thinking=True)
+        assert "production" in self._label_text(built, answered), "the trace is not what got quoted"
+        unmarked = [shape for shape in self._label_shapes(built, answered) if not shape.pen.bold]
+        assert unmarked and all(shape.pen.color == config.thinking_label_color for shape in unmarked)
+
+    def test_a_match_in_what_was_said_keeps_the_ordinary_ink(self, searchable):
+        """The control for the above: the trace colour is about *where* the hit was, not about a hit existing."""
+        forest, _system, _asked, answered = searchable
+        config = chatgraph.LayoutConfig()
+        built = self._built(forest, answered, "hydrogen", include_thinking=True)
+        unmarked = [shape for shape in self._label_shapes(built, answered) if not shape.pen.bold]
+        assert unmarked and all(shape.pen.color != config.thinking_label_color for shape in unmarked)
+
+    def test_a_box_that_did_not_match_is_left_alone(self, searchable):
+        """Including one holding a lone fragment of the query, which is not a hit and must not be painted."""
+        forest, _system, asked, answered = searchable
+        built = self._built(forest, answered, "tell hydrogen")  # "tell" is in the user message, "hydrogen" is not
+        assert not built.refs[asked].holds_match, "the fixture's user message matched, so it is the wrong control"
+        shapes = self._label_shapes(built, asked)
+        assert [shape.text for shape in shapes] == ["tell me about it"], "the label was split, so something was marked"
+        assert not any(shape.pen.bold for shape in shapes)
+
+    def test_an_unmatched_label_sits_where_it_always_did(self, searchable):
+        """A line of one run is placed explicitly now, where it used to be a centred shape given the box width.
+
+        The two spellings agree — the renderer starts a centred shape at `centre - width/2`, which for the
+        available width *is* the text area's left edge — and that agreement is what keeps this change
+        invisible wherever no search is running. Asserted on the same box with and without one.
+        """
+        forest, system, _asked, answered = searchable
+        before = self._label_shapes(chatgraph.build(forest, chatgraph.ViewState(head_node_id=answered)),
+                                    system)
+        during = self._label_shapes(self._built(forest, answered, "hydrogen"), system)
+        assert before, "no label to compare"
+        assert not chatgraph.build(forest, chatgraph.ViewState(head_node_id=answered)).refs[system].holds_match
+        assert [(shape.x, shape.text) for shape in during] == [(shape.x, shape.text) for shape in before]
+
+    # What bold actually comes out as, against the regular face the widths here are estimated in: 7.5%
+    # wider, measured across the graph's whole size ladder in `investigations/graph-font-atlas/`.
+    #
+    # A literal rather than `chatgraph._BOLD_WIDTH_HEADROOM`, which is the thing under test. Reusing that
+    # constant makes the assertion move with it, so the test passes whatever it is set to — including zero,
+    # which is the case it exists to reject.
+    BOLD_RENDERS_AT = 1.075
+
+    def test_a_matching_line_stays_inside_the_box_once_its_match_is_bold(self):
+        """Wrapping measures in the regular face, and a match then renders in the bold one, which is wider.
+
+        One long unbroken word, because that is the tight case: a line cut mid-word is filled to the wrap
+        width exactly, where a line that stopped at a word boundary is holding most of a word in reserve
+        and would absorb the widening whether or not anything made room for it.
+
+        Asked of the whole line rather than of each run: the runs are placed at cumulative widths, so the
+        widening of a match pushes everything after it right, and what leaves the box is the line's end.
+        """
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        unbroken = forest.create_node(payload("assistant", "photocatalysis_" * 8), parent_id=root)
+        config = chatgraph.LayoutConfig()
+        built = self._built(forest, unbroken, "photocatalysis")
+        right_edge = built.graph.get_node_by_name(unbroken).x + 0.5 * config.node_w - 8.0  # the label inset
+
+        shapes = self._label_shapes(built, unbroken)
+        assert any(shape.pen.bold for shape in shapes), \
+            "nothing was marked, so this fixture cannot tell a line given room to widen from one that was not"
+        by_line = {}
+        for shape in shapes:
+            by_line.setdefault(shape.y, []).append(shape)
+        for runs in by_line.values():
+            rendered = sum(shape.width * (self.BOLD_RENDERS_AT if shape.pen.bold else 1.0)
+                           for shape in runs)
+            assert runs[0].x + rendered <= right_edge + 0.01, \
+                f"this line runs past the box once its match is bold: {''.join(s.text for s in runs)!r}"

@@ -242,6 +242,12 @@ _MIN_ABOVE_FOCUS = 1
 _PILL_ADVANCE_PER_CHAR = 0.62
 _LABEL_ADVANCE_PER_CHAR = 0.5
 
+# How much wider bold text runs than regular, as a fraction. Measured on OpenSans across the graph's whole
+# size ladder (`investigations/graph-font-atlas/`), where it came out at 7.5% and did not vary with size.
+# Rounded up: this buys headroom rather than predicting a width, and the cost of being generous is a couple
+# of characters off a label that matched.
+_BOLD_WIDTH_HEADROOM = 0.08
+
 # How a caller lets this module ask what text actually measures: `(text, font size) -> width or None`, in
 # graph units. Optional, because the module is pure and DPG is where the answer lives -- with no measurer
 # it falls back to an average advance, which is good enough to size a box and not good enough to centre
@@ -541,6 +547,12 @@ class ViewState:
     `sibling_focus`: Parent node ID -> which of its children the sibling window is centred on. An override:
                      a level not listed here centres on whichever child the spine goes through, which is
                      what the user sees before touching anything.
+    `search_query`: The running search, or `None` for none. Carried as well as `match_counts` because the
+                    two answer different questions: the counts say *whether* a box matched and how often,
+                    while this says *where* in the box's own text, which no count can. Nor could those
+                    offsets come from the counts — a match is found in the normalized message text and a
+                    label is the Markdown-stripped one, two different strings, so a box re-finds its
+                    matches in the text it actually draws.
     `match_counts`: Chat node ID -> the search's hits in that message, over the whole forest rather than
                     only where the picture reaches. `chatsearch.find_matches`' answer, as a mapping. Empty
                     when no search is running, which is what turns every box's mark off; a box sums this
@@ -553,6 +565,7 @@ class ViewState:
     new_chat_node_id: Optional[str] = None
     expanded_tool_turns: Set[str] = dataclasses.field(default_factory=set)
     sibling_focus: Dict[str, str] = dataclasses.field(default_factory=dict)
+    search_query: Optional[chatsearch.SearchQuery] = None
     match_counts: Dict[str, chatsearch.MatchCounts] = dataclasses.field(default_factory=dict)
 
 
@@ -680,6 +693,19 @@ class LayoutConfig:
     margin: float = 20.0
     label_width: Optional[float] = None
     label_lines: int = 2
+    # How much of the text before a search match to keep when a box's label becomes a snippet of it, in
+    # characters, snapped outward to a word boundary. Enough that the match reads as being *in* something
+    # rather than starting it, and small enough that it stays on the first line. A taste call, and the one
+    # thing here to judge by looking.
+    snippet_lead_in: int = 12
+    # A search match inside a label. Written as what the *renderer* should end up drawing, then authored
+    # back through the inversion this module's colours all take — so this is not
+    # `guiutils.SEARCH_HIGHLIGHT_COLOR` but the same colour on the other side of that remap, the two being
+    # genuinely different numbers rather than one constant that could be shared.
+    search_match_color: xdotconstants.Color = _authored_for_dark(0.0, 1.0, 0.5)
+    # A label quoting a thinking trace rather than what was said, in the colour the chat log paints a
+    # trace: `gui_config.chat_color_think_front`, authored back through the same remap.
+    thinking_label_color: xdotconstants.Color = _authored_for_dark(237.0, 0.702, 0.776)
 
     def _get_attachment_card_offset(self, index: int, n_cards: int) -> Tuple[float, float]:
         """Return the `index`-th of `n_cards` cards' centre, offset from the deck's own top-left anchor.
@@ -1083,6 +1109,85 @@ def _wrap(text: str, max_width: float, max_lines: int, font_size: float,
     return lines
 
 
+@dataclasses.dataclass(frozen=True)
+class _Run:
+    """A stretch of one label line drawn in one pen: its text, and whether it is a search match.
+
+    A `TextShape` carries one `Pen`, so painting part of a label needs the line broken into pieces. An
+    ordinary line is one run and comes out as one shape, which is what keeps this free where no search is
+    running.
+    """
+    text: str
+    is_match: bool = False
+
+
+def _match_spans(text: str, highlight: Tuple) -> List[Tuple[int, int]]:
+    """Return `(start, end)` for every search match in `text`, merged where they overlap, in order.
+
+    Two regexes, the case rule splitting the query's fragments between them. They hold disjoint fragments,
+    but two *different* fragments can still land on overlapping stretches of text — and one painted stretch
+    should be one run rather than two abutting ones that happen to look like it.
+    """
+    spans = sorted(match.span()
+                   for regex in highlight if regex is not None
+                   for match in regex.finditer(text))
+    merged: List[Tuple[int, int]] = []
+    for start, end in spans:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def _runs_of(line: str, maybe_highlight: Optional[Tuple]) -> List[_Run]:
+    """Split one label line into its runs. One run, unmatched, when nothing is being searched for.
+
+    The matches are found in the *line*, after wrapping, rather than carried down from the message text:
+    `_wrap` collapses whitespace, rejoins words with single spaces, may cut a word that is wider than the
+    box and may append an ellipsis, so an offset taken before it means nothing afterwards. A match a word
+    cut in half is then not marked on that line, which is the honest outcome — the fragment is not there
+    to paint.
+    """
+    if not maybe_highlight or not any(maybe_highlight):
+        return [_Run(line)]
+    runs: List[_Run] = []
+    cursor = 0
+    for start, end in _match_spans(line, maybe_highlight):
+        if start > cursor:
+            runs.append(_Run(line[cursor:start]))
+        runs.append(_Run(line[start:end], is_match=True))
+        cursor = end
+    if cursor < len(line):
+        runs.append(_Run(line[cursor:]))
+    return runs or [_Run(line)]
+
+
+def _label_runs(lines: Sequence[str], maybe_highlight: Optional[Tuple] = None) -> List[List[_Run]]:
+    """Turn wrapped lines into the runs each is drawn as."""
+    return [_runs_of(line, maybe_highlight) for line in lines]
+
+
+def _snippet_around_first_match(text: str, highlight: Tuple, lead_in: int) -> str:
+    """Return `text` from a little before its first search match, marked with a leading ellipsis if that cut it.
+
+    What a box quotes when it matched: the opening of the message says nothing about *why* it is on screen,
+    and the reader is looking for the hit rather than for the message. Cut at a word boundary so the
+    snippet does not open mid-word, and outward, so the lead-in is at least `lead_in` characters rather
+    than at most.
+    """
+    spans = _match_spans(text, highlight)
+    if not spans:  # the box matched in a text this is not, or a wrapped line lost the fragment
+        return text
+    start = spans[0][0] - lead_in
+    if start <= 0:
+        return text
+    boundary = text.rfind(" ", 0, start + 1)
+    if boundary < 0:
+        return text
+    return f"…{text[boundary + 1:]}"
+
+
 def _with_ellipsis(line: str, max_width: float, width_of: Callable[[str], float]) -> str:
     """Return `line` with an ellipsis appended, shortened until the result fits `max_width`."""
     # Not `common_text.ellipsize_to_width`, which asks a different question. That one shortens text that is
@@ -1203,10 +1308,18 @@ def _fit_bracketed(speaker: str, detail: str, max_width: float, font_size: float
     return f"{speaker} [{detail[:low]}…]"
 
 
-def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
+def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, state: "ViewState",
                           config: "LayoutConfig", has_role_icon: bool, has_attachments: bool,
-                          measure_text: Optional[MeasureText]) -> Tuple[str, List[str], Optional[str]]:
-    """Return `(who said it, the lines of what they said, a quieter second line or `None`)` for `node_id`.
+                          measure_text: Optional[MeasureText]
+                          ) -> Tuple[str, List[List[_Run]], Optional[str], Optional[xdotconstants.Color]]:
+    """Return `(who said it, the lines of what they said, a quieter second line or `None`, the label's colour or `None`)` for `node_id`.
+
+    **A box that matched the running search quotes its match instead of its opening.** The opening says
+    nothing about why the box is on screen, and a reader with a search running is looking for the hit. The
+    match itself is painted in `config.search_match_color` and bold, as the chat log paints one, and where
+    the match was in a *thinking trace* the whole label is quoted from the trace and takes
+    `config.thinking_label_color` — the colour the log draws a trace in, so a box says which kind of text
+    its match came out of without spending a word on it.
 
     The speaker is the message's stored persona where it has one, and the role otherwise — the same
     preference the chat log shows, so the two views name the same participants the same way.
@@ -1220,17 +1333,36 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
     width = config._get_effective_label_width(has_role_icon, has_attachments)
     speaker_width = config._get_effective_speaker_width(has_role_icon, has_attachments)
     max_lines = config.label_lines
+    wrap_width = width
 
     def wrap(what: str, lines_left: int) -> List[str]:
-        return _wrap(what, width, lines_left, config.font_size, measure_text)
+        return _wrap(what, wrap_width, lines_left, config.font_size, measure_text)
 
     try:
         role, persona, text = chatutil.get_node_message_text_without_persona(datastore, node_id)
     except (KeyError, TypeError):
-        return "?", ["[missing]"], None
+        return "?", _label_runs(["[missing]"]), None, None
     speaker = persona or _ROLE_CAPTIONS.get(role, (role or "?").upper())
     payload = _payload_of(datastore, node_id)
-    lines = wrap(_plain(text), max_lines)
+
+    # What this box quotes, and in what colour. Off a search, or on a box that did not match, this is the
+    # message's opening in the ordinary ink, exactly as before.
+    plain = _plain(text)
+    label_color = None
+    maybe_highlight = None
+    maybe_counts = state.match_counts.get(node_id)
+    if state.search_query is not None and maybe_counts is not None:
+        maybe_highlight = state.search_query.highlight
+        if not maybe_counts.content:  # it matched in the trace and nowhere else, so the trace is what to show
+            plain = _plain((payload.get("message") or {}).get("reasoning_content") or "")
+            label_color = config.thinking_label_color
+        plain = _snippet_around_first_match(plain, maybe_highlight, config.snippet_lead_in)
+        # Wrapping measures the line in the regular face, and a match then renders in the bold one, which
+        # is wider -- so a line fitted to the last unit would spill past the box's inset. Give a matched
+        # label room for the worst case, which is the whole line turning out to be a match.
+        wrap_width = width / (1.0 + _BOLD_WIDTH_HEADROOM)
+
+    lines = wrap(plain, max_lines)
     tool_calls = (payload.get("message") or {}).get("tool_calls") or ()
 
     # A turn that asked for tools ends this line with `[tool call]`, and the room for it is reserved
@@ -1263,7 +1395,7 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
                                      config.role_font_size, measure_text)
 
     if lines:
-        return speaker, lines, None
+        return speaker, _label_runs(lines, maybe_highlight), None, label_color
 
     message = payload.get("message") or {}
     if tool_calls:
@@ -1282,15 +1414,16 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str,
         sub_label = f"{len(tool_calls)} tool calls" if len(tool_calls) > 1 else None
         lines_for_calls = max_lines - 1 if sub_label is not None else max_lines
         return (f"{speaker}{marker}",
-                wrap(chatutil.format_tool_calls(tool_calls), lines_for_calls),
-                sub_label)
+                _label_runs(wrap(chatutil.format_tool_calls(tool_calls), lines_for_calls), maybe_highlight),
+                sub_label,
+                label_color)
     # Square brackets, which is how the constellation says something in its own voice rather than the
     # message's -- `[Video is off]`, `[no extractable text]`, `[Interrupted — the reply was stopped here]`.
     # A box carrying one of these is not quoting a message that says "empty"; it is remarking that there
     # is nothing to quote.
     if (message.get("reasoning_content") or "").strip():
-        return speaker, ["[thinking only]"], None
-    return speaker, ["[empty]"], None
+        return speaker, _label_runs(["[thinking only]"]), None, None
+    return speaker, _label_runs(["[empty]"]), None, None
 
 
 class _ToolRound:
@@ -1574,14 +1707,15 @@ class _Row:
 # Emitting shapes
 
 def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
-                label_lines: Sequence[str], fill: Optional[xdotconstants.Color],
+                label_lines: Sequence[Sequence[_Run]], fill: Optional[xdotconstants.Color],
                 dashed: bool, pills: Tuple[str, ...],
                 speaker: Optional[str] = None, sub_label: Optional[str] = None,
                 measure_text: Optional[MeasureText] = None,
                 emphasized: bool = False, previewed: bool = False,
                 role_icon: Optional[Union[int, str]] = None,
                 attachments: Sequence[Optional[Union[int, str]]] = (),
-                hidden_attachments: int = 0) -> List[xdotgraph.Shape]:
+                hidden_attachments: int = 0,
+                label_color: Optional[xdotconstants.Color] = None) -> List[xdotgraph.Shape]:
     """Return the shapes for one box: its outline, its text, and any pointer pills above it.
 
     `width`: The box's width. A gap is narrower than a node, and the row layout allocates it that much
@@ -1606,6 +1740,9 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                    when they land.
     `hidden_attachments`: How many the fan left out, drawn as a broken-outlined box after the last one.
                           Zero when they all fit.
+    `label_color`: The ink for the label, or `None` for the ordinary one. Set where the label is quoting
+                   something other than what was said — a thinking trace, in the colour the chat log
+                   paints one. A run marked as a search match keeps its own colour regardless.
     """
     x1, y1 = x - 0.5 * width, y - 0.5 * config.node_h
     x2, y2 = x + 0.5 * width, y + 0.5 * config.node_h
@@ -1669,8 +1806,16 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                                            max_screen_size=config.role_icon_native_size))
 
     text_pen = xdotgraph.Pen()
-    text_pen.color = LINE_COLOR
+    text_pen.color = label_color if label_color is not None else LINE_COLOR
     text_pen.fontsize = config.font_size
+
+    # A search match, in the constellation's red and bold, which is how the chat log paints one. Two
+    # channels rather than one because the two views have to agree on what a hit looks like; a difference
+    # between them reads as damage rather than as a distinction.
+    match_pen = xdotgraph.Pen()
+    match_pen.color = config.search_match_color
+    match_pen.fontsize = config.font_size
+    match_pen.bold = True
 
     # A text shape's y is its baseline, so a line sits on the y given plus about a third of its cap height.
     # With a speaker the two lines straddle the centre; without one the label takes the centre itself.
@@ -1696,14 +1841,26 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
             block += config.role_font_size + _LINE_GAP
         cursor = y - 0.5 * block
 
-    # Centred in what is left of the box rather than on the box, so a glyph shifts the label off-centre by
-    # exactly the room it took. Centring on the box instead would let a long line run under the glyph
-    # while a short one sat clear of it -- the collision then depending on the message.
-    text_center = 0.5 * (text_x1 + text_x2)
-    for line in label_lines:
+    # Laid out inside what is left of the box rather than across the box, so a glyph shifts the label by
+    # exactly the room it took. Using the whole box instead would let a long line run under the glyph while
+    # a short one sat clear of it -- the collision then depending on the message.
+    #
+    # Each run is placed at its own x, left to right from the line's own left edge at cumulative measured
+    # widths, because a `TextShape` carries one `Pen` and a line holding a search match is several shapes.
+    # A line of one run lands exactly where it did when it was one centred shape given the available width:
+    # the renderer starts such a shape at `centre - width/2`, and with the available width that *is* this
+    # left edge. Worth knowing, because the two spellings agreeing is what makes this change invisible
+    # anywhere a search is not running.
+    for runs in label_lines:
         cursor += config.font_size
-        shapes.append(xdotgraph.TextShape(text_pen, text_center, cursor,
-                                          xdotgraph.TextShape.CENTER, text_x2 - text_x1, line))
+        run_x = text_x1
+        for run in runs:
+            pen = match_pen if run.is_match else text_pen
+            run_width = _text_width(run.text, config.font_size, measure_text, _LABEL_ADVANCE_PER_CHAR,
+                                    bold=run.is_match)
+            shapes.append(xdotgraph.TextShape(pen, run_x, cursor,
+                                              xdotgraph.TextShape.LEFT, run_width, run.text))
+            run_x += run_width
         cursor += _LINE_GAP
 
     if sub_label is not None:
@@ -1714,6 +1871,9 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         sub_pen.color = GAP_LINE_COLOR
         sub_pen.fontsize = config.role_font_size
         cursor += config.role_font_size
+        # Given the available width, which the renderer turns into a start at the text area's left edge --
+        # the same place the label lines above are placed explicitly. One line, one run, no match to mark.
+        text_center = 0.5 * (text_x1 + text_x2)
         shapes.append(xdotgraph.TextShape(sub_pen, text_center, cursor, xdotgraph.TextShape.CENTER,
                                           text_x2 - text_x1, sub_label))
 
@@ -2310,8 +2470,8 @@ def build(datastore: chattree.Forest,
                               pills=_pills_for(node_id, state, is_root=is_root))
             mark_matches(ref)
             decoration = decorations_of(node_id)
-            speaker, label_lines, sub_label = _speaker_and_label_of(
-                datastore, node_id, config, decoration.role_icon is not None,
+            speaker, label_lines, sub_label, label_color = _speaker_and_label_of(
+                datastore, node_id, state, config, decoration.role_icon is not None,
                 bool(decoration.attachments) or decoration.hidden_attachments > 0, measure_text)
             shapes = _box_shapes(x, y, config.node_w, config, label_lines,
                                  fill=_fill_for(ref.role, node_id in current_branch,
@@ -2323,7 +2483,8 @@ def build(datastore: chattree.Forest,
                                  previewed=(node_id == state.cursor_name),
                                  role_icon=decoration.role_icon,
                                  attachments=decoration.attachments,
-                                 hidden_attachments=decoration.hidden_attachments)
+                                 hidden_attachments=decoration.hidden_attachments,
+                                 label_color=label_color)
             return ref, shapes
 
         for row_index, row in enumerate(rows):
@@ -2357,7 +2518,7 @@ def build(datastore: chattree.Forest,
                     # hiding the card HEAD is under. Reading it there is what tells a reader browsing an
                     # older card that the live chat is somewhere else.
                     gap_pills = ("HEAD",) if (set(slot.hidden) & current_branch) else ()
-                    shapes = _box_shapes(x, y, width, config, [label], fill=None, dashed=True,
+                    shapes = _box_shapes(x, y, width, config, _label_runs([label]), fill=None, dashed=True,
                                          pills=gap_pills, measure_text=measure_text,
                                          previewed=(name == state.cursor_name))
                 else:
@@ -2390,7 +2551,7 @@ def build(datastore: chattree.Forest,
             """
             mark_matches(ref)
             node = xdotgraph.Node(x=x, y=y, w=config.gap_node_w, h=config.node_h,
-                                  shapes=_box_shapes(x, y, config.gap_node_w, config, [label],
+                                  shapes=_box_shapes(x, y, config.gap_node_w, config, _label_runs([label]),
                                                      fill=None, dashed=True,
                                                      pills=("HEAD",) if hides_head else (),
                                                      sub_label=sub_label,
