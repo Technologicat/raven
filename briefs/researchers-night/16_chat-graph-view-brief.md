@@ -1396,10 +1396,29 @@ when it appears.
   per slot — and never from content, so rewriting labels moves nothing. Those rebuilds pass
   `set_graph(animate=False)`, there being no motion to animate and one morph per keystroke to avoid.
 
-### Left for the live look
+### The first live look, 2026-09-18
 
-Whether `N (M)` reads without the word, judged on a gap box; forest preorder; the collapse rule for arrows
-and clicks; and whether a jump's two topology changes read as one motion.
+**Search v1 is built and runs**, pure layer through to the search row and the keys. The look found three
+faults, all fixed the same afternoon and all in code the search merely made visible:
+
+- **A match was drawn in the contrast grey**, because dark mode discards a text pen's colour on any filled
+  element. `Pen.keep_color` now says a colour is deliberate, and such a colour keeps its hue while its
+  lightness moves as far as legibility needs — red on the TOOL orange is 1.2:1 untouched, so exempting it
+  without replacing it was no fix at all.
+- **A red flash for about 300 ms after some rebuilds.** A transition splits a node into up to three
+  elements and only the one carrying the filled shape knew the fill, so a label *gaining* a run had that
+  run coloured for no background. `Node.fillcolor_hint` carries it to every part.
+- **Two panes lit blue at once**, tabbing to the graph and then pressing `Ctrl+F`: the caret-taking chords
+  did not release prior keyboard claims. All such sites now go through one entry point.
+
+**Still open, diagnosed and not started**: a pill's text is made legible against the *element's* fill,
+where a pill sits on a backing of its own — so the count's thinking share comes out unreadable on a box
+that called tools. `TODO_DEFERRED.md`, *"A pill's text is made legible against the wrong background"*.
+
+**Not yet judged**, and what a second look is for: whether `N (M)` reads without a word, whether one line
+of context around the match is enough, whether forest preorder feels right as an order, the collapse rule
+for arrows and clicks, and whether a jump's two topology changes read as one motion. The `N (M)` form is at
+least legible on gap boxes, which was the case with least context around it.
 
 ## Where this stands, 2026-09-15
 

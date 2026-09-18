@@ -122,6 +122,22 @@ interpolated, `xdotwidget.morph`); the graph camera and a morph share one clock 
 straight onto the chat graph. The blank frames before the graph's first picture at startup are filed in
 `TODO_DEFERRED.md`.
 
+### Where search v1 stands, 2026-09-18 — both halves are built and tried live
+
+**The graph half is built**, designed first in a session of its own (brief 16 → *Where this stands,
+2026-09-18*, which is what an implementer reads) and then built bottom-up in a day: `Forest.linearize_down`,
+`chatsearch.MatchCounts`, per-box marks and counts, faces in the shared widget, the snippet, the count pill,
+the panel's forest-wide search and navigation, and the row's graph half with `Ctrl+F3` / `Ctrl+Shift+F3`.
+
+**Tried live the same afternoon**, which found three faults and fixed them: a match drawn in dark mode's
+contrast grey, a ~300 ms wrong-coloured flash during transitions, and two panes lit blue at once after
+`Tab` then `Ctrl+F`. All three were in code the search merely made visible. Brief 16 → *The first live look*
+has them, and what is still open.
+
+**Next session picks up**: the pill-background bug in `TODO_DEFERRED.md` (diagnosed, not started), then a
+second live look at the questions the first did not reach — whether `N (M)` reads without a word, whether
+one line of context is enough, and whether forest preorder is the right order.
+
 ### Where search v1 stands, 2026-09-17 — the chat log half is built
 
 **The chat log's search is done and tried live** (Juha): highlighting as you type without the view moving,

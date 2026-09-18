@@ -11,6 +11,32 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## A pill's text is made legible against the wrong background
+
+*Cluster: chat-graph-search · Cost: S · Gate: none · Filed: 2026-09-18 · See also: `briefs/researchers-night/16_chat-graph-view-brief.md` → Where this stands, 2026-09-18*
+
+Seen live: on a message box that called tools — which takes the TOOL fill, a bright orange — the search
+count pill's thinking share, the `(1)` of `3 (1)`, comes out nearly black and cannot be read. On a *gap*
+box the same pill is fine.
+
+**The diagnosis is complete and the fix is not started.** `renderer.text_color` makes a `keep_color` pen
+legible against `element_fillcolor`, which is the *element's* fill — and a pill does not sit on that. It
+has a backing of its own (`chatgraph._PILL_BACKING`, dark), drawn under it for the reason attachment cards
+have one. So the blue is pushed darker to contrast with the orange box, and then drawn on something dark.
+A gap box escapes it by having no fill at all: nothing to adjust against, so the authored blue is drawn as
+authored, and that reads.
+
+Two shapes for the fix, and the second is probably right:
+
+- **Let `chatgraph` colour its own pill runs**, choosing against `_PILL_BACKING` and setting `keep_color`
+  so the renderer leaves them be. Smallest, and puts the adjustment in two places.
+- **Let a shape say what it is drawn on**, as an element already can since 2026-09-18 (`Node.fillcolor_hint`,
+  added so a node split by a transition still knows its fill). A pill's text would carry the backing, and
+  `text_color` would prefer that over the element's. One mechanism, one place, and it generalises to
+  anything else drawn on its own ground.
+
+Found while live-testing the chat graph's search (2026-09-18).
+
 ## A whitespace and test-style sweep, straight after search v1
 
 *Cluster: code-hygiene · Cost: S · Gate: search v1 lands · Filed: 2026-09-17 · See also: `briefs/researchers-night/README.md` → Decided 2026-09-17*
