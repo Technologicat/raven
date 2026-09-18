@@ -1227,6 +1227,43 @@ class DPGChatGraphPanel(gui_animation.Animation):
                     maybe_node = maybe_ref.hidden_node_ids[0]
         return maybe_node if maybe_node is not None else self.app_state["HEAD"]
 
+    def _match_beyond(self, direction: int) -> Optional[str]:
+        """Return the match a step in `direction` would go to, or `None` where there is none that way.
+
+        Asked without moving, so that a button can be lit exactly when pressing it would do something —
+        which is the only thing that says where the reader stands when they are not on a match at all. A
+        counter reading `[–/58]` is the same before the first match and after the last.
+        """
+        matches = self.search_matches
+        if not matches:
+            return None
+        # Under the lock, and scanning the matches rather than copying the whole reading order: this is
+        # asked once a frame per button, and there are far fewer matches than nodes. Reentrant, so
+        # `_search_anchor` taking it again is fine.
+        with self._lock:
+            order = self._preorder_index
+            here = order.get(self._search_anchor(), -1)
+            beyond = [node_id for node_id, _ in matches if order.get(node_id, -1) > here]
+            before = [node_id for node_id, _ in matches if order.get(node_id, -1) < here]
+        if direction > 0:
+            return beyond[0] if beyond else None
+        return before[-1] if before else None
+
+    def _get_search_can_go_back(self) -> bool:
+        """Whether a backward step would move: the chat log's question, asked of this view."""
+        return self._match_beyond(-1) is not None
+
+    def _get_search_can_go_forward(self) -> bool:
+        """Whether a forward step would move."""
+        return self._match_beyond(+1) is not None
+
+    search_can_go_back = property(fget=_get_search_can_go_back,
+                                  doc="Whether stepping to the previous match would go anywhere. What "
+                                      "the toolbar's back button is lit by.")
+    search_can_go_forward = property(fget=_get_search_can_go_forward,
+                                     doc="Whether stepping to the next match would go anywhere. What the "
+                                         "toolbar's forward button is lit by.")
+
     def step_search(self, direction: int) -> bool:
         """Go to the next (`direction=+1`) or previous (`-1`) match in reading order. Returns whether it moved.
 
@@ -1236,18 +1273,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         where it is. Search is a way of looking, and committing to what you find is the second act the rest
         of this view already asks for.
         """
-        matches = self.search_matches
-        if not matches:
-            return False
-        with self._lock:
-            order = dict(self._preorder_index)
-        here = order.get(self._search_anchor(), -1)
-        if direction > 0:
-            beyond = [node_id for node_id, _ in matches if order.get(node_id, -1) > here]
-            maybe_target = beyond[0] if beyond else None
-        else:
-            before = [node_id for node_id, _ in matches if order.get(node_id, -1) < here]
-            maybe_target = before[-1] if before else None
+        maybe_target = self._match_beyond(direction)
         if maybe_target is None:
             return False
         self._go_to_match(maybe_target)

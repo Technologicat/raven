@@ -2609,23 +2609,32 @@ def _step_graph_search(direction: int) -> None:
 
 def _update_graph_search_row() -> None:
     """Redraw the chat graph's search counter and previous/next buttons. Callable from any thread."""
-    global _graph_search_counter_shown
+    global _graph_search_row_shown
     maybe_index, total = chat_graph_panel.search_position()
     if chat_graph_panel.search_matches:
         counter = f"[{maybe_index + 1 if maybe_index is not None else '–'}/{total}]"
     else:
         counter = ""
-    if counter == _graph_search_counter_shown:
+    # Lit by whether the step would go anywhere, not by whether there are matches at all -- which is the
+    # chat log's rule, and here it carries more than tidiness. Standing off a match, the counter reads
+    # `[–/58]` whether the reader is before the first or past the last, and being past the last is the
+    # ordinary case: a search run from a recent chat matches older ones. So a `Ctrl+F3` that could only
+    # ever do nothing was offered by a lit button, pressed, and read as broken.
+    state = (counter, chat_graph_panel.search_can_go_back, chat_graph_panel.search_can_go_forward)
+    if state == _graph_search_row_shown:
         return  # polled once a frame; the answer is the same on nearly all of them
-    _graph_search_counter_shown = counter
+    _graph_search_row_shown = state
     with guiutils.nonexistent_ok():
         dpg.set_value("graph_search_counter_text", counter)  # tag
-        for button in ("graph_search_prev_button", "graph_search_next_button"):  # tag
-            (dpg.enable_item if total else dpg.disable_item)(button)
+        for button, has_somewhere_to_go in (("graph_search_prev_button", state[1]),  # tag
+                                            ("graph_search_next_button", state[2])):  # tag
+            (dpg.enable_item if has_somewhere_to_go else dpg.disable_item)(button)
 
 
-# What the graph's counter last said, so a poll that changes nothing touches no widget.
-_graph_search_counter_shown = None
+# What the graph's search row last showed -- its counter and which way it offers to step -- so a poll that
+# changes nothing touches no widget. All three, because the buttons can change while the text does not:
+# stepping onto the last match leaves `[58/58]` reading the same as it did a frame earlier on the way in.
+_graph_search_row_shown = None
 
 
 def _update_search_row() -> None:

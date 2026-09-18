@@ -11,6 +11,23 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## Widening the window feeds the chat log, which is the pane that wants it least
+
+*Cluster: chat-graph-view · Cost: M · Gate: none · Filed: 2026-09-18 · See also: `briefs/researchers-night/16_chat-graph-view-brief.md` → Panel sizing on a wide screen, and the constraint underneath it*
+
+Confirmed in use, 2026-09-18: made larger, the window spends its new width on the chat log, which becomes
+too wide to read comfortably — past the measure the eye can track from the end of one line to the start of
+the next. The graph would use that width better, having a picture that grows rather than prose that does not.
+
+**The design work is already in the brief**, which names three compatible directions and reports one of them
+free: the avatar's cost follows `avatar_config`'s `upscale` rather than its rect, so panel size and avatar
+cost are already decoupled and a growable panel needs nothing built. What is left is choosing among them
+and settling the numbers, and that is test-and-tune against real windows rather than a decision anyone can
+make on paper — which is what makes it an item rather than a brief edit.
+
+Raised again while live-testing the chat graph's search (2026-09-18); Juha asked for it early the following
+week.
+
 ## A whitespace and test-style sweep, straight after search v1
 
 *Cluster: code-hygiene · Cost: S · Gate: search v1 lands · Filed: 2026-09-17 · See also: `briefs/researchers-night/README.md` → Decided 2026-09-17*

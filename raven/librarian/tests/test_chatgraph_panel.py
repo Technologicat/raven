@@ -2226,6 +2226,37 @@ class TestSearch:
         assert built.search_position() == (None, 1), \
             "HEAD is not the one match here, so there is no current match to report"
 
+    def test_it_reports_which_ways_a_step_would_go(self, panel):
+        """What lights the toolbar's two buttons, and the only thing that says where an off-match reader is.
+
+        The counter cannot: standing on no match it reads `[–/N]` before the first and after the last
+        alike. Being past the last is the ordinary case rather than a corner — a search run from a recent
+        chat matches older ones — so a button lit by "are there matches at all" offers a step that could
+        only ever do nothing, and reads as broken when it does.
+        """
+        built, _forest, _app_state, ids, _calls = panel
+        self._search(built, "way")  # "which way", "this way", "or that way"
+        # Past the last of them in reading order, and not on one — the state the complaint is about.
+        built._set_cursor(ids["not_taken_tip"])
+        assert built.search_position()[0] is None and built.search_matches, \
+            "the reader is on a match here, so the counter could have said where they are"
+        assert built.search_can_go_back
+        assert not built.search_can_go_forward, "offered a step past the last match"
+
+    def test_the_two_ends_answer_differently(self, panel):
+        """The control: a fixture where both are False everywhere would pass the halves above by accident."""
+        built, _forest, _app_state, ids, _calls = panel
+        self._search(built, "way")
+        while built.step_search(-1):
+            pass
+        assert not built.search_can_go_back, "at the first match and still offering a step back"
+        assert built.search_can_go_forward, "at the first of three matches with nowhere forward"
+
+    def test_with_no_search_neither_way_goes_anywhere(self, panel):
+        built, _forest, _app_state, _ids, _calls = panel
+        assert not built.search_matches
+        assert not built.search_can_go_back and not built.search_can_go_forward
+
     def test_ending_the_search_clears_the_marks(self, panel):
         built, _forest, _app_state, _ids, _calls = panel
         self._search(built, "way")
