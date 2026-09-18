@@ -11,42 +11,6 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
-## A box that draws more than one ground cannot describe itself with one fill colour
-
-*Cluster: chat-graph-search · Cost: S · Gate: none · Filed: 2026-09-18 · See also: `briefs/researchers-night/16_chat-graph-view-brief.md` → The first live look, 2026-09-18*
-
-`renderer._get_element_fillcolor` answers with **the first filled shape it finds in the element**, and
-`text_color` then colours *every* text shape in that element against it — for contrast in dark mode, or to
-keep a deliberate colour legible. A chat graph box draws more grounds than one: its own fill, and the
-backing under each pill. So the single answer is wrong for somebody, and which somebody depends on which
-shape happens to come first.
-
-**Two symptoms, both seen live on 2026-09-18, and the second predates the search work:**
-
-- **A pill's own text is corrected against the box instead of against the pill.** On a message box that
-  called tools — which takes the TOOL fill, a bright orange — the count pill's thinking share, the `(1)`
-  of `3 (1)`, is pushed *darker* to contrast with the orange, and then drawn on the pill's dark backing.
-  Nearly black, unreadable.
-- **A gap box's label is corrected against a pill's backing.** A gap box draws no fill of its own, so
-  without a pill nothing is corrected and its two lines come out as authored — the label bright, the
-  sub-label deliberately quieter. Add a pill and its backing becomes "the element's fill", so both lines
-  are forced to the contrast grey and the sub-label stops being quiet. Measured off two screenshots: the
-  `…6 more` / `6 levels` pair reads 193 / 133 without a pill and 220 / 206 with one, 220 being
-  `_DARK_MODE_L_MAX`. **A gap box wearing a `HEAD` pill reads 220 / 206 with no search running at all**,
-  which dates this to whenever pills and the contrast rule first shared a box.
-
-**The fix, and it is the same one for both: let a shape say what it is drawn on.** An *element* can already
-(`Node.fillcolor_hint`, added 2026-09-18 so a node split by a transition still knows its fill); this is the
-same idea one level down. A pill's text carries the backing, a box's label carries the box's own fill or
-nothing, and `text_color` prefers the shape's answer to the element's. One mechanism, one place, and the
-element-level hint stays for what it was written for.
-
-The alternative — have `chatgraph` colour its pill runs itself against `_PILL_BACKING` and set `keep_color`
-so the renderer leaves them alone — is smaller, fixes only the first symptom, and puts the adjustment in
-two places.
-
-Found while live-testing the chat graph's search (2026-09-18).
-
 ## A whitespace and test-style sweep, straight after search v1
 
 *Cluster: code-hygiene · Cost: S · Gate: search v1 lands · Filed: 2026-09-17 · See also: `briefs/researchers-night/README.md` → Decided 2026-09-17*

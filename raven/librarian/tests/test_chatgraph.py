@@ -3190,3 +3190,73 @@ class TestSearchCountPill:
         holders = [ref for ref in refs_of_type(built, chatgraph.SiblingGapRef) if ref.holds_match]
         assert len(holders) == 1
         assert [shape.text for shape in self._pill_runs(built, holders[0].name)] == ["2"]
+
+
+class TestWhatEachTextStandsOn:
+    """That every piece of text says what it is drawn on, so nothing is coloured against a distant fill.
+
+    The renderer asks the *element* what its fill is, and an element answers with the first filled shape
+    it holds — one answer, which is right only while a box draws one ground. These draw several: the box's
+    own fill, an opaque backing under every pill, another under every attachment card. So each text shape
+    carries its own answer, and the ones that stand on nothing say so with `None` rather than by staying
+    silent, which would hand them back to the element.
+    """
+
+    @staticmethod
+    def texts_in(node):
+        return [sh for sh in node.shapes if isinstance(sh, xdotgraph.TextShape)]
+
+    @staticmethod
+    def element_answer(node):
+        """What the element says its fill is: the first filled shape in it, which is all it can offer."""
+        for shape in node.shapes:
+            if isinstance(shape, xdotgraph.PolygonShape) and shape.filled:
+                return shape.pen.fillcolor if shape.pen is not None else None
+        return None
+
+    def test_every_text_in_a_built_graph_knows_its_ground(self):
+        """The coverage half: a text shape added later without an answer is what brings this back."""
+        forest, ids = _forest_with_every_gap_kind()
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=ids["head"],
+                                                            new_chat_node_id=ids["greeting"]))
+        silent = [(shape.text, node) for node in built.graph.nodes for shape in self.texts_in(node)
+                  if shape.background_hint is xdotgraph.UNKNOWN_BACKGROUND]
+        assert silent == [], f"text with no ground of its own: {[text for text, _ in silent]}"
+
+    def test_a_pill_on_a_filled_box_stands_on_the_pill_and_not_on_the_box(self):
+        """The first symptom: `SYS` on the system prompt's green, drawn for contrast against that green.
+
+        The pill is opaque, so the colour chosen to read on the box lands on the backing instead. Measured
+        live on a box that had called tools, whose orange pushed the count pill's text nearly black.
+        """
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        user = forest.create_node(payload("user", "hello"), parent_id=system)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=user))
+
+        node = built.graph.get_node_by_name(system)
+        assert self.element_answer(node) not in (None, chatgraph._PILL_BACKING), \
+            ("this box reports no fill of its own, or reports the pill's, so it cannot show the element "
+             "and the pill disagreeing")
+        on_pill = [sh for sh in self.texts_in(node) if sh.text == "SYS"]
+        assert [sh.background_hint for sh in on_pill] == [chatgraph._PILL_BACKING]
+
+    def test_a_gap_box_wearing_a_pill_keeps_its_label_as_authored(self):
+        """The second symptom, and the older one: it needs no search running, only a pill on a gap box.
+
+        A gap box draws no fill, so its two lines are meant to reach the screen as written — the label
+        bright, the sub-label deliberately quieter. A pill's backing becoming "the element's fill" forces
+        both to the contrast rule instead, and the quiet line stops being quiet.
+        """
+        config = chatgraph.LayoutConfig()
+        shapes = chatgraph._box_shapes(0.0, 0.0, config.gap_node_w, config,
+                                       chatgraph._label_runs(chatgraph._plain_lines("…6 more")),
+                                       fill=None, dashed=True, pills=("HEAD",), sub_label="6 levels")
+        node = xdotgraph.Node(x=0.0, y=0.0, w=config.gap_node_w, h=config.node_h, shapes=shapes)
+        assert self.element_answer(node) == chatgraph._PILL_BACKING, \
+            ("nothing in this box reports the pill's backing as the element's fill, so the fixture cannot "
+             "tell a label corrected against it from one left alone")
+        by_text = {sh.text: sh.background_hint for sh in self.texts_in(node)}
+        assert by_text["…6 more"] is None and by_text["6 levels"] is None, \
+            f"a line of a gap box was told it stands on something: {by_text}"
+        assert by_text["HEAD"] == chatgraph._PILL_BACKING

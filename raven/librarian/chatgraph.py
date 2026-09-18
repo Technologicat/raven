@@ -1261,12 +1261,17 @@ def _snippet_around_first_match(text: str, highlight: Tuple, lead_in_width: floa
 
 def _run_shapes(runs: Sequence[_Run], x: float, baseline: float, base_pen: xdotgraph.Pen,
                 font_size: float, measure_text: Optional[MeasureText],
-                advance_per_char: float) -> Tuple[List[xdotgraph.Shape], float]:
+                advance_per_char: float, *,
+                background: xdotconstants.Color | None) -> Tuple[List[xdotgraph.Shape], float]:
     """Lay `runs` out left to right from `x`, each in its own pen. Returns `(the shapes, the width they took)`.
 
     The one place runs become shapes, so a label and a pill cannot come to disagree about how a marked
     stretch of text is drawn. A run naming no colour takes `base_pen`'s — the ink of whatever it belongs to
     — and one that names its own gets a pen of its own.
+
+    `background`: What these runs are drawn on — a box's fill, a pill's backing, or `None` where the
+                  ground is the graph's own. Required rather than defaulted, because every caller here
+                  knows the answer and a wrong one is invisible until it is looked at on a screen.
 
     Each run is measured in the face it is *drawn* in, which is what keeps a bold one from displacing
     everything after it. Where no measurer is available the estimate is face-blind, so the runs come out
@@ -1286,7 +1291,9 @@ def _run_shapes(runs: Sequence[_Run], x: float, baseline: float, base_pen: xdotg
                 pen.keep_color = True
             pen.bold = run.bold
         width = _text_width(run.text, font_size, measure_text, advance_per_char, bold=run.bold)
-        shapes.append(xdotgraph.TextShape(pen, cursor, baseline, xdotgraph.TextShape.LEFT, width, run.text))
+        shape = xdotgraph.TextShape(pen, cursor, baseline, xdotgraph.TextShape.LEFT, width, run.text)
+        shape.background_hint = background
+        shapes.append(shape)
         cursor += width
     return shapes, cursor - x
 
@@ -1944,9 +1951,11 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         # Left-aligned, as everything inside a box is: a common left edge lets the eye read a column of
         # them without tracking a centre that moves, and for a label of prose it is simply how prose is
         # set. Only the pills above a box are centred, being labels attached to it rather than text in it.
-        shapes.append(xdotgraph.TextShape(speaker_pen, text_x1, cursor,
-                                          xdotgraph.TextShape.LEFT,
-                                          text_x2 - text_x1, speaker))
+        speaker_shape = xdotgraph.TextShape(speaker_pen, text_x1, cursor,
+                                            xdotgraph.TextShape.LEFT,
+                                            text_x2 - text_x1, speaker)
+        speaker_shape.background_hint = fill
+        shapes.append(speaker_shape)
         cursor += _LINE_GAP
     else:
         # A gap box has nobody to attribute it to, so its text takes the middle -- however many lines it
@@ -1971,7 +1980,7 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     for runs in label_lines:
         cursor += config.font_size
         line_shapes, _ = _run_shapes(runs, text_x1, cursor, text_pen, config.font_size,
-                                     measure_text, _LABEL_ADVANCE_PER_CHAR)
+                                     measure_text, _LABEL_ADVANCE_PER_CHAR, background=fill)
         shapes.extend(line_shapes)
         cursor += _LINE_GAP
 
@@ -1983,8 +1992,10 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         sub_pen.color = GAP_LINE_COLOR
         sub_pen.fontsize = config.role_font_size
         cursor += config.role_font_size
-        shapes.append(xdotgraph.TextShape(sub_pen, text_x1, cursor, xdotgraph.TextShape.LEFT,
-                                          text_x2 - text_x1, sub_label))
+        sub_shape = xdotgraph.TextShape(sub_pen, text_x1, cursor, xdotgraph.TextShape.LEFT,
+                                        text_x2 - text_x1, sub_label)
+        sub_shape.background_hint = fill
+        shapes.append(sub_shape)
 
     # After the text, which is the backstop for the gutter above rather than a substitute for it: the two
     # are meant never to meet, and where a measurement is off by a character the reader should see a
@@ -2111,10 +2122,12 @@ def _attachment_shapes(attachments: Sequence[Optional["Thumbnail"]], hidden: int
         text_pen = xdotgraph.Pen()
         text_pen.color = GAP_LINE_COLOR
         text_pen.fontsize = config.role_font_size
-        shapes.append(xdotgraph.TextShape(
+        count_shape = xdotgraph.TextShape(
             text_pen, 0.5 * (x1 + x2), center_y + 0.3 * config.role_font_size,
             xdotgraph.TextShape.CENTER,
-            _text_width(label, config.role_font_size, measure_text, _PILL_ADVANCE_PER_CHAR), label))
+            _text_width(label, config.role_font_size, measure_text, _PILL_ADVANCE_PER_CHAR), label)
+        count_shape.background_hint = _ATTACHMENT_BACKING
+        shapes.append(count_shape)
     return shapes
 
 
@@ -2181,7 +2194,7 @@ def _pill_shapes(pills: Sequence[Sequence[_Run]], anchor_x: float, bottom_y: flo
         # box rather than text in it, and the capsule is sized to fit it exactly.
         run_shapes, _ = _run_shapes(runs, 0.5 * (px1 + px2 - text_w), bottom_y - 0.3 * config.pill_h,
                                     pill_text_pen, config.pill_font_size, measure_text,
-                                    _PILL_ADVANCE_PER_CHAR)
+                                    _PILL_ADVANCE_PER_CHAR, background=_PILL_BACKING)
         shapes.extend(run_shapes)
         cursor = px2 + _PILL_SPACING
     return shapes

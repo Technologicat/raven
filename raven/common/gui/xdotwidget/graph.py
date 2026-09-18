@@ -19,6 +19,7 @@ __all__ = ["mix_colors",
            "set_highlight_colors",
            "get_highlight_colors",
            "Pen",
+           "UNKNOWN_BACKGROUND",
            "Shape",
            "TextShape",
            "EllipseShape",
@@ -37,6 +38,8 @@ __all__ = ["mix_colors",
 from collections.abc import Iterable, Iterator, Sequence
 from itertools import chain
 from typing import NamedTuple
+
+from unpythonic import sym
 
 from ... import utils as common_utils
 
@@ -202,11 +205,27 @@ class Pen:
         tgt.fontsize = pen1.fontsize + (pen2.fontsize - pen1.fontsize) * t
 
 
+UNKNOWN_BACKGROUND = sym("UNKNOWN_BACKGROUND")
+"""What `Shape.background_hint` holds when the shape does not know what it is drawn on."""
+
+
 class Shape:
-    """Abstract base class for all drawing shapes."""
+    """Abstract base class for all drawing shapes.
+
+    Attributes:
+        pen: Drawing state, or `None` to inherit the caller's.
+        background_hint: What this shape is drawn on top of, where the shape knows and the element
+                         containing it cannot say. `UNKNOWN_BACKGROUND`, the default, means it does not
+                         know and the element answers instead; a `Color` names the ground; and `None`
+                         says there is nothing under it but the graph's own background.
+    """
 
     def __init__(self):
         self.pen: Pen | None = None
+        # An element answers with one colour -- the first filled shape it holds -- which is right only
+        # while it draws one ground. A box carrying pills or cards draws several, and then the parts
+        # standing on the later ones have to say so themselves or be coloured for somebody else's fill.
+        self.background_hint: Color | None | sym = UNKNOWN_BACKGROUND
 
     def get_bounding_box(self) -> tuple[float, float, float, float] | None:
         """Return (x1, y1, x2, y2) bounding box, or None if not applicable."""

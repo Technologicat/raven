@@ -7,6 +7,7 @@ DearPyGUI's drawlist primitives.
 __all__ = ["FontLadder", "TextFonts", "nearest_font",  # which font a size and a face resolve to
 
            "set_dark_mode", "get_dark_mode", "color_to_dpg",
+           "background_under",  # what a shape stands on...
            "text_color",  # ...and what a pen's text actually lands as, contrast rule included
 
            "render_graph", "render_scene"]
@@ -20,7 +21,7 @@ import dearpygui.dearpygui as dpg
 from .graph import (
     Graph, Element, Node, Edge, Shape, Pen,
     TextShape, EllipseShape, PolygonShape, LineShape, BezierShape, ImageShape,
-    CompoundShape, tessellate_bezier
+    CompoundShape, tessellate_bezier, UNKNOWN_BACKGROUND
 )
 from .constants import Color, DPGColor, Point
 from .morph import IN_PLACE, Placement
@@ -188,6 +189,25 @@ def _legible_against(color: Color, background: Color) -> Color:
         else:
             near = middle
     return at(far)
+
+
+def background_under(shape: Shape, element_fillcolor: Color | None) -> Color | None:
+    """Return the ground `shape` is drawn on: its own answer where it has one, else `element_fillcolor`.
+
+    An element answers for all of its shapes with the colour of the first filled one it holds, which is
+    right exactly while it draws a single ground. A chat graph box draws several — its own fill, and an
+    opaque backing under every pill and every attachment card — so a shape standing on a later one has to
+    say so itself, or its text is coloured for contrast against a fill that is nowhere near it.
+
+    `None` is a real answer rather than a missing one: it says there is nothing under the shape but the
+    graph's own background, so nothing is corrected and the pen's colours are drawn as authored. A shape
+    that does not know says `UNKNOWN_BACKGROUND` and gets the element's answer.
+
+    Pure, so what a shape will be coloured against can be asserted without a running renderer.
+    """
+    if shape.background_hint is UNKNOWN_BACKGROUND:
+        return element_fillcolor
+    return shape.background_hint
 
 
 def text_color(pen: Pen, element_fillcolor: Color | None, opacity: float = 1.0) -> DPGColor:
@@ -618,6 +638,10 @@ def _render_shape(drawlist: int | str,
                   opacity: float = 1.0) -> None:
     """Render a single shape."""
     pen = _get_effective_pen(shape, element, highlight_intensities)
+
+    # Resolved once, then passed on to anything this shape contains -- so a compound standing on a pill's
+    # backing colours its text against that rather than against whatever the element is filled with.
+    element_fillcolor = background_under(shape, element_fillcolor)
 
     if isinstance(shape, TextShape):
         _render_text_shape(drawlist, shape, viewport, pen,

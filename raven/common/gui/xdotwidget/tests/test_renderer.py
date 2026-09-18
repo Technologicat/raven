@@ -16,7 +16,7 @@ import colorsys
 
 import pytest
 
-from ..graph import Pen
+from ..graph import Pen, TextShape
 from .. import renderer
 
 
@@ -95,6 +95,53 @@ class TestTextColor:
         for keep in (False, True):
             drawn = renderer.text_color(pen_for(RED, keep_color=keep), FILLS["pale"], opacity=0.5)
             assert drawn[3] == pytest.approx(127, abs=1), f"keep_color={keep} lost the opacity: {drawn}"
+
+
+class TestBackgroundUnder:
+    """Which ground a shape is coloured against, where its element draws more than one.
+
+    An element answers for everything it holds with the colour of the first filled shape in it. That is
+    right while it draws a single ground and wrong as soon as it draws two — a box with an opaque backing
+    under a pill — and the shape standing on the second one is the only thing that knows.
+    """
+
+    # Authored for light, like everything else here. Chosen on opposite sides of the contrast rule's own
+    # decision — one inverts to a light ground and one to a dark — so that a text colour chosen against the
+    # wrong one of them is a visibly different colour rather than the same answer by luck.
+    ELEMENT_FILL = (0.16, 0.40, 0.17, 1.0)
+    OWN_GROUND = (0.93, 0.94, 0.94, 1.0)
+
+    def test_a_shape_that_says_nothing_takes_the_element_s_answer(self):
+        assert renderer.background_under(TextShape(Pen(), 0.0, 0.0, 0, 1.0, "x"),
+                                         self.ELEMENT_FILL) == self.ELEMENT_FILL
+
+    def test_a_shape_that_knows_its_ground_overrides_the_element(self):
+        shape = TextShape(Pen(), 0.0, 0.0, 0, 1.0, "x")
+        shape.background_hint = self.OWN_GROUND
+        assert self.OWN_GROUND != self.ELEMENT_FILL, \
+            "the two grounds are the same colour here, so this fixture cannot tell which one was used"
+        assert renderer.background_under(shape, self.ELEMENT_FILL) == self.OWN_GROUND
+
+    def test_none_is_an_answer_and_not_a_missing_one(self):
+        """A gap box draws no fill, so its label stands on the graph's background and wants no correction.
+
+        The distinction this pins: `None` from the shape must not fall through to the element, which for
+        such a box reports whatever backing its pills brought.
+        """
+        shape = TextShape(Pen(), 0.0, 0.0, 0, 1.0, "x")
+        shape.background_hint = None
+        assert renderer.background_under(shape, self.ELEMENT_FILL) is None
+
+    def test_the_resolved_ground_is_what_decides_the_colour(self, dark_mode):
+        """The two halves joined, since either alone can be right while the pair still paints it wrong."""
+        on_element = renderer.text_color(pen_for(RED), self.ELEMENT_FILL)
+        on_own = renderer.text_color(pen_for(RED), self.OWN_GROUND)
+        assert on_element != on_own, \
+            "these two grounds give the same text colour, so this fixture cannot tell them apart"
+        shape = TextShape(Pen(), 0.0, 0.0, 0, 1.0, "x")
+        shape.background_hint = self.OWN_GROUND
+        assert renderer.text_color(pen_for(RED),
+                                   renderer.background_under(shape, self.ELEMENT_FILL)) == on_own
 
 
 class TestLegibleAgainst:

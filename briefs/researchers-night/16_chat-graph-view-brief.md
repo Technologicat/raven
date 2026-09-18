@@ -1398,8 +1398,8 @@ when it appears.
 
 ### The first live look, 2026-09-18
 
-**Search v1 is built and runs**, pure layer through to the search row and the keys. The look found three
-faults, all fixed the same afternoon and all in code the search merely made visible:
+**Search v1 is built and runs**, pure layer through to the search row and the keys. The look found four
+faults, all fixed the same day and all in code the search merely made visible:
 
 - **A match was drawn in the contrast grey**, because dark mode discards a text pen's colour on any filled
   element. `Pen.keep_color` now says a colour is deliberate, and such a colour keeps its hue while its
@@ -1411,12 +1411,17 @@ faults, all fixed the same afternoon and all in code the search merely made visi
 - **Two panes lit blue at once**, tabbing to the graph and then pressing `Ctrl+F`: the caret-taking chords
   did not release prior keyboard claims. All such sites now go through one entry point.
 
-**Still open, diagnosed and not started**: a box draws more grounds than one — its own fill and a backing
-under each pill — and the renderer describes an element with a single fill colour, whichever filled shape
-it finds first. So a pill's text is corrected against the box, and a gap box's label against a pill. The
-second predates this work: a gap box wearing a `HEAD` pill has had both its lines forced to the contrast
-grey, losing the sub-label's quietness, with no search running. `TODO_DEFERRED.md`, *"A box that draws more
-than one ground cannot describe itself with one fill colour"*, which has the measurements and the fix.
+- **A box draws more grounds than one**, and the renderer described an element with a single fill colour,
+  whichever filled shape it found first. So a pill's text was corrected against the box — the `(1)` of
+  `3 (1)` nearly black on a tool-calling box's orange — and a gap box's label against a pill, the `…6 more`
+  / `6 levels` pair reading 220 / 206 with a pill where it reads 193 / 133 without one, so the sub-label
+  stopped being quieter than the label. The second half predated this work entirely, needing only a `HEAD`
+  pill on a gap box and no search at all. Fixed by letting a *shape* say what it is drawn on, generalising
+  `Node.fillcolor_hint` one level down: `Shape.background_hint`, resolved by `renderer.background_under`,
+  and set at every text site in `chatgraph` — including the attachment deck's `+N` count box, a third
+  instance of the same fault that nothing had reported yet.
+
+**Nothing from the first look is left open.**
 
 **Not yet judged**, and what a second look is for: whether `N (M)` reads without a word, whether one line
 of context around the match is enough, whether forest preorder feels right as an order, the collapse rule
