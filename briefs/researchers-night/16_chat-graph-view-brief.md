@@ -1239,7 +1239,10 @@ says how many *nodes* it stands for, in its own `…N more`, so a node count abo
 already answered — what the search adds is how many hits are in there. On a message box the node reading is
 degenerate anyway, a matching message always standing for one. Counted with the regexes that paint the text
 red, and only in whichever of a message's texts actually matched — so a lone fragment sitting in a trace
-that did not match is not a hit, though the renderer would still colour it.
+that did not match is not a hit, though the renderer would still colour it. **Filtering and highlighting
+being two steps is the constellation's shape rather than something introduced here**: the Visualizer
+decides which records survive a search with `make_search_matcher` and paints what survived with
+`compile_search_highlight_regexes`, and those answer two different questions (Juha, 2026-09-18).
 
 **The search row's `[x/y]` counts messages, and the difference is deliberate.** The message is brief 14's
 match unit and what stepping through the matches moves between, so the row answers *which match am I on*

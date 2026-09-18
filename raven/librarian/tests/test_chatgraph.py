@@ -18,6 +18,7 @@ from raven.common import text as textutil
 from raven.common.gui.xdotwidget import graph as xdotgraph
 
 from raven.librarian import chatgraph
+from raven.librarian import chatsearch
 from raven.librarian import chatutil
 from raven.librarian.chattree import Forest
 
@@ -2730,11 +2731,17 @@ class TestSearchMarks:
     of nodes it names, and is why this is a walk rather than a lookup.
     """
 
-    def _built(self, forest, ids, matched=()):
+    @staticmethod
+    def one_hit_each(node_ids):
+        """A `ViewState.match_counts` where each of `node_ids` matched once, in its own text."""
+        return {node_id: chatsearch.MatchCounts(content=1, thinking=0) for node_id in node_ids}
+
+    def _built(self, forest, ids, matched=(), match_counts=None):
         return chatgraph.build(forest,
                                chatgraph.ViewState(head_node_id=ids["head"],
                                                    new_chat_node_id=ids["greeting"],
-                                                   matched_node_ids=set(matched)),
+                                                   match_counts=(self.one_hit_each(matched)
+                                                                 if match_counts is None else match_counts)),
                                chatgraph.LayoutConfig(max_visible_depth=8))
 
     def test_with_no_search_running_nothing_is_marked(self):
@@ -2771,6 +2778,24 @@ class TestSearchMarks:
             "the gap names this node outright, so this fixture cannot tell the walk from a lookup in that list"
         assert ids["chats"][2] in holders[0].hidden_node_ids, "the control: its parent is what the gap does name"
 
+    def test_a_message_box_reports_its_own_hits(self):
+        forest, ids = _forest_with_every_gap_kind()
+        counts = {ids["head"]: chatsearch.MatchCounts(content=4, thinking=2)}
+        built = self._built(forest, ids, match_counts=counts)
+        assert built.refs[ids["head"]].match_counts == chatsearch.MatchCounts(content=4, thinking=2)
+
+    def test_a_gap_sums_the_hits_of_everything_behind_it(self):
+        """Including the subtree it does not name: a box says how much is in it, so the number is a sum."""
+        forest, ids = _hidden_sibling_with_a_subtree()
+        counts = {ids["chats"][2]: chatsearch.MatchCounts(content=3, thinking=0),
+                  ids["buried"]: chatsearch.MatchCounts(content=2, thinking=1)}
+        built = self._built(forest, ids, match_counts=counts)
+        holders = [ref for ref in refs_of_type(built, chatgraph.SiblingGapRef) if ref.holds_match]
+        assert len(holders) == 1, "both marked nodes have to be behind one gap, or this is not a sum"
+        assert holders[0].match_counts == chatsearch.MatchCounts(content=5, thinking=1), \
+            "3 alone would mean the subtree was left out, and 2 alone that the sibling was"
+        assert holders[0].match_counts.total == 6
+
     def test_the_roots_gap_marks_for_a_chat_under_another_card(self):
         """The fifth kind, which `_forest_with_every_gap_kind` has no second root to produce.
 
@@ -2783,7 +2808,7 @@ class TestSearchMarks:
         older = forest.create_node(payload("system", "an older version of the card"), parent_id=None)
         elsewhere = chain(forest, length=3, parent_id=older)[-1]
 
-        state = chatgraph.ViewState(head_node_id=head, matched_node_ids={elsewhere})
+        state = chatgraph.ViewState(head_node_id=head, match_counts=self.one_hit_each([elsewhere]))
         gap = only_ref_of_type(chatgraph.build(forest, state), chatgraph.RootGapRef)
         assert elsewhere not in gap.hidden_node_ids, \
             "the gap names this node outright, so this fixture cannot tell the walk from a lookup in that list"

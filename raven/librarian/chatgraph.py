@@ -58,10 +58,15 @@ from ..common.gui.xdotwidget import constants as xdotconstants
 from ..common.gui.xdotwidget import graph as xdotgraph
 from ..common.gui.xdotwidget import renderer as xdotrenderer
 
+from . import chatsearch
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
 from . import sidecarstore
+
+# A box with nothing to say about the search, which is every box until one is running. One shared instance
+# rather than one per box: `MatchCounts` is frozen, and a rebuild makes hundreds of refs.
+_NO_MATCHES = chatsearch.MatchCounts(content=0, thinking=0)
 
 # Authored for a light background and inverted by the renderer, which is the path a parsed graph takes too
 # -- so the two cannot drift apart, and there is one place to look when a colour is wrong.
@@ -333,15 +338,22 @@ class Ref:
                        that shows a message; every gap kind fills it. Declared here so that asking *what
                        is behind this box* needs no isinstance ladder — see
                        `ChatGraph.representative_of`, which inverts it.
-    `holds_match`: Whether the running search has a hit in what this box answers for — the message itself,
-                   or, for a gap, anything behind it. False whenever no search is running. Filled in by
-                   `build` from `ViewState.matched_node_ids`.
+    `match_counts`: The running search's hits in what this box answers for — the message itself, or, for a
+                    gap, everything behind it. All zero whenever no search is running, or this box holds
+                    none. Filled in by `build` from `ViewState.match_counts`.
     """
 
     def __init__(self, name: str):
         self.name = name
         self.hidden_node_ids: Tuple[str, ...] = ()
-        self.holds_match: bool = False
+        self.match_counts: chatsearch.MatchCounts = _NO_MATCHES
+
+    def _get_holds_match(self) -> bool:
+        """Return whether this box has anything to report about the search."""
+        return self.match_counts.total > 0
+
+    holds_match = property(fget=_get_holds_match,
+                           doc="Whether the search found anything in what this box answers for.")
 
 
 class ChatNodeRef(Ref):
@@ -521,9 +533,10 @@ class ViewState:
     `sibling_focus`: Parent node ID -> which of its children the sibling window is centred on. An override:
                      a level not listed here centres on whichever child the spine goes through, which is
                      what the user sees before touching anything.
-    `matched_node_ids`: The chat nodes the running search found, anywhere in the forest rather than only
-                        where the picture reaches. Empty when no search is running, which is what turns
-                        every box's mark off. A box reads its own mark off this — see `Ref.holds_match`.
+    `match_counts`: Chat node ID -> the search's hits in that message, over the whole forest rather than
+                    only where the picture reaches. `chatsearch.find_matches`' answer, as a mapping. Empty
+                    when no search is running, which is what turns every box's mark off; a box sums this
+                    over what it stands for — see `Ref.match_counts`.
     """
 
     head_node_id: str
@@ -532,7 +545,7 @@ class ViewState:
     new_chat_node_id: Optional[str] = None
     expanded_tool_turns: Set[str] = dataclasses.field(default_factory=set)
     sibling_focus: Dict[str, str] = dataclasses.field(default_factory=dict)
-    matched_node_ids: Set[str] = dataclasses.field(default_factory=set)
+    match_counts: Dict[str, chatsearch.MatchCounts] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -2253,17 +2266,19 @@ def build(datastore: chattree.Forest,
         drawn_node_ids.update(extra.node_id for extra in extras if extra.kind == "child")
 
         def mark_matches(ref: Ref) -> None:
-            """Fill in `ref.holds_match`. Call once per box, wherever its ref is built."""
-            if not state.matched_node_ids:  # no search running; nothing is marked, and no walk is paid for
+            """Fill in `ref.match_counts`. Call once per box, wherever its ref is built."""
+            if not state.match_counts:  # no search running; nothing is marked, and no walk is paid for
                 return
-            own = ref.node_id if isinstance(ref, ChatNodeRef) else None
-            if own is not None and own in state.matched_node_ids:
-                ref.holds_match = True
-                return
-            ref.holds_match = any(node_id in state.matched_node_ids
-                                  for node_id in datastore.linearize_down(
-                                      *ref.hidden_node_ids,
-                                      prune=lambda node_id: node_id in drawn_node_ids))
+            answers_for = [ref.node_id] if isinstance(ref, ChatNodeRef) else []
+            answers_for.extend(datastore.linearize_down(
+                *ref.hidden_node_ids, prune=lambda node_id: node_id in drawn_node_ids))
+            content = thinking = 0
+            for node_id in answers_for:
+                counts = state.match_counts.get(node_id)
+                if counts is not None:
+                    content += counts.content
+                    thinking += counts.thinking
+            ref.match_counts = chatsearch.MatchCounts(content=content, thinking=thinking)
 
         # ------------------------------------------------------------------
         # Shapes.
