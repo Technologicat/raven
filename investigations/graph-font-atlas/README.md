@@ -48,7 +48,7 @@ a probe.
 ## The bug this is *not* about
 
 Raven has two font problems and they are easy to conflate — the first version of the write-up in
-`briefs/researchers-night/16_chat-graph-view-brief.md` conflated them twice over:
+`briefs/researchers-night/done/16_chat-graph-view-brief.md` conflated them twice over:
 
 - **Atlas overflow at several hundred pixels**, which needs the extended Unicode ranges and was answered by
   loading only the codepoints actually needed. DPG 2.3 made the ranges automatic and turned

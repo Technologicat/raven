@@ -127,7 +127,7 @@ the one-letter rate, and whether that feels acceptable is to be judged live (Juh
 
 ## What the graph half asks of this one, 2026-09-18
 
-The graph's half of search is designed in `16_chat-graph-view-brief.md` → *Where this stands, 2026-09-18*. One
+The graph's half of search is designed in `done/16_chat-graph-view-brief.md` → *Where this stands, 2026-09-18*. One
 decision lands here, the chat log being where it happens:
 
 **Committing to a match found only in a thinking trace opens that trace.** The graph draws a box per node and

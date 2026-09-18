@@ -11,6 +11,25 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## Read the chat graph's changelog block back before it ships
+
+*Cluster: chat-graph-view · Cost: S · Gate: none · Filed: 2026-09-18*
+
+`CHANGELOG.md` → 0.2.9 → *Added* → *Raven-librarian* → *a chat graph view*: the eight sub-bullets covering
+clicking, the three marks, the gap boxes, the keyboard, the toolbar and the graph's half of search were
+written in one pass on 2026-09-18, filling a placeholder that had stood since the view landed on
+2026-09-01. Three weeks of features described from one afternoon's memory of them, by someone who had just
+spent that afternoon inside the code — which is the condition under which a sentence reads as obviously
+true to its author and as unverifiable to everybody else.
+
+Four claims were checked against the source while writing (the three-result fold threshold, the `N (M)`
+caption, what the trace colour actually covers, and the toolbar's buttons); the rest were not. So the pass
+wanted is a reader's rather than an author's: open the app beside it and try each sentence.
+
+Asked for by Juha the same day, and deliberately *not* done the same day: it was a long one spent building
+the thing being described, and a review of one's own afternoon is the one kind that cannot be done tired.
+Fresh eyes are the whole point of deferring it rather than the excuse for it.
+
 ## Widening the window feeds the chat log, which is the pane that wants it least
 
 *Cluster: chat-graph-view · Cost: M · Gate: none · Filed: 2026-09-18*
@@ -5203,7 +5222,7 @@ reason to have a version number rather than just a migration marker.
 
 ## A no-avatar mode, with the chat tree in the panel the avatar vacates
 
-*Cluster: panel occupancy · Cost: L · Gate: the post-RN2026 triage · Filed: 2026-07-29 · See also: `briefs/researchers-night/16_chat-graph-view-brief.md`*
+*Cluster: panel occupancy · Cost: L · Gate: the post-RN2026 triage · Filed: 2026-07-29 · See also: `briefs/researchers-night/done/16_chat-graph-view-brief.md`*
 
 **Timing, stated so this is not read as near-term work** (Juha, 2026-09-04): everything here is post-
 Researchers' Night, and the realistic slot is autumn 2026 or spring 2027 — an academic year has no
@@ -6320,7 +6339,7 @@ effect *is*, and the second one would want the filters audited for whether they 
 
 ## Bookmarks in the chat graph
 
-*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-04 · See also: briefs/researchers-night/16_chat-graph-view-brief.md*
+*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-04 · See also: briefs/researchers-night/done/16_chat-graph-view-brief.md*
 
 Mark chat nodes worth coming back to, drawn with the pill mechanism the graph already has for pointers, in
 a colour of their own. Design first — what a bookmark *is* (a per-node flag in the datastore, or view

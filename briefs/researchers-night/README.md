@@ -18,7 +18,6 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | Brief | What | Status |
 |---|---|---|
 | `markdown-block-rendering-brief.md` | Band-2 item 12: block-level Markdown in the chat view | **After Researchers' Night** — it was the sprint's slack, and the slack is gone (2026-09-15). Steps 1 and 5 landed 2026-08-25; what remains is behind the single-newline split, which is also what fenced code and multi-line lists are waiting on |
-| `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night, and **in progress**. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Items 1–7 are done, and so is the transition animation (2026-09-16); the look check (item 10) was struck the same day, having been done as the work went. Open on search alone — **and a search v1 is back on the exhibit path** as of 2026-09-16; see *Decided 2026-09-16* below. Search (item 8) moved past the event on 2026-09-15, with a first draft welcome before it; see *Decided 2026-09-15* below. **Search v1 is built and in polish as of 2026-09-18**, and the second search mode it was to be followed by is doubted rather than pending — so this brief closes on that polish; see *Decided 2026-09-18* below |
 | `12_derived-artifact-store-brief.md` | One keying and regeneration mechanism for everything computed *from* a source artifact | v0.2.10. Does not depend on 13 |
 | `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night. **It precedes `visualizer-keyword-pools-brief.md`'s corpus-level display** (Juha, 2026-09-10): its §2 keeps the corpus frequency stats that window reads, so it is the foundation and goes first |
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, ~~PCA preprocessing~~, ~~cosine-to-medoid outlier assignment~~, Procrustes alignment, and **clustering in high-D**. **Items 2, 3 and 5 were measured on 2026-09-01 and the brief now points at `investigations/highdim-clustering/README.md`, which is the specification** — 2 and 3 are measured harmful and must not be built as written, 5 is settled and ready to implement (agglomerative, not HDBSCAN) | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
@@ -29,6 +28,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 
 | Brief | What | Landed |
 |---|---|---|
+| `done/16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit — the chat multiverse made visible, which was the job | 2026-09-18, v0.2.9. Items 1–7 and the transition animation landed through September; item 8, search, closed it. Item 9 (a filtering mode beside the navigating one) was designed and then **doubted rather than built** — navigating the matches answered what it was wanted for; what it would need is in the brief. Its two *live look* sections are the ones worth reading: a run of faults across two afternoons with **not one of them in the design**, and six open design questions that all came back yes |
 | `done/15_headless-agent-driver-brief.md` | A scripting surface over the scaffold — `raven.librarian.agent`, plus the backend-status work and the per-variety system prompt storage that came out of it | 2026-08-12, v0.2.9 |
 | `done/filedialog-thumbnails-brief.md` | Image previews in the file dialog, as a toggled grid view | 2026-08-14 |
 | `done/filedialog-keyboard-brief.md` | Operating the file dialog without a pointing device, and saying where the keyboard is | 2026-08-21 |
@@ -180,16 +180,22 @@ asks. The detail is in `TODO_DEFERRED.md`, *"A whitespace and test-style sweep, 
 is recorded here as well because an item in that file is otherwise easy to forget, and this README is what a
 session reads first.
 
-### Decided 2026-09-18 — the second search mode is doubted, so brief 16 closes on polish
+### Closed 2026-09-18 — the chat graph view is done, and the brief is in `done/`
 
 Search v1 — **A, navigate** — is built, both halves, and was driven live the same day. Using it answered the
 question the second mode was wanted for: *"I think that might not even be needed"* (Juha). So **B, filter**
-is no longer treated as pending work, and `16_chat-graph-view-brief.md` closes once v1's polish is in
+is no longer treated as pending work, and `done/16_chat-graph-view-brief.md` closes once v1's polish is in
 rather than waiting on a second mode.
 
 Recorded here because it leaves no diff — B was never started, so nothing in the tree would otherwise show
 that it stopped being expected, and the next session would read the brief's *"B stays wanted"* as current.
 What B would need is still written in the brief, against the day somebody wants it.
+
+**So the brief closed the same afternoon**, its changelog block written and the file moved to `done/`. One
+thing is deliberately *not* finished with it: that changelog block describes three weeks of features from
+one afternoon's memory of them, and wants reading back with fresh eyes rather than by the person who had
+just spent the day inside the code — `TODO_DEFERRED.md`, *"Read the chat graph's changelog block back
+before it ships"*, for Monday.
 
 **Every design question the looks were for came back positive, and none of them changed anything**: the
 `N (M)` count reads without a word, one line of context around a match is enough, forest preorder walks
@@ -545,7 +551,7 @@ another's tree, and they are different enough to review side by side — which i
 review bandwidth rather than machine time. **Only the first is bound by the deadline**; the other two are
 here because they are ready to start, not because they are urgent.
 
-1. **The graph view** — `16_chat-graph-view-brief.md`, which is item 2 of the ordering below and the
+1. **The graph view** — `done/16_chat-graph-view-brief.md`, which is item 2 of the ordering below and the
    thread that matters for 26 September. **Step zero is already done** (2026-08-25): a hand-built
    chat-shaped `Graph` renders through `XDotWidget.set_graph` with no GraphViz and no xdot in the path,
    and `test_widget.py` covers it. So this starts from the feature work rather than from proving the door
