@@ -124,3 +124,20 @@ that wait while their text is hidden. The streaming message is included: it is h
 
 **Every search length highlights**, `e` included, if it is fast enough: a screenful costs roughly 150–250 ms at
 the one-letter rate, and whether that feels acceptable is to be judged live (Juha).
+
+## What the graph half asks of this one, 2026-09-18
+
+The graph's half of search is designed in `16_chat-graph-view-brief.md` → *Where this stands, 2026-09-18*. One
+decision lands here, the chat log being where it happens:
+
+**Committing to a match found only in a thinking trace opens that trace.** The graph draws a box per node and
+has no trace to open, so a match there is shown as the box's snippet, tagged; acting on the box moves HEAD, and
+the log then owes the reader the text the count was counting. Same rule `step_search` already follows within a
+branch, and the same mechanism — `view.find_message(node_id).show_thinking_trace()`.
+
+**It cannot be called at the commit.** Moving HEAD rebuilds the log asynchronously, so the message does not
+exist yet and `find_message` answers `None`. It wants the per-message hook the rebuild already calls
+`add_search_matches_for` on: remember which node to open, and act when it arrives.
+
+The rest the graph half simply inherits — the matcher, the two checkboxes, and
+`compile_search_highlight_regexes`, which is what makes a match look the same in both views.

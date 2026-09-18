@@ -1161,6 +1161,188 @@ Three directions, none chosen:
 The first two are compatible and could both apply. The third is the one that makes the *avatar* panel
 growable, which the other two deliberately avoid needing.
 
+## Where this stands, 2026-09-18 — item 8's v1 is designed
+
+Designed in a session before any code. Almost none of what follows produces a diff of its own, and the
+alternatives it rules out are what a later session would otherwise re-open.
+
+### Item 8 is two features, and v1 is the first of them
+
+The 2026-09-08 reading — *a search changes which nodes the graph must show* — holds two separable things:
+
+- **A, navigate.** The picture is built as it always was, and the search moves where it is drawn from. A
+  match anywhere becomes drawn by focusing it: `_depth_window` centres on the focus, and three activations
+  (`_click_chat_node`, `_look_inside`, `_show_other_root`) already make exactly that move. This is what
+  2026-09-08 actually derived — a match outside the window has to move the window and rebuild rather than
+  pan — and it is cheap now that the morph animates the rearrangement.
+- **B, filter.** The built picture becomes a selection of the matches, with a ceiling on how many, and gap
+  runs split around the survivors (`[a] [12 more] [n] [1 more] [p] [9 more]`).
+
+**A is item 8's v1** (Juha, 2026-09-18). **B stays wanted and becomes a checkbox**, above the graph beside
+its own next/previous controls, so a reader picks which of the two pictures they are looking at.
+
+**What blocks B is a design rather than the module.** Matches scattered across depths and branches need
+connecting ancestry to have edges at all, and which ancestors survive is unanswered. The code side is
+contained: B changes which nodes are selected, plus the run-splitting inside `_window`, and everything
+after `rows` is downstream of that. Measured while the question was being asked — `chatgraph.py` is 2775
+lines and ~1150 SLOC, `build` 473 and 275, laid out as eight sequential phases of 1–44 lines with three
+closures over their shared scope, which is what keeps it one function.
+
+### Two mechanisms this cannot use, and one that both halves share
+
+- **`XDotWidget.search` is not the machinery**, though the UX is still copied from `raven-xdot-viewer`.
+  `SearchState` matches through `Graph.filter_items_by_text`, which is the *drawn label* — forty
+  Markdown-stripped characters of a message, and only for boxes that exist. Matches have to come from full
+  message text including undrawn nodes, so they come from `chatsearch.find_matches` over the forest and the
+  marks are drawn by `build`, which is where the cursor ring lives and for the same reason.
+- **Markdown labels remain unavailable.** Asked again on 2026-09-18; the structural answer above stands,
+  the graph drawing shapes into a drawlist under its own viewport transform while `dpg_markdown` emits
+  widgets.
+- **What both halves share is `compile_search_highlight_regexes`**, the pair already carried on
+  `chatsearch.SearchQuery.highlight`. It decides which characters are a match; the two views agree there
+  and render it differently.
+
+### What a matching box shows
+
+**The first matching snippet, with the match in red and bold** — the same two channels the chat log uses.
+Bold is in v1 rather than after it, because the halves have to agree on what a hit looks like or the
+difference reads as damage (Juha, 2026-09-18). Painted as the three shapes settled on 2026-09-08 — before,
+match, after, at cumulative measured widths — and since wrapping already emits one `TextShape` per line, a
+split never straddles a line break.
+
+**Red outlines were weighed and dropped**: a box outlined in red reads as broken rather than as matched
+(Juha). The 2026-09-08 objection to colouring the whole label red does not carry over, its premise being
+that filtering had already left every box on screen a match, which A does not do.
+
+**Which text the snippet comes from**: the message's own when it matched there, and the thinking trace when
+that is the only place it matched. `find_matches` already returns `where` as a frozenset of `{"content",
+"thinking"}`, so the preference needs no new computation.
+
+**A trace snippet is drawn in the chat log's think blue**, so a box says which kind of text its match was
+found in by the same means the log does. Both colours are sourced rather than repeated, and the dark mode
+between them behaves differently enough to be worth writing down:
+
+- **The match itself takes `guiutils.SEARCH_HIGHLIGHT_COLOR`, authored as it stands.** Pure red sits at
+  L=0.5, almost exactly the lightness remap's fixed point, so `(255, 0, 0)` comes out of the renderer as
+  `(255, 10, 10)` and the two views agree on the red for nothing.
+- **The trace text takes `gui_config.chat_color_think_front`** — `#9ea2ee`, what `my_steady_think_theme`
+  paints a trace with — which is a value authored for dark and has to be pre-inverted like every other
+  colour in this module: `_authored_for_dark` of it is `(10, 12, 55)`.
+
+**A count, as a total rather than a remainder**, since the distinction exists only on a message box: a gap
+shows nothing, so what is behind it *is* the total, and only the snippet raises the question of whether the
+one on screen is counted. Counting it everywhere makes the number mean one thing in both places (Juha,
+2026-09-18).
+
+It reads `3`, with `(N thinking)` appended whenever any of the matches were found in a trace — `3 (2
+thinking)`, or `2 (2 thinking)` where the trace was the only place. That third form is redundant and is
+kept anyway: a rule with no exception in it is worth more than the line it saves, and with the Thinking
+checkbox off by default most readers never meet it.
+
+- **Both counts are labelled, because one bare number beside a labelled one reads as *1 of 2*.** The
+  alternative weighed was `1 content · 2 thinking`, which names both and drops the total, leaving the
+  reader to add — the same arithmetic that ruled out writing the count as a remainder. It is also half as
+  wide again as anything else here, and `content` is the message dict's key rather than a word the
+  interface uses anywhere.
+- **Not in the match colour.** A red count on a box reads as *3 errors* (Juha). Ordinary text colour.
+
+**Where the count goes is for the live look, and both channels are priced.** A third line inside the box
+costs the second label line; a pill above it costs width on the strip that already carries SYS, NEW and
+HEAD.
+
+- **The third line's arithmetic**: with `node_h` 84, label font 20, role font 14, top inset 8 and line gap
+  2, baselines fall at y1+22 for the speaker and y1+44 and y1+66 for two label lines, leaving 16. A 14 px
+  line beneath those lands its baseline at y1+82 against a box bottom of y1+84, so descenders clip.
+  `node_h` is global and there is no per-box height, so the box cannot grow to take it. **So a matching box
+  is speaker, one line of snippet, and the count line** — and whether one line of context around the match
+  reads thinly is the thing to look at first.
+- **The widths**, estimated at the pill and label advances: `3 (2 thinking)` is 98 px as a line and 142 as a
+  pill, against 104 px of label width inside a gap box and 120 px of box to sit a pill on. It fits both,
+  with nothing to spare on the line. `1 content · 2 thinking` fits neither, at 154 and 211.
+- **A pill can take a colour of its own cheaply** — `_pill_shapes` already builds a pen per pill for the
+  backing, and only the outline and text pens are hoisted out of the loop — so the fallback's cost is the
+  width of that strip rather than any confusion with the pills already on it.
+- **Nothing reserves room for pills.** `_Decorations` reach covers the role icon and the attachment fan and
+  no more, so a pill row overlapping a neighbour's would be silent. It has never bitten because SYS, NEW and
+  HEAD together come to 155 px against a 300 px box; a count pill on a 120 px gap box is the first thing
+  wide enough to test it.
+
+### Marking the gap boxes, because otherwise the picture lies
+
+Once a message box shows that it matched, an unmarked gap box claims there is nothing behind it. That is
+the rule the gaps exist for, so the mark is a precondition for marking messages at all.
+
+**`hidden_node_ids` is not what is behind the box**, for four of the five kinds: `SiblingGapRef` carries the
+siblings without their subtrees, `DepthGapRef` the elided ancestors without their off-spine children, and
+`RootGapRef` the other roots without their trees. Nothing else stands for those, so the test is a walk from
+each hidden node that **stops at drawn nodes**, uniform across all five kinds.
+
+**`ToolRoundGapRef` takes the same walk, and the reason is worth keeping.** It looks like the exception —
+its results are a chain and the answer below it is drawn — but a row shows the siblings of a *drawn* spine
+node, and the folded results are not on the spine. So alternates hanging off the last result are drawn, as
+siblings of the answer, while alternates hanging off an earlier result have no row at all and are in no
+gap's `hidden_node_ids` either. It takes a reroll at a mid-round tool result, and then those nodes are
+drawn nowhere. Note that whether tool results are *searched* is a separate question, answered by the
+`include_tools` checkbox: it decides whether those nodes match, not what stands behind the box.
+
+### The shared widget grows bold and italic
+
+`Pen` carries no font family today; the renderer binds whichever of five OpenSans Regular atlases
+(4/8/16/32/64) is nearest the size. For a red-and-bold fragment it needs `Pen.bold` and `Pen.italic`, and
+the atlases keyed **`(bold, italic) -> [(size, font_id), …]`** as one mapping rather than a list per family
+added one at a time. `MeasureText` and `_text_width` grow the same two flags, split widths having to be
+measured against the font they are drawn in. All four variants ship already and `get_font_path` names them,
+so each family is one entry.
+
+**Regular and Bold go in first, the other two once that works** (Juha, 2026-09-18) — both are wanted. One
+extra family at a time also keeps the atlas experiment legible: 64 px bold is in the size range where Raven
+has seen silent glyph loss, and if it does blow up, a reproduction of that is worth having (Juha).
+
+`raven-xdot-viewer` is the other caller of the widget and is in the blast radius.
+
+### Navigation
+
+- **Forest preorder** — depth-first from each root, children in sibling order. It agrees with the chat log's
+  order along the branch in view, both being a path through it. To be judged live (Juha).
+- **The whole forest**, other character cards included; the ordering is what keeps that reasonable.
+- **The cursor says where the reader is in the matches**, the way the chat log reads its position off the
+  scroll, so clicking a matching box moves the counter and there is no index to go stale. HEAD stands in
+  when no box holds the cursor. A jump sets the cursor, with the ring a click would have given it.
+- **A jump previews and does not commit** — search is navigation, and HEAD stays where it is.
+- **A match inside a folded tool round expands the round**, as brief 14's jump opens a thinking trace and
+  for the same reason: every match counted should be on screen.
+  - **And collapses it again on the way out**, which needs one set: rounds opened by a search. A jump
+    closes any of them the cursor is no longer inside, and ending the search closes them all. **A user act
+    that expands a round takes ownership of it** — the owner leaves the set — so a search never closes a
+    round the reader opened.
+  - **Arrows and clicks do not collapse.** A reader who walks out of a round with the cursor may walk back,
+    and rearranging the picture under ordinary navigation is the surprise that the preview-and-commit split
+    exists to avoid. Proposed rather than measured; to be tried (Juha, 2026-09-18).
+  - A jump can therefore make two topology changes at once, closing one round and opening another. One
+    rebuild, one morph, so it ought to read as a single motion — which the transitions so far suggest it
+    will, and which is for the live look to confirm.
+
+**Committing a match whose trace was the only place it matched opens that trace in the chat log** (Juha).
+The mechanism is `view.find_message(node_id).show_thinking_trace()`, which `step_search` already uses — but
+a commit moves HEAD and the log rebuilds asynchronously, so calling it in the commit finds no message. It
+wants the per-message hook the rebuild already calls `add_search_matches_for` on: remember the node, act
+when it appears.
+
+### Measured before building
+
+- **A tree-wide search costs about 25 ms per keystroke** over a forest of ~900 nodes and ~0.8 M characters,
+  of which `normalize_search_string` is ~21 ms and the matching ~4 ms. Caching normalized text per node and
+  revision takes it to ~4 ms if it is ever needed. Affordable now, and this is a small forest: Librarian
+  has spent its life as a prototype, and the datastore grows the moment it is used in earnest (Juha).
+- **A search-only rebuild is geometry-identical.** Box widths come from `config` — `gap_node_w` or `node_w`
+  per slot — and never from content, so rewriting labels moves nothing. Those rebuilds pass
+  `set_graph(animate=False)`, there being no motion to animate and one morph per keystroke to avoid.
+
+### Left for the live look
+
+One line of context per matching box; whether the count rides a third line or a pill; forest preorder; the
+collapse rule for arrows and clicks; and whether a jump's two topology changes read as one motion.
+
 ## Where this stands, 2026-09-15
 
 **What the exhibit needs from this brief is the transition animation** (*Animating a change of topology*,

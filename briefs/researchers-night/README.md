@@ -149,6 +149,12 @@ and a surviving edge drawn once in the graph morph — the arrows flashed at eac
    while the avatar is shown, and the graph's toolbar stays in the graph view. The bold heading at the row's left
    naming what the panel shows — the character's name, or *Chat graph* — was built the same day, so the
    navigation takes the right-hand side.
+   - **Designed 2026-09-18, in a session before any code**: brief 16 → *Where this stands, 2026-09-18*, which is
+     what the implementation starts from. In short — item 8 is two features and v1 is the navigating one, the
+     filtering one becoming a checkbox later; a matching box shows its first snippet with the match in red and
+     bold, and a count of the matches it holds; gap boxes are marked by a walk that stops at drawn nodes; and
+     the shared `XDotWidget` grows bold and italic pens. Brief 14 → *What the graph half asks of this one* has
+     the single decision that lands in the chat log instead.
 
 ### Decided 2026-09-17 — a hygiene sweep follows search v1 directly
 
