@@ -1234,38 +1234,51 @@ shows nothing, so what is behind it *is* the total, and only the snippet raises 
 one on screen is counted. Counting it everywhere makes the number mean one thing in both places (Juha,
 2026-09-18).
 
-It reads `3`, with `(N thinking)` appended whenever any of the matches were found in a trace — `3 (2
-thinking)`, or `2 (2 thinking)` where the trace was the only place. That third form is redundant and is
-kept anyway: a rule with no exception in it is worth more than the line it saves, and with the Thinking
-checkbox off by default most readers never meet it.
+**It rides a pill, on both box kinds**, which is what keeps the two lines of context a box already has: the
+only thing that wanted the second label line was a count line inside the box. `_pill_shapes` builds a pen
+per pill for the backing already, so a pill of its own colour is a couple of lines moved inside the loop;
+what ripples is the type, `ChatNodeRef.pills` being a tuple of strings today.
 
-- **Both counts are labelled, because one bare number beside a labelled one reads as *1 of 2*.** The
-  alternative weighed was `1 content · 2 thinking`, which names both and drops the total, leaving the
-  reader to add — the same arithmetic that ruled out writing the count as a remainder. It is also half as
-  wide again as anything else here, and `content` is the message dict's key rather than a word the
-  interface uses anywhere.
-- **Not in the match colour.** A red count on a box reads as *3 errors* (Juha). Ordinary text colour.
+**One channel for both kinds, rather than the channel each kind has room for.** A gap box could take the
+count inside it at no cost — being centred and having no speaker line, it keeps 17 px of slack even with a
+sub-label and a count line, where a message box has 2 — and a split by box kind was rejected anyway: it
+would read as two different things (Juha, 2026-09-18). Worth recording because the vertical measurement
+that started this was taken on a message box and stated as though it covered both, which it does not.
 
-**Where the count goes is for the live look, and both channels are priced.** A third line inside the box
-costs the second label line; a pill above it costs width on the strip that already carries SYS, NEW and
-HEAD.
+**The caption is `N (M)`**, the total with the share found in thinking after it, the parenthetical dropped
+when that share is zero — and drawn in the same think blue a trace snippet is, so the colour says what the
+second number counts. **The help card's search section documents that blue**, which is what a reader who
+has met the shade somewhere in the interface needs to pin it down (Juha).
 
-- **The third line's arithmetic**: with `node_h` 84, label font 20, role font 14, top inset 8 and line gap
-  2, baselines fall at y1+22 for the speaker and y1+44 and y1+66 for two label lines, leaving 16. A 14 px
-  line beneath those lands its baseline at y1+82 against a box bottom of y1+84, so descenders clip.
-  `node_h` is global and there is no per-box height, so the box cannot grow to take it. **So a matching box
-  is speaker, one line of snippet, and the count line** — and whether one line of context around the match
-  reads thinly is the thing to look at first.
-- **The widths**, estimated at the pill and label advances: `3 (2 thinking)` is 98 px as a line and 142 as a
-  pill, against 104 px of label width inside a gap box and 120 px of box to sit a pill on. It fits both,
-  with nothing to spare on the line. `1 content · 2 thinking` fits neither, at 154 and 211.
-- **A pill can take a colour of its own cheaply** — `_pill_shapes` already builds a pen per pill for the
-  backing, and only the outline and text pens are hoisted out of the loop — so the fallback's cost is the
-  width of that strip rather than any confusion with the pills already on it.
-- **Nothing reserves room for pills.** `_Decorations` reach covers the role icon and the attachment fan and
-  no more, so a pill row overlapping a neighbour's would be silent. It has never bitten because SYS, NEW and
-  HEAD together come to 155 px against a 300 px box; a count pill on a 120 px gap box is the first thing
-  wide enough to test it.
+- **The fallback, if the bare outer number does not read, is `N matches`** — same width to the pixel, and
+  it buys the word by giving up the breakdown, there being room for one or the other and not both. So the
+  caption wants writing as one function of the two counts, and switching between the forms is a line.
+- **Not in the match colour.** A red count on a box reads as *3 errors* (Juha). Ordinary text colour for
+  the total.
+- **A count is the whole of what a gap box says about the search**, having no snippet, so the blue there
+  rests on the association rather than on anything beside it. That box is the one to judge the caption on.
+
+**The widths, estimated at the pill advance.** A gap box is 120 wide with 24 of gap beside it, a message
+box 300, and SYS, NEW and HEAD together come to 155:
+
+| caption | span | overhang on a gap box | with all three pills |
+|---|---|---|---|
+| `3 (2)` | 63 | 0 | 222 |
+| `889 (412)` | 98 | 0 | 257 |
+| `12345 (6789)` | 124 | 4 | 283 |
+| `889 matches` | 116 | 0 | 274 |
+| `889 matches (412)` | 168 | 48 | 326 |
+| `3 (2 thinking)` | 142 | 22 | 300 |
+
+Spelling the breakdown out is what blows the budget, which is ~11.5 characters at a gap box. Both surviving
+forms fit everywhere, including the node carrying SYS, NEW and HEAD at once.
+
+**Which is what makes the pill affordable at all, because nothing reserves room for one.**
+`_Decorations` reach covers the role icon and the attachment fan and no more, so a pill row overlapping a
+neighbour's would be silent — never bitten, the existing pills being narrow against a 300 px box. Adding
+pills to the reach would fix that and cost more than it fixes: the spacing would then change as the counts
+change, so a row would shuffle sideways on every keystroke. **A caption that fits needs no reach, and the
+picture stays geometry-stable under typing**, which is worth more than the breakdown it is buying (Juha).
 
 ### Marking the gap boxes, because otherwise the picture lies
 
@@ -1340,8 +1353,8 @@ when it appears.
 
 ### Left for the live look
 
-One line of context per matching box; whether the count rides a third line or a pill; forest preorder; the
-collapse rule for arrows and clicks; and whether a jump's two topology changes read as one motion.
+Whether `N (M)` reads without the word, judged on a gap box; forest preorder; the collapse rule for arrows
+and clicks; and whether a jump's two topology changes read as one motion.
 
 ## Where this stands, 2026-09-15
 
