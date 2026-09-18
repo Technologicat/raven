@@ -23,7 +23,7 @@ import logging
 import threading
 import uuid
 import weakref
-from typing import Callable, Optional, Set, Tuple, Union
+from typing import Callable, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ from ..common.gui.xdotwidget.widget import XDotWidget
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 
 from . import chatgraph
+from . import chatsearch
 from . import chattree
 from . import config as librarian_config
 
@@ -209,6 +210,19 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # box as well as on a message — see `chatgraph.ViewState.cursor_name`. Mirrored into the view
         # state, which is what draws the ring; kept here too so the panel can answer without a rebuild.
         self._cursor_name: Optional[str] = None
+        # The running search. `_search_matches` is every matching node in forest preorder, which is the
+        # order stepping between them follows; the counts the boxes draw live in the view state. A counter
+        # rather than a flag, so a rebuild can record which search it drew and a search arriving while one
+        # is being drawn is not lost.
+        self._search_matches: List[Tuple[str, chatsearch.MatchCounts]] = []
+        # Node -> its place in reading order, so "the next match after where I am" can be answered when
+        # where-I-am is not itself a match.
+        self._preorder_index: dict = {}
+        # Tool rounds this panel opened to land a search jump inside one. They are its to close again; a
+        # round the reader opened is theirs, and `_set_round_expanded` hands ownership over when they do.
+        self._rounds_opened_by_search: Set[str] = set()
+        self._search_generation = 0
+        self._seen_search_generation = 0
         self._is_shown = bool(show)
         # Whether the view has been framed yet. The first build fits the branch; later ones must not, or
         # the picture would re-frame itself under a reader once per turn of the conversation.
@@ -916,6 +930,18 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._view_state.new_chat_node_id = self.app_state.get("new_chat_HEAD")
             generation = self.datastore.generation
 
+            # A search's answer is about the forest, so the forest changing makes it stale: an arriving
+            # reply is a node that may match, a reroll adds one, and a deleted subtree may have held the
+            # reader's next stop.
+            #
+            # Keyed on the datastore's own change counter rather than on any particular event, which is
+            # what makes that list not need maintaining -- every mutation bumps it, `add_revision` and
+            # `overwrite_active_revision` included, so message editing is covered on the day it lands
+            # without anyone having to come back here. Re-asked from this side for the reason the polling
+            # rests on too: the dozen-odd writers to the tree should not have to know a view exists.
+            if self._view_state.search_query is not None and generation != self._seen_generation:
+                self.set_search(self._view_state.search_query)
+
             self._awaited_thumbnails.clear()  # refilled by the build below, through `_thumbnail_of`
             chat_graph = self._try_build()
             if chat_graph is None:  # the node the picture was drawn around is gone -- fall back to HEAD
@@ -945,6 +971,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 if rebuilt is not None:
                     chat_graph = rebuilt
             self._chat_graph = chat_graph
+            self._seen_search_generation = self._search_generation
             self._seen_generation = generation
             self._seen_head = self._view_state.head_node_id
             anchor = (self._cursor_name
@@ -1110,6 +1137,144 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._widget.pan_to_point(head_node.x, head_node.y - panel_h / 6.0, animate=animate)
         return True
 
+    # ------------------------------------------------------------------
+    # Search
+
+    def set_search(self, maybe_query: Optional[chatsearch.SearchQuery]) -> None:
+        """Mark the picture with whatever `maybe_query` finds. `None` ends the search. Callable from any thread.
+
+        **The whole forest, not the branch on screen.** A box answers for what is behind it as well as for
+        itself, and for a gap box a count of the hits back there is the only thing it can say about a
+        search at all — it has no message to quote.
+
+        Finding the matches happens here, on the caller's thread, and the picture is redrawn by the render
+        loop when it next notices. So a keystroke pays for the search and the frame pays for the redraw,
+        rather than one thread paying for both.
+        """
+        with self.datastore.lock:
+            # Preorder, which is the order stepping between matches follows: depth first from each root,
+            # children in sibling order, so the walk reads down a conversation and then across to the next.
+            in_reading_order = self.datastore.linearize_down(*self.datastore.get_all_root_nodes())
+        matches = chatsearch.find_matches(self.datastore, in_reading_order, maybe_query)
+        with self._lock:
+            self._search_matches = matches
+            self._preorder_index = {node_id: index for index, node_id in enumerate(in_reading_order)}
+            self._view_state.search_query = maybe_query
+            self._view_state.match_counts = dict(matches)
+            self._search_generation += 1
+            if maybe_query is None:
+                # Ending the search closes what it opened: the reader asked for those rounds only in the
+                # sense that a jump needed somewhere to land, and that reason has just gone away.
+                for owner in self._rounds_opened_by_search:
+                    self._view_state.expanded_tool_turns.discard(owner)
+                self._rounds_opened_by_search.clear()
+
+    def _get_search_matches(self) -> List[Tuple[str, chatsearch.MatchCounts]]:
+        """Return the running search's matches over the whole forest, in preorder."""
+        with self._lock:
+            return list(self._search_matches)
+
+    search_matches = property(fget=_get_search_matches,
+                              doc="The running search's matches over the whole forest, in preorder. Empty for no search.")
+
+    def search_position(self) -> Tuple[Optional[int], int]:
+        """Return `(which match the reader is at or None, how many there are)`, for a counter to draw.
+
+        **Read off the cursor rather than remembered**, the way the chat log reads its own position off the
+        scroll: clicking a matching box moves the counter, and there is no stored index to go stale when
+        the matches change under it. HEAD stands in while no box holds the cursor, that being where the
+        reader is when they are not pointing at anything.
+        """
+        matches = self.search_matches
+        anchor = self._search_anchor()
+        for index, (node_id, _counts) in enumerate(matches):
+            if node_id == anchor:
+                return index, len(matches)
+        return None, len(matches)
+
+    def _search_anchor(self) -> Optional[str]:
+        """Return the chat node the reader is at, which decides which match comes next."""
+        maybe_node = self._cursor_chat_node_id()
+        if maybe_node is None:
+            with self._lock:
+                chat_graph, cursor_name = self._chat_graph, self._cursor_name
+            if chat_graph is not None and cursor_name is not None:
+                # On a gap box, the reader is at the run it stands for, which begins at its first hidden
+                # node — the same answer `_chat_node_meant` gives for pairing boxes across two builds.
+                maybe_ref = chat_graph.ref_for(cursor_name)
+                if maybe_ref is not None and maybe_ref.hidden_node_ids:
+                    maybe_node = maybe_ref.hidden_node_ids[0]
+        return maybe_node if maybe_node is not None else self.app_state["HEAD"]
+
+    def step_search(self, direction: int) -> bool:
+        """Go to the next (`direction=+1`) or previous (`-1`) match in reading order. Returns whether it moved.
+
+        Stops at either end rather than wrapping around, as the chat log's navigation does.
+
+        This *previews* — it draws the picture around the match and puts the cursor on it, and leaves HEAD
+        where it is. Search is a way of looking, and committing to what you find is the second act the rest
+        of this view already asks for.
+        """
+        matches = self.search_matches
+        if not matches:
+            return False
+        with self._lock:
+            order = dict(self._preorder_index)
+        here = order.get(self._search_anchor(), -1)
+        if direction > 0:
+            beyond = [node_id for node_id, _ in matches if order.get(node_id, -1) > here]
+            maybe_target = beyond[0] if beyond else None
+        else:
+            before = [node_id for node_id, _ in matches if order.get(node_id, -1) < here]
+            maybe_target = before[-1] if before else None
+        if maybe_target is None:
+            return False
+        self._go_to_match(maybe_target)
+        return True
+
+    def _go_to_match(self, node_id: str) -> None:
+        """Draw the picture around `node_id` and put the cursor on it, opening a tool round if it is inside one."""
+        maybe_owner = self._round_owner_of(node_id)
+        with self._lock:
+            self._view_state.focus_node_id = node_id
+            if maybe_owner is not None:
+                # A folded round's results have no box, so a match inside one has nowhere to land. Opening
+                # it is the same courtesy the chat log's jump does in opening a thinking trace: every match
+                # the search counted should be somewhere a reader can see it.
+                self._view_state.expanded_tool_turns.add(maybe_owner)
+                self._rounds_opened_by_search.add(maybe_owner)
+            # What the search opened, the search closes. A round the *reader* opened is theirs and is left
+            # alone -- `_set_round_expanded` hands ownership over -- and so is one they are still inside.
+            for owner in list(self._rounds_opened_by_search):
+                if owner != maybe_owner:
+                    self._view_state.expanded_tool_turns.discard(owner)
+                    self._rounds_opened_by_search.discard(owner)
+        self._set_cursor(node_id)  # redraws, so the branch change and the fold changes land with it
+        self._widget.pan_to_node(node_id)
+
+    def _round_owner_of(self, node_id: str) -> Optional[str]:
+        """Return the assistant message whose tool round `node_id` is a result of, or `None` if it is not one.
+
+        Read from the datastore rather than from the picture, because the picture is what this is about to
+        change: a folded round's results are not drawn, so there is nothing there to ask.
+        """
+        with self.datastore.lock:
+            def role_of(candidate: str) -> Optional[str]:
+                try:
+                    return (self.datastore.get_payload(candidate).get("message") or {}).get("role")
+                except (KeyError, AttributeError):
+                    return None
+            if role_of(node_id) != "tool":
+                return None
+            walker = node_id
+            while True:
+                maybe_parent = self.datastore.get_parent(walker)
+                if maybe_parent is None:
+                    return None
+                if role_of(maybe_parent) != "tool":
+                    return maybe_parent
+                walker = maybe_parent
+
     def go_to_head(self) -> None:  # noqa: D401 -- the docstring below is a description, not an imperative
         """Abandon any preview and put the reader back at HEAD, at 1:1."""
         with self._lock:
@@ -1160,11 +1325,13 @@ class DPGChatGraphPanel(gui_animation.Animation):
     def _is_stale(self) -> bool:
         """Return whether anything the picture depends on has changed since it was built.
 
-        Two things, and neither implies the other: the forest gains and loses nodes, and HEAD moves among
-        nodes that were already there. A branch switch changes only the second.
+        Three things, and none implies another: the forest gains and loses nodes, HEAD moves among nodes
+        that were already there, and the search changes what the boxes have to say. A branch switch is the
+        second alone; a keystroke in the search field is the third alone.
         """
         return (self.datastore.generation != self._seen_generation
                 or self.app_state["HEAD"] != self._seen_head
+                or self._search_generation != self._seen_search_generation
                 or self._a_thumbnail_has_landed())
 
     def _a_thumbnail_has_landed(self) -> bool:
@@ -1369,6 +1536,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 self._view_state.expanded_tool_turns.add(owner_node_id)
             else:
                 self._view_state.expanded_tool_turns.discard(owner_node_id)
+            # Whichever way it went, the reader has just said what they want this round to do, so a search
+            # that had opened it no longer has a claim on closing it again.
+            self._rounds_opened_by_search.discard(owner_node_id)
         # The cursor's own box is the one thing this is certain to destroy — the gap when opening it, a
         # result when folding one away — so the landing policy inside the rebuild is what moves it, onto
         # whichever box now stands for what the reader was pointing at. Which is the first result on the

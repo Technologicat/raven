@@ -23,6 +23,7 @@ from raven.common.gui.xdotwidget import graph as xdotgraph  # noqa: E402 -- afte
 
 from raven.librarian import chatgraph  # noqa: E402 -- after importorskip by design
 from raven.librarian import chatgraph_panel  # noqa: E402 -- after importorskip by design
+from raven.librarian import chatsearch  # noqa: E402 -- after importorskip by design
 from raven.librarian.chattree import Forest  # noqa: E402 -- after importorskip by design
 
 
@@ -2112,3 +2113,120 @@ class TestWhenTheReadoutIsDrawn:
         assert not readout_is_visible(built)
         built.show()
         assert readout_is_visible(built)
+
+
+class TestSearch:
+    """Searching the forest from the graph, and stepping between what it finds.
+
+    The scope is the whole forest rather than the branch on screen: a box answers for what is behind it,
+    and the chat log already covers the branch. So this finds things the log cannot reach at all.
+    """
+
+    @staticmethod
+    def _search(panel, search_string, **options):
+        panel.set_search(chatsearch.make_query(search_string, **options))
+        panel.refresh()
+
+    def test_a_search_finds_matches_off_the_branch_on_screen(self, panel):
+        built, _forest, app_state, ids, _calls = panel
+        assert app_state["HEAD"] == ids["taken_tip"], "the fixture is not on the branch this assumes"
+        self._search(built, "elsewhere")  # the word is on the branch *not* taken
+        assert [node_id for node_id, _ in built.search_matches] == [ids["not_taken_tip"]]
+
+    def test_the_matches_come_in_reading_order(self, panel):
+        built, _forest, _app_state, ids, _calls = panel
+        self._search(built, "way")  # "which way", "this way", "or that way"
+        assert [node_id for node_id, _ in built.search_matches] == [ids["user"], ids["taken"],
+                                                                    ids["not_taken"]]
+
+    def test_stepping_goes_to_the_next_match_after_where_the_reader_is(self, panel):
+        """Relative to the reader, not to the forest: the first match overall is *behind* HEAD here."""
+        built, _forest, app_state, ids, _calls = panel
+        self._search(built, "way")
+        assert [node_id for node_id, _ in built.search_matches][0] == ids["user"], \
+            "the fixture's first match is not before HEAD, so this cannot tell the two rules apart"
+        assert built.step_search(+1)
+        assert built._cursor_name == ids["not_taken"], "stepped to the forest's first match rather than the reader's next"
+
+    def test_stepping_previews_without_committing(self, panel):
+        built, _forest, app_state, ids, calls = panel
+        was_head = app_state["HEAD"]
+        self._search(built, "way")
+        assert built.step_search(+1)
+        assert app_state["HEAD"] == was_head, "stepping moved HEAD; search is a way of looking, not of going"
+        assert calls.committed == []
+
+    def test_stepping_stops_at_the_ends_rather_than_wrapping(self, panel):
+        built, _forest, _app_state, ids, _calls = panel
+        self._search(built, "way")
+        assert built.step_search(-1), "the control: there is a match before HEAD to step back to"
+        while built.step_search(-1):
+            pass
+        assert built._cursor_name == ids["user"], "did not come to rest on the first match"
+        assert not built.step_search(-1), "stepping wrapped around instead of stopping"
+
+    def test_the_counter_follows_the_cursor(self, panel):
+        built, _forest, _app_state, ids, _calls = panel
+        self._search(built, "way")
+        assert built.search_position()[1] == 3
+        built._set_cursor(ids["not_taken"])
+        assert built.search_position() == (2, 3), "the counter did not follow a cursor put there by hand"
+        built._set_cursor(ids["taken"])
+        assert built.search_position() == (1, 3)
+
+    def test_the_counter_says_nothing_where_the_reader_is_not_on_a_match(self, panel):
+        built, _forest, _app_state, ids, _calls = panel
+        self._search(built, "elsewhere")
+        assert built.search_position() == (None, 1), \
+            "HEAD is not the one match here, so there is no current match to report"
+
+    def test_ending_the_search_clears_the_marks(self, panel):
+        built, _forest, _app_state, _ids, _calls = panel
+        self._search(built, "way")
+        assert any(ref.holds_match for ref in built._chat_graph.refs.values()), "nothing was marked to clear"
+        self._search(built, "")  # an empty search is no query at all
+        assert built.search_matches == []
+        assert not any(ref.holds_match for ref in built._chat_graph.refs.values())
+
+    def test_a_reply_arriving_is_searched_too(self, panel):
+        """The forest is what was searched, so the forest changing makes the answer stale."""
+        built, forest, _app_state, ids, _calls = panel
+        self._search(built, "hydrogen")
+        assert built.search_matches == [], "the fixture already mentions it, so this proves nothing"
+        forest.create_node(payload("assistant", "hydrogen it is"), parent_id=ids["taken_tip"])
+        built.refresh()
+        assert [node_id for node_id, _ in built.search_matches], \
+            "the new node was not searched, so the count on screen is of a forest that no longer exists"
+
+    def test_a_deleted_match_stops_being_one(self, panel):
+        """The other direction, and the one that can strand a reader: what they were looking at is gone.
+
+        The trigger is the datastore's change counter rather than any particular event, so this covers
+        rerolling and — once it exists — editing a message, by the same path and with nothing to add.
+        """
+        built, forest, _app_state, ids, _calls = panel
+        self._search(built, "elsewhere")
+        assert [node_id for node_id, _ in built.search_matches] == [ids["not_taken_tip"]]
+        forest.delete_subtree(ids["not_taken"])
+        built.refresh()
+        assert built.search_matches == [], "a deleted node is still counted, so the counter promises a box that is gone"
+        assert built.search_position() == (None, 0)
+
+    def test_the_counter_follows_the_cursor_when_the_current_match_is_deleted(self, panel):
+        """Nothing here implements this: the cursor's own relanding does, and the counter reads off the cursor.
+
+        Which is the argument for reading the position off the cursor rather than remembering an index. An
+        index would point into a list that has just changed under it, and the obvious repairs — go to HEAD,
+        or to the previous match — both send the reader somewhere they were not.
+        """
+        built, forest, app_state, ids, _calls = panel
+        self._search(built, "way")
+        assert built.step_search(+1) and built._cursor_name == ids["not_taken"]
+        assert built.search_position() == (2, 3)
+
+        forest.delete_subtree(ids["not_taken"])
+        built.refresh()
+        assert built._cursor_name == ids["user"], "the cursor did not land on the nearest surviving ancestor"
+        assert built._cursor_name != app_state["HEAD"], \
+            "the cursor fell back to HEAD, which is a branch the reader may not even be looking at"
+        assert built.search_position() == (0, 2), "the counter did not follow the cursor to where it landed"
