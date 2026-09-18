@@ -242,6 +242,30 @@ class TestTheCursorOutlivesTheKeyboard:
         assert built._cursor_name == ids["taken"], "leaving the graph cost the reader their place"
         assert self.ring_colors(built, ids["taken"]) == [chatgraph.PREVIEW_COLOR_BOOKMARK]
 
+    def test_taking_the_keys_with_no_cursor_puts_one_on_head(self, panel):
+        """A pane holding the keyboard and showing no ring says nothing about where the keys would act.
+
+        So arriving plants it on HEAD, where the reader is, and the first arrow press moves rather than
+        being spent conjuring it.
+        """
+        built, _forest, app_state, _ids, _calls = panel
+        assert built._cursor_name is None, "there is already a cursor, so arriving cannot be what put it there"
+        built.has_keyboard = True
+        assert built._cursor_name == app_state["HEAD"]
+        assert self.ring_colors(built, app_state["HEAD"]) == [chatgraph.PREVIEW_COLOR], \
+            "arrived with a ring that says the keys are elsewhere"
+
+    def test_arriving_does_not_move_a_cursor_that_is_already_somewhere(self, panel):
+        """The control, and the case that matters: coming back must resume, not send the reader home."""
+        built, _forest, app_state, ids, _calls = panel
+        built.has_keyboard = True
+        built._set_cursor(ids["not_taken"])
+        assert ids["not_taken"] != app_state["HEAD"], \
+            "the cursor is parked on HEAD, so this fixture cannot tell 'left alone' from 'reset'"
+        built.has_keyboard = False
+        built.has_keyboard = True
+        assert built._cursor_name == ids["not_taken"]
+
     def test_coming_back_makes_it_live_again(self, panel):
         built, _forest, _app_state, ids, _calls = panel
         built.has_keyboard = True

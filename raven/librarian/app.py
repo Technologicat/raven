@@ -2380,13 +2380,11 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
 # rather than a corner of one. Two-thirds of these are unreachable from anywhere else in the app, and
 # until the card had pages they lived only in the README, which is not open while you are using the graph.
 chat_graph_hotkey_info = (env(key_indent=0, key="Ctrl+Shift+G", action_indent=0, action="Leave the graph, and switch it off", notes="The same key that brought you here"),
-                          # The cursor has to be conjured before it can be moved, and the first arrow press
-                          # is what does it — planting it on HEAD rather than stepping. Its own row, because
-                          # a reader whose first press "did nothing" is looking straight at the key that
-                          # worked, and the rows below would have them pressing it again to no effect.
-                          env(key_indent=0, key="Any arrow", action_indent=0, action="Show the cursor, on HEAD", notes="The first press only"),
-                          env(key_indent=1, key="Up / Down", action_indent=1, action="Then: move it along the branch", notes="Up the conversation, or down"),
-                          env(key_indent=1, key="Left / Right", action_indent=1, action="Move it along the siblings", notes="Staying on one level"),
+                          # The cursor is already on HEAD by the time these are read: it appears there when
+                          # the graph takes the keyboard. So the arrows only ever move it, and the row that
+                          # used to warn about a first press spent conjuring it has nothing left to warn of.
+                          env(key_indent=0, key="Up / Down", action_indent=0, action="Move the cursor along the branch", notes="Up the conversation, or down"),
+                          env(key_indent=0, key="Left / Right", action_indent=0, action="Move it along the siblings", notes="Staying on one level"),
                           env(key_indent=0, key="Enter", action_indent=0, action="Look at it", notes="Again to switch. Opens a gap box"),
                           env(key_indent=0, key="Esc", action_indent=0, action="Put the cursor away, then leave", notes="Leaves at once if none is shown"),
                           env(key_indent=0, key="Backspace", action_indent=0, action="Fold an opened tool round back up", notes="From anywhere inside the round"),

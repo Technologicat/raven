@@ -633,7 +633,15 @@ class DPGChatGraphPanel(gui_animation.Animation):
             with self._lock:
                 self._view_state.cursor_is_live = self._has_keyboard
                 ring_on_screen = self._cursor_name is not None
-            if ring_on_screen:
+                chat_graph = self._chat_graph
+            if self._has_keyboard and not ring_on_screen and chat_graph is not None:
+                # Arriving with the cursor nowhere, which is a pane that has the keys and shows no sign of
+                # where they would act. So it appears on HEAD -- where the reader is -- and the first arrow
+                # press moves it, rather than being spent conjuring it. `_move_cursor` still conjures for
+                # the one route that gets here without passing through this: `Esc` putting it away without
+                # leaving the pane.
+                self._set_cursor(self._cursor_home(chat_graph))  # which redraws
+            elif ring_on_screen:
                 self.refresh()
 
     has_keyboard = property(fget=_get_has_keyboard, fset=_set_has_keyboard,

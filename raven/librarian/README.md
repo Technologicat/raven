@@ -163,7 +163,7 @@ When the AI calls tools, each result it gets back is a message of its own, and a
 
 **Tab** moves the keyboard between the message composer, the chat log and the graph, and **clicking anywhere in the graph** sends it there too. The pane holding it wears a blue mark, and only one ever does; with no mark showing anywhere, the keys are the chat log's, where they scroll.
 
-Once the graph has the keyboard it can be driven from there alone, pointer or no pointer. The keys below, and the ones named in the toolbar's tooltips, work while it holds them. The tooltips name their keys whether it holds them or not, so a graph key that seems dead usually means the blue mark is somewhere else. The **arrow keys** move a cursor, drawn as a dotted ring around the box it is on: down and up follow the conversation, left and right step along the siblings at that level. **Enter** does to the box under the cursor exactly what clicking it does: a message switches the chat to it, a **…N more** opens it. The *first* arrow press only conjures the cursor, on HEAD, there being nothing yet to move; it steps from the second press onward. **Esc** puts the cursor away, and **Backspace** closes an opened tool round.
+Once the graph has the keyboard it can be driven from there alone, pointer or no pointer. The keys below, and the ones named in the toolbar's tooltips, work while it holds them. The tooltips name their keys whether it holds them or not, so a graph key that seems dead usually means the blue mark is somewhere else. The **arrow keys** move a cursor, drawn as a dotted ring around the box it is on: down and up follow the conversation, left and right step along the siblings at that level. **Enter** does to the box under the cursor exactly what clicking it does: a message switches the chat to it, a **…N more** opens it. The cursor appears on HEAD the moment the graph takes the keyboard, so the arrows move it straight away and there is nothing to summon first. **Esc** puts the cursor away, and **Backspace** closes an opened tool round.
 
 **The ring stays where you left it** when the keyboard goes elsewhere — stepping away to fix a search term should not cost you your place — but it goes pale while it waits, so you can tell the box the arrows would move from the box you were last looking at. It brightens again the moment the graph has the keys.
 
@@ -816,8 +816,7 @@ passes on anything it does not claim, so `F1` and the rest still work from insid
 
 | Key | Action |
 |---|---|
-| `Any arrow` | Show the cursor, on HEAD — the first press only, before there is a cursor to move |
-| `Up` / `Down` / `Left` / `Right` | Then: move the cursor between boxes |
+| `Up` / `Down` / `Left` / `Right` | Move the cursor between boxes — it is already on HEAD when the graph takes the keyboard |
 | `Enter` | Do what clicking the box under the cursor does: preview it, or commit on the second press — which also hands the keyboard back to the chat log |
 | `Esc` | Put the cursor away; press again, or once with no cursor showing, to leave for the chat log |
 | `Backspace` | Fold an opened tool round back up |
