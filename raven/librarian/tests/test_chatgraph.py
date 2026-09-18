@@ -3081,3 +3081,91 @@ class TestSearchSnippets:
                            for shape in runs)
             assert runs[0].x + rendered <= right_edge + 0.01, \
                 f"this line runs past the box once its match is bold: {''.join(s.text for s in runs)!r}"
+
+
+class TestSearchCountPill:
+    """The pill that says how many hits a box holds — the only thing on screen that can, for a gap box.
+
+    Its second number, the share found in thinking traces, is told apart by its colour rather than by a
+    word: a gap box is 120 units wide, which is about eleven characters of pill, and there is no room to
+    spell it out.
+    """
+
+    @staticmethod
+    def _pill_runs(built, node_id):
+        """The pill row's text shapes, in drawing order.
+
+        Told from the speaker line by *height* rather than by font size: the two are drawn at the same size,
+        and a pill sits in the space above the box while a speaker sits inside it.
+        """
+        node = built.graph.get_node_by_name(node_id)
+        return [shape for shape in node.shapes
+                if isinstance(shape, xdotgraph.TextShape) and shape.y < node.y1]
+
+    def _search(self, forest, head, search_string, **options):
+        query = chatsearch.make_query(search_string, **options)
+        counts = dict(chatsearch.find_matches(forest, list(forest.nodes.keys()), query))
+        return chatgraph.build(forest, chatgraph.ViewState(head_node_id=head,
+                                                           search_query=query, match_counts=counts))
+
+    @pytest.fixture
+    def counted(self):
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        asked = forest.create_node(payload("user", "and then?"), parent_id=root)
+        answered = forest.create_node(
+            payload("assistant", "Hydrogen, then more hydrogen, and hydrogen after that.",
+                    reasoning="They want hydrogen, so say hydrogen."),
+            parent_id=asked)
+        return forest, root, asked, answered
+
+    def test_a_matching_box_wears_its_total(self, counted):
+        forest, _root, _asked, answered = counted
+        built = self._search(forest, answered, "hydrogen")
+        assert built.refs[answered].match_counts.total == 3, "the fixture changed; the pill below follows this"
+        assert [shape.text for shape in self._pill_runs(built, answered)] == ["3", "HEAD"]
+
+    def test_the_thinking_share_follows_in_the_trace_colour(self, counted):
+        forest, _root, _asked, answered = counted
+        config = chatgraph.LayoutConfig()
+        built = self._search(forest, answered, "hydrogen", include_thinking=True)
+        runs = self._pill_runs(built, answered)
+        assert [shape.text for shape in runs] == ["5", " (2)", "HEAD"]
+        by_text = {shape.text: shape for shape in runs}
+        assert by_text[" (2)"].pen.color == config.thinking_label_color
+        assert by_text["5"].pen.color != config.thinking_label_color, \
+            "the whole pill is in the trace colour, so the parenthetical says nothing the rest does not"
+
+    def test_no_thinking_hits_means_no_parenthetical(self, counted):
+        """The control for the above: the second number appears because there *were* trace hits."""
+        forest, _root, _asked, answered = counted
+        built = self._search(forest, answered, "hydrogen", include_thinking=False)
+        assert [shape.text for shape in self._pill_runs(built, answered)] == ["3", "HEAD"]
+
+    def test_the_count_leads_the_row_so_the_pointers_do_not_move(self, counted):
+        """A reader typing into the search field should not see the boxes on screen rearrange."""
+        forest, _root, _asked, answered = counted
+        before = self._pill_runs(chatgraph.build(forest, chatgraph.ViewState(head_node_id=answered)),
+                                 answered)
+        during = self._pill_runs(self._search(forest, answered, "hydrogen"), answered)
+        assert [(shape.x, shape.text) for shape in before] == [(shape.x, shape.text) for shape in during][-1:]
+
+    def test_a_box_with_no_hits_wears_no_count(self, counted):
+        forest, _root, asked, answered = counted
+        built = self._search(forest, answered, "hydrogen")
+        assert not built.refs[asked].holds_match, "the fixture's user message matched, so it is the wrong control"
+        assert [shape.text for shape in self._pill_runs(built, asked)] == []
+
+    def test_a_gap_box_wears_the_count_of_what_is_behind_it(self):
+        """Where the pill earns its place: a gap box has no snippet, so this is all it can say."""
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+        chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
+        forest.create_node(payload("assistant", "hydrogen hydrogen"), parent_id=chats[2])
+        head = forest.create_node(payload("assistant", "here you are"), parent_id=chats[15])
+
+        built = self._search(forest, head, "hydrogen")
+        holders = [ref for ref in refs_of_type(built, chatgraph.SiblingGapRef) if ref.holds_match]
+        assert len(holders) == 1
+        assert [shape.text for shape in self._pill_runs(built, holders[0].name)] == ["2"]

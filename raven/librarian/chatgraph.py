@@ -693,11 +693,11 @@ class LayoutConfig:
     margin: float = 20.0
     label_width: Optional[float] = None
     label_lines: int = 2
-    # How much of the text before a search match to keep when a box's label becomes a snippet of it, in
-    # characters, snapped outward to a word boundary. Enough that the match reads as being *in* something
-    # rather than starting it, and small enough that it stays on the first line. A taste call, and the one
-    # thing here to judge by looking.
-    snippet_lead_in: int = 12
+    # How much room to spend on the text *before* a search match, when a box's label becomes a snippet of
+    # it, as a fraction of a label line's width. Half puts the match in the middle of the first line, which
+    # is where the eye goes; a smaller fraction opens the snippet closer to the hit. Whole words either
+    # way, so what is kept is the most that fits.
+    snippet_lead_in_fraction: float = 0.5
     # A search match inside a label. Written as what the *renderer* should end up drawing, then authored
     # back through the inversion this module's colours all take — so this is not
     # `guiutils.SEARCH_HIGHLIGHT_COLOR` but the same colour on the other side of that remap, the two being
@@ -1111,14 +1111,19 @@ def _wrap(text: str, max_width: float, max_lines: int, font_size: float,
 
 @dataclasses.dataclass(frozen=True)
 class _Run:
-    """A stretch of one label line drawn in one pen: its text, and whether it is a search match.
+    """A stretch of text drawn in one pen: what it says, and how it differs from the ink around it.
 
-    A `TextShape` carries one `Pen`, so painting part of a label needs the line broken into pieces. An
-    ordinary line is one run and comes out as one shape, which is what keeps this free where no search is
-    running.
+    A `TextShape` carries one `Pen`, so painting part of a line needs it broken into pieces. A line with
+    nothing to mark is one run and comes out as one shape, which is what keeps this free wherever no search
+    is running.
+
+    `color`: `None` to take the colour of whatever this run is part of — a label's ink, a pill's. Set where
+             the run says something the surrounding text does not.
+    `bold`: Whether to draw it in the bold face.
     """
     text: str
-    is_match: bool = False
+    color: Optional[xdotconstants.Color] = None
+    bold: bool = False
 
 
 def _match_spans(text: str, highlight: Tuple) -> List[Tuple[int, int]]:
@@ -1140,7 +1145,8 @@ def _match_spans(text: str, highlight: Tuple) -> List[Tuple[int, int]]:
     return merged
 
 
-def _runs_of(line: str, maybe_highlight: Optional[Tuple]) -> List[_Run]:
+def _runs_of(line: str, maybe_highlight: Optional[Tuple],
+             match_color: Optional[xdotconstants.Color] = None) -> List[_Run]:
     """Split one label line into its runs. One run, unmatched, when nothing is being searched for.
 
     The matches are found in the *line*, after wrapping, rather than carried down from the message text:
@@ -1156,36 +1162,88 @@ def _runs_of(line: str, maybe_highlight: Optional[Tuple]) -> List[_Run]:
     for start, end in _match_spans(line, maybe_highlight):
         if start > cursor:
             runs.append(_Run(line[cursor:start]))
-        runs.append(_Run(line[start:end], is_match=True))
+        runs.append(_Run(line[start:end], color=match_color, bold=True))
         cursor = end
     if cursor < len(line):
         runs.append(_Run(line[cursor:]))
     return runs or [_Run(line)]
 
 
-def _label_runs(lines: Sequence[str], maybe_highlight: Optional[Tuple] = None) -> List[List[_Run]]:
+def _label_runs(lines: Sequence[str], maybe_highlight: Optional[Tuple] = None,
+                match_color: Optional[xdotconstants.Color] = None) -> List[List[_Run]]:
     """Turn wrapped lines into the runs each is drawn as."""
-    return [_runs_of(line, maybe_highlight) for line in lines]
+    return [_runs_of(line, maybe_highlight, match_color) for line in lines]
 
 
-def _snippet_around_first_match(text: str, highlight: Tuple, lead_in: int) -> str:
+def _match_caption(counts: chatsearch.MatchCounts, config: "LayoutConfig") -> List[_Run]:
+    """The pill a box wears while a search is running: how many hits it holds, and how many of those were thinking.
+
+    `N` alone where nothing was found in a trace, and `N (M)` where something was — the parenthetical in
+    the colour the chat log paints a trace, so the second number says what it counts by how it is drawn.
+    A word would say it outright and there is no room for one: a gap box is 120 units wide, which is about
+    eleven characters of pill, and `N matches (M)` is seventeen.
+    """
+    runs = [_Run(str(counts.total))]
+    if counts.thinking:
+        runs.append(_Run(f" ({counts.thinking})", color=config.thinking_label_color))
+    return runs
+
+
+def _snippet_around_first_match(text: str, highlight: Tuple, lead_in_width: float,
+                                font_size: float, measure_text: Optional[MeasureText]) -> str:
     """Return `text` from a little before its first search match, marked with a leading ellipsis if that cut it.
 
-    What a box quotes when it matched: the opening of the message says nothing about *why* it is on screen,
-    and the reader is looking for the hit rather than for the message. Cut at a word boundary so the
-    snippet does not open mid-word, and outward, so the lead-in is at least `lead_in` characters rather
-    than at most.
+    What a box quotes when it matched: the opening of the message says nothing about *why* the box is on
+    screen, and a reader with a search running is looking for the hit rather than for the message.
+
+    The lead-in is as many whole words as fit `lead_in_width`, measured rather than counted, so the match
+    lands at a predictable place on the line whatever the words before it happen to be. Counting characters
+    instead puts it wherever the prose's average letter width leaves it, which is a different place in
+    every box.
     """
     spans = _match_spans(text, highlight)
     if not spans:  # the box matched in a text this is not, or a wrapped line lost the fragment
         return text
-    start = spans[0][0] - lead_in
-    if start <= 0:
-        return text
-    boundary = text.rfind(" ", 0, start + 1)
-    if boundary < 0:
-        return text
-    return f"…{text[boundary + 1:]}"
+    start = spans[0][0]
+    cut = start
+    while True:
+        previous_space = text.rfind(" ", 0, max(cut - 1, 0))
+        if previous_space < 0:  # the lead-in reaches the start of the text, so there is nothing to cut
+            return text
+        candidate = previous_space + 1
+        if _text_width(text[candidate:start], font_size, measure_text,
+                       _LABEL_ADVANCE_PER_CHAR) > lead_in_width:
+            break
+        cut = candidate
+    return text if cut == 0 else f"…{text[cut:]}"
+
+
+def _run_shapes(runs: Sequence[_Run], x: float, baseline: float, base_pen: xdotgraph.Pen,
+                font_size: float, measure_text: Optional[MeasureText],
+                advance_per_char: float) -> Tuple[List[xdotgraph.Shape], float]:
+    """Lay `runs` out left to right from `x`, each in its own pen. Returns `(the shapes, the width they took)`.
+
+    The one place runs become shapes, so a label and a pill cannot come to disagree about how a marked
+    stretch of text is drawn. A run naming no colour takes `base_pen`'s — the ink of whatever it belongs to
+    — and one that names its own gets a pen of its own.
+
+    Each run is measured in the face it is *drawn* in, which is what keeps a bold one from displacing
+    everything after it. Where no measurer is available the estimate is face-blind, so the runs come out
+    at slightly uneven spacings rather than at wrong ones.
+    """
+    shapes: List[xdotgraph.Shape] = []
+    cursor = x
+    for run in runs:
+        pen = base_pen
+        if run.color is not None or run.bold:
+            pen = base_pen.copy()
+            if run.color is not None:
+                pen.color = run.color
+            pen.bold = run.bold
+        width = _text_width(run.text, font_size, measure_text, advance_per_char, bold=run.bold)
+        shapes.append(xdotgraph.TextShape(pen, cursor, baseline, xdotgraph.TextShape.LEFT, width, run.text))
+        cursor += width
+    return shapes, cursor - x
 
 
 def _with_ellipsis(line: str, max_width: float, width_of: Callable[[str], float]) -> str:
@@ -1356,7 +1414,9 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, state: "View
         if not maybe_counts.content:  # it matched in the trace and nowhere else, so the trace is what to show
             plain = _plain((payload.get("message") or {}).get("reasoning_content") or "")
             label_color = config.thinking_label_color
-        plain = _snippet_around_first_match(plain, maybe_highlight, config.snippet_lead_in)
+        plain = _snippet_around_first_match(plain, maybe_highlight,
+                                            config.snippet_lead_in_fraction * width,
+                                            config.font_size, measure_text)
         # Wrapping measures the line in the regular face, and a match then renders in the bold one, which
         # is wider -- so a line fitted to the last unit would spill past the box's inset. Give a matched
         # label room for the worst case, which is the whole line turning out to be a match.
@@ -1395,7 +1455,7 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, state: "View
                                      config.role_font_size, measure_text)
 
     if lines:
-        return speaker, _label_runs(lines, maybe_highlight), None, label_color
+        return speaker, _label_runs(lines, maybe_highlight, config.search_match_color), None, label_color
 
     message = payload.get("message") or {}
     if tool_calls:
@@ -1414,7 +1474,8 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, state: "View
         sub_label = f"{len(tool_calls)} tool calls" if len(tool_calls) > 1 else None
         lines_for_calls = max_lines - 1 if sub_label is not None else max_lines
         return (f"{speaker}{marker}",
-                _label_runs(wrap(chatutil.format_tool_calls(tool_calls), lines_for_calls), maybe_highlight),
+                _label_runs(wrap(chatutil.format_tool_calls(tool_calls), lines_for_calls),
+                            maybe_highlight, config.search_match_color),
                 sub_label,
                 label_color)
     # Square brackets, which is how the constellation says something in its own voice rather than the
@@ -1715,7 +1776,8 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                 role_icon: Optional[Union[int, str]] = None,
                 attachments: Sequence[Optional[Union[int, str]]] = (),
                 hidden_attachments: int = 0,
-                label_color: Optional[xdotconstants.Color] = None) -> List[xdotgraph.Shape]:
+                label_color: Optional[xdotconstants.Color] = None,
+                match_caption: Sequence[_Run] = ()) -> List[xdotgraph.Shape]:
     """Return the shapes for one box: its outline, its text, and any pointer pills above it.
 
     `width`: The box's width. A gap is narrower than a node, and the row layout allocates it that much
@@ -1742,7 +1804,9 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                           Zero when they all fit.
     `label_color`: The ink for the label, or `None` for the ordinary one. Set where the label is quoting
                    something other than what was said — a thinking trace, in the colour the chat log
-                   paints one. A run marked as a search match keeps its own colour regardless.
+                   paints one. A run carrying its own colour keeps it regardless.
+    `match_caption`: The search-count pill's runs, or empty for no search or a box holding no hits. Leads
+                     the pill row, ahead of the pointers.
     """
     x1, y1 = x - 0.5 * width, y - 0.5 * config.node_h
     x2, y2 = x + 0.5 * width, y + 0.5 * config.node_h
@@ -1809,14 +1873,6 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     text_pen.color = label_color if label_color is not None else LINE_COLOR
     text_pen.fontsize = config.font_size
 
-    # A search match, in the constellation's red and bold, which is how the chat log paints one. Two
-    # channels rather than one because the two views have to agree on what a hit looks like; a difference
-    # between them reads as damage rather than as a distinction.
-    match_pen = xdotgraph.Pen()
-    match_pen.color = config.search_match_color
-    match_pen.fontsize = config.font_size
-    match_pen.bold = True
-
     # A text shape's y is its baseline, so a line sits on the y given plus about a third of its cap height.
     # With a speaker the two lines straddle the centre; without one the label takes the centre itself.
     if speaker is not None:
@@ -1856,14 +1912,9 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     # measured widths put it rather than where a centring rule would.
     for runs in label_lines:
         cursor += config.font_size
-        run_x = text_x1
-        for run in runs:
-            pen = match_pen if run.is_match else text_pen
-            run_width = _text_width(run.text, config.font_size, measure_text, _LABEL_ADVANCE_PER_CHAR,
-                                    bold=run.is_match)
-            shapes.append(xdotgraph.TextShape(pen, run_x, cursor,
-                                              xdotgraph.TextShape.LEFT, run_width, run.text))
-            run_x += run_width
+        line_shapes, _ = _run_shapes(runs, text_x1, cursor, text_pen, config.font_size,
+                                     measure_text, _LABEL_ADVANCE_PER_CHAR)
+        shapes.extend(line_shapes)
         cursor += _LINE_GAP
 
     if sub_label is not None:
@@ -1894,7 +1945,13 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     # Outlined, because the renderer picks a contrasting text colour in dark mode from *the element's*
     # fill, and a node carrying a second filled shape would have some of its text coloured for the wrong
     # background.
-    shapes.extend(_pill_shapes(pills, x2, y1 - 4.0, config, measure_text))
+    #
+    # The search count leads the row, so the pointers keep their distance from the box's right edge and
+    # nothing already on screen moves sideways when a reader starts typing into the search field.
+    pill_runs = [[_Run(pill)] for pill in pills]
+    if match_caption:
+        pill_runs.insert(0, list(match_caption))
+    shapes.extend(_pill_shapes(pill_runs, x2, y1 - 4.0, config, measure_text))
     return shapes
 
 
@@ -2006,10 +2063,12 @@ def _attachment_shapes(attachments: Sequence[Optional["Thumbnail"]], hidden: int
 _PILL_SPACING = 3.0  # between two pills sharing one node
 
 
-def _pill_shapes(pills: Tuple[str, ...], anchor_x: float, bottom_y: float, config: LayoutConfig,
+def _pill_shapes(pills: Sequence[Sequence[_Run]], anchor_x: float, bottom_y: float, config: LayoutConfig,
                  measure_text: Optional[MeasureText], align: str = "right") -> List[xdotgraph.Shape]:
-    """Return the shapes for a row of pointer pills, sitting with their bottom edge on `bottom_y`.
+    """Return the shapes for a row of pills, sitting with their bottom edge on `bottom_y`.
 
+    `pills`: One sequence of runs per pill. A pointer pill is a single run; the search count is two, the
+             second of them in the trace colour.
     `anchor_x`: Where the row is pinned; which edge that is depends on `align`.
     `align`: `"right"` against a box, whose right edge is a real edge to line up with; `"left"` beside a
              stub, which has no edges and where the room is to the side; `"center"` where neither.
@@ -2036,8 +2095,10 @@ def _pill_shapes(pills: Tuple[str, ...], anchor_x: float, bottom_y: float, confi
     # otherwise. Measuring matters here more than the size of the box suggests: an error in `w` displaces
     # the glyphs by half of it. Estimating "HEAD" at 10 px gave 24.8 against a true 19.5, and the label sat
     # visibly left inside its own pill -- invisible in the box's geometry and obvious on screen.
-    text_widths = [_text_width(pill, config.pill_font_size, measure_text, _PILL_ADVANCE_PER_CHAR)
-                   for pill in pills]
+    text_widths = [sum(_text_width(run.text, config.pill_font_size, measure_text,
+                                   _PILL_ADVANCE_PER_CHAR, bold=run.bold)
+                       for run in runs)
+                   for runs in pills]
     box_widths = [text_w + config.pill_h for text_w in text_widths]  # a cap's worth of room at each end
     pill_span = sum(box_widths) + max(0, len(pills) - 1) * _PILL_SPACING
 
@@ -2045,7 +2106,7 @@ def _pill_shapes(pills: Tuple[str, ...], anchor_x: float, bottom_y: float, confi
     cursor = {"left": anchor_x,
               "center": anchor_x - 0.5 * pill_span,
               "right": anchor_x - pill_span}[align]
-    for pill, text_w, box_w in zip(pills, text_widths, box_widths):
+    for runs, text_w, box_w in zip(pills, text_widths, box_widths):
         px1, px2 = cursor, cursor + box_w
         py1 = bottom_y - config.pill_h
         corners = _rounded_rect_points(px1, py1, px2, bottom_y, 0.5 * config.pill_h)
@@ -2056,9 +2117,14 @@ def _pill_shapes(pills: Tuple[str, ...], anchor_x: float, bottom_y: float, confi
         backing_pen.fillcolor = _PILL_BACKING
         shapes.append(xdotgraph.PolygonShape(backing_pen, corners, filled=True))
         shapes.append(xdotgraph.PolygonShape(pill_pen, corners, filled=False))
-        shapes.append(xdotgraph.TextShape(pill_text_pen,
-                                          0.5 * (px1 + px2), bottom_y - 0.3 * config.pill_h,
-                                          xdotgraph.TextShape.CENTER, text_w, pill))
+        # Centred in the capsule, by starting the runs at its centre less half of what they measure -- the
+        # same arithmetic the renderer does for a centred shape, done here because a pill's text can be
+        # several runs and each needs its own x. A pill is centred where a label is not: it is a tag on the
+        # box rather than text in it, and the capsule is sized to fit it exactly.
+        run_shapes, _ = _run_shapes(runs, 0.5 * (px1 + px2 - text_w), bottom_y - 0.3 * config.pill_h,
+                                    pill_text_pen, config.pill_font_size, measure_text,
+                                    _PILL_ADVANCE_PER_CHAR)
+        shapes.extend(run_shapes)
         cursor = px2 + _PILL_SPACING
     return shapes
 
@@ -2484,7 +2550,9 @@ def build(datastore: chattree.Forest,
                                  role_icon=decoration.role_icon,
                                  attachments=decoration.attachments,
                                  hidden_attachments=decoration.hidden_attachments,
-                                 label_color=label_color)
+                                 label_color=label_color,
+                                 match_caption=_match_caption(ref.match_counts, config)
+                                 if ref.holds_match else ())
             return ref, shapes
 
         for row_index, row in enumerate(rows):
@@ -2520,7 +2588,9 @@ def build(datastore: chattree.Forest,
                     gap_pills = ("HEAD",) if (set(slot.hidden) & current_branch) else ()
                     shapes = _box_shapes(x, y, width, config, _label_runs([label]), fill=None, dashed=True,
                                          pills=gap_pills, measure_text=measure_text,
-                                         previewed=(name == state.cursor_name))
+                                         previewed=(name == state.cursor_name),
+                                         match_caption=_match_caption(ref.match_counts, config)
+                                         if ref.holds_match else ())
                 else:
                     name = slot.node_id
                     ref, shapes = chat_box(slot.node_id, x, y, is_root=(row_index == 0))
@@ -2556,7 +2626,9 @@ def build(datastore: chattree.Forest,
                                                      pills=("HEAD",) if hides_head else (),
                                                      sub_label=sub_label,
                                                      measure_text=measure_text,
-                                                     previewed=(name == state.cursor_name)),
+                                                     previewed=(name == state.cursor_name),
+                                                     match_caption=_match_caption(ref.match_counts, config)
+                                                     if ref.holds_match else ()),
                                   internal_name=name)
             refs[name] = ref
             nodes_by_name[name] = node
