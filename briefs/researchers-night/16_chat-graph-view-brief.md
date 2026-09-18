@@ -1411,9 +1411,12 @@ faults, all fixed the same afternoon and all in code the search merely made visi
 - **Two panes lit blue at once**, tabbing to the graph and then pressing `Ctrl+F`: the caret-taking chords
   did not release prior keyboard claims. All such sites now go through one entry point.
 
-**Still open, diagnosed and not started**: a pill's text is made legible against the *element's* fill,
-where a pill sits on a backing of its own — so the count's thinking share comes out unreadable on a box
-that called tools. `TODO_DEFERRED.md`, *"A pill's text is made legible against the wrong background"*.
+**Still open, diagnosed and not started**: a box draws more grounds than one — its own fill and a backing
+under each pill — and the renderer describes an element with a single fill colour, whichever filled shape
+it finds first. So a pill's text is corrected against the box, and a gap box's label against a pill. The
+second predates this work: a gap box wearing a `HEAD` pill has had both its lines forced to the contrast
+grey, losing the sub-label's quietness, with no search running. `TODO_DEFERRED.md`, *"A box that draws more
+than one ground cannot describe itself with one fill colour"*, which has the measurements and the fix.
 
 **Not yet judged**, and what a second look is for: whether `N (M)` reads without a word, whether one line
 of context around the match is enough, whether forest preorder feels right as an order, the collapse rule
