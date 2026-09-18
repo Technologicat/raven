@@ -10,7 +10,7 @@ one model per hardware tier.
 | 16 GB dGPU, mobile | **Qwen3.5-9B** | 6.89 GB | The better mobile option where the card allows it. |
 | 24 GB eGPU, at the desk | **Qwen3.6-27B** (dense) or **Qwen3.6-35B-A3B** (MoE) | 18.54 / 20.40 GB | Serious single-workstation use, whenever the external card is attached. |
 
-The eGPU travels to the Researchers' Night demo (2026-09-26), so the demo runs on the top tier rather than on a
+The eGPU travels to the Researchers' Night demo (2026-09-25), so the demo runs on the top tier rather than on a
 laptop-class model. See `../TODO.md` for the demo plan; the hardware shape recorded there — LLM alone on the
 larger card, all nine raven-server modules on the internal one, the `config_dual_midvram` variant — is what this
 lineup assumes.

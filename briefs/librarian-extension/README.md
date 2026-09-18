@@ -235,7 +235,7 @@ including the whole tool loop, *round* = one iteration of the agent loop within 
   2026-08-03 as a rough draft rather than a design: it carries the decisions already made, the proposals not
   yet agreed, and the retractions with their reasons, so the design session starts from an agenda instead of
   a pile. The design comes back from a claude.ai session as a filled-in version of it. Realistically after
-  Researchers' Night (26 September 2026).
+  Researchers' Night (25 September 2026).
 
 The reason to wait rather than ship at 07: both remaining items leave a user-visible half-feature.
 Sidecar attachments have no way to remove strays until §D wires the sweep — `prune_unreferenced_sidecars`

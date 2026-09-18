@@ -32,7 +32,7 @@ of this document is that a later reader can tell what is settled from what is me
 - **[X]** — proposed and **retracted**, kept with the reason so it is not re-proposed.
 
 **Timing.** 04, 05, 06 and 09 to implement, then v0.2.8, then demo polish through Researchers' Night
-(26 September 2026). The design session lands after that unless something slips forward.
+(25 September 2026). The design session lands after that unless something slips forward.
 
 **What this gates.** [D] Scopes and the unified DB are the prerequisite for the corpus TOC (§4 below) and for
 most of what the corpus-interrogation sketch wants. Brief 12 (derived artifact store) deliberately does *not*

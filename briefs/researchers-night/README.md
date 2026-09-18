@@ -5,7 +5,7 @@ order, what was cut and on what argument, what was learned while building each i
 because it produced no diff and would otherwise be re-decided from scratch. Read it when taking stock or
 picking the next item; it is not a document anyone reads through.*
 
-**Deadline: 26 September 2026.** That is what this folder is named for, and it is the honest name — the
+**Deadline: 25 September 2026.** That is what this folder is named for, and it is the honest name — the
 contents are not one scope. They are the briefs that were conceived during the Librarian run but scheduled
 after it, and what they share is the deadline that orders them, not a subsystem.
 

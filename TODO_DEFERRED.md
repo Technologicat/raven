@@ -3,7 +3,7 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
-**A triage pass is due after Researchers' Night 2026** (2026-09-26; noted 2026-09-04). Several gates here
+**A triage pass is due after Researchers' Night 2026** (2026-09-25; noted 2026-09-04). Several gates here
 name releases that were guesses when written, and the file is long enough that its length is itself the
 obstacle to reading it. Expect a meaningful fraction to be already done or already stale.
 
