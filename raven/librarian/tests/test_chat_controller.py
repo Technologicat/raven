@@ -697,3 +697,40 @@ class TestChatExchange:
         controller.chat_exchange("")
         assert self._wait_for(lambda: controller.ai_turns == ["earlier question"]), \
             "an empty send did nothing with the setting on, so the refusal above proves nothing"
+
+
+class TestSteppingTheSearch:
+    """What `step_search` reports back, which is what lets a caller follow a jump that happened.
+
+    The app sends the keyboard to the chat log after one, so that the arrows act on the pane the key just
+    took the reader to — and must not when the key did nothing, which is the whole reason this answers at
+    all rather than returning `None` as it used to.
+
+    Built with `__new__`, as the datastore-side tests above are: the paths here touch four attributes and
+    the view, and `__init__` would build a GUI to reach them.
+    """
+
+    @staticmethod
+    def _controller(matches, jumped_to=None):
+        controller = chat_controller.DPGChatController.__new__(chat_controller.DPGChatController)
+        controller._search_jump = None
+        controller._search_position_stale = False
+        controller.search_matches = matches
+        controller.view = types.SimpleNamespace(find_message=lambda node_id: None,
+                                                jump_to_node=lambda node_id: jumped_to)
+        return controller
+
+    def test_it_says_no_when_there_is_nowhere_to_go(self, monkeypatch):
+        controller = self._controller(matches=[])
+        monkeypatch.setattr(type(controller), "_find_search_match",
+                            lambda self, forward, beyond_a_line: None)
+        assert controller.step_search(+1) is False
+
+    def test_it_says_yes_when_it_jumped(self, monkeypatch):
+        counts = chat_controller.chatsearch.MatchCounts(content=1, thinking=0)
+        controller = self._controller(matches=[("n1", counts)], jumped_to=120)
+        monkeypatch.setattr(type(controller), "_find_search_match",
+                            lambda self, forward, beyond_a_line: 0)
+        assert controller.step_search(+1) is True
+        assert controller._search_position_stale, \
+            "nothing was recorded, so this fixture did not reach the body it claims to have run"

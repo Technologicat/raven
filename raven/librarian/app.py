@@ -1344,13 +1344,13 @@ with timer() as tim:
                                          callback=search_changed_callback)
                         with dpg.tooltip("search_tools_checkbox"):  # tag
                             dpg.add_text("Search what tools returned: web pages, search results, documents. [Alt+R]")
-                        dpg.add_button(label=fa.ICON_CIRCLE_UP, callback=lambda: chat_controller.step_search(-1),  # the Visualizer's glyphs for the same verb
+                        dpg.add_button(label=fa.ICON_CIRCLE_UP, callback=lambda: _step_chat_search(-1),  # the Visualizer's glyphs for the same verb
                                        width=gui_config.toolbutton_w, enabled=False, tag="search_prev_button")
                         dpg.bind_item_font("search_prev_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("search_prev_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("search_prev_button"):  # tag
                             dpg.add_text("Go to the previous matching message [Shift+F3]")
-                        dpg.add_button(label=fa.ICON_CIRCLE_DOWN, callback=lambda: chat_controller.step_search(+1),
+                        dpg.add_button(label=fa.ICON_CIRCLE_DOWN, callback=lambda: _step_chat_search(+1),
                                        width=gui_config.toolbutton_w, enabled=False, tag="search_next_button")
                         dpg.bind_item_font("search_next_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("search_next_button", "disablable_widget_theme")  # tag
@@ -2573,6 +2573,19 @@ def _resize_search_row(search_row_w: int) -> None:
     field_w = content_w - gui_config.toolbutton_w - controls_w - counter_w - 3 * spacing_x
     dpg.set_item_width("search_field", max(100, int(field_w)))  # tag
 
+def _step_chat_search(direction: int) -> None:
+    """Go to the next (`+1`) or previous (`-1`) match in the chat log, and send the keyboard after it.
+
+    The counterpart of `_step_graph_search`, and the keyboard moves for the same reason: this key has just
+    put the reader somewhere, so the arrows should act on the pane they are now looking at. Landing them on
+    the log rather than leaving them in the search field costs nothing the field wanted — `Enter` commits a
+    single-line field and gives up the caret anyway, so stepping from it already worked this way.
+    """
+    if not chat_controller.step_search(direction):
+        return  # nowhere to go, so nothing moved and nothing should
+    _give_keyboard_to_log()
+
+
 def _step_graph_search(direction: int) -> None:
     """Go to the next (`+1`) or previous (`-1`) match in the chat graph, and show the graph if it is not up.
 
@@ -2588,6 +2601,10 @@ def _step_graph_search(direction: int) -> None:
         # the preference the checkbox holds, so the graph would flick away again on its own. Flipping
         # rather than setting is safe because the branch above has just established that it is off.
         guiutils.toggle_checkbox("chat_graph_checkbox")  # tag
+    # And send the keyboard after the cursor, this key having just moved it. Leaving the keys where they
+    # were would put the arrows on one pane while the thing they would step is in another -- which is the
+    # same fault as staying on the graph after committing, in the other direction.
+    _give_keyboard_to_graph()
 
 
 def _update_graph_search_row() -> None:
@@ -2967,7 +2984,7 @@ def librarian_hotkeys_callback(sender, app_data):
     # the field. *Focused*, not *active*: committing a single-line field is what Enter does, so by the time this
     # runs the field has already given up the caret, and only focus still says the key was typed there.
     elif key == dpg.mvKey_Return and dpg.is_item_focused("search_field"):  # tag
-        chat_controller.step_search(-1 if shift_pressed else +1)
+        _step_chat_search(-1 if shift_pressed else +1)
 
     # The audio input panel is not modal, so it cannot claim the keyboard the way a dialog does — it
     # takes the keys only while the focus is on one of its own controls, and passes on anything else.
@@ -3005,7 +3022,7 @@ def librarian_hotkeys_callback(sender, app_data):
         if ctrl_pressed:
             _step_graph_search(-1 if shift_pressed else +1)
         else:
-            chat_controller.step_search(-1 if shift_pressed else +1)
+            _step_chat_search(-1 if shift_pressed else +1)
     elif key == dpg.mvKey_F9:  # a bare key, because it is reached with a microphone in one hand
         _toggle_audio_input_panel()
     elif key == dpg.mvKey_F8:  # NOTE: Shift is a modifier here

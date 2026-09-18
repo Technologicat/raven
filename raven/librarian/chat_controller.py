@@ -4350,21 +4350,24 @@ class DPGChatController:
     # than from wherever the last jump went. The Visualizer's info panel works the same way, and the two should
     # stay alike.
 
-    def step_search(self, direction: int) -> None:
+    def step_search(self, direction: int) -> bool:
         """Jump to the next (`direction=+1`) or previous (`-1`) matching message, relative to the top of the view.
 
         Stops at either end rather than wrapping around. A message whose thinking trace matched has its trace
         opened, whether or not its text matched too, so that every match the search counted is on screen.
+
+        Returns whether it went anywhere, so a caller can follow the jump with something — sending the
+        keyboard after it — and do nothing at all where there was nothing to jump to.
         """
         maybe_jump = self._search_jump  # one read: the render thread may clear it meanwhile
         if self._search_jump_holds(maybe_jump):
             maybe_index = maybe_jump[0] + (1 if direction > 0 else -1)
             if not 0 <= maybe_index < len(self.search_matches):
-                return
+                return False
         else:
             maybe_index = self._find_search_match(forward=(direction > 0), beyond_a_line=True)
             if maybe_index is None:
-                return
+                return False
         node_id, counts = self.search_matches[maybe_index]
         if counts.thinking and (message := self.view.find_message(node_id)) is not None:
             message.show_thinking_trace()
@@ -4373,6 +4376,7 @@ class DPGChatController:
         # view not yet where it is going.
         self._search_jump = (maybe_index, maybe_y_scroll) if maybe_y_scroll is not None else None
         self._search_position_stale = True
+        return True
 
     # Position alone cannot say where the reader is after a jump near the end of the chat: the last few messages
     # cannot be scrolled up to the top of the view, there being nothing below them to scroll into, so the topmost
