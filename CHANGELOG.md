@@ -207,6 +207,16 @@
   - The card sizes itself to its tallest page and keeps that height, so turning a page does not resize the
     window under you.
 
+*Raven-xdot-viewer*
+
+- **a label your graph set in bold or italic now comes out that way.** GraphViz records the font it
+  resolved into the xdot it writes, and the viewer had been drawing every label in the regular face
+  regardless. Emphasis in a diagram usually marks the part that matters, so it was the one thing worth
+  keeping that was being dropped.
+  - **The face is taken from the graph; the typeface is not.** A graph asking for `Times-Bold` is drawn in
+    Raven's own font, in bold — matching the weight and the slant, not the family. A font name that spells
+    its style some other way is drawn regular, as it would have been anyway.
+
 *Constellation-wide*
 
 - **`--qr`**, which puts a scannable "Get Raven" code in the corner of any of the seven GUI apps. For running Raven where people are watching: a visitor sees a demo for a minute and walks off, and nobody writes down a URL. Off unless asked for.

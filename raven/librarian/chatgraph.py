@@ -1827,8 +1827,9 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         speaker_pen.color = LINE_COLOR
         speaker_pen.fontsize = config.role_font_size
         cursor = y1 + config.text_top_inset + config.role_font_size
-        # Left-aligned, unlike the label. The speaker is the same handful of short words on every node, so
-        # a common left edge lets the eye read the column of them without tracking a centre that moves.
+        # Left-aligned, as everything inside a box is: a common left edge lets the eye read a column of
+        # them without tracking a centre that moves, and for a label of prose it is simply how prose is
+        # set. Only the pills above a box are centred, being labels attached to it rather than text in it.
         shapes.append(xdotgraph.TextShape(speaker_pen, text_x1, cursor,
                                           xdotgraph.TextShape.LEFT,
                                           text_x2 - text_x1, speaker))
@@ -1845,12 +1846,14 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     # exactly the room it took. Using the whole box instead would let a long line run under the glyph while
     # a short one sat clear of it -- the collision then depending on the message.
     #
-    # Each run is placed at its own x, left to right from the line's own left edge at cumulative measured
+    # Each run is placed at its own x, left to right from the text area's left edge at cumulative measured
     # widths, because a `TextShape` carries one `Pen` and a line holding a search match is several shapes.
-    # A line of one run lands exactly where it did when it was one centred shape given the available width:
-    # the renderer starts such a shape at `centre - width/2`, and with the available width that *is* this
-    # left edge. Worth knowing, because the two spellings agreeing is what makes this change invisible
-    # anywhere a search is not running.
+    #
+    # **Left-aligned, deliberately.** Until 2026-09-18 these were written as centred shapes given the
+    # *available* width, which the renderer starts at `centre - width/2` -- the text area's left edge, so
+    # they were left-aligned in fact while three comments said they were centred. Left is what looks
+    # right and is what ships; the spelling now says so, and a run placed after a match lands where the
+    # measured widths put it rather than where a centring rule would.
     for runs in label_lines:
         cursor += config.font_size
         run_x = text_x1
@@ -1871,10 +1874,7 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         sub_pen.color = GAP_LINE_COLOR
         sub_pen.fontsize = config.role_font_size
         cursor += config.role_font_size
-        # Given the available width, which the renderer turns into a start at the text area's left edge --
-        # the same place the label lines above are placed explicitly. One line, one run, no match to mark.
-        text_center = 0.5 * (text_x1 + text_x2)
-        shapes.append(xdotgraph.TextShape(sub_pen, text_center, cursor, xdotgraph.TextShape.CENTER,
+        shapes.append(xdotgraph.TextShape(sub_pen, text_x1, cursor, xdotgraph.TextShape.LEFT,
                                           text_x2 - text_x1, sub_label))
 
     # After the text, which is the backstop for the gutter above rather than a substitute for it: the two
