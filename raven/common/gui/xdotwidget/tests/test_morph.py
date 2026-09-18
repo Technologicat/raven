@@ -330,3 +330,41 @@ def test_shifting_a_picture_moves_everything_in_it_and_nothing_else():
     assert moved.positions == {"r": (10.0, -5.0), "x": (110.0, -5.0)}
     assert [(x, y) for _, x, y, _ in moved.nodes] == [(10.0, -5.0), (110.0, -5.0)]
     assert [node.x for node, *_ in moved.nodes] == [0.0, 100.0], "the nodes themselves were edited"
+
+
+class TestEveryPartKnowsWhatItStandsOn:
+    """A split node's parts each report the whole node's fill, not only the part that draws it.
+
+    A renderer may pick text colour from the element's fill — for contrast in dark mode, or to keep a
+    deliberate colour readable. Mid-change a node is several elements, and only one of them carries the
+    filled shape; the others would answer "no fill" and have their text coloured for a background that is
+    not on screen. Invisible at rest, and visible for exactly as long as a transition lasts, which is why
+    it wants a test rather than an eye.
+    """
+
+    @staticmethod
+    def fills(picture, name):
+        return [node.fillcolor_hint for node, _, _, _ in picture.nodes if node.internal_name == name]
+
+    def test_a_box_gaining_a_shape_reports_its_fill_in_every_part(self):
+        """What a label splitting into runs looks like from here: one more shape on the new side."""
+        before = graph(styled_box("a", 0.0))
+        after = graph(styled_box("a", 0.0, ring))
+        picture = frame(still(before), after, 0.5)
+
+        reported = self.fills(picture, "a")
+        assert len(reported) > 1, "the fixture did not split the node, so there is nothing to have got wrong"
+        assert all(fill == (0.5, 0.5, 0.5, 1.0) for fill in reported), \
+            f"a part of the box does not know what it is drawn on: {reported}"
+
+    def test_a_box_losing_a_shape_reports_it_too(self):
+        """The other direction: the leaving shape fades in a part of its own."""
+        picture = frame(still(graph(styled_box("a", 0.0, ring))), graph(styled_box("a", 0.0)), 0.5)
+        reported = self.fills(picture, "a")
+        assert len(reported) > 1 and all(fill == (0.5, 0.5, 0.5, 1.0) for fill in reported), reported
+
+    def test_an_unsplit_node_is_left_to_answer_for_itself(self):
+        """The control, and what every parsed graph relies on: no hint where the node draws its own fill."""
+        picture = frame(still(graph(box("a", 0.0, 0.0))), graph(box("a", 10.0, 0.0)), 0.5)
+        assert self.fills(picture, "a") == [None], \
+            "a hint was invented for a node that draws no fill, which would colour its text for one"

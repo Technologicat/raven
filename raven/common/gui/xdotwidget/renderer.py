@@ -595,6 +595,12 @@ def _get_element_fillcolor(element: Element | None) -> Color | None:
     """
     if element is None:
         return None
+    # An element that draws only part of a node — a transition splits one into several — knows what it is
+    # standing on without drawing it, and says so here. Asked of its own shapes it would answer "nothing",
+    # and its text would be coloured for a background that is not the one on screen.
+    hint = getattr(element, "fillcolor_hint", None)
+    if hint is not None:
+        return hint
     for shape in element.shapes:
         if isinstance(shape, (EllipseShape, PolygonShape)) and shape.filled:
             return shape.pen.fillcolor if shape.pen is not None else None

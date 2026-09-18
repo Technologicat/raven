@@ -479,6 +479,15 @@ class Node(Element):
         self.url = url
         self.internal_name = internal_name
         self.tooltip = tooltip
+        # The fill this node's text sits on, where the node does not draw that fill itself. `None` means
+        # "ask my shapes", which is the ordinary case and what a parsed graph always wants.
+        #
+        # For a node mid-change: a transition splits one node into several, each drawing part of it, and
+        # only one of those parts carries the filled shape. The others are the same box to a reader and
+        # have to be told what they are standing on, or text in them is coloured for a background that is
+        # not there — which, with a rule that picks text colour from the fill, means an invisible label
+        # for exactly as long as the transition lasts.
+        self.fillcolor_hint: Color | None = None
 
     def is_inside(self, x: float, y: float) -> bool:
         """Return whether point (x, y) is inside this node's bounding box."""

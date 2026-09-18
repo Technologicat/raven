@@ -45,7 +45,7 @@ import weakref
 from collections.abc import Callable, Mapping
 from typing import NamedTuple
 
-from .constants import Point
+from .constants import Color, Point
 from .graph import (Edge, Element, Graph, Node, Pen, Shape,
                     BezierShape, CompoundShape, EllipseShape, ImageShape, LineShape, PolygonShape, TextShape)
 
@@ -276,8 +276,22 @@ def scene(picture: Picture, edge_between: EdgeBetween | None = None) -> Scene:
 
 def _carrier(like: Node, shapes: list[Shape]) -> Node:
     """A node with `like`'s box, name and coordinates, drawing `shapes` — one part of a node mid-change."""
-    return Node(x=like.x, y=like.y, w=like.x2 - like.x1, h=like.y2 - like.y1, shapes=shapes,
+    part = Node(x=like.x, y=like.y, w=like.x2 - like.x1, h=like.y2 - like.y1, shapes=shapes,
                 url=like.url, internal_name=like.internal_name, tooltip=like.tooltip)
+    # What the whole node is filled with, which only the part carrying the filled shape would otherwise
+    # know. A renderer choosing text colour from the fill needs it in every part: a box gaining a run --
+    # a label that has just matched a search, say -- puts that run in a part of its own, and without this
+    # the run is coloured for no background at all until the change finishes.
+    part.fillcolor_hint = _fill_of(like)
+    return part
+
+
+def _fill_of(node: Node) -> Color | None:
+    """The fill colour of `node`'s first filled shape, or `None` if it draws none."""
+    for shape in node.shapes:
+        if isinstance(shape, (EllipseShape, PolygonShape)) and shape.filled and shape.pen is not None:
+            return shape.pen.fillcolor
+    return None
 
 
 def _signature(shape: Shape) -> tuple:

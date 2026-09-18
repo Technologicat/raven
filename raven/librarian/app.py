@@ -216,7 +216,7 @@ with timer() as tim:
         current = dpg.get_value("chat_field")  # tag
         separator = "" if (not current or current.endswith((" ", "\n"))) else " "
         dpg.set_value("chat_field", f"{current}{separator}{url}")  # tag
-        gui_animation.give_caret("chat_field")  # tag
+        _give_caret_to("chat_field")  # tag
     dpg_markdown.set_url_secondary_action(_append_url_to_chat_input,
                                           glyph=fa.ICON_ARROW_RIGHT_TO_BRACKET,
                                           font=themes_and_fonts.icon_font_solid,
@@ -1317,7 +1317,7 @@ with timer() as tim:
                         """Empty the search field and end the search. The button and Ctrl+Shift+F, caret or no caret."""
                         guiutils.set_input_text("search_field", "", park_focus_on="search_clear_button")  # tag
                         search_changed_callback()
-                        gui_animation.give_caret("search_field")  # tag
+                        _give_caret_to("search_field")  # tag
 
                     dpg.add_button(label=fa.ICON_X, callback=clear_search_callback, width=gui_config.toolbutton_w,
                                    tag="search_clear_button")
@@ -2080,7 +2080,7 @@ with timer() as tim:
                         chat_controller.view.build()
                         # The flash below rewrites the button's tooltip, and a tooltip measuring new text takes a
                         # plain `focus_item` request for itself, so ask in the way that keeps asking.
-                        gui_animation.give_caret("chat_field")  # tag  # Focus the chat field for convenience, since the whole point of a new chat is to immediately start a new conversation.
+                        _give_caret_to("chat_field")  # tag  # Focus the chat field for convenience, since the whole point of a new chat is to immediately start a new conversation.
                         # Acknowledge the action in the GUI.
                         gui_animation.flash_button(button=new_chat_button,
                                                    message="New chat started!",
@@ -2863,15 +2863,28 @@ def _cycle_keyboard_home(backwards: bool = False) -> None:
     # ImGui text field from the outside. A button is the safe place to park: DPG leaves ImGui's keyboard
     # navigation activation off, so a focused button ignores Space and Enter rather than pressing itself.
     if target == "composer":
-        _release_manual_keyboard_claims()
-        gui_animation.give_caret("chat_field")  # tag
+        _give_caret_to("chat_field")  # tag
     elif target == "search":
-        _release_manual_keyboard_claims()
-        gui_animation.give_caret("search_field")  # tag
+        _give_caret_to("search_field")  # tag
     elif target == "graph":
         _give_keyboard_to_graph()
     else:
         _give_keyboard_to_log()
+
+
+def _give_caret_to(field_tag: str) -> None:
+    """Put the caret in a text field, releasing whatever else was claiming the keyboard.
+
+    The third way into a keyboard home, beside `_give_keyboard_to_graph` and `_give_keyboard_to_log`, and
+    the reason all three are functions rather than two lines at each caller: the release is the half that
+    gets forgotten. It has no visible effect at the site that omits it — the caret does arrive — and the
+    cost lands on a *different* pane, which goes on wearing its blue border while the keys go elsewhere.
+
+    Hence `dpg.focus_item` and `gui_animation.give_caret` are not to be called directly for this. They are
+    the mechanism; these three are the app's ways of using it.
+    """
+    _release_manual_keyboard_claims()
+    gui_animation.give_caret(field_tag)
 
 
 def _give_keyboard_to_log() -> None:
@@ -3100,9 +3113,9 @@ def librarian_hotkeys_callback(sender, app_data):
     # Ctrl+...
     elif ctrl_pressed:
         if key == dpg.mvKey_Spacebar:
-            gui_animation.give_caret("chat_field")  # tag
+            _give_caret_to("chat_field")  # tag
         elif key == dpg.mvKey_F:
-            gui_animation.give_caret("search_field")  # tag
+            _give_caret_to("search_field")  # tag
         # The send chord, when it is the composer that is *not* holding the caret. While it is, the field
         # commits and this fires on the same keypress; `_request_send` is what makes that one send.
         elif key == dpg.mvKey_Return and librarian_config.send_message_key == "ctrl+enter":
@@ -3539,7 +3552,7 @@ def _build_initial_chat_view() -> None:
     # caret. The button is safe because DPG leaves ImGui's keyboard-nav activation off, so a focused button
     # ignores Space and Enter.
     if librarian_config.startup_keyboard_home == "composer":
-        gui_animation.give_caret("chat_field")  # tag
+        _give_caret_to("chat_field")  # tag
     else:
         if librarian_config.startup_keyboard_home != "chat_log":
             logger.warning(f"_build_initial_chat_view: unknown `startup_keyboard_home` {librarian_config.startup_keyboard_home!r}; "
