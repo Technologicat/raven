@@ -713,7 +713,7 @@ the blue mark shows where it went.
 | `Shift+F8` | ...with node IDs and metadata included |
 | `F9` | Audio input panel |
 | `Tab` / `Shift+Tab` | Move the keyboard to the next / previous pane, in screen order: the search field, the chat log, the message field, and the chat graph when shown |
-| `Ctrl+Shift+G` | Give the keyboard to the chat graph, showing it first if it is switched off |
+| `Ctrl+Shift+G` | Go to the chat graph, showing it first if it is switched off — and, pressed again while you are in it, leave and switch it back off. One key there and back |
 | `Ctrl+Space` | Put the caret in the message field |
 | `Ctrl+N` | Start a new chat |
 | `Ctrl+G` | Stop the AI's text generation |

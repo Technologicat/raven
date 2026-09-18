@@ -1358,6 +1358,9 @@ with timer() as tim:
                             dpg.add_text("Go to the next matching message [F3]")
                     # Last in the row, so that its width changing as the count does moves nothing.
                     dpg.add_text("", tag="search_counter_text", color=(160, 160, 160))
+                    with dpg.tooltip("search_counter_text"):  # tag
+                        dpg.add_text("Which match is at the top of the view, of how many the search\n"
+                                     "found in the chat log — this branch of this chat.")
             with dpg.child_window(tag="graph_search_row",  # the graph's search navigation goes here too, to the right
                                   width=_get_avatar_panel_base_size()[0],
                                   height=gui_config.search_row_h,
@@ -1380,15 +1383,20 @@ with timer() as tim:
                     dpg.bind_item_font("graph_search_prev_button", themes_and_fonts.icon_font_solid)  # tag
                     dpg.bind_item_theme("graph_search_prev_button", "disablable_widget_theme")  # tag
                     with dpg.tooltip("graph_search_prev_button"):  # tag
-                        dpg.add_text("Go to the previous match in the chat graph [Ctrl+Shift+F3]")
+                        dpg.add_text("Go to the previous match in the chat graph [Ctrl+Shift+F3]\n\n"
+                                     "Same search, and the same two checkboxes, as the chat log above.")
                     dpg.add_button(label=fa.ICON_CIRCLE_DOWN, callback=lambda: _step_graph_search(+1),
                                    width=gui_config.toolbutton_w, enabled=False, tag="graph_search_next_button")
                     dpg.bind_item_font("graph_search_next_button", themes_and_fonts.icon_font_solid)  # tag
                     dpg.bind_item_theme("graph_search_next_button", "disablable_widget_theme")  # tag
                     with dpg.tooltip("graph_search_next_button"):  # tag
-                        dpg.add_text("Go to the next match in the chat graph [Ctrl+F3]")
+                        dpg.add_text("Go to the next match in the chat graph [Ctrl+F3]\n\n"
+                                     "Same search, and the same two checkboxes, as the chat log above.")
                     # Last, so that its width changing as the count does moves nothing beside it.
                     dpg.add_text("", tag="graph_search_counter_text", color=(160, 160, 160))
+                    with dpg.tooltip("graph_search_counter_text"):  # tag
+                        dpg.add_text("Which match you are at, of how many the search found in the\n"
+                                     "chat graph — every branch of every chat, not just this one.")
 
         with dpg.group(horizontal=True):
             with dpg.group():  # left column: linearized chat view
@@ -1900,7 +1908,8 @@ with timer() as tim:
                                      "Every chat ever started is in there, branching. Clicking a message\n"
                                      "shows it; clicking it again switches the conversation to it, so you\n"
                                      "can look around without changing anything. To steer it from the\n"
-                                     "keyboard, give it the keys. [Ctrl+Shift+G]\n\n"
+                                     "keyboard, give it the keys — and the same chord again to come back\n"
+                                     "out and switch it off. [Ctrl+Shift+G]\n\n"
                                      "The avatar's video pauses while it is covered, and switching this\n"
                                      "off wakes it, even if it had gone to sleep meanwhile. With this off,\n"
                                      "the graph still stands in whenever the avatar has nothing to show:\n"
@@ -2314,7 +2323,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start a new chat", notes=""),
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="Ctrl+Shift+G", action_indent=0, action="Give the keyboard to the graph", notes="Shows it first if switched off"),
+               env(key_indent=0, key="Ctrl+Shift+G", action_indent=0, action="Go to the chat graph, and back", notes="Shows it first; again to leave"),
                env(key_indent=0, key="Ctrl+P", action_indent=0, action="Ping the avatar", notes="Wakes it; it takes notice"),
                helpcard.hotkey_new_column,
                # The graph's own keyboard has a page of its own; this page carries only the ways into it, Tab
@@ -2369,7 +2378,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
 # The graph is a keyboard of its own — nineteen keys against the main page's forty — so it gets a page
 # rather than a corner of one. Two-thirds of these are unreachable from anywhere else in the app, and
 # until the card had pages they lived only in the README, which is not open while you are using the graph.
-chat_graph_hotkey_info = (env(key_indent=0, key="Ctrl+Shift+G", action_indent=0, action="Move the keyboard to the graph", notes="Or Tab, or click anywhere in it"),
+chat_graph_hotkey_info = (env(key_indent=0, key="Ctrl+Shift+G", action_indent=0, action="Leave the graph, and switch it off", notes="The same key that brought you here"),
                           # The cursor has to be conjured before it can be moved, and the first arrow press
                           # is what does it — planting it on HEAD rather than stepping. Its own row, because
                           # a reader whose first press "did nothing" is looking straight at the key that
@@ -2854,16 +2863,30 @@ def _cycle_keyboard_home(backwards: bool = False) -> None:
     # ImGui text field from the outside. A button is the safe place to park: DPG leaves ImGui's keyboard
     # navigation activation off, so a focused button ignores Space and Enter rather than pressing itself.
     if target == "composer":
+        _release_manual_keyboard_claims()
         gui_animation.give_caret("chat_field")  # tag
-        chat_graph_panel.has_keyboard = False
     elif target == "search":
+        _release_manual_keyboard_claims()
         gui_animation.give_caret("search_field")  # tag
-        chat_graph_panel.has_keyboard = False
     elif target == "graph":
         _give_keyboard_to_graph()
     else:
-        dpg.focus_item("chat_send_button")  # tag  # deactivate the composer's ImGui edit buffer
-        chat_graph_panel.has_keyboard = False
+        _give_keyboard_to_log()
+
+
+def _give_keyboard_to_log() -> None:
+    """Send the keyboard to the chat log, which is the neutral home.
+
+    Nothing there grabs the caret, bare keys merely scroll, and the message that would be acted on already
+    wears the blue dot — so it is where to land anything that is *leaving* somewhere else rather than
+    choosing where to go.
+
+    Focus parks on a button, which is the only thing that deactivates an ImGui text field from outside; a
+    focused button is safe, DPG leaving ImGui's keyboard-navigation activation off, so it ignores Space and
+    Enter rather than pressing itself.
+    """
+    _release_manual_keyboard_claims()
+    dpg.focus_item("chat_send_button")  # tag  # deactivate the composer's ImGui edit buffer
 
 
 def librarian_hotkeys_callback(sender, app_data):
@@ -3001,11 +3024,24 @@ def librarian_hotkeys_callback(sender, app_data):
             clear_search_callback()
         # The graph's own key, as Ctrl+Space is the composer's and Ctrl+F the search field's. Shows the graph first
         # if it is switched off, since keys sent to a hidden graph would go nowhere.
+        #
+        # **Context-sensitive, which almost nothing else here is**, and deliberately: pressed from anywhere
+        # else it opens the graph and goes there, so pressed *in* the graph it should undo that rather than
+        # do nothing. One key in and back out again, and the reader need not remember which of the two
+        # spellings — this or `Alt+G` — leaves the state they are in.
         elif key == dpg.mvKey_G:
-            if not dpg.get_value("chat_graph_checkbox"):  # tag
-                guiutils.toggle_checkbox("chat_graph_checkbox")  # tag
-            if chat_graph_panel.is_shown:
-                _give_keyboard_to_graph()
+            if chat_graph_panel.is_shown and chat_graph_panel.has_keyboard:
+                # Only *switch off* what the checkbox is holding on. A graph standing in for an absent
+                # avatar is not there because the box is ticked, and flipping it then would tick it —
+                # turning the graph on in the middle of a gesture that means leave.
+                if dpg.get_value("chat_graph_checkbox"):  # tag
+                    guiutils.toggle_checkbox("chat_graph_checkbox")  # tag
+                _give_keyboard_to_log()
+            else:
+                if not dpg.get_value("chat_graph_checkbox"):  # tag
+                    guiutils.toggle_checkbox("chat_graph_checkbox")  # tag
+                if chat_graph_panel.is_shown:
+                    _give_keyboard_to_graph()
 
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         elif key == dpg.mvKey_M:

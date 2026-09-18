@@ -4,9 +4,11 @@ This module provides rendering functions that draw graph shapes using
 DearPyGUI's drawlist primitives.
 """
 
-__all__ = ["set_dark_mode", "get_dark_mode", "color_to_dpg",
-           "text_color",  # what a pen's text actually lands as, contrast rule included
-           "FontLadder", "TextFonts", "nearest_font",
+__all__ = ["FontLadder", "TextFonts", "nearest_font",  # which font a size and a face resolve to
+
+           "set_dark_mode", "get_dark_mode", "color_to_dpg",
+           "text_color",  # ...and what a pen's text actually lands as, contrast rule included
+
            "render_graph", "render_scene"]
 
 import colorsys
@@ -129,6 +131,65 @@ def _ink(color: Color, opacity: float) -> DPGColor:
     return (r, g, b, int(a * opacity))
 
 
+# WCAG 2.1 asks 4.5:1 for body text and 3:1 for large or bold text. A graph label's deliberate colour marks
+# a run that is bold as well, and the colour is a *mark* rather than the only thing carrying the meaning, so
+# 3:1 is the bar. Sourced rather than chosen by eye, which for a threshold is the difference between a
+# number that holds on the next fill somebody invents and one that describes the fills we happened to try.
+_MIN_TEXT_CONTRAST = 3.0
+
+
+def _relative_luminance(color: Color) -> float:
+    """WCAG relative luminance of `color`, whose components are in [0, 1]."""
+    def channel(value: float) -> float:
+        return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+    red, green, blue = (channel(c) for c in color[:3])
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def _contrast_ratio(one: Color, other: Color) -> float:
+    """WCAG contrast ratio between two colours, from 1 (identical) to 21 (black against white)."""
+    first, second = _relative_luminance(one), _relative_luminance(other)
+    lighter, darker = max(first, second), min(first, second)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _legible_against(color: Color, background: Color) -> Color:
+    """Return `color` with its lightness moved as little as is needed to read against `background`.
+
+    **Hue and saturation are left alone**, so a colour chosen to *say* something goes on saying it — a red
+    match stays red — while the one dimension that decides whether it can be read at all is spent on being
+    readable. Which is the split the plain contrast rule does not make: that one keeps the legibility and
+    throws the meaning away.
+
+    Moved the least distance that suffices, and only towards a lightness dark mode would use anyway. Where
+    even the end of that range is not enough — a saturated fill can be bright at every lightness — the best
+    available is returned rather than nothing: a thin mark still beats an invisible one, and the run is
+    bold besides.
+    """
+    if _contrast_ratio(color, background) >= _MIN_TEXT_CONTRAST:
+        return color
+
+    hue, lightness, saturation = colorsys.rgb_to_hls(*color[:3])
+
+    def at(value: float) -> Color:
+        return (*colorsys.hls_to_rgb(hue, value, saturation), color[3])
+
+    # For a fixed hue and saturation, luminance rises with lightness, so one end of the range helps and the
+    # other does not; the binary search then finds the least move that clears the bar.
+    ends = (_DARK_MODE_L_MIN, _DARK_MODE_L_MAX)
+    best_end = max(ends, key=lambda value: _contrast_ratio(at(value), background))
+    if _contrast_ratio(at(best_end), background) < _MIN_TEXT_CONTRAST:
+        return at(best_end)
+    near, far = lightness, best_end
+    for _ in range(16):
+        middle = 0.5 * (near + far)
+        if _contrast_ratio(at(middle), background) >= _MIN_TEXT_CONTRAST:
+            far = middle
+        else:
+            near = middle
+    return at(far)
+
+
 def text_color(pen: Pen, element_fillcolor: Color | None, opacity: float = 1.0) -> DPGColor:
     """Return the colour to draw `pen`'s text in, on an element filled with `element_fillcolor`.
 
@@ -137,16 +198,22 @@ def text_color(pen: Pen, element_fillcolor: Color | None, opacity: float = 1.0) 
     fill — green or yellow, say — which is unreadable. `element_fillcolor` is the element's *filled* shape's
     colour (from xdot's `_draw_`), not this text's own pen (from `_ldraw_`).
 
-    **`pen.keep_color` opts out of that**, for text whose colour carries meaning rather than merely being
-    legible: a search match drawn in a readable grey is not a compromise, it is wrong. The rule exists for
-    graphs whose colours nobody picked with dark mode in mind, and a caller that authored its own for it is
-    not one of those — there, the rule would be overriding somebody who has already done the work.
+    **`pen.keep_color` asks for a different trade**, for text whose colour carries meaning rather than
+    merely being legible: a search match drawn in a readable grey is not a compromise, it is the wrong
+    answer. Such text keeps its hue and saturation and has only its *lightness* moved, as far as legibility
+    against the fill requires and no further — so it stays recognisably the colour it was chosen to be. It
+    is not simply exempt: red on this widget's own orange fill measures 1.2:1, which is a mark nobody can
+    see, and opting out of the rule without replacing it merely swaps one unreadable answer for another.
 
     Pure, so what lands on screen can be asserted without a running renderer.
     """
-    if _dark_mode and element_fillcolor is not None and not pen.keep_color:
-        inv_fill = _invert_lightness(element_fillcolor)
-        lum = _perceived_luminance(inv_fill[0], inv_fill[1], inv_fill[2])
+    if _dark_mode and element_fillcolor is not None:
+        shown_fill = _invert_lightness(element_fillcolor)
+        if pen.keep_color:
+            legible = _legible_against(_invert_lightness(pen.color), shown_fill)
+            red, green, blue = (int(c * 255) for c in legible[:3])
+            return (red, green, blue, int(pen.color[3] * opacity * 255))
+        lum = _perceived_luminance(shown_fill[0], shown_fill[1], shown_fill[2])
         value = int((_DARK_MODE_L_MIN if lum > 0.5 else _DARK_MODE_L_MAX) * 255)
         return (value, value, value, int(pen.color[3] * opacity * 255))
     return _ink(pen.color, opacity)

@@ -607,6 +607,13 @@ class DPGChatGraphPanel(gui_animation.Animation):
         A hidden panel refuses to take it, rather than taking it and hiding the fact. The two are
         different states and only one of them is coherent: a panel that answered `True` while showing no
         border would be claiming keys the reader has no way to see it holding.
+
+        **Assigning `False` here by hand is almost always the wrong call.** This flag is one of a set the
+        owning app maintains, one per pane that has no widget DPG can be asked about, and they all go stale
+        together the moment something else takes the keys. Librarian keeps the list in one place —
+        `app._release_manual_keyboard_claims` — and the convention is that anything taking the keyboard
+        calls that and then claims what it wants. Clearing this one alone leaves the others lit, which is
+        how a panel once kept its blue border while a dialog had the keys.
         """
         self._has_keyboard = bool(value) and self._is_shown
         self._keyboard_mark.lit = self._has_keyboard
