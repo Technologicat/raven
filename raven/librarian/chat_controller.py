@@ -2487,7 +2487,6 @@ class DPGCompleteChatMessage(DPGChatMessage):
         self.rendered_system_postamble = list(postamble)
         self._render_injected_texts(postamble)
 
-
     def _render_image_part(self, part: dict[str, Any], sidecars_meta: dict[str, Any]) -> None:
         """Render one `image_url` content-part: an inline thumbnail plus a per-image provenance cluster.
 
