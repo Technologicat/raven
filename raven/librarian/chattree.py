@@ -745,6 +745,46 @@ class Forest:
         self.walk_up(node_id, callback=prepend_to_history)
         return list(linearized_history)
 
+    def linearize_down(self, *node_ids: str, prune: Callable[[str], bool] | None = None) -> list[str]:
+        """Walking down from each of `node_ids`, return it and everything below it, depth first.
+
+        The counterpart of `linearize_up`, and a different shape because the walk is: a branch upward is a
+        path, so that one returns a path, while everything below a node is a subtree. This returns it in
+        preorder — each node before its children, children in sibling order — which is the order the tree
+        reads in.
+
+        `node_ids`: Where to start. Each is itself included. Pass `*forest.get_all_root_nodes()` for the
+                    whole forest.
+        `prune`: Optional. Asked about each node before it is taken. A node it accepts is left out *and*
+                 not descended into, so whatever hangs below that node is left out with it. For asking
+                 what sits behind something that stands in for a part of the tree: prune at the nodes
+                 that are accounted for elsewhere, and what comes back is what is not.
+
+        A node is reported at most once however many starting points reach it, so overlapping ones cost
+        nothing and a forest that has grown a cycle still terminates.
+        """
+        with self.lock:
+            result: list[str] = []
+            seen: set[str] = set()
+            stack = list(reversed(node_ids))
+            while stack:
+                node_id = stack.pop()
+                if node_id in seen:
+                    continue
+                seen.add(node_id)
+                if node_id not in self.nodes:
+                    logger.warning(f"Forest.linearize_down: trying to scan non-existent node '{node_id}'. Ignoring error.")
+                    continue
+                if prune is not None and prune(node_id):
+                    continue
+                result.append(node_id)
+                # Reversed, because the stack is popped from its end and the children are to come out in
+                # sibling order. Iterative rather than recursive: a chat branch is a chain, so the depth
+                # of this walk is the length of the longest conversation in the forest, which outgrows
+                # CPython's recursion limit long before the forest is large.
+                stack.extend(reversed(self.nodes[node_id]["children"]))
+            return result
+
     def get_all_root_nodes(self) -> List[str]:
         """Return the IDs of all root nodes (i.e. nodes whose parent is `None`) currently in the forest.
 

@@ -43,6 +43,30 @@ def branching(forest):
     return forest, root, left, right
 
 
+@pytest.fixture
+def bushy(forest):
+    """Two roots, one of them branching two levels deep, for testing downward traversal.
+
+    Deep enough on one side and wide on the other that preorder, sibling order and a pruned subtree
+    each come out as a different list — which `chain` and `branching` are too small to show.
+
+        one          two
+       /   \\          |
+      a     b         x
+     / \\      \\
+    a1  a2     b1
+    """
+    one = forest.create_node("one", parent_id=None)
+    a = forest.create_node("a", parent_id=one)
+    a1 = forest.create_node("a1", parent_id=a)
+    a2 = forest.create_node("a2", parent_id=a)
+    b = forest.create_node("b", parent_id=one)
+    b1 = forest.create_node("b1", parent_id=b)
+    two = forest.create_node("two", parent_id=None)
+    x = forest.create_node("x", parent_id=two)
+    return forest, dict(one=one, a=a, a1=a1, a2=a2, b=b, b1=b1, two=two, x=x)
+
+
 # ---------------------------------------------------------------------------
 # Node creation and basic structure
 # ---------------------------------------------------------------------------
@@ -413,6 +437,37 @@ class TestWalk:
     def test_linearize_up_from_root(self, chain):
         f, a, _b, _c = chain
         assert f.linearize_up(a) == [a]
+
+    def test_linearize_down_is_preorder_in_sibling_order(self, bushy):
+        f, n = bushy
+        assert f.linearize_down(n["one"]) == [n["one"], n["a"], n["a1"], n["a2"], n["b"], n["b1"]]
+
+    def test_linearize_down_from_a_leaf_is_just_the_leaf(self, bushy):
+        f, n = bushy
+        assert f.linearize_down(n["a1"]) == [n["a1"]]
+
+    def test_linearize_down_takes_several_starting_points(self, bushy):
+        f, n = bushy
+        assert f.linearize_down(*f.get_all_root_nodes()) == [n["one"], n["a"], n["a1"], n["a2"],
+                                                             n["b"], n["b1"], n["two"], n["x"]]
+
+    def test_linearize_down_reports_a_node_once_however_many_starts_reach_it(self, bushy):
+        f, n = bushy
+        assert f.linearize_down(n["one"], n["a"]) == f.linearize_down(n["one"])
+
+    def test_prune_drops_the_node_and_everything_below_it(self, bushy):
+        f, n = bushy
+        assert n["a1"] in f.linearize_down(n["one"]), "nothing was pruned here, so the fixture cannot tell a pruned subtree from an absent one"
+        assert f.linearize_down(n["one"], prune=lambda node_id: node_id == n["a"]) == [n["one"], n["b"], n["b1"]]
+
+    def test_prune_at_a_starting_point_drops_that_whole_start(self, bushy):
+        f, n = bushy
+        assert f.linearize_down(*f.get_all_root_nodes(),
+                                prune=lambda node_id: node_id == n["two"]) == f.linearize_down(n["one"])
+
+    def test_a_start_that_does_not_exist_is_skipped_rather_than_raising(self, bushy):
+        f, n = bushy
+        assert f.linearize_down("no_such_node", n["two"]) == [n["two"], n["x"]]
 
 
 # ---------------------------------------------------------------------------
