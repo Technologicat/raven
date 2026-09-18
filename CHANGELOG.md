@@ -111,6 +111,22 @@
 
 - **the chat history is saved every minute while the app runs**, not only when it closes, so a crash loses at most the last minute of the conversation. Nothing is written while nothing has changed. The interval is `llm_autosave_interval` in `raven.librarian.config`; `None` goes back to saving only at exit.
 
+- **the help card (F1) now turns pages.** Librarian's has three: the app's keyboard, the chat graph's own
+  keyboard with the prose that explains it, and *Features*. Arrow keys, `Home` and `End` turn them,
+  or the buttons at the top. The keyboard page is a reference you can screenshot and keep beside you, which
+  is what prose sharing the page had been taking away.
+  - **The prose pages read as two newspaper columns**, the left one finished before the right one starts —
+    a card this wide gives a single column lines too long to track back to the start of, and a section
+    split into a pair either side would have the eye crossing back and forth once per section.
+  - **Message attachments are described**, having been the previous release's headline feature and absent
+    from the card until now: what an attachment is for as against the document database, the two kinds and
+    what each asks of the model, the three ways to attach one, and where to clean up the ones nothing
+    refers to any more.
+  - **Flipping *Internet* or *Documents* is noted as costing a pause** on the next reply, the tool
+    declarations riding at the top of the conversation, so the whole chat has to be re-read.
+  - The card sizes itself to its tallest page and keeps that height, so turning a page does not resize the
+    window under you.
+
 *Raven-avatar*
 
 - **`atmospheric_dust`, light-catching motes drifting in the air around the character** — dust in a sunbeam, or with different tuning something nearer to pollen, snow or petals. In the default chain, at the head of it: the dust is composited before the camera looks at the scene, so the particles are framed by the zoom and lit by the capture optics exactly as the character is.
@@ -190,22 +206,6 @@
   - **The audit TSV says what came out and why**: one row per removed record, naming the record, where it was published, and which criterion it failed, under a header stamping the tool version, the inputs and the tests applied. There is no way to switch it off, a removal nobody recorded being the thing it exists to prevent. The venue is in there because it is what tells you whether a dropped record is worth chasing up by hand.
   - **Deterministic and offline.** No model, no network: the same bibliography and the same flags produce the same two files on any machine. Whether a record is *about* the right subject is a judgement rather than a test, and belongs to a different tool.
   - `--dry-run` reports what would go and writes nothing; the input file is never modified.
-
-- **the help card (F1) now turns pages.** Librarian's has three: the app's keyboard, the chat graph's own
-  keyboard with the prose that explains it, and *Features*. Arrow keys, `Home` and `End` turn them,
-  or the buttons at the top. The keyboard page is a reference you can screenshot and keep beside you, which
-  is what prose sharing the page had been taking away.
-  - **The prose pages read as two newspaper columns**, the left one finished before the right one starts —
-    a card this wide gives a single column lines too long to track back to the start of, and a section
-    split into a pair either side would have the eye crossing back and forth once per section.
-  - **Message attachments are described**, having been the previous release's headline feature and absent
-    from the card until now: what an attachment is for as against the document database, the two kinds and
-    what each asks of the model, the three ways to attach one, and where to clean up the ones nothing
-    refers to any more.
-  - **Flipping *Internet* or *Documents* is noted as costing a pause** on the next reply, the tool
-    declarations riding at the top of the conversation, so the whole chat has to be re-read.
-  - The card sizes itself to its tallest page and keeps that height, so turning a page does not resize the
-    window under you.
 
 *Raven-xdot-viewer*
 
