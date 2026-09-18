@@ -11,28 +11,6 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
-## A search match wider than a chat graph box goes unpainted
-
-*Cluster: chat-graph-search · Cost: S · Gate: none · Filed: 2026-09-18 · See also: `briefs/researchers-night/16_chat-graph-view-brief.md` → Where this stands, 2026-09-18*
-
-A box that matched quotes its match and paints it red and bold. The runs are found in the *wrapped line*
-rather than carried down from the message text, wrapping having collapsed whitespace, rejoined words and
-possibly cut one — so an offset taken beforehand means nothing after. The consequence is that a match the
-wrap cut in half is not marked on that line: `_runs_of` re-runs the fragment regexes, and half a fragment
-is not a match.
-
-**It only bites when the matched term is itself wider than the box**, which is about forty characters at
-1:1. Searching `supercalifragilisticexpialidociousphotocatalysis` draws
-`supercalifragilisticexpia…` in the ordinary ink, with nothing to say why the box is on screen. A term
-inside a *long* word is fine — `wikipedia` in a URL longer than the box comes out painted, the snippet
-centring on the match so the match itself survives the cut whole.
-
-What it wants is for a cut fragment to paint its shown part: the wrap would have to report that it cut a
-word and where, and the run splitter to accept a prefix of a fragment at a line's end. Neither is large;
-the question is whether anyone searches for a term that long.
-
-Raised by Juha while the snippet was being built (2026-09-18).
-
 ## A whitespace and test-style sweep, straight after search v1
 
 *Cluster: code-hygiene · Cost: S · Gate: search v1 lands · Filed: 2026-09-17 · See also: `briefs/researchers-night/README.md` → Decided 2026-09-17*
