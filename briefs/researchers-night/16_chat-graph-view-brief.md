@@ -1360,6 +1360,13 @@ neither. A missing glyph is silent and looks exactly like this. That part belong
   scroll, so clicking a matching box moves the counter and there is no index to go stale. HEAD stands in
   when no box holds the cursor. A jump sets the cursor, with the ring a click would have given it.
 - **A jump previews and does not commit** — search is navigation, and HEAD stays where it is.
+- **`Ctrl+F3` and `Ctrl+Shift+F3`** (Juha, 2026-09-18), pairing with the chat log's `F3` by the obvious
+  family, with `Ctrl` picking the other view's matches. Nothing bound them. They live in the *app's* key
+  handler rather than the panel's `handle_key`, because they have to work while the avatar holds the
+  panel: a reader who can see from the counter that there are matches elsewhere in the tree should be able
+  to go to one without first finding the checkbox that puts the graph on screen. Stepping does show it,
+  through `guiutils.toggle_checkbox` — the panel's own visibility is recomputed from that preference on a
+  timer, so setting it directly would be undone within the tick.
 - **A match inside a folded tool round expands the round**, as brief 14's jump opens a thinking trace and
   for the same reason: every match counted should be on screen.
   - **And collapses it again on the way out**, which needs one set: rounds opened by a search. A jump

@@ -96,6 +96,7 @@ with timer() as tim:
     from . import appstate
     from . import audio_input_panel as audio_input  # module: the panel class, and the meter scale the toolbar's VU meter shares
     from . import chatgraph_panel
+    from . import chatsearch  # the graph panel takes a compiled query, the chat controller compiles its own
     from .chat_controller import DPGChatController
     from .cleanup_dialog import DPGCleanupDialog
     from . import config as librarian_config
@@ -1300,9 +1301,17 @@ with timer() as tim:
                     def search_changed_callback() -> None:
                         app_state["search_thinking"] = dpg.get_value("search_thinking_checkbox")  # tag
                         app_state["search_tools"] = dpg.get_value("search_tools_checkbox")  # tag
-                        chat_controller.set_search(dpg.get_value("search_field"),  # tag
+                        search_string = dpg.get_value("search_field")  # tag
+                        chat_controller.set_search(search_string,
                                                    include_thinking=app_state["search_thinking"],
                                                    include_tools=app_state["search_tools"])
+                        # One field, two views. The chat log searches the branch on screen and the graph
+                        # the whole forest, so the same query gives two different answers — which is the
+                        # point of asking it in both places rather than sharing one result.
+                        chat_graph_panel.set_search(
+                            chatsearch.make_query(search_string,
+                                                  include_thinking=app_state["search_thinking"],
+                                                  include_tools=app_state["search_tools"]))
 
                     def clear_search_callback() -> None:
                         """Empty the search field and end the search. The button and Ctrl+Shift+F, caret or no caret."""
@@ -1354,12 +1363,32 @@ with timer() as tim:
                                   height=gui_config.search_row_h,
                                   no_scrollbar=True,
                                   no_scroll_with_mouse=True):
-                # What the panel below is showing. Both are built once, and `_apply_panel_occupancy` shows the one
-                # that matches the occupant.
-                dpg_markdown.add_text(f"**{llm_settings.char}**", tag="panel_heading_avatar",  # tag
-                                      show=not app_state["chat_graph_shown"])
-                dpg_markdown.add_text("**Chat graph**", tag="panel_heading_graph",  # tag
-                                      show=app_state["chat_graph_shown"])
+                with dpg.group(horizontal=True):
+                    # What the panel below is showing. Both are built once, and `_apply_panel_occupancy`
+                    # shows the one that matches the occupant.
+                    dpg_markdown.add_text(f"**{llm_settings.char}**", tag="panel_heading_avatar",  # tag
+                                          show=not app_state["chat_graph_shown"])
+                    dpg_markdown.add_text("**Chat graph**", tag="panel_heading_graph",  # tag
+                                          show=app_state["chat_graph_shown"])
+                    dpg.add_spacer(width=16)
+                    # The graph's own half of the search: how many matches are in the whole forest, and the
+                    # way to step between them. It stays up while the *avatar* holds the panel, which is
+                    # the one thing this row can say that nothing else on screen does — the chat's counter
+                    # covers the branch in front of the reader and no more.
+                    dpg.add_button(label=fa.ICON_CIRCLE_UP, callback=lambda: _step_graph_search(-1),
+                                   width=gui_config.toolbutton_w, enabled=False, tag="graph_search_prev_button")
+                    dpg.bind_item_font("graph_search_prev_button", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.bind_item_theme("graph_search_prev_button", "disablable_widget_theme")  # tag
+                    with dpg.tooltip("graph_search_prev_button"):  # tag
+                        dpg.add_text("Go to the previous match in the chat graph [Ctrl+Shift+F3]")
+                    dpg.add_button(label=fa.ICON_CIRCLE_DOWN, callback=lambda: _step_graph_search(+1),
+                                   width=gui_config.toolbutton_w, enabled=False, tag="graph_search_next_button")
+                    dpg.bind_item_font("graph_search_next_button", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.bind_item_theme("graph_search_next_button", "disablable_widget_theme")  # tag
+                    with dpg.tooltip("graph_search_next_button"):  # tag
+                        dpg.add_text("Go to the next match in the chat graph [Ctrl+F3]")
+                    # Last, so that its width changing as the count does moves nothing beside it.
+                    dpg.add_text("", tag="graph_search_counter_text", color=(160, 160, 160))
 
         with dpg.group(horizontal=True):
             with dpg.group():  # left column: linearized chat view
@@ -1815,8 +1844,9 @@ with timer() as tim:
                                 # those two happened is invisible to the user, so the same gesture would
                                 # work or not for reasons nobody can see.
                                 #
-                                # Here rather than in `_apply_panel_occupancy`, which runs five times a
-                                # second: a ping there would keep the avatar awake forever.
+                                # Here rather than in `_apply_panel_occupancy`, which runs on a timer
+                                # (`_PANEL_OCCUPANCY_TICK_S`): a ping there would keep the avatar awake
+                                # forever.
                                 avatar_controller.ping(avatar_record)
                             _apply_panel_occupancy()
                         def toggle_show_thinking():
@@ -2224,6 +2254,9 @@ def update_animations():
     chat_controller.update_current_message_mark()
     # The search counter follows the scroll position too, for the same reason.
     chat_controller.update_search_position()
+    # And the graph's counter follows its cursor, which the arrow keys and a click both move without
+    # telling anyone. Cheap: it redraws nothing on a frame where the answer has not changed.
+    _update_graph_search_row()
     # Whether a turn is in flight gates sending, and is polled for the same reason: the turn starts and
     # finishes on a background task, which raises nothing this module hooks. The call is a comparison
     # unless the answer actually changed.
@@ -2302,6 +2335,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus the search field", notes="Searches this branch as you type"),
                env(key_indent=0, key="Ctrl+Shift+F", action_indent=0, action="Clear the search", notes=""),
                env(key_indent=0, key="F3 / Shift+F3", action_indent=0, action="Next / previous search match", notes="Or (Shift+)Enter in the field"),
+               env(key_indent=0, key="Ctrl+F3 / Ctrl+Shift+F3", action_indent=0, action="...the same, in the chat graph", notes="Searches every branch"),
                env(key_indent=0, key="Alt+H / Alt+R", action_indent=0, action="Search thinking / tool results", notes="The checkboxes by the field"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+G", action_indent=0, action="Stop the AI's text generation", notes="While the AI is writing"),
@@ -2528,6 +2562,44 @@ def _resize_search_row(search_row_w: int) -> None:
     content_w = search_row_w - 2 * guiutils.DPG_WINDOW_PADDING
     field_w = content_w - gui_config.toolbutton_w - controls_w - counter_w - 3 * spacing_x
     dpg.set_item_width("search_field", max(100, int(field_w)))  # tag
+
+def _step_graph_search(direction: int) -> None:
+    """Go to the next (`+1`) or previous (`-1`) match in the chat graph, and show the graph if it is not up.
+
+    The graph's navigation works while the *avatar* holds the panel, that being half of what its counter
+    staying up is for: a reader who can see that there are matches elsewhere in the tree can go to one
+    without first working out which control puts the graph on screen.
+    """
+    if not chat_graph_panel.step_search(direction):
+        return  # nowhere to go; do not switch the panel to show the reader that nothing happened
+    if not app_state["chat_graph_shown"]:
+        # Through the checkbox and as a click would, which is what `toggle_checkbox` is for. The panel's
+        # own visibility is not the thing to set: `_apply_panel_occupancy` recomputes it on a timer from
+        # the preference the checkbox holds, so the graph would flick away again on its own. Flipping
+        # rather than setting is safe because the branch above has just established that it is off.
+        guiutils.toggle_checkbox("chat_graph_checkbox")  # tag
+
+
+def _update_graph_search_row() -> None:
+    """Redraw the chat graph's search counter and previous/next buttons. Callable from any thread."""
+    global _graph_search_counter_shown
+    maybe_index, total = chat_graph_panel.search_position()
+    if chat_graph_panel.search_matches:
+        counter = f"[{maybe_index + 1 if maybe_index is not None else '–'}/{total}]"
+    else:
+        counter = ""
+    if counter == _graph_search_counter_shown:
+        return  # polled once a frame; the answer is the same on nearly all of them
+    _graph_search_counter_shown = counter
+    with guiutils.nonexistent_ok():
+        dpg.set_value("graph_search_counter_text", counter)  # tag
+        for button in ("graph_search_prev_button", "graph_search_next_button"):  # tag
+            (dpg.enable_item if total else dpg.disable_item)(button)
+
+
+# What the graph's counter last said, so a poll that changes nothing touches no widget.
+_graph_search_counter_shown = None
+
 
 def _update_search_row() -> None:
     """Redraw the chat search's counter and previous/next buttons from the controller. Callable from any thread."""
@@ -2889,7 +2961,14 @@ def librarian_hotkeys_callback(sender, app_data):
 
     # Hotkeys for main window, while no modal window is shown
     elif key == dpg.mvKey_F3:  # the de facto "find next", and Shift+F3 "find previous"
-        chat_controller.step_search(-1 if shift_pressed else +1)
+        # Ctrl picks the *other* view's matches: the chat log searches the branch on screen, the graph the
+        # whole forest. Here rather than in the graph panel's own `handle_key`, because it has to work
+        # while the avatar holds the panel — a reader who can see from the counter that there are matches
+        # elsewhere in the tree should be able to go to one without first finding the checkbox.
+        if ctrl_pressed:
+            _step_graph_search(-1 if shift_pressed else +1)
+        else:
+            chat_controller.step_search(-1 if shift_pressed else +1)
     elif key == dpg.mvKey_F9:  # a bare key, because it is reached with a microphone in one hand
         _toggle_audio_input_panel()
     elif key == dpg.mvKey_F8:  # NOTE: Shift is a modifier here
