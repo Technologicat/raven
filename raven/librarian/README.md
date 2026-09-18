@@ -161,7 +161,11 @@ The box at the very top, **…N more cards**, is the one exception to "under the
 
 When the AI calls tools, each result it gets back is a message of its own, and a turn that made several of them would otherwise fill the picture with plumbing. So a round of three or more results is drawn as one **…N more** box hanging between the message that asked and the answer that followed; clicking it draws the results, and each is then an ordinary message you can look at and switch to. Smaller rounds are simply drawn, there being nothing to gain by hiding one message behind one box. To put an opened round away again, press **Backspace** or use the toolbar's fold button — either one, from anywhere inside the round.
 
-The graph can be driven without a pointer. **Tab** moves the keyboard between the message composer, the chat log and the graph, and **clicking anywhere in the graph** does the same — the pane holding the keyboard wears a blue mark, and only one ever does. The keys below, and the ones named in the toolbar's tooltips, work while the graph holds it; a tooltip that names a key says so until it does. In the graph, the **arrow keys** move a cursor, drawn as a dotted ring around the box it is on: down and up follow the conversation, left and right step along the siblings at that level. **Enter** does to the box under the cursor exactly what clicking it does: a message switches the chat to it, a **…N more** opens it. The *first* arrow press only conjures the cursor, on HEAD, there being nothing yet to move; it steps from the second press onward. **Esc** puts the cursor away, and **Backspace** closes an opened tool round. Nothing the cursor does changes the conversation; only Enter on a message, or a second click, moves you.
+**Tab** moves the keyboard between the message composer, the chat log and the graph, and **clicking anywhere in the graph** sends it there too. The pane holding it wears a blue mark, and only one ever does; with no mark showing anywhere, the keys are the chat log's, where they scroll.
+
+Once the graph has the keyboard it can be driven from there alone, pointer or no pointer. The keys below, and the ones named in the toolbar's tooltips, work while it holds them; a tooltip that names a key says so until it does. The **arrow keys** move a cursor, drawn as a dotted ring around the box it is on: down and up follow the conversation, left and right step along the siblings at that level. **Enter** does to the box under the cursor exactly what clicking it does: a message switches the chat to it, a **…N more** opens it. The *first* arrow press only conjures the cursor, on HEAD, there being nothing yet to move; it steps from the second press onward. **Esc** puts the cursor away, and **Backspace** closes an opened tool round.
+
+**The keyboard comes back on its own** when you are done in the graph, so leaving is never a key you have to remember. Switching to a message hands it to the chat log, that being where the gesture was taking you; and **Esc** with no cursor showing does the same, so a second **Esc** — one to put the cursor away, one to leave — walks back out the way you came in. It is the same escalation the composer and the search field use. Nothing the cursor does changes the conversation; only Enter on a message, or a second click, moves you.
 
 The arrow keys walk what is drawn, and one level of the graph can hold hundreds of chats with only a handful of them on screen. To go further along a level, **Ctrl+Left** and **Ctrl+Right** step between its siblings whether they are drawn or not, sliding the window to follow; **Ctrl+Shift** with either jumps ten at a time, and **Ctrl+Home** and **Ctrl+End** go to the ends. Those are the same keys the chat log uses on a message's siblings — the difference being that in the chat log they switch the conversation, while here they only move the cursor.
 
@@ -812,8 +816,8 @@ passes on anything it does not claim, so `F1` and the rest still work from insid
 |---|---|
 | `Any arrow` | Show the cursor, on HEAD — the first press only, before there is a cursor to move |
 | `Up` / `Down` / `Left` / `Right` | Then: move the cursor between boxes |
-| `Enter` | Do what clicking the box under the cursor does: preview it, or commit on the second press |
-| `Esc` | Put the cursor away |
+| `Enter` | Do what clicking the box under the cursor does: preview it, or commit on the second press — which also hands the keyboard back to the chat log |
+| `Esc` | Put the cursor away; press again, or once with no cursor showing, to leave for the chat log |
 | `Backspace` | Fold an opened tool round back up |
 | `Shift+Up` / `Shift+Down` / `Shift+Left` / `Shift+Right` | Pan |
 | `Ctrl+Left` / `Ctrl+Right` | Previous / next sibling at this level |

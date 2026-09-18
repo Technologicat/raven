@@ -112,6 +112,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                  on_commit: Optional[Callable[[str], None]] = None,
                  input_blocked: Optional[Callable[[], bool]] = None,
                  on_focus_requested: Optional[Callable[[], None]] = None,
+                 on_focus_released: Optional[Callable[[], None]] = None,
                  graph_text_fonts: Optional[xdotrenderer.TextFonts] = None,
                  icon_for: Optional[Callable[[], Optional[chatgraph.IconFor]]] = None,
                  thumbnail_for: Optional[Callable[[str, float], Optional[env]]] = None,
@@ -141,6 +142,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
                               taking the caret *away* from the composer, and where to park it is the app's
                               knowledge rather than this widget's. `None` leaves clicks changing nothing,
                               which is what a caller with no keyboard cycle wants.
+        `on_focus_released`: Called when the reader is done here, asking the caller to take the keyboard
+                             back — after committing, the gesture's whole point being to arrive at the
+                             message, and on an `Esc` pressed with no cursor showing. Where the keyboard
+                             then goes is the app's to decide, as above. `None` leaves this panel holding
+                             the keys, which is what a caller with no keyboard cycle wants.
         `graph_text_fonts`: The fonts for graph labels: a ladder of sizes per `(bold, italic)` face, from
                             which the renderer picks the face a pen asks for at the size nearest what it
                             is drawing. `None` (the default) loads the faces this view uses into
@@ -174,6 +180,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._on_preview = on_preview
         self._on_commit = on_commit
         self._on_focus_requested = on_focus_requested
+        self._on_focus_released = on_focus_released
         self._input_blocked = input_blocked
         self._icon_for = icon_for
         self._thumbnail_for = thumbnail_for
@@ -704,11 +711,18 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # has to commit, that being the capability opening the round exists to restore.
         elif key == dpg.mvKey_Back:
             self._collapse_round()
-        # Esc puts the cursor away. Nothing is undone by it -- the ring commits nothing on its own, being
-        # a place to stand rather than a change -- so this is "I am done pointing at things", and the next
-        # arrow starts again from HEAD.
+        # Esc backs out one step at a time, the way it does in the composer and the search field: first
+        # out of what is armed, then out of the pane. So the cursor goes away if there is one -- nothing is
+        # undone by that, the ring commits nothing on its own, being a place to stand rather than a change,
+        # and the next arrow starts again from HEAD -- and a second press, with nothing left to put away,
+        # hands the keyboard back. One key, escalating, rather than a separate key for leaving.
         elif key == dpg.mvKey_Escape:
-            self._set_cursor(None)
+            with self._lock:
+                pointing_at_something = self._cursor_name is not None
+            if pointing_at_something:
+                self._set_cursor(None)
+            else:
+                self._release_focus()
         # Numpad only, and the main row deliberately left out. `mvKey_Plus` is a pre-2.0 constant (61)
         # against a key that arrives as 602 -- measured, in `briefs/reference/dpg-keycodes.md` -- so a
         # branch on it never runs, and the main-row pair is separately known to misbehave on a Nordic
@@ -1586,6 +1600,16 @@ class DPGChatGraphPanel(gui_animation.Animation):
         if node_id is not None:
             self._commit(node_id)
 
+    def _release_focus(self) -> None:
+        """Ask the app to take the keyboard back, if it gave us a way to say so.
+
+        Not `self.has_keyboard = False`, which lights nothing elsewhere and leaves the keys belonging to
+        nobody: the app keeps one flag per pane and they only stay consistent when it clears the set
+        itself. So this says *we are done* and lets the app decide where that leaves the reader.
+        """
+        if self._on_focus_released is not None:
+            self._on_focus_released()
+
     def _commit(self, node_id: str) -> None:
         """Move HEAD to `node_id`, through the caller."""
         with self._lock:
@@ -1606,6 +1630,12 @@ class DPGChatGraphPanel(gui_animation.Animation):
         with self._lock:
             self._view_state.head_node_id = self.app_state["HEAD"]
         self.refresh()
+
+        # And hand the keyboard back, because committing is the reader saying *take me to that message*
+        # rather than *show it to me here*. Leaving the keys on the graph after that puts the arrows on
+        # the picture while the reader is looking at the chat log, which is a pane's worth away from where
+        # the gesture just sent them. Last, so an app that acts on this sees a picture already redrawn.
+        self._release_focus()
 
     def _update_cursor_buttons(self) -> None:
         """Enable each button that acts on the cursor exactly when the cursor gives it something to do,

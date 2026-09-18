@@ -1812,6 +1812,7 @@ with timer() as tim:
                     # Through a lambda, as `input_blocked` above is and for the same reason: both are
                     # defined further down this module than the panel is built.
                     on_focus_requested=lambda: _give_keyboard_to_graph(),
+                    on_focus_released=lambda: _give_keyboard_to_log(),
                     # `None` when the setting is off, which is what gives the label back the room the
                     # glyph's gutter reserves -- the panel asks per rebuild, so the switch takes
                     # effect on the next one rather than needing the app restarted.
@@ -2387,7 +2388,7 @@ chat_graph_hotkey_info = (env(key_indent=0, key="Ctrl+Shift+G", action_indent=0,
                           env(key_indent=1, key="Up / Down", action_indent=1, action="Then: move it along the branch", notes="Up the conversation, or down"),
                           env(key_indent=1, key="Left / Right", action_indent=1, action="Move it along the siblings", notes="Staying on one level"),
                           env(key_indent=0, key="Enter", action_indent=0, action="Look at it", notes="Again to switch. Opens a gap box"),
-                          env(key_indent=0, key="Esc", action_indent=0, action="Put the cursor away", notes="Without going anywhere"),
+                          env(key_indent=0, key="Esc", action_indent=0, action="Put the cursor away, then leave", notes="Leaves at once if none is shown"),
                           env(key_indent=0, key="Backspace", action_indent=0, action="Fold an opened tool round back up", notes="From anywhere inside the round"),
                           helpcard.hotkey_blank_entry,
                           env(key_indent=0, key="Ctrl+Right / Ctrl+Left", action_indent=0, action="Next / previous sibling", notes="Drawn or not; the window follows"),

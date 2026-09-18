@@ -72,7 +72,12 @@ class Calls:
     def __init__(self, app_state=None):
         self.previewed = []
         self.committed = []
+        self.focus_releases = 0
         self._app_state = app_state
+
+    def release_focus(self):
+        """Record that the panel asked for the keyboard to be taken back."""
+        self.focus_releases += 1
 
     def commit(self, node_id):
         """Record a commit, and move HEAD as `app.switch_to_chat_node` does."""
@@ -110,6 +115,7 @@ def panel(dpg_context):
             width=400, height=300,
             on_preview=calls.previewed.append,
             on_commit=calls.commit,
+            on_focus_released=calls.release_focus,
             show=True)
     built.refresh()
 
@@ -209,6 +215,46 @@ class TestPreview:
 # ---------------------------------------------------------------------------
 # Commit is the second act
 # ---------------------------------------------------------------------------
+
+class TestLeavingTheGraph:
+    """How the keyboard gets back out, which is the half a pane that can take focus also owes.
+
+    Two ways, and they are the same idea: the reader is done here. Committing says so by arriving at a
+    message — the chat log is where that gesture was going — and `Esc` says so outright, once there is
+    nothing left in the pane to put away first.
+    """
+
+    def test_committing_hands_the_keyboard_back(self, panel):
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["not_taken"])
+        assert calls.focus_releases == 0, \
+            "a preview is looking, not leaving, so this fixture cannot tell the commit apart from it"
+        click(built, ids["not_taken"])
+        assert calls.committed == [ids["not_taken"]] and calls.focus_releases == 1
+
+    def test_escape_puts_the_cursor_away_before_it_leaves(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built.handle_key(dpg.mvKey_Down)  # conjure the cursor, on HEAD
+        assert built._cursor_name is not None, \
+            "no cursor to put away, so this fixture cannot tell the first Esc from the second"
+        assert built.handle_key(dpg.mvKey_Escape) is True
+        assert built._cursor_name is None
+        assert calls.focus_releases == 0, "the press that cleared the cursor also left the pane"
+
+    def test_escape_with_no_cursor_leaves(self, panel):
+        built, forest, app_state, ids, calls = panel
+        assert built._cursor_name is None
+        assert built.handle_key(dpg.mvKey_Escape) is True
+        assert calls.focus_releases == 1
+
+    def test_two_presses_do_both(self, panel):
+        """The escalation the composer and the search field use, so `Esc` means one thing everywhere."""
+        built, forest, app_state, ids, calls = panel
+        built.handle_key(dpg.mvKey_Down)
+        built.handle_key(dpg.mvKey_Escape)
+        built.handle_key(dpg.mvKey_Escape)
+        assert built._cursor_name is None and calls.focus_releases == 1
+
 
 class TestCommit:
     def test_a_second_click_on_the_same_box_commits(self, panel):
