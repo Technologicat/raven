@@ -2403,7 +2403,7 @@ chat_graph_hotkey_info = (env(key_indent=0, key="Ctrl+Shift+G", action_indent=0,
                           env(key_indent=0, key="1", action_indent=0, action="Actual size (1:1)", notes="Main row or numpad"),
                           env(key_indent=0, key="Numpad + / Numpad -", action_indent=0, action="Zoom in / out", notes=""),
                           helpcard.hotkey_blank_entry,
-                          env(key_indent=0, key="Home", action_indent=0, action="Back to where you are", notes="Takes you to HEAD"),
+                          env(key_indent=0, key="Home", action_indent=0, action="Back to where you are", notes="To HEAD, cursor and all"),
                           env(key_indent=0, key="Alt+Left / Alt+Right", action_indent=0, action="Back / forward in view history", notes=""),
                           # The app's own key, listed here because from this view it is another way of moving:
                           # it takes you to the box wearing the NEW pill. The graph does not bind it — an
@@ -2618,8 +2618,9 @@ def _update_graph_search_row() -> None:
     # Lit by whether the step would go anywhere, not by whether there are matches at all -- which is the
     # chat log's rule, and here it carries more than tidiness. Standing off a match, the counter reads
     # `[–/58]` whether the reader is before the first or past the last, and being past the last is the
-    # ordinary case: a search run from a recent chat matches older ones. So a `Ctrl+F3` that could only
-    # ever do nothing was offered by a lit button, pressed, and read as broken.
+    # ordinary case: a search run from a recent chat matches older ones. So the greying is the only thing
+    # that says which end they are at, and a button lit by the wrong question offers a step that cannot
+    # move and then reads as broken when it does not.
     state = (counter, chat_graph_panel.search_can_go_back, chat_graph_panel.search_can_go_forward)
     if state == _graph_search_row_shown:
         return  # polled once a frame; the answer is the same on nearly all of them

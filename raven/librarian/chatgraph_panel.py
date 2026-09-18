@@ -622,8 +622,19 @@ class DPGChatGraphPanel(gui_animation.Animation):
         calls that and then claims what it wants. Clearing this one alone leaves the others lit, which is
         how a panel once kept its blue border while a dialog had the keys.
         """
+        was_live = self._has_keyboard
         self._has_keyboard = bool(value) and self._is_shown
         self._keyboard_mark.lit = self._has_keyboard
+        # The cursor stays where it is -- `Ctrl+F` to adjust the search term must not cost the reader their
+        # place -- so what changes is how its ring is drawn: live where the keys would move it, and a
+        # bookmark where they are elsewhere. Redrawn only when there is a ring on screen and the answer
+        # actually changed, this being one of the app's per-pane flags and written more often than it moves.
+        if self._has_keyboard != was_live:
+            with self._lock:
+                self._view_state.cursor_is_live = self._has_keyboard
+                ring_on_screen = self._cursor_name is not None
+            if ring_on_screen:
+                self.refresh()
 
     has_keyboard = property(fget=_get_has_keyboard, fset=_set_has_keyboard,
                             doc="Whether the keys are going to this panel. Set by the app, which owns the "
@@ -1323,11 +1334,16 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 walker = maybe_parent
 
     def go_to_head(self) -> None:  # noqa: D401 -- the docstring below is a description, not an imperative
-        """Abandon any preview and put the reader back at HEAD, at 1:1."""
+        """Abandon any preview and put the reader back at HEAD, at 1:1, with the cursor on it."""
         with self._lock:
             self._view_state.focus_node_id = None
+            head = self._view_state.head_node_id
         self._framed = True  # this is a framing of its own; the refresh below must not override it
-        self._set_cursor(None)  # which redraws
+        # On HEAD rather than nowhere. The preview -- the branch a second click would commit to -- is
+        # abandoned by the line above, which is the whole of what this gesture asks to be rid of; the
+        # cursor is where the reader stands, and "take me back" should leave them able to move from where
+        # it put them. Clearing it would spend their next arrow conjuring it on the box they are on.
+        self._set_cursor(head)  # which redraws
 
         self._remember_view()  # returning to HEAD is a place too, and one worth being able to leave again
 

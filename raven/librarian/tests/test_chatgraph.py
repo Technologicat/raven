@@ -8,6 +8,7 @@ The module needs no DearPyGui: the xdot package imports its widget lazily, and e
 `Graph`, `Node`, the shapes -- is plain data.
 """
 
+import colorsys
 import itertools
 import math
 import re
@@ -738,6 +739,36 @@ class TestEmphasis:
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply,
                                                             cursor_name=user))
         assert len(self._rings(built, user)) == 1
+
+    def _ring_colors(self, built, node_id):
+        """Every dotted ring on `node_id`, by colour — either of the two the cursor can wear."""
+        node = built.graph.get_node_by_name(node_id)
+        return [s.pen.color for s in node.shapes
+                if isinstance(s, xdotgraph.PolygonShape) and s.pen.dash == chatgraph._PREVIEW_DOTS]
+
+    def test_the_ring_says_whether_the_keys_would_move_it(self, conversation):
+        """The cursor outlives the keyboard leaving — `Ctrl+F` to fix a typo must not cost the reader their
+        place — so the ring stays and changes colour, rather than going away and coming back."""
+        forest, system, greeting, user, reply = conversation
+        assert chatgraph.PREVIEW_COLOR != chatgraph.PREVIEW_COLOR_BOOKMARK, \
+            "the two rings are one colour, so this fixture cannot tell a live cursor from a left one"
+
+        live = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply, cursor_name=user))
+        left = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply, cursor_name=user,
+                                                           cursor_is_live=False))
+        assert self._ring_colors(live, user) == [chatgraph.PREVIEW_COLOR]
+        assert self._ring_colors(left, user) == [chatgraph.PREVIEW_COLOR_BOOKMARK], \
+            "the ring went on claiming the keys would move it"
+
+    def test_the_left_ring_is_the_same_ring(self, conversation):
+        """Desaturated, not dimmed away: it still has to be findable, being where coming back resumes."""
+        forest, system, greeting, user, reply = conversation
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply, cursor_name=user,
+                                                            cursor_is_live=False))
+        assert len(self._ring_colors(built, user)) == 1, "the cursor stopped being drawn at all"
+        live_hue = colorsys.rgb_to_hls(*chatgraph.PREVIEW_COLOR[:3])[0]
+        left_hue = colorsys.rgb_to_hls(*chatgraph.PREVIEW_COLOR_BOOKMARK[:3])[0]
+        assert left_hue == pytest.approx(live_hue), "the hue moved, so it reads as a different mark"
         assert self._rings(built, reply) == [], "the ring is on every box, so it marks nothing"
 
     def test_the_ring_sits_outside_the_box_and_is_dotted(self, conversation):

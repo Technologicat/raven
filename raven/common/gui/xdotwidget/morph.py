@@ -364,10 +364,11 @@ def _pen_between(old: Pen, new: Pen, t: float) -> Pen:
 def _shape_between(old: Shape, new: Shape, dx: float, dy: float, t: float) -> Shape:
     """The shape partway from `old`, moved by `(dx, dy)`, to `new`. The two must share a `_signature`.
 
-    What a shape stands on it stands on throughout: an in-between is a fresh object, and one built without
-    that answer falls back to the element's, which is the single fill a carrier can offer. So a gap box's
-    label -- which stands on nothing, and is drawn quiet because of it -- came out corrected for the pill
-    backing beside it, for as long as the transition ran and not afterwards.
+    What a shape stands on it stands on throughout. An in-between is a fresh object, and one built without
+    that answer falls back to the element's -- the single fill a carrier can offer, which is exactly what
+    a shape-level answer exists to overrule. A gap box's label stands on nothing and is drawn quiet
+    because of it; given the pill backing beside it instead, it is corrected against that for as long as
+    the transition runs, and reads correctly the moment it settles.
     """
     made = _interpolated(old, new, dx, dy, t)
     if made is not new:  # the fallback below hands `new` straight back, and it already knows

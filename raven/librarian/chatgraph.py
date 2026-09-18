@@ -19,6 +19,7 @@ box, which is what `Viewport.zoom_to_fit` expects.
 __all__ = ["LINE_COLOR",
            "GAP_LINE_COLOR",
            "PREVIEW_COLOR",
+           "PREVIEW_COLOR_BOOKMARK",
 
            "MeasureText",
            "IconFor",
@@ -110,9 +111,9 @@ _TOOL_HUE = 33  # orange, as the log's TOOL
 _SYSTEM_HUE = 122  # green, as the log's SYSTEM
 
 # By role, for the roles that have a colour of their own. Anything not here is the conversation itself and
-# takes `_BRANCH_HUE`. A table rather than a conditional because it used to be one, and the conditional had
-# no system case at all — system was green only while the *branch* hue happened to be green, so the moment
-# that moved, the system prompt moved with it and the design note saying otherwise quietly became false.
+# takes `_BRANCH_HUE`. A table rather than a conditional, which cannot express the system case at all:
+# keyed on the branch hue, system is green only while the branch happens to be, so moving the branch moves
+# the system prompt with it and the design note saying otherwise quietly becomes false.
 _ROLE_HUES = {"system": _SYSTEM_HUE, "tool": _TOOL_HUE}
 
 # Orange needs more of both than the others to read as orange at all. Dark, muted orange is *brown* — it
@@ -173,6 +174,22 @@ GAP_LINE_COLOR: xdotconstants.Color = (0.45, 0.45, 0.45, 1.0)
 # The ring around the box a click has selected. A colour of its own, and used for nothing else, because
 # the two things it must not be mistaken for are both already on screen: the hover highlight, and HEAD.
 PREVIEW_COLOR: xdotconstants.Color = (0.10, 0.35, 0.80, 1.0)
+
+# And the same ring while the keys are somewhere else. The cursor outlives the keyboard leaving -- it is
+# where the reader was, and `Ctrl+F` to adjust the search term should not cost them their place -- so what
+# needs saying is that the ring is no longer a thing to act from. Desaturated rather than darkened, which
+# is what an unfocused selection does everywhere else, and it keeps the hue that says *cursor* while
+# dropping the one property that was claiming *live*.
+_BOOKMARK_SATURATION = 0.3  # of the live ring's
+
+
+def _desaturated(color: xdotconstants.Color, factor: float) -> xdotconstants.Color:
+    """Return `color` with its saturation scaled by `factor`, its hue and lightness untouched."""
+    hue, lightness, saturation = colorsys.rgb_to_hls(*color[:3])
+    return (*colorsys.hls_to_rgb(hue, lightness, saturation * factor), color[3])
+
+
+PREVIEW_COLOR_BOOKMARK: xdotconstants.Color = _desaturated(PREVIEW_COLOR, _BOOKMARK_SATURATION)
 
 # Dash pattern for the outline of a gap, in graph units: on, off. A gap stands for content that is not
 # here, and a broken outline says that before any label is read.
@@ -534,6 +551,11 @@ class ViewState:
                    the two coincide; a gap box has a synthesised name, and can hold the cursor like any
                    other box. It has to: the boxes a keyboard most needs to reach are the gaps, a run of
                    hidden siblings being reachable through nothing else.
+    `cursor_is_live`: Whether the keys would move the cursor right now. The cursor is *not* cleared when
+                      the keyboard goes elsewhere — it is where the reader was, and coming back should
+                      resume there rather than start over — so while it is not live the ring marks a place
+                      rather than offering one to act from, and is drawn desaturated to say which it is.
+                      The same distinction a selection draws everywhere else when its pane loses focus.
     `focus_node_id`: The node the picture is drawn around, defaulting to `head_node_id`. These come apart
                      while previewing: clicking a node on another branch re-lays the graph out around it
                      and refreshes the siblings near it, without moving HEAD. Browsing the multiverse
@@ -562,6 +584,7 @@ class ViewState:
     head_node_id: str
     focus_node_id: Optional[str] = None
     cursor_name: Optional[str] = None
+    cursor_is_live: bool = True
     new_chat_node_id: Optional[str] = None
     expanded_tool_turns: Set[str] = dataclasses.field(default_factory=set)
     sibling_focus: Dict[str, str] = dataclasses.field(default_factory=dict)
@@ -678,11 +701,10 @@ class LayoutConfig:
     # Costs nothing for a small attachment: the preparation never upscales, so a source below this size
     # is prepared at its own and the chain simply starts lower.
     #
-    # **Not a cap on how large a card is drawn**, which is what it was until 2026-09-07 and which failed in
-    # a way neither of us predicted. We both expected a zoomed-in thumbnail to go blurry; capping the
-    # *drawn* size instead meant it stopped growing, so a card zoomed well in was a huge empty frame with a
-    # small sharp stamp marooned in the middle of it. The frame is a polygon and scaled with the zoom like
-    # everything else; only the picture was pinned.
+    # **Not a cap on how large a card is drawn**, which fails in a way that does not look like blurriness
+    # and is worth knowing before reaching for it. Capping the *drawn* size stops the picture growing while
+    # its frame goes on scaling, the frame being a polygon like everything else — so a card zoomed well in
+    # is a huge empty frame with a small sharp stamp marooned in the middle of it.
     #
     # A cap is right for the role glyph, whose asset is shipped at its display size and has nothing better
     # to show. An attachment's source image is large, so the answer to "the card is bigger now" is a finer
@@ -1437,8 +1459,8 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, state: "View
     A message with no text is not necessarily an empty one, and the three ways it happens are worth
     telling apart. A turn that asked for a tool carries its request and no prose; a thinking model that
     was interrupted carries a reasoning trace and no answer; and a turn stopped before either carries
-    nothing at all. Drawn as one `[empty]` box, as they were until 2026-09-03, the commonest of the three
-    reads as a tree full of replies that never happened.
+    nothing at all. Drawn as one `[empty]` box, the commonest of the three reads as a tree full of replies
+    that never happened.
     """
     width = config._get_effective_label_width(has_role_icon, has_attachments)
     speaker_width = config._get_effective_speaker_width(has_role_icon, has_attachments)
@@ -1829,12 +1851,23 @@ class _Row:
 # --------------------------------------------------------------------------------
 # Emitting shapes
 
+def _preview_ring_color(name: str, state: ViewState) -> Optional[xdotconstants.Color]:
+    """Return the colour of the cursor's ring on the box named `name`, or `None` where it wears none.
+
+    One place, because every box asks the same two questions in the same order and a box answering them
+    differently from its neighbour is a picture with two cursors in it.
+    """
+    if name != state.cursor_name:
+        return None
+    return PREVIEW_COLOR if state.cursor_is_live else PREVIEW_COLOR_BOOKMARK
+
+
 def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                 label_lines: Sequence[Sequence[_Run]], fill: Optional[xdotconstants.Color],
                 dashed: bool, pills: Tuple[str, ...],
                 speaker: Optional[str] = None, sub_label: Optional[str] = None,
                 measure_text: Optional[MeasureText] = None,
-                emphasized: bool = False, previewed: bool = False,
+                emphasized: bool = False, preview_ring: Optional[xdotconstants.Color] = None,
                 role_icon: Optional[Union[int, str]] = None,
                 attachments: Sequence[Optional[Union[int, str]]] = (),
                 hidden_attachments: int = 0,
@@ -1853,9 +1886,11 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
                  this says how deep they go.
     `emphasized`: Draw the outline heavy. This is HEAD, and where the reader actually is deserves to be
                   the loudest thing in the picture.
-    `previewed`: Draw a dotted ring outside the box. This is the cursor — the box a click or `Enter` acts
-                 on — and on a message it is also the branch a second click would commit to, dotted
-                 because that selection is tentative until the second one.
+    `preview_ring`: The colour of the dotted ring outside the box, or `None` for no ring. The ring is the
+                    cursor — the box a click or `Enter` acts on — and on a message it is also the branch a
+                    second click would commit to, dotted because that selection is tentative until the
+                    second one. Which colour says whether the keys would move it; `_preview_ring_color`
+                    is where that is decided, so no caller has to know.
     `role_icon`: DPG texture for who is speaking, straddling the left edge. `None` for a gap, and for a
                  role no icon was supplied for.
     `attachments`: One `Thumbnail` per attachment this message carries and this box shows, straddling the
@@ -1888,12 +1923,12 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
         shapes.append(xdotgraph.PolygonShape(fill_pen, corners, filled=True))
     shapes.append(xdotgraph.PolygonShape(outline_pen, corners, filled=False))
 
-    if previewed:
+    if preview_ring is not None:
         # A ring outside the box rather than a change to the box itself. The box's own outline is already
         # saying something -- solid or dashed, heavy for HEAD -- and a selection has to be legible on top
         # of every combination of those without overwriting any of them.
         ring_pen = xdotgraph.Pen()
-        ring_pen.color = PREVIEW_COLOR
+        ring_pen.color = preview_ring
         ring_pen.linewidth = config.preview_line_width
         ring_pen.dash = _PREVIEW_DOTS  # dotted, because the selection is tentative until a second click
         offset = config.preview_ring_offset
@@ -2617,7 +2652,7 @@ def build(datastore: chattree.Forest,
                                  sub_label=sub_label,
                                  measure_text=measure_text,
                                  emphasized=(node_id == state.head_node_id),
-                                 previewed=(node_id == state.cursor_name),
+                                 preview_ring=_preview_ring_color(node_id, state),
                                  role_icon=decoration.role_icon,
                                  attachments=decoration.attachments,
                                  hidden_attachments=decoration.hidden_attachments,
@@ -2659,7 +2694,7 @@ def build(datastore: chattree.Forest,
                     gap_pills = ("HEAD",) if (set(slot.hidden) & current_branch) else ()
                     shapes = _box_shapes(x, y, width, config, _label_runs(_plain_lines(label)), fill=None, dashed=True,
                                          pills=gap_pills, measure_text=measure_text,
-                                         previewed=(name == state.cursor_name),
+                                         preview_ring=_preview_ring_color(name, state),
                                          match_caption=_match_caption(ref.match_counts, config)
                                          if ref.holds_match else ())
                 else:
@@ -2697,7 +2732,7 @@ def build(datastore: chattree.Forest,
                                                      pills=("HEAD",) if hides_head else (),
                                                      sub_label=sub_label,
                                                      measure_text=measure_text,
-                                                     previewed=(name == state.cursor_name),
+                                                     preview_ring=_preview_ring_color(name, state),
                                                      match_caption=_match_caption(ref.match_counts, config)
                                                      if ref.holds_match else ()),
                                   internal_name=name)

@@ -165,6 +165,8 @@ When the AI calls tools, each result it gets back is a message of its own, and a
 
 Once the graph has the keyboard it can be driven from there alone, pointer or no pointer. The keys below, and the ones named in the toolbar's tooltips, work while it holds them. The tooltips name their keys whether it holds them or not, so a graph key that seems dead usually means the blue mark is somewhere else. The **arrow keys** move a cursor, drawn as a dotted ring around the box it is on: down and up follow the conversation, left and right step along the siblings at that level. **Enter** does to the box under the cursor exactly what clicking it does: a message switches the chat to it, a **…N more** opens it. The *first* arrow press only conjures the cursor, on HEAD, there being nothing yet to move; it steps from the second press onward. **Esc** puts the cursor away, and **Backspace** closes an opened tool round.
 
+**The ring stays where you left it** when the keyboard goes elsewhere — stepping away to fix a search term should not cost you your place — but it goes pale while it waits, so you can tell the box the arrows would move from the box you were last looking at. It brightens again the moment the graph has the keys.
+
 **The keyboard comes back on its own** when you are done in the graph, so leaving is never a key you have to remember. Switching to a message hands it to the chat log, that being where the gesture was taking you; and **Esc** with no cursor showing does the same, so a second **Esc** — one to put the cursor away, one to leave — walks back out the way you came in. It is the same escalation the composer and the search field use. Nothing the cursor does changes the conversation; only Enter on a message, or a second click, moves you.
 
 The arrow keys walk what is drawn, and one level of the graph can hold hundreds of chats with only a handful of them on screen. To go further along a level, **Ctrl+Left** and **Ctrl+Right** step between its siblings whether they are drawn or not, sliding the window to follow; **Ctrl+Shift** with either jumps ten at a time, and **Ctrl+Home** and **Ctrl+End** go to the ends. Those are the same keys the chat log uses on a message's siblings — the difference being that in the chat log they switch the conversation, while here they only move the cursor.
@@ -828,7 +830,7 @@ passes on anything it does not claim, so `F1` and the rest still work from insid
 | `B` | Fit the current branch |
 | `1` (main row or numpad) | Actual size (1:1) |
 | `Numpad +` / `Numpad -` | Zoom in / out |
-| `Home` | Back to where you are (HEAD) |
+| `Home` | Back to where you are (HEAD), with the cursor on it |
 
 ### Hidden debug keys
 

@@ -216,6 +216,41 @@ class TestPreview:
 # Commit is the second act
 # ---------------------------------------------------------------------------
 
+class TestTheCursorOutlivesTheKeyboard:
+    """Leaving the graph keeps the reader's place and stops the ring claiming to be live.
+
+    The gesture this is for: search, step with `Ctrl+F3`, then `Ctrl+F` to adjust the query — which takes
+    the keys to the search field while the ring stays on a node in the graph. Clearing it would cost the
+    reader their place over a typo; leaving it unchanged would say the arrows still move it. So it stays,
+    desaturated.
+    """
+
+    @staticmethod
+    def ring_colors(panel_obj, node_name):
+        node = panel_obj._chat_graph.graph.get_node_by_name(node_name)
+        return [shape.pen.color for shape in node.shapes
+                if isinstance(shape, xdotgraph.PolygonShape) and shape.pen.dash == chatgraph._PREVIEW_DOTS]
+
+    def test_the_keys_leaving_recolours_the_ring_rather_than_clearing_it(self, panel):
+        built, _forest, _app_state, ids, _calls = panel
+        built.has_keyboard = True
+        built._set_cursor(ids["taken"])
+        assert self.ring_colors(built, ids["taken"]) == [chatgraph.PREVIEW_COLOR], \
+            "the cursor is not live to begin with, so this fixture cannot tell the two states apart"
+
+        built.has_keyboard = False
+        assert built._cursor_name == ids["taken"], "leaving the graph cost the reader their place"
+        assert self.ring_colors(built, ids["taken"]) == [chatgraph.PREVIEW_COLOR_BOOKMARK]
+
+    def test_coming_back_makes_it_live_again(self, panel):
+        built, _forest, _app_state, ids, _calls = panel
+        built.has_keyboard = True
+        built._set_cursor(ids["taken"])
+        built.has_keyboard = False
+        built.has_keyboard = True
+        assert self.ring_colors(built, ids["taken"]) == [chatgraph.PREVIEW_COLOR]
+
+
 class TestLeavingTheGraph:
     """How the keyboard gets back out, which is the half a pane that can take focus also owes.
 
@@ -292,15 +327,23 @@ class TestCommit:
         click(built, ids["taken"])
         assert calls.committed == [ids["taken"]], "the third click committed again"
 
-    def test_going_home_abandons_the_preview(self, panel):
+    def test_going_home_abandons_the_preview_and_lands_the_cursor(self, panel):
+        """It abandons the *preview* — the branch a second click would commit to — and not the cursor.
+
+        Two separable things, and only the first is what "take me back" asks to be rid of. The cursor
+        lands on HEAD, so the reader can move from where they were put; clearing it instead would spend
+        their next arrow press conjuring it on the box they are already standing on.
+        """
         built, forest, app_state, ids, calls = panel
         click(built, ids["not_taken"])
-        assert built._view_state.cursor_name, "nothing was previewed, so clearing it proves nothing"
+        assert built._view_state.cursor_name == ids["not_taken"], \
+            "nothing was previewed, so moving it proves nothing"
 
         built.go_to_head()
         assert built._chat_graph.spine == tuple(forest.linearize_up(app_state["HEAD"]))
-        assert built._cursor_name is None, "the preview survived, so a click would commit it"
-        assert built._view_state.cursor_name is None, "the ring is still drawn"
+        assert built._view_state.focus_node_id is None, "the preview survived"
+        assert built._cursor_name == app_state["HEAD"], "landed at HEAD with nothing to move from"
+        assert calls.committed == [], "going home committed the branch it had been previewing"
 
     def test_going_home_flashes_where_it_landed(self, panel):
         # The view slides and the zoom changes together, and HEAD is parked off-centre on purpose, so
@@ -463,9 +506,16 @@ class TestFraming:
             "the view did not move, so this fixture cannot tell a re-framing from doing nothing"
 
         built.go_to_head()
-        assert (viewport.zoom.target, viewport.pan_x.target,
-                viewport.pan_y.target) == pytest.approx(opened), \
+        assert (viewport.zoom.target, viewport.pan_x.target) == pytest.approx(opened[:2]), \
             "the crosshair puts the reader somewhere other than where the panel opened"
+        # Vertically, within the ring's own offset rather than exactly. Going home lands the cursor on
+        # HEAD, whose ring hangs that far below the bottom row, so the view may scroll that much further
+        # down than it could with no ring drawn — the framing is the same request and the *clamp* differs.
+        # The opening view is not stable under that either way: the reader's first arrow press conjures
+        # the same ring on the same box.
+        ring_offset = chatgraph.LayoutConfig().preview_ring_offset
+        assert abs(viewport.pan_y.target - opened[2]) <= ring_offset + 1e-6, \
+            f"vertically {viewport.pan_y.target} against {opened[2]}, further than a ring can explain"
 
     def test_later_rebuilds_do_not_reframe(self, panel):
         # The picture must stay still while a reply arrives. The tree gains a node per round, so a re-fit
