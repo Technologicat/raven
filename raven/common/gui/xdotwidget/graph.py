@@ -131,6 +131,10 @@ class Pen:
         linewidth: Line width in points.
         fontsize: Font size in pixels.
         dash: Dash pattern tuple (empty for solid line).
+        bold, italic: Which face to draw text in. A renderer that was given no font for the face falls
+                      back to the regular one, so these are safe to set whatever the caller loaded.
+                      A parsed xdot graph never sets them: the format's font opcode carries a family
+                      name, and this widget does not resolve one.
     """
 
     DEFAULT_COLOR: Color = (0.0, 0.0, 0.0, 1.0)
@@ -142,6 +146,8 @@ class Pen:
         self.linewidth: float = 1.0
         self.fontsize: float = 14.0
         self.dash: tuple[float, ...] = ()
+        self.bold: bool = False
+        self.italic: bool = False
 
     def copy(self) -> "Pen":
         """Create and return a copy of this pen."""
@@ -151,6 +157,8 @@ class Pen:
         pen.linewidth = self.linewidth
         pen.fontsize = self.fontsize
         pen.dash = self.dash
+        pen.bold = self.bold
+        pen.italic = self.italic
         return pen
 
     def highlighted_initial(self) -> "Pen":

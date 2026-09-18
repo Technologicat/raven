@@ -12,7 +12,7 @@ import logging
 import threading
 import time
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ from .graph import Graph, Node, Edge, Element, PolygonShape, get_highlight_color
 from .highlight import HighlightState
 from .hitdetect import hit_test_screen
 from .parser import parse_xdot
-from .renderer import render_graph, render_scene, color_to_dpg, set_dark_mode
+from .renderer import render_graph, render_scene, color_to_dpg, set_dark_mode, TextFonts
 from .search import SearchState
 from .viewport import Viewport
 
@@ -69,7 +69,7 @@ class XDotWidget(gui_animation.Animation):
                  input_blocked: Callable[[], bool] | None = None,
                  text_compaction_callback: Callable[[str, float], str] | None = None,
                  highlight_fade_duration: float = 1.0,
-                 graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
+                 graph_text_fonts: TextFonts | None = None,
                  mouse_wheel_zoom_factor: float = 1.25,
                  clamp_pan_to_graph: bool = False,
                  animate_view: bool = True,
@@ -110,6 +110,12 @@ class XDotWidget(gui_animation.Animation):
                                      a node won't fit inside that node visually.
                                      Receives (text, available_width_px).
                                      Must return compacted text.
+        `graph_text_fonts`: The fonts to draw labels in: a `renderer.TextFonts`, which is a font ladder per
+                            `(bold, italic)` face. A caller that loaded only the regular family passes
+                            `{(False, False): [...]}` and gets everything drawn in it, a pen asking for a
+                            face that is missing falling back to that one. Anything measuring these labels
+                            must resolve the font through `renderer.nearest_font` as the renderer does, or
+                            it measures against a font other than the one the glyphs land in.
         `mouse_wheel_zoom_factor`: Zoom factor per mouse wheel notch. 1.25 needs three notches to double,
                                    which is about the coarsest that still feels controllable; the earlier
                                    1.1 took seven and read as an unresponsive wheel.

@@ -670,11 +670,15 @@ def main() -> int:
 
     # Load extra fonts for graph text at various zoom levels.
     # The renderer picks whichever atlas size is closest to the rendered size.
-    graph_text_fonts = []
+    #
+    # The regular face only. A pen can ask for bold or italic and falls back to this, and nothing here ever
+    # asks: the parser reads the font name out of an xdot `F` opcode and discards it, so a parsed graph's
+    # labels carry no face. Loading the other three would cost their atlases for nothing until it does.
+    graph_text_fonts = {(False, False): []}
     for size in config.GRAPH_TEXT_FONT_SIZES:
         _key, font_id = guiutils.load_extra_font(
             themes_and_fonts, size, "OpenSans", "Regular")
-        graph_text_fonts.append((size, font_id))
+        graph_text_fonts[(False, False)].append((size, font_id))
 
     # Initialize file dialog (must be after dpg.setup_dearpygui)
     global _filedialog_open

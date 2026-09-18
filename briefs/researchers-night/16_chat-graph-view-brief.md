@@ -1321,9 +1321,33 @@ added one at a time. `MeasureText` and `_text_width` grow the same two flags, sp
 measured against the font they are drawn in. All four variants ship already and `get_font_path` names them,
 so each family is one entry.
 
-**Regular and Bold go in first, the other two once that works** (Juha, 2026-09-18) — both are wanted. One
-extra family at a time also keeps the atlas experiment legible: 64 px bold is in the size range where Raven
-has seen silent glyph loss, and if it does blow up, a reproduction of that is worth having (Juha).
+**All four faces are loaded**, though the boxes reach for two of them so far. The application already
+carries every face — the Markdown renderer builds each lazily per size — so what is new is those faces at
+the graph's own ladder rather than the faces themselves, and a caller that later paints a run italic finds
+the font already there.
+
+**Raven has two font problems and this touches the second, which took three tries to state** (corrected
+twice by Juha, 2026-09-18):
+
+- **The overflow at several hundred pixels is a different and answered thing.** Its remedy was to load only
+  the codepoints actually needed, which `raven-conference-timer` has run on since.
+- **The one still open is the intermittent drop at ordinary sizes** — `TODO_DEFERRED.md` → *"The Markdown
+  renderer drops text"*: unexplained, settled per launch, with the font atlas as its standing suspect. This
+  work adds twenty `(face, size)` rungs to a process that already has an unexplained fault around building
+  them. A reason to watch rather than to hold back, and a run that does drop glyphs is a specimen, which is
+  the thing that cannot be scheduled.
+
+**And the atlas does not mind the ladder**, measured rather than argued: `investigations/graph-font-atlas/`.
+All twenty rungs measure, widths scale with the atlas size to a fraction of a percent, bold comes out ~7.5%
+wider than regular and italic slightly narrower, and nothing falls back to another face. A face loads in
+0.1–0.2 ms at any size up to 1024 px, which is only possible if rasterization follows what gets *drawn*
+rather than covering the font's whole range — so an estimate made here before the probes ran, bounding the
+four faces at ~25 M pixels by charging every glyph an em square at every rung, was a bound on something that
+does not happen.
+
+**What the probes cannot say is that glyphs rasterize**, `get_text_size` answering from the font's own
+metrics; the tell is that Greek and Cyrillic measure correctly at 1024 px in a process that has drawn
+neither. A missing glyph is silent and looks exactly like this. That part belongs to the first live look.
 
 `raven-xdot-viewer` is the other caller of the widget and is in the blast radius.
 

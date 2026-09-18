@@ -5,11 +5,12 @@ DearPyGUI's drawlist primitives.
 """
 
 __all__ = ["set_dark_mode", "get_dark_mode", "color_to_dpg",
+           "FontLadder", "TextFonts", "nearest_font",
            "render_graph", "render_scene"]
 
 import colorsys
 import math
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 
 import dearpygui.dearpygui as dpg
 
@@ -27,6 +28,35 @@ from .viewport import Viewport
 # and dark mode is an app-wide display concern. If multiple widget instances
 # are ever needed, this should move into the widget or renderer instance.
 _dark_mode: bool = False
+
+
+# `(atlas size in px, DPG font id)` rungs, one per size the text may be drawn at. A renderer picks the
+# rung nearest the size it is about to draw, DPG filtering the atlas bilinearly, so the least scaling is
+# the sharpest text.
+FontLadder = Sequence[tuple[float, int | str]]
+
+# `(bold, italic)` -> the ladder for that face. `(False, False)` is the one a caller must supply; a face it
+# did not load falls back to that, so loading only the regular family still draws everything.
+#
+# A mapping rather than one parameter per face: the faces arrive one at a time as a caller finds a use for
+# them, and a parameter list that grows by one each time is a signature nobody can read.
+TextFonts = Mapping[tuple[bool, bool], FontLadder]
+
+
+def nearest_font(text_fonts: TextFonts | None, size_px: float,
+                 bold: bool = False, italic: bool = False) -> tuple[float, int | str] | None:
+    """Return the `(atlas size, DPG font id)` to draw `size_px` text in the face `(bold, italic)`, or `None` if there is none.
+
+    The one place that resolves a size and a face to a font. Anything *measuring* text has to call this too,
+    or it measures against a different font than the one the text is drawn in — and a measured width that
+    is off by a few pixels shows up as glyphs displaced by half the error.
+    """
+    if not text_fonts:
+        return None
+    ladder = text_fonts.get((bold, italic)) or text_fonts.get((False, False))
+    if not ladder:
+        return None
+    return min(ladder, key=lambda rung: abs(rung[0] - size_px))
 
 
 def set_dark_mode(enabled: bool) -> None:
@@ -205,7 +235,7 @@ def _render_text_shape(drawlist: int | str,
                        viewport: Viewport,
                        pen: Pen,
                        text_compaction_cb: Callable | None = None,
-                       graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
+                       graph_text_fonts: TextFonts | None = None,
                        element_fillcolor: Color | None = None,
                        opacity: float = 1.0) -> None:
     """Render a text shape."""
@@ -262,12 +292,10 @@ def _render_text_shape(drawlist: int | str,
     # DPG's draw_text size parameter is in pixels
     item = dpg.draw_text((x, y), text, size=font_size_px, color=color, parent=drawlist)
 
-    # Bind the font whose atlas size is closest to the rendered size.
-    # DPG uses bilinear filtering on font atlas textures, so minimal
-    # scaling ratio → sharpest text.
-    if graph_text_fonts:
-        best_font = min(graph_text_fonts, key=lambda sf: abs(sf[0] - font_size_px))[1]
-        dpg.bind_item_font(item, best_font)
+    # The face the pen asks for, at the atlas size nearest what is being drawn.
+    maybe_rung = nearest_font(graph_text_fonts, font_size_px, pen.bold, pen.italic)
+    if maybe_rung is not None:
+        dpg.bind_item_font(item, maybe_rung[1])
 
 
 def _render_ellipse_shape(drawlist: int | str,
@@ -502,7 +530,7 @@ def _render_shape(drawlist: int | str,
                   element: Element | None,
                   highlight_intensities: dict[Element, float],
                   text_compaction_cb: Callable | None,
-                  graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
+                  graph_text_fonts: TextFonts | None = None,
                   element_fillcolor: Color | None = None,
                   opacity: float = 1.0) -> None:
     """Render a single shape."""
@@ -553,7 +581,7 @@ def render_graph(drawlist: int | str,
                  viewport: Viewport,
                  highlight_intensities: dict[Element, float] | None = None,
                  text_compaction_cb: Callable | None = None,
-                 graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
+                 graph_text_fonts: TextFonts | None = None,
                  background_color: DPGColor | None = None) -> None:
     """Render a graph to a DPG drawlist.
 
@@ -563,9 +591,9 @@ def render_graph(drawlist: int | str,
     `highlight_intensities`: Per-element highlight intensity {element: [0,1]}.
     `text_compaction_cb`: Optional callback for text compaction.
                           Signature: (text: str, available_width: float) -> str
-    `graph_text_fonts`: Optional list of (atlas_size_px, dpg_font_id) tuples.
-                         The renderer picks the font whose atlas size is closest
-                         to the rendered text size, for sharpest results.
+    `graph_text_fonts`: Optional `TextFonts`: the font ladder per `(bold, italic)` face. The renderer
+                         picks the face each pen asks for, at the atlas size closest to the rendered
+                         text size, for sharpest results. See `nearest_font`.
     `background_color`: Optional DPG color for the graph background rectangle.
     """
     render_scene(drawlist, viewport,
@@ -585,7 +613,7 @@ def render_scene(drawlist: int | str,
                  nodes: Iterable[tuple[Node, Placement]],
                  highlight_intensities: dict[Element, float] | None = None,
                  text_compaction_cb: Callable | None = None,
-                 graph_text_fonts: Sequence[tuple[float, int | str]] | None = None,
+                 graph_text_fonts: TextFonts | None = None,
                  background_color: DPGColor | None = None) -> None:
     """Render elements that need not belong to one graph, each at its own `Placement`.
 

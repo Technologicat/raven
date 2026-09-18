@@ -251,7 +251,11 @@ _LABEL_ADVANCE_PER_CHAR = 0.5
 # atlas does not exist until a frame has been rendered, so anything drawing before the first one -- or in
 # a test suite, which renders none -- gets the estimate and no complaint. An exception means something
 # actually went wrong, and is logged.
-MeasureText = Callable[[str, float], Optional[float]]
+#
+# `(text, font size, bold, italic) -> width`. The face is part of the question because a run painted bold
+# is drawn in another font, and a width measured in the wrong one puts the runs beside it at the wrong
+# offsets.
+MeasureText = Callable[[str, float, bool, bool], Optional[float]]
 
 # `(role, persona) -> DPG texture`, for the speaker glyph on a message box. `None` draws no glyph.
 #
@@ -299,17 +303,21 @@ class Thumbnail:
 
 
 def _text_width(text: str, font_size: float,
-                measure_text: Optional[MeasureText], advance_per_char: float) -> float:
-    """Return how wide `text` is at `font_size`, measured where that is possible and estimated where not."""
+                measure_text: Optional[MeasureText], advance_per_char: float,
+                bold: bool = False, italic: bool = False) -> float:
+    """Return how wide `text` is at `font_size` in the face `(bold, italic)`, measured where that is possible and estimated where not."""
     if measure_text is not None:
         try:
-            measured = measure_text(text, font_size)
+            measured = measure_text(text, font_size, bold, italic)
         except Exception:  # noqa: BLE001 -- a measurer that fails must not cost the whole picture
             logger.warning(f"_text_width: measuring '{text}' failed; falling back to an estimate",
                            exc_info=True)
         else:
             if measured is not None:
                 return measured
+    # The estimate is face-blind: one advance per character, whichever face was asked for. Bold is a little
+    # wider than regular, so a label split into runs comes out with slightly uneven gaps between them where
+    # no measurer is available — the same fallback a whole label already tolerates, failing more visibly.
     return font_size * advance_per_char * len(text)
 
 

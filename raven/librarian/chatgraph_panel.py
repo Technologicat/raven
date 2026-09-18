@@ -23,7 +23,7 @@ import logging
 import threading
 import uuid
 import weakref
-from typing import Callable, Optional, Sequence, Set, Tuple, Union
+from typing import Callable, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ from ..common.gui import animation as gui_animation
 from ..common.gui import keyboardmark
 from ..common.gui import utils as guiutils
 from ..common.gui.xdotwidget import graph as xdotgraph
+from ..common.gui.xdotwidget import renderer as xdotrenderer
 from ..common.gui.xdotwidget.widget import XDotWidget
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
@@ -84,6 +85,16 @@ def _toolbar_tooltip_text(caption: str) -> str:
 # scaling one atlas across that range is what makes it look smeared. Same ladder `raven-xdot-viewer` uses.
 _GRAPH_TEXT_FONT_SIZES = (4, 8, 16, 32, 64)
 
+# `(bold, italic)` -> the OpenSans variant to load for it. All four, though the boxes reach for two of them
+# so far: the application already carries every face (the Markdown renderer builds each lazily per size),
+# and these are registered with DPG's default Latin-1 range of ~224 codepoints, where the atlas trouble
+# Raven has met needs the extended ranges' ~11,500 at several hundred pixels. So the whole set costs
+# little, and a caller that later paints a run italic finds the font already there.
+_GRAPH_TEXT_FONT_VARIANTS = {(False, False): "Regular",
+                             (True, False): "Bold",
+                             (False, True): "Italic",
+                             (True, True): "BoldItalic"}
+
 
 class DPGChatGraphPanel(gui_animation.Animation):
     """The chat graph view, as a self-contained panel.
@@ -109,7 +120,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                  on_commit: Optional[Callable[[str], None]] = None,
                  input_blocked: Optional[Callable[[], bool]] = None,
                  on_focus_requested: Optional[Callable[[], None]] = None,
-                 graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
+                 graph_text_fonts: Optional[xdotrenderer.TextFonts] = None,
                  icon_for: Optional[Callable[[], Optional[chatgraph.IconFor]]] = None,
                  thumbnail_for: Optional[Callable[[str, float], Optional[env]]] = None,
                  dark_mode: bool = True,
@@ -138,9 +149,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
                               taking the caret *away* from the composer, and where to park it is the app's
                               knowledge rather than this widget's. `None` leaves clicks changing nothing,
                               which is what a caller with no keyboard cycle wants.
-        `graph_text_fonts`: `(size, font_id)` pairs for graph labels; the renderer picks the closest to the
-                            size it is drawing at. `None` (the default) loads a ladder of sizes into
-                            `themes_and_fonts` and uses that, since every caller wants the same one.
+        `graph_text_fonts`: The fonts for graph labels: a ladder of sizes per `(bold, italic)` face, from
+                            which the renderer picks the face a pen asks for at the size nearest what it
+                            is drawing. `None` (the default) loads the faces this view uses into
+                            `themes_and_fonts` and uses those, since every caller wants the same ones.
         `icon_for`: Called at each rebuild for the `(role, persona) -> texture` resolver the boxes draw
                     their speaker glyph from; see `chatgraph.build` and `chatgraph.IconFor`. A callable
                     returning the resolver, rather than the resolver itself, because it belongs to
@@ -242,10 +254,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
                                                tag=f"chat_graph_panel_{self.gui_uuid}")  # tag
         self._build_toolbar(dark_mode=dark_mode)
         if graph_text_fonts is None:
-            graph_text_fonts = [(size, guiutils.load_extra_font(themes_and_fonts, size,
-                                                                "OpenSans", "Regular")[1])
-                                for size in _GRAPH_TEXT_FONT_SIZES]
-        self._graph_text_fonts = list(graph_text_fonts)
+            graph_text_fonts = {face: [(size, guiutils.load_extra_font(themes_and_fonts, size,
+                                                                       "OpenSans", variant)[1])
+                                       for size in _GRAPH_TEXT_FONT_SIZES]
+                                for face, variant in _GRAPH_TEXT_FONT_VARIANTS.items()}
+        self._graph_text_fonts = dict(graph_text_fonts)
         # An inner window holding nothing but the graph, so the keyboard mark has something to frame that
         # is *not* the toolbar. A `Mark` binds a theme to its target, and DPG composes a theme down the
         # whole parent chain — so a mark on the outer panel reaches the toolbar's tooltips, which came out
@@ -1064,17 +1077,23 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._awaited_thumbnails.discard(filename)
         return chatgraph.Thumbnail(levels=tuple(xdotgraph.MipLevel(*level) for level in prepared.levels))
 
-    def _measure_text(self, text: str, font_size: float) -> Optional[float]:
-        """Return how wide `text` is at `font_size`, in graph units, or `None` if DPG cannot say yet.
+    def _measure_text(self, text: str, font_size: float,
+                      bold: bool = False, italic: bool = False) -> Optional[float]:
+        """Return how wide `text` is at `font_size` in the face `(bold, italic)`, in graph units, or `None` if DPG cannot say yet.
 
         This is what `chatgraph` cannot do for itself: it holds no DPG, and an average glyph advance is
         enough to size a box but not to centre text inside one — the renderer starts centred text at
         `centre - w/2`, so an error in the width displaces the glyphs by half of it.
 
         Measured against whichever font atlas is nearest the requested size and scaled, the atlases being
-        a ladder rather than a continuum.
+        a ladder rather than a continuum. Resolved through the renderer's own lookup, so a width cannot be
+        measured against one font and drawn in another — which for a label split into runs of different
+        faces would show up as uneven gaps between the runs.
         """
-        atlas_size, font_id = min(self._graph_text_fonts, key=lambda pair: abs(pair[0] - font_size))
+        maybe_rung = xdotrenderer.nearest_font(self._graph_text_fonts, font_size, bold, italic)
+        if maybe_rung is None:
+            return None
+        atlas_size, font_id = maybe_rung
         measured = dpg.get_text_size(text, font=font_id)
         if not measured:  # no atlas until a frame has been rendered; an ordinary state, not a fault
             return None
