@@ -333,11 +333,15 @@ class Ref:
                        that shows a message; every gap kind fills it. Declared here so that asking *what
                        is behind this box* needs no isinstance ladder — see
                        `ChatGraph.representative_of`, which inverts it.
+    `holds_match`: Whether the running search has a hit in what this box answers for — the message itself,
+                   or, for a gap, anything behind it. False whenever no search is running. Filled in by
+                   `build` from `ViewState.matched_node_ids`.
     """
 
     def __init__(self, name: str):
         self.name = name
         self.hidden_node_ids: Tuple[str, ...] = ()
+        self.holds_match: bool = False
 
 
 class ChatNodeRef(Ref):
@@ -517,6 +521,9 @@ class ViewState:
     `sibling_focus`: Parent node ID -> which of its children the sibling window is centred on. An override:
                      a level not listed here centres on whichever child the spine goes through, which is
                      what the user sees before touching anything.
+    `matched_node_ids`: The chat nodes the running search found, anywhere in the forest rather than only
+                        where the picture reaches. Empty when no search is running, which is what turns
+                        every box's mark off. A box reads its own mark off this — see `Ref.holds_match`.
     """
 
     head_node_id: str
@@ -525,6 +532,7 @@ class ViewState:
     new_chat_node_id: Optional[str] = None
     expanded_tool_turns: Set[str] = dataclasses.field(default_factory=set)
     sibling_focus: Dict[str, str] = dataclasses.field(default_factory=dict)
+    matched_node_ids: Set[str] = dataclasses.field(default_factory=set)
 
 
 @dataclasses.dataclass
@@ -2225,6 +2233,39 @@ def build(datastore: chattree.Forest,
                 cursor += row_step
 
         # ------------------------------------------------------------------
+        # Search marks. Which boxes hold a match has to be settled before any box is drawn, the mark being
+        # part of what the box shows.
+        #
+        # A gap box's mark is the reason this needs a walk at all. A message box answers only for itself,
+        # but a gap answers for everything behind it -- and that is more than its own `hidden_node_ids`,
+        # which for four of the five kinds names what is *directly* elided and not the subtrees hanging
+        # off it. Nothing else in the picture stands for those, so a gap that reported only on its own
+        # list would say there was nothing behind it when there was, which is precisely what the gaps
+        # exist not to do.
+        #
+        # Pruning at the nodes that do have a box of their own is what bounds the walk: reaching one means
+        # that node is answering for itself and for whatever hangs below it, so there is nothing further
+        # down for this gap to claim.
+        #
+        # Every box is a row slot except an inlined child, which is drawn where a gap would merely have
+        # counted it. Leaving those out would make a drawn box look hidden.
+        drawn_node_ids = {slot.node_id for row in rows for slot in row.slots if slot.node_id is not None}
+        drawn_node_ids.update(extra.node_id for extra in extras if extra.kind == "child")
+
+        def mark_matches(ref: Ref) -> None:
+            """Fill in `ref.holds_match`. Call once per box, wherever its ref is built."""
+            if not state.matched_node_ids:  # no search running; nothing is marked, and no walk is paid for
+                return
+            own = ref.node_id if isinstance(ref, ChatNodeRef) else None
+            if own is not None and own in state.matched_node_ids:
+                ref.holds_match = True
+                return
+            ref.holds_match = any(node_id in state.matched_node_ids
+                                  for node_id in datastore.linearize_down(
+                                      *ref.hidden_node_ids,
+                                      prune=lambda node_id: node_id in drawn_node_ids))
+
+        # ------------------------------------------------------------------
         # Shapes.
 
         refs: Dict[str, Ref] = {}
@@ -2244,6 +2285,7 @@ def build(datastore: chattree.Forest,
                               on_current_branch=(node_id in current_branch),
                               tool_call_count=_tool_call_count(datastore, node_id),
                               pills=_pills_for(node_id, state, is_root=is_root))
+            mark_matches(ref)
             decoration = decorations_of(node_id)
             speaker, label_lines, sub_label = _speaker_and_label_of(
                 datastore, node_id, config, decoration.role_icon is not None,
@@ -2285,6 +2327,7 @@ def build(datastore: chattree.Forest,
                         # Sideways rather than downward, so this one counts *siblings*: they are all on
                         # one level, and how many levels they are is not a question about them.
                         label = _more_label(len(slot.hidden))
+                    mark_matches(ref)
                     # Anything hidden that is on HEAD's branch is HEAD itself or an ancestor of it, so
                     # HEAD is behind this gap either way. True of a hidden sibling, and — once the
                     # picture is showing another character card — of the roots gap too, which is then
@@ -2322,6 +2365,7 @@ def build(datastore: chattree.Forest,
                           the picture with nothing saying where it went, which is exactly the comparison
                           a preview exists to make.
             """
+            mark_matches(ref)
             node = xdotgraph.Node(x=x, y=y, w=config.gap_node_w, h=config.node_h,
                                   shapes=_box_shapes(x, y, config.gap_node_w, config, [label],
                                                      fill=None, dashed=True,

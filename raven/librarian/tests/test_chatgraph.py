@@ -2708,6 +2708,98 @@ def _forest_with_every_gap_kind():
     return forest, {"root": root, "greeting": greeting, "chats": chats, "asking": asking, "head": head}
 
 
+def _hidden_sibling_with_a_subtree():
+    """A level wide enough to gap, where one hidden sibling has a reply under it. Returns `(forest, ids)`.
+
+    The shape a sibling gap's own `hidden_node_ids` cannot describe: it lists the siblings, and `buried`
+    hangs below one of them, so nothing in the picture names it at all.
+    """
+    forest = Forest()
+    root = forest.create_node(payload("system", "the card"), parent_id=None)
+    greeting = forest.create_node(payload("assistant", "hello!"), parent_id=root)
+    chats = [forest.create_node(payload("user", f"chat {k}"), parent_id=greeting) for k in range(30)]
+    buried = forest.create_node(payload("assistant", "the needle"), parent_id=chats[2])
+    head = forest.create_node(payload("assistant", "here you are"), parent_id=chats[15])
+    return forest, {"root": root, "greeting": greeting, "chats": chats, "buried": buried, "head": head}
+
+
+class TestSearchMarks:
+    """Which boxes report that the search found something in what they stand for.
+
+    One sentence of rule, and all of the work in what a *gap* box stands for — which is more than the list
+    of nodes it names, and is why this is a walk rather than a lookup.
+    """
+
+    def _built(self, forest, ids, matched=()):
+        return chatgraph.build(forest,
+                               chatgraph.ViewState(head_node_id=ids["head"],
+                                                   new_chat_node_id=ids["greeting"],
+                                                   matched_node_ids=set(matched)),
+                               chatgraph.LayoutConfig(max_visible_depth=8))
+
+    def test_with_no_search_running_nothing_is_marked(self):
+        forest, ids = _forest_with_every_gap_kind()
+        built = self._built(forest, ids)
+        assert not any(ref.holds_match for ref in built.refs.values())
+
+    def test_a_message_box_marks_itself(self):
+        forest, ids = _forest_with_every_gap_kind()
+        built = self._built(forest, ids, matched=[ids["head"]])
+        assert built.refs[ids["head"]].holds_match
+        assert not built.refs[ids["asking"]].holds_match, "a box that did not match is marked too, so the mark says nothing"
+
+    @pytest.mark.parametrize("kind", [chatgraph.SiblingGapRef,
+                                      chatgraph.DepthGapRef,
+                                      chatgraph.SubtreeGapRef,
+                                      chatgraph.ToolRoundGapRef])
+    def test_every_gap_kind_marks_for_what_it_hides(self, kind):
+        forest, ids = _forest_with_every_gap_kind()
+        gaps = refs_of_type(self._built(forest, ids), kind)
+        assert gaps, f"no {kind.__name__} in this picture, so this parameter checks nothing"
+        hidden = gaps[0].hidden_node_ids[0]
+        built = self._built(forest, ids, matched=[hidden])
+        assert hidden not in built.refs, "the fixture draws this node, so the gap is not what would have to report it"
+        assert next(ref for ref in refs_of_type(built, kind) if ref.name == gaps[0].name).holds_match
+
+    def test_a_gap_marks_for_a_node_it_does_not_name(self):
+        """The case the walk exists for: a subtree hanging off a hidden sibling, which no box names."""
+        forest, ids = _hidden_sibling_with_a_subtree()
+        built = self._built(forest, ids, matched=[ids["buried"]])
+        holders = [ref for ref in refs_of_type(built, chatgraph.SiblingGapRef) if ref.holds_match]
+        assert len(holders) == 1, "exactly one sibling gap stands for the level's hidden run containing it"
+        assert ids["buried"] not in holders[0].hidden_node_ids, \
+            "the gap names this node outright, so this fixture cannot tell the walk from a lookup in that list"
+        assert ids["chats"][2] in holders[0].hidden_node_ids, "the control: its parent is what the gap does name"
+
+    def test_the_roots_gap_marks_for_a_chat_under_another_card(self):
+        """The fifth kind, which `_forest_with_every_gap_kind` has no second root to produce.
+
+        Its `hidden_node_ids` are the other roots, so a chat written under one of them is two walks away
+        from anything the picture names — the deepest case the mark has to reach.
+        """
+        forest = Forest()
+        current = forest.create_node(payload("system", "the card in use"), parent_id=None)
+        head = forest.create_node(payload("user", "hello"), parent_id=current)
+        older = forest.create_node(payload("system", "an older version of the card"), parent_id=None)
+        elsewhere = chain(forest, length=3, parent_id=older)[-1]
+
+        state = chatgraph.ViewState(head_node_id=head, matched_node_ids={elsewhere})
+        gap = only_ref_of_type(chatgraph.build(forest, state), chatgraph.RootGapRef)
+        assert elsewhere not in gap.hidden_node_ids, \
+            "the gap names this node outright, so this fixture cannot tell the walk from a lookup in that list"
+        assert gap.holds_match
+
+    def test_a_gap_does_not_claim_a_node_that_has_its_own_box(self):
+        """The prune, without which a depth gap hiding ancestors would claim the whole branch drawn below them."""
+        forest, ids = _forest_with_every_gap_kind()
+        built = self._built(forest, ids, matched=[ids["head"]])
+        depth_gaps = refs_of_type(built, chatgraph.DepthGapRef)
+        assert depth_gaps, "no depth gap here, so nothing is being checked"
+        assert built.refs[ids["head"]].holds_match, "the control: the matching node is drawn and marks itself"
+        assert not any(gap.holds_match for gap in depth_gaps), \
+            "a depth gap claims a node drawn below it, so the walk is not stopping at boxes that stand for themselves"
+
+
 class TestCursorMovement:
     """Where the arrow keys take the cursor, which is a question about the drawn picture.
 
