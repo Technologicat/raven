@@ -191,11 +191,16 @@ Recorded here because it leaves no diff — B was never started, so nothing in t
 that it stopped being expected, and the next session would read the brief's *"B stays wanted"* as current.
 What B would need is still written in the brief, against the day somebody wants it.
 
-**Polish, as the live looks have found it**: four rendering faults on 2026-09-18 (all fixed), then, from the
-second look, the keyboard following what a gesture moves — committing and `Esc` hand the keys back, a search
-step sends them after the jump — and the graph's search buttons lit only where a step would go somewhere.
-Still unjudged: one line of context around a match, forest preorder as an order, the collapse rule for
-arrows and clicks, and whether a jump's two topology changes read as one motion.
+**Every design question the looks were for came back positive, and none of them changed anything**: the
+`N (M)` count reads without a word, one line of context around a match is enough, forest preorder walks
+sensibly, a round folding shut behind the reader reads as tidying up, a morph reads as one motion however
+much it does at once, and the `F1` card does not clip. Written up in the brief, *The second live look*.
+
+**What the looks found instead was polish**, all of it fixed the same day: four rendering faults, then the
+colour bug's counterpart during a morph, then five places where the keyboard or the cursor did not follow
+what a gesture moved — committing and `Esc` hand the keys back, a search step sends them after the jump,
+`Home` lands the cursor on HEAD, taking the keyboard shows the cursor, and the ring goes pale while the keys
+are elsewhere. Plus the graph's search buttons lit only where a step would go somewhere.
 
 ### ~~Make `IDLE_SLEEP_S` mean what it says~~ — done 2026-09-11, and it grew a tail
 

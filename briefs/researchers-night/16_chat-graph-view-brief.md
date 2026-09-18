@@ -1433,6 +1433,33 @@ of context around the match is enough, whether forest preorder feels right as an
 for arrows and clicks, and whether a jump's two topology changes read as one motion. The `N (M)` form is at
 least legible on gap boxes, which was the case with least context around it.
 
+### The second live look, 2026-09-18 — every design question answered yes
+
+Driven by Juha, against builds relaunched as each fix landed. **All six open judgements came back positive**,
+and no design was revised as a result of any of them:
+
+- **`N (M)` reads without a word.** Tried in both modes; the two counts are legible on every ground,
+  including a tool-calling box's orange.
+- **One line of context around the match is enough** — *"the amount of context looks nice"*.
+- **Forest preorder behaves sensibly** as an order to walk matches in.
+- **The collapse rule reads as tidying up**, which was the open half: a round the search opened folding
+  shut behind the reader as they step onward. Not as the picture rearranging under them.
+- **A morph reads as one motion however much it does at once.** *"Having the continuous interpolation
+  there does a lot."* Scope worth keeping: this is Juha's observation across the morphs the session
+  produced, rather than a test of the specific case where a re-layout and a fold land together — no search
+  term to hand set that up. The general claim is the stronger one anyway, and the specific case is a
+  member of it.
+- **The `F1` card's graph page does not clip**, and has about half a page spare.
+
+**And the cursor turned out to be a cursor.** Asked how to make the search resume from a particular match
+using the mouse, the answer is to click that box — which needed no mechanism, `search_position` reading its
+anchor off the cursor rather than remembering an index.
+
+What the look *did* find was seven faults and gaps, none of them in the design: the settled-state colour
+bug and its counterpart during a morph, then a run of five places where the keyboard or the cursor did not
+follow what a gesture moved. Those are in the git log for the day and in the sprint README's
+*Decided 2026-09-18*.
+
 ## Where this stands, 2026-09-15
 
 **What the exhibit needs from this brief is the transition animation** (*Animating a change of topology*,
