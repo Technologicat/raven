@@ -34,6 +34,7 @@ from unpythonic import env, si_prefix, sym, timer
 from ..common import navhistory
 from ..common.running_average import RunningAverage
 from ..common.gui import animation as gui_animation
+from ..common.gui import fontsetup
 from ..common.gui import keyboardmark
 from ..common.gui import utils as guiutils
 from ..common.gui.xdotwidget import graph as xdotgraph
@@ -84,16 +85,6 @@ def _toolbar_tooltip_text(caption: str) -> str:
 # so this is a ladder rather than a choice: a label is legible at one zoom and unreadable at the next, and
 # scaling one atlas across that range is what makes it look smeared. Same ladder `raven-xdot-viewer` uses.
 _GRAPH_TEXT_FONT_SIZES = (4, 8, 16, 32, 64)
-
-# `(bold, italic)` -> the OpenSans variant to load for it. All four, though the boxes reach for two of them
-# so far: the application already carries every face (the Markdown renderer builds each lazily per size),
-# and these are registered with DPG's default Latin-1 range of ~224 codepoints, where the atlas trouble
-# Raven has met needs the extended ranges' ~11,500 at several hundred pixels. So the whole set costs
-# little, and a caller that later paints a run italic finds the font already there.
-_GRAPH_TEXT_FONT_VARIANTS = {(False, False): "Regular",
-                             (True, False): "Bold",
-                             (False, True): "Italic",
-                             (True, True): "BoldItalic"}
 
 
 class DPGChatGraphPanel(gui_animation.Animation):
@@ -254,10 +245,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
                                                tag=f"chat_graph_panel_{self.gui_uuid}")  # tag
         self._build_toolbar(dark_mode=dark_mode)
         if graph_text_fonts is None:
-            graph_text_fonts = {face: [(size, guiutils.load_extra_font(themes_and_fonts, size,
-                                                                       "OpenSans", variant)[1])
-                                       for size in _GRAPH_TEXT_FONT_SIZES]
-                                for face, variant in _GRAPH_TEXT_FONT_VARIANTS.items()}
+            # All four faces, though the boxes reach for two so far: a run of a label that matched a search
+            # is painted bold, and italic is then a pen attribute away for whatever wants it next.
+            graph_text_fonts = fontsetup.load_font_ladders(themes_and_fonts, _GRAPH_TEXT_FONT_SIZES)
         self._graph_text_fonts = dict(graph_text_fonts)
         # An inner window holding nothing but the graph, so the keyboard mark has something to frame that
         # is *not* the toolbar. A `Mark` binds a theme to its target, and DPG composes a theme down the

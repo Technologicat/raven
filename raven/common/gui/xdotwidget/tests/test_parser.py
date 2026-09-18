@@ -4,7 +4,7 @@ import pytest
 
 from raven.common.tests import approx
 
-from ..parser import parse_xdot, ParseError
+from ..parser import parse_xdot, font_style_of, ParseError
 from ..graph import (Graph, Node,
                      TextShape, EllipseShape, BezierShape, PolygonShape)
 
@@ -523,3 +523,46 @@ class TestTooltipParsing:
         }'''
         graph = parse_xdot(xdot)
         assert graph.nodes[0].tooltip == "spaced"
+
+
+# The same graph as `SIMPLE_XDOT`, differing only in the font name its labels carry, so a test comparing
+# the two is about the name and nothing else.
+BOLD_XDOT = SIMPLE_XDOT.replace("-Times-Roman", "-Times-Bold")
+
+
+class TestFontStyle:
+    """Which face a label is drawn in, read out of the font name GraphViz writes into the `F` opcode.
+
+    The family stays the app's to choose — DPG registers families from TTF files, and a renderer falls back
+    to the regular face where the app loaded no other. What the name settles is which face to ask for.
+    """
+
+    @pytest.mark.parametrize("font_name, expected", [
+        ("Times-Roman", (False, False)),
+        ("Times-Bold", (True, False)),
+        ("Times-Italic", (False, True)),
+        ("Times-BoldItalic", (True, True)),
+        ("Helvetica", (False, False)),
+        ("Helvetica-Oblique", (False, True)),  # a slanted roman, drawn in the italic face for want of another
+        ("Helvetica-BoldOblique", (True, True)),
+        ("Times,serif", (False, False)),  # as `fontnames=svg` writes it
+        ("DejaVu Sans Bold Italic", (True, True)),  # a family named naturally in the DOT source
+        ("OpenSans-Semibold", (False, False)),  # a weight with no face of its own, and one that contains "bold"
+        ("Bodoni", (False, False)),
+    ])
+    def test_the_face_is_read_out_of_the_font_name(self, font_name, expected):
+        assert font_style_of(font_name) == expected
+
+    def test_the_family_itself_is_not_read_as_a_style(self):
+        assert font_style_of("Oblique Pro") == (False, False)
+        assert font_style_of("Oblique Pro Bold") == (True, False), \
+            "the control: a style word after the family is still read, so the first test is about position"
+
+    def test_a_label_is_drawn_in_the_face_its_font_name_names(self):
+        text = _shapes_of_type(parse_xdot(BOLD_XDOT).get_node_by_name("a"), TextShape)[0]
+        assert (text.pen.bold, text.pen.italic) == (True, False)
+
+    def test_an_ordinary_label_stays_regular(self):
+        """The control for the above: the same graph with the roman name, so the difference is the name."""
+        text = _shapes_of_type(parse_xdot(SIMPLE_XDOT).get_node_by_name("a"), TextShape)[0]
+        assert (text.pen.bold, text.pen.italic) == (False, False)

@@ -62,6 +62,7 @@ with timer() as tim:
     from ..common import utils as common_utils
     from ..common.gui.xdotwidget import XDotWidget
     from ..common.gui import utils as guiutils
+    from ..common.gui import fontsetup
     from ..common.gui import helpcard
     from ..common.gui import animation as gui_animation
     from ..common.gui import keyboardmark
@@ -669,16 +670,10 @@ def main() -> int:
     dpg.setup_dearpygui()
 
     # Load extra fonts for graph text at various zoom levels.
-    # The renderer picks whichever atlas size is closest to the rendered size.
-    #
-    # The regular face only. A pen can ask for bold or italic and falls back to this, and nothing here ever
-    # asks: the parser reads the font name out of an xdot `F` opcode and discards it, so a parsed graph's
-    # labels carry no face. Loading the other three would cost their atlases for nothing until it does.
-    graph_text_fonts = {(False, False): []}
-    for size in config.GRAPH_TEXT_FONT_SIZES:
-        _key, font_id = guiutils.load_extra_font(
-            themes_and_fonts, size, "OpenSans", "Regular")
-        graph_text_fonts[(False, False)].append((size, font_id))
+    # The renderer picks whichever atlas size is closest to the rendered size, in the face the pen asks
+    # for — which for a parsed graph is whatever its own font names say, GraphViz writing the face into
+    # the xdot `F` opcode. All four, so a graph that asked for bold gets it.
+    graph_text_fonts = fontsetup.load_font_ladders(themes_and_fonts, config.GRAPH_TEXT_FONT_SIZES)
 
     # Initialize file dialog (must be after dpg.setup_dearpygui)
     global _filedialog_open

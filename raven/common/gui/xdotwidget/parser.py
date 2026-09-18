@@ -16,6 +16,9 @@ __all__ = ["ParseError",
            "DotScanner",
            "DotLexer",
            "DotParser",
+
+           "font_style_of",  # which face a font name names, for the `F` opcode
+
            "XDotAttrParser",
            "XDotParser",
            "parse_xdot"]
@@ -453,6 +456,42 @@ class DotParser(Parser):
 # --------------------------------------------------------------------------------
 # The xdot (DOT with xdot drawing attributes) parser.
 
+# Style words as GraphViz's font names spell them, mapped to `(bold, italic)`. Oblique is a slanted roman
+# rather than a true italic; nothing here has both, so it takes the italic face.
+#
+# Only the words naming a face we can draw. A weight with no face of its own -- semibold, light, black --
+# is deliberately absent and falls through as regular, which is what it would be drawn as anyway; matching
+# it as a substring would also make "semibold" bold, since the word contains it.
+_FONT_STYLE_WORDS = {"bold": (True, False),
+                     "italic": (False, True),
+                     "oblique": (False, True),
+                     "bolditalic": (True, True),
+                     "boldoblique": (True, True),
+                     "italicbold": (True, True),
+                     "obliquebold": (True, True)}
+
+_FONT_NAME_SEPARATORS = re.compile(r"[^0-9A-Za-z]+")
+
+
+def font_style_of(font_name: str) -> tuple[bool, bool]:
+    """Return `(bold, italic)` read out of a font name, as GraphViz writes one into an xdot `F` opcode.
+
+    Covers the conventions GraphViz actually emits: the PostScript base-14 spellings (`Times-Bold`,
+    `Helvetica-BoldOblique`), the `fontnames=svg` form (`Times,serif`), and a family named naturally in the
+    DOT source (`DejaVu Sans Bold Italic`). A name whose style is spelled some other way comes back
+    regular, which is the face it would have been drawn in regardless.
+
+    The family is skipped, being always first, so a face called `Oblique Pro` is not read as slanted.
+    """
+    words = [word for word in _FONT_NAME_SEPARATORS.split(font_name) if word]
+    bold = italic = False
+    for word in words[1:]:
+        was_bold, was_italic = _FONT_STYLE_WORDS.get(word.lower(), (False, False))
+        bold = bold or was_bold
+        italic = italic or was_italic
+    return bold, italic
+
+
 class XDotAttrParser:
     """Parser for xdot drawing attributes."""
 
@@ -584,15 +623,13 @@ class XDotAttrParser:
             elif op == "F":
                 size = self.read_float()
                 self.pen.fontsize = size
-                # Font family - must consume from buffer even though we don't use it.
-                #
-                # DPG requires registering font families from a TTF file with `dpg.font`.
-                # Raven currently does that in `raven.common.gui.utils`, function `bootup`.
-                # So we shouldn't load any fonts here. Hence we can change the size, but
-                # not the font family.
-                #
-                # TODO: implement font loading later?
-                _name = self.read_text()  # noqa: F841
+                # The family itself is not ours to choose: DPG registers font families from TTF files, and
+                # which ones an app loaded is the app's business -- `raven.common.gui.utils.bootup` and
+                # `load_extra_font` are where Raven does it. What the name *can* tell us is the face, and
+                # the renderer draws a pen's face from whatever ladder the app supplied, falling back to
+                # the regular one where it has no such face. So a graph written in bold comes out bold in
+                # an app that loaded a bold family, and unchanged in one that did not.
+                self.pen.bold, self.pen.italic = font_style_of(self.read_text())
             elif op == "T":
                 x, y = self.read_point()
                 j = self.read_number()
