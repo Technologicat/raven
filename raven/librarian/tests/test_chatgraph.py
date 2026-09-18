@@ -3045,6 +3045,27 @@ class TestSearchSnippets:
         assert not chatgraph.build(forest, chatgraph.ViewState(head_node_id=answered)).refs[system].holds_match
         assert [(shape.x, shape.text) for shape in during] == [(shape.x, shape.text) for shape in before]
 
+    def test_a_match_the_wrap_cut_is_painted_as_far_as_it_is_shown(self):
+        """A term wider than the box has to be cut, and what survives the cut is still the match.
+
+        The spans are found once in the text being wrapped and clipped to each line, which is what makes
+        this work: looking for the fragment in the finished line would find half of one, and half a
+        fragment is not a match — so the box would be on screen with nothing saying why.
+        """
+        forest = Forest()
+        root = forest.create_node(payload("system", "the card"), parent_id=None)
+        term = "supercalifragilisticexpialidociousphotocatalysis"
+        node = forest.create_node(payload("assistant", f"See {term} in the notes."), parent_id=root)
+
+        shapes = self._label_shapes(self._built(forest, node, term), node)
+        painted = [shape.text for shape in shapes if shape.pen.bold]
+        assert painted, "the cut match is not painted, so the box says nothing about why it is on screen"
+        assert len(painted) == 1 and term.startswith(painted[0]), \
+            f"what was painted is not a piece of the term: {painted}"
+        assert painted[0] != term, "the fixture's term fits the box whole, so nothing here was cut"
+        assert not any(shape.pen.bold for shape in shapes if shape.text == "…"), \
+            "the ellipsis is painted as part of the match, and it is not in the text that matched"
+
     # What bold actually comes out as, against the regular face the widths here are estimated in: 7.5%
     # wider, measured across the graph's whole size ladder in `investigations/graph-font-atlas/`.
     #

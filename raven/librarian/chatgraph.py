@@ -1062,8 +1062,28 @@ def _plain(text: str) -> str:
     return strip_markdown.strip_markdown(text) or ""
 
 
+@dataclasses.dataclass(frozen=True)
+class _WrappedLine:
+    """One line of a wrapped label, and where in the wrapped text it came from.
+
+    `text`: what the line says, an ellipsis included where one was appended.
+    `start`: its offset in the *normalized* text — whitespace collapsed to single spaces, which is what
+             `_wrap` folds. The first `source_length` characters of `text` are that text verbatim.
+    `source_length`: how many characters of the normalized text this line accounts for. Shorter than
+                     `text` where an ellipsis was appended, and shorter still where appending one had to
+                     shorten the line to make room.
+
+    The offsets exist so that search matches can be found *once*, in the text being wrapped, and clipped
+    to each line — which marks a match the wrap cut in half on both of its halves. Re-finding them in the
+    finished lines cannot: half a fragment is not a match, so the halves would go unpainted.
+    """
+    text: str
+    start: int
+    source_length: int
+
+
 def _wrap(text: str, max_width: float, max_lines: int, font_size: float,
-          measure_text: Optional[MeasureText]) -> List[str]:
+          measure_text: Optional[MeasureText]) -> List[_WrappedLine]:
     """Fold `text` into at most `max_lines` lines no wider than `max_width` graph units, marking any cut.
 
     The message's own line breaks go first — `split` collapses every run of whitespace, so a message that
@@ -1085,9 +1105,11 @@ def _wrap(text: str, max_width: float, max_lines: int, font_size: float,
         return _text_width(candidate, font_size, measure_text, _LABEL_ADVANCE_PER_CHAR)
 
     words = text.split(" ")
-    lines: List[str] = []
+    lines: List[_WrappedLine] = []
+    consumed = 0  # how much of `text` the lines so far account for, the spaces the breaks replaced included
     while words and len(lines) < max_lines:
         line = ""
+        cut_mid_word = False
         while words:
             candidate = f"{line} {words[0]}" if line else words[0]
             if width_of(candidate) <= max_width:
@@ -1101,12 +1123,26 @@ def _wrap(text: str, max_width: float, max_lines: int, font_size: float,
             head = common_text.longest_prefix_that_fits(words[0], max_width, width_of)
             words[0] = words[0][len(head):]
             line = head
+            cut_mid_word = True
             break
-        lines.append(line)
+        lines.append(_WrappedLine(line, consumed, len(line)))
+        # A break stands where a space was, and the next line starts past it -- except after a word that
+        # was cut, where the next line carries straight on from this one's last character.
+        consumed += len(line) + (0 if cut_mid_word else 1)
 
     if words and lines:  # something was left over, and the label has to say so rather than stop mid-word
-        lines[-1] = _with_ellipsis(lines[-1], max_width, width_of)
+        last = lines[-1]
+        shortened = _with_ellipsis(last.text, max_width, width_of)
+        # The ellipsis is not in the text this was wrapped from, and making room for it can drop
+        # characters that are, so what the line still accounts for shrinks by both.
+        kept = len(shortened) - 1 if shortened.endswith("…") else len(shortened)
+        lines[-1] = _WrappedLine(shortened, last.start, min(kept, last.source_length))
     return lines
+
+
+def _plain_lines(*texts: str) -> List[_WrappedLine]:
+    """Lines that were not wrapped from anything, and so have nothing to mark: a gap box's caption, or one of the picture's own remarks."""
+    return [_WrappedLine(text, 0, len(text)) for text in texts]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1145,34 +1181,39 @@ def _match_spans(text: str, highlight: Tuple) -> List[Tuple[int, int]]:
     return merged
 
 
-def _runs_of(line: str, maybe_highlight: Optional[Tuple],
-             match_color: Optional[xdotconstants.Color] = None) -> List[_Run]:
-    """Split one label line into its runs. One run, unmatched, when nothing is being searched for.
+def _runs_for_line(line: _WrappedLine, spans: Sequence[Tuple[int, int]],
+                   match_color: Optional[xdotconstants.Color]) -> List[_Run]:
+    """Split one wrapped line into its runs, given where the matches are in the text it was wrapped from.
 
-    The matches are found in the *line*, after wrapping, rather than carried down from the message text:
-    `_wrap` collapses whitespace, rejoins words with single spaces, may cut a word that is wider than the
-    box and may append an ellipsis, so an offset taken before it means nothing afterwards. A match a word
-    cut in half is then not marked on that line, which is the honest outcome — the fragment is not there
-    to paint.
+    Clipping the spans to the line is what marks a match the wrap cut in half: each half falls inside its
+    own line and is painted there, where looking for the fragment in the finished line would find neither.
+    The ellipsis a line may end with is outside `source_length`, so it is never part of a match.
     """
-    if not maybe_highlight or not any(maybe_highlight):
-        return [_Run(line)]
+    marked = []
+    line_end = line.start + line.source_length
+    for start, end in spans:
+        overlap_start, overlap_end = max(start, line.start), min(end, line_end)
+        if overlap_start < overlap_end:
+            marked.append((overlap_start - line.start, overlap_end - line.start))
+    if not marked:
+        return [_Run(line.text)]
+
     runs: List[_Run] = []
     cursor = 0
-    for start, end in _match_spans(line, maybe_highlight):
+    for start, end in marked:
         if start > cursor:
-            runs.append(_Run(line[cursor:start]))
-        runs.append(_Run(line[start:end], color=match_color, bold=True))
+            runs.append(_Run(line.text[cursor:start]))
+        runs.append(_Run(line.text[start:end], color=match_color, bold=True))
         cursor = end
-    if cursor < len(line):
-        runs.append(_Run(line[cursor:]))
-    return runs or [_Run(line)]
+    if cursor < len(line.text):
+        runs.append(_Run(line.text[cursor:]))
+    return runs
 
 
-def _label_runs(lines: Sequence[str], maybe_highlight: Optional[Tuple] = None,
+def _label_runs(lines: Sequence[_WrappedLine], spans: Sequence[Tuple[int, int]] = (),
                 match_color: Optional[xdotconstants.Color] = None) -> List[List[_Run]]:
     """Turn wrapped lines into the runs each is drawn as."""
-    return [_runs_of(line, maybe_highlight, match_color) for line in lines]
+    return [_runs_for_line(line, spans, match_color) for line in lines]
 
 
 def _match_caption(counts: chatsearch.MatchCounts, config: "LayoutConfig") -> List[_Run]:
@@ -1393,13 +1434,13 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, state: "View
     max_lines = config.label_lines
     wrap_width = width
 
-    def wrap(what: str, lines_left: int) -> List[str]:
+    def wrap(what: str, lines_left: int) -> List[_WrappedLine]:
         return _wrap(what, wrap_width, lines_left, config.font_size, measure_text)
 
     try:
         role, persona, text = chatutil.get_node_message_text_without_persona(datastore, node_id)
     except (KeyError, TypeError):
-        return "?", _label_runs(["[missing]"]), None, None
+        return "?", _label_runs(_plain_lines("[missing]")), None, None
     speaker = persona or _ROLE_CAPTIONS.get(role, (role or "?").upper())
     payload = _payload_of(datastore, node_id)
 
@@ -1417,10 +1458,19 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, state: "View
         plain = _snippet_around_first_match(plain, maybe_highlight,
                                             config.snippet_lead_in_fraction * width,
                                             config.font_size, measure_text)
+
         # Wrapping measures the line in the regular face, and a match then renders in the bold one, which
         # is wider -- so a line fitted to the last unit would spill past the box's inset. Give a matched
         # label room for the worst case, which is the whole line turning out to be a match.
         wrap_width = width / (1.0 + _BOLD_WIDTH_HEADROOM)
+
+    def spans_in(what: str) -> List[Tuple[int, int]]:
+        """Where the search matches are in `what`, in the coordinates `_wrap` folds it to."""
+        if maybe_highlight is None:
+            return []
+        # Normalized as `_wrap` normalizes, and idempotently, so the spans are in the same coordinates the
+        # lines report their offsets in.
+        return _match_spans(" ".join(what.split()), maybe_highlight)
 
     lines = wrap(plain, max_lines)
     tool_calls = (payload.get("message") or {}).get("tool_calls") or ()
@@ -1455,7 +1505,7 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, state: "View
                                      config.role_font_size, measure_text)
 
     if lines:
-        return speaker, _label_runs(lines, maybe_highlight, config.search_match_color), None, label_color
+        return speaker, _label_runs(lines, spans_in(plain), config.search_match_color), None, label_color
 
     message = payload.get("message") or {}
     if tool_calls:
@@ -1473,9 +1523,10 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, state: "View
         # in its own voice rather than the message's.
         sub_label = f"{len(tool_calls)} tool calls" if len(tool_calls) > 1 else None
         lines_for_calls = max_lines - 1 if sub_label is not None else max_lines
+        call_signatures = chatutil.format_tool_calls(tool_calls)
         return (f"{speaker}{marker}",
-                _label_runs(wrap(chatutil.format_tool_calls(tool_calls), lines_for_calls),
-                            maybe_highlight, config.search_match_color),
+                _label_runs(wrap(call_signatures, lines_for_calls),
+                            spans_in(call_signatures), config.search_match_color),
                 sub_label,
                 label_color)
     # Square brackets, which is how the constellation says something in its own voice rather than the
@@ -1483,8 +1534,8 @@ def _speaker_and_label_of(datastore: chattree.Forest, node_id: str, state: "View
     # A box carrying one of these is not quoting a message that says "empty"; it is remarking that there
     # is nothing to quote.
     if (message.get("reasoning_content") or "").strip():
-        return speaker, _label_runs(["[thinking only]"]), None, None
-    return speaker, _label_runs(["[empty]"]), None, None
+        return speaker, _label_runs(_plain_lines("[thinking only]")), None, None
+    return speaker, _label_runs(_plain_lines("[empty]")), None, None
 
 
 class _ToolRound:
@@ -2586,7 +2637,7 @@ def build(datastore: chattree.Forest,
                     # hiding the card HEAD is under. Reading it there is what tells a reader browsing an
                     # older card that the live chat is somewhere else.
                     gap_pills = ("HEAD",) if (set(slot.hidden) & current_branch) else ()
-                    shapes = _box_shapes(x, y, width, config, _label_runs([label]), fill=None, dashed=True,
+                    shapes = _box_shapes(x, y, width, config, _label_runs(_plain_lines(label)), fill=None, dashed=True,
                                          pills=gap_pills, measure_text=measure_text,
                                          previewed=(name == state.cursor_name),
                                          match_caption=_match_caption(ref.match_counts, config)
@@ -2621,7 +2672,7 @@ def build(datastore: chattree.Forest,
             """
             mark_matches(ref)
             node = xdotgraph.Node(x=x, y=y, w=config.gap_node_w, h=config.node_h,
-                                  shapes=_box_shapes(x, y, config.gap_node_w, config, _label_runs([label]),
+                                  shapes=_box_shapes(x, y, config.gap_node_w, config, _label_runs(_plain_lines(label)),
                                                      fill=None, dashed=True,
                                                      pills=("HEAD",) if hides_head else (),
                                                      sub_label=sub_label,
