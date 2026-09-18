@@ -3,7 +3,7 @@
 import pytest
 
 from raven.common.gui.xdotwidget.graph import (Edge, Graph, ImageShape, LineShape, MipLevel, Node, Pen,
-                                               PolygonShape, TextShape)
+                                               PolygonShape, TextShape, UNKNOWN_BACKGROUND)
 from raven.common.gui.xdotwidget.morph import Placement, frame, scene, shifted, still
 
 
@@ -368,3 +368,41 @@ class TestEveryPartKnowsWhatItStandsOn:
         picture = frame(still(graph(box("a", 0.0, 0.0))), graph(box("a", 10.0, 0.0)), 0.5)
         assert self.fills(picture, "a") == [None], \
             "a hint was invented for a node that draws no fill, which would colour its text for one"
+
+    @staticmethod
+    def labels(picture, name):
+        """Every drawn label of `name`, as `(its text, what it says it stands on)`."""
+        return [(shape.text, shape.background_hint)
+                for node, _, _, _ in picture.nodes if node.internal_name == name
+                for shape in node.shapes if isinstance(shape, TextShape)]
+
+    def test_a_shape_keeps_its_own_ground_across_the_change(self):
+        """One level below the hints above, and the level that outranks them.
+
+        An in-between shape is a new object built each frame, so an answer the original carried is lost
+        unless it is carried over — and the fallback is the element's single fill, which is exactly what
+        such a shape is saying is wrong for it. Visible as a label that reads correctly at rest and
+        brightens for the length of every transition.
+        """
+        def grounded(node):
+            for shape in node.shapes:
+                if isinstance(shape, TextShape):
+                    shape.background_hint = None  # a gap box's label: nothing under it but the background
+            return node
+
+        before = graph(grounded(styled_box("a", 0.0)))
+        after = graph(grounded(styled_box("a", 0.0, ring)))
+        picture = frame(still(before), after, 0.5)
+
+        assert len(self.fills(picture, "a")) > 1, \
+            "the fixture did not split the node, so no in-between shape was built and nothing was rebuilt"
+        assert self.fills(picture, "a") != [None], \
+            "the element reports no fill either, so this fixture cannot tell the shape's answer from it"
+        assert self.labels(picture, "a") == [("label", None)], \
+            f"a label lost what it stands on partway through: {self.labels(picture, 'a')}"
+
+    def test_a_shape_that_says_nothing_still_says_nothing(self):
+        """The control: carrying the answer over must not invent one for a shape that never had it."""
+        picture = frame(still(graph(styled_box("a", 0.0))), graph(styled_box("a", 0.0, ring)), 0.5)
+        assert all(hint is UNKNOWN_BACKGROUND for _, hint in self.labels(picture, "a")), \
+            self.labels(picture, "a")
