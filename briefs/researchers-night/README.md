@@ -208,6 +208,35 @@ what a gesture moved — committing and `Esc` hand the keys back, a search step 
 `Home` lands the cursor on HEAD, taking the keyboard shows the cursor, and the ring goes pale while the keys
 are elsewhere. Plus the graph's search buttons lit only where a step would go somewhere.
 
+### Queued for the week of 2026-09-21 — three small items, then the design call
+
+**Four working days, and nothing on the exhibit path** — 16, `crt-display` and `atmospheric-dust` are all
+closed, and every open brief here is scheduled after the event or at v0.2.10. So the week is uncommitted
+rather than tight, and what is queued is small. In order:
+
+1. **Read the chat graph's changelog block back** — `TODO_DEFERRED.md`, *"Read the chat graph's changelog
+   block back before it ships"*. Written in one pass on 2026-09-18 covering three weeks of features, by the
+   person who had just spent the day inside them; it wants a reader's eyes, not the author's.
+2. **The whitespace and test-style sweep** — `TODO_DEFERRED.md`, *"A whitespace and test-style sweep,
+   straight after search v1"*. Its gate was "search v1 lands", which it now has. Mechanical, and needs none
+   of this week's context.
+3. **Brief 14's last item, which closes it**: committing to a match found *only* in a thinking trace should
+   open that trace. The design is in `14_chat-search-brief.md` → *What the graph half asks of this one*,
+   including why it cannot be done at the commit — the log rebuilds asynchronously, so `find_message`
+   answers `None`, and it wants the per-message hook `add_search_matches_for` already sits on. Scheduled
+   2026-09-18 (Juha), on the grounds that it is small and closes a brief.
+
+**Then the one that is not small: message editing v1**, floated 2026-09-18 for the four days. The substrate
+is unusually ready — `chattree`'s revision API is complete and tested, and every message row already carries
+a built, disabled pencil button with `Ctrl+E` reserved for it — so what is left is the callback, the editing
+UI, and the eight `TODO: ... revision` markers where reads auto-select the active revision.
+
+**Start it with a design session, not with code.** Editing a message that has children means the
+conversation below it was generated from the old text; revisions make that representable, and what the UI
+*does* about it — mark the replies stale, offer a re-roll, branch instead — is the decision, and the one
+that can eat the week. The recorded open question (how many of the eight markers actually change) is
+downstream of it. It is slack, and after the event, so an unfinished branch costs nothing.
+
 ### ~~Make `IDLE_SLEEP_S` mean what it says~~ — done 2026-09-11, and it grew a tail
 
 *Hammerspace*, and of the low-density kind: the work is behind a fixed interface — one loop per app, one
