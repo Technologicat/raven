@@ -4366,8 +4366,8 @@ class DPGChatController:
             maybe_index = self._find_search_match(forward=(direction > 0), beyond_a_line=True)
             if maybe_index is None:
                 return
-        node_id, where = self.search_matches[maybe_index]
-        if "thinking" in where and (message := self.view.find_message(node_id)) is not None:
+        node_id, counts = self.search_matches[maybe_index]
+        if counts.thinking and (message := self.view.find_message(node_id)) is not None:
             message.show_thinking_trace()
         maybe_y_scroll = self.view.jump_to_node(node_id)
         # Recorded once the scroll has started, so that `_search_jump_holds` finds it gliding rather than finding the
@@ -4452,7 +4452,7 @@ class DPGChatController:
         containers_by_node_id = {message.node_id: message.gui_container_group
                                  for message in tuple(self.current_chat_history)}
         indices, containers = [], []
-        for index, (node_id, where) in enumerate(self.search_matches):
+        for index, (node_id, _counts) in enumerate(self.search_matches):
             if node_id in containers_by_node_id:
                 indices.append(index)
                 containers.append(containers_by_node_id[node_id])

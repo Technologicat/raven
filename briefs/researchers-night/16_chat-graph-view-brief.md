@@ -1234,6 +1234,17 @@ shows nothing, so what is behind it *is* the total, and only the snippet raises 
 one on screen is counted. Counting it everywhere makes the number mean one thing in both places (Juha,
 2026-09-18).
 
+**And it counts occurrences rather than nodes, on both box kinds** (Juha, 2026-09-18): a gap box already
+says how many *nodes* it stands for, in its own `…N more`, so a node count above it would answer a question
+already answered — what the search adds is how many hits are in there. On a message box the node reading is
+degenerate anyway, a matching message always standing for one. Counted with the regexes that paint the text
+red, and only in whichever of a message's texts actually matched — so a lone fragment sitting in a trace
+that did not match is not a hit, though the renderer would still colour it.
+
+**The search row's `[x/y]` counts messages, and the difference is deliberate.** The message is brief 14's
+match unit and what stepping through the matches moves between, so the row answers *which match am I on*
+while a box answers *how much is in here*. Two questions, two units.
+
 **It rides a pill, on both box kinds**, which is what keeps the two lines of context a box already has: the
 only thing that wanted the second label line was a count line inside the box. `_pill_shapes` builds a pen
 per pill for the backing already, so a pill of its own colour is a couple of lines moved inside the loop;

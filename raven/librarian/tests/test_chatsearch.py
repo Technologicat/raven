@@ -31,11 +31,21 @@ def branch():
     return forest, [question, tool, reply]
 
 
-def find(branch, search_string, **options):
+def find_counted(branch, search_string, **options):
     """Search `branch` with thinking traces included unless told otherwise, since most of these tests are about them."""
     options.setdefault("include_thinking", True)
     forest, node_ids = branch
     return chatsearch.find_matches(forest, node_ids, chatsearch.make_query(search_string, **options))
+
+
+def where_of(counts):
+    """The texts a `MatchCounts` reports a match in, as a set: a count is nonzero exactly where the query matched."""
+    return frozenset(name for name in ("content", "thinking") if getattr(counts, name))
+
+
+def find(branch, search_string, **options):
+    """`find_counted`, reduced to *where* each message matched — which is what most of these tests are about."""
+    return [(node_id, where_of(counts)) for node_id, counts in find_counted(branch, search_string, **options)]
 
 
 class TestMakeQuery:
@@ -85,7 +95,8 @@ class TestFindMatches:
         query = chatsearch.make_query("summarize")
         assert (query.include_thinking, query.include_tools) == (False, True)
         assert chatsearch.find_matches(forest, node_ids, query) == [], "the trace-only match is left out"
-        assert chatsearch.find_matches(forest, node_ids, chatsearch.make_query("wikipedia")) == [(tool, CONTENT)]
+        found = chatsearch.find_matches(forest, node_ids, chatsearch.make_query("wikipedia"))
+        assert [(node_id, where_of(counts)) for node_id, counts in found] == [(tool, CONTENT)]
 
     def test_tool_messages_can_be_left_out(self, branch):
         _, (question, tool, reply) = branch
@@ -93,6 +104,48 @@ class TestFindMatches:
         assert find(branch, "wikipedia", include_tools=False) == []
 
     def test_the_text_is_normalized_as_the_query_is(self):
+        """Also the one place asserting the raw shape, so a change to it cannot slip past the reducing helper above."""
         forest = Forest()
         node = forest.create_node(payload=payload("assistant", "Oxygen is O₂."), parent_id=None)  # content only, so defaults suffice
-        assert chatsearch.find_matches(forest, [node], chatsearch.make_query("o2")) == [(node, CONTENT)]
+        assert chatsearch.find_matches(forest, [node], chatsearch.make_query("o2")) == \
+            [(node, chatsearch.MatchCounts(content=1, thinking=0))]
+
+
+class TestMatchCounts:
+    """How many hits a match holds, and which of a message's texts they are in.
+
+    A chat graph box reports a count rather than a yes-or-no, so the number has to mean something exact:
+    occurrences of the query's fragments, in the texts the query matched.
+    """
+
+    def test_a_fragment_occurring_twice_is_counted_twice(self, branch):
+        _, (_question, tool, _reply) = branch
+        counted = dict(find_counted(branch, "photo"))
+        assert counted[tool].content == 2, "'Photocatalysis' and 'photoreaction' are two occurrences of the one fragment"
+
+    def test_the_texts_are_counted_apart_and_the_total_is_their_sum(self, branch):
+        _, (_question, _tool, reply) = branch
+        counts = dict(find_counted(branch, "the"))[reply]
+        assert (counts.content, counts.thinking) == (1, 2)
+        assert counts.total == 3
+
+    def test_a_text_that_did_not_match_contributes_nothing(self, branch):
+        """A lone fragment sitting in a non-matching text is not a hit, though the renderer would colour it."""
+        _, (_question, _tool, reply) = branch
+        counts = dict(find_counted(branch, "the reaction"))[reply]
+        assert dict(find_counted(branch, "the"))[reply].thinking == 2, \
+            "the control: that trace holds two occurrences of 'the', so a count over every text would find them"
+        assert counts.thinking == 0, "the trace lacks the other fragment, so it did not match and holds no hits"
+        assert counts.content == 2
+
+    def test_a_trace_left_out_of_the_search_counts_nothing(self, branch):
+        _, (_question, _tool, reply) = branch
+        assert dict(find_counted(branch, "the", include_thinking=False))[reply].thinking == 0
+
+    @pytest.mark.parametrize("search_string", ["photocatalysis", "the", "photo", "the reaction"])
+    def test_a_matching_message_always_counts_at_least_one(self, branch, search_string):
+        """A match means every fragment occurs somewhere in one text, so a count of zero would be the two disagreeing."""
+        found = find_counted(branch, search_string)
+        assert found, f"{search_string!r} matches nothing here, so this parameter checks nothing"
+        for _node_id, counts in found:
+            assert counts.total >= 1
