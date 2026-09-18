@@ -5,6 +5,7 @@ DearPyGUI's drawlist primitives.
 """
 
 __all__ = ["set_dark_mode", "get_dark_mode", "color_to_dpg",
+           "text_color",  # what a pen's text actually lands as, contrast rule included
            "FontLadder", "TextFonts", "nearest_font",
            "render_graph", "render_scene"]
 
@@ -126,6 +127,29 @@ def _ink(color: Color, opacity: float) -> DPGColor:
     """`color_to_dpg`, with `opacity` multiplied into the alpha."""
     r, g, b, a = color_to_dpg(color)
     return (r, g, b, int(a * opacity))
+
+
+def text_color(pen: Pen, element_fillcolor: Color | None, opacity: float = 1.0) -> DPGColor:
+    """Return the colour to draw `pen`'s text in, on an element filled with `element_fillcolor`.
+
+    In dark mode, text on a coloured fill is drawn in a contrast-chosen grey rather than in the pen's own
+    colour: the lightness inversion that serves everything else can put near-white text on a mid-lightness
+    fill — green or yellow, say — which is unreadable. `element_fillcolor` is the element's *filled* shape's
+    colour (from xdot's `_draw_`), not this text's own pen (from `_ldraw_`).
+
+    **`pen.keep_color` opts out of that**, for text whose colour carries meaning rather than merely being
+    legible: a search match drawn in a readable grey is not a compromise, it is wrong. The rule exists for
+    graphs whose colours nobody picked with dark mode in mind, and a caller that authored its own for it is
+    not one of those — there, the rule would be overriding somebody who has already done the work.
+
+    Pure, so what lands on screen can be asserted without a running renderer.
+    """
+    if _dark_mode and element_fillcolor is not None and not pen.keep_color:
+        inv_fill = _invert_lightness(element_fillcolor)
+        lum = _perceived_luminance(inv_fill[0], inv_fill[1], inv_fill[2])
+        value = int((_DARK_MODE_L_MIN if lum > 0.5 else _DARK_MODE_L_MAX) * 255)
+        return (value, value, value, int(pen.color[3] * opacity * 255))
+    return _ink(pen.color, opacity)
 
 
 def _get_effective_pen(shape: Shape,
@@ -273,21 +297,7 @@ def _render_text_shape(drawlist: int | str,
     # Approximate adjustment based on font size
     y = sy - font_size_px * 0.8
 
-    # In dark mode, text on colored fills needs contrast-aware color selection.
-    # The standard lightness inversion can produce near-white text on medium-
-    # lightness fills (e.g., green, yellow), which is unreadable.
-    # `element_fillcolor` comes from the element's filled shape (parsed from
-    # `_draw_`), not from this text shape's pen (parsed from `_ldraw_`).
-    if _dark_mode and element_fillcolor is not None:
-        inv_fill = _invert_lightness(element_fillcolor)
-        lum = _perceived_luminance(inv_fill[0], inv_fill[1], inv_fill[2])
-        if lum > 0.5:
-            v = int(_DARK_MODE_L_MIN * 255)
-        else:
-            v = int(_DARK_MODE_L_MAX * 255)
-        color = (v, v, v, int(pen.color[3] * opacity * 255))
-    else:
-        color = _ink(pen.color, opacity)
+    color = text_color(pen, element_fillcolor, opacity)
 
     # DPG's draw_text size parameter is in pixels
     item = dpg.draw_text((x, y), text, size=font_size_px, color=color, parent=drawlist)

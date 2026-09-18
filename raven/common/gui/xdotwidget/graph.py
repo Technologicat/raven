@@ -135,6 +135,14 @@ class Pen:
                       back to the regular one, so these are safe to set whatever the caller loaded.
                       A parsed xdot graph never sets them: the format's font opcode carries a family
                       name, and this widget does not resolve one.
+        keep_color: Draw text in exactly `color`, rather than in whatever dark mode would pick for
+                    contrast against the element's fill. Set it where the colour *is* the message — a
+                    search match painted red, a label quoting something other than what was said — and
+                    where the caller has already chosen that colour knowing what it will sit on.
+
+                    Off by default, because the contrast rule earns its place on the graphs it was
+                    written for: a parsed one carries whatever colours its author chose for paper, and
+                    inverting those can put near-white text on a mid-lightness fill.
     """
 
     DEFAULT_COLOR: Color = (0.0, 0.0, 0.0, 1.0)
@@ -148,6 +156,7 @@ class Pen:
         self.dash: tuple[float, ...] = ()
         self.bold: bool = False
         self.italic: bool = False
+        self.keep_color: bool = False
 
     def copy(self) -> "Pen":
         """Create and return a copy of this pen."""
@@ -159,6 +168,7 @@ class Pen:
         pen.dash = self.dash
         pen.bold = self.bold
         pen.italic = self.italic
+        pen.keep_color = self.keep_color
         return pen
 
     def highlighted_initial(self) -> "Pen":

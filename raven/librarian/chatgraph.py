@@ -1280,6 +1280,10 @@ def _run_shapes(runs: Sequence[_Run], x: float, baseline: float, base_pen: xdotg
             pen = base_pen.copy()
             if run.color is not None:
                 pen.color = run.color
+                # A run that names its own colour is saying something by it, so the renderer must not
+                # trade that colour for a legible grey against the box's fill — which is what it does to
+                # a graph whose colours were chosen without dark mode in mind. These were chosen with it.
+                pen.keep_color = True
             pen.bold = run.bold
         width = _text_width(run.text, font_size, measure_text, advance_per_char, bold=run.bold)
         shapes.append(xdotgraph.TextShape(pen, cursor, baseline, xdotgraph.TextShape.LEFT, width, run.text))
@@ -1923,6 +1927,9 @@ def _box_shapes(x: float, y: float, width: float, config: LayoutConfig,
     text_pen = xdotgraph.Pen()
     text_pen.color = label_color if label_color is not None else LINE_COLOR
     text_pen.fontsize = config.font_size
+    # Only where the colour is carrying something. The ordinary ink is left to the renderer's contrast
+    # rule, which is what it has always been drawn through and comes out right.
+    text_pen.keep_color = label_color is not None
 
     # A text shape's y is its baseline, so a line sits on the y given plus about a third of its cap height.
     # With a speaker the two lines straddle the centre; without one the label takes the centre itself.
