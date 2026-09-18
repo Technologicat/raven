@@ -1181,6 +1181,11 @@ The 2026-09-08 reading — *a search changes which nodes the graph must show* �
 **A is item 8's v1** (Juha, 2026-09-18). **B stays wanted and becomes a checkbox**, above the graph beside
 its own next/previous controls, so a reader picks which of the two pictures they are looking at.
 
+**Doubted later the same day, after using A**: *"I think that might not even be needed"* (Juha, 2026-09-18).
+Navigating the matches turned out to answer what B was wanted for, so B is no longer treated as pending
+work — **this brief closes once A's polish is in**, rather than waiting on a second mode. Should B be wanted
+after all, what it needs is written above and nothing here has been spent against it.
+
 **What blocks B is a design rather than the module.** Matches scattered across depths and branches need
 connecting ancestry to have edges at all, and which ancestors survive is unanswered. The code side is
 contained: B changes which nodes are selected, plus the run-splitting inside `_window`, and everything

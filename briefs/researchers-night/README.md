@@ -18,7 +18,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | Brief | What | Status |
 |---|---|---|
 | `markdown-block-rendering-brief.md` | Band-2 item 12: block-level Markdown in the chat view | **After Researchers' Night** — it was the sprint's slack, and the slack is gone (2026-09-15). Steps 1 and 5 landed 2026-08-25; what remains is behind the single-newline split, which is also what fenced code and multi-line lists are waiting on |
-| `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night, and **in progress**. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Items 1–7 are done, and so is the transition animation (2026-09-16); the look check (item 10) was struck the same day, having been done as the work went. Open on search alone — **and a search v1 is back on the exhibit path** as of 2026-09-16; see *Decided 2026-09-16* below. Search (item 8) moved past the event on 2026-09-15, with a first draft welcome before it; see *Decided 2026-09-15* below |
+| `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night, and **in progress**. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Items 1–7 are done, and so is the transition animation (2026-09-16); the look check (item 10) was struck the same day, having been done as the work went. Open on search alone — **and a search v1 is back on the exhibit path** as of 2026-09-16; see *Decided 2026-09-16* below. Search (item 8) moved past the event on 2026-09-15, with a first draft welcome before it; see *Decided 2026-09-15* below. **Search v1 is built and in polish as of 2026-09-18**, and the second search mode it was to be followed by is doubted rather than pending — so this brief closes on that polish; see *Decided 2026-09-18* below |
 | `12_derived-artifact-store-brief.md` | One keying and regeneration mechanism for everything computed *from* a source artifact | v0.2.10. Does not depend on 13 |
 | `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night. **It precedes `visualizer-keyword-pools-brief.md`'s corpus-level display** (Juha, 2026-09-10): its §2 keeps the corpus frequency stats that window reads, so it is the foundation and goes first |
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, ~~PCA preprocessing~~, ~~cosine-to-medoid outlier assignment~~, Procrustes alignment, and **clustering in high-D**. **Items 2, 3 and 5 were measured on 2026-09-01 and the brief now points at `investigations/highdim-clustering/README.md`, which is the specification** — 2 and 3 are measured harmful and must not be built as written, 5 is settled and ready to implement (agglomerative, not HDBSCAN) | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
@@ -179,6 +179,23 @@ picked up: flake8 across the tree, and the Visualizer's test modules regrouped i
 asks. The detail is in `TODO_DEFERRED.md`, *"A whitespace and test-style sweep, straight after search v1"*. It
 is recorded here as well because an item in that file is otherwise easy to forget, and this README is what a
 session reads first.
+
+### Decided 2026-09-18 — the second search mode is doubted, so brief 16 closes on polish
+
+Search v1 — **A, navigate** — is built, both halves, and was driven live the same day. Using it answered the
+question the second mode was wanted for: *"I think that might not even be needed"* (Juha). So **B, filter**
+is no longer treated as pending work, and `16_chat-graph-view-brief.md` closes once v1's polish is in
+rather than waiting on a second mode.
+
+Recorded here because it leaves no diff — B was never started, so nothing in the tree would otherwise show
+that it stopped being expected, and the next session would read the brief's *"B stays wanted"* as current.
+What B would need is still written in the brief, against the day somebody wants it.
+
+**Polish, as the live looks have found it**: four rendering faults on 2026-09-18 (all fixed), then, from the
+second look, the keyboard following what a gesture moves — committing and `Esc` hand the keys back, a search
+step sends them after the jump — and the graph's search buttons lit only where a step would go somewhere.
+Still unjudged: one line of context around a match, forest preorder as an order, the collapse rule for
+arrows and clicks, and whether a jump's two topology changes read as one motion.
 
 ### ~~Make `IDLE_SLEEP_S` mean what it says~~ — done 2026-09-11, and it grew a tail
 
