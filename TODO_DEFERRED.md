@@ -11,6 +11,37 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## Tests for the rest of the `scripts/` checkers
+
+*Cluster: testing · Cost: M overall; two or three of them are S · Gate: none · Filed: 2026-09-20 · See also: `scripts/tests/test_check_doc_links.py`*
+
+`check_doc_links.py` got tests on 2026-09-20 and is the only one of the nine that has any.
+`scripts/tests/` now exists as their home, and that module is the pattern: every case feeds the checker
+input broken on purpose, plus a control proving the checker can still see a fault it is meant to catch.
+
+The reason this is worth doing rather than filed for tidiness: an untested checker fails *silently and
+in the reassuring direction*. It reports nothing, which is indistinguishable from a clean repository,
+and nobody investigates a passing check. `check_doc_links` shipped a first draft whose slug function
+reported two working links as broken — the loud direction, and caught within the minute. Its second
+draft had the quiet one, reading quoted example links as real references, and that was found only by
+running it over 148 documents rather than the README it was written against. A checker with no
+adversarial input has had neither test performed on it.
+
+They are not uniformly cheap, which is the thing to know before picking one up:
+
+- **Mostly pure, so mostly fixtures-free:** `check_exports.py` (six functions, one touching the repo)
+  and `check_dependency_versions.py` (nine, three). Start here.
+- **Repo-walkers throughout,** so they need a fixture tree or a `tmp_path` sandbox before anything can
+  be asserted: `check_ci_imports.py` (seven of seven), `check_usage_paths.py` (four of four),
+  `check_todo_structure.py` (two of two).
+- **In between:** `check_module_maps.py`, `check_option_lists.py`, `check_hotkey_tooltips.py`.
+
+The tests run locally rather than in CI, which scopes `pytest` to `raven/`. That is deliberate — these
+are development helpers, and the local suite runs before a push anyway — so this item wants no workflow
+change.
+
+Raised by Juha (2026-09-20) on noticing that `scripts/` had no tests at all.
+
 ## Cite a retrieved passage by the page number printed on the page
 
 *Cluster: document-ingestion · Cost: M — the PDF half is S, the rest is `extract_text`'s return shape and the chunker · Gate: a decision on what `extract_text` returns · Filed: 2026-09-20*
