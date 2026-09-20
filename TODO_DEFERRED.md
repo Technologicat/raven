@@ -11,6 +11,62 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## Cite a retrieved passage by the page number printed on the page
+
+*Cluster: document-ingestion · Cost: M — the PDF half is S, the rest is `extract_text`'s return shape and the chunker · Gate: a decision on what `extract_text` returns · Filed: 2026-09-20*
+
+A PDF carries a `/PageLabels` tree mapping each physical page index to the number *printed* on that page, with
+a style (arabic, upper or lower roman, upper or lower letters), an optional prefix and a start value. Front
+matter is `i`–`viii` where the indices are 0–7; a journal article paginated continuously within its volume
+starts at index 0 and prints `447`. `pypdf` exposes the whole mapping as `reader.page_labels`, a `list[str]`
+parallel to `reader.pages`.
+
+That printed number is the one a reader can act on — it matches the paper's own table of contents, the
+citation they would write, and what they see when they open the file. The physical index matches nothing.
+So when Librarian grounds an answer in a retrieved chunk, the page label is the locator worth showing, and
+index 0 for a paper that starts on page 447 is worth showing to nobody.
+
+Nothing carries a locator today. `_extract_pdf` joins every page's text into one string, and the only page
+number in the module is the 0-based `enumerate` index inside the warning logged for an unreadable page.
+
+Three things make this larger than the one-line `pypdf` call:
+
+- **`extract_text` returns `str`**, so locators mean either changing that or carrying an offset→label map
+  beside it.
+- **It is the shared chokepoint** for RAG ingestion and chat attachments both, so whatever shape it grows
+  lands on both surfaces at once — the same property that makes adding a *format* there cheap makes changing
+  its *contract* expensive.
+- **The retrieval chunker slides a window that does not respect page boundaries**, so a chunk can span a page
+  break and the association has to survive that.
+
+A locator is also PDF-specific. The other backends have no stable page numbering — pagination in `.docx` and
+`.odt` is decided at layout time and `python-docx` does not report it — so whatever the shape is, it has to
+degrade to "no locator" without the callers special-casing by format.
+
+**Where there is no page number, cite a text anchor instead** — a short snippet, a section heading, or both —
+so the reader can find the passage with Ctrl+F in the original. That works for every format, which turns the
+shape around: the anchor is the mechanism and the page label is an enrichment on top of it, rather than the
+anchor being a degraded mode for the formats that lack pagination.
+
+Three properties of the stored text decide whether such an anchor actually matches, and all three are
+already true today:
+
+- **`extract_text` applies `common_text.normalize`**, which strips invisible-injection glyphs and control
+  characters and applies Unicode NFC. A PDF text layer holding decomposed forms is stored composed, and
+  viewers differ on whether their search normalizes, so an accented word can fail to match.
+- **A soft hyphen or zero-width space inside a word is gone** from our copy for the same reason, while the
+  viewer is searching the raw layer that still has it.
+- **PDF text is line-broken by layout**, and most viewers will not match a search string across a line
+  break. So an anchor wants to be a short run that sits *within* one line, and the matching wants to be
+  approximate rather than exact.
+
+The librarian indexer does not dehyphenate (`raven.client.api.sanitize_dehyphenate` is reached by
+`visualizer.importer`, `papers.pdf2bib` and `tools.dehyphenate`, not by the RAG path), so a hyphenated
+line break survives into the stored text as-is. Worth keeping that way if anchors are built on it.
+
+Raised by Juha while reviewing a pypdf bump whose security fix turned out to be in the page-label code
+(2026-09-20); the text-anchor fallback is his (2026-09-20).
+
 ## Read the chat graph's changelog block back before it ships
 
 *Cluster: chat-graph-view · Cost: S · Gate: none · Filed: 2026-09-18*
