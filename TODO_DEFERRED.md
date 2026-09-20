@@ -5805,18 +5805,35 @@ carries one target, `requires_python = ">=3.11,<3.13"`, and 418 `macosx`/`win_am
 wheels are `manylinux_2_28_{x86_64,aarch64}` and `win_amd64`, all `+cu128`, with no macOS build at all,
 because the `pytorch-cu128` index publishes none.
 
-So committing it as it stands gives Linux and Windows on CUDA 12.8 a reproducible install and hands
-everyone else a `pdm install` that cannot resolve until they drop the source and re-lock. Since the README
-tells users to install with `pdm install`, that lands on users rather than only on developers.
+**But that restriction is inherited, not introduced, which is the part that decides the item.** macOS has
+had no CUDA since 2018 and Apple Silicon never did — the M series runs torch on MPS over unified memory —
+so the index carrying no macOS wheels is what it should carry, rather than a finding. Removing the source
+is not a downgrade for those users either: it resolves torch from PyPI, whose wheels are the ones with MPS
+in them, and Raven speaks MPS (`common.deviceinfo`, the `"mps"` device string in `server.config`, and the
+float64 avoidance in `common.image.utils` that exists because MPS has no float64). `include_packages`
+already makes that index *exclusive* for the torch trio, so a macOS `pdm install` fails today against
+`pyproject.toml` alone, with no lock in sight — and the README says so in bold, instructing macOS users to
+delete the `[[tool.pdm.source]]` block before installing. Anyone off CUDA 12.8 is in the same position, by
+the same paragraph.
 
-**This upgrades the `.gitignore` entry from an undecided inconsistency to a documented exception**, which
-is the part of this item that was actually open. What is left is a choice among three, none of them free:
-separate lock targets per platform, a committed Linux/Windows lock plus a documented re-lock step for
-macOS and other CUDA versions, or leaving it ignored and keeping
-`scripts/check_dependency_versions.py` as the thing that catches the drift.
+So a committed lock takes nothing away from them. It mirrors a configuration that is already CUDA-12.8-only
+by design and carries a documented escape hatch; it does not narrow what anyone can install. The one real
+increment is that editing `pyproject.toml` changes the content hash, so those users run `pdm lock`
+explicitly where today the resolution simply happens — one command, already implied by the instruction to
+edit the file.
 
-Raised again by Juha on 2026-09-20, asking whether the 0.2.9 release was the moment to commit it. The
-answer the measurement gives is no, and not for scheduling reasons.
+**Which leaves the fleet-policy argument standing rather than blocked.** The August framing assumed the
+CUDA set might make the lock unshippable; measured, it does not. So the choice is the ordinary one — commit
+it and get reproducible installs for the default audience, or keep it ignored and keep
+`scripts/check_dependency_versions.py` as the thing that catches the drift — with no platform veto either
+way.
+
+Raised again by Juha on 2026-09-20, asking whether the 0.2.9 release was the moment. The measurement clears
+the blocker rather than confirming it, so the timing question is a real one again and not foreclosed.
+
+**A caution for whoever picks this up**, since it was nearly written into this file as a conclusion: "the
+lock has no macOS torch wheels" is true and proves nothing on its own. The comparison that matters is
+against what a macOS install requires *without* a lock, which is the same source edit either way.
 
 So this is a **measurement**, not a judgement call: generate the lock here, then try `pdm install` against
 it on a non-CUDA target. **CI is the only such target available** (Juha, 2026-08-04 — no non-CUDA machine
