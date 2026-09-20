@@ -873,6 +873,30 @@ Two consequences worth stating, because both were learned the expensive way:
   - **What is left is reading the source**, which is enough for anything that is syntax rather than behaviour — that a handler is registered, that every registered callback makes some call. `raven/visualizer/tests/test_app_throttle.py` is the worked example, and it catches what an import could not: a handler added later is visible to the parse whether or not anything calls it.
 - **App-level state that mirrors a component's state will drift.** A module-level "the current image is N" tracked beside the widget that holds it is correct only while the app is the sole writer, and it fails silently the moment anything else drives that widget. Ask the component instead, or give it the datum to carry (`ImageView.image_key` is the worked example). The corruption this produced outlived the session that caused it, and gave no sign of itself anywhere near where it happened.
 
+### Device selection: a supported platform needs no configuration
+
+**The level of support Raven aims at, across platforms, is "no config change needed"** (Juha,
+2026-09-20). A user on a supported machine installs and runs; they do not first have to find out what
+their accelerator is called and write it into a config file.
+
+`common.deviceinfo` is where that promise is kept. The configs ship `device_string: "gpu"`, an alias
+rather than a device, and `_autodetect_gpu` probes `_GPU_BACKENDS` in order — CUDA (which is also how
+ROCm presents), MPS, XPU, Vulkan — takes the single match, and logs which one it resolved to. An
+explicit `"cuda:0"` or `"mps"` remains available for pinning; it is not the path anyone is expected to
+take.
+
+- **So adding a backend means adding a probe, not documenting a setting.** A new accelerator that
+  works only once the user edits a config has not been supported, it has been accommodated. The
+  three-line `_GPU_BACKENDS` entry is the whole of the work, and the `hasattr` gate before each
+  `is_available()` is what lets a probe name a namespace a given build may not have.
+- **Multiple live backends raise rather than guess**, which is the one place the promise is
+  deliberately not kept: two GPU vendors active at once (NVIDIA plus Intel Arc, say) is rare enough
+  that picking silently would be worse than asking. The error names the candidates.
+- **Apple Silicon is a supported target with a real user**, and it is the case that shows the promise
+  working: no CUDA exists there, PyPI's macOS wheels carry MPS, and `"gpu"` finds it unaided. The
+  install-side half — removing the `pytorch-cu128` source, which has no macOS wheels because there is
+  nothing for them to be — is in the README under *Install on an Apple Silicon Mac*.
+
 ### Avatar Lipsync
 TTS (Kokoro) provides timestamped phonemes → mapped to mouth morphs → THA3 animator. Audio playback occurs on the client side.
 This coupling limits TTS engine choices (most don't expose timestamped phoneme data).

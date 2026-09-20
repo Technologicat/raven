@@ -30,6 +30,7 @@
         - [Install Raven via PDM](#install-raven-via-pdm)
             - [Basic install without GPU compute support](#basic-install-without-gpu-compute-support)
             - [Install with GPU compute support](#install-with-gpu-compute-support)
+            - [Install on an Apple Silicon Mac (M series)](#install-on-an-apple-silicon-mac-m-series)
             - [Install on an Intel Mac with MacOSX 10.x](#install-on-an-intel-mac-with-macosx-10x)
             - [Install on Windows (if Windows Defender gets angry)](#install-on-windows-if-windows-defender-gets-angry)
         - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
@@ -394,6 +395,20 @@ The `torch`, `torchvision` and `torchaudio` versions are pinned as a matched set
 To target a **different CUDA version**, change the `cuXYZ` in that source's URL (e.g. `cu126`, `cu129`) and re-run `pdm lock && pdm install`. Bump the three `torch*` versions in `[project] dependencies` together, deliberately, if you also want a newer PyTorch.
 
 :exclamation: *The `pytorch-cu128` index has Linux and Windows wheels only — no macOS wheels.* On **macOS** (or any platform that index doesn't cover), remove that `[[tool.pdm.source]]` block from [`pyproject.toml`](pyproject.toml) before installing, so `torch` resolves from PyPI instead. :exclamation:
+
+#### Install on an Apple Silicon Mac (M series)
+
+Apple Silicon is a supported target. Install as above, with the `pytorch-cu128` source block removed as described just now.
+
+Removing it is not a downgrade — it is how you get the right wheels. There is no CUDA on Apple Silicon; PyTorch reaches the M series' GPU through **MPS** (Metal Performance Shaders), over the same unified memory the CPU uses, and the MPS builds are the ones on PyPI.
+
+Nothing needs configuring afterwards. Raven's device settings default to the `"gpu"` alias, which probes the backends it knows — CUDA, MPS, XPU, Vulkan — and takes the one it finds, so on an M-series Mac it selects MPS by itself and says so at startup:
+
+```
+get_device_and_dtype: 'gpu' autodetect resolved to MPS (device_string='mps').
+```
+
+To pin it rather than autodetect, set the device string to `"mps"` in the config modules named under *Choose which GPU to use*, below.
 
 #### Install on an Intel Mac with MacOSX 10.x
 
