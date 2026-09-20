@@ -30,6 +30,7 @@
         - [Install Raven via PDM](#install-raven-via-pdm)
             - [Basic install without GPU compute support](#basic-install-without-gpu-compute-support)
             - [Install with GPU compute support](#install-with-gpu-compute-support)
+                - [CUDA version and the `torch` wheels](#cuda-version-and-the-torch-wheels)
             - [Install on an Apple Silicon Mac (M series)](#install-on-an-apple-silicon-mac-m-series)
             - [Install on an Intel Mac with MacOSX 10.x](#install-on-an-intel-mac-with-macosx-10x)
             - [Install on Windows (if Windows Defender gets angry)](#install-on-windows-if-windows-defender-gets-angry)
@@ -402,13 +403,7 @@ Apple Silicon is a supported target. Install as above, with the `pytorch-cu128` 
 
 Removing it is not a downgrade — it is how you get the right wheels. There is no CUDA on Apple Silicon; PyTorch reaches the M series' GPU through **MPS** (Metal Performance Shaders), over the same unified memory the CPU uses, and the MPS builds are the ones on PyPI.
 
-Nothing needs configuring afterwards. Raven's device settings default to the `"gpu"` alias, which probes the backends it knows — CUDA (which is also how an AMD card under ROCm presents itself to PyTorch), MPS, XPU (Intel Arc), Vulkan — and takes the one it finds, so on an M-series Mac it selects MPS by itself and says so at startup:
-
-```
-get_device_and_dtype: 'gpu' autodetect resolved to MPS (device_string='mps').
-```
-
-To pin it rather than autodetect, set the device string to `"mps"` in the config modules named under *Choose which GPU to use*, below.
+Nothing needs configuring afterwards: Raven's device settings ship set to detect, and on an M-series Mac that finds MPS on its own. See [Choose which GPU to use](#choose-which-gpu-to-use-optional), below, for what it reports and how to pin a backend instead.
 
 #### Install on an Intel Mac with MacOSX 10.x
 
@@ -612,6 +607,14 @@ source env.sh
 This sets up the library paths and `$PATH` so that Raven finds the CUDA libraries. This script is coded to look for them in Raven's `.venv` subfolder.
 
 ### Choose which GPU to use (optional)
+
+Raven's device settings ship as `"gpu"`, which is an instruction to detect rather than the name of a device. It probes the backends Raven knows — CUDA (which is also how an AMD card under ROCm presents itself to PyTorch), MPS (Apple Silicon), XPU (Intel Arc), Vulkan — takes the one it finds, and says which at startup:
+
+```
+get_device_and_dtype: 'gpu' autodetect resolved to MPS (device_string='mps').
+```
+
+With one GPU in the machine that is the whole story, and nothing below is needed. To pin a backend rather than detect it, write its device string — `"cuda:0"`, `"mps"`, `"xpu"`, `"vulkan"` — into the config modules named just below. Raven refuses to guess when two different vendors are active at once (an NVIDIA card alongside an Intel Arc, say): it stops and names the candidates, and you pick one the same way.
 
 If your machine has multiple GPUs, there are two ways to tell Raven which GPU to use.
 
