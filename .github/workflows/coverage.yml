@@ -14,6 +14,10 @@ permissions:
 
 jobs:
   coverage:
+    # Upstream only. A fork runs this on its own pushes with no `CODECOV_TOKEN` of its own, and
+    # Codecov wants one for a permanent branch even on a public repo, so without this the workflow
+    # greets every contributor with a red run about a secret they were never meant to hold.
+    if: github.repository == 'Technologicat/raven'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
