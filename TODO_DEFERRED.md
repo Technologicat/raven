@@ -5774,7 +5774,7 @@ Discovered during brief 07 GUI testing (2026-07-29, raised by Juha).
 
 ## `pdm.lock` is gitignored, against the fleet policy for applications
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10 if it resolves cleanly, else next · Filed: 2026-08-04 · See also: "Easy install with a chosen CUDA version"*
+*Cluster: ? · Cost: M — the lock cannot be committed as-is; what remains is choosing between lock targets, a documented re-lock step, or leaving it · Gate: next; measured 2026-09-20 and it does not resolve cleanly · Filed: 2026-08-04 · See also: "Easy install with a chosen CUDA version"*
 
 Fleet policy is that libraries don't commit `pdm.lock` and applications do — a lockfile is what makes a
 deployment reproducible, and Raven is an application. Raven's `.gitignore` has ignored it since early on
@@ -5798,6 +5798,25 @@ turns "reproducible install" into "install is now broken for everyone unlike me"
 
 Juha (2026-08-04): recent trouble with some ML libraries on macOS makes the middle possibility the one to
 check first.
+
+**Measured 2026-09-20, and it is the middle one.** Read straight out of a freshly generated lock: the file
+carries one target, `requires_python = ">=3.11,<3.13"`, and 418 `macosx`/`win_amd64` wheel entries, so it
+*is* cross-platform in general. `torch` is the exception and the only one that matters — the recorded
+wheels are `manylinux_2_28_{x86_64,aarch64}` and `win_amd64`, all `+cu128`, with no macOS build at all,
+because the `pytorch-cu128` index publishes none.
+
+So committing it as it stands gives Linux and Windows on CUDA 12.8 a reproducible install and hands
+everyone else a `pdm install` that cannot resolve until they drop the source and re-lock. Since the README
+tells users to install with `pdm install`, that lands on users rather than only on developers.
+
+**This upgrades the `.gitignore` entry from an undecided inconsistency to a documented exception**, which
+is the part of this item that was actually open. What is left is a choice among three, none of them free:
+separate lock targets per platform, a committed Linux/Windows lock plus a documented re-lock step for
+macOS and other CUDA versions, or leaving it ignored and keeping
+`scripts/check_dependency_versions.py` as the thing that catches the drift.
+
+Raised again by Juha on 2026-09-20, asking whether the 0.2.9 release was the moment to commit it. The
+answer the measurement gives is no, and not for scheduling reasons.
 
 So this is a **measurement**, not a judgement call: generate the lock here, then try `pdm install` against
 it on a non-CUDA target. **CI is the only such target available** (Juha, 2026-08-04 — no non-CUDA machine
