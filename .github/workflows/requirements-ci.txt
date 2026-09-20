@@ -42,7 +42,7 @@ mistletoe==1.6.0
 # Also needed because of the GUI tests: `raven.common.gui.qroverlay` imports it to build the exhibit
 # overlay's QR matrix, and `test_qroverlay.py` exercises that without a window.
 segno==1.6.6
-simpleeval==1.0.7  # librarian.llmtools, the `calculate` tool; `test_llmtools.py` exercises it
+simpleeval==1.0.8  # librarian.llmtools, the `calculate` tool; `test_llmtools.py` exercises it
 # `librarian.chatgraph` strips Markdown out of a node's label, a box drawing plain glyphs and no formatting.
 # Imported at module scope there, so `test_chatgraph.py` cannot even be collected without it.
 strip-markdown==1.3
