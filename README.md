@@ -402,7 +402,7 @@ Apple Silicon is a supported target. Install as above, with the `pytorch-cu128` 
 
 Removing it is not a downgrade — it is how you get the right wheels. There is no CUDA on Apple Silicon; PyTorch reaches the M series' GPU through **MPS** (Metal Performance Shaders), over the same unified memory the CPU uses, and the MPS builds are the ones on PyPI.
 
-Nothing needs configuring afterwards. Raven's device settings default to the `"gpu"` alias, which probes the backends it knows — CUDA, MPS, XPU, Vulkan — and takes the one it finds, so on an M-series Mac it selects MPS by itself and says so at startup:
+Nothing needs configuring afterwards. Raven's device settings default to the `"gpu"` alias, which probes the backends it knows — CUDA (which is also how an AMD card under ROCm presents itself to PyTorch), MPS, XPU (Intel Arc), Vulkan — and takes the one it finds, so on an M-series Mac it selects MPS by itself and says so at startup:
 
 ```
 get_device_and_dtype: 'gpu' autodetect resolved to MPS (device_string='mps').
