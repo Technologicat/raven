@@ -1793,6 +1793,10 @@ with timer() as tim:
                         return
                     if app_state["HEAD"] == node_id:
                         return
+                    # Before the rebuild, which is what consumes it. A box whose count was a thinking-trace
+                    # hit owes the reader that text once they act on it, and the graph has no trace to open:
+                    # the log is where the match the count was counting can actually be read.
+                    chat_controller.open_thinking_trace_on_arrival(node_id)
                     app_state["HEAD"] = node_id
                     # The same discontinuity a sibling switch is, and usually a larger one: a jump taken
                     # from the graph can cross to a conversation the avatar was never in.

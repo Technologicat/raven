@@ -4184,6 +4184,9 @@ class DPGChatController:
         self._search_position_y_scroll = None
         self._search_position_stale = True
         self._search_jump = None  # `(index, target_y_scroll)`; see `_search_jump_holds`
+        # The one node whose thinking trace is owed to the reader once its message exists; see
+        # `open_thinking_trace_on_arrival`. `None` whenever nothing is awaited, which is nearly always.
+        self._node_awaiting_trace_open = None
         # Called with no arguments whenever any of the four above changes, so the app can redraw its search row.
         # Set by the app; `None` until then.
         self.on_search_results_changed = None
@@ -4326,15 +4329,44 @@ class DPGChatController:
     def add_search_matches_for(self, node_id: str) -> None:
         """Test one message just added to the end of the branch on screen against the search, and count it if it matches.
 
-        Per message, so that a view rebuilt message by message tests each once.
+        Per message, so that a view rebuilt message by message tests each once. Also where a jump that had to
+        wait for this message gets to open its thinking trace; see `open_thinking_trace_on_arrival`.
         """
-        maybe_query = self.search_query
-        if maybe_query is None:
-            return
-        new_matches = chatsearch.find_matches(self.datastore, [node_id], maybe_query)
+        # `find_matches` answers `[]` for no search, so the no-search case needs no branch of its own here —
+        # and must not take an early return, because an awaited trace is still awaited when the reader has
+        # cleared the search in the frames since they jumped.
+        new_matches = chatsearch.find_matches(self.datastore, [node_id], self.search_query)
         if new_matches:
             self.search_matches = self.search_matches + new_matches  # rebound whole, never mutated: readers take no lock
             self._search_matches_changed()
+        self._open_awaited_thinking_trace(node_id, new_matches[0][1] if new_matches else None)
+
+    def open_thinking_trace_on_arrival(self, node_id: str) -> None:
+        """Ask that `node_id`'s thinking trace be opened once the view has built its message, if the trace is what matched.
+
+        For a jump that moves HEAD, which is what the chat graph's commit gesture does: the view rebuilds on
+        another thread, so at the moment of the jump the message does not exist and `view.find_message`
+        answers `None`. The wait ends in `add_search_matches_for`, which the rebuild already calls once per
+        message.
+
+        Only one node is remembered. A second jump arriving before the first message does is the reader
+        changing their mind, and the trace they no longer want opened is the one they left.
+        """
+        self._node_awaiting_trace_open = node_id
+
+    def _open_awaited_thinking_trace(self, node_id: str, maybe_counts: "chatsearch.MatchCounts | None") -> None:
+        """Open the trace of `node_id`, if it is the message a jump was waiting for and its trace is what matched."""
+        if node_id != self._node_awaiting_trace_open:
+            return
+        # Arrived, so the wait is over whether or not it ends in an open one: leaving it set would spend the
+        # request on whichever later rebuild happened to pass this node next.
+        self._node_awaiting_trace_open = None
+        # The rule the chat log's own `step_search` follows: a trace that matched is opened whether or not
+        # the message text matched too, so that every match the search counted is on screen.
+        if maybe_counts is None or not maybe_counts.thinking:
+            return
+        if (message := self.view.find_message(node_id)) is not None:
+            message.show_thinking_trace()
 
     def refresh_search_matches(self) -> None:
         """Recompute which messages of the branch on screen match the current search, all of them."""
