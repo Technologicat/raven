@@ -2,6 +2,24 @@
 
 These effects work in linear intensity space, before gamma correction.
 
+**The chain follows a signal.** The order the filters ship in traces the path a picture takes to a
+viewer — the room in front of the lens, then the camera, then whatever records and carries the
+recording, and finally the display it comes out on. That is what makes a chain read as one imagined
+apparatus rather than as a pile of effects, and it is the sense in which a filter belongs to a band.
+
+So there are three things here, and the third is what the other two are for: **the intent** above,
+**the filters and the interactions between them**, and then the user's own arrangement. The bands are
+an invitation rather than a constraint — a chain that ignores them entirely is not a mistake, it is
+somebody building an apparatus nobody has imagined yet.
+
+Which is why **a filter's own docstring says what has to be on which side of it and never where it
+runs.** "The transport wants to be downstream of this, the noise being the camera's" survives any
+arrangement and tells a reader what they are trading; "runs early in the chain" stops being true the
+moment somebody moves it, and tells them nothing about what moving it would cost. Where an
+interaction is sharp enough to break an effect, say so and say by how much: `crt` measures which
+filters erase a raster and to what degree, and that is worth more once the order can be edited than
+it ever was while it was fixed.
+
 This module was originally released under AGPL in SillyTavern-Extras.
 This module is relicensed by its author (Juha Jeronen) under the
 2-clause BSD license.
