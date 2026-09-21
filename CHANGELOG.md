@@ -6,87 +6,66 @@
 
 *Raven-librarian*
 
-- **search in the chat log.** A search row across the top of the window: `Ctrl+F` to type, and the matches turn red and bold in the chat as you do. `F3` and `Shift+F3` — or `Enter` and `Shift+Enter` in the field, or the arrow buttons — go to the next and previous matching message below or above what is on screen, stopping at the first and the last. A counter says which match is at the top of the view, and follows as you scroll. `Ctrl+Shift+F` clears it. The row works like the Visualizer's.
-  - **The same search as the Visualizer's**: every word you type must occur, in any order, and a word with a capital letter in it matches case exactly. `cat photo` finds *photocatalytic*.
-  - **Two checkboxes say where to look besides the messages themselves**: *Thinking* searches the reasoning traces too, and going to a match inside a collapsed trace opens it; *Tool results* searches what tools returned — web pages, search results, documents. `Alt+H` and `Alt+R` toggle them. Traces are off to begin with and tool results on, and both are remembered.
-  - **The chat does not move under you while the highlighting updates**, including for text scrolled out of view above.
+- **search across the whole chat history.**
+  A search row across the top of the window: `Ctrl+F` to type, and the matches turn red and bold in the chat as you do. `Ctrl+Shift+F` clears it. The row works like the Visualizer's. It searches the conversation you are in; with the chat graph up, the same search reaches every other branch and every chat held under an older character card.
+  - **`F3` and `Shift+F3` go to the next and previous matching message.**
+    Below or above what is on screen, stopping at the first and the last. `Enter` and `Shift+Enter` in the field do the same, as do the arrow buttons. A counter says which match is at the top of the view, and follows as you scroll.
+  - **`Ctrl+F3` and `Ctrl+Shift+F3` do the same over the whole tree.**
+    Where `F3` walks the matches in the conversation you are in, these walk every match in the chat graph — the other branches, and the chats held under older character cards. Same search field and the same two checkboxes, with a counter and a pair of arrow buttons of their own. They work whether or not the graph is on screen, and going to a match puts it up.
+  - **The same search as the Visualizer's.**
+    Every word you type must occur, in any order, and a word with a capital letter in it matches case exactly. `cat photo` finds *photocatalytic*.
+  - **Two checkboxes say where to look besides the messages themselves.**
+    *Thinking* searches the reasoning traces too, and going to a match inside a collapsed trace opens it; *Tool results* searches what tools returned — web pages, search results, documents. `Alt+H` and `Alt+R` toggle them. Traces are off to begin with and tool results on, and both are remembered.
+  - **The chat does not move under you while the highlighting updates.**
+    This includes text scrolled out of view above.
 
-- **a chat graph view**, showing the chat multiverse itself: every branch you have ever taken, drawn as a
-  tree, with the conversation you are in running down the middle of it. Toggle it with the *Chat graph*
-  checkbox below the avatar.
-  - **The graph and the avatar take turns at the panel, and only one of them is running at a time.** The
-    avatar's video pauses while the graph covers it, instead of animating a face nobody can see. The graph
-    stands in whenever the avatar has nothing to show — while its video starts up, and once it has switched
-    itself off after a spell of quiet — so the panel no longer sits on *[Video is off]*, and the checkbox is
-    a preference for what to show when there is a choice.
-    - **A heading above the panel says which of the two it is showing**: the character's name, or *Chat graph*.
-    - **A reply does not speak itself while the graph is up and *Subtitles* is on.** Subtitles are drawn in
-      the avatar's rect, so the graph covers them, and speech whose captions are missing is the one thing
-      that switch says you cannot use. With *Subtitles* off, replies speak as usual. `Ctrl+S` and a
-      message's speak button always speak, captions or no.
-  - **Every box says who is speaking and what they attached.** The speaker's icon — the same one the chat
-    log uses, your character's own where it has one — sits on the box's left edge, and any images the
-    message carries fan off its right edge as a deck of thumbnails — and an attached document as its file
-    type's icon, so a message that is nothing but attachments no longer reads as an empty one. Both
-    decorations hang outside the box, so neither costs the message's own words any room. A long stack is
-    abbreviated to the first two, the last two, and a count.
-  - **The `...N more cards` box walks through the chats held under older character cards.** Changing the
-    system prompt starts a new card and the earlier chats stay under the old one, where nothing else in
-    either view names them — so until now they could not be opened at all. Your avatar and voice stay as
-    configured while you look, and the box wears the *HEAD* pill while you are away from your live chat.
-  - **The graph changes shape as one motion rather than a cut.** When the picture is redrawn — stepping to
-    another branch, opening a gap, going back or forward, a reply arriving — the box you are working with
-    stays where it was on screen, and the rest rearranges around it: boxes that stay slide to their new
-    places, boxes that go out of view travel into the gap that takes them, and new ones come out of the gap
-    that held them. `chat_graph_animate_transitions` switches it off and `chat_graph_transition_rate` sets
-    its speed; `chat_graph_animate_view` does the same for the graph's pan and zoom.
-  - **Looking costs nothing; only a second act moves you.** Clicking a box *previews* it — the chat log
-    scrolls to that message, or, for a message on another branch, the graph redraws around it — and leaves
-    the conversation exactly where it was. Clicking the same box again is what switches to it. So the whole
-    tree can be explored without committing to anything, and without leaving the next visitor somewhere you
-    only meant to look at.
-  - **Three marks, and they say different things.** The box under the pointer lights up; the message you
-    are actually on wears a heavy outline and a *HEAD* pill; and the box a click or `Enter` would act on
-    wears a dotted ring. The ring is the cursor — it appears on HEAD when the graph takes the keyboard, the
-    arrow keys move it, and it stays where you left it if you step away, going pale while the keys are
-    elsewhere so you can tell "where I am" from "where I was". Tab back and carry on from there.
-  - **Nothing is hidden without a box saying so.** Wherever the picture leaves something out it draws a
-    dashed **…N more** box, because a branch that simply stopped being drawn would read as a branch that
-    ends. There are five kinds and each opens what it stands for: siblings past the edge of a level (which
-    slides the level's window onto the run it was hiding), ancestors past the depth limit (which doubles the
-    depth shown), the subtree under a branch you are not on, the other character cards, and the results of a
-    tool round. Each says how many messages it holds, and a depth gap how many levels.
-    - **A round of three or more tool results folds into one box** between the message that asked and the
-      answer that followed, so a turn that consulted five web pages does not fill the picture with plumbing.
-      Open it to get the results as ordinary boxes you can read and switch to; `Backspace`, or the toolbar's
-      fold button, puts them away again from anywhere inside the round.
-  - **The keyboard drives all of it.** `Tab` moves the keys between the composer, the chat log and the
-    graph, and the pane holding them wears a blue mark. Then: arrows move the cursor, `Enter` does what
-    clicking does, `Backspace` folds a tool round, `Home` returns to where you are, `Esc` puts the cursor
-    away and again leaves for the chat log. `Ctrl+Left` / `Ctrl+Right` step along a level's siblings whether
-    they are drawn or not — `Ctrl+Shift` with either jumps ten, `Ctrl+Home` / `Ctrl+End` go to the ends —
-    which is how you walk a level of hundreds. `F` fits the graph, `B` the current branch, `1` is actual
-    size, and the numpad `+` and `-` zoom about whatever the cursor is on.
-    - **The view remembers where you have been.** `Alt+Left` and `Alt+Right` walk back and forward through
-      the branches and gaps you opened, as a browser's do.
-  - **A toolbar across the top offers the same things to the mouse**, each button naming its key: the view
-    controls, light and dark mode, back and forward, fit-the-branch and back-to-where-you-are, the fold
-    button, the switch-to-this-branch button, and six steps along the siblings with a counter saying which
-    of them the cursor is on — the one thing the picture cannot show you, since most of a wide level is
-    behind **…N more** boxes that need not be on screen together.
-  - **The chat search reaches the whole tree, not just the branch you are on.** With a search running, every
-    box that matches wears a count above it — `3 (1)` being three hits, one of them in a thinking trace —
-    and each matching message shows the first match in its own text, in the same red and bold the chat log
-    uses, so what a box matched on is readable without opening it. A **…N more** box counts the matches in
-    everything it stands for, so a search never hides behind one.
-    - **`Ctrl+F3` and `Ctrl+Shift+F3` walk them**, in reading order over the whole forest, alongside the
-      chat log's own `F3` — same search field and the same two checkboxes, a second counter and a second
-      pair of arrow buttons. Going to a match draws the picture around it, opens a folded tool round if that
-      is where it is, and folds that round again as you step past; the buttons go grey when there is nothing
-      further that way. It previews rather than commits, like everything else here.
-    - **A box that matched only in its reasoning quotes the trace, in the trace's own blue** — the colour
-      the chat log paints one — so which kind of text the hit came out of is legible without a word for it.
-      The `(1)` of `3 (1)` is in that same blue, for the same reason.
+- **a chat graph view.**
+  The chat multiverse itself: every branch you have ever taken, drawn as a tree, with the conversation you are in running down the middle of it. Toggle it with the *Chat graph* checkbox below the avatar.
+  - **The graph and the avatar take turns at the panel, and only one of them is running at a time.**
+    The avatar's video pauses while the graph covers it, instead of animating a face nobody can see. The graph stands in whenever the avatar has nothing to show — while its video starts up, and once it has switched itself off after a spell of quiet — so the panel no longer sits on *[Video is off]*, and the checkbox is a preference for what to show when there is a choice.
+    - **A heading above the panel says which of the two it is showing.**
+      The character's name, or *Chat graph*.
+    - **A reply does not speak itself while the graph is up and *Subtitles* is on.**
+      Subtitles are drawn in the avatar's rect, so the graph covers them, and speech whose captions are missing is the one thing that switch says you cannot use. With *Subtitles* off, replies speak as usual. `Ctrl+S` and a message's speak button always speak, captions or no.
+  - **Every box says who is speaking and what they attached.**
+    The speaker's icon — the same one the chat log uses, your character's own where it has one — sits on the box's left edge, and any images the message carries fan off its right edge as a deck of thumbnails — and an attached document as its file type's icon, so a message that is nothing but attachments no longer reads as an empty one.
+    - **Both decorations hang outside the box.**
+      Neither costs the message's own words any room. A long stack is abbreviated to the first two, the last two, and a count.
+  - **The `...N more cards` box walks through the chats held under older character cards.**
+    Changing the system prompt starts a new card and the earlier chats stay under the old one, where nothing else in either view names them — so until now they could not be opened at all. Your avatar and voice stay as configured while you look, and the box wears the *HEAD* pill while you are away from your live chat.
+  - **The graph changes shape as one motion rather than a cut.**
+    When the picture is redrawn — stepping to another branch, opening a gap, going back or forward, a reply arriving — the box you are working with stays where it was on screen, and the rest rearranges around it: boxes that stay slide to their new places, boxes that go out of view travel into the gap that takes them, and new ones come out of the gap that held them.
+    - **Three settings.**
+      `chat_graph_animate_transitions` switches the morph off, `chat_graph_animate_view` does the same for the graph's own pan and zoom, and `chat_graph_transition_rate` is the one speed both of them run at.
+  - **Looking costs nothing; only a second act moves you.**
+    Clicking a box *previews* it — the chat log scrolls to that message, or, for a message on another branch, the graph redraws around it — and leaves the conversation exactly where it was. Clicking the same box again is what switches to it. So the whole tree can be explored without committing to anything, and without leaving the next visitor somewhere you only meant to look at.
+  - **Three marks, and they say different things.**
+    The box under the pointer lights up; the message you are actually on wears a heavy outline and a *HEAD* pill; and the box a click or `Enter` would act on wears a dotted ring.
+    - **The ring is the cursor.**
+      It appears on HEAD when the graph takes the keyboard, the arrow keys move it, and it stays where you left it if you step away, going pale while the keys are elsewhere so you can tell "where I am" from "where I was". Tab back and carry on from there.
+  - **Nothing is hidden without a box saying so.**
+    Wherever the picture leaves something out it draws a dashed **…N more** box, because a branch that simply stopped being drawn would read as a branch that ends. There are five kinds, each saying how many boxes it stands for, and each opening what it stands for.
+    - **Siblings past the edge of a level**, which slides the level's window onto the run it was hiding.
+    - **Ancestors past the depth limit**, which doubles the depth shown.
+    - **The subtree under a branch you are not on**, which says how far down it reaches as well as how much of it there is.
+    - **The other character cards**, counted as cards.
+    - **The results of a tool round.**
+      A round of three or more folds into one box between the message that asked and the answer that followed, so a turn that consulted five web pages does not fill the picture with plumbing. Open it to get the results as ordinary boxes you can read and switch to; `Backspace`, or the toolbar's fold button, puts them away again from anywhere inside the round.
+  - **The keyboard drives all of it.**
+    `Tab` moves the keys between the search row, the chat log, the composer and the graph, and the pane holding them wears a blue mark.
+    - **On the graph**: arrows move the cursor, `Enter` does what clicking does, `Backspace` folds a tool round, `Home` returns to where you are, and `Esc` puts the cursor away and again leaves for the chat log.
+    - **`Ctrl+Left` / `Ctrl+Right` step along a level's siblings** whether they are drawn or not — `Ctrl+Shift` with either jumps ten, `Ctrl+Home` / `Ctrl+End` go to the ends — which is how you walk a level of hundreds.
+    - **`F` fits the graph, `B` the current branch, `1` is actual size**, and the numpad `+` and `-` zoom about whatever the cursor is on.
+    - **The view remembers where you have been.**
+      `Alt+Left` and `Alt+Right` walk back and forward through the branches and gaps you opened, as a browser's do.
+  - **A toolbar across the top offers the same things to the mouse**, each button naming its key.
+    The view controls, light and dark mode, back and forward, fit-the-branch and back-to-where-you-are, the fold button, the switch-to-this-branch button, and six steps along the siblings with a counter saying which of them the cursor is on — the one thing the picture cannot show you, since most of a wide level is behind **…N more** boxes that need not be on screen together.
+  - **The chat search reaches the whole tree, not just the branch you are on.**
+    With a search running, every box that matches wears a count above it — `3 (1)` being three hits, one of them in a thinking trace — and each matching message shows the first match in its own text, in the same red and bold the chat log uses, so what a box matched on is readable without opening it. A **…N more** box counts the matches in everything it stands for, so a search never hides behind one.
+    - **`Ctrl+F3` and `Ctrl+Shift+F3` walk them**, in reading order over the whole forest.
+      Going to a match draws the picture around it, opens a folded tool round if that is where it is, and folds that round again as you step past; the buttons go grey when there is nothing further that way. It previews rather than commits, like everything else here.
+    - **A box that matched only in its reasoning quotes the trace, in the trace's own blue** — the colour the chat log paints one.
+      So which kind of text the hit came out of is legible without a word for it. The `(1)` of `3 (1)` is in that same blue, for the same reason.
 
 - **a *Thinking* toggle**, for asking a reasoning model to just answer. On by default. Switch it off and the same model skips the reasoning step: replies arrive sooner and shorter, at the cost of the thinking that was making them good on a hard question. It applies from the next reply onward, and to every round of a tool-using turn.
   - **Tools still work with it off.** Asked for `1234 * 5678` with reasoning switched off, Qwen 3.6 reached for the calculator rather than answering from its head. Observed on that model rather than promised for all of them — whether a model keeps calling tools without its reasoning channel is the model's own business — but this is not a switch that quietly turns the agent loop off.
