@@ -150,7 +150,15 @@ message's `MatchCounts` anyway, which is what made that hook the right one rathe
 one. The request is spent when the message arrives, opened or not — left set it would be collected by
 whichever later rebuild passed that node next.
 
-One case is slower than the design assumed, and is left as it is: a reply still being generated is drawn by
-`add_streaming_message`, which does not call the hook, its text being still in motion. Committing to such a
-node — a turn running on a branch you are not on — opens the trace when the reply finishes rather than at
-the commit.
+**The design assumed the message exists or soon will, and a reply still being generated is neither.** It is
+drawn by `add_streaming_message`, which does not call that hook, its text being in motion; committing to such
+a node — a turn running on a branch you are not on — would have opened the trace only when the reply
+finished. Settled the same day, by asking what the search does there: a streaming reply *is* highlighted like
+any other message, so waiting contradicted what the view was already showing.
+
+**The rule that covers both** (Juha): open the trace iff the match is actually in it *now*, and while it is
+not, do not. A stored message is asked once, its answer being final; a reply in progress is asked again each
+time it writes, its answer being able to change from no to yes, and the wait survives a no. The check hangs
+off `replace_last_paragraph`, which the stream handler already rate-limits to a newline or half a second — so
+it inherits a throttle rather than adding one, and needs no paragraph boundary, which a turn ending in a tool
+call or stopped by the reader never reaches.
