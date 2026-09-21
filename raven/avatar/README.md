@@ -231,8 +231,8 @@ A chain is a list of `(name, settings)` pairs in `postprocessor_chain` (see `pos
 
 **The display**
 
-- `crt` — raster projection: the character drawn by a scanning electron beam.
-- `scanlines` — the horizontal lines of a CRT television.
+- `crt` — raster projection: the character drawn by a scanning electron beam. A simulation rather than a look, modelling the beam's Gaussian falloff across each raster line, the shadow mask or aperture grille, beam bleed and phosphor glow, persistence between frames, interlaced field alternation, barrel warp with overscan, and corner falloff.
+- `scanlines` — a cheap alternate-line darkener, and the one to reach for when a hard bright/dark alternation is all you want. It is not a lesser `crt`: the two model different things — the character's own raster there, the viewer's monitor here — so they sit in different bands and stacking them is legal.
 - `translucent_display` — a science-fiction hologram.
 - `monochrome_display` — one phosphor colour.
 - `digital_glitches` — a glitchy digital transport, with blocks of lines shifted sideways.
