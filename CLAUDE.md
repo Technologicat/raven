@@ -515,17 +515,10 @@ Raven ships many separate user-facing apps, so within each of **Added** / **Chan
 
 Component order is fixed, so a reader learns where to look: *Raven-librarian*, *Raven-visualizer*, *Raven-server*, *Raven-avatar*, *Raven-cherrypick*, *Raven-arxiv-download*, *Raven-pdf2bib*, then *Constellation-wide* for anything cross-cutting (install, device strings, CLI options shared by every app, client-side HTTP behavior). Omit a component that has no entries in that section. An entry spanning two tools goes under the primary one and names the other inline ("with `raven-wos2bib`: …").
 
-**An entry is a bold title, then its prose on the next line**, indented to the item's own content column and
-with no blank line between them — Markdown folds the two back into one paragraph, so this is a shape the
-source has and the rendered page does not. **One line per bullet**, unwrapped, however long it runs; the file's
-released sections have always been written that way, and wrapping only some of it is what makes the mixture
-visible. A bullet that would run long is **nested rather than wrapped**: break the wall of text into
-sub-bullets, each with a title of its own.
-
-**The measure is whether the document is scannable, and the budget being spent is the reader's attention**
-(Juha, 2026-09-21). That is the rule the other three fall out of, and it is the one to apply where they do not
-reach. It also says where to stop: an item that is a single clause takes a title and nothing else, because
-splitting it yields a title and a sentence fragment, which costs a reader two lines to learn one thing.
+**This file is long enough that its entries are titled**: the bold lead on a line of its own, the prose
+starting on the next one, and one line per bullet throughout. The rules and the measure they come from — a
+section is as good as it is scannable — are in the `changelog` skill. What is Raven-local is only that we
+crossed the size where titling starts to pay, at 139 top-level entries in 0.2.9 alone.
 
 **File a new entry into its group when you write it.** The failure this prevents: 0.2.8 accumulated 58 flat entries — 24 of them opening with `*Raven-librarian*:` — before anyone noticed the prefix was a heading doing prose duty, and regrouping after the fact is a large, error-prone reshuffle that has to be verified entry by entry.
 
