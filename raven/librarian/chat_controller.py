@@ -4327,10 +4327,17 @@ class DPGChatController:
         self._search_matches_changed()
 
     def add_search_matches_for(self, node_id: str) -> None:
-        """Test one message just added to the end of the branch on screen against the search, and count it if it matches.
+        """Test one message just built into the view against the search, and count it if it matches.
 
-        Per message, so that a view rebuilt message by message tests each once. Also where a jump that had to
-        wait for this message gets to open its thinking trace; see `open_thinking_trace_on_arrival`.
+        Called once per message by whatever built it, which is a whole branch's worth during a rebuild and a
+        single message when a turn writes one. Per message rather than per build, so that a view assembled
+        message by message tests each exactly once.
+
+        A reply still streaming is not tested, its text being still in motion; it is counted when it
+        finalizes and is rebuilt as a stored message.
+
+        Also where a jump that had to wait for this message gets to open its thinking trace; see
+        `open_thinking_trace_on_arrival`.
         """
         # `find_matches` answers `[]` for no search, so the no-search case needs no branch of its own here —
         # and must not take an early return, because an awaited trace is still awaited when the reader has
