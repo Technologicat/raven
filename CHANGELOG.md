@@ -1,10 +1,10 @@
 # Changelog
 
-**0.2.9** (in progress):
+## 0.2.9 (in progress) — *["Pleiades"](https://en.wikipedia.org/wiki/Pleiades)* edition
 
-**Added**:
+### Added
 
-*Raven-librarian*
+#### Raven-librarian
 
 - **search across the whole chat history.**
   A search row across the top of the window: `Ctrl+F` to type, and the matches turn red and bold in the chat as you do. `Ctrl+Shift+F` clears it. The row works like the Visualizer's. It searches the conversation you are in; with the chat graph up, the same search reaches every other branch and every chat held under an older character card.
@@ -150,7 +150,7 @@
   - The card sizes itself to its tallest page and keeps that height, so turning a page does not resize the
     window under you.
 
-*Raven-avatar*
+#### Raven-avatar
 
 - **`atmospheric_dust`, light-catching motes drifting in the air around the character** — dust in a sunbeam, or with different tuning something nearer to pollen, snow or petals. In the default chain, at the head of it: the dust is composited before the camera looks at the scene, so the particles are framed by the zoom and lit by the capture optics exactly as the character is.
   - **Each mote is a thin disc tumbling in place, and the twinkle comes out of that rather than out of an animation.** A disc is invisible edge-on and flashes as it turns through alignment with the light. `glint_exponent` is the knob that decides the register: low values give a soft continuous shimmer, high ones sharp sparse flashes.
@@ -173,7 +173,7 @@
 
 - **`lanczos` as an upscaler quality**, alongside `bilinear` and `bicubic`. The sharpest of the three that skip Anime4K, and still under half the cost of Anime4K's `low` — so it is worth trying if bicubic looks soft to you but the neural upscaler is more than your GPU has to spare. It is the same resampler Raven uses for still images everywhere else. As with bicubic, the character's silhouette is scaled bilinearly, since a ringing alpha reads as a halo.
 
-*Raven-fixbib*
+#### Raven-fixbib
 
 - **records naming the same field twice are now repaired too**, which is how a database export arrives: a ProQuest record carries a separate `annote` for its copyright statement, its last-updated date and its subject terms, and BibTeX has no way to say that, so the parser rejects the entry whole — title, authors and all. The repeats are merged into one field, values kept and joined by newlines, and everything else in the record is left character for character as it was.
   - **This can account for a large share of a file**, and nothing previously said so more specifically than "unparseable" — so a `.bib` assembled from several databases is worth running through this before trusting a count of it.
@@ -193,7 +193,7 @@
   - `copyright` because it collides with nothing real exports emit, and standard BibTeX styles do not typeset it, so it cannot turn up in a reference list.
   - A record that already has a `copyright` field keeps what is there and gains the moved notice below it — both name a source the record came from — and a notice already recorded there is not moved twice. A record whose braces would not survive the split is left alone. Everything outside a moved notice is byte for byte as it was, so the diff shows exactly which abstracts changed. `--keep-notices` switches it off.
 
-*Raven-deduplicate*
+#### Raven-deduplicate
 
 - **a new tool, `raven-deduplicate`**, for the bibliography a multi-database literature search leaves behind. Search Scopus, Web of Science, ProQuest, Springer and arXiv for the same question and concatenate what they give you, and the file holds every paper once per database that indexes it — each copy in that database's dialect, with a different subset of the fields filled in. This finds those copies and merges them into one record.
 
@@ -216,7 +216,7 @@
       - The bias is toward keeping: a venue that is general, interdisciplinary or merely unfamiliar fits, an unparseable answer fits, and a work whose every identifier is rejected keeps them all — that is a model recognizing nothing rather than a bibliography where nothing is right.
   - **It errs toward leaving duplicates rather than making them up.** A missed merge leaves a visible duplicate that a reviewer can act on; a false merge deletes a paper from the review and nothing downstream can notice. So two records carrying the same genre label — `Editorial`, `Book Review` — are merged only if they agree about the author and the year, and two authorless records carrying a serial's recurring section heading are not merged when their DOIs disagree.
 
-*Raven-siftbib*
+#### Raven-siftbib
 
 - **a new tool, `raven-siftbib`**, for the records a literature search returns that a review cannot actually use. A record carrying nothing but a title is not off topic — nobody can tell what it is — it simply has no text to screen on, and a screening pass has to account for it rather than quietly carry it into the count. This removes such records and writes down what went.
 
@@ -230,7 +230,7 @@
   - **Deterministic and offline.** No model, no network: the same bibliography and the same flags produce the same two files on any machine. Whether a record is *about* the right subject is a judgement rather than a test, and belongs to a different tool.
   - `--dry-run` reports what would go and writes nothing; the input file is never modified.
 
-*Raven-xdot-viewer*
+#### Raven-xdot-viewer
 
 - **a label your graph set in bold or italic now comes out that way.** GraphViz records the font it
   resolved into the xdot it writes, and the viewer had been drawing every label in the regular face
@@ -240,7 +240,7 @@
     Raven's own font, in bold — matching the weight and the slant, not the family. A font name that spells
     its style some other way is drawn regular, as it would have been anyway.
 
-*Constellation-wide*
+#### Constellation-wide
 
 - **`--qr`**, which puts a scannable "Get Raven" code in the corner of any of the seven GUI apps. For running Raven where people are watching: a visitor sees a demo for a minute and walks off, and nobody writes down a URL. Off unless asked for.
   - The URL comes from the installed package's own metadata, so it cannot drift from where Raven actually lives. Running from a source checkout, where there is no metadata to read, the overlay declines instead of showing a wrong address.
@@ -264,15 +264,15 @@
     localhost. A debugging aid: do not leave it running, and forward a port over SSH rather than exposing
     one.
 
-**Changed**:
+### Changed
 
-*Raven-avatar*
+#### Raven-avatar
 
 - **the settings editor separates its postprocessor filters with a rule.** The panel lists every filter one after another, and there are enough of them now that where one ends and the next begins had become a thing to work out rather than a thing to see.
 
 - **the "data eyes" effect stays on for at least a second** before it fades, so a lookup that finishes quickly is still seen. A slow one keeps the effect on for as long as it runs, as before. The animator setting `data_eyes_min_duration` sets the minimum, next to `data_eyes_fadeout_duration`.
 
-*Raven-librarian*
+#### Raven-librarian
 
 - **a character now declares itself, and switching character is one setting.** A character is a JSON file
   — `aria1.json` — stating what it is *called* and which voice it speaks in. Everything else sits beside
@@ -379,7 +379,7 @@
 - **with speech on, the avatar's expression follows what it is saying.** It used to react to the reply as the text streamed in, so the face was already showing the mood of a sentence the voice had not reached yet. Now it stays neutral while the reply is being written, and changes as each sentence starts to be spoken, from that sentence and the few before it. With speech off, the expression follows the text as it arrives, as before.
   - Speaking a message again (`Ctrl+S`, or its speak button) does the same.
 
-*Raven-visualizer*
+#### Raven-visualizer
 
 - **the info panel shows each item's authors and year on a line of their own, above the title.**
 
@@ -411,11 +411,11 @@
 
 - the importer's two LLM steps — cluster keyword extraction and abstract summarization — no longer run as a conversation with the assistant character. Both outputs are parsed by the importer rather than read by a person, while the character card asks for Markdown, for a reported train of thought, and for conversational prose — all of which had to be undone before the result could be used. Each of the two prompts already states its own task, so what the character contributed was only the part working against it. Expect cleaner keyword lists, and summaries that start with the summary.
 
-*Raven-avatar*
+#### Raven-avatar
 
 - **the settings editor's fractional sliders now show the value they set**, where four of them showed it multiplied by ten with an `x 0.1` label to undo — upscale factor, animator speed, TTS speed and the lipsync AV offset. The animator's speed slider was the worst of them, since its label said only "Speed", so the 3 on screen was a 0.3 with nothing saying so. They read `1.4`, `0.3`, `1.0` and `-0.8` now.
 
-*Raven-cherrypick*
+#### Raven-cherrypick
 
 - **the thumbnail grid scrolls smoothly**, and flashes an arrow at the top or bottom edge as you arrive there, and again if you press or wheel further. It was the last view in the constellation that jumped. A rebuild — changing the filter, or the tile size — still repositions instantly, since gliding there would animate toward a position that is about to be corrected.
   - `SMOOTH_SCROLLING`, `SMOOTH_SCROLLING_STEP_PARAMETER` and `SCROLL_ENDS_HERE_DURATION` in `raven/cherrypick/config.py` tune or disable both.
@@ -427,12 +427,12 @@
   - `1` is 1:1 in the chat graph and the graph viewer too, so it now means one thing across the constellation. A bare digit could not both do that and pick a winner; reaching for 1:1 while comparing would have thrown you out of compare mode instead.
   - `Numpad 1` works as well, for keyboard layouts where the main-row digits are shifted.
 
-*Raven-pdf2bib*
+#### Raven-pdf2bib
 
 - the same for all eight extraction steps — authors, title, keywords, abstract and the rest — which now run without the character, on prompts that already tell the model its answer "will be sent to a computer program that cannot understand natural language". The per-step progress letters on stderr are unchanged.
   - when a step fails, the error report shows the model's thinking trace and its final answer laid out the way Librarian's export buttons lay them out, so a trace in an error report and a trace in an exported chat read the same way. The usual cause of an empty step is the model overthinking until the token budget runs out, which is what the trace shows.
 
-*Constellation-wide*
+#### Constellation-wide
 
 - **the file dialog can be driven from the keyboard.** Every app that opens a file browser gets this. Arrow keys, Page Up / Page Down and Home / End move a cursor through the listing; **Enter** goes as deep as it can — descending into the directory under the cursor, accepting a file where there is nothing deeper — and **Ctrl+Enter** commits where you are, as the OK button does. A line above the buttons names the path OK would return, and updates as you move.
   - **Ctrl+Space marks the entry under the cursor** where the dialog was opened for picking several files, which is what Ctrl+click does with the mouse. Marking a folder now also updates the line naming what OK will return — Ctrl+click had never done that either.
@@ -468,13 +468,13 @@
   - **It holds that rate when frames are expensive.** The throttle used to sleep a fixed interval *on top of* whatever the frame had already cost, so the two agreed only while frames were nearly free: a view whose frame took 60 ms landed nearer seven frames a second than the twelve asked for, the throttle taking its cut from a rate that was already low. It now sleeps out what is left of the frame's budget, so a heavy view idles at the rate you set. Past the budget there is no sleep at all and the app runs flat out, which is what a cap on rate rather than on effort means.
   - If you had edited `IDLE_SLEEP_S` or `INPUT_ACTIVE_S` in an app's `config.py`, those are gone. Set `GUI_IDLE_FRAMERATE` — frames per second, where the old one was seconds per frame — and `GUI_INPUT_ACTIVE_S` in `raven.config` instead.
 
-**Fixed**:
+### Fixed
 
-*Raven-avatar*
+#### Raven-avatar
 
 - **`bloom` now decides what is bright by the light a pixel emits rather than by the colour it carries.** In a straight-alpha frame those differ wherever a pixel is not fully opaque: the colour alone is what the pixel *would* look like if it were, which for a nearly transparent one can be a large number attached to almost no light. The old reading called such pixels highlights and then blurred that colour outward, so the avatar's antialiased outline picked up light from the empty space around it. The character itself is unaffected — the two readings agree wherever alpha is 1.
 
-*Raven-librarian*
+#### Raven-librarian
 
 - **on Windows, saving the chat no longer fails because another program has the file open for a moment** — an antivirus scanner checking what was just written, a search indexer, a sync client. The save is now tried again for up to ten seconds. This matters most at exit, where the chat is saved once with no later save to fall back on.
 
@@ -581,7 +581,7 @@
 
 - **a stopped reply from a thinking model no longer reports a fraction of the tokens it generated.** When the count has to be worked out locally — `config.llm_tokenizer_path` is set and the backend reported none, which is what happens when you stop a reply part-way through — only the visible answer was counted, while the elapsed time beside it covered the thinking as well. On a model that spends most of a turn reasoning, that left the `[Nt, Xs, Yt/s]` line under the message understating both figures by most of the turn.
 
-*Raven-cherrypick*
+#### Raven-cherrypick
 
 - **compare mode no longer skips an image, and no longer leaves the wrong picture cached behind it.** The cycle would advance — the overlay number changed, the grid badge lit up — while one of the images never appeared, its slot showing one of the others instead. A three-image comparison would show you two, the same two every loop.
   - Cancelling compare mode filed the frame it was parked on under the index of the image you were looking at *before* compare mode started. From then on that index displayed the wrong picture — in compare mode, in the main view, and in the status bar's dimensions — until something reloaded it. So the mix-up outlasted the compare session that caused it, and came back every time you returned to that image.
@@ -602,7 +602,7 @@
 
 - **attaching a document no longer reads it twice.** Its text was extracted once when you picked the file, to tell you straight away if a PDF turned out to be scanned pages with no text in them, and then extracted all over again when the message was sent. For a large paper each pass is seconds — nearly four, for an 8.5 MB one — so the wait happened twice for no reason. The first result is now kept and reused.
 
-*Raven-visualizer*
+#### Raven-visualizer
 
 - **search highlighting now marks what was typed when it contains `+`, `*`, `?`, `|`, `^`, `$` or a backslash.** These were read as regex syntax: `C++` highlighted just the `C`, `a|b` every `a` and every `b`, and `^` or a backslash nothing at all. Which titles *match* was never affected, only the red marking inside them.
 
@@ -630,12 +630,12 @@
 
 - **the plot's mouse hover and click-to-select now work on small datasets.** Finding the datapoints under the cursor asks for a fixed number of nearest neighbours, and a dataset with fewer points than that gets an answer padded out with placeholders; those were read as real datapoints. Below the threshold — a few dozen entries, which is an ordinary size for a focused bibliography — the hover highlight, the annotation tooltip and click-to-select therefore all did nothing at all.
 
-*Raven-avatar*
+#### Raven-avatar
 
 - in the pose editor, keyboard shortcuts no longer fire behind a modal dialog. Every failed character-image or emotion load is reported through one, and the guard that suppresses hotkeys did not count it as a dialog — so the Enter that dismissed the error also did whatever Enter does in the editor behind it.
 - in the settings editor, the same guard missed the backdrop-image browser, leaving hotkeys live while it was open. The app's four other file dialogs were already covered.
 
-*Raven-xdot-viewer*
+#### Raven-xdot-viewer
 
 - **the keyboard shortcuts work again from app start.** Ctrl+O, Ctrl+F, F1, F11 and the rest were dead until you clicked somewhere: the search field counts as focused from the moment the window appears, with nobody having touched it, and every shortcut was being held back for it. Typing in the search field still keeps the plain keys to itself, which is what the check was for.
 
@@ -643,7 +643,7 @@
 
 - button flashes and error reports in the file dialog no longer fade in steps. The idle throttle, which drops the app to ~12 fps when nothing is happening, asked only the graph whether anything was animating — so a flash lasting a second, or a report standing for three, ran at the idle rate once the half second bought by your click had passed.
 
-*Constellation-wide*
+#### Constellation-wide
 
 - **code backgrounds, underlines and code-block borders now appear in text that was hidden when it was drawn** — a collapsed thinking trace once expanded, and a help card's pages past the first. Such text used to be decorated while hidden, which draws nothing, and nothing redrew it.
 
@@ -675,11 +675,11 @@
 
 ---
 
-**0.2.8** (7 August 2026):
+## 0.2.8 (7 August 2026)
 
-**Added**:
+### Added
 
-*Raven-librarian*
+#### Raven-librarian
 
 - keyboard shortcuts no longer fire behind a modal dialog. Opening the attach-file browser, or any dialog, left the chat hotkeys live underneath it — so Enter could send a chat message while you were picking a file. (`raven-xdot-viewer` had the same gap on its error dialogs.)
 
@@ -762,22 +762,22 @@
   - Exported chat text carries **origin metadata**, as a YAML front-matter block that names the generator, the export time, which messages came from a human, which from the AI, and which model produced each AI message. Both export routes emit it: the whole-chatlog copy (F8) gets one manifest for the document, and a single copied AI or tool message gets a one-message manifest of its own, since a lifted fragment travels without the document's. Copying one of your *own* messages is unchanged — there is no AI generation to disclose, and it keeps the copy clean for editing and resending.
   - This is what a system on this side of the model boundary can honestly attest to. The robust mark for AI-generated text is a watermark applied while the model samples; *Raven-librarian* runs third-party models through an OpenAI-compatible backend and never sees the sampler, so it records the origin metadata it does know rather than claiming a mark it cannot make.
 
-*Raven-visualizer*
+#### Raven-visualizer
 
 - logs whether *Raven-server* is reachable once at startup, so its presence or absence is explicit from the first line of output rather than only surfacing when the importer first reaches for it. The server is optional for the Visualizer, so both outcomes log at info level.
 
-*Raven-server*
+#### Raven-server
 
 - HTTP API: new `/api/embeddings/info` endpoint returns the loaded embedding models keyed by role (HF repo name and output vector dimension). Parallel to the existing `/api/stt/info` and `/api/tts/info`; lets clients size storage and avoid hardcoding values that drift when the server config changes.
 
 - NVRTC sanity check at startup. Compiles a trivial element-wise kernel via the jiterator path right after device validation, so a broken NVRTC runtime (missing `libnvrtc-builtins.so`, version skew between bundled and host CUDA) surfaces as a clear startup warning instead of an opaque crash the first time a JIT-compiled path runs. Adds ~300 ms to startup on healthy CUDA setups, nothing on CPU-only ones.
 
-*Raven-avatar*
+#### Raven-avatar
 
 - settings editor: `Clear` and `Default` buttons on the postprocessor section header. `Clear` disables every filter for a blank-slate starting point; `Default` reloads the postprocessor chain from `animator.json`. Per-filter `Reset` buttons now have tooltips.
 - settings editor: idle CPU/GPU throttle in the render loop. When the avatar is paused (Ctrl+P) and there has been no recent user input, the GUI drops to ~12 fps; live playback runs at full fps as before. Brings the settings editor in line with the rest of the constellation.
 
-*Raven-cherrypick*
+#### Raven-cherrypick
 
 - the window title bar now shows the current image's filename alongside the folder (`… — folder — filename`), so the open image is identifiable from the taskbar / window switcher. In fullscreen, where the window manager hides the title bar, the filename moves into the status bar instead — so long autonamed filenames don't crowd the rest of the status bar during normal windowed use.
 - the cherry / lemon triage marker now sits just outside the top-right corner of the *image* rather than the corner of the viewer pane, so it stays beside the image when the image is small in a large window. It clamps back to the pane corner when the image fills the view.
@@ -785,7 +785,7 @@
 - **undo / redo for triage moves** — `Ctrl+Z` / `Ctrl+Shift+Z` (also `Ctrl+Y`), plus toolbar buttons. Reverts the last cherry / lemon / clear / winner action, including a multi-select batch as one step, and keeps the view on the changed image so you see what changed — staying put when you're already on it (e.g. reverting a winner+losers set leaves the winner current), only moving when needed. Works from a filtered view too. Session-only: opening a folder rescans from disk, which is the source of truth.
 - **WASD navigation** as an alias for the arrow keys, plus `Q` / `E` for page up / down — so triage can be done one-handed (left hand on WASD, with the `X` / `C` / `V` triage cluster right below it) on a coffee break. Mirrors the arrows everywhere they work, including panning the focused image pane. The arrow keys keep working unchanged.
 
-*Raven-arxiv-download*
+#### Raven-arxiv-download
 
 - prints the paper's citation (`Authors (Year) - Title`) just before downloading its PDF, so it stays on screen during the rate-limit wait — a mistyped ID that resolved to the wrong paper is caught before the download completes. Only shown when a paper is actually being fetched; already-present papers are reported by their existing one-line status.
 - ends with a summary counted **by outcome** — downloaded, already present, duplicate identifier, no PDF available, failed. A rerun over the same list does almost nothing, that being the point of skipping papers already present, so a bare total answers nothing; and only the outcomes that occurred are named, so a clean run does not print `0 failed` for you to read past.
@@ -794,25 +794,25 @@
   - Papers are matched to the metadata that comes back by identifier, and a request naming a version is matched on *that* version. Asking for two versions of one paper in a single run therefore gets each its own metadata, rather than both silently receiving whichever arXiv answered with first.
 - new `-s` / `--save-bib file.bib` option writes the papers' metadata as BibTeX alongside the PDFs, so downloading a set of papers and building its bibliography is now one command instead of two. This is free — naming the PDFs already requires the metadata, so nothing extra is fetched and no extra rate-limit waiting is incurred, unlike running `raven-arxiv2bib` over the same identifiers afterwards. Version suffixes are kept, since a download names a specific version and the bibliography should record which one it describes; papers already present in the output directory are included too, the bibliography being a description of the set you asked for.
 
-*Raven-arxiv2id*
+#### Raven-arxiv2id
 
 - new `-s` / `--strip-versions` option prints each identifier without its version suffix. This is what refreshes a collection of preprints: an arXiv identifier carrying a version means *that* version, and one without means whatever is current, so dropping the suffix turns the tool's output into a request for the latest of everything — `raven-arxiv2id -i ~/papers --strip-versions` piped to `raven-arxiv-download` fetches the papers that have been revised since you saved them, and to `raven-arxiv2bib` brings the bibliography along. Previously this needed hand-editing the identifier list, and there was no way to notice which papers had moved on.
 
-*Raven-fixbib*
+#### Raven-fixbib
 
 - **new tool**: repairs BibTeX records whose braces a parser refuses, which is how mathematics arrives when a `.bib` was built from PDFs — set-builder notation like `{0 <= rho <= 1` with its closing brace lost somewhere in the extraction. One such brace ends a field value early or leaves it unterminated, and the whole record goes missing from anything that reads the file: title, authors and all. `raven-fixbib myrefs.bib` escapes the stray braces and writes `myrefs_fixed.bib`; `--in-place` edits the original, and `--dry-run` only reports. Your bibliography is yours, so nothing is written back unless you ask.
   - Only the offending braces are escaped — the text is otherwise identical, character for character. What cannot be repaired is reported with its line number and the fields that look responsible, rather than guessed at: where a record lost a value's *terminator* rather than gaining a stray brace, nothing can know where the missing one belonged.
   - This is the other half of a fix that landed earlier for `raven-wos2bib`, which stopped *generating* unbalanced braces. This one repairs the files you already have.
 
-*Constellation-wide*
+#### Constellation-wide
 
 - New `"gpu"` device string in config files: an explicit autodetect token that picks whichever GPU backend (CUDA / MPS / XPU / Vulkan) is available, falling back to CPU if none. Replaces the implicit autodetect that was meant to live inside the `"cuda"` string with a clearly-named alias — `"cuda"` now means exactly CUDA. The defaults in the server (`raven/server/config.py`, `config_avatar_only.py`, `config_lowvram.py`) and the Visualizer / Librarian client configs now use `"gpu"`. Explicit names like `"cuda:0"` or `"mps"` are still honored as deliberate choices — no cross-backend fallback. On a machine with multiple distinct GPU backends active simultaneously (rare — e.g. NVIDIA + Intel Arc), startup raises `RuntimeError` and asks for an explicit pick.
 
 - New `--log <path>` and `--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}` CLI options on all major apps (`raven-visualizer`, `raven-importer`, `raven-librarian`, `raven-server`, `raven-minichat`, `raven-xdot-viewer`, `raven-cherrypick`, `raven-conference-timer`, `raven-avatar-pose-editor`, `raven-avatar-settings-editor`) plus the bibliography tools that emit log records (`raven-pdf2bib`, `raven-wos2bib`, `raven-csv2bib`). `--log` mirrors stderr to a file (overwritten each run) so users can capture session logs for bug reports without redirecting their terminal — especially useful for the GUI apps where the launching terminal is often a side window. The logfile path accepts `~` and is resolved to an absolute path. The mirroring survives third-party libraries (notably `flair`) that call `logging.shutdown()` on import.
 
-**Changed**:
+### Changed
 
-*Raven-librarian*
+#### Raven-librarian
 
 - **the attach dialog stops offering image formats when the loaded model cannot read them.** On a model the backend confirms is text-only, the picker offers *Documents* and *All files* — where before it offered images too and then refused them after you had picked one. A model whose capability the backend does not report is still offered everything, as it was: unknown is not the same as no.
   - What is offered is decided when the dialog opens, so loading a vision model mid-session makes images pickable without a restart.
@@ -827,21 +827,21 @@
   - With **Documents off** the marker does not appear, since it would only report the switch you just set. An **attachment still counts as grounding** either way — attach a PDF with the database off and the reply is treated as grounded in it.
   - Nothing to do either way. If you left Speculation at its default (off), that behavior is now simply what Documents-on does, and nothing changes. If you used to switch it on, replies are unchanged but you will now see the marker where you previously saw nothing, and the AI is reminded to stick to what was retrieved. `raven-minichat`'s `!speculate` command is gone with it.
 
-*Raven-server*
+#### Raven-server
 
 - the server log now records **every** request, at `--log-level DEBUG`, and records the *shape* of one rather than its content: counts, lengths, formats, durations, and the names of models, voices and filters. Running under `waitress`, a request that arrived and succeeded previously left no trace anywhere, so there was nothing to look at when a client seemed to be talking to nothing.
   - Your text, audio and images are not logged, at any log level. Two deliberate exceptions: `webfetch` records the URL it was asked to fetch, that being the request's identity and undiagnosable without it, and an error names the offending byte offset and codepoint rather than quoting the text around it. A `websearch` query is your question in your own words, so it is counted and not quoted.
   - The embeddings endpoint used to be the only one that said anything, printing a line and drawing a progress bar per request; speech-to-text drew one too. Both are gone — a progress bar is a display for one foreground job, and a server handling several callers at once has no foreground to draw in. Transcription instead logs how much audio it was given and how long it took.
 
-*Raven-arxiv-download*
+#### Raven-arxiv-download
 
 - a repeated identifier is dropped before any metadata is fetched, rather than being carried to the download step and skipped there. **The two arXiv tools now treat duplicates alike**: `raven-arxiv2bib` already discarded exact repeats as it collected its input, and `raven-arxiv-download` paid for one all the way to the download step. Two *versions* of one paper are not repeats in either tool, and still fetch as two — asking for v3 and v5 is asking for both.
 
-*Raven-pdf2bib*
+#### Raven-pdf2bib
 
 - extracts PDF text with the bundled `pypdf` instead of the external `pdftotext` (poppler-utils) binary — one fewer system dependency to install.
 
-*Constellation-wide*
+#### Constellation-wide
 
 - Install (GPU): `torch` / `torchvision` / `torchaudio` are pinned as a matched set and installed as CUDA 12.8 (`+cu128`) wheels from a dedicated PyTorch index (`pytorch-cu128` in `pyproject.toml`), so a dependency re-lock can't silently swap in a mismatched-CUDA wheel that fails to load at import. These wheels run on both CUDA 12 and CUDA 13 driver stacks; macOS installs must remove that source first (see the README's CUDA section).
 
@@ -850,9 +850,9 @@
 - **the file browser's type filter can offer a named group of formats** instead of one entry per extension. Raven-librarian's attach dialog opens on *Documents and images*, which is every format it can actually take — 21 extensions, previously reachable only as *All files* with everything else mixed in — and offers *Documents* and *Images* for when you know which you want. Hovering the filter lists the extensions it covers.
   - The offered sets are asked for at startup rather than written down, so the picker cannot come to disagree with what Raven will accept.
 
-**Fixed**:
+### Fixed
 
-*Raven-librarian*
+#### Raven-librarian
 
 - moving or renaming your documents folder no longer breaks the index. On the next startup scan, Raven compared each document against the *full path* it was indexed under, so a folder reached by a different route — renamed, moved, or through a symlink — looked like an entirely new collection: every file to be re-read, every indexed document to be dropped. It did not get that far either, aborting the scan with `'<file>' is not in the subpath of '<documents dir>'`. Documents are now matched by their path *relative* to the documents folder, which is what identifies them. Existing indexes are unaffected and need no rebuild.
 - a document that is a symlink is now indexed instead of aborting the run. Opening a document store containing one failed outright with `'<target>' is not in the subpath of '<documents dir>'`, because each document's path was resolved through the link before being turned into an id relative to the documents directory — so a link pointing anywhere outside that directory took the whole store down with it, no document indexed. Symlinks now keep the path they were reached by, which is also the one the id is built from. This makes a document collection assemblable as a *view* over files that live elsewhere, without copying them.
@@ -869,7 +869,7 @@
 - the chat view no longer drags you back to the bottom while the AI is writing. Scrolling up to re-read something during generation now stays where you put it, across tool calls too — which on a thinking model is the difference between waiting and reading. The view follows new content only when you were already at the end when it arrived, and a reply finalizing or a tool result landing is treated the same way.
 - the chat view now actually reaches the message you just sent. "Scroll to the end" read the panel's scroll maximum before the new message had been laid out, so it stopped where the *previous* message ended — on Send, the view typically stayed on the greeting.
 
-*Raven-visualizer*
+#### Raven-visualizer
 
 - with `raven-wos2bib`: BibTeX records with a brace in an unexpected field are no longer lost. The converter escaped some field values but not others, so a single `{` in, say, a DOI ended the field early and made the whole record unparseable — 8 records in 96296 on the Web of Science hydrogen corpus. Every field is now escaped. Existing `.bib` files converted with an earlier version keep the defect; reconvert them from the Web of Science source to recover the lost records.
 - importer: a BibTeX record that fails to parse is now reported instead of silently missing from the dataset. The warning names the file, the record key, the line, and which field's braces look unbalanced, so the offending data can be found and fixed. Previously a record that lacked a title was reported but one that could not be parsed at all was not — the wrong way round, since the second is the case that leaves no other trace.
@@ -881,17 +881,17 @@
 - opening a dataset while the tooltip, info panel, or word cloud is rebuilding can no longer raise an `IndexError` from indices computed against the old dataset landing on the new one. Each background render now pins one dataset snapshot for the whole build instead of re-reading the shared reference as it can change mid-build.
 - running without *Raven-server* (which the Visualizer treats as optional, loading models locally) no longer dumps a multi-frame connection-refused stack trace to the log for every model load. The low-level reachability probe now logs a single concise line at debug level; callers that require the server still report a clear error.
 
-*Raven-server*
+#### Raven-server
 
 - the console no longer prints the text sent for sentiment classification, nor the classification of it. That endpoint is fed whatever is being said in the chat — so on a session with the AI avatar running, the conversation was being written to the server's console and to any log capturing it, at every log level and with nothing to switch it off. Only the length is recorded now, at debug level.
 
-*Raven-avatar*
+#### Raven-avatar
 
 - an AI reply ending on a stray Markdown bullet (`...to the naked eye:` followed by a lone `*`) no longer aborts the whole spoken utterance. Such a fragment reached the speech synthesizer as a sentence of its own, with nothing pronounceable in it, and the resulting zero-length audio crashed the encoder; fragments with no speakable content are now dropped before synthesis, and empty audio encodes cleanly rather than failing.
 - the log no longer fills with the avatar announcing, every three seconds for as long as the session is idle, that it is returning to its neutral expression. It says so now only when it actually returns from one — so on a quiet session the line is silent, and when it appears it means something. *Raven-server*'s console had the matching half of this, dutifully reporting each of those re-assertions as it applied them; it too now speaks only on a change, and names what the emotion changed from.
 - releasing an avatar instance that the server does not have no longer fails. Leaving a client running across a *Raven-server* restart meant the client still held an instance ID from the previous server process, so closing it raised a 500 and a traceback on the server console on the way out. Unloading now succeeds whether or not the instance is there — the point of the call is that the instance is gone afterwards, and one that was never there satisfies that already.
 
-*Raven-cherrypick*
+#### Raven-cherrypick
 
 - triaging an image (cherry / lemon / winner) while its mips were still loading no longer leaves it stuck at a reduced resolution or failing to appear. The triage move relocates the file out from under the in-flight background decode, which then failed with `FileNotFoundError`; the load now restarts from the file's new location, whether it was filling in the full-res level of a preloaded image or doing the initial decode of a cache-miss one.
 - triaging then immediately navigating (e.g. `C` then `Right` within one ~16 ms frame) no longer tags the wrong image. DearPyGui dispatches same-frame key presses by keycode, not by press order, so navigation (lower keycode) moved the current image before the triage key read it; keyboard navigation is now deferred by one frame so a same-frame triage key acts on the intended image.
@@ -900,13 +900,13 @@
 - navigating to a preloaded neighbor no longer flashes it at low resolution before sharpening. Speculative preloads were capped at a fixed quarter resolution, so even on a cache hit the larger mip levels were regenerated on arrival — a visible re-sharpen on every step. The cap is now adaptive to the current zoom: a neighbor is prefetched at exactly the resolution the pane shows it at, so small images at fit-zoom arrive crisp while multi-MP photos still avoid the slow full-res GPU→host readback they don't need.
 - a thin colored stripe no longer appears along the image edge when zoomed in past 1:1. Under magnification the GPU's bilinear sampler read just past the texture boundary and wrapped to the opposite edge (a bright bottom row bleeding into the top, etc.); the sampled region is now inset by half a texel when magnifying. Unchanged at 1:1, which samples exactly on the texel grid.
 
-*Raven-arxiv-download*
+#### Raven-arxiv-download
 
 - downloaded-filename titles no longer read as run-on sentences. Clause boundaries that the filename sanitizer used to drop (`:` `?` `!` `;` followed by a space) now become ` - `, em/en dashes become a plain `-` instead of collapsing to a double space, and a compound-joining `/` becomes `-` instead of mashing the two sides together (`Twitter/X` → `Twitter-X`, not `TwitterX`). Example: `…Own Exploration? Gradient-Guided…` → `…Own Exploration - Gradient-Guided…`.
 - a nonexistent or malformed arXiv ID (e.g. a typoed month, `2614.19062`) now fails with a readable one-line "no arXiv entry for ID …" message — no traceback, since it's an expected user error — instead of an opaque `AttributeError`. The run continues to the remaining IDs; genuinely unexpected errors (network, parse bugs) still print a traceback for debugging.
 - with *raven-arxiv-search*: HTTP 429 responses from the arXiv API no longer abort the run. Both tools now retry up to three attempts with backoff (honoring `Retry-After` when set, else exponential 3/6 s) and send an identifying `User-Agent` per arXiv's API TOU. Triggered occasionally on cache-miss bursts even when the caller is within the published 3 s rate limit; `raven-arxiv-download` also now goes straight to HTTPS instead of getting redirected from HTTP.
 
-*Constellation-wide*
+#### Constellation-wide
 
 - All client HTTP calls to *Raven-server* and to the LLM backend now use connect/read timeouts, so a server or backend that becomes unreachable mid-connection fails fast instead of hanging indefinitely. Matters most when either is configured to run on another machine that is down. Timeouts are configurable in `raven.client.config` (`network_timeout`) and `raven.librarian.config` (`llm_network_timeout`); streaming endpoints bound only the connect, leaving long-lived streams unbounded.
 - `dpg_markdown` bullet lists and blockquotes now render correctly inside tooltips (and any other initially-hidden container). Previously every bullet glyph in a tooltip stacked at the top-left, because DPG reports `get_item_pos() == (0, 0)` for children of a hidden container; the bullet drawlists are now deferred until their row has been laid out.
@@ -917,9 +917,9 @@
 
 ---
 
-**0.2.7** (22 April 2026):
+## 0.2.7 (22 April 2026)
 
-**Added**:
+### Added
 
 - New submodule: `raven.papers` — consolidates all paper and bibliography tools.
   - New tool: `raven-arxiv-search`.
@@ -948,7 +948,7 @@
 - *Raven-avatar*: settings editor now has per-parameter help as Markdown tooltips, sourced from each filter's docstring. An info button next to every postprocessor parameter shows that parameter's description, rendered via `dpg_markdown`. Filter-level info buttons show each filter's preamble. New helper module `raven.common.docstring_utils` parses Raven-style docstrings (`` `name`: description``) into summary + per-parameter sections.
 - *Raven-avatar*: pose editor F1 help card with a prose section explaining the posing workflow. Hotkey table + two-column layout matching the settings editor / xdot viewer style.
 
-**Changed**:
+### Changed
 
 - *Raven-avatar* performance improvements:
   - ~4–5% faster avatar rendering via `torch.inference_mode`, cached `affine_grid` base grids in the THA3 engine, and zero-copy pose tensor expansion. Pure inference paths across the render pipeline (avatar, postprocessor, upscaler, pose editor) now use `inference_mode` instead of `no_grad`.
@@ -1027,7 +1027,7 @@
 - *Common utilities*: minimum `unpythonic` dependency bumped to 2.1.0. `environ_override`, `maybe_open`, `UnionFilter`, and `si_prefix` graduated to `unpythonic` in that release — Raven's local copies have been removed; the names now come from `unpythonic`.
   - Visible side effect: SI-prefixed numbers in log messages (bitrate, byte-rate, pixel-rate strings in the avatar renderer and audio codec) now use correct SI casing — lowercase `k` for kilo (previously uppercase `K`, which is the symbol for kelvin). `si_prefix` also gained binary (base-1024) mode, sub-unity prefixes (`m`, `µ`, ...), and correct handling of negative and zero values.
 
-**Fixed**:
+### Fixed
 
 - *Raven-minichat*:
   - `raven-minichat` no longer crashes on MS Windows. Previously, the command would fail at startup with `ImportError: No module named 'readline'` because Python's stdlib `readline` module is POSIX-only. The fix is a three-tier hybrid load: try stdlib `readline` first (Linux/macOS), fall back to `pyreadline3` (a drop-in Windows replacement; `pip install pyreadline3` to get the full experience), and finally degrade gracefully to plain `input()` if neither is available — the chat loop still works, you just lose command history, tab completion, and persistent cross-session history. When running in the degraded mode, a startup notice explains what's missing and how to restore it.
@@ -1067,9 +1067,9 @@
 
 ---
 
-**0.2.6** (9 April 2026):
+## 0.2.6 (9 April 2026)
 
-**Added**:
+### Added
 
 - New GUI app: *Raven-cherrypick*.
   - An image triage tool for quickly sorting a folder of images into cherries (keepers), lemons (rejects), and neutral.
@@ -1112,7 +1112,7 @@
   - Extracted `SmoothValue`/`SmoothInt` into `raven.common.smoothvalue` (shared across xdot viewer, cherrypick, and future apps).
   - `PyTurboJPEG` dependency added for fast JPEG decoding. Requires the `turbojpeg` system-level library (on Debian-based Linux: `sudo apt install libturbojpeg`).
 
-**Changed**:
+### Changed
 
 - *Video processing* (`raven.common.video`):
   - There are now two noise stages: `noise` (sensor/film grain, early in the chain) and `analog_vhs_noise` (VHS tape noise, later). This better models the physical signal path.
@@ -1127,7 +1127,7 @@
   - Widen Python support to `<3.15`.
     - But narrow `requires-python` to `<3.13` for `kokoro`/`misaki` compatibility.
 
-**Fixed**:
+### Fixed
 
 - Compatibility: detect "Item not found" across different Python/DPG versions, needed in GUI code.
 
@@ -1139,9 +1139,9 @@
 
 ---
 
-**0.2.5** (3 March 2026):
+## 0.2.5 (3 March 2026)
 
-**Added**:
+### Added
 
 - New GUI app: *Raven-xdot-viewer*.
   - This is a utility app for viewing GraphViz graphs (`.dot`, `.gv`, `.xdot`).
@@ -1165,7 +1165,7 @@
         - von Last, Jr., First
       - For more details, see: https://www.bibtex.com/f/author-field/
 
-**Changed**:
+### Changed
 
 - Bump minimum **Python** version to **3.11**.
   - **Upgrading to Raven 0.2.5 requires a fresh reinstall**.
@@ -1185,9 +1185,9 @@
 
 ---
 
-**0.2.4** (16 December 2025):
+## 0.2.4 (16 December 2025)
 
-**Added**:
+### Added
 
 - Tools:
   - New command-line tool: *Raven-arxiv-download*.
@@ -1261,7 +1261,7 @@
     - Changes take effect when Librarian is restarted.
     - Limitation: for now, only one AI character icon is loaded. If you switch characters, old chats will show the current character's icon (the persona name is stored in the chat database, but the avatar and icon paths are not).
 
-**Changed**:
+### Changed
 
 - *Raven-visualizer*:
   - Configurable plotter colors (background, grid, colormap). Loaded from `raven.visualizer.config` at app startup.
@@ -1311,7 +1311,7 @@
       - See `raven.librarian.config`.
 
 
-**Fixed**:
+### Fixed
 
 - *Raven-visualizer*:
   - Fix bug: "reset zoom" missed some datapoints (in a "select visible", hotkey F9), if they were exactly at the edges of the data bounding box.
@@ -1333,9 +1333,9 @@
 
 ---
 
-**0.2.3** (7 October 2025):
+## 0.2.3 (7 October 2025)
 
-**Added**:
+### Added
 
 - Prototype of *Raven-librarian*, a scientific LLM frontend GUI app.
   - Features an animated AI avatar with TTS and auto-translated subtitles, document database (plain text files for now), and tool-calling support (websearch for now).
@@ -1363,7 +1363,7 @@
   - These can be used to piece together a speech video in a video editor such as *OpenShot*.
 
 
-**Changed**:
+### Changed
 
 - *Raven-visualizer*'s importer now uses both the title and the abstract to cluster the inputs.
   - This requires *Snowflake-Arctic* or better as the embedding model; the older *mpnet* model tends to lead everything to become one cluster if the abstracts are used for clustering.
@@ -1379,9 +1379,9 @@
 
 ---
 
-**0.2.2** (13 August 2025):
+## 0.2.2 (13 August 2025)
 
-**Added**:
+### Added
 
 - First complete tech demo of *Raven-avatar*.
   - See the GUI apps `raven-avatar-settings-editor` (completely new postprocessor settings GUI) and `raven-avatar-pose-editor` (ported from the old THA3 pose editor).
@@ -1392,11 +1392,11 @@
 
 ---
 
-**0.2.1** (18 June 2025):
+## 0.2.1 (18 June 2025)
 
 Otherwise the same as 0.2.0 (17 June 2025), but with the TODO cleaned up. Documenting both here.
 
-**Added**:
+### Added
 
 - *Raven-server*: to provide an animated AI avatar, and to eventually host all AI components.
   - This is a web API server, initially ported and stripped from the discontinued *SillyTavern-extras*.
@@ -1412,7 +1412,7 @@ Otherwise the same as 0.2.0 (17 June 2025), but with the TODO cleaned up. Docume
 ---
 
 
-**0.1.x** and older
+## 0.1.x and older
 
 The project was started in December 2024.
 
