@@ -277,3 +277,14 @@ Collected so the session has an agenda rather than a pile:
    the index. Three stores currently believe different things about who is authoritative.
 4. **Whether the TOC (§4) is one mechanism or two** — the always-on names-and-counts, and `describe_scope`.
 5. **Migration.** Existing hybridir datastores and existing Visualizer datasets both predate all of this.
+
+## The release this lands in has a name waiting for it
+
+**Antennae Galaxies**, reserved 2026-09-21. Two galaxies mid-collision, their contents flowing into one
+another — for the release where Librarian and Visualizer stop being separate apps that happen to share a
+disk and start reaching into each other.
+
+Raven's releases are named after objects in the night sky as of 0.2.9 (*"Pleiades"*); the `release` skill
+has the well and why it is the whole sky rather than Corvus alone. The rule there is that the name must pun
+on what the release *did* rather than merely fit the theme, and this one does, which is why it is being held
+rather than spent on the next release that happens to need a name.
