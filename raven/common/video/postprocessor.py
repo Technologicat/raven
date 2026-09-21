@@ -2378,9 +2378,7 @@ class Postprocessor:
 
         This is the advanced version of `scanlines`, which stays around as the cheap and simple one.
         Reach for that when all you need is a hard bright/dark alternation, and for this when you want
-        it to look like a real CRT. They also sit in different bands and model different things - the
-        character's own raster here, the viewer's monitor there - so stacking them is legal, if rarely
-        what anyone wants.
+        it to look like a real CRT.
 
         `warp_x`, `warp_y`: Barrel distortion, pushing the image outward toward the left/right edges
                             and the top/bottom edges respectively. Nearly vestigial for a hologram,
