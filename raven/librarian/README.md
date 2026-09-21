@@ -669,7 +669,7 @@ The first two each govern one group of tools (see [Tools](#tools) above), and ne
       - Spurious matches are still possible, and may trip up your LLM.
         - E.g. *"What does your knowledge base say about whether cats can jump?"* may find matches in e.g. AI research literature due to the phrase *"knowledge base"*.
         - Whether the AI notices the case where all results are spurious and don't actually contain the requested information, depends on your particular LLM.
-          - *Qwen3 30B A3B Thinking 2507* is pretty good at this (and will e.g. tell you that the search results were about AI, not cats), but as of 12/2025, anything smaller than 30B generally isn't.
+          - A capable model will say so — that the search results were about AI rather than cats — and a small one generally will not. Where the line falls moves with each model generation, so it is worth checking on whichever one you run rather than taking a figure from here.
     - When **nothing** was retrieved — no document matches, no attachments, no tool results — the reply is marked **[no sources retrieved]** below the message. The AI still answers.
       - The marker reports what was *retrieved*, not whether the reply used it. A search that returns irrelevant matches still counts as retrieval, so the absence of the marker means something came back, not that the answer rests on it. Telling those apart needs either relevance-aware retrieval scores or citations from the AI itself; both are planned, neither is built.
       - Note this is the *expected* state for a general question. Nobody's document database answers *"what is 2+2?"*, so asides get the marker, and that is the marker doing its job rather than reporting a problem.
@@ -1152,9 +1152,7 @@ Recommendations:
   - *Librarian* is tested with this backend.
   - It is easy to install; see the instructions on its frontpage.
   - You'll want to start it with the `--api --listen` command-line options, so that it will listen for incoming connections, and serve the OpenAI-compatible API (which *Librarian* uses).
-- Model:
-  - 24GB: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507)
-  - 8GB: [Qwen3-4B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507)
+- Model: the recommendations live in the [main README](../../README.md#raven-librarian-multiversal-llm-frontend), by how much VRAM you have. They move with each model generation, so they are kept in one place rather than repeated per app.
 
 **Multiple-device** considerations:
 

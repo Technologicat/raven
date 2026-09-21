@@ -160,8 +160,9 @@ For hosting one, we recommend [oobabooga/text-generation-webui](https://github.c
 
 - **2024**: originally tested on a local Llama 3.1 8B on Oobabooga. Fits a laptop's 8 GB VRAM at 4 bits (Q4_K_M) with room for 24k tokens of context. Accuracy about 80% — eight abstracts in ten convert without warnings and look right on inspection.
 - **February 2025**: thinking models supported, first tested on a Q4_K_M [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B) at 64k context on a 24 GB eGPU. A couple of percentage points more accurate, and much slower. [QwQ 32B](https://huggingface.co/Qwen/QwQ-32B) runs on similar specs.
-- **December 2025**: **the current recommendation is [Qwen3 2507 30B A3B Thinking](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507)**. Also a 24 GB eGPU at 4 bits, and being a MoE with 3B active parameters per token, much faster than the earlier models. It loads with 128k context and works at least to ~50k; the 256k it supports does not fit in 24 GB. Noticeably smarter, and informally about 88% accurate.
-- **On 8 GB**, [Qwen3 2507 4B Thinking](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507) is worth a try — not in the same class as the 30B, but punching well above its size, and better than Llama 3.1 8B or DeepSeek-R1-Distill-Qwen-7B at half their size.
+- **December 2025**: [Qwen3 2507 30B A3B Thinking](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507), on a 24 GB eGPU at 4 bits. A MoE with 3B active parameters per token, so much faster than the earlier models; loads with 128k context and works at least to ~50k. Noticeably smarter, and informally about 88% accurate. **This is the most recent model the converter has been measured against.**
+
+**For what to run now, see the [main README](../../README.md#raven-librarian-multiversal-llm-frontend)**, which carries the current recommendations by VRAM for the whole constellation. They move with each model generation, so they are kept in one place rather than repeated per tool — and the accuracy figures above belong to the models named beside them rather than to whatever you end up running.
 
 ## `raven-fixbib` — repairing a database export
 

@@ -576,6 +576,27 @@ sentence being written at that moment is usually a docstring for the code that d
 corrections in one session (2026-09-02) plus two in another (2026-08-28) are what promoted it from the
 changelog rule above to this one.
 
+### Name the capability, not the model
+
+The same rule with a different instance, and it ages faster than any dataset does. **A model named in
+user-facing guidance reads as a recommendation however it was framed** — a reader will go and download it —
+so a docs sentence says what a model has to be *able to do*, and leaves which one to the single place that
+carries the current recommendations, `README.md`'s Librarian section. Repeating them per app is how three
+manuals came to recommend a generation nobody runs.
+
+**The harm is not staleness but misdirection** (Juha, 2026-09-21). An observation a year old is useless in
+this field, and worse than useless when somebody picks a model on the strength of it. *"Qwen3 30B A3B
+Thinking 2507 is pretty good at noticing spurious retrievals, and as of 12/2025 anything smaller generally
+is not"* was correctly scoped, correctly dated, and still sent a reader after a model that had been
+superseded twice over by the time they read it. What survives the rewrite is the durable half: a capable
+model says so, a small one does not, and where the line falls moves every generation.
+
+**Two places may name a model, and both are records rather than guidance.** A *sample of stored data* — an
+exported chat whose `model:` field says what produced a reply — is correct precisely because it names what
+was there. And a *measurement* in an investigation bundle or a testing history names its subject, since
+a figure without the model it was measured on means nothing; say outright that the number belongs to that
+model, as `raven/papers/README.md`'s converter history does.
+
 ### Live GUI testing on a shared desktop
 
 Raven's apps are DPG, so verifying GUI work means running them — and the agent and the human are on the *same X session*. Keyboard focus is therefore a shared, single-holder resource: a window that maps or gets activated takes focus away from wherever the human is typing, and their next keystrokes land in the app instead of their editor or terminal. (Observed the obvious way: a launched Librarian window swallowed a half-typed message and its Enter, which sent an empty chat turn.)
