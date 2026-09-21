@@ -199,10 +199,13 @@ The [video postprocessor](../common/video/postprocessor.py) is a set of custom p
 
 ## What the postprocessor can do
 
-Twenty-one filters, applied in the order you list them. **`Postprocessor.get_filters()` is the definitive
-list**, and the settings editor reads it live — so each filter's own documentation, its parameters and
-their ranges are in front of you while you are adjusting it, and the catalogue below is for deciding *which*
-ones you want rather than how to set them.
+Twenty-one filters, applied in the order you list them.
+
+**The details are in the app.** Run `raven-avatar-settings-editor` and each filter carries its own
+documentation there — what it does, every parameter it takes, and the range each one is meaningful over —
+beside live controls, so you read it while watching the effect on the character. The editor builds that from
+`Postprocessor.get_filters()`, which is the definitive list; the catalogue below is the other question, the
+one the app cannot answer until you are already in it: **which** filters exist at all.
 
 A chain is a list of `(name, settings)` pairs in `postprocessor_chain` (see `postprocessor_defaults` in
 [`raven.server.config`](../server/config.py) for the one Raven ships), and any entry can carry
