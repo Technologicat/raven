@@ -223,35 +223,10 @@
   raven-deduplicate search.bib -o deduped.bib
   ```
 
-  - **Two keys decide**: the DOI, and the title (reduced until two databases' spellings of one title agree).
-    - Matching is transitive. A record sharing a DOI with one twin and a title with another brings all three together. The two keys are complementary, because neither is present on every record.
-  - **DOI equality carries a merge; DOI *inequality* does not refuse one.**
-    - A paper carrying two different DOIs usually means something ordinary — a preprint beside its published version, a repository deposit beside the journal's own, a hyphen typed as an en-dash. So a title match is not overruled by a DOI mismatch, and the disagreement goes in the audit for you to look at.
-    - **However, a wrong DOI does refuse a merge**. In the real world, it does occasionally happen that a publication database mismatches an identifier, or an author pastes the wrong journal reference into a preprint submission — and a database record then ends up carrying a DOI that belongs to a different paper.
-      - Two records sharing a DOI are kept apart when they contradict it twice over — unalike titles *and* different first authors — and the tool names the pair in its audit, since that is a fault in your data rather than a fact about the merge.
-      - Requiring both is what keeps the rule quiet, and either alone would split real papers: a title may change between a preprint and its publication, and two databases may disagree about which author comes first.
-  - **The merge keeps everything**, rather than keeping the best record.
-    - The surviving copy is the most complete one — preferring the version of record over a preprint, and the higher version of a Springer living-reference chapter. Every field that most complete copy lacks is filled in from a twin that has one. Where two copies disagree about a field, the audit records the value that lost.
-  - **Abstracts have the publisher's rights notice removed before they are compared** — and only for the comparison; what gets written is the abstract as its database wrote it.
-    - Two copies of one abstract usually differ *only* by that notice, so without stripping first "keep the longest" would be picking a record for the size of its copyright line.
-  - **The tool automatically applies the same fixes `raven-fixbib` does**, so records the parser would refuse are still counted, and HTML in the field values is still decoded — you get an honest number, and a citable file, from one command. You do not need to first run `raven-fixbib`.
-  - **Normalized and stripped forms decide *which* value to keep, and never reach the output.** The record that wins a merge is written as it stands, not composed from the ones that lost. The one field kept from *every* copy is `copyright`: each notice names one of the exports the record came from, so a merged record says where all of it came from.
-  - **An audit TSV is written by default**, beside the deduplicated file as `<output>_audit.tsv`.
-    - The `.bib` is what you came for; the audit is what lets you stand behind it. A review has to report how many duplicates it removed and answer for the number, and this is what that number is computed from: one row per merge, naming what was kept, what was merged away, which key matched, and every value that differed.
-    - The audit carries Raven's version, so a method section can cite a published tool.
-    - `--audit PATH` puts the audit file elsewhere.
-    - `--no-audit` declines writing an audit, at the cost of the only record of what the merge did.
-  - **Nothing is written unless you ask.** Without `-o` the tool reports what it would do; the input file is never modified.
-  - **`--judge`** additionally asks an LLM about near-miss titles that no exact key joined, and about merges whose records disagree about the DOI. Off by default, since it needs a backend.
-    - The model proposes and Raven disposes: a "same work" verdict contradicted by the records themselves is dropped, so a confident wrong answer cannot create a merge the ordinary rules would have refused.
-    - The run is resumable, and its answers are kept in a JSONL file beside the audit file.
-    - **The judge also decides which DOI a merged work actually keeps.** Where the records of one work disagree about the identifier, one of them can simply be wrong, and the merge would otherwise pick by completeness and write it into your bibliography.
-      - So each candidate is checked against the venue named by the record carrying it — an astronomy journal on a paper about classroom assessment is visible, where the identifier alone is not — and a rejected DOI is dropped along with that venue, with the audit saying which and why.
-    - **The judge is asked about the venue and never about the identifier.** A DOI says nothing to a reader who does not already know it, including LLMs. The venue beside it is something the database record actually states.
-      - The bias is toward keeping: a venue that is general, interdisciplinary or merely unfamiliar fits, an unparseable answer fits, and a work whose every identifier is rejected keeps them all. The tool prefers to err toward treating those cases as the LLM recognizing nothing rather than as a bibliography where nothing is right.
-  - **The tool errs toward leaving duplicates rather than making them up.**
-    - A missed merge leaves a visible duplicate that a reviewer can act on; a false merge deletes a paper from the review and nothing downstream can notice.
-    - So two database records carrying the same genre label as their title — `Editorial`, `Book Review` — are merged only if they agree about the author and the year, and two authorless records carrying a serial's recurring section heading are not merged when their DOIs disagree.
+  - **An audit TSV is written beside the output**, one row per merge: what was kept, what was merged away, which key matched, and every value that differed. A review has to answer for the number of duplicates it removed, and this is what that number is computed from.
+  - **Nothing is written unless you ask.** Without `-o` the run reports what it would do; your inputs are never modified either way.
+  - **`--judge` additionally asks an LLM about the near misses** — titles that no exact key joined, and merges whose records disagree about the DOI. Off by default, since it needs a backend.
+  - **The rules it applies are documented**: what counts as the same paper, what a DOI decides and what it does not, what a merge keeps, and why it errs toward leaving duplicates. See the [paper tools manual](raven/papers/README.md#raven-deduplicate--merging-a-multi-database-search).
 
 #### Raven-siftbib
 
