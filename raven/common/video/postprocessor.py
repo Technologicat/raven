@@ -821,8 +821,9 @@ class Postprocessor:
 
         Dust in a sunbeam, or with different tuning something closer to pollen, snow or petals. The
         effect is diegetic: the particles are a property of the air the character is standing in, not
-        a sparkle laid over the picture, which is why this runs in the Scene band ahead of `zoom` and
-        the capture optics. The dust is framed by the camera and lit by the same lens as the character.
+        a sparkle laid over the picture. So the capture optics want to be downstream of this — `zoom`
+        and the lens effects — and the dust is then framed by the camera and lit by the same lens as
+        the character. Upstream of them, it becomes an overlay on a finished picture instead.
 
         Each particle is modelled as a thin disc tumbling in place, which is where the twinkle comes
         from - the disc is invisible edge-on and flashes as it turns through alignment with the light.
@@ -1424,9 +1425,10 @@ class Postprocessor:
                    bandpass_q: float = 0.0) -> None:
         """[static] Desaturate the image, with optional hue bandpass and tint.
 
-        This is an image retouching / color grading effect. It runs early in the
-        chain (before noise and analog degradation), so the bandpass sees clean
-        color data. For monochrome display simulation, see `monochrome_display`.
+        This is an image retouching / color grading effect. The hue bandpass reads the colour it is
+        given, so put noise and analog degradation downstream of this: upstream, they are what it
+        reads, and it selects hues out of the damage rather than out of the picture. For monochrome
+        display simulation, see `monochrome_display`.
 
         Does not touch the alpha channel.
 
@@ -1525,9 +1527,9 @@ class Postprocessor:
               name: str = "noise0") -> None:
         """[dynamic] Sensor / film grain noise.
 
-        Isotropic noise applied at the camera/capture stage. Runs early in the
-        chain, before analog transport degradation. For VHS tape noise, see
-        `analog_vhs_noise`.
+        Isotropic noise, as a camera or film stock produces it at capture — so anything modelling
+        the transport that carries the picture afterwards wants to be downstream of this. For VHS
+        tape noise, which is the transport's own, see `analog_vhs_noise`.
 
         NOTE: At small values of `sigma`, this filter causes the video to use a lot of bandwidth
         during network transfer, because noise is impossible to compress.
@@ -1845,9 +1847,8 @@ class Postprocessor:
                          name: str = "analog_vhs_noise0") -> None:
         """[dynamic] VHS tape noise.
 
-        Anisotropic noise characteristic of the VHS magnetic medium. Runs in the
-        analog transport stage, after hsync artifacts but before glitches and
-        head switching. For sensor / film grain noise, see `noise`.
+        Anisotropic noise characteristic of the VHS magnetic medium — the tape's own, as distinct
+        from what the camera contributed at capture. For sensor / film grain noise, see `noise`.
 
         `strength`: How much noise to apply. 0 is no noise, 1 replaces the input with noise.
 
@@ -2373,8 +2374,8 @@ class Postprocessor:
         copy of itself, which fills the gaps back in. Measured on a character still, with the
         scanline contrast at 0.48 where 1.0 means no raster left: `zoom` and `analog_lowres` take it
         to 1.00, `bloom` to 0.81, `chromatic_aberration` to 0.79. Making the raster coarser does not
-        rescue it. So this filter sits next to `translucent_display`, past everything that resamples,
-        and the two hologram effects travel together.
+        rescue it. So keep it downstream of everything that resamples; `translucent_display` is the
+        other hologram effect that belongs there, and the two travel together.
 
         This is the advanced version of `scanlines`, which stays around as the cheap and simple one.
         Reach for that when all you need is a hard bright/dark alternation, and for this when you want
@@ -2625,11 +2626,11 @@ class Postprocessor:
                            tint_rgb: List[float] = [1.0, 1.0, 1.0]) -> None:
         """[static] Monochrome display simulation.
 
-        Desaturates the image as seen through a monochrome display. Runs late
-        in the chain (after noise and analog degradation), so transport artifacts
-        like NTSC chroma noise are correctly collapsed into luminance — as a
-        real monochrome display would do. For color grading / bandpass
-        desaturation, see `desaturate`.
+        Desaturates the image as seen through a monochrome display. Anything modelling the signal
+        that reaches that display wants to be upstream of this, so that transport artifacts like
+        NTSC chroma noise are collapsed into luminance the way a real monochrome display collapses
+        them; downstream, they arrive as colour on a screen that has none. For color grading /
+        bandpass desaturation, see `desaturate`.
 
         Does not touch the alpha channel.
 
