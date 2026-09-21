@@ -916,6 +916,10 @@ class DPGChatMessage:
         with self.paragraphs_lock:
             self.paragraphs.append(paragraph)
             self._render_text()
+        # Outside the lock: this reaches the controller, which takes `current_chat_history_lock` to find a
+        # message — and `build` takes that one first and `paragraphs_lock` second, so asking from in here
+        # would be the same two locks in the opposite order.
+        self._recheck_awaited_thinking_trace()
 
     def replace_last_paragraph(self, text: str, is_thought: bool) -> None:  # TODO: Only last paragraph is replaceable for now, because it's easier for coding the GUI. :)
         """Replace the last paragraph of text in this widget. If there are no paragraphs yet, create one automatically.
@@ -941,6 +945,13 @@ class DPGChatMessage:
             paragraph["is_thought"] = is_thought
             paragraph["rendered"] = False
             self._render_text()
+
+        # As in `add_paragraph`, and outside the lock for the same reason. Here rather than only at a
+        # paragraph break because this is where a reply's words actually arrive: the caller rate-limits it
+        # to a newline, or half a second, or a quarter second and ten chunks, so a request outstanding on
+        # this message is answered within that rather than whenever the model happens to end a paragraph —
+        # which for a turn that ends in a tool call, or one the reader stops, may be never.
+        self._recheck_awaited_thinking_trace()
 
         dpg.split_frame()  # ...and anything after this point runs in another frame.
 
@@ -1062,6 +1073,20 @@ class DPGChatMessage:
         with guiutils.nonexistent_ok():
             if self.gui_thought_group is not None:
                 dpg.show_item(self.gui_thought_group)
+
+    def _recheck_awaited_thinking_trace(self) -> None:
+        """Tell the controller this message's text has moved, in case its trace is one somebody asked to see.
+
+        Called as words arrive rather than once, because for a reply being generated the answer to "does the
+        trace match" changes: the request was made against a count saying it did, and the words that made it
+        so may not have been written yet. Opening before they arrive would show a bubble that does not yet
+        hold what was promised, which is the one thing the request was for.
+
+        Costs a search of this one message per update, and only while a request is in fact outstanding on
+        this message — one node at a time, ending at the first match.
+        """
+        if self.node_id is not None:
+            self.parent_view.chat_controller.recheck_awaited_thinking_trace(self.node_id)
 
     def _thought_bubble(self) -> str | int:
         """The container the thinking trace renders into, built on first use. Returns its DPG ID.
@@ -4185,7 +4210,7 @@ class DPGChatController:
         self._search_position_stale = True
         self._search_jump = None  # `(index, target_y_scroll)`; see `_search_jump_holds`
         # The one node whose thinking trace is owed to the reader once its message exists; see
-        # `open_thinking_trace_on_arrival`. `None` whenever nothing is awaited, which is nearly always.
+        # `open_thinking_trace_when_it_matches`. `None` whenever nothing is awaited, which is nearly always.
         self._node_awaiting_trace_open = None
         # Called with no arguments whenever any of the four above changes, so the app can redraw its search row.
         # Set by the app; `None` until then.
@@ -4337,7 +4362,7 @@ class DPGChatController:
         finalizes and is rebuilt as a stored message.
 
         Also where a jump that had to wait for this message gets to open its thinking trace; see
-        `open_thinking_trace_on_arrival`.
+        `open_thinking_trace_when_it_matches`.
         """
         # `find_matches` answers `[]` for no search, so the no-search case needs no branch of its own here —
         # and must not take an early return, because an awaited trace is still awaited when the reader has
@@ -4348,18 +4373,40 @@ class DPGChatController:
             self._search_matches_changed()
         self._open_awaited_thinking_trace(node_id, new_matches[0][1] if new_matches else None)
 
-    def open_thinking_trace_on_arrival(self, node_id: str) -> None:
-        """Ask that `node_id`'s thinking trace be opened once the view has built its message, if the trace is what matched.
+    def open_thinking_trace_when_it_matches(self, node_id: str) -> None:
+        """Ask that `node_id`'s thinking trace be opened as soon as that trace actually matches the search.
 
-        For a jump that moves HEAD, which is what the chat graph's commit gesture does: the view rebuilds on
-        another thread, so at the moment of the jump the message does not exist and `view.find_message`
-        answers `None`. The wait ends in `add_search_matches_for`, which the rebuild already calls once per
-        message.
+        For a caller that cannot open it itself, because the message is not there to open. Moving HEAD
+        rebuilds the view on another thread, so at the moment of the request `view.find_message` answers
+        `None`; and a reply still being generated may not yet have written the words that make its trace
+        match. Both are answered by asking later rather than now — `add_search_matches_for` when the message
+        arrives, `recheck_awaited_thinking_trace` while it is still being written.
 
-        Only one node is remembered. A second jump arriving before the first message does is the reader
+        The chat graph's commit gesture is the caller today, having a box whose count says the trace matched
+        and no trace of its own to open. Nothing here is particular to it.
+
+        Only one node is remembered. A second request arriving before the first is answered is the reader
         changing their mind, and the trace they no longer want opened is the one they left.
         """
         self._node_awaiting_trace_open = node_id
+
+    def recheck_awaited_thinking_trace(self, node_id: str) -> None:
+        """A message still being written has new words; open its trace if that is what was asked for.
+
+        The rule is the one `add_search_matches_for` applies to a message that has arrived — open the trace
+        when the trace is what matched — asked repeatedly rather than once, because here the text is still
+        moving and the answer can change from no to yes.
+
+        **It does not end the wait when the answer is still no**, and that is the whole difference from the
+        arrival case: a stored message's answer is final, so the request is spent on it either way, while a
+        reply in progress may yet write the words being waited for. The wait ends when the reply finalizes
+        and is rebuilt as a stored message, which goes through `add_search_matches_for`.
+        """
+        if node_id != self._node_awaiting_trace_open:
+            return
+        matches = chatsearch.find_matches(self.datastore, [node_id], self.search_query)
+        if matches and matches[0][1].thinking:
+            self._open_awaited_thinking_trace(node_id, matches[0][1])
 
     def _open_awaited_thinking_trace(self, node_id: str, maybe_counts: "chatsearch.MatchCounts | None") -> None:
         """Open the trace of `node_id`, if it is the message a jump was waiting for and its trace is what matched."""

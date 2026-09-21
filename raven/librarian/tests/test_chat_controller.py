@@ -741,21 +741,24 @@ class TestOpeningAnAwaitedThinkingTrace:
 
     The chat graph's commits are where this comes from: a box wearing a count that was a thinking-trace hit
     has no trace of its own to open, and acting on it moves HEAD — at which moment the message the count was
-    about does not exist yet, the view rebuilding on another thread. `open_thinking_trace_on_arrival` names
+    about does not exist yet, the view rebuilding on another thread. `open_thinking_trace_when_it_matches` names
     the node, and `add_search_matches_for` — which the rebuild already calls once per message — collects.
 
     Built with `__new__`, as `TestSteppingTheSearch` above is, and for the same reason.
     """
 
     @staticmethod
-    def _branch():
+    def _payload(reasoning):
+        return {"message": {"role": "assistant",
+                            "content": [{"type": "text", "text": "It speeds up the reaction using light."}],
+                            "reasoning_content": reasoning},
+                "general_metadata": {"persona": None}}
+
+    @classmethod
+    def _branch(cls, reasoning="Summarize the tool result for the reader."):
         """One reply whose reasoning says something its answer does not, which is the whole case here."""
         forest = chat_controller.chattree.Forest()
-        payload = {"message": {"role": "assistant",
-                               "content": [{"type": "text", "text": "It speeds up the reaction using light."}],
-                               "reasoning_content": "Summarize the tool result for the reader."},
-                   "general_metadata": {"persona": None}}
-        return forest, forest.create_node(payload=payload, parent_id=None)
+        return forest, forest.create_node(payload=cls._payload(reasoning), parent_id=None)
 
     @staticmethod
     def _controller(forest, search_string, opened):
@@ -776,7 +779,7 @@ class TestOpeningAnAwaitedThinkingTrace:
         forest, node_id = self._branch()
         opened = []
         controller = self._controller(forest, "summarize", opened)
-        controller.open_thinking_trace_on_arrival(node_id)
+        controller.open_thinking_trace_when_it_matches(node_id)
         controller.add_search_matches_for(node_id)
         assert opened == [node_id]
 
@@ -784,7 +787,7 @@ class TestOpeningAnAwaitedThinkingTrace:
         forest, node_id = self._branch()
         opened = []
         controller = self._controller(forest, "light", opened)
-        controller.open_thinking_trace_on_arrival(node_id)
+        controller.open_thinking_trace_when_it_matches(node_id)
         controller.add_search_matches_for(node_id)
         assert controller.search_matches, \
             "nothing matched at all, so this fixture cannot tell a trace left closed from a message not found"
@@ -803,7 +806,7 @@ class TestOpeningAnAwaitedThinkingTrace:
         forest, node_id = self._branch()
         opened = []
         controller = self._controller(forest, "summarize", opened)
-        controller.open_thinking_trace_on_arrival(node_id)
+        controller.open_thinking_trace_when_it_matches(node_id)
         controller.add_search_matches_for(node_id)
         controller.add_search_matches_for(node_id)  # a later rebuild walking past the same message
         assert opened == [node_id]
@@ -812,9 +815,33 @@ class TestOpeningAnAwaitedThinkingTrace:
         forest, node_id = self._branch()
         opened = []
         controller = self._controller(forest, "summarize", opened)
-        controller.open_thinking_trace_on_arrival(node_id)
+        controller.open_thinking_trace_when_it_matches(node_id)
         controller.search_query = None  # the reader cleared it in the frames since the jump
         controller.add_search_matches_for(node_id)
         assert opened == []
         assert controller._node_awaiting_trace_open is None, \
             "the request outlived the message it named, and would be spent on some later rebuild"
+
+    def test_a_reply_still_writing_its_trace_keeps_the_jump_waiting(self):
+        forest, node_id = self._branch(reasoning="Let me think about this for a moment.")
+        opened = []
+        controller = self._controller(forest, "summarize", opened)
+        controller.open_thinking_trace_when_it_matches(node_id)
+        controller.recheck_awaited_thinking_trace(node_id)
+        assert opened == []
+        assert controller._node_awaiting_trace_open == node_id, \
+            "the wait ended on a trace that had not yet written the words it was waiting for"
+
+    def test_the_trace_opens_as_soon_as_the_words_arrive(self):
+        forest, node_id = self._branch(reasoning="Let me think about this for a moment.")
+        opened = []
+        controller = self._controller(forest, "summarize", opened)
+        controller.open_thinking_trace_when_it_matches(node_id)
+        controller.recheck_awaited_thinking_trace(node_id)
+        assert opened == [], \
+            "the trace matched before the words arrived, so this fixture cannot show them arriving"
+        forest.add_revision(node_id, self._payload("Summarize the tool result for the reader."))
+        controller.recheck_awaited_thinking_trace(node_id)
+        assert opened == [node_id]
+        assert controller._node_awaiting_trace_open is None, \
+            "the trace opened but the request was not spent, so a later message could collect it too"
