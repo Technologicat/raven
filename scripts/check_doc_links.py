@@ -21,10 +21,13 @@ this wrong and reports working links as broken — which is how this checker's f
 false positives on a README that was entirely correct.
 
 `slugify`, `heading_anchors`, `toc_anchors`, `dangling_links` and `toc_problems` are kept
-character-for-character identical to the copies in `pyan/tests/test_docs.py`. That duplication is on
-purpose while there are two of them: the fleet-wide version will lift these out into one shared module,
-and keeping the copies from drifting in the meantime is what makes that a move rather than a merge. If
-you change one, change the other.
+character-for-character identical to the copies in `pyan/tests/test_docs.py`, **their code at least** —
+a docstring may differ where it points at the other copy, since each says where the other one is. That
+duplication is on purpose while there are two of them: the fleet-wide version will lift these out into
+one shared module, and keeping the copies from drifting in the meantime is what makes that a move rather
+than a merge. If you change one, change the other, and compare the *bodies* — `ast.dump` of each
+function with its docstring dropped is the check, since a prose diff reports the cross-references as
+drift every time.
 
 Usage:
 
@@ -114,8 +117,8 @@ def dangling_links(lines):
 
     Inline code spans are removed before matching, so a link written *about* link syntax — a brief
     explaining that ``[text](#anchor)`` is what it walks — is prose rather than a reference to a
-    heading called "anchor". This is the one place this file knowingly differs from
-    `pyan/tests/test_docs.py`, whose copy has the same gap and no document that triggers it.
+    heading called "anchor". Raven's briefs are where the gap showed up, pyan's README having no such
+    sentence; `pyan/tests/test_docs.py` carries the same fix.
     """
     headings = set(heading_anchors(lines))
     found = []
