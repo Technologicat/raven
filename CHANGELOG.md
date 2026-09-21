@@ -9,7 +9,7 @@
 - **search across the whole chat history.**
   A search row across the top of the window: `Ctrl+F` to type, and the matches turn red and bold in the chat as you do. `Ctrl+Shift+F` clears it. The row works like the Visualizer's. It searches the conversation you are in; with the chat graph up, the same search reaches every other branch and every chat held under an older character card.
   - **`F3` and `Shift+F3` go to the next and previous matching message.**
-    Below or above what is on screen, stopping at the first and the last. `Enter` and `Shift+Enter` in the field do the same, as do the arrow buttons. A counter says which match is at the top of the view, and follows as you scroll.
+    Below or above what is on screen, stopping at the first and the last. `Enter` in the field takes you to the first match and ends the typing, so `F3` is what cycles from there; the arrow buttons do the same. A counter says which match is at the top of the view, and follows as you scroll.
   - **`Ctrl+F3` and `Ctrl+Shift+F3` do the same over the whole tree.**
     Where `F3` walks the matches in the conversation you are in, these walk every match in the chat graph — the other branches, and the chats held under older character cards. Same search field and the same two checkboxes, with a counter and a pair of arrow buttons of their own. They work whether or not the graph is on screen, and going to a match puts it up.
   - **The same search as the Visualizer's.**
