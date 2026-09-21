@@ -3,9 +3,12 @@
 These effects work in linear intensity space, before gamma correction.
 
 **The chain follows a signal.** The order the filters ship in traces the path a picture takes to a
-viewer — the room in front of the lens, then the camera, then whatever records and carries the
-recording, and finally the display it comes out on. That is what makes a chain read as one imagined
-apparatus rather than as a pile of effects, and it is the sense in which a filter belongs to a band.
+viewer:
+
+    room → camera → recording → transport → display
+
+That is what makes a chain read as one imagined apparatus rather than as a pile of effects, and it
+is the sense in which a filter belongs to a band.
 
 So there are three things here, and the third is what the other two are for: **the intent** above,
 **the filters and the interactions between them**, and then the user's own arrangement. The bands are

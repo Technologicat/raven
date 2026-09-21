@@ -219,7 +219,10 @@ room → camera → recording → transport → display
 
 Following it is what makes a chain read as one imagined apparatus rather than a pile of effects — and it is
 an invitation rather than a rule. Some filters interact sharply enough that the order decides whether an
-effect survives at all, and each says so in its own documentation; past that, the arrangement is yours.
+effect survives at all, and each says so in its own documentation.
+
+Changing the order means editing `postprocessor_chain` itself. The settings editor tunes each filter and
+switches it on and off; it does not move them.
 
 **The scene and the lens**
 
