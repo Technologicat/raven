@@ -141,3 +141,16 @@ exist yet and `find_message` answers `None`. It wants the per-message hook the r
 
 The rest the graph half simply inherits — the matcher, the two checkboxes, and
 `compile_search_highlight_regexes`, which is what makes a match look the same in both views.
+
+### Closed 2026-09-21
+
+The item above landed, and with it the brief. `DPGChatController.open_thinking_trace_on_arrival` names the
+node whose trace is owed; `add_search_matches_for` opens it as the rebuild walks past, having computed that
+message's `MatchCounts` anyway, which is what made that hook the right one rather than merely an available
+one. The request is spent when the message arrives, opened or not — left set it would be collected by
+whichever later rebuild passed that node next.
+
+One case is slower than the design assumed, and is left as it is: a reply still being generated is drawn by
+`add_streaming_message`, which does not call the hook, its text being still in motion. Committing to such a
+node — a turn running on a branch you are not on — opens the trace when the reply finishes rather than at
+the commit.

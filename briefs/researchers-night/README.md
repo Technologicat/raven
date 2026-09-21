@@ -22,12 +22,12 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night. **It precedes `visualizer-keyword-pools-brief.md`'s corpus-level display** (Juha, 2026-09-10): its §2 keeps the corpus frequency stats that window reads, so it is the foundation and goes first |
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, ~~PCA preprocessing~~, ~~cosine-to-medoid outlier assignment~~, Procrustes alignment, and **clustering in high-D**. **Items 2, 3 and 5 were measured on 2026-09-01 and the brief now points at `investigations/highdim-clustering/README.md`, which is the specification** — 2 and 3 are measured harmful and must not be built as written, 5 is settled and ready to implement (agglomerative, not HDBSCAN) | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
 | `aokk-corpus-scope-classification-brief.md` | An LLM batch pass over the AOKK corpus, flagging records the boolean search pulled in that are not about AI agents in higher education | Filed 2026-08-31. **In hand as of 2026-09-08**, in a parallel session rather than on this repo's main line: the corpus is deduplicated and topic-filtered in the Visualizer already, and what it needs next is the agglomerative clustering that `investigations/highdim-clustering/` measured as the better answer — 1–2 days (Juha). Originally **the only near-term item with a date**: needed within two weeks of 2026-09-01, and its two open questions were settled that day, so it starts from a decided spec. The problem is confirmed rather than suspected: `"conversational agent"` caught a child-helpline paper, and `"learning assistant"` matches 40 records across *two senses* — the AI tool, and the STEM term of art for a human undergraduate Learning Assistant. Carries a warning about reusing `agent-batch-classification`'s confidence-based escalation, whose known failure mode applies directly |
-| `14_chat-search-brief.md` | Search within the chat log | **Built and shipped in 0.2.9**, v1 and v2 together: the row, the two checkboxes, the counter, and in-text highlighting — which was v2 until 2026-09-17, when measuring the mechanism (`investigations/chat-search-highlight/`) put it in v1 after all. **One item keeps it open**, the one the graph half asked of it on 2026-09-18: committing to a match found *only* in a thinking trace should open that trace, and cannot be done at the commit — the log rebuilds asynchronously, so `find_message` answers `None` and it wants the per-message hook instead. Small, and it closes the brief |
 
 ## Closed
 
 | Brief | What | Landed |
 |---|---|---|
+| `done/14_chat-search-brief.md` | Search within the chat log, in both views | 2026-09-21. v1 and v2 shipped together in 0.2.9 — the row, the two checkboxes, the counter, and in-text highlighting, which was v2 until measuring the mechanism (`investigations/chat-search-highlight/`) put it in v1 after all. Closed by the one item the graph half asked of it: committing to a match found in a thinking trace opens that trace, deferred to the rebuild because at the commit the message does not exist yet |
 | `done/16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit — the chat multiverse made visible, which was the job | 2026-09-18, v0.2.9. Items 1–7 and the transition animation landed through September; item 8, search, closed it. Item 9 (a filtering mode beside the navigating one) was designed and then **doubted rather than built** — navigating the matches answered what it was wanted for; what it would need is in the brief. Its two *live look* sections are the ones worth reading: a run of faults across two afternoons with **not one of them in the design**, and six open design questions that all came back yes |
 | `done/15_headless-agent-driver-brief.md` | A scripting surface over the scaffold — `raven.librarian.agent`, plus the backend-status work and the per-variety system prompt storage that came out of it | 2026-08-12, v0.2.9 |
 | `done/filedialog-thumbnails-brief.md` | Image previews in the file dialog, as a toggled grid view | 2026-08-14 |
@@ -110,10 +110,10 @@ sprint is clear; what remains open here is past the event.
 
 With the transition animation and the look check done in one day, **seven workdays remain, and that is
 enough for a v1 of search** (Juha). This revises *Decided 2026-09-15* above, which moved search (brief 16
-item 8, with `14_chat-search-brief.md`) past the event because of its edge-case-by-edge-case nature: the
+item 8, with `done/14_chat-search-brief.md`) past the event because of its edge-case-by-edge-case nature: the
 v1 is now the plan for the remaining days, and the long tail of edge cases is still what comes after.
 
-**The next session starts on search v1**, in a fresh session. What it starts from: `14_chat-search-brief.md`
+**The next session starts on search v1**, in a fresh session. What it starts from: `done/14_chat-search-brief.md`
 (the match unit is the message) and brief 16's item 8. The transition animation already covers the view
 changing under a search: filtering the drawn nodes is a topology change, and the morph animates it.
 
@@ -220,11 +220,24 @@ rather than tight, and what is queued is small. In order:
 2. **The whitespace and test-style sweep** — `TODO_DEFERRED.md`, *"A whitespace and test-style sweep,
    straight after search v1"*. Its gate was "search v1 lands", which it now has. Mechanical, and needs none
    of this week's context.
-3. **Brief 14's last item, which closes it**: committing to a match found *only* in a thinking trace should
-   open that trace. The design is in `14_chat-search-brief.md` → *What the graph half asks of this one*,
-   including why it cannot be done at the commit — the log rebuilds asynchronously, so `find_message`
-   answers `None`, and it wants the per-message hook `add_search_matches_for` already sits on. Scheduled
-   2026-09-18 (Juha), on the grounds that it is small and closes a brief.
+3. ~~**Brief 14's last item, which closes it**~~ — **done 2026-09-21** (`bf300a7c`), and the brief is
+   archived. `open_thinking_trace_on_arrival` names the node and the rebuild's per-message hook opens it;
+   `done/14_chat-search-brief.md` → *Closed 2026-09-21* has what the design assumed and the one case that
+   came out slower than it assumed.
+
+**What actually happened on the 21st, since two of the three grew.** Item 1's source half found three wrong
+claims in the chat graph block — a gap box's second line attributed to the wrong kind, `Tab` still described
+as cycling three panes a release after the search row made it four, and two animation settings described as a
+pair when one rate now drives both. Juha's read-through then turned it into a **format** job rather than a
+correction job: entries take a bold title with their prose on the next line, one line per bullet, and nesting
+in place of walls of text. Two items are converted, 139 top-level and ~190 sub-bullets are not, and Juha is
+doing that pass himself.
+
+That review also produced five fleet-wide rules, now in the `changelog` skill and not in any brief: a section
+is as good as it is scannable; an entry is not documentation; an entry is a selection rather than an
+inventory; nesting says where detail goes and never whether it belongs; and there is no right length in words
+— an application's entries run two to three times a library's, measured across the fleet, and the failure
+lives in a tail rather than in the typical entry.
 
 **Then the one that is not small: message editing v1**, floated 2026-09-18 for the four days. The substrate
 is unusually ready — `chattree`'s revision API is complete and tested, and every message row already carries

@@ -2,7 +2,7 @@
 
 What it costs to re-render chat paragraphs with search matches highlighted, whether a highlight changes a
 paragraph's size, and how a re-rendered paragraph can replace the old one without the view moving. The
-groundwork for search v1 in Raven-librarian (`briefs/researchers-night/14_chat-search-brief.md`, brief 16
+groundwork for search v1 in Raven-librarian (`briefs/researchers-night/done/14_chat-search-brief.md`, brief 16
 item 8). Measured 2026-09-17, DPG 2.3.1, font size 20, wrap width 850 px.
 
 ## The scripts
