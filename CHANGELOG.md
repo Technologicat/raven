@@ -198,21 +198,16 @@
 
 - **Records naming the same field twice are now repaired too**, which is how a database export arrives: a ProQuest record carries a separate `annote` for its copyright statement, its last-updated date and its subject terms, and BibTeX has no way to say that, so the parser rejects the entry whole — title, authors and all. The repeats are merged into one field, values kept and joined by newlines, and everything else in the record is left character for character as it was.
   - **This can account for a large share of a file**, and nothing previously said so more specifically than "unparseable" — so a `.bib` assembled from several databases is worth running through this before trusting a count of it.
-  - Merging rather than keeping one: each repeat holds something different, so choosing between them would be deleting your data, not repairing it.
 
 - **Every report now names the fault**, so an unreadable `.bib` says what is wrong with it and not merely how much. Each line carries the record's key, its line number in *your* file, which of the two faults it is, and the specifics — which fields repeat, which look unbalanced, or the parser's own complaint where it is neither. A record whose author reads `Bloggs, PhD, MSc, Joan` is now reported as *too many commas* rather than as a suspected brace problem.
-  - **A record broken twice over is repaired as far as it goes, and reported for what is left.** One naming `annote` three times *and* carrying an author BibTeX cannot express keeps the merge — so you do not have to redo it by hand after fixing the name — and the report names the name, rather than the repeated fields the tool has just fixed and would send you looking for.
   - `--list` names every record that was repaired, not just how many. Off by default, since a database export can need repairing a thousand times over.
 
 - **HTML left in the field values is now decoded**, which is the one fault here that afflicts records a parser is perfectly happy with — so nothing previously reported it at all. A database that exports its web page rather than its record leaves entities behind, and a title meaning `Q&A` reaches your citations, your word cloud and your typeset bibliography as `Q\&amp;A`.
-  - The result is BibTeX rather than plain text: a decoded character that BibTeX reserves is escaped on the way out, so `&amp;` becomes `\&` and the file stays as readable as it was.
-  - **An entity naming something invisible is not decoded to it.** A zero-width joiner or a directional mark is dropped, and a control character or line separator becomes a space — a `&#10;` landing mid-record would move every line after it. Real spaces are kept as themselves, no-break spaces included: not breaking the line there is what the source asked for.
-  - Everything outside an entity is left byte for byte as it was, and an entity naming nothing is left alone. `--keep-entities` switches the whole thing off.
+  - The result is BibTeX rather than plain text: a decoded character that BibTeX reserves is escaped on the way out, so `&amp;` becomes `\&` and the file stays as readable as it was. `--keep-entities` switches the whole thing off.
 
 - **A publisher's rights notice is moved out of the `abstract` into a `copyright` field of its own.** It is not what the paper says, and anything reading the abstract as prose has to cope with it — it is why a publisher's name turns up in a word cloud. Humans strip it before analyzing an abstract; this does it once, in the file.
-  - **Moved, not deleted.** In a bibliography merged from several database exports the notice is often the only thing saying which export a record came from, and `raven-deduplicate` keeps *all* of them when it merges — so a merged record's `copyright` field names every source it came from.
-  - `copyright` because it collides with nothing real exports emit, and standard BibTeX styles do not typeset it, so it cannot turn up in a reference list.
-  - A record that already has a `copyright` field keeps what is there and gains the moved notice below it — both name a source the record came from — and a notice already recorded there is not moved twice. A record whose braces would not survive the split is left alone. Everything outside a moved notice is byte for byte as it was, so the diff shows exactly which abstracts changed. `--keep-notices` switches it off.
+  - **Moved, not deleted.** In a bibliography merged from several database exports the notice is often the only thing saying which export a record came from, and `raven-deduplicate` keeps *all* of them when it merges — so a merged record's `copyright` field names every source it came from. `--keep-notices` switches it off.
+  - What each of these repairs does in detail — how repeats are merged, which entities are dropped rather than decoded, and what happens to a record that already has a `copyright` field — is in the [paper tools manual](raven/papers/README.md#raven-fixbib--repairing-a-database-export).
 
 #### Raven-deduplicate
 
@@ -236,11 +231,11 @@
   raven-siftbib corpus.bib --require abstract
   ```
 
-  - **The criterion is yours, not the tool's.** `--require FIELD` keeps the records carrying that field; `--min-chars FIELD=N` keeps those whose field reaches a given length. Either may be given more than once, and a record must satisfy all of them. A run with no criteria is refused rather than defaulted — a default would be the tool holding an opinion about what a usable record is, which is the caller's to hold.
-  - **`--min-chars` is for the field that is present and useless.** Publishers routinely export a truncated teaser in place of the abstract, a sentence or two ending mid-word, which satisfies `--require abstract` while giving a reader no more to go on than an empty field would.
-  - **The audit TSV says what came out and why**: one row per removed record, naming the record, where it was published, and which criterion it failed, under a header stamping the tool version, the inputs and the tests applied. There is no way to switch it off, a removal nobody recorded being the thing it exists to prevent. The venue is in there because it is what tells you whether a dropped record is worth chasing up by hand.
-  - **Deterministic and offline.** No model, no network: the same bibliography and the same flags produce the same two files on any machine. Whether a record is *about* the right subject is a judgement rather than a test, and belongs to a different tool.
-  - `--dry-run` reports what would go and writes nothing; the input file is never modified.
+  - **The criterion is yours, not the tool's.** `--require FIELD` keeps the records carrying that field; `--min-chars FIELD=N` keeps those whose field reaches a given length. A run naming no criteria is refused rather than defaulted.
+  - **`--min-chars` is for the field that is present and useless.** Publishers routinely export a truncated teaser in place of the abstract, a sentence or two ending mid-word, which satisfies `--require abstract` while telling a screener nothing.
+  - **An audit TSV records what came out and why**, one row per removed record. `--dry-run` reports what would go and writes nothing; the input file is never modified.
+  - **Deterministic and offline.** No model, no network. Whether a record is *about* the right subject is a judgement rather than a test, and belongs to a different tool.
+  - The criteria, the two output files and what the audit holds are in the [paper tools manual](raven/papers/README.md#raven-siftbib--removing-what-a-review-cannot-screen).
 
 #### Raven-xdot-viewer
 

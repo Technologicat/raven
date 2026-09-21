@@ -24,6 +24,11 @@
     - [Raven-server: Web API server](#raven-server-web-api-server)
         - [Quickstart](#quickstart)
     - [Command-line tools](#command-line-tools)
+        - [Document database](#document-database)
+        - [Building a bibliography](#building-a-bibliography)
+        - [From several databases into one bibliography](#from-several-databases-into-one-bibliography)
+        - [Datasets and odds and ends](#datasets-and-odds-and-ends)
+        - [The rules these tools apply](#the-rules-these-tools-apply)
 - [Install & run](#install--run)
     - [From source](#from-source)
         - [Install PDM in your Python environment](#install-pdm-in-your-python-environment)
@@ -268,11 +273,11 @@ raven-server
 
 Beside the desktop apps, Raven installs a set of headless tools. They exist so that the parts of a workflow that do not need a window do not open one — a document collection can be indexed over SSH, and a bibliography can be assembled in a shell pipeline.
 
-**Document database**
+### Document database
 
 - **`raven-indexer`** builds or refreshes *Librarian*'s RAG index over a documents directory, then exits. Useful when you have just dropped several hundred files into the folder and would rather not watch the GUI chew through them, and necessary on a headless machine. `-d/--db-dir` writes the index somewhere other than the configured location, so several collections can be kept side by side. See [the Librarian README](raven/librarian/README.md#indexing-from-the-command-line-raven-indexer) for the options.
 
-**Building a bibliography**
+### Building a bibliography
 
 - **`raven-arxiv-search`** runs a boolean search against arXiv and writes the matching papers to a BibTeX file (`-o/--output`, defaulting to `<query_file>.bib`, or `results.bib` when the query is given with `-q`). Its output is already a bibliography, so it feeds `raven-arxiv-download --from-bib` directly — query to fulltext in two commands, with no identifiers to shuffle in between.
 - **`raven-arxiv2id`** scans a directory for arXiv identifiers in PDF filenames, keeping the newest version of each paper. `--strip-versions` drops the version suffix, which is how a collection gets refreshed to the current revisions.
@@ -284,7 +289,7 @@ Beside the desktop apps, Raven installs a set of headless tools. They exist so t
 - **`raven-deduplicate`** merges the copies a multi-database search leaves behind: the same paper once per database that indexes it, each in that database's dialect with a different subset of the fields filled in. Two keys decide, and neither is a guess — the DOI, and the title reduced until two databases' spellings of one title agree — unioned transitively, so a record sharing a DOI with one twin and a title with another brings all three together. The surviving copy is the most complete one, with every field it lacks filled in from a twin that has one, and every merge is written to an audit TSV.
 - **`raven-siftbib`** removes the records you cannot screen. A search export carries records of wildly uneven completeness, and one holding nothing but a title is not off topic — nobody can tell what it is — it just has no text to form a view about, and carrying it into the screening count overstates what was actually read. You say what a usable record must have (`--require abstract`, `--min-chars abstract=600` for the truncated teaser a publisher exports in place of one, `--require year`, as many as you like), and everything removed goes to an audit TSV naming the record, its venue and which criterion it failed. Deterministic and offline: no model, no network, same answer every time. Whether a record is *about* your subject is a judgement and a different question; this one only asks whether there is anything to judge.
 
-**From several databases into one bibliography**
+### From several databases into one bibliography
 
 Search Scopus, Web of Science, ProQuest, Springer and arXiv for the same question and you have five exports holding the same papers over and over. One command turns them into something citable:
 
@@ -301,7 +306,7 @@ The audit is tab-separated, exactly as the `.tsv` says. Worth knowing when you o
 
 Matching errs toward leaving duplicates rather than inventing them, because the two failures cost differently — a missed merge leaves a visible duplicate that a reviewer can act on, while a false merge deletes a paper from the review and nothing downstream can notice. `--judge` additionally asks an LLM about the near-misses no exact key joined; it needs an LLM backend, so it is off by default, and a verdict the records themselves contradict is dropped rather than acted on.
 
-**Datasets and odds and ends**
+### Datasets and odds and ends
 
 - **`raven-importer`** runs *Visualizer*'s import pipeline (BibTeX → analyzed dataset) without the GUI.
 - **`raven-dehyphenate`** undoes line-break hyphenation in text extracted from PDFs.
@@ -309,6 +314,12 @@ Matching errs toward leaving duplicates rather than inventing them, because the 
 - **`raven-check-cuda`** and **`raven-check-audio-devices`** report what the machine offers, which is usually the fastest way to settle an installation question.
 
 The other end-to-end recipes that chain these — [turning a folder of arXiv PDFs into a searchable database](raven/librarian/README.md#turning-a-folder-of-arxiv-pdfs-into-a-searchable-database), and [refreshing that collection when papers get new versions](raven/librarian/README.md#refreshing-a-collection-when-papers-get-new-versions) — are in the Librarian README.
+
+### The rules these tools apply
+
+The recipes above say what to run. What each tool *decides* — what counts as the same paper, which records are dropped and why, what a merge keeps and what it discards — is in the [paper tools manual](raven/papers/README.md).
+
+Worth reading before you report a number that came out of one of them. A deduplication count and a screening count both end up in a method section, and both are answerable questions.
 
 
 # Install & run
