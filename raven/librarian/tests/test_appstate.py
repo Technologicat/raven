@@ -457,7 +457,6 @@ class TestSave:
             appstate.save(state_path, state)
         assert state_path.read_text(encoding="utf-8") == survivor
 
-
     def test_an_unchanged_state_is_not_written_again(self, tmp_path, llm_settings, monkeypatch):
         _, state, _, state_path = _load(tmp_path, llm_settings)
         writes = []

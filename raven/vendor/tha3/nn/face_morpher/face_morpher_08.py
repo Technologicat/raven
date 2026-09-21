@@ -176,13 +176,13 @@ class FaceMorpher08(Module):
         output_image = self.apply_color_change(eye_alpha, eye_color_change, iris_mouth_image_1.detach())
 
         return [
-            output_image, #0
-            eye_alpha, #1
-            eye_color_change, #2
-            iris_mouth_image_1, #3
-            iris_mouth_alpha, #4
-            iris_mouth_color_change, #5
-            iris_mouth_image_0, #6
+            output_image,  # 0
+            eye_alpha,  # 1
+            eye_color_change,  # 2
+            iris_mouth_image_1,  # 3
+            iris_mouth_alpha,  # 4
+            iris_mouth_color_change,  # 5
+            iris_mouth_image_0,  # 6
         ]
 
     OUTPUT_IMAGE_INDEX = 0

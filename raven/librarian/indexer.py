@@ -92,8 +92,8 @@ def main() -> None:
 
     try:
         retriever, scanner = hybridir.open_document_store(docs_dir=opts.docs_dir,
-                                                         db_dir=opts.db_dir,
-                                                         recursive=opts.recursive)
+                                                          db_dir=opts.db_dir,
+                                                          recursive=opts.recursive)
     except Exception as exc:  # noqa: BLE001 -- the CLI's job is to report, not to add a traceback
         print(f"raven-indexer: could not open the document store: {type(exc)}: {exc}", file=sys.stderr)
         sys.exit(1)

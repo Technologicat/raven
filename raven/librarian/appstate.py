@@ -37,7 +37,7 @@ from . import textfilestore
 # expose to the user). `load` uses these to fill any missing keys from an on-disk state file;
 # `save` uses the keys to validate that the state dict has all required flags. Adding or removing
 # a flag means touching this one mapping — `load`, `save`, and the tests derive from it.
-_DEFAULT_FLAGS = {# Whether a thinking model may reason before it answers. On by default, which is the
+_DEFAULT_FLAGS = {  # Whether a thinking model may reason before it answers. On by default, which is the
                   # model's own default: a model that reasons was chosen for its reasoning.
                   "thinking_enabled": True,
                   "internet_enabled": True,

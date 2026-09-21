@@ -28,7 +28,7 @@ in `raven.client.config`.
 This module is licensed under the 2-clause BSD license.
 """
 
-__all__ = [# Re-exported: TTS was the one subsystem large enough to want its own module, and these come
+__all__ = [  # Re-exported: TTS was the one subsystem large enough to want its own module, and these come
            # from it rather than from here. The rest of the client's remote mode is inlined below.
            "tts_info",
            "tts_list_voices",

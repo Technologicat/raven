@@ -135,7 +135,6 @@ if __name__ == "__main__":
     for output in outputs:
         print(output.shape)
 
-
     if True:
         repeat = 100
         acc = 0.0

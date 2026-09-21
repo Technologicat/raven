@@ -27,9 +27,9 @@ import torch
 # doesn't slot into Raven's eager-mode architecture, so silently mapping `"gpu"`
 # onto it would be misleading.
 _GPU_BACKENDS: List[Tuple[str, str, Callable[[], bool]]] = [
-    ("cuda",   "CUDA",   lambda: hasattr(torch, "cuda") and torch.cuda.is_available()),
-    ("mps",    "MPS",    lambda: hasattr(torch.backends, "mps") and torch.backends.mps.is_available()),
-    ("xpu",    "XPU",    lambda: hasattr(torch, "xpu") and torch.xpu.is_available()),
+    ("cuda",   "CUDA", lambda: hasattr(torch, "cuda") and torch.cuda.is_available()),
+    ("mps",    "MPS", lambda: hasattr(torch.backends, "mps") and torch.backends.mps.is_available()),
+    ("xpu",    "XPU", lambda: hasattr(torch, "xpu") and torch.xpu.is_available()),
     ("vulkan", "Vulkan", lambda: hasattr(torch, "is_vulkan_available") and torch.is_vulkan_available()),
 ]
 

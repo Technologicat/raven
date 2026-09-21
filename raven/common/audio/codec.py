@@ -189,7 +189,7 @@ def decode(stream: BinaryIO,
                         input_layout = frame.layout.name
 
                         plural_s = "s" if frame.samples != 1 else ""
-                        logger.info(f"decode: Detected input sample format '{frame.format.name}', sample rate {frame.sample_rate}, audio frame size {frame.samples} sample{plural_s} per channel, layout '{frame.layout.name}', channels: { {channel.name: channel.description for channel in frame.layout.channels} }.")
+                        logger.info(f"decode: Detected input sample format '{frame.format.name}', sample rate {frame.sample_rate}, audio frame size {frame.samples} sample{plural_s} per channel, layout '{frame.layout.name}', channels: { {channel.name: channel.description for channel in frame.layout.channels} }.")  # noqa: E201,E202 -- the spaces are what keep the inner braces a dict display; `{{` is an escaped brace
 
                         target_sample_format_str = f"'{target_sample_format}'" if (target_sample_format is not None) else "same as input"
                         target_sample_rate_str = f"{target_sample_rate} Hz" if (target_sample_rate is not None) else "same as input"

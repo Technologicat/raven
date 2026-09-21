@@ -221,8 +221,8 @@ def _debug_dump() -> None:
 # We use memoization to cache results for each unique query during the same session.
 
 def _format_results(texts: List[str],
-                   titles: Optional[List[str]] = None,
-                   links: Optional[List[str]] = None) -> str:
+                    titles: Optional[List[str]] = None,
+                    links: Optional[List[str]] = None) -> str:
     """Format search results.
 
     Returns the tuple `(preformatted_text, results)`,

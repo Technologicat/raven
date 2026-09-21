@@ -59,7 +59,6 @@ ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
 ARXIV_NS = {"arxiv": "http://arxiv.org/schemas/atom"}
 
 
-
 class ArxivMetadataError(ValueError):
     """Raised when an arXiv API response carries no usable paper metadata.
 

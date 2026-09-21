@@ -967,9 +967,9 @@ class TestCreateInitialSystemMessage:
                        greeting="Hello!")
         content = chatutil.content_to_text(chatutil.create_initial_system_message(settings)["content"])
         assert [piece.strip() for piece in content.split("-----")] == ["Answer in metric units.",
-                                                                      "Name: Bot",
-                                                                      "The user is a materials scientist.",
-                                                                      ""]
+                                                                       "Name: Bot",
+                                                                       "The user is a materials scientist.",
+                                                                       ""]
 
 
 class TestTheSetupSaysWhatItIs:
@@ -1543,4 +1543,3 @@ class TestLatestUserMessageText:
         system = f.create_node(chat_payload("system", "prompt"), parent_id=None)
         greeting = f.create_node(chat_payload("assistant", "hello"), parent_id=system)
         assert chatutil.latest_user_message_text(f, greeting) is None
-

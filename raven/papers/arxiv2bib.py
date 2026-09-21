@@ -66,8 +66,6 @@ from .identifiers import strip_version
 from .ratelimit import RateLimiter
 
 
-
-
 def read_identifiers(maybe_paths: list[str], stream=None) -> list[str]:
     """Collect arXiv identifiers from CLI arguments, files, or a stream.
 

@@ -1,6 +1,6 @@
 """Utilities for formatting LLM chat messages."""
 
-__all__ = [# The parts a message is made of, and reading them back
+__all__ = [  # The parts a message is made of, and reading them back
            "text_content_part",
            "image_content_part",
            "text_file_content_part",

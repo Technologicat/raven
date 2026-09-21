@@ -145,7 +145,7 @@ def extract_numpy_image_from_filelike_with_pytorch_layout(file, has_alpha=True, 
     try:
         pil_image = PIL.Image.open(file)
     except Exception as e:
-        raise RuntimeError(file)
+        raise RuntimeError(file) from e
     return extract_numpy_image_from_PIL_image_with_pytorch_layout(pil_image, has_alpha, scale, offset)
 
 
@@ -177,7 +177,7 @@ def extract_pytorch_image_from_filelike(file, has_alpha=True, scale=2.0, offset=
     try:
         pil_image = PIL.Image.open(file)
     except Exception as e:
-        raise RuntimeError(file)
+        raise RuntimeError(file) from e
     image = extract_numpy_image_from_PIL_image_with_pytorch_layout(pil_image, has_alpha, scale, offset)
     return torch.from_numpy(image).float()
 

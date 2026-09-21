@@ -96,7 +96,7 @@ def create_separable_downsample_block(
                 block_args.initialization_method,
                 block_args.use_spectral_norm),
             NormalizationLayerFactory.resolve_2d(block_args.normalization_layer_factory)
-                .create(out_channels, affine=True),
+            .create(out_channels, affine=True),
             block_args.nonlinearity_factory.create())
 
 
@@ -115,5 +115,5 @@ def create_separable_upsample_block(
             block_args.initialization_method,
             block_args.use_spectral_norm),
         NormalizationLayerFactory.resolve_2d(block_args.normalization_layer_factory)
-            .create(out_channels, affine=True),
+        .create(out_channels, affine=True),
         block_args.nonlinearity_factory.create())

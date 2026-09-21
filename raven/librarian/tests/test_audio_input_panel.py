@@ -221,7 +221,7 @@ class TestDraggingASliderTurnsItsSettingOn:
 
 class TestTheControlsWriteEverywhereTheyHaveTo:
     def test_the_threshold_reaches_the_recorder_the_state_and_the_meter(self, panel):
-        panel._on_threshold_slider(THRESHOLD_SLIDER,-52.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER, -52.0)
         assert panel.recorder.silence_threshold == -52.0
         assert panel.app_state["stt_silence_threshold"] == -52.0
         assert panel.meter.threshold == -52.0
@@ -232,12 +232,12 @@ class TestTheControlsWriteEverywhereTheyHaveTo:
         assert panel.meter.threshold is None
 
     def test_the_autostop_timeout_reaches_the_recorder_and_the_state(self, panel):
-        panel._on_autostop_slider(AUTOSTOP_SLIDER,2.5)
+        panel._on_autostop_slider(AUTOSTOP_SLIDER, 2.5)
         assert panel.recorder.autostop_timeout == 2.5
         assert panel.app_state["stt_autostop_timeout"] == 2.5
 
     def test_peak_hold_reaches_the_recorder_and_the_state(self, panel):
-        panel._on_peak_hold_slider(PEAK_HOLD_SLIDER,3.0)
+        panel._on_peak_hold_slider(PEAK_HOLD_SLIDER, 3.0)
         assert panel.recorder.vu_peak_hold == 3.0
         assert panel.app_state["stt_vu_peak_hold"] == 3.0
 
@@ -549,14 +549,14 @@ class TestMeasureTheRoom:
         assert panel.recorder.silence_threshold == aip.METER_MAX
 
     def test_nothing_heard_yet_leaves_the_threshold_alone(self, panel):
-        panel._on_threshold_slider(THRESHOLD_SLIDER,-33.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER, -33.0)
         panel._measure_the_room()
         assert panel.recorder.silence_threshold == -33.0
 
     def test_digital_silence_leaves_the_threshold_alone(self, panel):
         # An input sending nothing at all is a broken microphone, not a very quiet room, and -inf plus
         # a margin is still -inf. Better to leave the last usable value than to write that in.
-        panel._on_threshold_slider(THRESHOLD_SLIDER,-33.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER, -33.0)
         panel._record_level(-math.inf)
         age_history(panel)
         panel._measure_the_room()
@@ -565,9 +565,9 @@ class TestMeasureTheRoom:
 
 class TestResetToConfiguredDefaults:
     def test_it_restores_every_setting(self, panel):
-        panel._on_threshold_slider(THRESHOLD_SLIDER,-55.0)
-        panel._on_autostop_slider(AUTOSTOP_SLIDER,4.0)
-        panel._on_peak_hold_slider(PEAK_HOLD_SLIDER,3.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER, -55.0)
+        panel._on_autostop_slider(AUTOSTOP_SLIDER, 4.0)
+        panel._on_peak_hold_slider(PEAK_HOLD_SLIDER, 3.0)
         panel._reset_to_configured_defaults()
         assert panel.recorder.silence_threshold == CONFIGURED["stt_silence_threshold"]
         assert panel.recorder.autostop_timeout == CONFIGURED["stt_autostop_timeout"]
@@ -702,7 +702,7 @@ class TestMonitoring:
         saved = []
         panel.save_app_state = lambda: saved.append(dict(panel.app_state))
         panel.open()
-        panel._on_threshold_slider(THRESHOLD_SLIDER,-47.0)
+        panel._on_threshold_slider(THRESHOLD_SLIDER, -47.0)
         panel.close()
         assert saved and saved[-1]["stt_silence_threshold"] == -47.0
 

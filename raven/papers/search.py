@@ -28,7 +28,6 @@ from .query import node_to_query, parse_query
 from .ratelimit import RateLimiter
 
 
-
 def load_query(query_file: Path | None, query: str | None) -> str:
     """Resolve the query text from the mutually-exclusive CLI inputs.
 

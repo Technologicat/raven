@@ -155,8 +155,8 @@ def escalate(llm_settings: env, path: pathlib.Path) -> dict:
         return {"about_ai": None, "field": "unknown", "confidence": "low",
                 "why": "no extractable text"}
     reply = agent.ask(llm_settings, ESCALATION_INSTRUCTIONS.format(name=path.name,
-                                                             excerpt=text[:EXCERPT_CHARS],
-                                                             fields=", ".join(FIELDS)))
+                                                                   excerpt=text[:EXCERPT_CHARS],
+                                                                   fields=", ".join(FIELDS)))
     answer = agent.parse_json_reply(reply)
     if isinstance(answer, list) and answer:
         answer = answer[0]

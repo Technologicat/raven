@@ -26,7 +26,6 @@ from . import config as papers_config
 logger = logging.getLogger(__name__)
 
 
-
 def arxiv_get(url: str,
               params: Optional[dict[str, Any]] = None,
               timeout: float = 30,
