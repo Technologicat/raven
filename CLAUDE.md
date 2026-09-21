@@ -511,7 +511,16 @@ bound is the only place it can live.
 
 ### CHANGELOG layout: group by component
 
-Raven ships many separate user-facing apps, so within each of **Added** / **Changed** / **Fixed**, entries are grouped under an italic component header and the per-entry `*Raven-<app>*:` prefix is dropped — the header carries it. Entries then read as continuations of the header, so they start lowercase.
+Raven ships many separate user-facing apps, so within each of **Added** / **Changed** / **Fixed**, entries are
+grouped by component and the per-entry `*Raven-<app>*:` prefix is dropped — the heading carries it. Versions
+are `##`, the three sections `###`, the components `####`, and the file opens with a contents listing the
+releases and stopping there.
+
+**Every item starts with a capital**, at whatever nesting depth: the start of an item is a start position as
+much as the start of a sentence is (Juha, 2026-09-21). They used to start lowercase, on the reading that an
+entry continues its header; that reading lost. The exceptions are spellings whose lowercase initial *is* the
+name — `arXiv`, `spaCy` — an item opening with an identifier in backticks, and an item that is sample data
+rather than prose, as the BibTeX name-format examples are.
 
 Component order is fixed, so a reader learns where to look: *Raven-librarian*, *Raven-visualizer*, *Raven-server*, *Raven-avatar*, *Raven-cherrypick*, *Raven-arxiv-download*, *Raven-pdf2bib*, then *Constellation-wide* for anything cross-cutting (install, device strings, CLI options shared by every app, client-side HTTP behavior). Omit a component that has no entries in that section. An entry spanning two tools goes under the primary one and names the other inline ("with `raven-wos2bib`: …").
 
