@@ -12,13 +12,9 @@ So there are three things here, and the third is what the other two are for: **t
 an invitation rather than a constraint — a chain that ignores them entirely is not a mistake, it is
 somebody building an apparatus nobody has imagined yet.
 
-Which is why **a filter's own docstring says what has to be on which side of it and never where it
-runs.** "The transport wants to be downstream of this, the noise being the camera's" survives any
-arrangement and tells a reader what they are trading; "runs early in the chain" stops being true the
-moment somebody moves it, and tells them nothing about what moving it would cost. Where an
-interaction is sharp enough to break an effect, say so and say by how much: `crt` measures which
-filters erase a raster and to what degree, and that is worth more once the order can be edited than
-it ever was while it was fixed.
+Some filters interact sharply enough that the order decides whether an effect survives at all. Each
+says so in its own documentation, and says by how much where that has been measured — `crt` lists
+which filters erase a raster and to what degree.
 
 This module was originally released under AGPL in SillyTavern-Extras.
 This module is relicensed by its author (Juha Jeronen) under the

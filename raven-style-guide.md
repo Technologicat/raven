@@ -438,6 +438,16 @@ Patterns:
   which cases are handled. Why the shape was chosen, what went wrong the other way, which failure it
   prevents: those go in a comment below the `def`, where the maintainer who needs them is reading. A second
   docstring paragraph that is none of the three is the tell.
+- **Don't describe an arrangement the user can change.** Where a thing is one member of a configurable
+  set — a filter in a postprocessor chain, a step in a pipeline, a handler in a stack — its docstring
+  describes *what must be on which side of it*, never where it currently sits. "The transport wants to be
+  downstream of this, the noise being the camera's" stays true however the chain is arranged and tells a
+  reader what rearranging would cost; "runs early in the chain" is a fact about today's default that goes
+  silently false the moment somebody moves it, and says nothing about what moving it costs. Where the
+  interaction is sharp enough to break the effect, say so and say by how much — `postprocessor.crt`
+  measures which filters erase a raster and to what degree.
+  - The *intent* behind an arrangement is worth writing down and belongs to the thing that owns it:
+    the module docstring for a chain, not a paragraph repeated by each member.
 - Parameters documented inline with backtick-quoted names and indented descriptions.
 - **NOTE** / **CAUTION** markers for gotchas.
 - Reference external resources (URLs, other modules) directly in docstrings.
