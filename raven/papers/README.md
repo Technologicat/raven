@@ -13,6 +13,12 @@ Eleven command-line tools for the part of a literature review that happens befor
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Contents**
 
+- [The arXiv tools](#the-arxiv-tools)
+    - [Identifiers and versions](#identifiers-and-versions)
+    - [arXiv's rate limit, and why batching matters](#arxivs-rate-limit-and-why-batching-matters)
+    - [When something goes wrong](#when-something-goes-wrong)
+    - [What a rerun does](#what-a-rerun-does)
+    - [Downloading](#downloading)
 - [`raven-fixbib` — repairing a database export](#raven-fixbib--repairing-a-database-export)
     - [What it repairs](#what-it-repairs)
     - [HTML that a database left in the values](#html-that-a-database-left-in-the-values)
@@ -30,6 +36,48 @@ Eleven command-line tools for the part of a literature review that happens befor
     - [What comes out, and the record of it](#what-comes-out-and-the-record-of-it)
 
 <!-- markdown-toc end -->
+
+## The arXiv tools
+
+`raven-arxiv-search` finds papers, `raven-arxiv2id` reads identifiers out of the filenames you already have, `raven-arxiv2bib` turns identifiers into BibTeX, and `raven-arxiv-download` fetches the PDFs. The main README says what each one does; what follows is what they decide.
+
+### Identifiers and versions
+
+**A bare identifier means "whatever is current".** `2410.07866` asks for the newest version; `2410.07866v5` pins that one.
+
+**What gets recorded is the version arXiv answered with**, however you spelled the request. Ask for the bare form and the BibTeX entry names the version you actually got, so a bibliography says which text the claims in it came from.
+
+**That is what makes a collection refreshable.** `raven-arxiv2id --strip-versions` prints each identifier without its version suffix, and re-fetching those gets you whatever is current now. Scanning filenames without it keeps the newest version of each paper that you already have.
+
+### arXiv's rate limit, and why batching matters
+
+**Three seconds between requests is arXiv's requirement, not a tuning knob.** Raising it is fine; lowering it is a violation of their terms rather than a faster setting. It lives in `raven.papers.config.arxiv_request_delay` where a user can find it.
+
+**The delay is charged per request, not per paper**, which is the whole reason metadata is fetched in batches — up to `arxiv_id_batch_size` (100) identifiers per request. A download of several hundred papers spends its politeness budget on a handful of requests rather than on one per paper.
+
+**A search pages at 200 results and stops at 30,000**, the latter being arXiv's own ceiling however you page through it. A query expecting more than that needs splitting into narrower ones.
+
+### When something goes wrong
+
+**An identifier arXiv returns nothing for is reported at the end, not thrown.** One withdrawn or mistyped entry cannot cost the several hundred that worked.
+
+**HTTP 429 is retried**, up to three attempts total, with backoff that honours a `Retry-After` header when the response carries one. Transport failures — dropped connections, read timeouts — are retried the same way.
+
+**A malformed identifier fails in one line.** A typoed month like `2614.19062` reports "no arXiv entry for ID …" rather than a traceback, that being an expected outcome rather than a bug.
+
+### What a rerun does
+
+**Almost nothing, which is the point.** The summary is counted by outcome — downloaded, already present, duplicate identifier, no PDF available, failed — so running the same list again tells you it is already there rather than fetching it again.
+
+**A repeated identifier is dropped before any metadata is fetched**, rather than being carried to the download step and skipped there. Both arXiv tools treat duplicates the same way.
+
+### Downloading
+
+**The citation is printed before the PDF is fetched** — `Authors (Year) - Title` — so it is on screen during the rate-limit wait, and a mistyped identifier that resolved to the wrong paper is visible before the file lands.
+
+**Filenames keep clause boundaries.** A `:`, `?`, `!` or `;` followed by a space becomes ` - ` rather than being dropped, so a long title does not come out as a run-on sentence.
+
+**`--save-bib file.bib` writes the metadata that was already fetched**, so downloading a set of papers and building its bibliography costs one set of politeness delays rather than two.
 
 ## `raven-fixbib` — repairing a database export
 
