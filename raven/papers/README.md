@@ -90,7 +90,13 @@ All three write BibTeX to stdout, so redirect them, and all three read several i
 
 ### `raven-wos2bib` — Web of Science
 
-Reads Web of Science plain-text exports.
+Web of Science indexes the engineering sciences well, and exports plain text.
+
+```bash
+raven-wos2bib input1.txt ... inputn.txt 1>output.bib 2>log.txt
+```
+
+The inputs are `.txt` files exported from Web of Science; the BibTeX goes to stdout and the log — including warnings about broken input data — to stderr, so redirect both. The resulting `.bib` imports into Raven-visualizer.
 
 **Two publication types are mapped**: `J` becomes `@article` and `B` becomes `@book`. Series and patents are not handled yet, so an export holding them needs a look.
 
@@ -106,13 +112,56 @@ Reads Web of Science plain-text exports.
 
 ### `raven-pdf2bib` — conference abstracts as PDFs
 
-Extracts each PDF's text with [`raven.common.docextract`](../common/docextract.py) and has an LLM turn it into a BibTeX entry. This is the one tool here that needs a backend, and the one whose output is worth reading before trusting.
+Abstract submissions to scientific conferences sometimes arrive as free-form, human-readable PDF files. If you are a conference organizer who would like to semantically visualize the set of abstracts sent to you, this is the way in. It extracts each PDF's text with [`raven.common.docextract`](../common/docextract.py) and has an LLM turn it into a BibTeX entry.
 
-**The conference metadata is yours to supply**, because it is not reliably in the files: `--slug` and `--year` are required, with `--booktitle`, `--note` and `--url` optional. They are injected into every entry rather than guessed at per paper.
+**An LLM is required here rather than optional.** `raven-deduplicate`'s `--judge` can simply be left off; this tool does not work without one, and its output is worth reading before you trust it.
 
-**Successes and failures are written separately** — `-s success.bib` and `-f failed.bib` — so the ones that need a human are in their own file rather than mixed into the good ones.
+```bash
+raven-pdf2bib -i some_input_directory --slug myconf --year 2026 \
+    -s success.bib -f failed.bib -l log.txt -o done_success -of done_failed
+```
 
-**A long run is resumable, and that is what the directory moving is for.** A PDF is moved to `--output-dir` only if it was processed successfully, and only after its entry has been written. Stop the run and start it again, and it picks up what is left. `-r` sets how many attempts a single paper gets, three by default.
+`--slug` and `--year` are required: the conference they name is injected into every entry, since it is not reliably in the files, and `--booktitle`, `--note` and `--url` are optional additions to the same. The LLM is the configured backend; `--backend-url` points it at another one serving an OpenAI-compatible API.
+
+#### What it expects of a PDF
+
+- **An extractable text layer** — a born-digital PDF, not a scan.
+- **One abstract per file.** Several abstracts are fed in as separate PDFs.
+- **A human-recognizable title, authors and main text.** Exact formatting does not matter.
+- No length limit is enforced, but the intended case is a typical conference abstract of one or two pages.
+
+The extracted text is sanitized with the dehyphenator before it is written to the `abstract` field. If the abstract carries a line beginning *"keywords:"* or *"key words:"*, keywords are extracted too.
+
+#### Running a directory
+
+Every PDF under `-i` is converted, descending into subdirectories, one directory at a time in Unicode lexicographical order by filename. Without `-i`, the working directory is used. The directories named by `-o` and `-of` are skipped while descending, so `-o some_input_directory/done_success` is safe.
+
+**The output buffers are flushed after each entry**, so a text editor that notices changed files can be used to watch progress.
+
+**A long run is resumable, and that is what the directory moving is for.** A PDF is moved to `-o` only if it was processed successfully, and only *after* its entry has been written; `-of` moves the failures likewise. Stop the job and run the same command again — the success bib, the failure bib and the log are all appended to — and it picks up what is left. `-r` sets how many attempts one paper gets, three by default.
+
+#### How it works, and why you should check its output
+
+**Anything after a *"References"* section title is discarded** before processing, which stops the reference list contaminating the title and the author list.
+
+**Fields are extracted one at a time**, which is more reliable than asking for the whole record at once. The system prompt and each field's prompt have been engineered by hand; no automatic prompt optimization has been tried.
+
+**The extracted data is double-checked by heuristics** where that is reasonably possible, and anything suspicious is flagged with a warning. **It is very strongly recommended to check a flagged entry against the original PDF**, because a flagged entry is very likely to be wrong in one or more ways.
+
+Failures go to `-f`, are logged to `-l`, and their full LLM traces are written into the *input* directory beside the file — `myfile.pdf` leaves `myfile_errors.txt`. LLMs being stochastic, simply moving the PDF back and retrying sometimes works.
+
+People do submit abstracts with no author list, or no title at all. The converter tries to catch that and does not always manage it. And an LLM may confabulate, answer incorrectly, or fail to follow an instruction — which is what the heuristics and the flagging are for, and why a flagged entry is worth the minute it takes to check.
+
+#### Which LLM to use
+
+**Only ever tested with a locally hosted backend**, meaning on the same LAN as Raven, possibly the same machine. A cloud LLM with an OpenAI-compatible API *might* work if you put a key in `~/.config/raven/librarian/api_key.txt` and set the URL in `raven.librarian.config`; it is not a development priority.
+
+For hosting one, we recommend [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui), which Raven is tested with, through its OpenAI-compatible API. Others such as [AnythingLLM](https://anythingllm.com/) might work and have not been tested — *OAI compatible* covers several dialects, so some features may not.
+
+- **2024**: originally tested on a local Llama 3.1 8B on Oobabooga. Fits a laptop's 8 GB VRAM at 4 bits (Q4_K_M) with room for 24k tokens of context. Accuracy about 80% — eight abstracts in ten convert without warnings and look right on inspection.
+- **February 2025**: thinking models supported, first tested on a Q4_K_M [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B) at 64k context on a 24 GB eGPU. A couple of percentage points more accurate, and much slower. [QwQ 32B](https://huggingface.co/Qwen/QwQ-32B) runs on similar specs.
+- **December 2025**: **the current recommendation is [Qwen3 2507 30B A3B Thinking](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507)**. Also a 24 GB eGPU at 4 bits, and being a MoE with 3B active parameters per token, much faster than the earlier models. It loads with 128k context and works at least to ~50k; the 256k it supports does not fit in 24 GB. Noticeably smarter, and informally about 88% accurate.
+- **On 8 GB**, [Qwen3 2507 4B Thinking](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507) is worth a try — not in the same class as the 30B, but punching well above its size, and better than Llama 3.1 8B or DeepSeek-R1-Distill-Qwen-7B at half their size.
 
 ## `raven-fixbib` — repairing a database export
 
@@ -273,3 +322,5 @@ raven-burstbib references.bib -o records/
 **Each file is named from the record's own BibTeX key**, sanitized so it can be a filename. That matters more than it sounds: a `.bib` written by somebody not steeped in BibTeX often carries a DOI or a URL where the key goes, and those contain characters a filesystem will not take.
 
 `-V` prints progress, which is worth having on a file with thousands of records in it.
+
+**It splits rather than parses.** The implementation finds record boundaries by looking for header lines, so it does not read the BibTeX as a grammar and cannot be relied on for a file that is malformed in the middle of a record. Run [`raven-fixbib`](#raven-fixbib--repairing-a-database-export) first if the file came out of a database export.

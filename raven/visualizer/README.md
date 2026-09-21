@@ -28,8 +28,6 @@
             - [Auto-downloading arXiv fulltexts by IDs](#auto-downloading-arxiv-fulltexts-by-ids)
         - [WOS (Web of Science)](#wos-web-of-science)
         - [PDF (human-readable abstracts)](#pdf-human-readable-abstracts)
-            - [How the PDF converter works](#how-the-pdf-converter-works)
-            - [LLM requirements for the PDF converter](#llm-requirements-for-the-pdf-converter)
 - [Visualize](#visualize)
     - [Load a dataset file in the GUI](#load-a-dataset-file-in-the-gui)
     - [Load a dataset file from the command line, when starting the app](#load-a-dataset-file-from-the-command-line-when-starting-the-app)
@@ -315,92 +313,16 @@ The version included in the filename is always automatically determined from the
 
 ### WOS (Web of Science)
 
-Useful for the engineering sciences.
+Useful for the engineering sciences. Export plain text from Web of Science, convert it with `raven-wos2bib`, and import the resulting `.bib` here.
 
-To convert WOS into BibTeX, see the `raven-wos2bib` command-line tool provided with Raven. Usage:
-
-```bash
-$(pdm venv activate)
-raven-wos2bib input1.txt ... inputn.txt 1>output.bib 2>log.txt
-```
-
-where the input `.txt` files are WOS files exported from Web of Science.
-
-In the example, the output is written to `output.bib`, and any log messages (such as warnings for broken input data) are written to `log.txt`.
-
-You can then import the resulting `.bib` file into *Raven-visualizer*.
+See [`raven-wos2bib`](../papers/README.md#raven-wos2bib--web-of-science) in the paper tools manual for how to run it and what it maps.
 
 
 ### PDF (human-readable abstracts)
 
-Abstract submissions to scientific conferences sometimes arrive as free-form, human-readable PDF files.
+Abstract submissions to scientific conferences sometimes arrive as free-form, human-readable PDF files. If you are a conference organizer who would like to semantically visualize the set of abstracts sent to you, `raven-pdf2bib` converts them into BibTeX you can import here. It needs an LLM.
 
-So if you are a conference organizer, and would like to semantically visualize the set of abstracts sent to you, see the `raven-pdf2bib` command-line tool provided with Raven.
-
-- The text content of the PDF is analyzed via an LLM (large language model).
-- The PDF must have an extractable text layer (a born-digital PDF, not a scan).
-- Each PDF should contain one abstract. Multiple abstracts are fed in as separate PDF files.
-- The converter does not enforce a length limit, but its intended use case is a typical conference abstract, 1-2 pages in length.
-- The abstract should have a human-recognizable title, authors, and main text. Exact formatting does not matter.
-- Starting with v0.2.4, the extracted abstract text is sanitized with the dehyphenator before it is written to the "abstract" field of the output BibTeX record.
-- If the abstract contains a line beginning with "*keywords:*" or "*key words:*", the converter will attempt to also extract keywords.
-
-**:exclamation: This functionality is currently in beta. :exclamation:**
-
-**:exclamation: This functionality requires an LLM. :exclamation:**
-
-To convert conference abstract PDFs into BibTeX:
-
-```bash
-$(pdm venv activate)
-raven-pdf2bib http://localhost:5000 -i some_input_directory -s success.bib -f failed.bib -l log.txt -o done_success -of done_failed
-```
-
-The "*http://...*" argument is the URL of an LLM serving an OpenAI-compatible API (streaming mode).
-
-The command converts all PDF files in `some_input_directory` (which can be a relative or absolute path), automatically descending into subdirectories. The files are processed one directory at a time, in Unicode lexicographical order by filename. Successful outputs are written to `success.bib`, failed outputs to `failed.bib`, and log messages to `log.txt`.
-
-The input directory (`-i some_input_directory`) is optional; if not provided, the current working directory of the terminal will be used.
-
-The `-s success.bib` writes items that were successfully processed into a BibTeX entry into the BibTeX file `success.bib`.
-
-Similarly, `-f failed.bib` writes failed items, which require manual checking and fixing. Failures are detected from LLM output by heuristics. Failed items are logged into the log file (`-l log.txt`), for troubleshooting. Full LLM traces of the possible error(s) are saved into the *input* directory, into separate files. For example, if `myfile.pdf` triggers errors, the LLM traces will be in `myfile_errors.txt`. This may help figure out where the LLM is going wrong. But note that since LLMs are stochastic, sometimes just running again may fix the error. (Just move the PDF file back from the failed output directory and retry.)
-
-The output buffers for the bib files are flushed to disk after each entry, so if you have a text editor app that autodetects updated files, you can monitor the progress by viewing the bib file there.
-
-The `-o done_success` moves each PDF file into directory named `done_success` after the file has been processed. This allows canceling the job and easily continuing it later, which is useful if there are lots of input files; the LLM analysis can be slow. An input PDF file is moved if and only if it was successfully processed, **after** writing the generated BibTeX entry.
-
-The `-of done_failed` moves failed items similarly.
-
-The directory specified by `-o` (as well as that by `-of`) is ignored while descending into subdirectories of the input directory, so it is possible to use e.g. `-o some_input_directory/done_success`.
-
-To continue a partial conversion (with some files already having been moved into the done-directories, and some remaining), just run the same command again - all the output files (success and failure bibs, and the log) are appended to automatically.
-
-#### How the PDF converter works
-
-The PDF converter analyzes the human-readable text content of the PDF via an LLM. If the text contains a section title *"References"*, anything after that point is discarded before processing. This is done to prevent cross-contamination, which would otherwise be an issue especially when extracting the title and the author list.
-
-To improve reliability, the fields are processed one at a time. Some prompt engineering has gone both into the system prompt as well as each individual data-extracting prompt. The prompts have been engineered manually; we have not looked at automatic prompt optimization.
-
-The extracted data is automatically double-checked via heuristics, for fields for which this is reasonably possible. Any suspicious-looking LLM responses are flagged with a warning. It is **very strongly recommended** to manually double-check any entries that were flagged by comparing the generated BibTeX entry to the human-readable content of the original PDF file, because any flagged entries are **very likely** to be incorrect in one or more ways.
-
-Note that people do actually sometimes submit PDF abstracts with no author list, or even no title. The converter attempts to catch such cases, but is not always successful at doing so.
-
-As is well known, LLMs may make things up (confabulate / "hallucinate"), may respond incorrectly, or may occasionally fail to follow instructions correctly. Hence this functionality is in beta.
-
-#### LLM requirements for the PDF converter
-
-Note that `raven-pdf2bib` has only been tested with a locally hosted LLM. Here "locally hosted" means "on the same LAN as Raven" (can even be on the same machine). A cloud LLM with an OpenAI compatible API *might* work if you put an API key to `~/.config/raven/librarian/api_key.txt`, and set the URL in `raven.librarian.config`. This is however not a development priority.
-
-For locally hosting an LLM, we recommend [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui), which Raven is tested with. Other LLM backends such as [AnythingLLM](https://anythingllm.com/) might also work, but have not been tested. We use the OpenAI-compatible API of `text-generation-webui`. However, in general, there are different dialects that consider themselves *OAI compatible*, so it may be that some features do not work with other backends.
-
-In 2024, `raven-pdf2bib` was originally tested on a local Llama 3.1 8B instance running on Oobabooga. This model fits into a laptop's 8 GB VRAM at 4 bits, e.g. in a Q4_K_M quantized format, while leaving enough VRAM for 24576 (24k) tokens of context. Based on our own testing, accuracy with this LLM is ~80%, or in other words, on average, 8 out of 10 abstracts convert without warnings (and also look correct by manual inspection).
-
-In **February 2025**, support for thinking LLMs was added. This was originally tested on a Q4_K_M quant of [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B), with 65536 (64k) tokens of context, running the model on an eGPU with 24GB of VRAM. This increases the accuracy by a couple of percentage points, but makes the converter much slower. The newer [QwQ 32B](https://huggingface.co/Qwen/QwQ-32B) model (March 2025, Alibaba, *Qwen with Questions*) can run with similar specs.
-
-As of **December 2025**, `raven-pdf2bib` is tested with [Qwen3 2507 30B A3B Thinking](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507). This is **the currently recommended LLM**. This can also run on a 24GB eGPU at 4bit, and as it's a MoE (*Mixture of Experts*) with 3B active parameters per token, it's much faster than earlier models. With 24GB, the model loads fine with 131072 (128k) context, and works as expected at least up to ~50k, but I have not tested filling up the whole context. The model itself supports up to 262144 (256k), but then 24GB VRAM is not enough (the model fails to load). This model seems much smarter than earlier ones. In our informal tests, accuracy is ~88%.
-
-If you must run with limited VRAM (8 GB), then [Qwen3 2507 4B Thinking](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507) is worth a try. Obviously, compared to the 30B of the same model series, it's not nearly as intelligent; but it punches way above its size class. I think this one is strictly better than LLaMa 3.1 8B or DeepSeek-R1-Distill-Qwen-7B, despite half the size.
+**See [`raven-pdf2bib`](../papers/README.md#raven-pdf2bib--conference-abstracts-as-pdfs) in the paper tools manual** for what it expects of a PDF, how to run a directory of them, how it works, why flagged entries are worth checking, and which model to use.
 
 
 # Visualize
