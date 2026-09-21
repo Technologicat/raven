@@ -265,9 +265,21 @@ What is queued, all small and independent:
   line break are the same shape to a whitespace-collapsing check, so the rule that distinguishes them is:
   a line after a bullet ending at its bold title is prose, a line after a bullet ending mid-sentence is a
   wrap. The invariant is the count of title-only bullets before and after.
-- **Three checker gaps found while linking the manuals**: `check_doc_links.py` does not validate cross-file
-  anchors, `check_usage_paths.py` does not see console-script invocations (which is what let the broken
-  `raven-pdf2bib` line survive), and `slugify` wants watching now that a heading can carry a link.
+- **Cross-file anchors are unchecked.** `check_doc_links.py` validates `](#anchor)` within a document and
+  is blind to `](../papers/README.md#heading)` — which is the identical failure it exists to prevent, and
+  became routine only when the manuals started linking to each other on 2026-09-21. `slugify` and
+  `heading_anchors` already do the work; the addition belongs in `check_file`, which is Raven-specific, so
+  the character-for-character contract with `pyan/tests/test_docs.py` is untouched. Small.
+- **Documented command lines are unchecked, and the obvious version of the check is worse than useless.**
+  `check_usage_paths.py` verifies that every `python -m raven...` names a real module. It was the
+  `raven-pdf2bib` line in the Visualizer manual that had gone stale — a positional backend URL that became
+  `--backend-url`, and two now-required options missing — and **a check that the script name exists would
+  have passed it**, the script being real and unchanged. Validating what actually broke means parsing each
+  documented command line with that tool's own `argparse` parser and seeing whether it is accepted.
+  - **Worth building** (Juha, 2026-09-21). It is a build rather than an addition — it has to import each
+    tool to reach its parser — and it is the only thing that would catch an instruction a reader is meant
+    to type, which nothing else in the toolchain looks at and nobody here runs, the console scripts being
+    right there.
 
 **Message editing v1 moves behind all of it.** The substrate is still unusually ready — `chattree`'s
 revision API is complete and tested, and every message row already carries a built, disabled pencil button
