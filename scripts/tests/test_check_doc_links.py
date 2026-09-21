@@ -67,6 +67,27 @@ def test_punctuation_is_dropped_before_spaces_become_hyphens():
     assert slugify("Pin vsync on multi-monitor setups (NVIDIA + X11)") == "pin-vsync-on-multi-monitor-setups-nvidia--x11"
 
 
+def test_a_link_in_a_heading_contributes_its_text_and_not_its_target():
+    """GitHub anchors from what the heading renders as, so the URL is not part of the slug.
+
+    The regression this pins: without stripping the link markup, the target's letters survive the
+    punctuation pass and land in the anchor — a release heading naming its edition would slug as
+    `029-in-progress--pleiadeshttpsenwikipediaorgwikipleiades-edition`. The failure is quiet in the
+    worst way, because a TOC generated from this same function agrees with itself and disagrees only
+    with GitHub, where nobody runs the checker.
+    """
+    assert slugify('0.2.9 (in progress) — *["Pleiades"](https://en.wikipedia.org/wiki/Pleiades)* edition') == \
+        "029-in-progress--pleiades-edition"
+    assert slugify("See [the notes](notes.md)") == "see-the-notes"
+
+
+def test_a_heading_link_resolves_from_a_toc_entry_written_against_it():
+    """The end-to-end form: a TOC entry using the rendered text finds the heading it names."""
+    lines = ["- [0.2.9 — *\"Pleiades\"* edition](#029--pleiades-edition)", "",
+             '## 0.2.9 — *["Pleiades"](https://en.wikipedia.org/wiki/Pleiades)* edition']
+    assert toc_problems(lines) == []
+
+
 def test_a_double_hyphen_heading_is_matched_by_its_own_link():
     """The end-to-end form of the case above: the link resolves, so nothing is reported."""
     lines = ["- [Install & run](#install--run)", "", "# Install & run"]

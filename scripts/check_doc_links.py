@@ -57,7 +57,14 @@ HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*$")
 
 
 def slugify(title):
-    """GitHub's heading-anchor rule: lowercase, drop punctuation, spaces to hyphens."""
+    """GitHub's heading-anchor rule: lowercase, drop punctuation, spaces to hyphens.
+
+    A link in the heading contributes its text and not its target, GitHub anchoring from what the
+    heading *renders* as. Without this the URL survives as letters — `## 0.2.9 — ["Pleiades"](https://
+    en.wikipedia.org/wiki/Pleiades) edition` would anchor as `029--pleiadeshttpsenwikipediaorg...`,
+    and a TOC generated from the same function would agree with itself while disagreeing with GitHub.
+    """
+    title = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", title)
     return re.sub(r"[^\w\s-]", "", title.strip().lower()).replace(" ", "-")
 
 
@@ -145,6 +152,12 @@ def toc_problems(lines):
 # `raven/avatar/README.md` 13 of 14 — so demanding completeness of them reports twenty-odd faults that
 # are all the author's intent. The main README is exhaustive, and being checked for it is what caught
 # the one `#####` heading that had never been listed.
+#
+# `CHANGELOG.md` is deliberately partial too, and for a different reason worth stating so that nobody
+# "completes" it later: its TOC lists releases and stops. Ten releases times three sections times up to
+# eight component groups is a hundred lines of contents before a reader reaches any content — and the
+# navigation that would buy is already free twice over, from GitHub's heading outline and from folding
+# in an editor. What a reader scanning that file wants is which release, not which component of 0.2.4.
 COMPLETE_TOC = {"README.md"}
 
 TOC_COMPLETENESS_PREFIX = "heading missing from TOC: "
