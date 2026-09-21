@@ -35,16 +35,16 @@ number claims a precision that the next commit removes. The previous exact figur
 time anyone noticed. Re-measure before quoting one.
 
 ```
-Layer 5 - Applications:     app.py (~3.6k), minichat.py (~750, minimal reference client),
+Layer 5 - Applications:     app.py (~3.8k), minichat.py (~750, minimal reference client),
                             indexer.py (~150, the `raven-indexer` CLI; also where the frontends get their
                             shared `open_document_store`)
 Layer 4 - Controller/GUI:   chat_controller.py (~5.9k), cleanup_dialog.py (~420), audio_input_panel.py (~750),
-                            chatgraph_panel.py (~1.7k)
+                            chatgraph_panel.py (~2.0k)
 Layer 4 - Scripting:        agent.py (~710), the headless sibling of the controller
 Layer 3 - Orchestration:    scaffold.py (~1.6k)
 Layer 2 - Backends:         llmclient.py (~2.6k), llmtools.py (~990), hybridir.py (~1.9k)
-Layer 1 - Utilities:        chatutil.py (~1.8k), chatsearch.py (~88), appstate.py (~580), cleanup.py (~290),
-                            imagestore.py (~270), textfilestore.py (~200), chatgraph.py (~2.8k),
+Layer 1 - Utilities:        chatutil.py (~1.8k), chatsearch.py (~130), appstate.py (~580), cleanup.py (~290),
+                            imagestore.py (~270), textfilestore.py (~200), chatgraph.py (~3.2k),
                             userprofile.py (~200)
 Layer 0 - Foundation:       config.py (~900), chattree.py (~1.5k), sidecarstore.py (~150),
                             gguftokenizer.py (~350)
@@ -62,7 +62,7 @@ Each layer only imports from layers below it. No circular dependencies.
 
 - **`chatutil.py`** — Pure functions for message formatting, creation, and cleanup. **Content is a list of typed parts** (OpenAI multimodal schema: `{"type": "text"|"image_url"|"text_file", ...}` — `text_file` is Raven's own part type for an attached plain-text/PDF document), not a bare string. Constructors: `create_chat_message()` (string → single text part, with persona), `create_message_from_parts()` (multi-part). Accessors: `content_to_text()` (universal "give me the text" reader — assumes a parts list, raises on a stray string; skips `text_file` parts, whose text is folded in at wire-build time, not shown as message text), `text_content_part`/`image_content_part`/`text_file_content_part`, `normalize_content()` (the one str→parts migration converter). Handles thought blocks (`<think>...</think>`) via regex — modes: `"discard"`, `"markup"`, `"keep"`. `scrub()` cleans LLM output (thought blocks, persona prefix, formatting quirks). `linearize_chat()` reconstructs linear history from tree. Multiple markup targets (ANSI, Markdown, None).
 
-- **`chatsearch.py`** — Which messages of a branch a search finds, and where: `make_query` compiles the search string with the constellation's fragment rules (and the renderer's highlight regexes), `find_matches` walks node IDs and reports `(node_id, where)`, `where` being the set of the message's texts that matched — `"content"`, `"thinking"`, or both. A jump opens the trace whenever `"thinking"` is among them, so that every match the search counted is on screen. Thinking traces and tool messages are each optional. Pure, no DPG; the GUI side — the search row, re-highlighting, navigation — is in `chat_controller` and `app`.
+- **`chatsearch.py`** — Which messages of a branch a search finds, and where: `make_query` compiles the search string with the constellation's fragment rules (and the renderer's highlight regexes), `find_matches` walks node IDs and reports `(node_id, counts)`, `counts` being a `MatchCounts` — how many occurrences are in the message text and how many in its thinking trace, each zero where the query did not match there, so one value answers both *where* and *how many*. Counts rather than a set because a chat graph box reports occurrences, where the search row counts messages. A jump opens the trace whenever `thinking` is nonzero, so that every match the search counted is on screen; when the jump moves HEAD the trace cannot be opened at the jump, and `chat_controller.open_thinking_trace_on_arrival` defers it to the rebuild. Thinking traces and tool messages are each optional. Pure, no DPG; the GUI side — the search row, re-highlighting, navigation — is in `chat_controller` and `app`.
 
 - **`sidecarstore.py`** — Shared foundation for the two per-kind attachment stores (`imagestore`, `textfilestore`). Owns the `SIDECAR_SCHEME` (`"sidecar:"`) constant and the mechanics both kinds duplicate otherwise: `read_source_bytes()` (bytes-or-path ingestion), `base_provenance()` (the four common provenance keys — url/fetched_at/content_type/source — as a fresh dict the caller extends), `sidecar_filename_from_url()` (the scheme-strip both resolvers need, raising on a non-`sidecar:` URL), `content_part_sidecar_refs(payload, part_type)` (the GC mark-phase content-list walk, parameterized by part type). Stdlib-only, no `chatutil`/`chattree`/`config` deps — so it sits beneath every store. Exists so the two kind modules can't drift on the shared bits.
 
