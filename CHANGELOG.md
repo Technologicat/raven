@@ -366,10 +366,16 @@
   - `raven-minichat` does the same and keeps the REPL — `!history` and `!dump` work with nothing loaded — reporting the verdict on the console. Its `!reconnect` command is the terminal's version of clicking the row.
   - `raven-pdf2bib` and `raven-importer` still exit instead, because they can run for hours — and they now also stop when the backend is *running with no model loaded*, which previously started the run and failed every step. That one reads as a bug in Raven when it is not caught: the backend answers, so nothing looks wrong until every extraction comes back empty. Neither recovers from a backend that goes away mid-run; that is still a run to restart.
 
-- **Editing the system prompt no longer rewrites the one your existing chats were held under.** Previously the stored system prompt was overwritten at every app start, so a conversation you had last month silently acquired today's instructions and there was no way to see what it had actually been written against. Now the datastore keeps one system prompt per distinct text, and a chat stays rooted at the one it was held under. Changing the prompt back reuses the earlier one rather than making a third.
-  - **On first start after upgrading, your existing chats appear under a second system prompt** — the text they were stored with, which differs from the current one. Nothing is lost or moved: the app opens where you left off, and the older ones are reached as below.
-  - **The branch arrows now work on the system prompt message**, which is how you get between them. They behave as they do on any other message; at the top of the chat they step between system prompts instead of between replies.
-  - **A system prompt can be deleted when it is not the one in use**, and this takes the chats held under it with it — which is the point, since that is the only thing those chats hang from. The one currently in use stays undeletable, as before. Deleting one leaves you where a new chat under the system prompt you land on would begin, rather than on the bare prompt with its greeting out of sight.
+- **Editing the system prompt no longer rewrites the one your existing chats were held under.**
+  - Previously the stored system prompt was overwritten at every app start, so a conversation you had last month silently acquired today's instructions and there was no way to see what it had actually been written against.
+  - Now the datastore keeps one system prompt per distinct text, and a chat stays rooted at the one it was held under. Changing the prompt back reuses the earlier one rather than making a third.
+  - **On first start after upgrading, your existing chats appear under a second system prompt** — the text they were stored with, which differs from the current one.
+    - Nothing is lost or moved: the app opens where you left off, and the older ones can be reached from the chat graph view.
+  - **The branch arrows now work on the system prompt message**, which is how you switch between system prompts stored in the chat datastore.
+    - They behave as they do on any other message; at the top of the chat they step between system prompts instead of between replies.
+  - **A system prompt can be deleted when it is not the one in use**, and this destroys the chats held under it with it — which is the point, since that is the only thing those chats hang from.
+    - Deleting a system prompt leaves you where a new chat under the system prompt you land on would begin (on the AI greeting attached to that prompt), rather than on the bare prompt.
+    - The system prompt currently in use stays undeletable, as before.
   - Cleanup understands this: chats under an older system prompt are not offered for deletion as unreachable.
 
 - **"branch from here" now works on the AI's opening greeting**, where it was refused before. Branching sets where you are writing from and nothing else, so from a greeting it starts a new chat under that system prompt — which is a fair thing to want, and reachable anyway through the new-chat button. It stays refused on a system prompt message, where it would leave you writing from a point that shows you none of the conversation.
