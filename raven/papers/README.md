@@ -19,6 +19,10 @@ Eleven command-line tools for the part of a literature review that happens befor
     - [When something goes wrong](#when-something-goes-wrong)
     - [What a rerun does](#what-a-rerun-does)
     - [Downloading](#downloading)
+- [The converters — getting an export into BibTeX](#the-converters--getting-an-export-into-bibtex)
+    - [`raven-wos2bib` — Web of Science](#raven-wos2bib--web-of-science)
+    - [`raven-csv2bib` — a spreadsheet](#raven-csv2bib--a-spreadsheet)
+    - [`raven-pdf2bib` — conference abstracts as PDFs](#raven-pdf2bib--conference-abstracts-as-pdfs)
 - [`raven-fixbib` — repairing a database export](#raven-fixbib--repairing-a-database-export)
     - [What it repairs](#what-it-repairs)
     - [HTML that a database left in the values](#html-that-a-database-left-in-the-values)
@@ -34,6 +38,7 @@ Eleven command-line tools for the part of a literature review that happens befor
 - [`raven-siftbib` — removing what a review cannot screen](#raven-siftbib--removing-what-a-review-cannot-screen)
     - [Naming the criterion](#naming-the-criterion)
     - [What comes out, and the record of it](#what-comes-out-and-the-record-of-it)
+- [`raven-burstbib` — one file per record](#raven-burstbib--one-file-per-record)
 
 <!-- markdown-toc end -->
 
@@ -78,6 +83,36 @@ Eleven command-line tools for the part of a literature review that happens befor
 **Filenames keep clause boundaries.** A `:`, `?`, `!` or `;` followed by a space becomes ` - ` rather than being dropped, so a long title does not come out as a run-on sentence.
 
 **`--save-bib file.bib` writes the metadata that was already fetched**, so downloading a set of papers and building its bibliography costs one set of politeness delays rather than two.
+
+## The converters — getting an export into BibTeX
+
+All three write BibTeX to stdout, so redirect them, and all three read several inputs as one corpus.
+
+### `raven-wos2bib` — Web of Science
+
+Reads Web of Science plain-text exports.
+
+**Two publication types are mapped**: `J` becomes `@article` and `B` becomes `@book`. Series and patents are not handled yet, so an export holding them needs a look.
+
+**Author affiliations are normalized to one string.** Web of Science's `C1` field arrives in more than one shape depending on the export, and BibTeX has one field to put it in.
+
+### `raven-csv2bib` — a spreadsheet
+
+**The header row is the schema.** Each column name becomes a BibTeX field name verbatim, and each row becomes an `@article` — so a sheet with columns `author`, `year`, `title`, `abstract` converts without any mapping to configure, and a sheet with a column called `Notes on screening` produces a field of that name.
+
+**The delimiter is autodetected** — tab or semicolon — and `-d` forces one. Values are BibTeX-escaped and braced on the way out.
+
+**Entry keys are generated**, one UUID per row, since a spreadsheet rarely carries one. They are unique rather than memorable; if you want citable keys, set them afterwards.
+
+### `raven-pdf2bib` — conference abstracts as PDFs
+
+Extracts each PDF's text with [`raven.common.docextract`](../common/docextract.py) and has an LLM turn it into a BibTeX entry. This is the one tool here that needs a backend, and the one whose output is worth reading before trusting.
+
+**The conference metadata is yours to supply**, because it is not reliably in the files: `--slug` and `--year` are required, with `--booktitle`, `--note` and `--url` optional. They are injected into every entry rather than guessed at per paper.
+
+**Successes and failures are written separately** — `-s success.bib` and `-f failed.bib` — so the ones that need a human are in their own file rather than mixed into the good ones.
+
+**A long run is resumable, and that is what the directory moving is for.** A PDF is moved to `--output-dir` only if it was processed successfully, and only after its entry has been written. Stop the run and start it again, and it picks up what is left. `-r` sets how many attempts a single paper gets, three by default.
 
 ## `raven-fixbib` — repairing a database export
 
@@ -226,3 +261,15 @@ The audit has one row per removed record, naming the record, where it was publis
 - `--out-dir DIR` puts them elsewhere.
 - `--no-audit` declines the audit.
 - `-n` / `--dry-run` reports what would go and writes nothing. The input file is never modified either way.
+
+## `raven-burstbib` — one file per record
+
+Splits a multi-entry `.bib` into one file per entry, which is what makes a bibliography usable as a **document database**: Raven-librarian indexes a folder of files, and a bibliography is one file holding hundreds of records until this is run over it. Records carrying abstracts are the ones this pays off for.
+
+```bash
+raven-burstbib references.bib -o records/
+```
+
+**Each file is named from the record's own BibTeX key**, sanitized so it can be a filename. That matters more than it sounds: a `.bib` written by somebody not steeped in BibTeX often carries a DOI or a URL where the key goes, and those contain characters a filesystem will not take.
+
+`-V` prints progress, which is worth having on a file with thousands of records in it.
