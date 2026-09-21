@@ -606,10 +606,13 @@
 
 #### Raven-cherrypick
 
-- **Compare mode no longer skips an image, and no longer leaves the wrong picture cached behind it.** The cycle would advance — the overlay number changed, the grid badge lit up — while one of the images never appeared, its slot showing one of the others instead. A three-image comparison would show you two, the same two every loop.
-  - Cancelling compare mode filed the frame it was parked on under the index of the image you were looking at *before* compare mode started. From then on that index displayed the wrong picture — in compare mode, in the main view, and in the status bar's dimensions — until something reloaded it. So the mix-up outlasted the compare session that caused it, and came back every time you returned to that image.
-  - Which image was displayed wrongly depended on where you cancelled, which is why it seemed to come and go: cancel on the frame you started from and nothing went wrong at all. **No file was ever touched** — this was the in-memory cache of decoded images handing back the wrong one, and reopening the folder cleared it.
-  - Separately, a newly loaded image announced itself from a background thread while the previous one was still being drawn, and the announcement was cleared after that drawing finished rather than before it — so an announcement arriving mid-draw was discarded. That one was real too, and fixed first; it was not the cause of the skipping.
+- **Compare mode no longer skips an image, and no longer leaves the wrong picture cached behind it.**
+  - The cycle would advance — the overlay number changed, the grid badge lit up — while one of the images never appeared, its slot showing one of the others instead. A three-image comparison would show you two, the same two every loop.
+    - The bug was that cancelling compare mode filed the frame it was parked on under the index of the image you were looking at *before* compare mode started. From then on that index displayed the wrong picture — in compare mode, in the main view, and in the status bar's dimensions — until something reloaded it. So the mix-up outlasted the compare session that caused it, and came back every time you returned to that image.
+    - Thus, which image was displayed wrongly depended on where you cancelled, which is why it seemed to come and go: cancel on the frame you started from and nothing went wrong at all.
+    - **No file was ever touched** — this was the in-memory cache of decoded images handing back the wrong one, and reopening the folder cleared it.
+
+- **Image loading robustified.** There was a race condition: a newly loaded image announced itself from a background thread while the previous one was still being drawn, and the announcement was cleared after that drawing finished rather than before it — so an announcement arriving mid-draw was discarded. Fixed.
 
 - **The image-number indicator now follows the compare cycle.** The small number in the main view's bottom-left corner stayed on whichever image was current when you entered compare mode, so it named the wrong image for every frame of the loop while the overlay number and the grid highlight both moved. It now names the frame on screen, and goes back to the current image when you leave. The window title follows the cycle too, for the same reason — it named the image you had left behind.
 
