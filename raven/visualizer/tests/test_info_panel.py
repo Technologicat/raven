@@ -111,49 +111,45 @@ NAVIGATION_BUTTONS = {"go_to_top_button": "go_to_top",
                       "next_search_match_button": "scroll_to_next_search_match"}
 
 
-def test_the_header_carries_the_widgets_the_module_writes_to(built_chrome):
-    for tag in ("item_information_header", "item_information_title",
-                "item_information_selection_item_count", "item_information_total_count",
-                "info_panel_pending_spinner", "info_panel_rendering_spinner",
-                "copy_report_to_clipboard_button"):
-        assert dpg.does_item_exist(tag), f"{tag} is missing from the built header"
-    assert info_panel._copy_report_tooltip is not None, "the copy button's self-sizing caption was not made"
+class TestTheHeaderAndTheNavigationBar:
+    def test_the_header_carries_the_widgets_the_module_writes_to(self, built_chrome):
+        for tag in ("item_information_header", "item_information_title",
+                    "item_information_selection_item_count", "item_information_total_count",
+                    "info_panel_pending_spinner", "info_panel_rendering_spinner",
+                    "copy_report_to_clipboard_button"):
+            assert dpg.does_item_exist(tag), f"{tag} is missing from the built header"
+        assert info_panel._copy_report_tooltip is not None, "the copy button's self-sizing caption was not made"
 
+    def test_the_status_readouts_start_hidden_and_the_spinners_with_them(self, built_chrome):
+        # Nothing is loaded yet, so there are no counts to show and no refresh in flight. `update` and the
+        # per-frame poller are what reveal these.
+        for tag in ("item_information_total_count", "info_panel_pending_spinner", "info_panel_rendering_spinner"):
+            assert dpg.get_item_configuration(tag)["show"] is False, f"{tag} should start hidden"
+        assert dpg.get_value("item_information_selection_item_count") == "[nothing selected]"
 
-def test_the_status_readouts_start_hidden_and_the_spinners_with_them(built_chrome):
-    # Nothing is loaded yet, so there are no counts to show and no refresh in flight. `update` and the
-    # per-frame poller are what reveal these.
-    for tag in ("item_information_total_count", "info_panel_pending_spinner", "info_panel_rendering_spinner"):
-        assert dpg.get_item_configuration(tag)["show"] is False, f"{tag} should start hidden"
-    assert dpg.get_value("item_information_selection_item_count") == "[nothing selected]"
+    @pytest.mark.parametrize("tag, function_name", sorted(NAVIGATION_BUTTONS.items()))
+    def test_every_navigation_button_is_wired_to_its_own_function(self, built_chrome, tag, function_name):
+        """The part that used to be seven `set_item_callback` calls against widgets another module had made.
 
+        A wrong or missing binding is silent: the button draws, enables itself with the others, and does
+        nothing when clicked.
+        """
+        assert dpg.does_item_exist(tag)
+        assert dpg.get_item_callback(tag) is getattr(info_panel, function_name)
 
-@pytest.mark.parametrize("tag, function_name", sorted(NAVIGATION_BUTTONS.items()))
-def test_every_navigation_button_is_wired_to_its_own_function(built_chrome, tag, function_name):
-    """The part that used to be seven `set_item_callback` calls against widgets another module had made.
+    def test_the_copy_button_is_wired_too(self, built_chrome):
+        assert dpg.get_item_callback("copy_report_to_clipboard_button") is info_panel.copy_report_to_clipboard
 
-    A wrong or missing binding is silent: the button draws, enables itself with the others, and does
-    nothing when clicked.
-    """
-    assert dpg.does_item_exist(tag)
-    assert dpg.get_item_callback(tag) is getattr(info_panel, function_name)
+    def test_every_navigation_button_starts_disabled(self, built_chrome):
+        # There is nothing to navigate until a dataset is loaded and something is in the panel;
+        # `update_navigation_controls` is what enables them.
+        for tag in NAVIGATION_BUTTONS:
+            assert dpg.get_item_configuration(tag)["enabled"] is False, f"{tag} should start disabled"
+        assert dpg.get_item_configuration("copy_report_to_clipboard_button")["enabled"] is False
 
-
-def test_the_copy_button_is_wired_too(built_chrome):
-    assert dpg.get_item_callback("copy_report_to_clipboard_button") is info_panel.copy_report_to_clipboard
-
-
-def test_every_navigation_button_starts_disabled(built_chrome):
-    # There is nothing to navigate until a dataset is loaded and something is in the panel;
-    # `update_navigation_controls` is what enables them.
-    for tag in NAVIGATION_BUTTONS:
-        assert dpg.get_item_configuration(tag)["enabled"] is False, f"{tag} should start disabled"
-    assert dpg.get_item_configuration("copy_report_to_clipboard_button")["enabled"] is False
-
-
-def test_the_search_match_readouts_start_at_no_search(built_chrome):
-    assert dpg.get_value("item_information_search_controls_item_count") == "[no search active]"
-    assert dpg.get_item_configuration("item_information_search_controls_current_item")["show"] is False
+    def test_the_search_match_readouts_start_at_no_search(self, built_chrome):
+        assert dpg.get_value("item_information_search_controls_item_count") == "[no search active]"
+        assert dpg.get_item_configuration("item_information_search_controls_current_item")["show"] is False
 
 
 class RecordingDPG:
@@ -162,6 +158,7 @@ class RecordingDPG:
     `user_data` is the interesting one: Raven stores `(kind, data)` on widgets and finds them again by
     asking what kind they are, so a test that wants a widget of some kind registers it here.
     """
+
     def __init__(self, real_dpg):
         self._real_dpg = real_dpg
         self.user_data = {}  # item -> (kind, data)
@@ -258,153 +255,139 @@ def be_current(monkeypatch, item):
 # --------------------------------------------------------------------------------
 # How a widget says what kind of thing it is
 
-def test_a_widget_is_recognized_by_the_kind_filed_on_it(gui):
-    gui.dpg.user_data[11] = ("entry_title_container", None)
-    assert info_panel._is_entry_title_container_group(11) == 11
+class TestHowAWidgetSaysWhatKindOfThingItIs:
+    def test_a_widget_is_recognized_by_the_kind_filed_on_it(self, gui):
+        gui.dpg.user_data[11] = ("entry_title_container", None)
+        assert info_panel._is_entry_title_container_group(11) == 11
 
+    def test_a_widget_of_another_kind_is_not_recognized(self, gui):
+        # Negative control: the predicates all share one implementation, so this is what says the `kind`
+        # comparison happens at all.
+        gui.dpg.user_data[11] = ("cluster_title", None)
+        assert info_panel._is_entry_title_container_group(11) is None
 
-def test_a_widget_of_another_kind_is_not_recognized(gui):
-    # Negative control: the predicates all share one implementation, so this is what says the `kind`
-    # comparison happens at all.
-    gui.dpg.user_data[11] = ("cluster_title", None)
-    assert info_panel._is_entry_title_container_group(11) is None
+    def test_a_matching_widget_whose_id_is_zero_is_still_returned(self, gui):
+        # DPG item 0 is a valid ID and a falsy value, which is why these predicates answer with the item and
+        # `None` rather than with a bool. A caller writing `if predicate(item):` would drop this widget, so
+        # what has to hold is that the match is distinguishable from the miss.
+        gui.dpg.user_data[0] = ("entry_title_container", None)
+        assert info_panel._is_entry_title_container_group(0) == 0
+        assert info_panel._is_entry_title_container_group(0) is not None
 
+    def test_a_widget_with_no_user_data_at_all_is_not_recognized(self, gui):
+        # Most widgets in the panel carry none: spacers, separators, the text inside a group.
+        assert info_panel._get_user_data(11) is None
+        assert info_panel._is_entry_title_container_group(11) is None
 
-def test_a_matching_widget_whose_id_is_zero_is_still_returned(gui):
-    # DPG item 0 is a valid ID and a falsy value, which is why these predicates answer with the item and
-    # `None` rather than with a bool. A caller writing `if predicate(item):` would drop this widget, so
-    # what has to hold is that the match is distinguishable from the miss.
-    gui.dpg.user_data[0] = ("entry_title_container", None)
-    assert info_panel._is_entry_title_container_group(0) == 0
-    assert info_panel._is_entry_title_container_group(0) is not None
-
-
-def test_a_widget_with_no_user_data_at_all_is_not_recognized(gui):
-    # Most widgets in the panel carry none: spacers, separators, the text inside a group.
-    assert info_panel._get_user_data(11) is None
-    assert info_panel._is_entry_title_container_group(11) is None
-
-
-def test_asking_about_no_widget_is_answered_rather_than_raising(gui):
-    # The finders return `None` when they find nothing, and their answer is fed straight back in.
-    assert info_panel._get_user_data(None) is None
-    assert info_panel._is_entry_title_container_group(None) is None
+    def test_asking_about_no_widget_is_answered_rather_than_raising(self, gui):
+        # The finders return `None` when they find nothing, and their answer is fed straight back in.
+        assert info_panel._get_user_data(None) is None
+        assert info_panel._is_entry_title_container_group(None) is None
 
 
 # --------------------------------------------------------------------------------
 # The clipboard
 
-def test_the_report_is_copied_as_plain_text_by_default(gui):
-    info_panel.copy_report_to_clipboard()
-    assert gui.dpg.clipboard == "the report, as plain text"
+class TestTheClipboard:
+    def test_the_report_is_copied_as_plain_text_by_default(self, gui):
+        info_panel.copy_report_to_clipboard()
+        assert gui.dpg.clipboard == "the report, as plain text"
 
+    def test_holding_shift_copies_the_report_as_markdown(self, gui):
+        gui.dpg.keys_down = {gui.dpg.mvKey_LShift}
+        info_panel.copy_report_to_clipboard()
+        assert gui.dpg.clipboard == "# the report, as Markdown"
 
-def test_holding_shift_copies_the_report_as_markdown(gui):
-    gui.dpg.keys_down = {gui.dpg.mvKey_LShift}
-    info_panel.copy_report_to_clipboard()
-    assert gui.dpg.clipboard == "# the report, as Markdown"
+    def test_either_shift_key_selects_markdown(self, gui):
+        # Negative control for the test above, which presses one particular key: the rule is about the
+        # modifier, not about which hand reached it.
+        gui.dpg.keys_down = {gui.dpg.mvKey_RShift}
+        info_panel.copy_report_to_clipboard()
+        assert gui.dpg.clipboard == "# the report, as Markdown"
 
+    def test_an_unknown_report_format_is_refused(self, gui):
+        # Two formats are built during every panel rebuild, and picking one by string is how the hotkey and
+        # the button both reach them. A typo should not quietly copy the wrong one, or an empty box.
+        with pytest.raises(ValueError):
+            info_panel._copy_report_to_clipboard(report_format="pdf")
 
-def test_either_shift_key_selects_markdown(gui):
-    # Negative control for the test above, which presses one particular key: the rule is about the
-    # modifier, not about which hand reached it.
-    gui.dpg.keys_down = {gui.dpg.mvKey_RShift}
-    info_panel.copy_report_to_clipboard()
-    assert gui.dpg.clipboard == "# the report, as Markdown"
+    def test_an_entry_is_cited_as_authors_year_and_title(self, gui):
+        # The citation shape someone pastes into notes or an email, so the format is the feature. It takes
+        # the entry rather than the widget showing it, which is what lets it be read at all.
+        assert info_panel.format_entry_citation(gui.entries[1]) == "Author, An (2024): A study of methanol"
 
+    def test_copying_one_entry_puts_its_citation_on_the_clipboard(self, gui, monkeypatch):
+        gui.dpg.user_data[99] = ("copy_entry_to_clipboard_button", (object(), "Copy this entry"))
+        monkeypatch.setattr(info_panel.widgetfinder, "find_widget_depth_first", lambda item, accept: 99)
+        info_panel._copy_entry_to_clipboard(11)
+        assert gui.dpg.clipboard == info_panel.format_entry_citation(gui.entries[1])
 
-def test_an_unknown_report_format_is_refused(gui):
-    # Two formats are built during every panel rebuild, and picking one by string is how the hotkey and
-    # the button both reach them. A typo should not quietly copy the wrong one, or an empty box.
-    with pytest.raises(ValueError):
-        info_panel._copy_report_to_clipboard(report_format="pdf")
+    def test_copying_the_current_entry_copies_the_one_at_the_top_of_the_panel(self, gui, monkeypatch):
+        gui.dpg.user_data[99] = ("copy_entry_to_clipboard_button", (object(), "Copy this entry"))
+        monkeypatch.setattr(info_panel.widgetfinder, "find_widget_depth_first", lambda item, accept: 99)
+        be_current(monkeypatch, 12)
+        info_panel.copy_current_entry_to_clipboard()
+        assert gui.dpg.clipboard == "Author, An (2024): Something else entirely"
 
-
-def test_an_entry_is_cited_as_authors_year_and_title(gui):
-    # The citation shape someone pastes into notes or an email, so the format is the feature. It takes
-    # the entry rather than the widget showing it, which is what lets it be read at all.
-    assert info_panel.format_entry_citation(gui.entries[1]) == "Author, An (2024): A study of methanol"
-
-
-def test_copying_one_entry_puts_its_citation_on_the_clipboard(gui, monkeypatch):
-    gui.dpg.user_data[99] = ("copy_entry_to_clipboard_button", (object(), "Copy this entry"))
-    monkeypatch.setattr(info_panel.widgetfinder, "find_widget_depth_first", lambda item, accept: 99)
-    info_panel._copy_entry_to_clipboard(11)
-    assert gui.dpg.clipboard == info_panel.format_entry_citation(gui.entries[1])
-
-
-def test_copying_the_current_entry_copies_the_one_at_the_top_of_the_panel(gui, monkeypatch):
-    gui.dpg.user_data[99] = ("copy_entry_to_clipboard_button", (object(), "Copy this entry"))
-    monkeypatch.setattr(info_panel.widgetfinder, "find_widget_depth_first", lambda item, accept: 99)
-    be_current(monkeypatch, 12)
-    info_panel.copy_current_entry_to_clipboard()
-    assert gui.dpg.clipboard == "Author, An (2024): Something else entirely"
-
-
-def test_copying_with_an_empty_panel_does_nothing(gui, monkeypatch):
-    # Negative control for the test above, and the case that would otherwise raise: no items, so no
-    # current item, and the hotkey still fires because a hotkey does not know the panel is empty.
-    be_current(monkeypatch, None)
-    info_panel.copy_current_entry_to_clipboard()
-    assert gui.dpg.clipboard is None
+    def test_copying_with_an_empty_panel_does_nothing(self, gui, monkeypatch):
+        # Negative control for the test above, and the case that would otherwise raise: no items, so no
+        # current item, and the hotkey still fires because a hotkey does not know the panel is empty.
+        be_current(monkeypatch, None)
+        info_panel.copy_current_entry_to_clipboard()
+        assert gui.dpg.clipboard is None
 
 
 # --------------------------------------------------------------------------------
 # Search-or-select
 
-def test_the_default_action_searches_the_plotter_for_the_current_entry(gui, monkeypatch):
-    be_current(monkeypatch, 11)
-    info_panel.search_or_select_current_entry()
-    assert gui.dpg.values[SEARCH_FIELD] == "study methanol"
-    assert gui.searched, "the search has to be re-run, or the field says one thing and the plot shows another"
+class TestSearchOrSelect:
+    def test_the_default_action_searches_the_plotter_for_the_current_entry(self, gui, monkeypatch):
+        be_current(monkeypatch, 11)
+        info_panel.search_or_select_current_entry()
+        assert gui.dpg.values[SEARCH_FIELD] == "study methanol"
+        assert gui.searched, "the search has to be re-run, or the field says one thing and the plot shows another"
 
+    def test_the_search_drops_stopwords_from_the_title(self, gui, monkeypatch):
+        # A title makes a poor query unstripped: the search matches by substring, so its short common words
+        # match almost everywhere. Asserted against the stubbed set, since what belongs to this module is
+        # dropping them -- `test_search.test_a_lowercase_stopword_matches_inside_longer_words` is why.
+        be_current(monkeypatch, 0)
+        info_panel.search_or_select_current_entry()
+        assert gui.dpg.values[SEARCH_FIELD] == "synthesis novel catalyst", \
+            "'The', 'of' and 'a' are in the stubbed stopword set; the rest of the title is the query"
 
-def test_the_search_drops_stopwords_from_the_title(gui, monkeypatch):
-    # A title makes a poor query unstripped: the search matches by substring, so its short common words
-    # match almost everywhere. Asserted against the stubbed set, since what belongs to this module is
-    # dropping them -- `test_search.test_a_lowercase_stopword_matches_inside_longer_words` is why.
-    be_current(monkeypatch, 0)
-    info_panel.search_or_select_current_entry()
-    assert gui.dpg.values[SEARCH_FIELD] == "synthesis novel catalyst", \
-        "'The', 'of' and 'a' are in the stubbed stopword set; the rest of the title is the query"
+    def test_asking_again_for_the_entry_already_searched_clears_the_search(self, gui, monkeypatch):
+        # The same key both searches and un-searches, so a reader can look an item up and put the plot back
+        # without reaching for the search field.
+        be_current(monkeypatch, 11)
+        info_panel.search_or_select_current_entry()
+        info_panel.search_or_select_current_entry()
+        assert gui.dpg.values[SEARCH_FIELD] == ""
 
+    def test_holding_shift_selects_the_current_entry_alone(self, gui, monkeypatch):
+        be_current(monkeypatch, 11)
+        gui.dpg.keys_down = {gui.dpg.mvKey_LShift}
+        info_panel.search_or_select_current_entry()
+        assert gui.selections == [([1], "replace", {"wait": False})]
+        assert SEARCH_FIELD not in gui.dpg.values, "the selection actions leave the search alone"
 
-def test_asking_again_for_the_entry_already_searched_clears_the_search(gui, monkeypatch):
-    # The same key both searches and un-searches, so a reader can look an item up and put the plot back
-    # without reaching for the search field.
-    be_current(monkeypatch, 11)
-    info_panel.search_or_select_current_entry()
-    info_panel.search_or_select_current_entry()
-    assert gui.dpg.values[SEARCH_FIELD] == ""
+    def test_an_unknown_search_or_select_action_is_refused(self, gui):
+        # The action arrives as a string from whichever handler read the gesture, so a typo should not
+        # quietly fall through to the search branch, which is the one with no modifier attached to it.
+        with pytest.raises(ValueError):
+            info_panel._search_or_select_entry(gui.entries[1], "seach")
 
+    def test_holding_ctrl_removes_the_current_entry_from_the_selection(self, gui, monkeypatch):
+        be_current(monkeypatch, 11)
+        gui.dpg.keys_down = {gui.dpg.mvKey_LControl}
+        info_panel.search_or_select_current_entry()
+        assert gui.selections == [([1], "subtract", {"wait": False})]
 
-def test_holding_shift_selects_the_current_entry_alone(gui, monkeypatch):
-    be_current(monkeypatch, 11)
-    gui.dpg.keys_down = {gui.dpg.mvKey_LShift}
-    info_panel.search_or_select_current_entry()
-    assert gui.selections == [([1], "replace", {"wait": False})]
-    assert SEARCH_FIELD not in gui.dpg.values, "the selection actions leave the search alone"
-
-
-def test_an_unknown_search_or_select_action_is_refused(gui):
-    # The action arrives as a string from whichever handler read the gesture, so a typo should not
-    # quietly fall through to the search branch, which is the one with no modifier attached to it.
-    with pytest.raises(ValueError):
-        info_panel._search_or_select_entry(gui.entries[1], "seach")
-
-
-def test_holding_ctrl_removes_the_current_entry_from_the_selection(gui, monkeypatch):
-    be_current(monkeypatch, 11)
-    gui.dpg.keys_down = {gui.dpg.mvKey_LControl}
-    info_panel.search_or_select_current_entry()
-    assert gui.selections == [([1], "subtract", {"wait": False})]
-
-
-def test_search_or_select_with_an_empty_panel_does_nothing(gui, monkeypatch):
-    be_current(monkeypatch, None)
-    info_panel.search_or_select_current_entry()
-    assert gui.selections == []
-    assert SEARCH_FIELD not in gui.dpg.values
+    def test_search_or_select_with_an_empty_panel_does_nothing(self, gui, monkeypatch):
+        be_current(monkeypatch, None)
+        info_panel.search_or_select_current_entry()
+        assert gui.selections == []
+        assert SEARCH_FIELD not in gui.dpg.values
 
 
 # --------------------------------------------------------------------------------
@@ -419,115 +402,107 @@ def in_cluster(monkeypatch, gui, display_idx):
     be_current(monkeypatch, 11)
 
 
-def test_scrolling_to_the_next_cluster_goes_to_the_one_after_the_current_item_s(gui, monkeypatch):
-    in_cluster(monkeypatch, gui, 0)
-    info_panel.scroll_to_next_cluster()
-    assert gui.scrolled == [f"cluster_1_title_build{info_panel.build_number}"]
+class TestClusterNavigation:
+    def test_scrolling_to_the_next_cluster_goes_to_the_one_after_the_current_item_s(self, gui, monkeypatch):
+        in_cluster(monkeypatch, gui, 0)
+        info_panel.scroll_to_next_cluster()
+        assert gui.scrolled == [f"cluster_1_title_build{info_panel.build_number}"]
 
+    def test_scrolling_to_the_previous_cluster_goes_to_the_one_before(self, gui, monkeypatch):
+        in_cluster(monkeypatch, gui, 1)
+        info_panel.scroll_to_prev_cluster()
+        assert gui.scrolled == [f"cluster_0_title_build{info_panel.build_number}"]
 
-def test_scrolling_to_the_previous_cluster_goes_to_the_one_before(gui, monkeypatch):
-    in_cluster(monkeypatch, gui, 1)
-    info_panel.scroll_to_prev_cluster()
-    assert gui.scrolled == [f"cluster_0_title_build{info_panel.build_number}"]
+    def test_the_next_cluster_from_the_last_one_stays_put(self, gui, monkeypatch):
+        # No wraparound: the panel is a list a reader is walking down, and arriving back at the top would
+        # read as having lost your place rather than as having reached the end.
+        in_cluster(monkeypatch, gui, 2)
+        info_panel.scroll_to_next_cluster()
+        assert gui.scrolled == []
 
+    def test_the_previous_cluster_from_the_first_one_stays_put(self, gui, monkeypatch):
+        in_cluster(monkeypatch, gui, 0)
+        info_panel.scroll_to_prev_cluster()
+        assert gui.scrolled == []
 
-def test_the_next_cluster_from_the_last_one_stays_put(gui, monkeypatch):
-    # No wraparound: the panel is a list a reader is walking down, and arriving back at the top would
-    # read as having lost your place rather than as having reached the end.
-    in_cluster(monkeypatch, gui, 2)
-    info_panel.scroll_to_next_cluster()
-    assert gui.scrolled == []
+    def test_scrolling_to_the_top_of_the_current_cluster_stays_in_that_cluster(self, gui, monkeypatch):
+        # Negative control for the two above: they assert that nothing happened, which is also what a broken
+        # `_scroll_to_cluster_by_id` would produce. This one goes somewhere.
+        in_cluster(monkeypatch, gui, 1)
+        info_panel.scroll_to_top_of_current_cluster()
+        assert gui.scrolled == [f"cluster_1_title_build{info_panel.build_number}"]
 
+    def test_navigating_clusters_with_an_empty_panel_does_nothing(self, gui, monkeypatch):
+        be_current(monkeypatch, None)
+        info_panel.scroll_to_next_cluster()
+        info_panel.scroll_to_prev_cluster()
+        assert gui.scrolled == []
 
-def test_the_previous_cluster_from_the_first_one_stays_put(gui, monkeypatch):
-    in_cluster(monkeypatch, gui, 0)
-    info_panel.scroll_to_prev_cluster()
-    assert gui.scrolled == []
-
-
-def test_scrolling_to_the_top_of_the_current_cluster_stays_in_that_cluster(gui, monkeypatch):
-    # Negative control for the two above: they assert that nothing happened, which is also what a broken
-    # `_scroll_to_cluster_by_id` would produce. This one goes somewhere.
-    in_cluster(monkeypatch, gui, 1)
-    info_panel.scroll_to_top_of_current_cluster()
-    assert gui.scrolled == [f"cluster_1_title_build{info_panel.build_number}"]
-
-
-def test_navigating_clusters_with_an_empty_panel_does_nothing(gui, monkeypatch):
-    be_current(monkeypatch, None)
-    info_panel.scroll_to_next_cluster()
-    info_panel.scroll_to_prev_cluster()
-    assert gui.scrolled == []
-
-
-def test_a_cluster_not_currently_shown_offers_nowhere_to_navigate(gui, monkeypatch):
-    # The panel shows the clusters of the current selection; the current item's cluster is normally one
-    # of them, but a rebuild in flight can leave the old content showing an item whose cluster is not.
-    entry = make_entry("Whatever", cluster_id=42, data_idx=0)
-    monkeypatch.setattr(app_state, "dataset", env(sorted_entries=[entry]), raising=False)
-    monkeypatch.setattr(info_panel, "widget_to_data_idx", {11: 0})
-    be_current(monkeypatch, 11)
-    info_panel.scroll_to_next_cluster()
-    assert gui.scrolled == []
+    def test_a_cluster_not_currently_shown_offers_nowhere_to_navigate(self, gui, monkeypatch):
+        # The panel shows the clusters of the current selection; the current item's cluster is normally one
+        # of them, but a rebuild in flight can leave the old content showing an item whose cluster is not.
+        entry = make_entry("Whatever", cluster_id=42, data_idx=0)
+        monkeypatch.setattr(app_state, "dataset", env(sorted_entries=[entry]), raising=False)
+        monkeypatch.setattr(info_panel, "widget_to_data_idx", {11: 0})
+        be_current(monkeypatch, 11)
+        info_panel.scroll_to_next_cluster()
+        assert gui.scrolled == []
 
 
 # --------------------------------------------------------------------------------
 # Selecting a whole cluster
 
-def test_selecting_a_cluster_selects_every_entry_in_it(gui):
-    info_panel.select_cluster_by_id(0, "replace")
-    data_idxs, mode, _ = gui.selections[0]
-    assert sorted(data_idxs) == [0, 1], "both entries of cluster 0, and neither of cluster 1"
-    assert mode == "replace"
+class TestSelectingAWholeCluster:
+    def test_selecting_a_cluster_selects_every_entry_in_it(self, gui):
+        info_panel.select_cluster_by_id(0, "replace")
+        data_idxs, mode, _ = gui.selections[0]
+        assert sorted(data_idxs) == [0, 1], "both entries of cluster 0, and neither of cluster 1"
+        assert mode == "replace"
 
+    def test_the_combine_mode_is_passed_through_rather_than_decided_here(self, gui):
+        # Negative control for the mode in the test above: it is the caller's, so a cluster can be added to
+        # or subtracted from a selection being built up.
+        info_panel.select_cluster_by_id(1, "add")
+        _, mode, _ = gui.selections[0]
+        assert mode == "add"
 
-def test_the_combine_mode_is_passed_through_rather_than_decided_here(gui):
-    # Negative control for the mode in the test above: it is the caller's, so a cluster can be added to
-    # or subtracted from a selection being built up.
-    info_panel.select_cluster_by_id(1, "add")
-    _, mode, _ = gui.selections[0]
-    assert mode == "add"
+    def test_selecting_the_current_cluster_reads_the_modifiers_at_the_gesture(self, gui, monkeypatch):
+        # The hotkey handler is where the keyboard is read, because that is where the gesture is. The
+        # operation below it takes the answer, so it cannot read a modifier the user has since let go of.
+        be_current(monkeypatch, 12)
+        gui.dpg.keys_down = {gui.dpg.mvKey_LShift}
+        info_panel.select_current_cluster()
+        _, mode, _ = gui.selections[0]
+        assert mode == "add"
 
+    def test_selecting_the_current_cluster_selects_the_current_item_s_cluster(self, gui, monkeypatch):
+        be_current(monkeypatch, 12)  # the entry in cluster 1
+        info_panel.select_current_cluster()
+        data_idxs, _, _ = gui.selections[0]
+        assert data_idxs == [2]
 
-def test_selecting_the_current_cluster_reads_the_modifiers_at_the_gesture(gui, monkeypatch):
-    # The hotkey handler is where the keyboard is read, because that is where the gesture is. The
-    # operation below it takes the answer, so it cannot read a modifier the user has since let go of.
-    be_current(monkeypatch, 12)
-    gui.dpg.keys_down = {gui.dpg.mvKey_LShift}
-    info_panel.select_current_cluster()
-    _, mode, _ = gui.selections[0]
-    assert mode == "add"
-
-
-def test_selecting_the_current_cluster_selects_the_current_item_s_cluster(gui, monkeypatch):
-    be_current(monkeypatch, 12)  # the entry in cluster 1
-    info_panel.select_current_cluster()
-    data_idxs, _, _ = gui.selections[0]
-    assert data_idxs == [2]
-
-
-def test_selecting_the_current_cluster_with_an_empty_panel_does_nothing(gui, monkeypatch):
-    be_current(monkeypatch, None)
-    info_panel.select_current_cluster()
-    assert gui.selections == []
+    def test_selecting_the_current_cluster_with_an_empty_panel_does_nothing(self, gui, monkeypatch):
+        be_current(monkeypatch, None)
+        info_panel.select_current_cluster()
+        assert gui.selections == []
 
 
 # --------------------------------------------------------------------------------
 # Lifecycle
 
-def test_clearing_tasks_before_anything_has_been_rendered_is_harmless(monkeypatch):
-    monkeypatch.setattr(info_panel, "_task_manager", None)
-    info_panel.clear_tasks()
+class TestLifecycle:
+    def test_clearing_tasks_before_anything_has_been_rendered_is_harmless(self, monkeypatch):
+        monkeypatch.setattr(info_panel, "_task_manager", None)
+        info_panel.clear_tasks()
 
+    def test_clearing_tasks_reaches_the_task_manager_once_there_is_one(self, monkeypatch):
+        # Negative control for the test above: the guard skips a missing manager rather than skipping always.
+        cleared = []
 
-def test_clearing_tasks_reaches_the_task_manager_once_there_is_one(monkeypatch):
-    # Negative control for the test above: the guard skips a missing manager rather than skipping always.
-    cleared = []
+        class FakeTaskManager:  # not an `env`: `clear` is one of its reserved names
+            def clear(self, wait):
+                cleared.append(wait)
 
-    class FakeTaskManager:  # not an `env`: `clear` is one of its reserved names
-        def clear(self, wait):
-            cleared.append(wait)
-
-    monkeypatch.setattr(info_panel, "_task_manager", FakeTaskManager())
-    info_panel.clear_tasks(wait=True)
-    assert cleared == [True]
+        monkeypatch.setattr(info_panel, "_task_manager", FakeTaskManager())
+        info_panel.clear_tasks(wait=True)
+        assert cleared == [True]

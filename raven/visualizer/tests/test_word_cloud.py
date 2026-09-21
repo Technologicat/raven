@@ -41,6 +41,7 @@ class RecordingDPG:
 
     `visible` is the one piece of GUI state the module reads back, so it is the one a test sets up.
     """
+
     def __init__(self, real_dpg):
         self._real_dpg = real_dpg
         self.visible = {}  # tag -> bool
@@ -172,186 +173,163 @@ def submissions(monkeypatch):
     return submitted
 
 
-def test_a_hidden_window_is_not_rendered_into_when_the_selection_changes(gui, submissions):
-    # This is the common case by a wide margin: the word cloud is off, and every selection change would
-    # otherwise pay for a render nobody is looking at.
-    gui.dpg.visible[WINDOW] = False
-    word_cloud.update([0, 1], only_if_visible=True)
-    assert submissions == []
+class TestWhenNotToRenderTheSubmissionGuard:
+    def test_a_hidden_window_is_not_rendered_into_when_the_selection_changes(self, gui, submissions):
+        # This is the common case by a wide margin: the word cloud is off, and every selection change would
+        # otherwise pay for a render nobody is looking at.
+        gui.dpg.visible[WINDOW] = False
+        word_cloud.update([0, 1], only_if_visible=True)
+        assert submissions == []
 
+    def test_a_visible_window_is_rendered_into_when_the_selection_changes(self, gui, submissions):
+        # Negative control for the test above: with the window up, the same call does submit -- so the guard
+        # is reading the window's visibility rather than declining always.
+        gui.dpg.visible[WINDOW] = True
+        word_cloud.update([0, 1], only_if_visible=True)
+        assert len(submissions) == 1
 
-def test_a_visible_window_is_rendered_into_when_the_selection_changes(gui, submissions):
-    # Negative control for the test above: with the window up, the same call does submit -- so the guard
-    # is reading the window's visibility rather than declining always.
-    gui.dpg.visible[WINDOW] = True
-    word_cloud.update([0, 1], only_if_visible=True)
-    assert len(submissions) == 1
+    def test_an_explicit_request_renders_even_into_a_hidden_window(self, gui, submissions):
+        # Opening the window is exactly the case where it is not visible yet and a render is wanted.
+        gui.dpg.visible[WINDOW] = False
+        word_cloud.update([0, 1])
+        assert len(submissions) == 1
 
-
-def test_an_explicit_request_renders_even_into_a_hidden_window(gui, submissions):
-    # Opening the window is exactly the case where it is not visible yet and a render is wanted.
-    gui.dpg.visible[WINDOW] = False
-    word_cloud.update([0, 1])
-    assert len(submissions) == 1
-
-
-def test_the_submitted_task_carries_the_selection_and_the_wait_flag(gui, submissions):
-    gui.dpg.visible[WINDOW] = False
-    word_cloud.update([0, 1], wait=True)
-    _, task_env = submissions[0]
-    assert list(task_env.data_idxs) == [0, 1]
-    assert task_env.wait is True
+    def test_the_submitted_task_carries_the_selection_and_the_wait_flag(self, gui, submissions):
+        gui.dpg.visible[WINDOW] = False
+        word_cloud.update([0, 1], wait=True)
+        _, task_env = submissions[0]
+        assert list(task_env.data_idxs) == [0, 1]
+        assert task_env.wait is True
 
 
 # --------------------------------------------------------------------------------
 # When not to render: the worker's cache
 
-def test_the_same_selection_twice_is_rendered_once(gui):
-    render([0, 1])
-    assert len(FakeWordCloud.instances) == 1
-    render([0, 1])
-    assert len(FakeWordCloud.instances) == 1, "an unchanged selection should be shown, not recomputed"
-    assert gui.dpg.shown.count(WINDOW) == 2, "...and shown both times, since that is what a toggle asks for"
+class TestWhenNotToRenderTheWorkerSCache:
+    def test_the_same_selection_twice_is_rendered_once(self, gui):
+        render([0, 1])
+        assert len(FakeWordCloud.instances) == 1
+        render([0, 1])
+        assert len(FakeWordCloud.instances) == 1, "an unchanged selection should be shown, not recomputed"
+        assert gui.dpg.shown.count(WINDOW) == 2, "...and shown both times, since that is what a toggle asks for"
 
+    def test_a_changed_selection_is_rendered_again(self, gui):
+        # Negative control for the test above: it would pass against a worker that renders only once ever.
+        render([0, 1])
+        render([0, 2])
+        assert len(FakeWordCloud.instances) == 2
 
-def test_a_changed_selection_is_rendered_again(gui):
-    # Negative control for the test above: it would pass against a worker that renders only once ever.
-    render([0, 1])
-    render([0, 2])
-    assert len(FakeWordCloud.instances) == 2
+    def test_reordering_the_same_selection_is_not_a_change(self, gui):
+        # The selection arrives as an index array whose order is not meaningful -- the combine modes in
+        # `selection` go through Python sets -- so the cache compares sets.
+        render([0, 1])
+        render([1, 0])
+        assert len(FakeWordCloud.instances) == 1
 
-
-def test_reordering_the_same_selection_is_not_a_change(gui):
-    # The selection arrives as an index array whose order is not meaningful -- the combine modes in
-    # `selection` go through Python sets -- so the cache compares sets.
-    render([0, 1])
-    render([1, 0])
-    assert len(FakeWordCloud.instances) == 1
-
-
-def test_a_new_dataset_with_the_same_selection_is_rendered_again(gui, monkeypatch):
-    # Indices mean different items after a file is opened, so the identity of the dataset is half of the
-    # cache key. Same indices, different data, and the cloud on screen would otherwise be the old one.
-    render([0, 1])
-    monkeypatch.setattr(app_state, "dataset",
-                        env(sorted_entries=[make_entry(entirely=1), make_entry(different=1)]),
-                        raising=False)
-    render([0, 1])
-    assert len(FakeWordCloud.instances) == 2
+    def test_a_new_dataset_with_the_same_selection_is_rendered_again(self, gui, monkeypatch):
+        # Indices mean different items after a file is opened, so the identity of the dataset is half of the
+        # cache key. Same indices, different data, and the cloud on screen would otherwise be the old one.
+        render([0, 1])
+        monkeypatch.setattr(app_state, "dataset",
+                            env(sorted_entries=[make_entry(entirely=1), make_entry(different=1)]),
+                            raising=False)
+        render([0, 1])
+        assert len(FakeWordCloud.instances) == 2
 
 
 # --------------------------------------------------------------------------------
 # What goes into the cloud
 
-def test_keyword_counts_are_summed_across_the_selected_entries(gui):
-    render([0, 1])
-    assert FakeWordCloud.instances[0].frequencies == {"laser": 5, "ablation": 1, "welding": 5}
+class TestWhatGoesIntoTheCloud:
+    def test_keyword_counts_are_summed_across_the_selected_entries(self, gui):
+        render([0, 1])
+        assert FakeWordCloud.instances[0].frequencies == {"laser": 5, "ablation": 1, "welding": 5}
 
+    def test_unselected_entries_contribute_nothing(self, gui):
+        # Negative control for the test above, which selects two of three: the third entry's keyword must be
+        # absent, or the sum says nothing about which entries were read.
+        render([0, 1])
+        assert "photocatalysis" not in FakeWordCloud.instances[0].frequencies
 
-def test_unselected_entries_contribute_nothing(gui):
-    # Negative control for the test above, which selects two of three: the third entry's keyword must be
-    # absent, or the sum says nothing about which entries were read.
-    render([0, 1])
-    assert "photocatalysis" not in FakeWordCloud.instances[0].frequencies
+    def test_an_empty_selection_clears_the_cloud_rather_than_rendering_one(self, gui):
+        render([])
+        assert FakeWordCloud.instances == [], "there is nothing to render, and an empty cloud raises"
+        assert texture_is_blank(gui)
+        assert WINDOW in gui.dpg.shown
 
+    def test_with_no_dataset_loaded_the_cloud_is_cleared(self, gui, monkeypatch):
+        monkeypatch.setattr(app_state, "dataset", None, raising=False)
+        render([0, 1])
+        assert FakeWordCloud.instances == []
+        assert texture_is_blank(gui)
 
-def test_an_empty_selection_clears_the_cloud_rather_than_rendering_one(gui):
-    render([])
-    assert FakeWordCloud.instances == [], "there is nothing to render, and an empty cloud raises"
-    assert texture_is_blank(gui)
-    assert WINDOW in gui.dpg.shown
+    def test_a_rendered_cloud_reaches_the_texture(self, gui):
+        # Negative control for the two above: a worker that cleared the texture unconditionally would satisfy
+        # both of them.
+        render([0, 1])
+        assert not texture_is_blank(gui)
 
-
-def test_with_no_dataset_loaded_the_cloud_is_cleared(gui, monkeypatch):
-    monkeypatch.setattr(app_state, "dataset", None, raising=False)
-    render([0, 1])
-    assert FakeWordCloud.instances == []
-    assert texture_is_blank(gui)
-
-
-def test_a_rendered_cloud_reaches_the_texture(gui):
-    # Negative control for the two above: a worker that cleared the texture unconditionally would satisfy
-    # both of them.
-    render([0, 1])
-    assert not texture_is_blank(gui)
-
-
-def test_the_rendered_cloud_is_kept_for_saving(gui):
-    # `save_to_file` writes whatever was last rendered, so the worker has to leave it somewhere.
-    render([0, 1])
-    assert unbox(word_cloud._data_box) is FakeWordCloud.instances[0]
+    def test_the_rendered_cloud_is_kept_for_saving(self, gui):
+        # `save_to_file` writes whatever was last rendered, so the worker has to leave it somewhere.
+        render([0, 1])
+        assert unbox(word_cloud._data_box) is FakeWordCloud.instances[0]
 
 
 # --------------------------------------------------------------------------------
 # When the render does not finish
 
-def test_a_task_cancelled_before_starting_touches_nothing(gui):
-    render([0, 1], cancelled=True)
-    assert FakeWordCloud.instances == []
-    assert TEXTURE not in gui.dpg.values
-    assert WINDOW not in gui.dpg.shown
+class TestWhenTheRenderDoesNotFinish:
+    def test_a_task_cancelled_before_starting_touches_nothing(self, gui):
+        render([0, 1], cancelled=True)
+        assert FakeWordCloud.instances == []
+        assert TEXTURE not in gui.dpg.values
+        assert WINDOW not in gui.dpg.shown
 
-
-def test_a_task_cancelled_partway_leaves_the_cache_cold(gui):
-    # The cache says "the texture already shows this selection", so a run that did not get as far as
-    # updating the texture must not claim it did -- otherwise the next request for the same selection is
-    # answered by showing a window with the *previous* cloud in it.
-    render([0, 1], cancel_after=1)
-    assert FakeWordCloud.instances == [], "cancelled while collecting keywords, before any rendering"
-    render([0, 1])
-    assert len(FakeWordCloud.instances) == 1, "the retry must actually render"
-
-
-def test_the_toolbar_is_restored_even_when_the_render_fails(gui, monkeypatch):
-    # The button and its tooltip say "working" for the duration, and a raise on the way through would
-    # otherwise leave them saying it forever.
-    class ExplodingWordCloud(FakeWordCloud):
-        def generate_from_frequencies(self, frequencies):
-            raise RuntimeError("word cloud generation exploded")
-
-    monkeypatch.setattr(word_cloud, "WordCloud", ExplodingWordCloud)
-    with pytest.raises(RuntimeError):
+    def test_a_task_cancelled_partway_leaves_the_cache_cold(self, gui):
+        # The cache says "the texture already shows this selection", so a run that did not get as far as
+        # updating the texture must not claim it did -- otherwise the next request for the same selection is
+        # answered by showing a window with the *previous* cloud in it.
+        render([0, 1], cancel_after=1)
+        assert FakeWordCloud.instances == [], "cancelled while collecting keywords, before any rendering"
         render([0, 1])
-    assert gui.dpg.labels[WINDOW] == "Word cloud"
-    assert app_state.word_cloud_tooltip.text == "Toggle word cloud window [F10]"
+        assert len(FakeWordCloud.instances) == 1, "the retry must actually render"
+
+    def test_the_toolbar_is_restored_even_when_the_render_fails(self, gui, monkeypatch):
+        # The button and its tooltip say "working" for the duration, and a raise on the way through would
+        # otherwise leave them saying it forever.
+        class ExplodingWordCloud(FakeWordCloud):
+            def generate_from_frequencies(self, frequencies):
+                raise RuntimeError("word cloud generation exploded")
+
+        monkeypatch.setattr(word_cloud, "WordCloud", ExplodingWordCloud)
+        with pytest.raises(RuntimeError):
+            render([0, 1])
+        assert gui.dpg.labels[WINDOW] == "Word cloud"
+        assert app_state.word_cloud_tooltip.text == "Toggle word cloud window [F10]"
 
 
 # --------------------------------------------------------------------------------
 # The window toggle
 
-def test_toggling_a_visible_window_hides_it_without_rendering(gui, submissions):
-    gui.dpg.visible[WINDOW] = True
-    word_cloud.toggle_window()
-    assert gui.dpg.hidden == [WINDOW]
-    assert submissions == [], "hiding is not a reason to compute anything"
+class TestTheWindowToggle:
+    def test_toggling_a_visible_window_hides_it_without_rendering(self, gui, submissions):
+        gui.dpg.visible[WINDOW] = True
+        word_cloud.toggle_window()
+        assert gui.dpg.hidden == [WINDOW]
+        assert submissions == [], "hiding is not a reason to compute anything"
 
-
-def test_toggling_a_hidden_window_renders_the_current_selection(gui, submissions, monkeypatch):
-    # The window is shown by the worker when it finishes, so the toggle's job is to ask for the render.
-    monkeypatch.setattr(app_state, "selection_data_idxs_box", box(np.array([0, 2])), raising=False)
-    gui.dpg.visible[WINDOW] = False
-    word_cloud.toggle_window()
-    assert len(submissions) == 1
-    _, task_env = submissions[0]
-    assert list(task_env.data_idxs) == [0, 2]
+    def test_toggling_a_hidden_window_renders_the_current_selection(self, gui, submissions, monkeypatch):
+        # The window is shown by the worker when it finishes, so the toggle's job is to ask for the render.
+        monkeypatch.setattr(app_state, "selection_data_idxs_box", box(np.array([0, 2])), raising=False)
+        gui.dpg.visible[WINDOW] = False
+        word_cloud.toggle_window()
+        assert len(submissions) == 1
+        _, task_env = submissions[0]
+        assert list(task_env.data_idxs) == [0, 2]
 
 
 # --------------------------------------------------------------------------------
 # Saving
-
-def test_showing_the_save_dialog_puts_the_app_into_modal_mode(gui, monkeypatch):
-    # Entering modal mode is what takes the plotter's annotation tooltip off the screen and lifts the
-    # info panel's keyboard mark, so the two go together: a dialog shown without it leaves a tooltip
-    # floating over the dialog.
-    shown = []
-    monkeypatch.setattr(app_state, "filedialog_save",
-                        env(show_file_dialog=lambda: shown.append("dialog")), raising=False)
-    entered = []
-    monkeypatch.setattr(app_state, "enter_modal_mode", lambda: entered.append(True), raising=False)
-    word_cloud.show_save_dialog()
-    assert shown == ["dialog"]
-    assert entered == [True]
-
 
 @pytest.fixture
 def closing_the_dialog(monkeypatch):
@@ -363,69 +341,78 @@ def closing_the_dialog(monkeypatch):
     return env(exited=exited, saved=saved)
 
 
-def test_choosing_a_file_saves_to_it(closing_the_dialog):
-    word_cloud.save_callback(["/tmp/cloud.png"])
-    assert closing_the_dialog.saved == ["/tmp/cloud.png"]
-    assert closing_the_dialog.exited == [True]
+class TestSaving:
+    def test_showing_the_save_dialog_puts_the_app_into_modal_mode(self, gui, monkeypatch):
+        # Entering modal mode is what takes the plotter's annotation tooltip off the screen and lifts the
+        # info panel's keyboard mark, so the two go together: a dialog shown without it leaves a tooltip
+        # floating over the dialog.
+        shown = []
+        monkeypatch.setattr(app_state, "filedialog_save",
+                            env(show_file_dialog=lambda: shown.append("dialog")), raising=False)
+        entered = []
+        monkeypatch.setattr(app_state, "enter_modal_mode", lambda: entered.append(True), raising=False)
+        word_cloud.show_save_dialog()
+        assert shown == ["dialog"]
+        assert entered == [True]
 
+    def test_choosing_a_file_saves_to_it(self, closing_the_dialog):
+        word_cloud.save_callback(["/tmp/cloud.png"])
+        assert closing_the_dialog.saved == ["/tmp/cloud.png"]
+        assert closing_the_dialog.exited == [True]
 
-def test_cancelling_the_dialog_saves_nothing_but_still_leaves_modal_mode(closing_the_dialog):
-    # Negative control for the test above, and the case that matters: a cancel that forgot to leave modal
-    # mode would lock the plot's input handlers out for the rest of the session.
-    word_cloud.save_callback([])
-    assert closing_the_dialog.saved == []
-    assert closing_the_dialog.exited == [True]
+    def test_cancelling_the_dialog_saves_nothing_but_still_leaves_modal_mode(self, closing_the_dialog):
+        # Negative control for the test above, and the case that matters: a cancel that forgot to leave modal
+        # mode would lock the plot's input handlers out for the rest of the session.
+        word_cloud.save_callback([])
+        assert closing_the_dialog.saved == []
+        assert closing_the_dialog.exited == [True]
 
+    def test_more_than_one_file_is_refused(self, closing_the_dialog):
+        # The dialog is built with `multi_selection=False`, so this cannot happen -- which is the reason it
+        # raises rather than picking one: silently saving to whichever came first would hide the day the
+        # dialog is rewired.
+        with pytest.raises(ValueError):
+            word_cloud.save_callback(["/tmp/a.png", "/tmp/b.png"])
 
-def test_more_than_one_file_is_refused(closing_the_dialog):
-    # The dialog is built with `multi_selection=False`, so this cannot happen -- which is the reason it
-    # raises rather than picking one: silently saving to whichever came first would hide the day the
-    # dialog is rewired.
-    with pytest.raises(ValueError):
-        word_cloud.save_callback(["/tmp/a.png", "/tmp/b.png"])
-
-
-def test_saving_writes_the_cloud_that_was_last_rendered(gui, monkeypatch):
-    render([0, 1])
-    written = []
-    monkeypatch.setattr(app_state, "bg", env(submit=lambda task: written.append(task())), raising=False)
-    word_cloud.save_to_file("/tmp/cloud.png")
-    assert FakeWordCloud.instances[0].saved_to == "/tmp/cloud.png"
+    def test_saving_writes_the_cloud_that_was_last_rendered(self, gui, monkeypatch):
+        render([0, 1])
+        written = []
+        monkeypatch.setattr(app_state, "bg", env(submit=lambda task: written.append(task())), raising=False)
+        word_cloud.save_to_file("/tmp/cloud.png")
+        assert FakeWordCloud.instances[0].saved_to == "/tmp/cloud.png"
 
 
 # --------------------------------------------------------------------------------
 # Odds and ends with a stated contract
 
-def test_the_save_dialog_is_not_visible_before_it_exists(monkeypatch):
-    # The hotkey that asks this fires from the first frame, before `initialize_filedialogs` has run.
-    monkeypatch.setattr(app_state, "filedialog_save", None, raising=False)
-    assert word_cloud.is_save_dialog_visible() is False
+class TestOddsAndEndsWithAStatedContract:
+    def test_the_save_dialog_is_not_visible_before_it_exists(self, monkeypatch):
+        # The hotkey that asks this fires from the first frame, before `initialize_filedialogs` has run.
+        monkeypatch.setattr(app_state, "filedialog_save", None, raising=False)
+        assert word_cloud.is_save_dialog_visible() is False
 
+    def test_the_save_dialog_reports_its_own_visibility_once_it_exists(self, monkeypatch):
+        # Negative control for the test above: the guard is about existence, not a hardcoded False.
+        monkeypatch.setattr(app_state, "filedialog_save", env(is_visible=lambda: True), raising=False)
+        assert word_cloud.is_save_dialog_visible() is True
 
-def test_the_save_dialog_reports_its_own_visibility_once_it_exists(monkeypatch):
-    # Negative control for the test above: the guard is about existence, not a hardcoded False.
-    monkeypatch.setattr(app_state, "filedialog_save", env(is_visible=lambda: True), raising=False)
-    assert word_cloud.is_save_dialog_visible() is True
+    def test_clearing_tasks_before_anything_has_been_rendered_is_harmless(self, monkeypatch):
+        # Shutdown runs this whether or not the word cloud was ever opened, and the task manager is created
+        # lazily on the first render.
+        monkeypatch.setattr(word_cloud, "_task_manager", None)
+        word_cloud.clear_tasks()
 
+    def test_clearing_tasks_reaches_the_task_manager_once_there_is_one(self, monkeypatch):
+        # Negative control for the test above: the guard skips a missing manager rather than skipping always.
+        cleared = []
 
-def test_clearing_tasks_before_anything_has_been_rendered_is_harmless(monkeypatch):
-    # Shutdown runs this whether or not the word cloud was ever opened, and the task manager is created
-    # lazily on the first render.
-    monkeypatch.setattr(word_cloud, "_task_manager", None)
-    word_cloud.clear_tasks()
+        class FakeTaskManager:  # not an `env`: `clear` is one of its reserved names
+            def clear(self, wait):
+                cleared.append(wait)
 
-
-def test_clearing_tasks_reaches_the_task_manager_once_there_is_one(monkeypatch):
-    # Negative control for the test above: the guard skips a missing manager rather than skipping always.
-    cleared = []
-
-    class FakeTaskManager:  # not an `env`: `clear` is one of its reserved names
-        def clear(self, wait):
-            cleared.append(wait)
-
-    monkeypatch.setattr(word_cloud, "_task_manager", FakeTaskManager())
-    word_cloud.clear_tasks(wait=True)
-    assert cleared == [True]
+        monkeypatch.setattr(word_cloud, "_task_manager", FakeTaskManager())
+        word_cloud.clear_tasks(wait=True)
+        assert cleared == [True]
 
 
 # ---------------------------------------------------------------------------

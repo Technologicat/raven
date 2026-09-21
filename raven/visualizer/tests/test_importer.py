@@ -46,6 +46,7 @@ TWO_RECORDS = """
 
 class FakeRecord:
     """Stands in for `agent.turn`'s `TurnRecord`, of which only these two fields are read here."""
+
     def __init__(self, reply):
         self.reply = reply
         self.reasoning = []
@@ -53,6 +54,7 @@ class FakeRecord:
 
 class ExplodingDehyphenator:
     """Stands in for `mayberemote.Dehyphenator`, failing the way a real one has been seen to."""
+
     def __init__(self, *args, **kwargs):
         pass
 
@@ -239,142 +241,140 @@ def test_parse_input_files_skips_a_record_that_fails_anywhere_else(two_record_bi
 # Cluster keyword canonicalization
 
 
-def test_canonicalization_mapping_keeps_only_verifiable_replacements():
-    # The mapping is parsed rather than trusted, which is the whole reason the prompt asks for a mapping
-    # instead of for a rewritten keyword list. Anything whose replacement was not itself extracted is
-    # dropped, so a model that invents or rephrases a term cannot get it into the dataset.
-    known = {"LLM", "Large Language Models", "Chain-of-Thought", "Reasoning"}
-    reply = ("LLM -> Large Language Models\n"
-             "Chain-of-Thought -> Chain of Thought Prompting\n"   # replacement was never extracted
-             "Reasoning -> Reasoning\n"                           # self-mapping, no-op
-             "Nonexistent -> Reasoning\n"                         # original was never extracted
-             "this line has no arrow at all\n")
-    mapping = importer._parse_canonicalization_mapping(reply, known)
-    assert mapping == {"LLM": "Large Language Models"}
+class TestClusterKeywordCanonicalization:
+    def test_canonicalization_mapping_keeps_only_verifiable_replacements(self):
+        # The mapping is parsed rather than trusted, which is the whole reason the prompt asks for a mapping
+        # instead of for a rewritten keyword list. Anything whose replacement was not itself extracted is
+        # dropped, so a model that invents or rephrases a term cannot get it into the dataset.
+        known = {"LLM", "Large Language Models", "Chain-of-Thought", "Reasoning"}
+        reply = ("LLM -> Large Language Models\n"
+                 "Chain-of-Thought -> Chain of Thought Prompting\n"   # replacement was never extracted
+                 "Reasoning -> Reasoning\n"                           # self-mapping, no-op
+                 "Nonexistent -> Reasoning\n"                         # original was never extracted
+                 "this line has no arrow at all\n")
+        mapping = importer._parse_canonicalization_mapping(reply, known)
+        assert mapping == {"LLM": "Large Language Models"}
 
+    def test_canonicalization_mapping_drops_chains(self):
+        # `a -> b` together with `b -> c` needs resolving in an order the model was never asked to give, so
+        # the far end is dropped rather than guessed at.
+        known = {"a", "b", "c"}
+        mapping = importer._parse_canonicalization_mapping("a -> b\nb -> c\n", known)
+        assert mapping == {"b": "c"}
 
-def test_canonicalization_mapping_drops_chains():
-    # `a -> b` together with `b -> c` needs resolving in an order the model was never asked to give, so
-    # the far end is dropped rather than guessed at.
-    known = {"a", "b", "c"}
-    mapping = importer._parse_canonicalization_mapping("a -> b\nb -> c\n", known)
-    assert mapping == {"b": "c"}
+    def test_canonicalize_cluster_keywords_merges_variants_without_reordering(self, monkeypatch):
+        clusters = [["LLM", "Reasoning"],
+                    ["Large Language Models", "Benchmarking"],
+                    ["Reasoning", "LLM"]]  # a cluster where the replacement collides with a keyword it has
 
+        def fake_turn(settings, prompt, **kwargs):
+            return FakeRecord("LLM -> Large Language Models")
 
-def test_canonicalize_cluster_keywords_merges_variants_without_reordering(monkeypatch):
-    clusters = [["LLM", "Reasoning"],
-                ["Large Language Models", "Benchmarking"],
-                ["Reasoning", "LLM"]]  # a cluster where the replacement collides with a keyword it has
+        # `agent` and `llm_settings` are bound at import time only when the config asks for LLM work, so a
+        # test that drives this path has to supply them.
+        monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
+        monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+        monkeypatch.setattr(importer, "llmclient",
+                            type("_FakeLLMClient", (),
+                                 {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                            raising=False)
 
-    def fake_turn(settings, prompt, **kwargs):
-        return FakeRecord("LLM -> Large Language Models")
+        out = importer._canonicalize_cluster_keywords(clusters)
 
-    # `agent` and `llm_settings` are bound at import time only when the config asks for LLM work, so a
-    # test that drives this path has to supply them.
-    monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
-    monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
-    monkeypatch.setattr(importer, "llmclient",
-                        type("_FakeLLMClient", (),
-                             {"make_console_progress_handler": staticmethod(lambda _: None)}),
-                        raising=False)
+        assert out[0] == ["Large Language Models", "Reasoning"]
+        assert out[1] == ["Large Language Models", "Benchmarking"], "an untouched keyword keeps its place"
+        # The replacement collides with a keyword the cluster already had; the duplicate goes and the
+        # original order survives, since that order is the model's ranking and reads as most-important-first.
+        assert out[2] == ["Reasoning", "Large Language Models"]
 
-    out = importer._canonicalize_cluster_keywords(clusters)
+    def test_canonicalize_cluster_keywords_passes_through_when_nothing_to_do(self, monkeypatch):
+        # Negative control for the test above: with one keyword there is nothing to canonicalize, so the LLM
+        # is never consulted. Were it consulted, the fake below would raise and this would fail rather than
+        # quietly agreeing with the treatment case.
+        def explode(*args, **kwargs):
+            raise AssertionError("the model should not be asked when there is nothing to canonicalize")
 
-    assert out[0] == ["Large Language Models", "Reasoning"]
-    assert out[1] == ["Large Language Models", "Benchmarking"], "an untouched keyword keeps its place"
-    # The replacement collides with a keyword the cluster already had; the duplicate goes and the
-    # original order survives, since that order is the model's ranking and reads as most-important-first.
-    assert out[2] == ["Reasoning", "Large Language Models"]
-
-
-def test_canonicalize_cluster_keywords_passes_through_when_nothing_to_do(monkeypatch):
-    # Negative control for the test above: with one keyword there is nothing to canonicalize, so the LLM
-    # is never consulted. Were it consulted, the fake below would raise and this would fail rather than
-    # quietly agreeing with the treatment case.
-    def explode(*args, **kwargs):
-        raise AssertionError("the model should not be asked when there is nothing to canonicalize")
-
-    monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(explode)}), raising=False)
-    clusters = [["Large Language Models"]]
-    assert importer._canonicalize_cluster_keywords(clusters) is clusters
+        monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(explode)}), raising=False)
+        clusters = [["Large Language Models"]]
+        assert importer._canonicalize_cluster_keywords(clusters) is clusters
 
 
 # ---------------------------------------------------------------------------
 # Oversized clusters
 
 
-def test_oversized_cluster_is_sampled_from_its_center_outwards(monkeypatch):
-    # A cluster with hundreds of entries builds a prompt no backend will take, so it is capped. The
-    # sample is spread along the centrality ordering rather than taken from the top of it, because the
-    # top of it describes the cluster's densest part and a big cluster is the one most likely to span
-    # several subtopics.
-    #
-    # The fixture is built so the two behaviours disagree: nine entries share one direction and the
-    # tenth is orthogonal to them, so it sorts last by centrality. Taking the five *most central* would
-    # leave it out; spreading five picks across the ordering includes it. Asserting that it is present
-    # is therefore an assertion about the spreading, not merely about the capping.
-    import numpy as np
-    from unpythonic.env import env
+class TestOversizedClusters:
+    def test_oversized_cluster_is_sampled_from_its_center_outwards(self, monkeypatch):
+        # A cluster with hundreds of entries builds a prompt no backend will take, so it is capped. The
+        # sample is spread along the centrality ordering rather than taken from the top of it, because the
+        # top of it describes the cluster's densest part and a big cluster is the one most likely to span
+        # several subtopics.
+        #
+        # The fixture is built so the two behaviours disagree: nine entries share one direction and the
+        # tenth is orthogonal to them, so it sorts last by centrality. Taking the five *most central* would
+        # leave it out; spreading five picks across the ordering includes it. Asserting that it is present
+        # is therefore an assertion about the spreading, not merely about the capping.
+        import numpy as np
+        from unpythonic.env import env
 
-    vis_data = [env(title=f"central {i}", abstract="", cluster_id=0, cluster_probability=1.0)
-                for i in range(9)]
-    vis_data.append(env(title="the outlier", abstract="", cluster_id=0, cluster_probability=1.0))
-    all_vectors = np.array([[1.0, 0.0]] * 9 + [[0.0, 1.0]])
+        vis_data = [env(title=f"central {i}", abstract="", cluster_id=0, cluster_probability=1.0)
+                    for i in range(9)]
+        vis_data.append(env(title="the outlier", abstract="", cluster_id=0, cluster_probability=1.0))
+        all_vectors = np.array([[1.0, 0.0]] * 9 + [[0.0, 1.0]])
 
-    prompts = []
+        prompts = []
 
-    def fake_turn(settings, prompt, **kwargs):
-        prompts.append(prompt)
-        return FakeRecord("Keyword A, Keyword B")
+        def fake_turn(settings, prompt, **kwargs):
+            prompts.append(prompt)
+            return FakeRecord("Keyword A, Keyword B")
 
-    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
-    monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
-    monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
-    monkeypatch.setattr(importer, "llmclient",
-                        type("_FakeLLMClient", (),
-                             {"make_console_progress_handler": staticmethod(lambda _: None)}),
-                        raising=False)
-    monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
+        monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+        monkeypatch.setattr(importer, "llmclient",
+                            type("_FakeLLMClient", (),
+                                 {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                            raising=False)
+        monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
 
-    importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors, max_prompt_entries=5)
+        importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors, max_prompt_entries=5)
 
-    assert len(prompts) == 1
-    body = prompts[0].split("-----", 1)[1]
-    assert body.count("\n\n\n") + 1 == 5, "the prompt should carry exactly the capped number of entries"
-    assert "the outlier" in body, \
-        "the least central entry should still be sampled; taking the most central ones would drop it"
+        assert len(prompts) == 1
+        body = prompts[0].split("-----", 1)[1]
+        assert body.count("\n\n\n") + 1 == 5, "the prompt should carry exactly the capped number of entries"
+        assert "the outlier" in body, \
+            "the least central entry should still be sampled; taking the most central ones would drop it"
 
+    def test_small_cluster_is_sent_whole(self, monkeypatch):
+        # Negative control for the test above: below the cap nothing is sampled, so every entry is present.
+        # Without this, a bug that sent one entry per cluster would still satisfy the assertions above.
+        import numpy as np
+        from unpythonic.env import env
 
-def test_small_cluster_is_sent_whole(monkeypatch):
-    # Negative control for the test above: below the cap nothing is sampled, so every entry is present.
-    # Without this, a bug that sent one entry per cluster would still satisfy the assertions above.
-    import numpy as np
-    from unpythonic.env import env
+        vis_data = [env(title=f"paper {i}", abstract="", cluster_id=0, cluster_probability=1.0)
+                    for i in range(4)]
+        all_vectors = np.array([[1.0, 0.0]] * 4)
 
-    vis_data = [env(title=f"paper {i}", abstract="", cluster_id=0, cluster_probability=1.0)
-                for i in range(4)]
-    all_vectors = np.array([[1.0, 0.0]] * 4)
+        prompts = []
 
-    prompts = []
+        def fake_turn(settings, prompt, **kwargs):
+            prompts.append(prompt)
+            return FakeRecord("Keyword A")
 
-    def fake_turn(settings, prompt, **kwargs):
-        prompts.append(prompt)
-        return FakeRecord("Keyword A")
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
+        monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+        monkeypatch.setattr(importer, "llmclient",
+                            type("_FakeLLMClient", (),
+                                 {"make_console_progress_handler": staticmethod(lambda _: None)}),
+                            raising=False)
+        monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
 
-    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
-    monkeypatch.setattr(importer, "agent", type("_FakeAgent", (), {"turn": staticmethod(fake_turn)}), raising=False)
-    monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
-    monkeypatch.setattr(importer, "llmclient",
-                        type("_FakeLLMClient", (),
-                             {"make_console_progress_handler": staticmethod(lambda _: None)}),
-                        raising=False)
-    monkeypatch.setattr(importer, "_canonicalize_cluster_keywords", lambda keywords: keywords)
+        importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors, max_prompt_entries=60)
 
-    importer._collect_cluster_keywords(vis_data, 1, {}, all_vectors, max_prompt_entries=60)
-
-    body = prompts[0].split("-----", 1)[1]
-    for i in range(4):
-        assert f"paper {i}" in body
+        body = prompts[0].split("-----", 1)[1]
+        for i in range(4):
+            assert f"paper {i}" in body
 
 
 # ---------------------------------------------------------------------------
@@ -411,69 +411,65 @@ def parse_bib(text):
     return bibtex.parse_string(text)
 
 
-def test_a_record_with_a_stray_brace_is_recovered_into_the_library():
-    # A stray `{` in an abstract -- mathematics arriving through a PDF extractor is the usual source --
-    # aborts the parse of the whole record, title and all. Escaping it recovers the record whole, and the
-    # entry is added as though it had parsed.
-    library = parse_bib(STRAY_BRACE + "\n" + GOOD_RECORD)
-    assert [entry.key for entry in library.entries] == ["fine2024"], \
-        "the stray-brace record parsed on its own, so this fixture cannot tell a recovery from a no-op"
+class TestRecordsBibtexparserRefused:
+    def test_a_record_with_a_stray_brace_is_recovered_into_the_library(self):
+        # A stray `{` in an abstract -- mathematics arriving through a PDF extractor is the usual source --
+        # aborts the parse of the whole record, title and all. Escaping it recovers the record whole, and the
+        # entry is added as though it had parsed.
+        library = parse_bib(STRAY_BRACE + "\n" + GOOD_RECORD)
+        assert [entry.key for entry in library.entries] == ["fine2024"], \
+            "the stray-brace record parsed on its own, so this fixture cannot tell a recovery from a no-op"
 
-    importer._report_unparseable_records("test.bib", library)
-    assert sorted(entry.key for entry in library.entries) == ["fine2024", "stray2024"]
+        importer._report_unparseable_records("test.bib", library)
+        assert sorted(entry.key for entry in library.entries) == ["fine2024", "stray2024"]
 
+    def test_a_recovered_record_keeps_the_fields_that_were_lost_with_it(self):
+        # The point of recovering is the whole record, not just its key: everything downstream needs the
+        # title, and the reason the record failed was a field the user cannot see is missing.
+        library = parse_bib(STRAY_BRACE)
+        importer._report_unparseable_records("test.bib", library)
+        recovered = next(entry for entry in library.entries if entry.key == "stray2024")
+        assert recovered["title"] == "A paper with a stray brace"
+        assert set(recovered.fields_dict) >= {"author", "year", "title", "abstract"}
+        assert "a, b" in recovered["abstract"], "the field the record died on should be there, brace and all"
 
-def test_a_recovered_record_keeps_the_fields_that_were_lost_with_it():
-    # The point of recovering is the whole record, not just its key: everything downstream needs the
-    # title, and the reason the record failed was a field the user cannot see is missing.
-    library = parse_bib(STRAY_BRACE)
-    importer._report_unparseable_records("test.bib", library)
-    recovered = next(entry for entry in library.entries if entry.key == "stray2024")
-    assert recovered["title"] == "A paper with a stray brace"
-    assert set(recovered.fields_dict) >= {"author", "year", "title", "abstract"}
-    assert "a, b" in recovered["abstract"], "the field the record died on should be there, brace and all"
+    def test_a_recovery_is_reported_naming_the_record_and_the_file(self, caplog):
+        # Raven repairs its own reading of the file and never the file, so the user has to be told that a
+        # record in their bibliography needs fixing and where -- `raven-fixbib` is what writes it back.
+        library = parse_bib(STRAY_BRACE)
+        with caplog.at_level("WARNING"):
+            importer._report_unparseable_records("mybib.bib", library)
+        messages = [record.message for record in caplog.records]
+        assert any("stray2024" in message and "mybib.bib" in message for message in messages), messages
+        assert any("raven-fixbib" in message for message in messages), messages
 
+    def test_a_record_that_cannot_be_recovered_is_reported_rather_than_vanishing(self, caplog):
+        # The asymmetry this removes: a record that parses but lacks `author`, `year` or `title` is skipped
+        # further down with a warning naming it, while a record that never became an entry at all would
+        # otherwise disappear silently -- and that is the case the user has no other way to notice.
+        library = parse_bib(BEYOND_REPAIR + "\n" + GOOD_RECORD)
+        with caplog.at_level("WARNING"):
+            importer._report_unparseable_records("mybib.bib", library)
 
-def test_a_recovery_is_reported_naming_the_record_and_the_file(caplog):
-    # Raven repairs its own reading of the file and never the file, so the user has to be told that a
-    # record in their bibliography needs fixing and where -- `raven-fixbib` is what writes it back.
-    library = parse_bib(STRAY_BRACE)
-    with caplog.at_level("WARNING"):
-        importer._report_unparseable_records("mybib.bib", library)
-    messages = [record.message for record in caplog.records]
-    assert any("stray2024" in message and "mybib.bib" in message for message in messages), messages
-    assert any("raven-fixbib" in message for message in messages), messages
+        assert [entry.key for entry in library.entries] == ["fine2024"], "nothing should have been recovered here"
+        messages = [record.message for record in caplog.records]
+        assert any("hopeless2024" in message for message in messages), \
+            f"the unparseable record should be named; got {messages}"
 
+    def test_the_report_counts_the_lost_records(self, caplog):
+        library = parse_bib(BEYOND_REPAIR + "\n" + BEYOND_REPAIR.replace("hopeless2024", "hopeless2025"))
+        with caplog.at_level("WARNING"):
+            importer._report_unparseable_records("mybib.bib", library)
+        assert any("2 records" in record.message for record in caplog.records), \
+            [record.message for record in caplog.records]
 
-def test_a_record_that_cannot_be_recovered_is_reported_rather_than_vanishing(caplog):
-    # The asymmetry this removes: a record that parses but lacks `author`, `year` or `title` is skipped
-    # further down with a warning naming it, while a record that never became an entry at all would
-    # otherwise disappear silently -- and that is the case the user has no other way to notice.
-    library = parse_bib(BEYOND_REPAIR + "\n" + GOOD_RECORD)
-    with caplog.at_level("WARNING"):
-        importer._report_unparseable_records("mybib.bib", library)
-
-    assert [entry.key for entry in library.entries] == ["fine2024"], "nothing should have been recovered here"
-    messages = [record.message for record in caplog.records]
-    assert any("hopeless2024" in message for message in messages), \
-        f"the unparseable record should be named; got {messages}"
-
-
-def test_the_report_counts_the_lost_records(caplog):
-    library = parse_bib(BEYOND_REPAIR + "\n" + BEYOND_REPAIR.replace("hopeless2024", "hopeless2025"))
-    with caplog.at_level("WARNING"):
-        importer._report_unparseable_records("mybib.bib", library)
-    assert any("2 records" in record.message for record in caplog.records), \
-        [record.message for record in caplog.records]
-
-
-def test_a_clean_file_is_reported_on_at_all(caplog):
-    # Negative control for the four above: with nothing to report the pass returns immediately, so a
-    # warning here would mean the check fires on healthy files too.
-    library = parse_bib(GOOD_RECORD)
-    with caplog.at_level("WARNING"):
-        importer._report_unparseable_records("mybib.bib", library)
-    assert not [record for record in caplog.records if record.levelname == "WARNING"]
+    def test_a_clean_file_is_reported_on_at_all(self, caplog):
+        # Negative control for the four above: with nothing to report the pass returns immediately, so a
+        # warning here would mean the check fires on healthy files too.
+        library = parse_bib(GOOD_RECORD)
+        with caplog.at_level("WARNING"):
+            importer._report_unparseable_records("mybib.bib", library)
+        assert not [record for record in caplog.records if record.levelname == "WARNING"]
 
 
 # ---------------------------------------------------------------------------
@@ -488,118 +484,112 @@ def progress(monkeypatch):
     return counter
 
 
-def test_progress_is_none_when_no_task_is_running(monkeypatch):
-    # The branch `importer_gui.update_status` handles by showing 0%: the counter has no meaning between
-    # runs, and reporting a stale fraction would be worse than reporting nothing.
-    monkeypatch.setattr(importer, "has_task", lambda: False)
-    assert importer._Progress().value is None
+class TestProgressReporting:
+    def test_progress_is_none_when_no_task_is_running(self, monkeypatch):
+        # The branch `importer_gui.update_status` handles by showing 0%: the counter has no meaning between
+        # runs, and reporting a stale fraction would be worse than reporting nothing.
+        monkeypatch.setattr(importer, "has_task", lambda: False)
+        assert importer._Progress().value is None
 
+    def test_progress_starts_at_zero_and_each_macrostep_is_an_equal_share(self, progress):
+        assert progress.value == pytest.approx(0.0)
+        progress.tock()
+        assert progress.value == pytest.approx(1 / 8), "eight macrosteps, so each is an eighth"
+        progress.tock()
+        assert progress.value == pytest.approx(2 / 8)
 
-def test_progress_starts_at_zero_and_each_macrostep_is_an_equal_share(progress):
-    assert progress.value == pytest.approx(0.0)
-    progress.tock()
-    assert progress.value == pytest.approx(1 / 8), "eight macrosteps, so each is an eighth"
-    progress.tock()
-    assert progress.value == pytest.approx(2 / 8)
+    def test_microsteps_interpolate_within_the_current_macrostep(self, progress):
+        progress.tock()
+        progress.set_micro_count(4)
+        progress.tick()
+        progress.tick()
+        # Half way through the second macrostep: one whole macrostep, plus half of the next one's share.
+        assert progress.value == pytest.approx((1 + 0.5) / 8)
 
+    def test_a_macrostep_does_not_inherit_the_previous_one_s_microstep_count(self, progress):
+        # Without the reset, a macrostep that never calls `set_micro_count` would divide its single tick by
+        # whatever the previous step happened to use, and the bar would crawl instead of stepping.
+        progress.set_micro_count(100)
+        progress.tock()
+        progress.tick()
+        assert progress.value == pytest.approx((1 + 1) / 8)
 
-def test_microsteps_interpolate_within_the_current_macrostep(progress):
-    progress.tock()
-    progress.set_micro_count(4)
-    progress.tick()
-    progress.tick()
-    # Half way through the second macrostep: one whole macrostep, plus half of the next one's share.
-    assert progress.value == pytest.approx((1 + 0.5) / 8)
-
-
-def test_a_macrostep_does_not_inherit_the_previous_one_s_microstep_count(progress):
-    # Without the reset, a macrostep that never calls `set_micro_count` would divide its single tick by
-    # whatever the previous step happened to use, and the bar would crawl instead of stepping.
-    progress.set_micro_count(100)
-    progress.tock()
-    progress.tick()
-    assert progress.value == pytest.approx((1 + 1) / 8)
-
-
-def test_resetting_takes_the_counter_back_to_the_start(progress):
-    progress.set_micro_count(4)
-    progress.tick()
-    progress.tock()
-    assert progress.value > 0.0, "nothing advanced, so this fixture cannot tell a reset from a fresh counter"
-    progress.reset()
-    assert progress.value == pytest.approx(0.0)
+    def test_resetting_takes_the_counter_back_to_the_start(self, progress):
+        progress.set_micro_count(4)
+        progress.tick()
+        progress.tock()
+        assert progress.value > 0.0, "nothing advanced, so this fixture cannot tell a reset from a fresh counter"
+        progress.reset()
+        assert progress.value == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------
 # Formatting an entry for keyword extraction
 
 
-def test_an_entry_with_an_abstract_is_its_title_then_the_abstract():
-    from unpythonic.env import env
-    entry = env(title="A title", abstract="An abstract.", author="Alpha, Anna", year="2024")
-    assert importer._format_entry_for_keyword_extraction(entry) == "A title.\n\nAn abstract."
+class TestFormattingAnEntryForKeywordExtraction:
+    def test_an_entry_with_an_abstract_is_its_title_then_the_abstract(self):
+        from unpythonic.env import env
+        entry = env(title="A title", abstract="An abstract.", author="Alpha, Anna", year="2024")
+        assert importer._format_entry_for_keyword_extraction(entry) == "A title.\n\nAn abstract."
 
+    def test_an_entry_without_an_abstract_is_its_bare_title(self):
+        # No full stop is added here, unlike the case above, where the stop separates title from abstract.
+        from unpythonic.env import env
+        entry = env(title="A title", abstract="", author="Alpha, Anna", year="2024")
+        assert importer._format_entry_for_keyword_extraction(entry) == "A title"
 
-def test_an_entry_without_an_abstract_is_its_bare_title():
-    # No full stop is added here, unlike the case above, where the stop separates title from abstract.
-    from unpythonic.env import env
-    entry = env(title="A title", abstract="", author="Alpha, Anna", year="2024")
-    assert importer._format_entry_for_keyword_extraction(entry) == "A title"
+    def test_an_entry_whose_title_is_the_placeholder_is_analyzed_from_its_abstract_alone(self):
+        # `MISSING_TITLE` is Raven's word, not the record's, and it is the *same* word on every such record —
+        # so letting it reach the embedder or the keyword extractor would gather those records into a cluster
+        # whose members share nothing but a field their database omitted.
+        from unpythonic.env import env
+        entry = env(title=importer.MISSING_TITLE, abstract="An abstract.", author="Alpha, Anna", year="2024")
+        assert importer._format_entry_for_keyword_extraction(entry) == "An abstract."
 
+        # The negative control: an ordinary title in the same position *is* joined on, so this fixture is
+        # showing that the placeholder is treated specially rather than that the abstract wins in general.
+        ordinary = env(title="A title", abstract="An abstract.", author="Alpha, Anna", year="2024")
+        assert importer._format_entry_for_keyword_extraction(ordinary) == "A title.\n\nAn abstract."
 
-def test_an_entry_whose_title_is_the_placeholder_is_analyzed_from_its_abstract_alone():
-    # `MISSING_TITLE` is Raven's word, not the record's, and it is the *same* word on every such record —
-    # so letting it reach the embedder or the keyword extractor would gather those records into a cluster
-    # whose members share nothing but a field their database omitted.
-    from unpythonic.env import env
-    entry = env(title=importer.MISSING_TITLE, abstract="An abstract.", author="Alpha, Anna", year="2024")
-    assert importer._format_entry_for_keyword_extraction(entry) == "An abstract."
-
-    # The negative control: an ordinary title in the same position *is* joined on, so this fixture is
-    # showing that the placeholder is treated specially rather than that the abstract wins in general.
-    ordinary = env(title="A title", abstract="An abstract.", author="Alpha, Anna", year="2024")
-    assert importer._format_entry_for_keyword_extraction(ordinary) == "A title.\n\nAn abstract."
-
-
-def test_authors_and_year_are_left_out():
-    # They are not relevant to what a paper is about, and an author name repeated across a cluster's
-    # entries would read to a frequency count as a keyword.
-    from unpythonic.env import env
-    entry = env(title="A title", abstract="An abstract.", author="Zzyzx, Quentin", year="1999")
-    formatted = importer._format_entry_for_keyword_extraction(entry)
-    assert "Zzyzx" not in formatted
-    assert "1999" not in formatted
+    def test_authors_and_year_are_left_out(self):
+        # They are not relevant to what a paper is about, and an author name repeated across a cluster's
+        # entries would read to a frequency count as a keyword.
+        from unpythonic.env import env
+        entry = env(title="A title", abstract="An abstract.", author="Zzyzx, Quentin", year="1999")
+        formatted = importer._format_entry_for_keyword_extraction(entry)
+        assert "Zzyzx" not in formatted
+        assert "1999" not in formatted
 
 
 # ---------------------------------------------------------------------------
 # Status updates
 
 
-def test_a_status_update_goes_nowhere_when_nobody_is_listening():
-    # The dynvar's default is a no-op, which is what lets the pipeline call this unconditionally --
-    # `raven-importer` on the command line has no GUI to update.
-    importer._update_status_and_log("Parsing input files...")
-
-
-def test_a_status_update_reaches_the_listener_verbatim():
-    from unpythonic import dyn
-    seen = []
-    with dyn.let(maybe_update_status=seen.append):
+class TestStatusUpdates:
+    def test_a_status_update_goes_nowhere_when_nobody_is_listening(self):
+        # The dynvar's default is a no-op, which is what lets the pipeline call this unconditionally --
+        # `raven-importer` on the command line has no GUI to update.
         importer._update_status_and_log("Parsing input files...")
-    assert seen == ["Parsing input files..."]
 
-
-def test_the_log_indent_does_not_reach_the_listener(caplog):
-    # The indent is for reading the log as a tree of steps; the GUI's status line is one line wide and
-    # would show it as leading blanks.
-    from unpythonic import dyn
-    seen = []
-    with caplog.at_level("INFO"):
+    def test_a_status_update_reaches_the_listener_verbatim(self):
+        from unpythonic import dyn
+        seen = []
         with dyn.let(maybe_update_status=seen.append):
-            importer._update_status_and_log("Clustering...", log_indent=2)
-    assert seen == ["Clustering..."]
-    assert any(record.message == "        Clustering..." for record in caplog.records), \
-        f"the log line should carry four spaces per indent level; got {[r.message for r in caplog.records]}"
+            importer._update_status_and_log("Parsing input files...")
+        assert seen == ["Parsing input files..."]
+
+    def test_the_log_indent_does_not_reach_the_listener(self, caplog):
+        # The indent is for reading the log as a tree of steps; the GUI's status line is one line wide and
+        # would show it as leading blanks.
+        from unpythonic import dyn
+        seen = []
+        with caplog.at_level("INFO"):
+            with dyn.let(maybe_update_status=seen.append):
+                importer._update_status_and_log("Clustering...", log_indent=2)
+        assert seen == ["Clustering..."]
+        assert any(record.message == "        Clustering..." for record in caplog.records), \
+            f"the log line should carry four spaces per indent level; got {[r.message for r in caplog.records]}"
 
 
 # ---------------------------------------------------------------------------
@@ -666,99 +656,90 @@ def run_one_task(fake_import_bibtex, monkeypatch, timeout=10.0):
     return seen[0]
 
 
-def test_no_task_exists_before_the_module_is_initialized(uninitialized):
-    assert importer.has_task() is False
+class TestTheBackgroundTask:
+    def test_no_task_exists_before_the_module_is_initialized(self, uninitialized):
+        assert importer.has_task() is False
 
+    def test_cancelling_before_initialization_is_a_no_op(self, uninitialized):
+        # Teardown paths call this whatever killed the app, including a failure during bootup.
+        importer.cancel_task()
 
-def test_cancelling_before_initialization_is_a_no_op(uninitialized):
-    # Teardown paths call this whatever killed the app, including a failure during bootup.
-    importer.cancel_task()
+    def test_an_import_cannot_start_before_the_module_is_initialized(self, uninitialized):
+        # The GUI's start button is live from the first frame, and `init` happens later in the app's bootup.
+        assert importer.start_task(None, None, "/out/dataset.pickle", "/in/one.bib") is False
 
+    def test_initialization_registers_a_cleanup(self, initialized):
+        # An import holds a worker thread, so a process exiting mid-import would otherwise hang waiting for it.
+        assert len(initialized) == 1
 
-def test_an_import_cannot_start_before_the_module_is_initialized(uninitialized):
-    # The GUI's start button is live from the first frame, and `init` happens later in the app's bootup.
-    assert importer.start_task(None, None, "/out/dataset.pickle", "/in/one.bib") is False
+    def test_initialization_is_idempotent(self, initialized):
+        # `init` is called from the app's bootup and from `raven-importer`; a second call must not swap the
+        # executor out from under a task that is already using it.
+        first = importer.task_manager
+        importer.init(concurrent.futures.ThreadPoolExecutor(max_workers=1))
+        assert importer.task_manager is first
 
+    def test_a_task_runs_the_pipeline_with_the_filenames_it_was_given(self, initialized, monkeypatch):
+        called = []
+        task_env = run_one_task(pipeline_stub(lambda out, ins: called.append((out, ins))), monkeypatch)
+        assert called == [("/out/dataset.pickle", ("/in/one.bib",))]
+        assert task_env.result_code is importer.result_successful
 
-def test_initialization_registers_a_cleanup(initialized):
-    # An import holds a worker thread, so a process exiting mid-import would otherwise hang waiting for it.
-    assert len(initialized) == 1
+    def test_only_one_import_runs_at_a_time(self, initialized, monkeypatch):
+        # An import takes a lot of GPU and CPU, so a second one alongside the first would make both slower
+        # and could exhaust VRAM.
+        release = threading.Event()
+        monkeypatch.setattr(importer, "import_bibtex", pipeline_stub(lambda out, ins: release.wait(10.0)))
+        assert importer.start_task(None, None, "/out/dataset.pickle", "/in/one.bib") is True
+        try:
+            assert importer.has_task(), "nothing was running, so this fixture cannot tell a refusal from a start"
+            assert importer.start_task(None, None, "/out/other.pickle", "/in/two.bib") is False
+        finally:
+            release.set()
 
+    def test_the_started_callback_fires_before_the_pipeline_does(self, initialized, monkeypatch):
+        # The GUI re-enables its stop button from this callback, so it must arrive while there is still
+        # something to stop.
+        order = []
+        monkeypatch.setattr(importer, "import_bibtex", pipeline_stub(lambda out, ins: order.append("pipeline")))
+        finished = threading.Event()
+        importer.start_task(lambda task_env: order.append("started"), lambda task_env: finished.set(),
+                            "/out/dataset.pickle", "/in/one.bib")
+        assert finished.wait(10.0)
+        assert order == ["started", "pipeline"]
 
-def test_initialization_is_idempotent(initialized):
-    # `init` is called from the app's bootup and from `raven-importer`; a second call must not swap the
-    # executor out from under a task that is already using it.
-    first = importer.task_manager
-    importer.init(concurrent.futures.ThreadPoolExecutor(max_workers=1))
-    assert importer.task_manager is first
+    def test_a_failing_import_is_reported_in_the_status_the_gui_reads(self, initialized, monkeypatch):
+        # The task dies on a background thread, so the exception itself never reaches the user. The status
+        # line is the only place they learn the import did not happen.
+        def explode(out, ins):
+            raise RuntimeError("the embedder went away")
 
+        task_env = run_one_task(pipeline_stub(explode), monkeypatch)
+        assert task_env.result_code is importer.result_errored
+        assert isinstance(task_env.exc, RuntimeError)
+        assert "the embedder went away" in unbox(importer.status_box)
 
-def test_a_task_runs_the_pipeline_with_the_filenames_it_was_given(initialized, monkeypatch):
-    called = []
-    task_env = run_one_task(pipeline_stub(lambda out, ins: called.append((out, ins))), monkeypatch)
-    assert called == [("/out/dataset.pickle", ("/in/one.bib",))]
-    assert task_env.result_code is importer.result_successful
+    def test_a_finished_import_says_so_and_says_how_to_start_another(self, initialized, monkeypatch):
+        run_one_task(pipeline_stub(), monkeypatch)
+        assert "complete" in unbox(importer.status_box)
 
+    def test_a_finished_task_leaves_the_progress_counter_at_the_start(self, initialized, monkeypatch):
+        advanced = []
 
-def test_only_one_import_runs_at_a_time(initialized, monkeypatch):
-    # An import takes a lot of GPU and CPU, so a second one alongside the first would make both slower
-    # and could exhaust VRAM.
-    release = threading.Event()
-    monkeypatch.setattr(importer, "import_bibtex", pipeline_stub(lambda out, ins: release.wait(10.0)))
-    assert importer.start_task(None, None, "/out/dataset.pickle", "/in/one.bib") is True
-    try:
-        assert importer.has_task(), "nothing was running, so this fixture cannot tell a refusal from a start"
-        assert importer.start_task(None, None, "/out/other.pickle", "/in/two.bib") is False
-    finally:
-        release.set()
+        def advance(out, ins):
+            importer.progress.tock()
+            importer.progress.tock()
+            advanced.append(importer.progress._macrosteps_done)
 
-
-def test_the_started_callback_fires_before_the_pipeline_does(initialized, monkeypatch):
-    # The GUI re-enables its stop button from this callback, so it must arrive while there is still
-    # something to stop.
-    order = []
-    monkeypatch.setattr(importer, "import_bibtex", pipeline_stub(lambda out, ins: order.append("pipeline")))
-    finished = threading.Event()
-    importer.start_task(lambda task_env: order.append("started"), lambda task_env: finished.set(),
-                        "/out/dataset.pickle", "/in/one.bib")
-    assert finished.wait(10.0)
-    assert order == ["started", "pipeline"]
-
-
-def test_a_failing_import_is_reported_in_the_status_the_gui_reads(initialized, monkeypatch):
-    # The task dies on a background thread, so the exception itself never reaches the user. The status
-    # line is the only place they learn the import did not happen.
-    def explode(out, ins):
-        raise RuntimeError("the embedder went away")
-
-    task_env = run_one_task(pipeline_stub(explode), monkeypatch)
-    assert task_env.result_code is importer.result_errored
-    assert isinstance(task_env.exc, RuntimeError)
-    assert "the embedder went away" in unbox(importer.status_box)
-
-
-def test_a_finished_import_says_so_and_says_how_to_start_another(initialized, monkeypatch):
-    run_one_task(pipeline_stub(), monkeypatch)
-    assert "complete" in unbox(importer.status_box)
-
-
-def test_a_finished_task_leaves_the_progress_counter_at_the_start(initialized, monkeypatch):
-    advanced = []
-
-    def advance(out, ins):
-        importer.progress.tock()
-        importer.progress.tock()
-        advanced.append(importer.progress._macrosteps_done)
-
-    monkeypatch.setattr(importer, "has_task", importer.has_task)  # keep the real one; the fixture has a task
-    run_one_task(pipeline_stub(advance), monkeypatch)
-    # The negative control. A stub that died before advancing anything leaves the counter at zero, which is
-    # also what a correct reset looks like -- so without this, the assertion below would pass whether or not
-    # there was ever anything to reset.
-    assert advanced and advanced[0] > 0, "the pipeline stub never advanced the counter, so this fixture cannot tell a reset from an untouched one"
-    # With no task running the counter reports `None` rather than a number, so the reset is checked on
-    # the underlying macrostep count -- which is what the *next* run would otherwise inherit.
-    assert importer.progress._macrosteps_done == 0
+        monkeypatch.setattr(importer, "has_task", importer.has_task)  # keep the real one; the fixture has a task
+        run_one_task(pipeline_stub(advance), monkeypatch)
+        # The negative control. A stub that died before advancing anything leaves the counter at zero, which is
+        # also what a correct reset looks like -- so without this, the assertion below would pass whether or not
+        # there was ever anything to reset.
+        assert advanced and advanced[0] > 0, "the pipeline stub never advanced the counter, so this fixture cannot tell a reset from an untouched one"
+        # With no task running the counter reports `None` rather than a number, so the reset is checked on
+        # the underlying macrostep count -- which is what the *next* run would otherwise inherit.
+        assert importer.progress._macrosteps_done == 0
 
 
 # ---------------------------------------------------------------------------
@@ -771,57 +752,55 @@ PROSE_REPLY = (
     "*   Applied standard machine learning algorithms and integrated explainability techniques.\n")
 
 
-def test_parse_keyword_list_separates_declining_from_malformed():
-    # Three outcomes, and the middle one is the reason this function exists. A model that declines has
-    # answered the question; a model that returns prose has not, and only the second is worth retrying.
-    assert importer._parse_keyword_list("Alpha, Beta Gamma, Delta") == ["Alpha", "Beta Gamma", "Delta"]
-    assert importer._parse_keyword_list("  Keyword Extraction Failed  ") == []
-    assert importer._parse_keyword_list(PROSE_REPLY) is None, \
-        "a bulleted prose summary is not a keyword list"
-    assert importer._parse_keyword_list(", ".join(f"kw{i}" for i in range(40))) is None, \
-        "forty keywords is not an answer to a request for six"
-    assert importer._parse_keyword_list("") is None
+class TestKeywordRepliesThatAreNotKeywordLists:
+    def test_parse_keyword_list_separates_declining_from_malformed(self):
+        # Three outcomes, and the middle one is the reason this function exists. A model that declines has
+        # answered the question; a model that returns prose has not, and only the second is worth retrying.
+        assert importer._parse_keyword_list("Alpha, Beta Gamma, Delta") == ["Alpha", "Beta Gamma", "Delta"]
+        assert importer._parse_keyword_list("  Keyword Extraction Failed  ") == []
+        assert importer._parse_keyword_list(PROSE_REPLY) is None, \
+            "a bulleted prose summary is not a keyword list"
+        assert importer._parse_keyword_list(", ".join(f"kw{i}" for i in range(40))) is None, \
+            "forty keywords is not an answer to a request for six"
+        assert importer._parse_keyword_list("") is None
 
+    def test_keyword_extraction_retries_a_malformed_reply(self, monkeypatch, caplog):
+        # The failure is occasional rather than systematic -- one cluster in 338 across five corpora -- so a
+        # second ask is worth one request against a run that takes minutes either way.
+        replies = iter([PROSE_REPLY, "Knowledge Distillation, Model Compression"])
 
-def test_keyword_extraction_retries_a_malformed_reply(monkeypatch, caplog):
-    # The failure is occasional rather than systematic -- one cluster in 338 across five corpora -- so a
-    # second ask is worth one request against a run that takes minutes either way.
-    replies = iter([PROSE_REPLY, "Knowledge Distillation, Model Compression"])
+        def fake_turn(settings, prompt, **kwargs):
+            return FakeRecord(next(replies))
 
-    def fake_turn(settings, prompt, **kwargs):
-        return FakeRecord(next(replies))
+        keywords = run_keyword_extraction(monkeypatch, fake_turn, caplog)
+        assert keywords == [["Knowledge Distillation", "Model Compression"]], \
+            "the retry's answer should be used, not the prose"
+        assert any("not a keyword list" in r.message for r in caplog.records)
 
-    keywords = run_keyword_extraction(monkeypatch, fake_turn, caplog)
-    assert keywords == [["Knowledge Distillation", "Model Compression"]], \
-        "the retry's answer should be used, not the prose"
-    assert any("not a keyword list" in r.message for r in caplog.records)
+    def test_keyword_extraction_gives_up_and_logs_an_error(self, monkeypatch, caplog):
+        # Out of attempts, the cluster is a hole in the map and somebody should see it in the log -- an
+        # error, where every other cluster in the run got a real label.
+        def always_prose(settings, prompt, **kwargs):
+            return FakeRecord(PROSE_REPLY)
 
+        keywords = run_keyword_extraction(monkeypatch, always_prose, caplog)
+        assert keywords == [["<unknown topic>"]]
+        assert any(r.levelname == "ERROR" and "Giving up" in r.message for r in caplog.records)
 
-def test_keyword_extraction_gives_up_and_logs_an_error(monkeypatch, caplog):
-    # Out of attempts, the cluster is a hole in the map and somebody should see it in the log -- an
-    # error, where every other cluster in the run got a real label.
-    def always_prose(settings, prompt, **kwargs):
-        return FakeRecord(PROSE_REPLY)
+    def test_keyword_extraction_does_not_retry_a_decline(self, monkeypatch, caplog):
+        # Negative control for the two above: declining is a valid answer, so it must be taken at face value
+        # rather than retried. Were it retried, the counter below would exceed one and this would fail --
+        # which is what separates "handles malformed replies" from "asks repeatedly whenever it dislikes an
+        # answer", and the second would pester the model into inventing a theme it had just said was absent.
+        calls = []
 
-    keywords = run_keyword_extraction(monkeypatch, always_prose, caplog)
-    assert keywords == [["<unknown topic>"]]
-    assert any(r.levelname == "ERROR" and "Giving up" in r.message for r in caplog.records)
+        def declines(settings, prompt, **kwargs):
+            calls.append(prompt)
+            return FakeRecord("keyword extraction failed")
 
-
-def test_keyword_extraction_does_not_retry_a_decline(monkeypatch, caplog):
-    # Negative control for the two above: declining is a valid answer, so it must be taken at face value
-    # rather than retried. Were it retried, the counter below would exceed one and this would fail --
-    # which is what separates "handles malformed replies" from "asks repeatedly whenever it dislikes an
-    # answer", and the second would pester the model into inventing a theme it had just said was absent.
-    calls = []
-
-    def declines(settings, prompt, **kwargs):
-        calls.append(prompt)
-        return FakeRecord("keyword extraction failed")
-
-    keywords = run_keyword_extraction(monkeypatch, declines, caplog)
-    assert keywords == [["<unknown topic>"]]
-    assert len(calls) == 1, f"a decline should be accepted, not retried; got {len(calls)} calls"
+        keywords = run_keyword_extraction(monkeypatch, declines, caplog)
+        assert keywords == [["<unknown topic>"]]
+        assert len(calls) == 1, f"a decline should be accepted, not retried; got {len(calls)} calls"
 
 
 def run_keyword_extraction(monkeypatch, fake_turn, caplog):
@@ -854,27 +833,6 @@ def run_keyword_extraction(monkeypatch, fake_turn, caplog):
 # which it was.
 
 
-def test_a_run_that_had_a_backend_records_the_llm_method(monkeypatch):
-    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
-    monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
-    assert importer._effective_keyword_method() == "llm"
-
-
-def test_a_run_that_had_no_backend_records_the_fallback_it_actually_used(monkeypatch):
-    # The pair with the test above: same configuration, and only `llm_settings` differs, so a fallback that
-    # went unrecorded would show up here as the two agreeing.
-    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
-    monkeypatch.setattr(importer, "llm_settings", None, raising=False)
-    assert importer._effective_keyword_method() == "frequencies"
-
-
-@pytest.mark.parametrize("settings", [object(), None], ids=["backend", "no backend"])
-def test_configured_frequency_keywords_are_recorded_whatever_the_backend_did(monkeypatch, settings):
-    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
-    monkeypatch.setattr(importer, "llm_settings", settings, raising=False)
-    assert importer._effective_keyword_method() == "frequencies"
-
-
 @pytest.fixture
 def no_backend(monkeypatch):
     """Configure LLM cluster keywords and summaries, and make the backend refuse to answer.
@@ -890,78 +848,90 @@ def no_backend(monkeypatch):
     monkeypatch.setattr(llmclient, "test_connection", lambda url: False)
 
 
-def test_a_required_backend_that_does_not_answer_stops_the_run(no_backend):
-    with pytest.raises(importer.LLMBackendUnavailable):
-        importer._setup_llm_backend(llm_policy=importer.llm_required)
+class TestWhatTheDatasetRecordsAboutHowItWasBuilt:
+    def test_a_run_that_had_a_backend_records_the_llm_method(self, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(importer, "llm_settings", object(), raising=False)
+        assert importer._effective_keyword_method() == "llm"
 
+    def test_a_run_that_had_no_backend_records_the_fallback_it_actually_used(self, monkeypatch):
+        # The pair with the test above: same configuration, and only `llm_settings` differs, so a fallback that
+        # went unrecorded would show up here as the two agreeing.
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(importer, "llm_settings", None, raising=False)
+        assert importer._effective_keyword_method() == "frequencies"
 
-def test_an_optional_backend_that_does_not_answer_lets_the_run_continue(no_backend):
-    # The pair with the test above, and the whole of the GUI's policy: same configuration, same dead
-    # backend, and the only difference is what the caller asked for. Returning rather than raising is the
-    # claim; the fallback assertion is the control, since `llm_settings` reads `None` before the call too,
-    # so on its own it would pass against a function that did nothing at all.
-    importer._setup_llm_backend(llm_policy=importer.llm_optional)
-    assert unbox(importer.llm_fallback_box) is not None, "no fallback was recorded, so the run did not reach the unavailable path and this asserts nothing"
-    assert importer.llm_settings is None
+    @pytest.mark.parametrize("settings", [object(), None], ids=["backend", "no backend"])
+    def test_configured_frequency_keywords_are_recorded_whatever_the_backend_did(self, monkeypatch, settings):
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
+        monkeypatch.setattr(importer, "llm_settings", settings, raising=False)
+        assert importer._effective_keyword_method() == "frequencies"
 
+    def test_a_required_backend_that_does_not_answer_stops_the_run(self, no_backend):
+        with pytest.raises(importer.LLMBackendUnavailable):
+            importer._setup_llm_backend(llm_policy=importer.llm_required)
 
-def test_the_run_that_continued_says_which_backend_it_gave_up_on(no_backend):
-    importer._setup_llm_backend(llm_policy=importer.llm_optional)
-    fallback = unbox(importer.llm_fallback_box)
-    assert isinstance(fallback, importer.LLMBackendUnavailable)
-    assert fallback.headline and fallback.advice
+    def test_an_optional_backend_that_does_not_answer_lets_the_run_continue(self, no_backend):
+        # The pair with the test above, and the whole of the GUI's policy: same configuration, same dead
+        # backend, and the only difference is what the caller asked for. Returning rather than raising is the
+        # claim; the fallback assertion is the control, since `llm_settings` reads `None` before the call too,
+        # so on its own it would pass against a function that did nothing at all.
+        importer._setup_llm_backend(llm_policy=importer.llm_optional)
+        assert unbox(importer.llm_fallback_box) is not None, "no fallback was recorded, so the run did not reach the unavailable path and this asserts nothing"
+        assert importer.llm_settings is None
 
+    def test_the_run_that_continued_says_which_backend_it_gave_up_on(self, no_backend):
+        importer._setup_llm_backend(llm_policy=importer.llm_optional)
+        fallback = unbox(importer.llm_fallback_box)
+        assert isinstance(fallback, importer.LLMBackendUnavailable)
+        assert fallback.headline and fallback.advice
 
-def test_a_run_that_gives_up_nothing_publishes_no_fallback(monkeypatch):
-    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
-    monkeypatch.setattr(visualizer_config, "summarize", False)
-    monkeypatch.setattr(importer, "llm_fallback_box", box("stale, from an earlier run"), raising=False)
-    importer._setup_llm_backend(llm_policy=importer.llm_optional)
-    assert unbox(importer.llm_fallback_box) is None
+    def test_a_run_that_gives_up_nothing_publishes_no_fallback(self, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
+        monkeypatch.setattr(visualizer_config, "summarize", False)
+        monkeypatch.setattr(importer, "llm_fallback_box", box("stale, from an earlier run"), raising=False)
+        importer._setup_llm_backend(llm_policy=importer.llm_optional)
+        assert unbox(importer.llm_fallback_box) is None
 
+    def test_every_llm_stage_drops_together(self, no_backend):
+        """Keywords fall back and summaries are skipped, rather than one of the two going ahead."""
+        importer._setup_llm_backend(llm_policy=importer.llm_optional)
+        assert importer._effective_keyword_method() == "frequencies"
+        # What the summarize gate in `import_bibtex` tests. Summaries are still *configured* -- the run simply
+        # has nothing to make them with, which is the state the gate has to notice.
+        assert visualizer_config.summarize is True
+        assert importer.llm_settings is None
 
-def test_every_llm_stage_drops_together(no_backend):
-    """Keywords fall back and summaries are skipped, rather than one of the two going ahead."""
-    importer._setup_llm_backend(llm_policy=importer.llm_optional)
-    assert importer._effective_keyword_method() == "frequencies"
-    # What the summarize gate in `import_bibtex` tests. Summaries are still *configured* -- the run simply
-    # has nothing to make them with, which is the state the gate has to notice.
-    assert visualizer_config.summarize is True
-    assert importer.llm_settings is None
+    def test_a_configuration_wanting_no_llm_names_no_stages(self, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
+        monkeypatch.setattr(visualizer_config, "summarize", False)
+        assert importer.llm_backed_stages() == ()
 
+    def test_each_named_stage_says_what_a_run_without_it_does(self, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
+        monkeypatch.setattr(visualizer_config, "summarize", True)
+        stages = importer.llm_backed_stages()
+        assert [stage.name for stage in stages] == ["cluster keywords", "entry summaries"]
+        assert all(stage.setting and stage.without for stage in stages)
 
-def test_a_configuration_wanting_no_llm_names_no_stages(monkeypatch):
-    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "frequencies")
-    monkeypatch.setattr(visualizer_config, "summarize", False)
-    assert importer.llm_backed_stages() == ()
+    def test_the_saved_dataset_carries_the_keyword_method(self):
+        """The method reaches the file, not just the helper.
 
-
-def test_each_named_stage_says_what_a_run_without_it_does(monkeypatch):
-    monkeypatch.setattr(visualizer_config, "clusters_keyword_method", "llm")
-    monkeypatch.setattr(visualizer_config, "summarize", True)
-    stages = importer.llm_backed_stages()
-    assert [stage.name for stage in stages] == ["cluster keywords", "entry summaries"]
-    assert all(stage.setting and stage.without for stage in stages)
-
-
-def test_the_saved_dataset_carries_the_keyword_method():
-    """The method reaches the file, not just the helper.
-
-    Read from the source, because the save is inline in `import_bibtex` and reaching it for real means a
-    whole pipeline run -- embeddings, clustering and all -- to assert on one key. What is checked is
-    syntactic anyway: that the dict literal written to the file has the entry.
-    """
-    import ast
-    import pathlib
-    source = (pathlib.Path(importer.__file__)).read_text(encoding="utf-8")
-    saved_keys = {key.value
-                  for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Dict)
-                  for key in node.keys
-                  if isinstance(key, ast.Constant) and isinstance(key.value, str)
-                  if any(isinstance(other, ast.Constant) and other.value == "lowdim_data"
-                         for other in node.keys)}
-    assert saved_keys, "no dict literal here looks like the saved dataset, so this test checks nothing"
-    assert "clusters_keyword_method" in saved_keys
+        Read from the source, because the save is inline in `import_bibtex` and reaching it for real means a
+        whole pipeline run -- embeddings, clustering and all -- to assert on one key. What is checked is
+        syntactic anyway: that the dict literal written to the file has the entry.
+        """
+        import ast
+        import pathlib
+        source = (pathlib.Path(importer.__file__)).read_text(encoding="utf-8")
+        saved_keys = {key.value
+                      for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Dict)
+                      for key in node.keys
+                      if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                      if any(isinstance(other, ast.Constant) and other.value == "lowdim_data"
+                             for other in node.keys)}
+        assert saved_keys, "no dict literal here looks like the saved dataset, so this test checks nothing"
+        assert "clusters_keyword_method" in saved_keys
 
 
 # ---------------------------------------------------------------------------
@@ -1001,106 +971,100 @@ def two_blobs(n_per_blob=40, dim=2, separation=10.0, seed=42):
     return np.concatenate([first, second], axis=0)
 
 
-def test_the_highdim_pass_finds_the_clusters_that_are_there():
-    _, n_clusters = importer._cluster_highdim_semantic_vectors(two_directions())
-    assert n_clusters >= 2, "two groups pointing different ways should not come back as one cluster"
+class TestClustering:
+    def test_the_highdim_pass_finds_the_clusters_that_are_there(self):
+        _, n_clusters = importer._cluster_highdim_semantic_vectors(two_directions())
+        assert n_clusters >= 2, "two groups pointing different ways should not come back as one cluster"
 
+    def test_the_highdim_pass_returns_a_bounded_sample_per_cluster(self):
+        # What comes back is training data for the dimension reduction, so it is stratified rather than
+        # complete: up to `_MAX_REPRESENTATIVES_PER_CLUSTER` from each detected cluster. `max_n` does not
+        # bound it — that bounds how many vectors are *fitted*.
+        cap = importer._MAX_REPRESENTATIVES_PER_CLUSTER
+        n_per_cluster = 40  # a literal, deliberately: sizing the fixture from `cap` would grow it with the
+        assert cap < n_per_cluster, ("the cap now exceeds what this fixture supplies per cluster, so it "
+                                     "cannot bite and this test asserts nothing -- raise `n_per_cluster`")
+        all_vectors = two_directions(n_per_cluster=n_per_cluster)
+        unique_vs, n_clusters = importer._cluster_highdim_semantic_vectors(all_vectors, max_n=10000)
 
-def test_the_highdim_pass_returns_a_bounded_sample_per_cluster():
-    # What comes back is training data for the dimension reduction, so it is stratified rather than
-    # complete: up to `_MAX_REPRESENTATIVES_PER_CLUSTER` from each detected cluster. `max_n` does not
-    # bound it — that bounds how many vectors are *fitted*.
-    cap = importer._MAX_REPRESENTATIVES_PER_CLUSTER
-    n_per_cluster = 40  # a literal, deliberately: sizing the fixture from `cap` would grow it with the
-    assert cap < n_per_cluster, ("the cap now exceeds what this fixture supplies per cluster, so it "
-                                 "cannot bite and this test asserts nothing -- raise `n_per_cluster`")
-    all_vectors = two_directions(n_per_cluster=n_per_cluster)
-    unique_vs, n_clusters = importer._cluster_highdim_semantic_vectors(all_vectors, max_n=10000)
+        assert unique_vs.shape[1] == all_vectors.shape[1], "the vectors keep their dimensionality"
+        assert len(unique_vs) <= cap * n_clusters
+        # Every cluster holds more than the cap, so a run that returned everything is the thing to rule out.
+        assert len(unique_vs) < len(all_vectors)
 
-    assert unique_vs.shape[1] == all_vectors.shape[1], "the vectors keep their dimensionality"
-    assert len(unique_vs) <= cap * n_clusters
-    # Every cluster holds more than the cap, so a run that returned everything is the thing to rule out.
-    assert len(unique_vs) < len(all_vectors)
+    def test_the_highdim_pass_fits_on_a_sample_when_the_dataset_is_large(self, caplog):
+        # HDBSCAN runs out of memory somewhere around 50k vectors, so above `max_n` it sees a random subset.
+        # The representative points still come from that subset, so `max_n` bounds them too.
+        all_vectors = two_directions(n_per_cluster=100)
+        with caplog.at_level("INFO"):
+            unique_vs, _ = importer._cluster_highdim_semantic_vectors(all_vectors, max_n=120)
+        assert any("Dataset is large" in record.message for record in caplog.records), \
+            "the sampling branch was not taken, so this fixture says nothing about the cap"
+        assert len(unique_vs) <= 120
 
+    def test_the_sample_a_large_dataset_is_fitted_on_holds_distinct_entries(self):
+        # The subset is drawn without replacement, so no entry is fitted twice. Drawing independently instead
+        # spends part of the sample on duplicates -- roughly a tenth of a 10k-of-50k draw -- and the duplicates
+        # reach the representative points, where they weight the dimension reduction's training set toward
+        # whichever entries happened to be drawn more than once.
+        #
+        # Observable from outside because the fixture has no repeated rows of its own: a duplicate row in the
+        # output can only have come from a repeated index.
+        import numpy as np
+        all_vectors = two_directions(n_per_cluster=100)
+        unique_vs, _ = importer._cluster_highdim_semantic_vectors(all_vectors, max_n=150)
+        assert len(np.unique(unique_vs, axis=0)) == len(unique_vs), "the same entry was picked more than once"
 
-def test_the_highdim_pass_fits_on_a_sample_when_the_dataset_is_large(caplog):
-    # HDBSCAN runs out of memory somewhere around 50k vectors, so above `max_n` it sees a random subset.
-    # The representative points still come from that subset, so `max_n` bounds them too.
-    all_vectors = two_directions(n_per_cluster=100)
-    with caplog.at_level("INFO"):
-        unique_vs, _ = importer._cluster_highdim_semantic_vectors(all_vectors, max_n=120)
-    assert any("Dataset is large" in record.message for record in caplog.records), \
-        "the sampling branch was not taken, so this fixture says nothing about the cap"
-    assert len(unique_vs) <= 120
+    def test_the_highdim_pass_refuses_a_dataset_it_cannot_cluster(self):
+        # Documented behaviour: with no clusters there is nothing to train the dimension reduction on, so the
+        # step stops rather than proceeding on an empty training set. A bibliography of a handful of entries
+        # is the realistic way to get here -- the clusterer's `min_cluster_size` is 5, so four entries cannot
+        # form one however they are arranged. (Scattering points at random does *not* get here: with
+        # `min_samples=1` and leaf selection, HDBSCAN finds structure in noise.)
+        with pytest.raises(RuntimeError):
+            importer._cluster_highdim_semantic_vectors(two_directions(n_per_cluster=2))
 
+    def test_the_2d_pass_tags_each_entry_with_its_own_cluster(self):
+        # The tagging walks `vis_data` and `labels` by the same index, so an off-by-one here would mislabel
+        # every point in the dataset while looking perfectly healthy -- every entry still gets *a* cluster.
+        from unpythonic.env import env
 
-def test_the_sample_a_large_dataset_is_fitted_on_holds_distinct_entries():
-    # The subset is drawn without replacement, so no entry is fitted twice. Drawing independently instead
-    # spends part of the sample on duplicates -- roughly a tenth of a 10k-of-50k draw -- and the duplicates
-    # reach the representative points, where they weight the dimension reduction's training set toward
-    # whichever entries happened to be drawn more than once.
-    #
-    # Observable from outside because the fixture has no repeated rows of its own: a duplicate row in the
-    # output can only have come from a repeated index.
-    import numpy as np
-    all_vectors = two_directions(n_per_cluster=100)
-    unique_vs, _ = importer._cluster_highdim_semantic_vectors(all_vectors, max_n=150)
-    assert len(np.unique(unique_vs, axis=0)) == len(unique_vs), "the same entry was picked more than once"
+        lowdim = two_blobs(n_per_blob=40, dim=2)
+        entries = [env(title=f"paper {i}", abstract="") for i in range(len(lowdim))]
+        input_data = env(parsed_data_by_filename={"a.bib": entries})
 
+        vis_data, labels, n_vis_clusters, n_vis_outliers = importer._cluster_lowdim_data(input_data, lowdim)
 
-def test_the_highdim_pass_refuses_a_dataset_it_cannot_cluster():
-    # Documented behaviour: with no clusters there is nothing to train the dimension reduction on, so the
-    # step stops rather than proceeding on an empty training set. A bibliography of a handful of entries
-    # is the realistic way to get here -- the clusterer's `min_cluster_size` is 5, so four entries cannot
-    # form one however they are arranged. (Scattering points at random does *not* get here: with
-    # `min_samples=1` and leaf selection, HDBSCAN finds structure in noise.)
-    with pytest.raises(RuntimeError):
-        importer._cluster_highdim_semantic_vectors(two_directions(n_per_cluster=2))
+        assert vis_data == entries, "the concatenation should preserve order; the labels are indexed by it"
+        assert len(labels) == len(lowdim)
+        for entry, label in zip(vis_data, labels):
+            assert entry.cluster_id == label
+            assert 0.0 <= entry.cluster_probability <= 1.0
+        # The two blobs are far apart, so the tags must actually separate them -- otherwise every assertion
+        # above is satisfied by a run that put everything in one cluster.
+        assert len({int(label) for label in labels} - {-1}) >= 2
+        assert n_vis_clusters >= 2
 
+    def test_the_2d_pass_counts_outliers_as_the_points_it_left_unclustered(self):
+        import numpy as np
 
-def test_the_2d_pass_tags_each_entry_with_its_own_cluster():
-    # The tagging walks `vis_data` and `labels` by the same index, so an off-by-one here would mislabel
-    # every point in the dataset while looking perfectly healthy -- every entry still gets *a* cluster.
-    from unpythonic.env import env
+        lowdim = two_blobs(n_per_blob=40, dim=2)
+        entries_env = _entries_env(len(lowdim))
+        _, labels, _, n_vis_outliers = importer._cluster_lowdim_data(entries_env, lowdim)
+        assert n_vis_outliers == int(np.sum(labels == -1))
 
-    lowdim = two_blobs(n_per_blob=40, dim=2)
-    entries = [env(title=f"paper {i}", abstract="") for i in range(len(lowdim))]
-    input_data = env(parsed_data_by_filename={"a.bib": entries})
+    def test_the_2d_pass_concatenates_across_input_files_in_order(self):
+        # A multi-file import is the normal case, and the 2D coordinates arrive as one array for the whole
+        # dataset -- so the concatenation order here is what aligns entries to their points.
+        from unpythonic.env import env
 
-    vis_data, labels, n_vis_clusters, n_vis_outliers = importer._cluster_lowdim_data(input_data, lowdim)
+        lowdim = two_blobs(n_per_blob=40, dim=2)
+        first = [env(title=f"first {i}", abstract="") for i in range(len(lowdim) // 2)]
+        second = [env(title=f"second {i}", abstract="") for i in range(len(lowdim) // 2)]
+        input_data = env(parsed_data_by_filename={"a.bib": first, "b.bib": second})
 
-    assert vis_data == entries, "the concatenation should preserve order; the labels are indexed by it"
-    assert len(labels) == len(lowdim)
-    for entry, label in zip(vis_data, labels):
-        assert entry.cluster_id == label
-        assert 0.0 <= entry.cluster_probability <= 1.0
-    # The two blobs are far apart, so the tags must actually separate them -- otherwise every assertion
-    # above is satisfied by a run that put everything in one cluster.
-    assert len({int(label) for label in labels} - {-1}) >= 2
-    assert n_vis_clusters >= 2
-
-
-def test_the_2d_pass_counts_outliers_as_the_points_it_left_unclustered():
-    import numpy as np
-
-    lowdim = two_blobs(n_per_blob=40, dim=2)
-    entries_env = _entries_env(len(lowdim))
-    _, labels, _, n_vis_outliers = importer._cluster_lowdim_data(entries_env, lowdim)
-    assert n_vis_outliers == int(np.sum(labels == -1))
-
-
-def test_the_2d_pass_concatenates_across_input_files_in_order():
-    # A multi-file import is the normal case, and the 2D coordinates arrive as one array for the whole
-    # dataset -- so the concatenation order here is what aligns entries to their points.
-    from unpythonic.env import env
-
-    lowdim = two_blobs(n_per_blob=40, dim=2)
-    first = [env(title=f"first {i}", abstract="") for i in range(len(lowdim) // 2)]
-    second = [env(title=f"second {i}", abstract="") for i in range(len(lowdim) // 2)]
-    input_data = env(parsed_data_by_filename={"a.bib": first, "b.bib": second})
-
-    vis_data, _, _, _ = importer._cluster_lowdim_data(input_data, lowdim)
-    assert vis_data == first + second
+        vis_data, _, _, _ = importer._cluster_lowdim_data(input_data, lowdim)
+        assert vis_data == first + second
 
 
 def _entries_env(n):
@@ -1148,63 +1112,60 @@ def two_entry_input_data(tmp_path):
                resolved_filenames=[str(path)])
 
 
-def test_embedding_vectors_land_on_the_unit_hypersphere(initialized_api, two_entry_input_data):
-    # The module documents this as a property callers may rely on -- it is what makes cosine similarity
-    # the right comparison downstream, and what the high-dimensional clustering assumes.
-    import numpy as np
-    all_vectors = importer._get_highdim_semantic_vectors(two_entry_input_data)
-    assert all_vectors.shape[0] == 2
-    norms = np.linalg.norm(all_vectors, axis=1)
-    # The tolerance is fp16-sized on purpose: the configured embedding device may use half precision, and
-    # measured norms then sit a few times 1e-4 off unity. Tightening this to 1e-4 fails on a correct run.
-    assert np.allclose(norms, 1.0, atol=1e-3), f"vectors are not unit-length: {norms}"
+class TestTheStepsThatNeedAModel:
+    def test_embedding_vectors_land_on_the_unit_hypersphere(self, initialized_api, two_entry_input_data):
+        # The module documents this as a property callers may rely on -- it is what makes cosine similarity
+        # the right comparison downstream, and what the high-dimensional clustering assumes.
+        import numpy as np
+        all_vectors = importer._get_highdim_semantic_vectors(two_entry_input_data)
+        assert all_vectors.shape[0] == 2
+        norms = np.linalg.norm(all_vectors, axis=1)
+        # The tolerance is fp16-sized on purpose: the configured embedding device may use half precision, and
+        # measured norms then sit a few times 1e-4 off unity. Tightening this to 1e-4 fails on a correct run.
+        assert np.allclose(norms, 1.0, atol=1e-3), f"vectors are not unit-length: {norms}"
 
+    def test_a_second_embedding_pass_reads_the_cache_rather_than_the_model(self, initialized_api, two_entry_input_data, caplog):
+        # Caches are per input file so that adding a file to a dataset does not re-embed the ones already
+        # done. On a real corpus this is the difference between seconds and an hour.
+        first = importer._get_highdim_semantic_vectors(two_entry_input_data)
+        with caplog.at_level("INFO"):
+            second = importer._get_highdim_semantic_vectors(two_entry_input_data)
 
-def test_a_second_embedding_pass_reads_the_cache_rather_than_the_model(initialized_api, two_entry_input_data, caplog):
-    # Caches are per input file so that adding a file to a dataset does not re-embed the ones already
-    # done. On a real corpus this is the difference between seconds and an hour.
-    first = importer._get_highdim_semantic_vectors(two_entry_input_data)
-    with caplog.at_level("INFO"):
-        second = importer._get_highdim_semantic_vectors(two_entry_input_data)
+        import numpy as np
+        assert np.allclose(first, second)
+        assert not any("Computing embeddings" in record.message for record in caplog.records), \
+            "the second pass recomputed the embeddings instead of reading its cache"
 
-    import numpy as np
-    assert np.allclose(first, second)
-    assert not any("Computing embeddings" in record.message for record in caplog.records), \
-        "the second pass recomputed the embeddings instead of reading its cache"
+    def test_keyword_extraction_fills_in_the_three_fields_the_dataset_needs(self, initialized_api, two_entry_input_data):
+        all_keywords = importer._extract_keywords(two_entry_input_data)
+        entries = two_entry_input_data.parsed_data_by_filename[two_entry_input_data.resolved_filenames[0]]
 
+        assert isinstance(all_keywords, dict) and all_keywords, "the dataset-wide keyword counts should be populated"
+        for entry in entries:
+            assert isinstance(entry.keywords, dict)
+            assert isinstance(entry.entities, set)
+            assert isinstance(entry.vis_keywords, list)
 
-def test_keyword_extraction_fills_in_the_three_fields_the_dataset_needs(initialized_api, two_entry_input_data):
-    all_keywords = importer._extract_keywords(two_entry_input_data)
-    entries = two_entry_input_data.parsed_data_by_filename[two_entry_input_data.resolved_filenames[0]]
+        # The entry with an abstract has more to say than the one without; without this the assertions above
+        # are satisfied by an extractor that returned empty containers for both.
+        with_abstract, without_abstract = entries
+        assert with_abstract.keywords, f"nothing was extracted from an abstract-bearing entry: {with_abstract.title}"
+        assert len(with_abstract.keywords) > len(without_abstract.keywords)
 
-    assert isinstance(all_keywords, dict) and all_keywords, "the dataset-wide keyword counts should be populated"
-    for entry in entries:
-        assert isinstance(entry.keywords, dict)
-        assert isinstance(entry.entities, set)
-        assert isinstance(entry.vis_keywords, list)
+    def test_the_dataset_wide_keyword_counts_are_sorted_by_frequency(self, initialized_api, two_entry_input_data):
+        all_keywords = importer._extract_keywords(two_entry_input_data)
+        counts = list(all_keywords.values())
+        assert counts == sorted(counts, reverse=True)
 
-    # The entry with an abstract has more to say than the one without; without this the assertions above
-    # are satisfied by an extractor that returned empty containers for both.
-    with_abstract, without_abstract = entries
-    assert with_abstract.keywords, f"nothing was extracted from an abstract-bearing entry: {with_abstract.title}"
-    assert len(with_abstract.keywords) > len(without_abstract.keywords)
-
-
-def test_the_dataset_wide_keyword_counts_are_sorted_by_frequency(initialized_api, two_entry_input_data):
-    all_keywords = importer._extract_keywords(two_entry_input_data)
-    counts = list(all_keywords.values())
-    assert counts == sorted(counts, reverse=True)
-
-
-def test_the_visualized_keywords_per_entry_are_capped(initialized_api, two_entry_input_data):
-    # `vis_keywords` is what reaches the GUI, so its length is a display decision rather than an analysis
-    # one. Named entities are added on top of the cap, so the bound is on the frequency-ranked part.
-    max_vis_kw = 2
-    importer._extract_keywords(two_entry_input_data, max_vis_kw=max_vis_kw)
-    entries = two_entry_input_data.parsed_data_by_filename[two_entry_input_data.resolved_filenames[0]]
-    for entry in entries:
-        frequency_ranked = [kw for kw in entry.vis_keywords if kw not in entry.entities]
-        assert len(frequency_ranked) <= max_vis_kw, f"{entry.title}: {entry.vis_keywords}"
+    def test_the_visualized_keywords_per_entry_are_capped(self, initialized_api, two_entry_input_data):
+        # `vis_keywords` is what reaches the GUI, so its length is a display decision rather than an analysis
+        # one. Named entities are added on top of the cap, so the bound is on the frequency-ranked part.
+        max_vis_kw = 2
+        importer._extract_keywords(two_entry_input_data, max_vis_kw=max_vis_kw)
+        entries = two_entry_input_data.parsed_data_by_filename[two_entry_input_data.resolved_filenames[0]]
+        for entry in entries:
+            frequency_ranked = [kw for kw in entry.vis_keywords if kw not in entry.entities]
+            assert len(frequency_ranked) <= max_vis_kw, f"{entry.title}: {entry.vis_keywords}"
 
 
 # ---------------------------------------------------------------------------
@@ -1251,14 +1212,15 @@ def live_llm(request, monkeypatch):
     return settings
 
 
-@pytest.mark.llm
-def test_an_abstract_is_summarized_and_a_missing_one_is_not(live_llm, two_entry_input_data, monkeypatch):
-    monkeypatch.setattr(visualizer_config, "summarize", True)
-    importer._summarize(two_entry_input_data)
+class TestSummarizationAgainstALiveLLMBackend:
+    @pytest.mark.llm
+    def test_an_abstract_is_summarized_and_a_missing_one_is_not(self, live_llm, two_entry_input_data, monkeypatch):
+        monkeypatch.setattr(visualizer_config, "summarize", True)
+        importer._summarize(two_entry_input_data)
 
-    with_abstract, without_abstract = two_entry_input_data.parsed_data_by_filename[two_entry_input_data.resolved_filenames[0]]
-    assert without_abstract.summary is None, "an entry with no abstract has nothing to summarize"
-    # `None` here too would mean the model answered with the failure sentinel, which is the outcome worth
-    # knowing about: the prompt no longer works on whatever model is loaded.
-    assert isinstance(with_abstract.summary, str) and with_abstract.summary.strip(), \
-        "the model returned no usable summary for an abstract; the prompt may no longer suit it"
+        with_abstract, without_abstract = two_entry_input_data.parsed_data_by_filename[two_entry_input_data.resolved_filenames[0]]
+        assert without_abstract.summary is None, "an entry with no abstract has nothing to summarize"
+        # `None` here too would mean the model answered with the failure sentinel, which is the outcome worth
+        # knowing about: the prompt no longer works on whatever model is loaded.
+        assert isinstance(with_abstract.summary, str) and with_abstract.summary.strip(), \
+            "the model returned no usable summary for an abstract; the prompt may no longer suit it"

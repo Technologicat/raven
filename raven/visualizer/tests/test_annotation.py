@@ -41,6 +41,7 @@ class RecordingDPG:
     between a red test and a dead test process is naming it here. (Learned by defeating the guard on
     purpose, which is what these tests are checked with.)
     """
+
     def __init__(self, real_dpg):
         self._real_dpg = real_dpg
         self.mouse_pos = [100.0, 100.0]
@@ -134,165 +135,153 @@ def marks(*, in_info_panel=False, in_selection=False, search_active=False, is_se
                                     search_active=search_active, is_search_match=is_search_match)
 
 
-def test_an_item_in_the_info_panel_gets_the_filled_clipboard(gui):
-    m = marks(in_info_panel=True, in_selection=True)
-    assert m.selection_status is annotation.ITEM_IN_INFO_PANEL
-    assert m.selection_mark_is_solid, "the filled glyph and the solid font are one difference, not two"
+class TestHowOneItemIsDecorated:
+    def test_an_item_in_the_info_panel_gets_the_filled_clipboard(self, gui):
+        m = marks(in_info_panel=True, in_selection=True)
+        assert m.selection_status is annotation.ITEM_IN_INFO_PANEL
+        assert m.selection_mark_is_solid, "the filled glyph and the solid font are one difference, not two"
 
+    def test_an_item_not_in_the_info_panel_gets_the_empty_clipboard(self, gui):
+        m = marks(in_info_panel=False, in_selection=True)
+        assert m.selection_status is annotation.ITEM_SELECTED
+        assert not m.selection_mark_is_solid
 
-def test_an_item_not_in_the_info_panel_gets_the_empty_clipboard(gui):
-    m = marks(in_info_panel=False, in_selection=True)
-    assert m.selection_status is annotation.ITEM_SELECTED
-    assert not m.selection_mark_is_solid
+    def test_a_selected_item_outside_the_panel_is_told_apart_from_an_unselected_one(self, gui):
+        assert marks(in_selection=True).selection_status is annotation.ITEM_SELECTED
+        assert marks(in_selection=False).selection_status is annotation.ITEM_NOT_SELECTED
+        assert marks(in_selection=True).selection_mark_color != marks(in_selection=False).selection_mark_color
 
+    def test_an_item_in_the_panel_but_out_of_the_selection_keeps_the_panel_glyph_and_loses_the_colour(self, gui):
+        # This is the disagreement that shows while the panel is updating: the old content stays on screen
+        # until the new is ready, so it can still list items the new selection has dropped. The icon says
+        # "in the panel" either way, and the colour is what reports it.
+        listed_and_selected = marks(in_info_panel=True, in_selection=True)
+        listed_only = marks(in_info_panel=True, in_selection=False)
+        assert listed_only.selection_mark_glyph == listed_and_selected.selection_mark_glyph
+        assert listed_only.selection_status is listed_and_selected.selection_status
+        assert listed_only.selection_mark_color != listed_and_selected.selection_mark_color
 
-def test_a_selected_item_outside_the_panel_is_told_apart_from_an_unselected_one(gui):
-    assert marks(in_selection=True).selection_status is annotation.ITEM_SELECTED
-    assert marks(in_selection=False).selection_status is annotation.ITEM_NOT_SELECTED
-    assert marks(in_selection=True).selection_mark_color != marks(in_selection=False).selection_mark_color
+    def test_no_search_mark_is_drawn_when_no_search_is_running(self, gui):
+        m = marks(search_active=False)
+        assert m.search_mark_color is None, "no colour means no magnifying glass at all, not a colourless one"
+        assert m.search_status is annotation.ITEM_SEARCH_OFF
 
+    def test_a_search_match_and_a_non_match_are_told_apart(self, gui):
+        matched = marks(search_active=True, is_search_match=True)
+        missed = marks(search_active=True, is_search_match=False)
+        assert matched.search_status is annotation.ITEM_SEARCH_MATCH
+        assert missed.search_status is annotation.ITEM_SEARCH_NOMATCH
+        assert matched.search_mark_color != missed.search_mark_color
 
-def test_an_item_in_the_panel_but_out_of_the_selection_keeps_the_panel_glyph_and_loses_the_colour(gui):
-    # This is the disagreement that shows while the panel is updating: the old content stays on screen
-    # until the new is ready, so it can still list items the new selection has dropped. The icon says
-    # "in the panel" either way, and the colour is what reports it.
-    listed_and_selected = marks(in_info_panel=True, in_selection=True)
-    listed_only = marks(in_info_panel=True, in_selection=False)
-    assert listed_only.selection_mark_glyph == listed_and_selected.selection_mark_glyph
-    assert listed_only.selection_status is listed_and_selected.selection_status
-    assert listed_only.selection_mark_color != listed_and_selected.selection_mark_color
+    def test_a_non_matching_item_is_dimmed_while_a_search_runs(self, gui):
+        # The titles the search did not find stay visible but recede, so the tooltip still says what is under
+        # the cursor while making the answer to the query obvious.
+        assert marks(search_active=True, is_search_match=False).title_color != \
+            marks(search_active=True, is_search_match=True).title_color
 
+    def test_every_title_is_at_full_brightness_when_no_search_is_running(self, gui):
+        # Negative control for the test above: dimming is what a search does, so with none running the two
+        # would-be cases have to agree. Without this, a `decorate_item` that dimmed by `is_search_match`
+        # alone would satisfy everything above.
+        assert marks(search_active=False, is_search_match=False).title_color == \
+            marks(search_active=False, is_search_match=True).title_color
+        assert marks(search_active=False).title_color == marks(search_active=True, is_search_match=True).title_color
 
-def test_no_search_mark_is_drawn_when_no_search_is_running(gui):
-    m = marks(search_active=False)
-    assert m.search_mark_color is None, "no colour means no magnifying glass at all, not a colourless one"
-    assert m.search_status is annotation.ITEM_SEARCH_OFF
+    def test_an_item_in_the_panel_can_be_jumped_to(self, gui):
+        # Right-clicking the plot scrolls the info panel to an item under the cursor, and the tooltip shows
+        # the help line for that only when there is one to jump to.
+        assert annotation.is_jumpable(marks(in_info_panel=True, in_selection=True))
 
+    def test_an_item_outside_the_panel_cannot_be_jumped_to(self, gui):
+        # There is nothing in the panel to scroll to.
+        assert not annotation.is_jumpable(marks(in_info_panel=False, in_selection=True))
 
-def test_a_search_match_and_a_non_match_are_told_apart(gui):
-    matched = marks(search_active=True, is_search_match=True)
-    missed = marks(search_active=True, is_search_match=False)
-    assert matched.search_status is annotation.ITEM_SEARCH_MATCH
-    assert missed.search_status is annotation.ITEM_SEARCH_NOMATCH
-    assert matched.search_mark_color != missed.search_mark_color
-
-
-def test_a_non_matching_item_is_dimmed_while_a_search_runs(gui):
-    # The titles the search did not find stay visible but recede, so the tooltip still says what is under
-    # the cursor while making the answer to the query obvious.
-    assert marks(search_active=True, is_search_match=False).title_color != \
-        marks(search_active=True, is_search_match=True).title_color
-
-
-def test_every_title_is_at_full_brightness_when_no_search_is_running(gui):
-    # Negative control for the test above: dimming is what a search does, so with none running the two
-    # would-be cases have to agree. Without this, a `decorate_item` that dimmed by `is_search_match`
-    # alone would satisfy everything above.
-    assert marks(search_active=False, is_search_match=False).title_color == \
-        marks(search_active=False, is_search_match=True).title_color
-    assert marks(search_active=False).title_color == marks(search_active=True, is_search_match=True).title_color
-
-
-def test_an_item_in_the_panel_can_be_jumped_to(gui):
-    # Right-clicking the plot scrolls the info panel to an item under the cursor, and the tooltip shows
-    # the help line for that only when there is one to jump to.
-    assert annotation.is_jumpable(marks(in_info_panel=True, in_selection=True))
-
-
-def test_an_item_outside_the_panel_cannot_be_jumped_to(gui):
-    # There is nothing in the panel to scroll to.
-    assert not annotation.is_jumpable(marks(in_info_panel=False, in_selection=True))
-
-
-def test_an_item_the_search_did_not_find_cannot_be_jumped_to(gui):
-    # It is dimmed rather than offered as a destination, even though it is listed in the panel.
-    assert not annotation.is_jumpable(marks(in_info_panel=True, search_active=True, is_search_match=False))
-    assert annotation.is_jumpable(marks(in_info_panel=True, search_active=True, is_search_match=True))
+    def test_an_item_the_search_did_not_find_cannot_be_jumped_to(self, gui):
+        # It is dimmed rather than offered as a destination, even though it is listed in the panel.
+        assert not annotation.is_jumpable(marks(in_info_panel=True, search_active=True, is_search_match=False))
+        assert annotation.is_jumpable(marks(in_info_panel=True, search_active=True, is_search_match=True))
 
 
 # --------------------------------------------------------------------------------
 # The plot highlight, which `update` does immediately rather than in the background
 
-def test_the_datapoints_under_the_cursor_are_highlighted_at_once(gui):
-    # The tooltip can afford to arrive a frame or two late; the highlight cannot, since it is the
-    # feedback that says the plot is tracking the mouse at all.
-    prime_mouse_at(gui, (100.0, 100.0))
-    gui.dpg.mouse_pos = [120.0, 100.0]
-    annotation.update()
-    xs, ys = gui.dpg.values[HOVER_SERIES]
-    assert sorted(xs) == [1.0, 3.0]
-    assert sorted(ys) == [10.0, 30.0]
+class TestThePlotHighlightWhichUpdateDoesImmediatelyRatherThanInTheBackground:
+    def test_the_datapoints_under_the_cursor_are_highlighted_at_once(self, gui):
+        # The tooltip can afford to arrive a frame or two late; the highlight cannot, since it is the
+        # feedback that says the plot is tracking the mouse at all.
+        prime_mouse_at(gui, (100.0, 100.0))
+        gui.dpg.mouse_pos = [120.0, 100.0]
+        annotation.update()
+        xs, ys = gui.dpg.values[HOVER_SERIES]
+        assert sorted(xs) == [1.0, 3.0]
+        assert sorted(ys) == [10.0, 30.0]
 
+    def test_the_highlight_is_cleared_when_the_cursor_is_over_nothing(self, gui):
+        prime_mouse_at(gui, (100.0, 100.0))
+        gui.at_mouse["idxs"] = np.array([], dtype=np.int64)
+        gui.dpg.mouse_pos = [120.0, 100.0]
+        annotation.update()
+        assert gui.dpg.values[HOVER_SERIES] == [[], []]
 
-def test_the_highlight_is_cleared_when_the_cursor_is_over_nothing(gui):
-    prime_mouse_at(gui, (100.0, 100.0))
-    gui.at_mouse["idxs"] = np.array([], dtype=np.int64)
-    gui.dpg.mouse_pos = [120.0, 100.0]
-    annotation.update()
-    assert gui.dpg.values[HOVER_SERIES] == [[], []]
+    def test_the_highlight_is_cleared_when_no_dataset_is_loaded(self, gui, monkeypatch):
+        # The plot is empty, but its series still exist, so something has to say so.
+        prime_mouse_at(gui, (100.0, 100.0))
+        monkeypatch.setattr(app_state, "dataset", None, raising=False)
+        gui.dpg.mouse_pos = [120.0, 100.0]
+        annotation.update()
+        assert gui.dpg.values[HOVER_SERIES] == [[], []]
 
+    def test_a_mouse_that_has_not_moved_does_not_redraw_the_highlight(self, gui):
+        # It would be the same points in the same places, and this runs on every mouse event.
+        prime_mouse_at(gui, (100.0, 100.0))
+        annotation.update()
+        assert HOVER_SERIES not in gui.dpg.values
 
-def test_the_highlight_is_cleared_when_no_dataset_is_loaded(gui, monkeypatch):
-    # The plot is empty, but its series still exist, so something has to say so.
-    prime_mouse_at(gui, (100.0, 100.0))
-    monkeypatch.setattr(app_state, "dataset", None, raising=False)
-    gui.dpg.mouse_pos = [120.0, 100.0]
-    annotation.update()
-    assert gui.dpg.values[HOVER_SERIES] == [[], []]
-
-
-def test_a_mouse_that_has_not_moved_does_not_redraw_the_highlight(gui):
-    # It would be the same points in the same places, and this runs on every mouse event.
-    prime_mouse_at(gui, (100.0, 100.0))
-    annotation.update()
-    assert HOVER_SERIES not in gui.dpg.values
-
-
-def test_forcing_an_update_redraws_the_highlight_though_the_mouse_is_still(gui):
-    # Negative control for the test above, and what `force` is for: the mouse wheel zooms the plot, so
-    # the points under a stationary cursor change without any mouse movement to notice.
-    prime_mouse_at(gui, (100.0, 100.0))
-    annotation.update(force=True)
-    assert HOVER_SERIES in gui.dpg.values
+    def test_forcing_an_update_redraws_the_highlight_though_the_mouse_is_still(self, gui):
+        # Negative control for the test above, and what `force` is for: the mouse wheel zooms the plot, so
+        # the points under a stationary cursor change without any mouse movement to notice.
+        prime_mouse_at(gui, (100.0, 100.0))
+        annotation.update(force=True)
+        assert HOVER_SERIES in gui.dpg.values
 
 
 # --------------------------------------------------------------------------------
 # Hiding the tooltip on movement
 
-def test_moving_the_mouse_hides_the_tooltip(gui):
-    # So that the user can move the cursor onto where the tooltip was. A window swallows the mouse across
-    # its whole rect, and `get_plot_mouse_pos` then stops reporting plot coordinates.
-    prime_mouse_at(gui, (100.0, 100.0))
-    gui.dpg.mouse_pos = [120.0, 100.0]
-    annotation.update()
-    assert TOOLTIP in gui.dpg.hidden
+class TestHidingTheTooltipOnMovement:
+    def test_moving_the_mouse_hides_the_tooltip(self, gui):
+        # So that the user can move the cursor onto where the tooltip was. A window swallows the mouse across
+        # its whole rect, and `get_plot_mouse_pos` then stops reporting plot coordinates.
+        prime_mouse_at(gui, (100.0, 100.0))
+        gui.dpg.mouse_pos = [120.0, 100.0]
+        annotation.update()
+        assert TOOLTIP in gui.dpg.hidden
 
-
-def test_forcing_an_update_without_moving_the_mouse_leaves_the_tooltip_up(gui):
-    # Negative control for the test above: the two conditions are separate, and `force` is not movement.
-    # Hiding here would make the wheel flicker the tooltip away on every notch.
-    prime_mouse_at(gui, (100.0, 100.0))
-    annotation.update(force=True)
-    assert TOOLTIP not in gui.dpg.hidden
+    def test_forcing_an_update_without_moving_the_mouse_leaves_the_tooltip_up(self, gui):
+        # Negative control for the test above: the two conditions are separate, and `force` is not movement.
+        # Hiding here would make the wheel flicker the tooltip away on every notch.
+        prime_mouse_at(gui, (100.0, 100.0))
+        annotation.update(force=True)
+        assert TOOLTIP not in gui.dpg.hidden
 
 
 # --------------------------------------------------------------------------------
 # Submitting the rebuild
 
-def test_every_update_submits_a_rebuild(gui):
-    prime_mouse_at(gui, (100.0, 100.0))
-    annotation.update()
-    assert len(gui.submitted) == 1
+class TestSubmittingTheRebuild:
+    def test_every_update_submits_a_rebuild(self, gui):
+        prime_mouse_at(gui, (100.0, 100.0))
+        annotation.update()
+        assert len(gui.submitted) == 1
 
-
-def test_the_submitted_task_carries_the_wait_flag(gui):
-    # The caller knows whether more input is likely -- mouse movement usually comes in bursts -- and a
-    # wait is what lets a burst collapse into one rebuild.
-    prime_mouse_at(gui, (100.0, 100.0))
-    annotation.update(wait=False)
-    assert gui.submitted[0][1].wait is False
-    annotation.update(wait=True)
-    assert gui.submitted[1][1].wait is True
+    def test_the_submitted_task_carries_the_wait_flag(self, gui):
+        # The caller knows whether more input is likely -- mouse movement usually comes in bursts -- and a
+        # wait is what lets a burst collapse into one rebuild.
+        prime_mouse_at(gui, (100.0, 100.0))
+        annotation.update(wait=False)
+        assert gui.submitted[0][1].wait is False
+        annotation.update(wait=True)
+        assert gui.submitted[1][1].wait is True
 
 
 # --------------------------------------------------------------------------------
@@ -305,87 +294,82 @@ def run_worker():
     return task_env
 
 
-def test_no_tooltip_is_built_while_a_modal_window_is_open(gui, monkeypatch):
-    # The rest of the GUI is meant to be inactive behind a modal, and a tooltip is drawn over everything.
-    monkeypatch.setattr(app_state, "is_any_modal_window_visible", lambda: True, raising=False)
-    run_worker()
-    assert TOOLTIP in gui.dpg.hidden
-
-
-def test_no_tooltip_is_built_once_the_mouse_has_left_the_plot(gui, monkeypatch):
-    # The task waits in a queue before it runs, so by the time it does, the cursor it was submitted for
-    # may be somewhere else entirely.
-    monkeypatch.setattr(app_state, "mouse_inside_plot_widget", lambda: False, raising=False)
-    run_worker()
-    assert TOOLTIP in gui.dpg.hidden
-
-
-def test_no_tooltip_is_built_when_the_cursor_is_over_nothing(gui):
-    gui.at_mouse["idxs"] = np.array([], dtype=np.int64)
-    run_worker()
-    assert TOOLTIP in gui.dpg.hidden
-
-
-def test_the_list_of_shown_items_is_emptied_when_the_cursor_is_over_nothing(gui):
-    # `data_idxs` says which items the tooltip is currently listing, and `app.py`'s right-click handler
-    # reads it to decide whether the click can scroll the info panel to one of them. Left stale, a right
-    # click acts on items that are no longer on screen.
-    annotation.data_idxs.extend([1, 3])
-    gui.at_mouse["idxs"] = np.array([], dtype=np.int64)
-    run_worker()
-    assert annotation.data_idxs == []
-
-
-@pytest.mark.parametrize("guard", ["modal", "outside_the_plot"])
-def test_the_list_of_shown_items_is_emptied_by_every_path_that_takes_the_tooltip_down(gui, monkeypatch, guard):
-    # The same reasoning as the test above, and the reason it is parameterized: three paths hide the
-    # tooltip, and `data_idxs` describes what the tooltip is showing, so all three have to agree. Two of
-    # them used to return before clearing it.
-    if guard == "modal":
+class TestTheWorkerSEarlyExits:
+    def test_no_tooltip_is_built_while_a_modal_window_is_open(self, gui, monkeypatch):
+        # The rest of the GUI is meant to be inactive behind a modal, and a tooltip is drawn over everything.
         monkeypatch.setattr(app_state, "is_any_modal_window_visible", lambda: True, raising=False)
-    else:
+        run_worker()
+        assert TOOLTIP in gui.dpg.hidden
+
+    def test_no_tooltip_is_built_once_the_mouse_has_left_the_plot(self, gui, monkeypatch):
+        # The task waits in a queue before it runs, so by the time it does, the cursor it was submitted for
+        # may be somewhere else entirely.
         monkeypatch.setattr(app_state, "mouse_inside_plot_widget", lambda: False, raising=False)
-    annotation.data_idxs.extend([1, 3])
-    run_worker()
-    assert annotation.data_idxs == []
+        run_worker()
+        assert TOOLTIP in gui.dpg.hidden
 
+    def test_no_tooltip_is_built_when_the_cursor_is_over_nothing(self, gui):
+        gui.at_mouse["idxs"] = np.array([], dtype=np.int64)
+        run_worker()
+        assert TOOLTIP in gui.dpg.hidden
 
-def test_the_guards_run_before_anything_is_built(gui, monkeypatch):
-    # The stand-in raises from `add_group`, so this is really asserting that the three tests above are
-    # testing the guards rather than a build that happens to be harmless. Stated once, explicitly,
-    # because it is the property that makes this whole module testable without a DPG context.
-    monkeypatch.setattr(app_state, "is_any_modal_window_visible", lambda: True, raising=False)
-    run_worker()  # would raise AssertionError from `RecordingDPG.add_group`
-    monkeypatch.setattr(app_state, "is_any_modal_window_visible", lambda: False, raising=False)
-    gui.at_mouse["idxs"] = np.array([], dtype=np.int64)
-    run_worker()
+    def test_the_list_of_shown_items_is_emptied_when_the_cursor_is_over_nothing(self, gui):
+        # `data_idxs` says which items the tooltip is currently listing, and `app.py`'s right-click handler
+        # reads it to decide whether the click can scroll the info panel to one of them. Left stale, a right
+        # click acts on items that are no longer on screen.
+        annotation.data_idxs.extend([1, 3])
+        gui.at_mouse["idxs"] = np.array([], dtype=np.int64)
+        run_worker()
+        assert annotation.data_idxs == []
+
+    @pytest.mark.parametrize("guard", ["modal", "outside_the_plot"])
+    def test_the_list_of_shown_items_is_emptied_by_every_path_that_takes_the_tooltip_down(self, gui, monkeypatch, guard):
+        # The same reasoning as the test above, and the reason it is parameterized: three paths hide the
+        # tooltip, and `data_idxs` describes what the tooltip is showing, so all three have to agree. Two of
+        # them used to return before clearing it.
+        if guard == "modal":
+            monkeypatch.setattr(app_state, "is_any_modal_window_visible", lambda: True, raising=False)
+        else:
+            monkeypatch.setattr(app_state, "mouse_inside_plot_widget", lambda: False, raising=False)
+        annotation.data_idxs.extend([1, 3])
+        run_worker()
+        assert annotation.data_idxs == []
+
+    def test_the_guards_run_before_anything_is_built(self, gui, monkeypatch):
+        # The stand-in raises from `add_group`, so this is really asserting that the three tests above are
+        # testing the guards rather than a build that happens to be harmless. Stated once, explicitly,
+        # because it is the property that makes this whole module testable without a DPG context.
+        monkeypatch.setattr(app_state, "is_any_modal_window_visible", lambda: True, raising=False)
+        run_worker()  # would raise AssertionError from `RecordingDPG.add_group`
+        monkeypatch.setattr(app_state, "is_any_modal_window_visible", lambda: False, raising=False)
+        gui.at_mouse["idxs"] = np.array([], dtype=np.int64)
+        run_worker()
 
 
 # --------------------------------------------------------------------------------
 # Clearing
 
-def test_clearing_the_hover_hides_the_tooltip_and_the_highlight(gui):
-    # Both halves: the tooltip is a window and the highlight is a scatter series, and leaving either
-    # behind leaves the plot claiming the cursor is somewhere it is not.
-    annotation.clear_mouse_hover()
-    assert TOOLTIP in gui.dpg.hidden
-    assert gui.dpg.values[HOVER_SERIES] == [[], []]
+class TestClearing:
+    def test_clearing_the_hover_hides_the_tooltip_and_the_highlight(self, gui):
+        # Both halves: the tooltip is a window and the highlight is a scatter series, and leaving either
+        # behind leaves the plot claiming the cursor is somewhere it is not.
+        annotation.clear_mouse_hover()
+        assert TOOLTIP in gui.dpg.hidden
+        assert gui.dpg.values[HOVER_SERIES] == [[], []]
 
+    def test_clearing_tasks_before_anything_has_been_rendered_is_harmless(self, monkeypatch):
+        # Shutdown runs this whether or not the plot was ever hovered, and the task manager is created lazily.
+        monkeypatch.setattr(annotation, "_task_manager", None)
+        annotation.clear_tasks()
 
-def test_clearing_tasks_before_anything_has_been_rendered_is_harmless(monkeypatch):
-    # Shutdown runs this whether or not the plot was ever hovered, and the task manager is created lazily.
-    monkeypatch.setattr(annotation, "_task_manager", None)
-    annotation.clear_tasks()
+    def test_clearing_tasks_reaches_the_task_manager_once_there_is_one(self, monkeypatch):
+        # Negative control for the test above: the guard skips a missing manager rather than skipping always.
+        cleared = []
 
+        class FakeTaskManager:  # not an `env`: `clear` is one of its reserved names
+            def clear(self, wait):
+                cleared.append(wait)
 
-def test_clearing_tasks_reaches_the_task_manager_once_there_is_one(monkeypatch):
-    # Negative control for the test above: the guard skips a missing manager rather than skipping always.
-    cleared = []
-
-    class FakeTaskManager:  # not an `env`: `clear` is one of its reserved names
-        def clear(self, wait):
-            cleared.append(wait)
-
-    monkeypatch.setattr(annotation, "_task_manager", FakeTaskManager())
-    annotation.clear_tasks(wait=True)
-    assert cleared == [True]
+        monkeypatch.setattr(annotation, "_task_manager", FakeTaskManager())
+        annotation.clear_tasks(wait=True)
+        assert cleared == [True]

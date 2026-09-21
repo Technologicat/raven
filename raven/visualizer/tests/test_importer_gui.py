@@ -64,6 +64,7 @@ class FakeImporter:
     `raven.visualizer.importer` here would take the whole file out of CI -- see `_importer` in the module
     under test. Identity is still what a test asserts on, so passing anything else would fail.
     """
+
     def __init__(self, running=False, llm_stages=()):
         self.running = running
         self.started_with = None  # (output_filename, input_filenames), as `start_task` received them
@@ -155,213 +156,206 @@ def gui(monkeypatch):
 # --------------------------------------------------------------------------------
 # What this module is allowed to cost
 
-def test_the_pipeline_is_not_imported_at_module_level():
-    """Asserted against the source, because by the time this runs another test may have imported it anyway.
+class TestWhatThisModuleIsAllowedToCost:
+    def test_the_pipeline_is_not_imported_at_module_level(self):
+        """Asserted against the source, because by the time this runs another test may have imported it anyway.
 
-    A top-level `from . import importer` here would put every test in this file into the `ml` group, and the
-    only visible consequence would be that CI stopped running them -- no failure, just a skip. So the guard
-    has to be structural: the pipeline is reached through `_importer`, and nothing else.
-    """
-    tree = ast.parse(pathlib.Path(importer_gui.__file__).read_text(encoding="utf-8"))
-    offenders = [node.lineno for node in tree.body
-                 if isinstance(node, ast.ImportFrom) and any(alias.name == "importer" for alias in node.names)]
-    assert not offenders, (f"importer_gui.py imports the pipeline at module level "
-                           f"(line{textutil.plural_s(len(offenders))} {offenders}); "
-                           f"that takes this whole test file out of CI")
+        A top-level `from . import importer` here would put every test in this file into the `ml` group, and the
+        only visible consequence would be that CI stopped running them -- no failure, just a skip. So the guard
+        has to be structural: the pipeline is reached through `_importer`, and nothing else.
+        """
+        tree = ast.parse(pathlib.Path(importer_gui.__file__).read_text(encoding="utf-8"))
+        offenders = [node.lineno for node in tree.body
+                     if isinstance(node, ast.ImportFrom) and any(alias.name == "importer" for alias in node.names)]
+        assert not offenders, (f"importer_gui.py imports the pipeline at module level "
+                               f"(line{textutil.plural_s(len(offenders))} {offenders}); "
+                               f"that takes this whole test file out of CI")
 
 
 # --------------------------------------------------------------------------------
 # Layout
 
-def test_the_window_carries_every_tag_the_module_addresses_it_by(gui):
-    """The layout and the callbacks were two distant regions of `app.py`, joined only by these names."""
-    for tag in (WINDOW, INPUT_TABLE, OUTPUT_TABLE, STARTSTOP, STARTSTOP_HEADING, PROGRESS_BAR, STATUS_TEXT,
-                "importer_save_button",  # tag
-                "importer_select_input_files_button",  # tag
-                "importer_startstop_tooltip_text",  # tag
-                "importer_startstop_heading_text_tooltip_text"):  # tag
-        assert dpg.does_item_exist(tag), f"{tag} is missing from the built window"
+class TestLayout:
+    def test_the_window_carries_every_tag_the_module_addresses_it_by(self, gui):
+        """The layout and the callbacks were two distant regions of `app.py`, joined only by these names."""
+        for tag in (WINDOW, INPUT_TABLE, OUTPUT_TABLE, STARTSTOP, STARTSTOP_HEADING, PROGRESS_BAR, STATUS_TEXT,
+                    "importer_save_button",  # tag
+                    "importer_select_input_files_button",  # tag
+                    "importer_startstop_tooltip_text",  # tag
+                    "importer_startstop_heading_text_tooltip_text"):  # tag
+            assert dpg.does_item_exist(tag), f"{tag} is missing from the built window"
 
-
-def test_the_window_starts_hidden_and_the_progress_bar_with_it(gui):
-    """Ctrl+I is the way in, so the window must not appear on its own; the bar belongs to a running import."""
-    assert dpg.get_item_configuration(WINDOW)["show"] is False
-    assert dpg.get_item_configuration(PROGRESS_BAR)["show"] is False
+    def test_the_window_starts_hidden_and_the_progress_bar_with_it(self, gui):
+        """Ctrl+I is the way in, so the window must not appear on its own; the bar belongs to a running import."""
+        assert dpg.get_item_configuration(WINDOW)["show"] is False
+        assert dpg.get_item_configuration(PROGRESS_BAR)["show"] is False
 
 
 # --------------------------------------------------------------------------------
 # The two filename tables
 
-def test_both_tables_start_out_saying_nothing_is_selected(gui):
-    assert table_texts(INPUT_TABLE) == ["[not selected]"]
-    assert table_texts(OUTPUT_TABLE) == ["[not selected]"]
+class TestTheTwoFilenameTables:
+    def test_both_tables_start_out_saying_nothing_is_selected(self, gui):
+        assert table_texts(INPUT_TABLE) == ["[not selected]"]
+        assert table_texts(OUTPUT_TABLE) == ["[not selected]"]
 
+    def test_the_input_table_lists_one_row_per_file_by_basename(self, gui):
+        importer_gui._input_files_box << ["/home/someone/papers/first.bib", "/elsewhere/second.bib"]
+        importer_gui._update_input_files_table()
+        assert table_texts(INPUT_TABLE) == ["first.bib", "second.bib"]
 
-def test_the_input_table_lists_one_row_per_file_by_basename(gui):
-    importer_gui._input_files_box << ["/home/someone/papers/first.bib", "/elsewhere/second.bib"]
-    importer_gui._update_input_files_table()
-    assert table_texts(INPUT_TABLE) == ["first.bib", "second.bib"]
+    def test_the_input_table_goes_back_to_not_selected_when_the_files_are_cleared(self, gui):
+        importer_gui._input_files_box << ["/home/someone/papers/first.bib"]
+        importer_gui._update_input_files_table()
+        assert table_texts(INPUT_TABLE) == ["first.bib"], ("nothing was ever listed, so this fixture cannot "
+                                                           "tell a cleared table from one that never filled")
 
+        importer_gui._input_files_box << []
+        importer_gui._update_input_files_table()
+        assert table_texts(INPUT_TABLE) == ["[not selected]"]
 
-def test_the_input_table_goes_back_to_not_selected_when_the_files_are_cleared(gui):
-    importer_gui._input_files_box << ["/home/someone/papers/first.bib"]
-    importer_gui._update_input_files_table()
-    assert table_texts(INPUT_TABLE) == ["first.bib"], ("nothing was ever listed, so this fixture cannot "
-                                                       "tell a cleared table from one that never filled")
+    def test_the_output_table_shows_the_basename_of_the_chosen_file(self, gui):
+        importer_gui._output_file_box << "/home/someone/datasets/mydata.pickle"
+        importer_gui._update_output_file_table()
+        assert table_texts(OUTPUT_TABLE) == ["mydata.pickle"]
 
-    importer_gui._input_files_box << []
-    importer_gui._update_input_files_table()
-    assert table_texts(INPUT_TABLE) == ["[not selected]"]
-
-
-def test_the_output_table_shows_the_basename_of_the_chosen_file(gui):
-    importer_gui._output_file_box << "/home/someone/datasets/mydata.pickle"
-    importer_gui._update_output_file_table()
-    assert table_texts(OUTPUT_TABLE) == ["mydata.pickle"]
-
-
-def test_refreshing_a_table_replaces_its_rows_rather_than_appending(gui):
-    """The refresh deletes the old rows first, so picking a second, shorter set must not leave the first."""
-    importer_gui._input_files_box << ["/a/one.bib", "/a/two.bib", "/a/three.bib"]
-    importer_gui._update_input_files_table()
-    importer_gui._input_files_box << ["/a/four.bib"]
-    importer_gui._update_input_files_table()
-    assert table_texts(INPUT_TABLE) == ["four.bib"]
+    def test_refreshing_a_table_replaces_its_rows_rather_than_appending(self, gui):
+        """The refresh deletes the old rows first, so picking a second, shorter set must not leave the first."""
+        importer_gui._input_files_box << ["/a/one.bib", "/a/two.bib", "/a/three.bib"]
+        importer_gui._update_input_files_table()
+        importer_gui._input_files_box << ["/a/four.bib"]
+        importer_gui._update_input_files_table()
+        assert table_texts(INPUT_TABLE) == ["four.bib"]
 
 
 # --------------------------------------------------------------------------------
 # Drag-and-drop
 
-def test_dropped_files_fill_the_input_table_and_open_the_window(gui):
-    importer_gui.import_bibtex_files(["/tmp/dropped.bib"])
-    assert table_texts(INPUT_TABLE) == ["dropped.bib"]
-    assert dpg.get_item_configuration(WINDOW)["show"] is True
+class TestDragAndDrop:
+    def test_dropped_files_fill_the_input_table_and_open_the_window(self, gui):
+        importer_gui.import_bibtex_files(["/tmp/dropped.bib"])
+        assert table_texts(INPUT_TABLE) == ["dropped.bib"]
+        assert dpg.get_item_configuration(WINDOW)["show"] is True
 
+    def test_a_drop_stops_short_of_starting_the_import(self, gui):
+        """The importer also needs an output dataset, which is the user's next step."""
+        importer_gui.import_bibtex_files(["/tmp/dropped.bib"])
+        assert gui.started_with is None
 
-def test_a_drop_stops_short_of_starting_the_import(gui):
-    """The importer also needs an output dataset, which is the user's next step."""
-    importer_gui.import_bibtex_files(["/tmp/dropped.bib"])
-    assert gui.started_with is None
-
-
-def test_the_dropped_list_is_copied_rather_than_kept(gui):
-    """The box outlives the call, and `filedrop` is free to reuse the list it handed over."""
-    dropped = ["/tmp/dropped.bib"]
-    importer_gui.import_bibtex_files(dropped)
-    dropped.append("/tmp/an_afterthought.bib")
-    assert unbox(importer_gui._input_files_box) == ["/tmp/dropped.bib"]
+    def test_the_dropped_list_is_copied_rather_than_kept(self, gui):
+        """The box outlives the call, and `filedrop` is free to reuse the list it handed over."""
+        dropped = ["/tmp/dropped.bib"]
+        importer_gui.import_bibtex_files(dropped)
+        dropped.append("/tmp/an_afterthought.bib")
+        assert unbox(importer_gui._input_files_box) == ["/tmp/dropped.bib"]
 
 
 # --------------------------------------------------------------------------------
 # Showing and hiding the window
 
-def test_showing_an_already_open_window_leaves_the_position_the_user_gave_it(gui, monkeypatch):
-    recentered = []
-    monkeypatch.setattr(importer_gui.guiutils, "recenter_window",
-                        lambda *args, **kwargs: recentered.append(args))
+class TestShowingAndHidingTheWindow:
+    def test_showing_an_already_open_window_leaves_the_position_the_user_gave_it(self, gui, monkeypatch):
+        recentered = []
+        monkeypatch.setattr(importer_gui.guiutils, "recenter_window",
+                            lambda *args, **kwargs: recentered.append(args))
 
-    importer_gui.show_window()
-    assert recentered, ("the window was not recentered even on the way in, so this fixture cannot tell "
-                        "a skipped recentering from one that never happens")
+        importer_gui.show_window()
+        assert recentered, ("the window was not recentered even on the way in, so this fixture cannot tell "
+                            "a skipped recentering from one that never happens")
 
-    monkeypatch.setattr(dpg, "is_item_visible", lambda tag: True)  # nothing renders here, so say so directly
-    importer_gui.show_window()
-    assert len(recentered) == 1
+        monkeypatch.setattr(dpg, "is_item_visible", lambda tag: True)  # nothing renders here, so say so directly
+        importer_gui.show_window()
+        assert len(recentered) == 1
 
-
-def test_toggle_hides_a_window_that_is_open(gui, monkeypatch):
-    monkeypatch.setattr(dpg, "is_item_visible", lambda tag: True)
-    importer_gui.toggle_window()
-    assert dpg.get_item_configuration(WINDOW)["show"] is False
+    def test_toggle_hides_a_window_that_is_open(self, gui, monkeypatch):
+        monkeypatch.setattr(dpg, "is_item_visible", lambda tag: True)
+        importer_gui.toggle_window()
+        assert dpg.get_item_configuration(WINDOW)["show"] is False
 
 
 # --------------------------------------------------------------------------------
 # Starting and stopping
 
-def test_an_import_starts_once_both_filenames_are_known(gui):
-    importer_gui._output_file_box << "/out/dataset.pickle"
-    importer_gui._input_files_box << ["/in/one.bib", "/in/two.bib"]
-    importer_gui.start_or_stop()
-    assert gui.started_with == ("/out/dataset.pickle", ("/in/one.bib", "/in/two.bib"))
+class TestStartingAndStopping:
+    def test_an_import_starts_once_both_filenames_are_known(self, gui):
+        importer_gui._output_file_box << "/out/dataset.pickle"
+        importer_gui._input_files_box << ["/in/one.bib", "/in/two.bib"]
+        importer_gui.start_or_stop()
+        assert gui.started_with == ("/out/dataset.pickle", ("/in/one.bib", "/in/two.bib"))
 
+    @pytest.mark.parametrize("output_file, input_files",
+                             [("", ["/in/one.bib"]),
+                              ("/out/dataset.pickle", []),
+                              ("", [])],
+                             ids=["no output file", "no input files", "neither"])
+    def test_an_import_is_refused_while_a_filename_is_missing(self, gui, output_file, input_files):
+        importer_gui._output_file_box << output_file
+        importer_gui._input_files_box << input_files
+        importer_gui.start_or_stop()
+        assert gui.started_with is None
+        assert is_enabled(STARTSTOP), "the button was disabled for an import that never started"
 
-@pytest.mark.parametrize("output_file, input_files",
-                         [("", ["/in/one.bib"]),
-                          ("/out/dataset.pickle", []),
-                          ("", [])],
-                         ids=["no output file", "no input files", "neither"])
-def test_an_import_is_refused_while_a_filename_is_missing(gui, output_file, input_files):
-    importer_gui._output_file_box << output_file
-    importer_gui._input_files_box << input_files
-    importer_gui.start_or_stop()
-    assert gui.started_with is None
-    assert is_enabled(STARTSTOP), "the button was disabled for an import that never started"
+    def test_starting_disables_the_button_until_the_task_says_it_is_running(self, gui):
+        """Prevents a second click queueing a second import while the first is still getting going."""
+        importer_gui._output_file_box << "/out/dataset.pickle"
+        importer_gui._input_files_box << ["/in/one.bib"]
+        importer_gui.start_or_stop()
+        assert not is_enabled(STARTSTOP)
+        assert not is_enabled(STARTSTOP_HEADING)
+        assert dpg.get_item_configuration(PROGRESS_BAR)["show"] is True
 
+        gui.started_callback(None)
+        assert is_enabled(STARTSTOP)
+        assert dpg.get_item_label(STARTSTOP) == fa.ICON_STOP
+        assert dpg.get_value("importer_startstop_tooltip_text") == "Cancel BibTeX import [Ctrl+Enter]"  # tag
 
-def test_starting_disables_the_button_until_the_task_says_it_is_running(gui):
-    """Prevents a second click queueing a second import while the first is still getting going."""
-    importer_gui._output_file_box << "/out/dataset.pickle"
-    importer_gui._input_files_box << ["/in/one.bib"]
-    importer_gui.start_or_stop()
-    assert not is_enabled(STARTSTOP)
-    assert not is_enabled(STARTSTOP_HEADING)
-    assert dpg.get_item_configuration(PROGRESS_BAR)["show"] is True
+    def test_the_same_button_cancels_a_running_import(self, gui):
+        gui.running = True
+        importer_gui.start_or_stop()
+        assert gui.cancelled
+        assert not is_enabled(STARTSTOP), "the button must stay disabled until the task actually exits"
+        assert dpg.get_item_label(STARTSTOP_HEADING) == "Canceling..."
 
-    gui.started_callback(None)
-    assert is_enabled(STARTSTOP)
-    assert dpg.get_item_label(STARTSTOP) == fa.ICON_STOP
-    assert dpg.get_value("importer_startstop_tooltip_text") == "Cancel BibTeX import [Ctrl+Enter]"  # tag
+    def test_a_finished_import_hands_the_button_back_saying_start(self, gui):
+        importer_gui._output_file_box << "/out/dataset.pickle"
+        importer_gui._input_files_box << ["/in/one.bib"]
+        importer_gui.start_or_stop()
+        gui.started_callback(None)
+        assert dpg.get_item_label(STARTSTOP) == fa.ICON_STOP, ("the button never changed, so this fixture "
+                                                               "cannot tell a reset from an untouched button")
 
+        gui.running = False
+        gui.done_callback(None)
+        assert dpg.get_item_label(STARTSTOP) == fa.ICON_PLAY
+        assert dpg.get_item_label(STARTSTOP_HEADING) == "Start"
+        assert is_enabled(STARTSTOP)
+        assert dpg.get_item_configuration(PROGRESS_BAR)["show"] is False
 
-def test_the_same_button_cancels_a_running_import(gui):
-    gui.running = True
-    importer_gui.start_or_stop()
-    assert gui.cancelled
-    assert not is_enabled(STARTSTOP), "the button must stay disabled until the task actually exits"
-    assert dpg.get_item_label(STARTSTOP_HEADING) == "Canceling..."
-
-
-def test_a_finished_import_hands_the_button_back_saying_start(gui):
-    importer_gui._output_file_box << "/out/dataset.pickle"
-    importer_gui._input_files_box << ["/in/one.bib"]
-    importer_gui.start_or_stop()
-    gui.started_callback(None)
-    assert dpg.get_item_label(STARTSTOP) == fa.ICON_STOP, ("the button never changed, so this fixture "
-                                                           "cannot tell a reset from an untouched button")
-
-    gui.running = False
-    gui.done_callback(None)
-    assert dpg.get_item_label(STARTSTOP) == fa.ICON_PLAY
-    assert dpg.get_item_label(STARTSTOP_HEADING) == "Start"
-    assert is_enabled(STARTSTOP)
-    assert dpg.get_item_configuration(PROGRESS_BAR)["show"] is False
-
-
-def test_a_second_start_is_ignored_while_a_task_exists(gui):
-    """`start_or_stop` routes a running task to cancel, but `_start` guards the direct path too."""
-    gui.running = True
-    importer_gui._start("/out/dataset.pickle", "/in/one.bib")
-    assert gui.started_with is None
+    def test_a_second_start_is_ignored_while_a_task_exists(self, gui):
+        """`start_or_stop` routes a running task to cancel, but `_start` guards the direct path too."""
+        gui.running = True
+        importer_gui._start("/out/dataset.pickle", "/in/one.bib")
+        assert gui.started_with is None
 
 
 # --------------------------------------------------------------------------------
 # Status display
 
-def test_the_status_line_and_progress_bar_report_what_the_pipeline_published(gui):
-    gui.status_box << "Clustering (3/7)"
-    gui.progress = env(value=0.42)
-    importer_gui.update_status()
-    assert dpg.get_value(STATUS_TEXT) == "Clustering (3/7)"
-    assert dpg.get_value(PROGRESS_BAR) == pytest.approx(0.42)
-    assert dpg.get_item_configuration(PROGRESS_BAR)["overlay"] == "42%"
+class TestStatusDisplay:
+    def test_the_status_line_and_progress_bar_report_what_the_pipeline_published(self, gui):
+        gui.status_box << "Clustering (3/7)"
+        gui.progress = env(value=0.42)
+        importer_gui.update_status()
+        assert dpg.get_value(STATUS_TEXT) == "Clustering (3/7)"
+        assert dpg.get_value(PROGRESS_BAR) == pytest.approx(0.42)
+        assert dpg.get_item_configuration(PROGRESS_BAR)["overlay"] == "42%"
 
-
-def test_the_progress_bar_reads_zero_before_the_pipeline_has_any_progress_to_report(gui):
-    """`importer.progress` is `None` between runs, and the bar is updated every frame regardless."""
-    gui.progress = None
-    importer_gui.update_status()
-    assert dpg.get_value(PROGRESS_BAR) == pytest.approx(0.0)
-    assert dpg.get_item_configuration(PROGRESS_BAR)["overlay"] == "0%"
+    def test_the_progress_bar_reads_zero_before_the_pipeline_has_any_progress_to_report(self, gui):
+        """`importer.progress` is `None` between runs, and the bar is updated every frame regardless."""
+        gui.progress = None
+        importer_gui.update_status()
+        assert dpg.get_value(PROGRESS_BAR) == pytest.approx(0.0)
+        assert dpg.get_item_configuration(PROGRESS_BAR)["overlay"] == "0%"
 
 
 # ---------------------------------------------------------------------------
@@ -376,119 +370,87 @@ class FakeFallback:
 
 class FakeStage:
     """One entry of what `importer.llm_backed_stages()` returns. Only `without` is read here."""
+
     def __init__(self, without):
         self.without = without
 
 
-def test_a_gui_run_lets_the_import_finish_without_a_backend(gui):
-    """The policy difference from `raven-importer`, which stops instead."""
-    importer_gui._start("/out/dataset.pickle", "/in/one.bib")
-    assert gui.started_policy is gui.llm_optional
+class TestTheNoticeThatARunWentAheadWithoutItsLLMBackedStages:
+    def test_a_gui_run_lets_the_import_finish_without_a_backend(self, gui):
+        """The policy difference from `raven-importer`, which stops instead."""
+        importer_gui._start("/out/dataset.pickle", "/in/one.bib")
+        assert gui.started_policy is gui.llm_optional
 
+    def test_an_import_uses_the_configured_backend_unless_told_otherwise(self, gui):
+        importer_gui._start("/out/dataset.pickle", "/in/one.bib")
+        assert gui.started_backend_url is None  # `None` is what the pipeline reads as "take the configured one"
 
-def test_an_import_uses_the_configured_backend_unless_told_otherwise(gui):
-    importer_gui._start("/out/dataset.pickle", "/in/one.bib")
-    assert gui.started_backend_url is None  # `None` is what the pipeline reads as "take the configured one"
+    def test_the_backend_url_from_the_command_line_reaches_the_import(self, gui, monkeypatch):
+        # The pair with the test above. `--backend-url` is set once at startup and every import thereafter
+        # uses it, so what is checked is that `_start` passes on what the app was given.
+        monkeypatch.setattr(importer_gui, "_llm_backend_url", "http://nowhere:1234")
+        importer_gui._start("/out/dataset.pickle", "/in/one.bib")
+        assert gui.started_backend_url == "http://nowhere:1234"
 
+    def test_the_notice_icon_pulsates_and_the_sentence_beside_it_does_not(self, gui):
+        """The icon carries the eye; a sentence is too long to read inside one pulsation cycle.
 
-def test_the_backend_url_from_the_command_line_reaches_the_import(gui, monkeypatch):
-    # The pair with the test above. `--backend-url` is set once at startup and every import thereafter
-    # uses it, so what is checked is that `_start` passes on what the app was given.
-    monkeypatch.setattr(importer_gui, "_llm_backend_url", "http://nowhere:1234")
-    importer_gui._start("/out/dataset.pickle", "/in/one.bib")
-    assert gui.started_backend_url == "http://nowhere:1234"
+        The colour assertion is the load-bearing one. A colour set on the item wins over the theme, so an icon
+        that declares its own would sit at full alpha and never move -- while every assertion about the theme
+        being bound still passed. DPG reports an undeclared colour as the sentinel `(-1, 0, 0, 1)`.
+        """
+        # Through `item_identifiers`, because a DPG getter answers with whichever spelling the widget happens
+        # to have -- alias if it has one, numeric id otherwise -- and a comparison against one of the two is
+        # right for some widgets and silently never matches for the rest.
+        assert dpg.get_item_theme(FALLBACK_ICON) in guiutils.item_identifiers(importer_gui.FALLBACK_ICON_THEME)
+        icon_color = dpg.get_item_configuration(FALLBACK_ICON)["color"]
+        assert icon_color[0] == -1.0, f"the icon declares its own colour {icon_color}, which the theme then cannot animate"
+        assert dpg.get_item_theme(FALLBACK_TEXT) is None, "the sentence should be left steady"
 
+    def test_no_notice_while_nothing_has_been_given_up(self, gui):
+        importer_gui.update_status()
+        assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is False
 
-def test_the_notice_icon_pulsates_and_the_sentence_beside_it_does_not(gui):
-    """The icon carries the eye; a sentence is too long to read inside one pulsation cycle.
+    def test_the_notice_names_both_stages_when_both_were_configured(self, gui):
+        gui._llm_stages = (FakeStage("using frequency keywords"), FakeStage("no summaries"))
+        gui.llm_fallback_box << FakeFallback()
+        importer_gui.update_status()
+        assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is True
+        assert dpg.get_value(FALLBACK_TEXT) == "LLM backend unreachable. Using frequency keywords; no summaries."
 
-    The colour assertion is the load-bearing one. A colour set on the item wins over the theme, so an icon
-    that declares its own would sit at full alpha and never move -- while every assertion about the theme
-    being bound still passed. DPG reports an undeclared colour as the sentinel `(-1, 0, 0, 1)`.
-    """
-    # Through `item_identifiers`, because a DPG getter answers with whichever spelling the widget happens
-    # to have -- alias if it has one, numeric id otherwise -- and a comparison against one of the two is
-    # right for some widgets and silently never matches for the rest.
-    assert dpg.get_item_theme(FALLBACK_ICON) in guiutils.item_identifiers(importer_gui.FALLBACK_ICON_THEME)
-    icon_color = dpg.get_item_configuration(FALLBACK_ICON)["color"]
-    assert icon_color[0] == -1.0, f"the icon declares its own colour {icon_color}, which the theme then cannot animate"
-    assert dpg.get_item_theme(FALLBACK_TEXT) is None, "the sentence should be left steady"
+    def test_the_notice_names_only_the_stage_that_was_configured(self, gui):
+        # The pair with the test above: a run that asked for LLM keywords and no summaries must not be told
+        # its summaries were dropped, there having been none to drop.
+        gui._llm_stages = (FakeStage("using frequency keywords"),)
+        gui.llm_fallback_box << FakeFallback()
+        importer_gui.update_status()
+        assert dpg.get_value(FALLBACK_TEXT) == "LLM backend unreachable. Using frequency keywords."
 
+    def test_the_notice_carries_the_full_diagnosis_in_its_tooltip(self, gui):
+        """The line has room for what happened; which backend, and what to do about it, go underneath."""
+        gui._llm_stages = (FakeStage("no summaries"),)
+        gui.llm_fallback_box << FakeFallback()
+        importer_gui.update_status()
+        caption = dpg.get_value(FALLBACK_TOOLTIP_TEXT)
+        assert "http://nowhere:1234" in caption
+        assert FakeFallback.advice in caption
 
-def test_no_notice_while_nothing_has_been_given_up(gui):
-    importer_gui.update_status()
-    assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is False
-
-
-def test_the_notice_names_both_stages_when_both_were_configured(gui):
-    gui._llm_stages = (FakeStage("using frequency keywords"), FakeStage("no summaries"))
-    gui.llm_fallback_box << FakeFallback()
-    importer_gui.update_status()
-    assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is True
-    assert dpg.get_value(FALLBACK_TEXT) == "LLM backend unreachable. Using frequency keywords; no summaries."
-
-
-def test_the_notice_names_only_the_stage_that_was_configured(gui):
-    # The pair with the test above: a run that asked for LLM keywords and no summaries must not be told
-    # its summaries were dropped, there having been none to drop.
-    gui._llm_stages = (FakeStage("using frequency keywords"),)
-    gui.llm_fallback_box << FakeFallback()
-    importer_gui.update_status()
-    assert dpg.get_value(FALLBACK_TEXT) == "LLM backend unreachable. Using frequency keywords."
-
-
-def test_the_notice_carries_the_full_diagnosis_in_its_tooltip(gui):
-    """The line has room for what happened; which backend, and what to do about it, go underneath."""
-    gui._llm_stages = (FakeStage("no summaries"),)
-    gui.llm_fallback_box << FakeFallback()
-    importer_gui.update_status()
-    caption = dpg.get_value(FALLBACK_TOOLTIP_TEXT)
-    assert "http://nowhere:1234" in caption
-    assert FakeFallback.advice in caption
-
-
-def test_a_later_run_that_gives_up_nothing_takes_the_notice_down(gui):
-    gui._llm_stages = (FakeStage("no summaries"),)
-    gui.llm_fallback_box << FakeFallback()
-    importer_gui.update_status()
-    assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is True, "nothing was shown, so this fixture cannot tell a hide from a never-shown"
-    gui.llm_fallback_box << None  # what `_setup_llm_backend` writes when a fresh run starts
-    importer_gui.update_status()
-    assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is False
+    def test_a_later_run_that_gives_up_nothing_takes_the_notice_down(self, gui):
+        gui._llm_stages = (FakeStage("no summaries"),)
+        gui.llm_fallback_box << FakeFallback()
+        importer_gui.update_status()
+        assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is True, "nothing was shown, so this fixture cannot tell a hide from a never-shown"
+        gui.llm_fallback_box << None  # what `_setup_llm_backend` writes when a fresh run starts
+        importer_gui.update_status()
+        assert dpg.get_item_configuration(FALLBACK_GROUP)["show"] is False
 
 
 # --------------------------------------------------------------------------------
 # File dialogs
 
-def test_no_dialog_is_visible_before_the_dialogs_exist(gui):
-    """They are created late, once the default path is known, and the modal check runs from the first frame."""
-    assert importer_gui.is_any_dialog_visible() is False
-
-
-def test_either_dialog_being_open_counts_as_a_modal(gui, monkeypatch):
-    monkeypatch.setattr(importer_gui, "_filedialog_open", env(is_visible=lambda: False))
-    monkeypatch.setattr(importer_gui, "_filedialog_save", env(is_visible=lambda: False))
-    assert importer_gui.is_any_dialog_visible() is False
-
-    monkeypatch.setattr(importer_gui, "_filedialog_save", env(is_visible=lambda: True))
-    assert importer_gui.is_any_dialog_visible() is True
-
-
-def test_destroying_the_dialogs_is_safe_before_they_exist(gui):
-    """Teardown runs whatever killed the app, including a crash during bootup."""
-    importer_gui.destroy_filedialogs()
-
-
-def test_destroying_the_dialogs_joins_both_tick_threads(gui, monkeypatch):
-    destroyed = []
-    monkeypatch.setattr(importer_gui, "_filedialog_open", env(destroy=lambda: destroyed.append("open")))
-    monkeypatch.setattr(importer_gui, "_filedialog_save", env(destroy=lambda: destroyed.append("save")))
-    importer_gui.destroy_filedialogs()
-    assert destroyed == ["open", "save"]
-
-
 class RecordingDialog:
     """Stands in for a `FileDialog`, recording whether it was asked to open."""
+
     def __init__(self, visible=False):
         self.shown = 0
         self.visible = visible
@@ -509,86 +471,104 @@ def modal_mode(monkeypatch):
     return entered, exited
 
 
-@pytest.mark.parametrize("show, dialog_attribute",
-                         [(lambda: importer_gui.show_open_dialog(), "_filedialog_open"),
-                          (lambda: importer_gui.show_save_dialog(), "_filedialog_save")],
-                         ids=["open", "save"])
-def test_opening_a_dialog_also_enters_modal_mode(gui, monkeypatch, modal_mode, show, dialog_attribute):
-    """The two halves are separable and only one of them is visible on screen.
+class TestFileDialogs:
+    def test_no_dialog_is_visible_before_the_dialogs_exist(self, gui):
+        """They are created late, once the default path is known, and the modal check runs from the first frame."""
+        assert importer_gui.is_any_dialog_visible() is False
 
-    Showing the dialog without entering modal mode leaves every hotkey live behind it, which is the failure
-    `is_any_modal_window_visible` exists to prevent and the one Librarian actually hit. Nothing about the
-    dialog's appearance says whether the second half happened, so it is asserted here.
-    """
-    entered, _ = modal_mode
-    dialog = RecordingDialog()
-    monkeypatch.setattr(importer_gui, dialog_attribute, dialog)
+    def test_either_dialog_being_open_counts_as_a_modal(self, gui, monkeypatch):
+        monkeypatch.setattr(importer_gui, "_filedialog_open", env(is_visible=lambda: False))
+        monkeypatch.setattr(importer_gui, "_filedialog_save", env(is_visible=lambda: False))
+        assert importer_gui.is_any_dialog_visible() is False
 
-    show()
-    assert dialog.shown == 1
-    assert entered == [True], "the dialog was shown without entering modal mode"
+        monkeypatch.setattr(importer_gui, "_filedialog_save", env(is_visible=lambda: True))
+        assert importer_gui.is_any_dialog_visible() is True
 
+    def test_destroying_the_dialogs_is_safe_before_they_exist(self, gui):
+        """Teardown runs whatever killed the app, including a crash during bootup."""
+        importer_gui.destroy_filedialogs()
 
-@pytest.mark.parametrize("show", [importer_gui.show_open_dialog, importer_gui.show_save_dialog],
-                         ids=["open", "save"])
-def test_opening_a_dialog_that_does_not_exist_yet_is_ignored(gui, modal_mode, show, caplog):
-    """The dialogs are created later in the app's bootup than the window whose buttons open them.
+    def test_destroying_the_dialogs_joins_both_tick_threads(self, gui, monkeypatch):
+        destroyed = []
+        monkeypatch.setattr(importer_gui, "_filedialog_open", env(destroy=lambda: destroyed.append("open")))
+        monkeypatch.setattr(importer_gui, "_filedialog_save", env(destroy=lambda: destroyed.append("save")))
+        importer_gui.destroy_filedialogs()
+        assert destroyed == ["open", "save"]
 
-    The fixture leaves both at `None`, which is the state between those two points.
-    """
-    entered, _ = modal_mode
-    with caplog.at_level("WARNING"):
+    @pytest.mark.parametrize("show, dialog_attribute",
+                             [(lambda: importer_gui.show_open_dialog(), "_filedialog_open"),
+                              (lambda: importer_gui.show_save_dialog(), "_filedialog_save")],
+                             ids=["open", "save"])
+    def test_opening_a_dialog_also_enters_modal_mode(self, gui, monkeypatch, modal_mode, show, dialog_attribute):
+        """The two halves are separable and only one of them is visible on screen.
+
+        Showing the dialog without entering modal mode leaves every hotkey live behind it, which is the failure
+        `is_any_modal_window_visible` exists to prevent and the one Librarian actually hit. Nothing about the
+        dialog's appearance says whether the second half happened, so it is asserted here.
+        """
+        entered, _ = modal_mode
+        dialog = RecordingDialog()
+        monkeypatch.setattr(importer_gui, dialog_attribute, dialog)
+
         show()
-    assert entered == [], "modal mode was entered with no dialog to be modal about"
-    assert any("does not exist yet" in record.message for record in caplog.records), \
-        f"the refusal should say why; got {[r.message for r in caplog.records]}"
+        assert dialog.shown == 1
+        assert entered == [True], "the dialog was shown without entering modal mode"
 
+    @pytest.mark.parametrize("show", [importer_gui.show_open_dialog, importer_gui.show_save_dialog],
+                             ids=["open", "save"])
+    def test_opening_a_dialog_that_does_not_exist_yet_is_ignored(self, gui, modal_mode, show, caplog):
+        """The dialogs are created later in the app's bootup than the window whose buttons open them.
 
-def test_the_dialogs_are_built_to_match_what_each_one_is_picking(gui, tmp_path):
-    """Filters and modes, which fail quietly: a wrong filter shows the user an empty folder.
+        The fixture leaves both at `None`, which is the state between those two points.
+        """
+        entered, _ = modal_mode
+        with caplog.at_level("WARNING"):
+            show()
+        assert entered == [], "modal mode was entered with no dialog to be modal about"
+        assert any("does not exist yet" in record.message for record in caplog.records), \
+            f"the refusal should say why; got {[r.message for r in caplog.records]}"
 
-    Input is any number of `.bib` files to read; output is one dataset file to write, so the save dialog
-    additionally wants the overwrite confirmation that `save_mode` brings.
-    """
-    importer_gui.initialize_filedialogs(str(tmp_path))
+    def test_the_dialogs_are_built_to_match_what_each_one_is_picking(self, gui, tmp_path):
+        """Filters and modes, which fail quietly: a wrong filter shows the user an empty folder.
 
-    assert importer_gui._filedialog_open is not None
-    assert importer_gui._filedialog_save is not None
-    assert importer_gui.is_any_dialog_visible() is False, "creating a dialog must not show it"
+        Input is any number of `.bib` files to read; output is one dataset file to write, so the save dialog
+        additionally wants the overwrite confirmation that `save_mode` brings.
+        """
+        importer_gui.initialize_filedialogs(str(tmp_path))
 
-    assert ".bib" in importer_gui._filedialog_open.filter_list
-    assert importer_gui._filedialog_open.multi_selection is True
-    assert importer_gui._filedialog_open.save_mode is False
+        assert importer_gui._filedialog_open is not None
+        assert importer_gui._filedialog_save is not None
+        assert importer_gui.is_any_dialog_visible() is False, "creating a dialog must not show it"
 
-    assert ".pickle" in importer_gui._filedialog_save.filter_list
-    assert importer_gui._filedialog_save.multi_selection is False
-    assert importer_gui._filedialog_save.save_mode is True
+        assert ".bib" in importer_gui._filedialog_open.filter_list
+        assert importer_gui._filedialog_open.multi_selection is True
+        assert importer_gui._filedialog_open.save_mode is False
 
+        assert ".pickle" in importer_gui._filedialog_save.filter_list
+        assert importer_gui._filedialog_save.multi_selection is False
+        assert importer_gui._filedialog_save.save_mode is True
 
-def test_a_closing_open_dialog_fills_in_the_files_it_returned(gui, monkeypatch):
-    monkeypatch.setattr(app_state, "exit_modal_mode", lambda: None, raising=False)
-    importer_gui._open_dialog_callback(["/in/one.bib", "/in/two.bib"])
-    assert table_texts(INPUT_TABLE) == ["one.bib", "two.bib"]
+    def test_a_closing_open_dialog_fills_in_the_files_it_returned(self, gui, monkeypatch):
+        monkeypatch.setattr(app_state, "exit_modal_mode", lambda: None, raising=False)
+        importer_gui._open_dialog_callback(["/in/one.bib", "/in/two.bib"])
+        assert table_texts(INPUT_TABLE) == ["one.bib", "two.bib"]
 
+    def test_a_cancelled_open_dialog_leaves_the_previous_choice_alone(self, gui, monkeypatch):
+        monkeypatch.setattr(app_state, "exit_modal_mode", lambda: None, raising=False)
+        importer_gui._open_dialog_callback(["/in/one.bib"])
+        importer_gui._open_dialog_callback([])
+        assert table_texts(INPUT_TABLE) == ["one.bib"]
 
-def test_a_cancelled_open_dialog_leaves_the_previous_choice_alone(gui, monkeypatch):
-    monkeypatch.setattr(app_state, "exit_modal_mode", lambda: None, raising=False)
-    importer_gui._open_dialog_callback(["/in/one.bib"])
-    importer_gui._open_dialog_callback([])
-    assert table_texts(INPUT_TABLE) == ["one.bib"]
+    def test_a_closing_save_dialog_fills_in_the_file_it_returned(self, gui, monkeypatch):
+        monkeypatch.setattr(app_state, "exit_modal_mode", lambda: None, raising=False)
+        importer_gui._save_dialog_callback(["/out/dataset.pickle"])
+        assert table_texts(OUTPUT_TABLE) == ["dataset.pickle"]
 
-
-def test_a_closing_save_dialog_fills_in_the_file_it_returned(gui, monkeypatch):
-    monkeypatch.setattr(app_state, "exit_modal_mode", lambda: None, raising=False)
-    importer_gui._save_dialog_callback(["/out/dataset.pickle"])
-    assert table_texts(OUTPUT_TABLE) == ["dataset.pickle"]
-
-
-def test_the_save_dialog_returning_two_files_is_an_error(gui, monkeypatch):
-    """It is created with `multi_selection=False`, so this cannot happen without the dialog being wrong."""
-    monkeypatch.setattr(app_state, "exit_modal_mode", lambda: None, raising=False)
-    with pytest.raises(ValueError):
-        importer_gui._save_dialog_callback(["/out/one.pickle", "/out/two.pickle"])
+    def test_the_save_dialog_returning_two_files_is_an_error(self, gui, monkeypatch):
+        """It is created with `multi_selection=False`, so this cannot happen without the dialog being wrong."""
+        monkeypatch.setattr(app_state, "exit_modal_mode", lambda: None, raising=False)
+        with pytest.raises(ValueError):
+            importer_gui._save_dialog_callback(["/out/one.pickle", "/out/two.pickle"])
 
 
 # ---------------------------------------------------------------------------
