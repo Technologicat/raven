@@ -233,22 +233,51 @@ correction job: entries take a bold title with their prose on the next line, one
 in place of walls of text. Two items are converted, 139 top-level and ~190 sub-bullets are not, and Juha is
 doing that pass himself.
 
-That review also produced five fleet-wide rules, now in the `changelog` skill and not in any brief: a section
-is as good as it is scannable; an entry is not documentation; an entry is a selection rather than an
-inventory; nesting says where detail goes and never whether it belongs; and there is no right length in words
-— an application's entries run two to three times a library's, measured across the fleet, and the failure
-lives in a tail rather than in the typical entry.
+**Fourteen fleet-wide rules came out of that review**, now in the `changelog` skill and not in any brief. All
+were derived from Juha editing an entry and the diff being read back, rather than from anybody reasoning
+about how they write — which is why two of the last three *corrected* an earlier rule instead of adding one.
+Each of the three sections was sampled and each produced rules the others could not: `Added` gave the gloss
+rule and "an entry is not documentation", `Changed` overturned the before-picture rule (cut it only where
+nobody was relying on the old behaviour, which is always in `Added` and never elsewhere), and `Fixed` gave
+one entry per fault, symptom above mechanism, and stating the bound where a fault could look like data loss.
 
-**Then the one that is not small: message editing v1**, floated 2026-09-18 for the four days. The substrate
-is unusually ready — `chattree`'s revision API is complete and tested, and every message row already carries
-a built, disabled pencil button with `Ctrl+E` reserved for it — so what is left is the callback, the editing
-UI, and the eight `TODO: ... revision` markers where reads auto-select the active revision.
+### The rest of the week, 2026-09-22 to 24 — the docs pass, ahead of message editing
 
-**Start it with a design session, not with code.** Editing a message that has children means the
-conversation below it was generated from the old text; revisions make that representable, and what the UI
-*does* about it — mark the replies stale, offer a re-roll, branch instead — is the decision, and the one
-that can eat the week. The recorded open question (how many of the eight markers actually change) is
-downstream of it. It is slack, and after the event, so an unfinished branch costs nothing.
+**Decided 2026-09-21 (Juha): documentation takes precedence over message editing for Tuesday to Thursday**,
+with Friday the 25th being the event itself. The changelog work turned into a documentation pass and the
+pass turned out to have a backlog behind it, which is the thing worth doing while the context is loaded.
+
+What landed on the 21st, so the rest is visible against it: `raven/papers/README.md` exists and documents
+all eleven of the package's console scripts; the avatar README gained the postprocessor catalogue, all 21
+filters; the Visualizer's `wos2bib` and `pdf2bib` write-ups moved into the paper tools manual, in
+preparation for the unified DB, when those tools stop being the Visualizer's; and the model recommendations
+now live in one place. Two documentation bugs were found by looking: 21 shipped filters named in no README,
+and a `raven-pdf2bib` invocation that had not worked since the backend became a flag.
+
+What is queued, all small and independent:
+
+- **`raven/tools/`** — four console scripts and no README. Smaller than `papers/` was, and the main README
+  may well be enough for them; the question is worth asking before writing one.
+- **Screenshots, and ffmpeg-captured GIFs of the animated features** — much of how Raven *feels* is motion,
+  and no still shows it. Wants a session where taking the keyboard is expected.
+- **The wrapped section in `Changed` → Raven-librarian.** 56 of the file's 65 remaining hard-wrapped runs
+  are there, left over from a job reported as finished when it was half done. A wrap and a deliberate
+  line break are the same shape to a whitespace-collapsing check, so the rule that distinguishes them is:
+  a line after a bullet ending at its bold title is prose, a line after a bullet ending mid-sentence is a
+  wrap. The invariant is the count of title-only bullets before and after.
+- **Three checker gaps found while linking the manuals**: `check_doc_links.py` does not validate cross-file
+  anchors, `check_usage_paths.py` does not see console-script invocations (which is what let the broken
+  `raven-pdf2bib` line survive), and `slugify` wants watching now that a heading can carry a link.
+
+**Message editing v1 moves behind all of it.** The substrate is still unusually ready — `chattree`'s
+revision API is complete and tested, and every message row already carries a built, disabled pencil button
+with `Ctrl+E` reserved — so what is left is the callback, the editing UI, and the eight `TODO: ... revision`
+markers where reads auto-select the active revision.
+
+**And it still starts with a design session rather than with code.** Editing a message that has children
+means the conversation below it was generated from the old text; revisions make that representable, and what
+the UI *does* about it — mark the replies stale, offer a re-roll, branch instead — is the decision, and the
+one that can eat a week.
 
 ### ~~Make `IDLE_SLEEP_S` mean what it says~~ — done 2026-09-11, and it grew a tail
 
