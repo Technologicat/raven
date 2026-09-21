@@ -197,6 +197,48 @@ see `TODO_DEFERRED.md`.
 
 The [video postprocessor](../common/video/postprocessor.py) is a set of custom pixel shaders implemented in PyTorch.
 
+## What the postprocessor can do
+
+Twenty-one filters, applied in the order you list them. **`Postprocessor.get_filters()` is the definitive
+list**, and the settings editor reads it live — so each filter's own documentation, its parameters and
+their ranges are in front of you while you are adjusting it, and the catalogue below is for deciding *which*
+ones you want rather than how to set them.
+
+A chain is a list of `(name, settings)` pairs in `postprocessor_chain` (see `postprocessor_defaults` in
+[`raven.server.config`](../server/config.py) for the one Raven ships), and any entry can carry
+`"enabled": false` to keep its settings while switching it off.
+
+**The scene and the lens**
+
+- `atmospheric_dust` — light-catching motes drifting in the air around the character.
+- `zoom` — simulated optical zoom.
+- `bloom` — fake HDR; bright areas bleed. Popular in early 2000s anime.
+- `chromatic_aberration` — both kinds a camera lens produces.
+- `vignetting` — less light reaching the corners of a frame or sensor.
+- `noise` — sensor and film grain.
+- `desaturate` — with an optional hue bandpass and tint.
+
+**Analog video**
+
+- `analog_lowres` — a low-resolution signal, simulated by blurring.
+- `chroma_subsample` — lo-fi YUV colour resolution.
+- `analog_rippling_hsync`, `analog_runaway_hsync` — a fluctuating horizontal sync, and one running away near an edge.
+- `analog_vhs_noise`, `analog_vhsglitches`, `analog_vhs_headswitching`, `analog_vhstracking` — tape noise, transient glitch lines, the band at the bottom edge, and bad tracking.
+- `banding` — travelling brighter and darker bands.
+
+**The display**
+
+- `crt` — raster projection: the character drawn by a scanning electron beam.
+- `scanlines` — the horizontal lines of a CRT television.
+- `translucent_display` — a science-fiction hologram.
+- `monochrome_display` — one phosphor colour.
+- `digital_glitches` — a glitchy digital transport, with blocks of lines shifted sideways.
+
+Some are **static** and some **dynamic** — a dynamic one changes from frame to frame and so animates on its
+own, which the settings editor marks. `raven/common/video/tests/README.md` has two instruments for judging
+them: a benchmark for what each costs on your GPU, and a preview that renders one still through a filter at
+several settings side by side.
+
 
 # Quick tips for character creation
 
