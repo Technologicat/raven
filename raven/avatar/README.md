@@ -211,6 +211,12 @@ A chain is a list of `(name, settings)` pairs in `postprocessor_chain` (see `pos
 [`raven.server.config`](../server/config.py) for the one Raven ships), and any entry can carry
 `"enabled": false` to keep its settings while switching it off.
 
+**The order traces a signal**, which is why the groups below run the way they do: the room in front of the
+lens, then the camera, then whatever records and carries the recording, and finally the display it comes out
+on. Following it is what makes a chain read as one imagined apparatus rather than a pile of effects — and it
+is an invitation rather than a rule. Some filters interact sharply enough that the order decides whether an
+effect survives at all, and each says so in its own documentation; past that, the arrangement is yours.
+
 **The scene and the lens**
 
 - `atmospheric_dust` — light-catching motes drifting in the air around the character.
