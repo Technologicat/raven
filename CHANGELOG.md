@@ -194,13 +194,6 @@
 - **The chat history is saved every minute while the app runs**, not only when it closes.
   A crash loses at most the last minute of the conversation, and nothing is written while nothing has changed. The interval is `raven.librarian.config.llm_autosave_interval`; `None` goes back to saving only at exit.
 
-- **The help card (`F1`) turns pages.**
-  - Librarian's are the app's keyboard, the chat graph's own keyboard with the prose that explains it, and *Features*. Arrow keys, `Home` and `End` turn them, or the buttons at the top.
-  - **The prose pages read as two newspaper columns**, the left one finished before the right one starts — a card this wide gives a single column lines too long to track back to the start of.
-  - **Message attachments are described**: what an attachment is for as against the document database, what each kind asks of the model, how to attach one, and where to clean up the ones nothing refers to any more.
-  - **Flipping *Internet* or *Documents* is noted as costing a pause** on the next reply, the tool declarations riding at the top of the conversation, so the whole chat has to be re-read.
-  - The card sizes itself to its tallest page and keeps that height, so turning a page does not resize the window under you.
-
 #### Raven-avatar
 
 - **`atmospheric_dust`, light-catching motes drifting in the air around the character** — dust in a sunbeam, or with different tuning something nearer to pollen, snow or petals.
@@ -317,81 +310,66 @@
 
 #### Raven-avatar
 
-- **The settings editor separates its postprocessor filters with a rule.** The panel lists every filter one after another, and there are enough of them now that where one ends and the next begins had become a thing to work out rather than a thing to see.
+- **The settings editor separates its postprocessor filters with a rule.**
+  The panel lists every filter one after another, and there are enough of them now that where one ends and the next begins had become a thing to work out rather than a thing to see.
 
-- **The "data eyes" effect stays on for at least a second** before it fades, so a lookup that finishes quickly is still seen. A slow one keeps the effect on for as long as it runs, as before. The animator setting `data_eyes_min_duration` sets the minimum, next to `data_eyes_fadeout_duration`.
+- **The "data eyes" effect stays on for at least a second** before it fades, so a lookup that finishes quickly is still seen.
+  A slow one keeps the effect on for as long as it runs, as before. The animator setting `data_eyes_min_duration` sets the minimum, next to `data_eyes_fadeout_duration`.
 
 #### Raven-librarian
 
-- **A character now declares itself, and switching character is one setting.** A character is a JSON file
-  — `aria1.json` — stating what it is *called* and which voice it speaks in. Everything else sits beside
-  it under the same stem and is optional: `aria1.md` is its personality, `aria1.png` its avatar image, and
-  `aria1_icon.png` the glyph beside its chat messages.
-  - **`llm_char_name` then selects a character by that name.** Set it to `"Aria"` and the card, the voice
-    and the face all follow; the two match on the string inside the JSON, so a character's filenames need
-    not resemble its name.
-  - It used to be four settings that had to be edited into agreement, and a mismatch showed as the new
-    face answering in the old voice, or as the previous character.
-  - **A character need not have a face.** One with a card and no image is an ordinary character, which is
-    what a terminal frontend such as `raven-minichat` wants anyway. An image with no JSON still animates
-    everywhere it did before, but cannot be selected by name.
+- **A character now declares itself, and switching character is one setting.**
+  - A character is a JSON file — `aria1.json` — stating what it is *called* and which voice it speaks in. Everything else sits beside it under the same stem and is optional: `aria1.md` is its personality, `aria1.png` its avatar image, and `aria1_icon.png` the glyph beside its chat messages.
+  - **`llm_char_name` then selects a character by that name.** Set it to `"Aria"` and the card, the voice and the face all follow; the two match on the string inside the JSON, so a character's filenames need not resemble its name.
+  - **It used to be four settings that had to be edited into agreement**, and a mismatch showed as the new face answering in the old voice, or as the previous character.
+  - **A character need not have a face.** One with a card and no image is an ordinary character, which is what a terminal frontend such as `raven-minichat` wants anyway. An image with no JSON still animates everywhere it did before, but cannot be selected by name.
 
-- **The AI is told what its setup is, once, instead of each character card saying so.** The line framing
-  the introductory block moved out of the character cards, where every author of one had to know to repeat
-  it, and is now added automatically whenever a character is present.
-  - **Its wording changed, because the old one was untrue.** It used to say you could not see the text —
-    while Librarian shows its system prompt on purpose. It now says what was actually wanted: the setup is
-    the AI's own ground, to be spoken *from* rather than quoted back or pointed at.
-  - **It is added to each request rather than kept in the chat**, so the system prompt display shows it
-    under *Added to every request, not stored*, alongside the date and the loaded model, instead of it
-    reading as prose you had written and could edit.
-  - **A horizontal rule now separates every part of the setup** — the notice, the system prompt, the
-    character card, the user card — where previously only the end of the block was marked. Three
-    separately authored pieces run together read as one, and the user card in particular used to begin
-    mid-flow, right after whatever sentence the character card ended on.
+- **The AI is told what its setup is, once, instead of each character card saying so.**
+  - The line framing the introductory block moved out of the character cards, where every author of one had to know to repeat it, and is now added automatically whenever a character is present.
+  - **Its wording changed, because the old one was untrue.** It used to say you could not see the text — while Librarian shows its system prompt on purpose. It now says what was actually wanted: the setup is the AI's own ground, to be spoken *from* rather than quoted back or pointed at.
+  - **It is added to each request rather than kept in the chat**, so the system prompt display shows it under *Added to every request, not stored*, alongside the date and the loaded model, instead of it reading as prose you had written and could edit.
+  - **A horizontal rule now separates every part of the setup** — the notice, the system prompt, the character card, the user card — where previously only the end of the block was marked.
+    - Three separately authored pieces run together read as one, and the user card in particular used to begin mid-flow, right after whatever sentence the character card ended on.
 
-- **You can tell the AI who *you* are, the same way a character says who it is.** Make
-  `~/.config/raven/librarian/users/` and put a `juha.json` in it naming you, with an optional `juha.md`
-  describing you and an optional `juha_icon.png` for your messages in the chat; `llm_user_name` then
-  selects it by that name. Nothing ships — Raven has no sensible default for somebody it has never met —
-  and without a profile you have a name and nothing else, exactly as before.
-  - **Your messages can carry your own icon.** Until now the user always got the generic glyph, there
-    being nowhere to declare another.
-  - It is a directory rather than one file, so a name can select from several: a shared machine, or a work
-    profile and a personal one, is then a matter of changing `llm_user_name`.
+- **You can tell the AI who *you* are, the same way a character says who it is.**
+  - Make `~/.config/raven/librarian/users/` and put a `juha.json` in it naming you, with an optional `juha.md` describing you and an optional `juha_icon.png` for your messages in the chat; `llm_user_name` then selects it by that name.
+  - Nothing ships — Raven has no sensible default for somebody it has never met — and without a profile you have a name and nothing else, exactly as before.
+  - **Your messages can carry your own icon.** Until now the user always got the generic glyph, there being nowhere to declare another.
+  - It is a directory rather than one file, so a name can select from several: a shared machine, or a work profile and a personal one, is then a matter of changing `llm_user_name`.
   - `prompts/user.md` is gone, replaced by this. It shipped empty, so nothing is lost.
 
-- **Hovering a message's role icon in the chat log names who wrote it.** The log carries a timestamp and
-  the text but no name, so the icon was the only indication of the speaker — and a message by a character
-  or a user profile other than the configured one draws the generic glyph, where the name was not on
-  screen at all.
+- **Hovering a message's role icon in the chat log names who wrote it.**
+  The log carries a timestamp and the text but no name, so the icon was the only indication of the speaker — and a message by a character or a user profile other than the configured one draws the generic glyph, where the name was not on screen at all.
 
-- **The help card (`F1`) has pages.** The keys are on the first one, with nothing else, so it is now a
-  reference you can screenshot and keep open while you learn them; everything the card says *about*
-  Librarian moved to the second. Turn them with `Left` / `Right`, or `Home` / `End` for the ends, or the
-  buttons in the card's new toolbar.
-  - **The card had run out of room**, and every addition for months had been bought by cutting something
-    else: the hotkey table was at its rebalancing floor, a separator row was spent to win back a line, and
-    the chat graph's own keys never made it onto the card at all. One screen had stopped being the right
-    format for an app this size.
+- **The help card (`F1`) has pages.**
+  - The keys are on the first one, with nothing else, so it is now a reference you can screenshot and keep open while you learn them. The chat graph's own keyboard is on the second, with the prose that explains it, and everything else the card says *about* Librarian is on *Features*.
+  - Turn them with `Left` / `Right`, or `Home` / `End` for the ends, or the buttons in the card's new toolbar.
+  - **The card had run out of room**, and every addition for months had been bought by cutting something else: the hotkey table was at its rebalancing floor, a separator row was spent to win back a line, and the chat graph's own keys never made it onto the card at all.
+  - **The prose pages read as two newspaper columns**, the left one finished before the right one starts — a card this wide gives a single column lines too long to track back to the start of.
+  - **Message attachments are described**: what an attachment is for as against the document database, what each kind asks of the model, how to attach one, and where to clean up the ones nothing refers to any more.
+  - **Flipping *Internet* or *Documents* is noted as costing a pause** on the next reply, the tool declarations riding at the top of the conversation, so the whole chat has to be re-read.
+  - The card sizes itself to its tallest page and keeps that height, so turning a page does not resize the window under you.
 
-- **The prompt texts are Markdown files now**, under `raven/librarian/prompts/`, and any of them can be
-  overridden from `~/.config/raven/librarian/prompts/` without touching the installed copy. That folder's
-  `README.md` documents the template variables and what each file is for.
-  - **`{model}` and `{context_length}` are gone from prompts.** A prompt is built once at startup and
-    stored as the message a chat is rooted at, so either would freeze at the value it had then while
-    neither fact is stable. Both are stated automatically in the per-turn system message instead, so you
-    lose nothing by not writing them. A prompt still using one now fails at startup, naming it.
+- **The prompt texts are Markdown files now**, under `raven/librarian/prompts/`.
+  - Any of them can be overridden from `~/.config/raven/librarian/prompts/` without touching the installed copy. That folder's `README.md` documents the template variables and what each file is for.
+  - **`{model}` and `{context_length}` are gone from prompts.** A prompt is built once at startup and stored as the message a chat is rooted at, so either would freeze at the value it had then while neither fact is stable.
+    - Both are stated automatically in the per-turn system message instead, so you lose nothing by not writing them. A prompt still using one now fails at startup, naming it.
 
-- **The user data folder is now `~/.config/raven/librarian/`**, where it was `~/.config/raven/llmclient/` — named after the app you run rather than after the module that first wrote there. It holds your chat history, your attachments, your document drop folder and its RAG index, so it is a folder people look at.
-  - **Move it by hand if you have one**: `mv ~/.config/raven/llmclient ~/.config/raven/librarian`. Nothing migrates it for you, and a Librarian that finds neither starts a fresh chat history rather than saying anything is wrong. Done now, while Librarian has no outside users, precisely so the migration code never has to exist.
+- **The user data folder is now `~/.config/raven/librarian/`**, where it was `~/.config/raven/llmclient/`.
+  - Named after the app you run rather than after the module that first wrote there. It holds your chat history, your attachments, your document drop folder and its RAG index, so it is a folder people look at.
+  - **Move it by hand if you have one**: `mv ~/.config/raven/llmclient ~/.config/raven/librarian`.
+    - Nothing migrates it for you, and a Librarian that finds neither starts a fresh chat history rather than saying anything is wrong. Done now, while Librarian has no outside users, precisely so the migration code never has to exist.
 
-- The **Tools** mode toggle is now **Internet**, and it no longer overrides **Documents**. Each switch governs one group of tools outright — *Internet* the two that reach the network (`websearch`, `webfetch`), *Documents* the three that read your document database — so all four combinations mean something. Previously *Tools* sat above both: with it off and *Documents* on, you had switched your documents on and the AI still could not search them, and nothing about a switch named "Tools" suggested it overruled the one named after the thing it was overruling.
+- **The *Tools* mode toggle is now *Internet*, and it no longer overrides *Documents*.**
+  - Each switch governs one group of tools outright — *Internet* the two that reach the network (`websearch`, `webfetch`), *Documents* the three that read your document database — so all four combinations mean something.
+  - **Previously *Tools* sat above both**: with it off and *Documents* on, you had switched your documents on and the AI still could not search them, and nothing about a switch named "Tools" suggested it overruled the one named after the thing it was overruling.
   - **Your setting carries over.** A stored *Tools* preference becomes the *Internet* setting on first start, which keeps the intent: the old switch governed web access too, so a user who had tools off gets the network off.
   - `get_current_time` answers to neither switch and is always available. The current time is injected into every reply regardless of both toggles, so withholding the tool would leave the AI reading a call it could not resolve.
   - In `raven-minichat`, `!tools` becomes `!internet`.
 
-- **Librarian now opens even when the LLM backend cannot answer**, and says so instead of exiting. Previously a backend that was not running ended the app at startup with an error code, which the past chats, the cleanup dialog and the settings did not need. A row above the message box reports what is wrong, in the words that say what to do about it — nothing is answering at that address (is the server running? is the address right?), or the server is running with no model loaded (load one).
+- **Librarian now opens even when the LLM backend cannot answer**, and says so instead of exiting.
+  - **Previously a backend that was not running ended the app at startup with an error code**, which the past chats, the cleanup dialog and the settings did not need.
+  - A row above the message box reports what is wrong, in the words that say what to do about it — nothing is answering at that address (is the server running? is the address right?), or the server is running with no model loaded (load one).
   - It clears itself. Start the server, or load a model, and the row turns green a few seconds later, names the model now loaded, and goes away. Clicking it checks immediately instead of waiting for the next check.
   - Nothing is polled while the backend is healthy — the row only exists while something is wrong, and the checking stops the moment it clears.
   - A backend that goes away *mid-session* is still reported by the reply that fails, which you can reroll. This row is about the state you start in.
@@ -410,28 +388,43 @@
     - The system prompt currently in use stays undeletable, as before.
   - Cleanup understands this: chats under an older system prompt are not offered for deletion as unreachable.
 
-- **"branch from here" now works on the AI's opening greeting**, where it was refused before. Branching sets where you are writing from and nothing else, so from a greeting it starts a new chat under that system prompt — which is a fair thing to want, and reachable anyway through the new-chat button. It stays refused on a system prompt message, where it would leave you writing from a point that shows you none of the conversation.
+- **"Branch from here" now works on the AI's opening greeting**, where it was refused before.
+  - Branching sets where you are writing from and nothing else, so from a greeting it starts a new chat under that system prompt — which is a fair thing to want, and reachable anyway through the new-chat button.
+  - It stays refused on a system prompt message, where it would leave you writing from a point that shows you none of the conversation.
 
-- The chat datastore is now `chat.json`, with its attachments in `chat.sidecars/` beside it. They were `data.json` and `data.images/` — the first said nothing about what was in it, and the second was named when images were the only thing you could attach, which stopped being true once documents could be. **Both are renamed on first start, together**, so there is nothing to do.
+- **The chat datastore is now `chat.json`, with its attachments in `chat.sidecars/` beside it.**
+  - They were `data.json` and `data.images/` — the first said nothing about what was in it, and the second was named when images were the only thing you could attach, which stopped being true once documents could be.
+  - **Both are renamed on first start, together**, so there is nothing to do.
   - A `data.json` is adopted only if it actually reads as a chat datastore. The name is generic enough to belong to something else entirely, and the file is looked for beside whatever datastore path you configured — so if you have pointed Raven at a directory of your own, an unrelated `data.json` there is left alone.
 
-- **The chat log now marks its ends when you reach them with the mouse wheel**, as it already did when you got there with the keyboard. The wheel is scrolled by the GUI toolkit itself, so nothing in Raven was watching it.
+- **The chat log now marks its ends when you reach them with the mouse wheel**, as it already did when you got there with the keyboard.
+  The wheel is scrolled by the GUI toolkit itself, so nothing in Raven was watching it.
 
-- **The per-message hotkeys act on the message you are looking at**, rather than on the last one in the chat. Scroll back and reroll, branch, speak, edit or step between siblings, and it happens to the bottommost message whose buttons are on screen — a blue dot beside them says which one that is. They used to always act on the end of the chat, which is off screen precisely when you have scrolled away from it.
+- **The per-message hotkeys act on the message you are looking at**, rather than on the last one in the chat.
+  - Scroll back and reroll, branch, speak, edit or step between siblings, and it happens to the bottommost message whose buttons are on screen — a blue dot beside them says which one that is.
+  - **They used to always act on the end of the chat**, which is off screen precisely when you have scrolled away from it.
   - Reading a message taller than the window is the one case with no dot to show: its buttons are below the edge and no other message's are visible either, so the keys act on the message filling the view, and the dot returns as soon as a button row does.
 
-- **The SYSTEM indicator now lights while the idle prefill is being read**, as it already did for a turn. SYSTEM means the backend has a prompt and has emitted nothing yet, which is exactly what a prefill is — but only a turn raised it, so the app looked idle throughout. Against a cold cache that is the better part of a minute with the GPU at its busiest and nothing on screen saying so.
+- **The SYSTEM indicator now lights while the idle prefill is being read**, as it already did for a turn.
+  - SYSTEM means the backend has a prompt and has emitted nothing yet, which is exactly what a prefill is — but only a turn raised it, so the app looked idle throughout.
+  - Against a cold cache that is the better part of a minute with the GPU at its busiest and nothing on screen saying so.
 
-- **`Esc` in the message composer now clears what you have written.** It used to put back whatever the field held when your caret last entered it — so the same key cleared the box or restored an older draft depending on where you had last clicked, which is not a difference you can see from the screen.
+- **`Esc` in the message composer now clears what you have written.**
+  - It used to put back whatever the field held when your caret last entered it — so the same key cleared the box or restored an older draft depending on where you had last clicked, which is not a difference you can see from the screen.
   - With text in the field, `Esc` clears it; press it again to leave the field.
 
-- **The app starts with the keyboard in the chat log**, where it used to start in the message composer. `Ctrl+Space`, or a click, puts the caret in the composer. `startup_keyboard_home = "composer"` in `raven.librarian.config` starts with the caret there instead.
+- **The app starts with the keyboard in the chat log**, where it used to start in the message composer.
+  `Ctrl+Space`, or a click, puts the caret in the composer. `startup_keyboard_home = "composer"` in `raven.librarian.config` starts with the caret there instead.
 
 - **`Ctrl+P` pings the avatar**: it wakes the avatar if it is asleep, and plays the "notice" lines above its head.
 
-- **Sending an empty message does nothing by default**, where it used to ask the AI to take another turn. The request then ends on the AI's own reply, and current models mostly answer that with an empty message. `llm_allow_empty_send` in `raven.librarian.config` switches the old behaviour back on, in both Raven-librarian and `raven-minichat`.
+- **Sending an empty message does nothing by default**, where it used to ask the AI to take another turn.
+  The request then ends on the AI's own reply, and current models mostly answer that with an empty message. `llm_allow_empty_send` in `raven.librarian.config` switches the old behaviour back on, in both Raven-librarian and `raven-minichat`.
 
-- **With speech on, the avatar's expression follows what it is saying.** It used to react to the reply as the text streamed in, so the face was already showing the mood of a sentence the voice had not reached yet. Now it stays neutral while the reply is being written, and changes as each sentence starts to be spoken, from that sentence and the few before it. With speech off, the expression follows the text as it arrives, as before.
+- **With speech on, the avatar's expression follows what it is saying.**
+  - **It used to react to the reply as the text streamed in**, so the face was already showing the mood of a sentence the voice had not reached yet.
+  - It now stays neutral while the reply is being written, and changes as each sentence starts to be spoken, from that sentence and the few before it.
+  - With speech off, the expression follows the text as it arrives, as before.
   - Speaking a message again (`Ctrl+S`, or its speak button) does the same.
 
 #### Raven-visualizer
