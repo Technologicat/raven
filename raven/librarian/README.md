@@ -45,7 +45,7 @@
 
 # Introduction
 
-:exclamation: *This document is a very early WIP, with many placeholders.* :exclamation:
+:exclamation: *This document is still under development; some sections are more complete than others.* :exclamation:
 
 **Raven-librarian** is a multiversal LLM (large language model) frontend, mainly meant for working with local AI.
 
@@ -567,7 +567,6 @@ The toolbar at the bottom contains **global actions**:
 - Start new chat (Ctrl+N)
   - Starting a new chat does not make any changes to the chat datastore - it only sets the **HEAD** pointer.
   - Changes occur only when you then send a message to the AI; that message is saved under the AI's greeting, and the chat continues.
-- Chat tree view *(placeholder button; feature to be added later)*
 - Copy linearized chatlog to clipboard (F8) — long fetched pages stay as excerpts; see [Message attachments](#message-attachments)
 - Stop the AI's text generation, if in progress (Ctrl+G)
 - Stop the AI avatar's speaking (Ctrl+S)
