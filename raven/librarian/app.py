@@ -1223,6 +1223,7 @@ def _attach_filter_list() -> list:
             ".*"]
 
 _filedialog_attach = FileDialog(title="Attach one or more files [Ctrl+click to multi-select]",
+                                themes_and_fonts=themes_and_fonts,
                                 tag="attach_file_dialog",
                                 callback=_attach_callback,
                                 filter_list=_attach_filter_list(),

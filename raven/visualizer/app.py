@@ -347,11 +347,13 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
     """Create the file dialogs."""
     global filedialog_open
     filedialog_open = FileDialog(title="Open dataset",
+                                 themes_and_fonts=app_state.themes_and_fonts,
                                  tag="open_file_dialog",
                                  callback=_open_file_callback,
                                  filter_list=[".pickle"],
                                  default_path=default_path)
     app_state.filedialog_save = FileDialog(title="Save word cloud as PNG",
+                                           themes_and_fonts=app_state.themes_and_fonts,
                                            tag="save_word_cloud_dialog",
                                            callback=word_cloud.save_callback,
                                            filter_list=[".png"],

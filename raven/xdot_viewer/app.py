@@ -679,6 +679,7 @@ def main() -> int:
     global _filedialog_open
     cwd = os.getcwd()
     _filedialog_open = FileDialog(title="Open graph file",
+                                  themes_and_fonts=themes_and_fonts,
                                   tag="open_file_dialog",
                                   callback=_open_file_dialog_callback,
                                   filter_list=[".xdot", ".dot", ".gv"],

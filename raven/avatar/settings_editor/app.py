@@ -196,26 +196,31 @@ def initialize_filedialogs():  # called at app startup
     global filedialog_save_animator_settings
     cwd = os.getcwd()  # might change during filedialog init
     filedialog_open_input_image = FileDialog(title="Open character image",
+                                             themes_and_fonts=themes_and_fonts,
                                              tag="open_input_image_dialog",
                                              callback=_open_input_image_callback,
                                              filter_list=[".png"],
                                              default_path=avatar.assets_path("characters"))
     filedialog_open_backdrop_image = FileDialog(title="Open backdrop image",
+                                                themes_and_fonts=themes_and_fonts,
                                                 tag="open_backdrop_image_dialog",
                                                 callback=_open_backdrop_image_callback,
                                                 filter_list=[".png", ".jpg"],
                                                 default_path=avatar.assets_path("backdrops"))
     filedialog_open_json = FileDialog(title="Open emotion templates",
+                                      themes_and_fonts=themes_and_fonts,
                                       tag="open_json_dialog",
                                       callback=_open_json_callback,
                                       filter_list=[".json"],
                                       default_path=avatar.assets_path("emotions"))
     filedialog_open_animator_settings = FileDialog(title="Open animator settings",
+                                                   themes_and_fonts=themes_and_fonts,
                                                    tag="open_animator_settings_dialog",
                                                    callback=_open_animator_settings_callback,
                                                    filter_list=[".json"],
                                                    default_path=avatar.assets_path("settings"))
     filedialog_save_animator_settings = FileDialog(title="Save animator settings",
+                                                   themes_and_fonts=themes_and_fonts,
                                                    tag="save_animator_settings_dialog",
                                                    callback=_save_animator_settings_callback,
                                                    filter_list=[".json"],

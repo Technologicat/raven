@@ -203,12 +203,14 @@ def initialize_filedialogs(default_path):
     global _filedialog_open
     global _filedialog_save
     _filedialog_open = FileDialog(title="Choose BibTeX file(s) to import [Ctrl+click to multi-select]",
+                                  themes_and_fonts=app_state.themes_and_fonts,
                                   tag="open_import_dialog",
                                   callback=_open_dialog_callback,
                                   filter_list=[".bib"],
                                   multi_selection=True,
                                   default_path=default_path)
     _filedialog_save = FileDialog(title="Save imported dataset as",
+                                  themes_and_fonts=app_state.themes_and_fonts,
                                   tag="save_import_dialog",
                                   callback=_save_dialog_callback,
                                   filter_list=[".pickle"],

@@ -13,13 +13,14 @@ import textwrap
 import threading
 import time
 import uuid
-from typing import Iterable, Optional, Union
+from typing import Callable, Iterable, Optional, Union
 
 import dearpygui.dearpygui as dpg
 
 from unpythonic import sym, timer
 from unpythonic.env import env
 
+from ..IconsFontAwesome6 import IconsFontAwesome6 as fa
 from ...common import filelisting
 from ...common import utils as common_utils
 from ...common.gui import animation as gui_animation
@@ -418,30 +419,31 @@ class FileDialog:
 
     def __init__(
         self,
-        title="File dialog",
-        tag="file_dialog",
-        width=1400,
-        height=820,
-        min_size=(960, 400),
-        pick="file",
-        save_mode=False,
-        default_file_extension=None,
-        default_path=os.getcwd(),
-        filter_list=None,
-        file_filter=None,
-        callback=None,
-        show_dir_size=False,
-        allow_drag=False,
-        multi_selection=False,
-        show_shortcuts_menu=True,
-        no_resize=False,
-        modal=True,
-        show_hidden_files=False,
-        show_thumbnails=None,
-        thumbnail_size=128,
-        thumbnail_device="gpu",
-        user_style=0
-    ):
+        title: str = "File dialog",
+        tag: str = "file_dialog",
+        width: int = 1400,
+        height: int = 820,
+        min_size: tuple[int, int] = (960, 400),
+        pick: str = "file",
+        save_mode: bool = False,
+        default_file_extension: str | None = None,
+        default_path: str = os.getcwd(),
+        filter_list: list[str | tuple[str, list[str]]] | None = None,
+        file_filter: str | None = None,
+        callback: Callable[[list[str]], None] | None = None,
+        show_dir_size: bool = False,
+        allow_drag: bool = False,
+        multi_selection: bool = False,
+        show_shortcuts_menu: bool = True,
+        no_resize: bool = False,
+        modal: bool = True,
+        show_hidden_files: bool = False,
+        show_thumbnails: bool | None = None,
+        thumbnail_size: int = 128,
+        thumbnail_device: str = "gpu",
+        themes_and_fonts: env | None = None,
+        user_style: int = 0
+    ) -> None:
         """
         **The app that builds one owns its shutdown: call `destroy` on it** once the render loop has
         exited and before `dpg.destroy_context()`. A dialog that has been opened runs a thread that calls
@@ -601,6 +603,10 @@ class FileDialog:
         self.show_hidden_files = show_hidden_files
         self.thumbnail_size = thumbnail_size
         self.thumbnail_device = thumbnail_device
+        # From `raven.common.gui.utils.bootup`. Optional, because this widget is also runnable on its own
+        # (see `example.py`) where no Raven app has booted the shared fonts — every use of it below asks
+        # `_icon_font` and falls back to what the dialog did before there were any.
+        self.themes_and_fonts = themes_and_fonts
         self.user_style = user_style
 
         # Grid view. Built on first use — see `_the_grid` — so a dialog only ever used as a list never
@@ -741,14 +747,24 @@ class FileDialog:
                         # down the parent chain, so the row supplies the border and the field keeps its
                         # colours.
                         with dpg.group(horizontal=True) as self._path_row:
-                            self.button_refresh = dpg.add_image_button(self.img_refresh, tag=f"button_refresh_{self.instance_tag}")
+                            self.button_refresh = self._add_toolbutton(fa.ICON_ARROWS_ROTATE, self.img_refresh,
+                                                                       tag=f"button_refresh_{self.instance_tag}")  # tag
                             with dpg.tooltip(self.button_refresh):
                                 dpg.add_text("Refresh the current folder listing [F5]")
-                            self.button_back_to_default_path = dpg.add_image_button(self.img_back, tag=f"button_back_to_default_path_{self.instance_tag}")
+                            self.button_back_to_default_path = self._add_toolbutton(fa.ICON_HOUSE, self.img_back,
+                                                                                    tag=f"button_back_to_default_path_{self.instance_tag}")  # tag
                             with dpg.tooltip(self.button_back_to_default_path):
                                 dpg.add_text("Go back to the default path [Ctrl+Home]")
+                            # The card is reachable by F1 alone otherwise, which is discoverable only to
+                            # somebody who already thought to try it. Every other Raven app carries this
+                            # same glyph for the same card.
+                            self.button_help = self._add_toolbutton(fa.ICON_CIRCLE_QUESTION, None,
+                                                                    tag=f"button_help_{self.instance_tag}")  # tag
+                            with dpg.tooltip(self.button_help):
+                                dpg.add_text("The keys this dialog answers to [F1]")
                             dpg.set_item_callback(self.button_refresh, self.refresh)
                             dpg.set_item_callback(self.button_back_to_default_path, self.back_to_default_path)
+                            dpg.set_item_callback(self.button_help, self._show_help_card)
 
                             self.path_field = dpg.add_input_text(hint="Path", on_enter=True, callback=self.on_path_enter,
                                                                  default_value=os.getcwd(), width=-1,
@@ -997,6 +1013,37 @@ class FileDialog:
     # 24 px the rows above take. A child window clips what it holds, so those two pixels came off the
     # bottom of the buttons, where `FrameRounding` is 6 and the curve is.
     _OKCANCEL_ROW_HEIGHT = 32
+
+    # The width every app in the constellation gives an icon-only toolbutton; see `raven.xdot_viewer.app`'s
+    # help button, and `toolbutton_w` in the two that keep it in config.
+    _TOOLBUTTON_W = 30
+
+    def _icon_font(self) -> Optional[int]:
+        """The solid icon font, or `None` when nothing has booted the shared fonts.
+
+        Asked with `getattr` rather than by membership, which is what `helpcard` does with the same env
+        and for the same reason: an app that set its fonts up by hand may have no such field at all.
+        """
+        return getattr(self.themes_and_fonts, "icon_font_solid", None)
+
+    def _add_toolbutton(self, glyph: str, texture: Optional[str], *, tag: str) -> Union[int, str]:
+        """Add one toolbar button to the current container, drawn from the icon font where there is one.
+
+        `glyph`: the FontAwesome codepoint to draw, from `fa`.
+        `texture`: a static texture to fall back to when there is no icon font, or `None` to fall back to
+                   drawing `glyph` as ordinary text — which is what a button with no image of its own
+                   must do, and which renders as a missing-glyph box rather than as nothing.
+
+        Returns the DPG item id.
+        """
+        icon_font = self._icon_font()
+        if icon_font is not None:
+            item = dpg.add_button(label=glyph, width=self._TOOLBUTTON_W, tag=tag)  # tag
+            dpg.bind_item_font(item, icon_font)
+            return item
+        if texture is not None:
+            return dpg.add_image_button(texture, tag=tag)  # tag
+        return dpg.add_button(label=glyph, width=self._TOOLBUTTON_W, tag=tag)  # tag
 
     def _effective_target(self) -> Optional[str]:
         """What OK would return right now in a directory-picking mode. `None` in a file picker, which has
@@ -2489,11 +2536,15 @@ class FileDialog:
                                                     # the card appears where the dialog was, which is where
                                                     # the reader is looking.
                                                     reference_window=self.tag,  # tag
-                                                    # All `HelpWindow` wants of this is a spacer height. 20
-                                                    # is the constellation's GUI font size, the figure
-                                                    # `min_size` is measured at and the one the grid view
-                                                    # takes by default.
-                                                    themes_and_fonts=env(font_size=20),
+                                                    # Built rather than forwarded, because the two fields the
+                                                    # card wants come from different places: an app that set
+                                                    # its fonts up granularly hands us `setup_icon_fonts`'s
+                                                    # env, which has the icon font and no `font_size` at all.
+                                                    # 20 is the fallback — the constellation's GUI font size,
+                                                    # the figure `min_size` is measured at and the one the
+                                                    # grid view takes by default.
+                                                    themes_and_fonts=env(font_size=getattr(self.themes_and_fonts, "font_size", 20),
+                                                                         icon_font_solid=self._icon_font()),
                                                     # The dialog is hidden while the card is up, so the
                                                     # title is the only thing left saying whose keys these
                                                     # are.

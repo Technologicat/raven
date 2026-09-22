@@ -1411,6 +1411,7 @@ def main() -> int:
     # --- File dialog ---
     global _filedialog_open
     _filedialog_open = FileDialog(
+        themes_and_fonts=themes_and_fonts,
         title="Open image folder",
         tag="cherrypick_open_dialog",
         callback=_open_file_dialog_callback,

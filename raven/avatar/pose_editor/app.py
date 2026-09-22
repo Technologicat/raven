@@ -251,22 +251,26 @@ def initialize_filedialogs():  # called at app startup
     global filedialog_save_all_emotions
     cwd = os.getcwd()  # might change during filedialog init
     filedialog_open_image = FileDialog(title="Open character image",
+                                       themes_and_fonts=icon_fonts,
                                        tag="open_image_dialog",
                                        callback=_open_image_callback,
                                        filter_list=[".png"],
                                        default_path=avatar.assets_path("characters"))
     filedialog_save_image = FileDialog(title="Save posed image",
+                                       themes_and_fonts=icon_fonts,
                                        tag="save_image_dialog",
                                        callback=_save_image_callback,
                                        filter_list=[".png"],
                                        save_mode=True,
                                        default_path=cwd)
     filedialog_open_json = FileDialog(title="Open emotion temmplates",
+                                      themes_and_fonts=icon_fonts,
                                       tag="open_json_dialog",
                                       callback=_open_json_callback,
                                       filter_list=[".json"],
                                       default_path=avatar.assets_path("emotions"))
     filedialog_save_all_emotions = FileDialog(title="Save all emotion templates",
+                                              themes_and_fonts=icon_fonts,
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,
                                               filter_list=[""],
