@@ -192,33 +192,16 @@ def _on_any_input(*_args) -> None:
 
 dpg.create_context()
 
-# Initialize fonts. Must be done after `dpg.create_context`, or the app will just segfault at startup.
+# Initialize the shared GUI machinery: the default font, the icon fonts, the Markdown renderer and the
+# themes. Must be done after `dpg.create_context`, or the app will just segfault at startup.
 # https://dearpygui.readthedocs.io/en/latest/documentation/fonts.html
-with dpg.font_registry() as the_font_registry:
-    # Change the default font to something that looks clean and has good on-screen readability.
-    # https://fonts.google.com/specimen/Open+Sans
-    font_size = 20
-    default_font = dpg.add_font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),  # load font from Raven's main assets
-                                font_size)
-    dpg.bind_font(default_font)
-
-# The help card's page buttons draw FontAwesome glyphs, which OpenSans has no codepoints for — without
-# this they come out as four replacement boxes.
-icon_fonts = guiutils.setup_icon_fonts(the_font_registry, font_size)
-icon_fonts.font_size = font_size
-
-# Set up the Markdown renderer — only the help card's prose goes through it, but it must be configured
-# before the first piece of Markdown is rendered.
-guiutils.setup_markdown(the_font_registry, font_size)
-
-# Modify global theme
-with dpg.theme() as global_theme:
-    with dpg.theme_component(dpg.mvAll):
-        # dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (53, 168, 84))  # same color as Linux Mint default selection color in the green theme
-        dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6, category=dpg.mvThemeCat_Core)
-        dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 8, category=dpg.mvThemeCat_Core)
-        dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
-dpg.bind_theme(global_theme)  # set this theme as the default
+#
+# The icon fonts are what keep the help card's page buttons from coming out as replacement boxes,
+# OpenSans having no codepoints for FontAwesome's glyphs; the Markdown renderer is for the card's prose,
+# and must be configured before the first piece of Markdown is rendered. `guiutils.teardown`, at the end
+# of this file, is the counterpart to this call.
+font_size = 20
+themes_and_fonts = guiutils.bootup(font_size=font_size)
 
 if platform.system().upper() == "WINDOWS":
     icon_ext = "ico"
@@ -251,26 +234,26 @@ def initialize_filedialogs():  # called at app startup
     global filedialog_save_all_emotions
     cwd = os.getcwd()  # might change during filedialog init
     filedialog_open_image = FileDialog(title="Open character image",
-                                       themes_and_fonts=icon_fonts,
+                                       themes_and_fonts=themes_and_fonts,
                                        tag="open_image_dialog",
                                        callback=_open_image_callback,
                                        filter_list=[".png"],
                                        default_path=avatar.assets_path("characters"))
     filedialog_save_image = FileDialog(title="Save posed image",
-                                       themes_and_fonts=icon_fonts,
+                                       themes_and_fonts=themes_and_fonts,
                                        tag="save_image_dialog",
                                        callback=_save_image_callback,
                                        filter_list=[".png"],
                                        save_mode=True,
                                        default_path=cwd)
     filedialog_open_json = FileDialog(title="Open emotion temmplates",
-                                      themes_and_fonts=icon_fonts,
+                                      themes_and_fonts=themes_and_fonts,
                                       tag="open_json_dialog",
                                       callback=_open_json_callback,
                                       filter_list=[".json"],
                                       default_path=avatar.assets_path("emotions"))
     filedialog_save_all_emotions = FileDialog(title="Save all emotion templates",
-                                              themes_and_fonts=icon_fonts,
+                                              themes_and_fonts=themes_and_fonts,
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,
                                               filter_list=[""],
@@ -1477,7 +1460,7 @@ _help_window = helpcard.HelpWindow(pages=[helpcard.page("Keyboard", hotkey_info=
                                    width=global_config.GUI_HELP_WINDOW_COMPACT_W,
                                    height=global_config.GUI_HELP_WINDOW_COMPACT_H,
                                    reference_window="pose_editor_window",
-                                   themes_and_fonts=icon_fonts)
+                                   themes_and_fonts=themes_and_fonts)
 
 # --------------------------------------------------------------------------------
 # Start the app
