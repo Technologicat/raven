@@ -11,6 +11,41 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## Is `fdialog` one logical unit, or is there a split hidden in it?
+
+*Cluster: file-dialog · Cost: ? · Gate: none · Filed: 2026-09-22*
+
+`raven/vendor/file_dialog/fdialog.py` is 3444 lines, ~2198 SLOC, and one class with 112 methods. For the
+comparison the project already uses: `chat_controller.py` is 5090 lines but 2046 SLOC, so this is slightly
+*larger* in real code than the module Raven's `CLAUDE.md` calls tolerated rather than endorsed.
+
+`Cost: ?` on purpose. The answer may be that there is no split worth making, and there is nothing to price
+until somebody decides they want one.
+
+What a first look found, clustering the methods by concern:
+
+| cluster | methods | ~lines |
+|---|---|---|
+| the shortcuts/places panel | 10 | 185 |
+| type filters | 10 | 126 |
+| the help card | 4 | 127 |
+| grid view | 11 | 207 |
+| row painting and the cursor | 16 | 393 |
+| core dialog | 41 | ~1588 |
+
+- **The places panel and the type-filter machinery look most separable**, both being cohesive and having a
+  narrow interface to the rest — a panel that reports *go here*, a filter that reports *show these*.
+- **The core is 1588 lines across 41 methods, and clustering by name cannot cut it.** That is weak evidence
+  the seam is not obvious; a real answer wants coupling analysis — which methods touch which instance
+  state — rather than names.
+- **The two easiest extractions have arguably already happened.** `common.gui.filegrid` and
+  `common.gui.helpcard` came out of this file, as did `thumbnailgrid`, `tablecursor` and `keyboardmark`. So
+  the file is large partly because it is where shared widgets get discovered, and what is left is the
+  residue after the separable parts already left.
+
+Raised by Juha (2026-09-22), reading the file after the annotation sweep: "is that a logical unit, or is
+there a split hidden somewhere?" — explicitly not for that day.
+
 ## Tests for the rest of the `scripts/` checkers
 
 *Cluster: testing · Cost: M overall; two or three of them are S · Gate: none · Filed: 2026-09-20 · See also: `scripts/tests/test_check_doc_links.py`*
