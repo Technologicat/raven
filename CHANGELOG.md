@@ -231,16 +231,22 @@
 
 #### Raven-fixbib
 
-- **Records naming the same field twice are now repaired too**, which is how a database export arrives: a ProQuest record carries a separate `annote` for its copyright statement, its last-updated date and its subject terms, and BibTeX has no way to say that, so the parser rejects the entry whole — title, authors and all. The repeats are merged into one field, values kept and joined by newlines, and everything else in the record is left character for character as it was.
-  - **This can account for a large share of a file**, and nothing previously said so more specifically than "unparseable" — so a `.bib` assembled from several databases is worth running through this before trusting a count of it.
+- **Records naming the same field twice are repaired too**, which is how a database export arrives.
+  - A ProQuest record carries a separate `annote` for its copyright statement, its last-updated date and its subject terms, and BibTeX has no way to say that, so the parser rejects the entry whole — title, authors and all.
+  - The repeats are merged into one field, values kept and joined by newlines, and everything else in the record is left character for character as it was.
+  - **This can account for a large share of a file**, so a `.bib` assembled from several databases is worth running through this before trusting a count of it.
 
-- **Every report now names the fault**, so an unreadable `.bib` says what is wrong with it and not merely how much. Each line carries the record's key, its line number in *your* file, which of the two faults it is, and the specifics — which fields repeat, which look unbalanced, or the parser's own complaint where it is neither. A record whose author reads `Bloggs, PhD, MSc, Joan` is now reported as *too many commas* rather than as a suspected brace problem.
+- **Every report names the fault**, so an unreadable `.bib` says what is wrong with it and not merely how much.
+  - Each line carries the record's key, its line number in *your* file, which of the two faults it is, and the specifics — which fields repeat, which look unbalanced, or the parser's own complaint where it is neither.
+  - An author reading `Bloggs, PhD, MSc, Joan` is reported as *too many commas* rather than as a suspected brace problem.
   - `--list` names every record that was repaired, not just how many. Off by default, since a database export can need repairing a thousand times over.
 
-- **HTML left in the field values is now decoded**, which is the one fault here that afflicts records a parser is perfectly happy with — so nothing previously reported it at all. A database that exports its web page rather than its record leaves entities behind, and a title meaning `Q&A` reaches your citations, your word cloud and your typeset bibliography as `Q\&amp;A`.
+- **HTML left in the field values is decoded**, which is the one fault here that afflicts records a parser is perfectly happy with.
+  - A database that exports its web page rather than its record leaves entities behind, and a title meaning `Q&A` reaches your citations, your word cloud and your typeset bibliography as `Q\&amp;A`.
   - The result is BibTeX rather than plain text: a decoded character that BibTeX reserves is escaped on the way out, so `&amp;` becomes `\&` and the file stays as readable as it was. `--keep-entities` switches the whole thing off.
 
-- **A publisher's rights notice is moved out of the `abstract` into a `copyright` field of its own.** It is not what the paper says, and anything reading the abstract as prose has to cope with it — it is why a publisher's name turns up in a word cloud. Humans strip it before analyzing an abstract; this does it once, in the file.
+- **A publisher's rights notice is moved out of the `abstract` into a `copyright` field of its own.**
+  - It is not what the paper says, and anything reading the abstract as prose has to cope with it — it is why a publisher's name turns up in a word cloud. This does once, in the file, what you would otherwise strip by hand before every analysis.
   - **Moved, not deleted.** In a bibliography merged from several database exports the notice is often the only thing saying which export a record came from, and `raven-deduplicate` keeps *all* of them when it merges — so a merged record's `copyright` field names every source it came from. `--keep-notices` switches it off.
   - What each of these repairs does in detail — how repeats are merged, which entities are dropped rather than decoded, and what happens to a record that already has a `copyright` field — is in the [paper tools manual](raven/papers/README.md#raven-fixbib--repairing-a-database-export).
 
@@ -260,7 +266,8 @@
 
 #### Raven-siftbib
 
-- **A new tool, `raven-siftbib`**, for the records a literature search returns that a review cannot actually use. A record carrying nothing but a title is not off topic — nobody can tell what it is — it simply has no text to screen on, and a screening pass has to account for it rather than quietly carry it into the count. This removes such records and writes down what went.
+- **A new tool, `raven-siftbib`**, for the records a literature search returns that a review cannot actually use.
+  A record carrying nothing but a title is not off topic — nobody can tell what it is — it simply has no text to screen on, and a screening pass has to account for it rather than quietly carry it into the count. This removes such records and writes down what went.
 
   ```
   raven-siftbib corpus.bib --require abstract
@@ -274,37 +281,35 @@
 
 #### Raven-xdot-viewer
 
-- **A label your graph set in bold or italic now comes out that way.** GraphViz records the font it
-  resolved into the xdot it writes, and the viewer had been drawing every label in the regular face
-  regardless. Emphasis in a diagram usually marks the part that matters, so it was the one thing worth
-  keeping that was being dropped.
-  - **The face is taken from the graph; the typeface is not.** A graph asking for `Times-Bold` is drawn in
-    Raven's own font, in bold — matching the weight and the slant, not the family. A font name that spells
-    its style some other way is drawn regular, as it would have been anyway.
+- **A label your graph set in bold or italic comes out that way.**
+  - GraphViz records the font it resolved into the xdot it writes, and the viewer honours it.
+  - **The face is taken from the graph; the typeface is not.** A graph asking for `Times-Bold` is drawn in Raven's own font, in bold — matching the weight and the slant, not the family. A font name that spells its style some other way is drawn regular.
 
 #### Constellation-wide
 
-- **`--qr`**, which puts a scannable "Get Raven" code in the corner of any of the seven GUI apps. For running Raven where people are watching: a visitor sees a demo for a minute and walks off, and nobody writes down a URL. Off unless asked for.
+- **`--qr`**, which puts a scannable "Get Raven" code in the corner of any GUI app.
+  - For running Raven where people are watching: a visitor sees a demo for a minute and walks off, and nobody writes down a URL. Off unless asked for.
   - The URL comes from the installed package's own metadata, so it cannot drift from where Raven actually lives. Running from a source checkout, where there is no metadata to read, the overlay declines instead of showing a wrong address.
   - The corner it sits in stays clickable, and it costs no framerate in an app that is otherwise idle.
 
-- **Drag files straight in from the file manager.** Every GUI app now accepts a drop where it previously wanted the in-app file browser. What a drop means is whatever that app's open button already meant:
-  - *Raven-librarian*: images and documents are attached to your next message, exactly as the attach button does — mixed drops included.
-  - *Raven-visualizer*: a `.pickle` opens that dataset; `.bib` files open the importer with them already filled in as input.
-  - *Raven-cherrypick*: a folder opens it.
-  - *Raven-xdot-viewer*: a `.dot`, `.xdot` or `.gv` opens it.
-  - *Raven-avatar-pose-editor*: an image with an alpha channel loads as the character; a `.json` loads emotion templates.
-  - *Raven-avatar-settings-editor*: an image with transparency loads as the character, any other image as the backdrop, and a `.json` as animator settings. It has two image slots and a drag cannot be aimed at either — the drop only reports itself on release — so the image decides: a character is a cutout, a backdrop is a full frame.
-  - Drop something an app cannot use and it says so, naming what you dropped and what would have worked, rather than doing nothing. A drop that arrives while a dialog is open is ignored, so it cannot answer a question you are in the middle of.
+- **Drag files straight in from the file manager.**
+  Every GUI app accepts a drop.
+  - **What a drop means is whatever that app's open button already meant.**
+    - *Raven-librarian*: images and documents are attached to your next message, exactly as the attach button does — mixed drops included.
+    - *Raven-visualizer*: a `.pickle` opens that dataset; `.bib` files open the importer with them already filled in as input.
+    - *Raven-cherrypick*: a folder opens it.
+    - *Raven-xdot-viewer*: a `.dot`, `.xdot` or `.gv` opens it.
+    - *Raven-avatar-pose-editor*: an image with an alpha channel loads as the character; a `.json` loads emotion templates.
+    - *Raven-avatar-settings-editor*: an image with transparency loads as the character, any other image as the backdrop, and a `.json` as animator settings.
+      - It has two image slots and a drag cannot be aimed at either — the drop only reports itself on release — so the image decides: a character is a cutout, a backdrop is a full frame.
+  - Drop something an app cannot use and it says so, naming what you dropped and what would have worked, rather than doing nothing.
+  - A drop that arrives while a dialog is open is ignored, so it cannot answer a question you are in the middle of.
   - Works wherever the GUI toolkit's own windowing layer does: X11, macOS and Windows. Wayland is untested — please report if it does not work there.
 
-- **`--repl`**, on every app and on the server: an in-process REPL for inspecting a running instance, off
-  unless asked for. `python -m unpythonic.net.client localhost` connects, and the app's own namespace is
-  in scope. For the case nothing else covers — an instance that came up *wrong* and is still running,
-  where the next launch will be fine and killing this one destroys the evidence.
-  - **It is unauthenticated, unencrypted, arbitrary code execution inside the app, as you.** Bound to
-    localhost. A debugging aid: do not leave it running, and forward a port over SSH rather than exposing
-    one.
+- **`--repl`**, on every app and on the server: an in-process REPL for inspecting a running instance, off unless asked for.
+  - `python -m unpythonic.net.client localhost` connects, and the app's own namespace is in scope.
+  - For the case nothing else covers — an instance that came up *wrong* and is still running, where the next launch will be fine and killing this one destroys the evidence.
+  - **It is unauthenticated, unencrypted, arbitrary code execution inside the app, as you.** Bound to localhost. A debugging aid: do not leave it running, and forward a port over SSH rather than exposing one.
 
 ### Changed
 
