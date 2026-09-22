@@ -267,8 +267,18 @@ What is queued, all small and independent:
   - Its natural pair is the screenshot scan below: both are a read-through of the docs asking what is
     missing, and doing them in one pass is cheaper than twice.
 
-- **`raven/tools/`** — four console scripts and no README. Smaller than `papers/` was, and the main README
-  may well be enough for them; the question is worth asking before writing one.
+- ~~**`raven/tools/` wants a README**~~ — **closed 2026-09-22, nothing to do.** It wanted no manual and
+  already has the mention it needed.
+  - Juha's read: `raven-check-cuda` and `raven-check-audio-devices` are self-explanatory, a diagnostic
+    that prints what it found needing no manual, and what the rest want is a short line in the main
+    user manual saying you can reach for these to check such things.
+  - `README.md` already carries it. All four tools have one-line entries under *Command-line tools*, and
+    the two diagnostics have the when-to-use framing as well: *"report what the machine offers, which is
+    usually the fastest way to settle an installation question."*
+  - Worth recording why the item existed: it was filed as "four console scripts and no README", by
+    analogy with `papers/`, which had just got one. The analogy was the flaw. Those eleven tools make
+    decisions a reader has to understand; these four report or convert, and a table entry is the whole
+    of what that needs. **An absent document is not by itself a gap.**
 - **Screenshots, and ffmpeg-captured GIFs of the animated features** — much of how Raven *feels* is motion,
   and no still shows it. Wants a session where taking the keyboard is expected.
   - **Roughly all the existing screenshots are out of date** (Juha, 2026-09-22), so this is a refresh
