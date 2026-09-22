@@ -13,7 +13,7 @@ import textwrap
 import threading
 import time
 import uuid
-from typing import Callable, Iterable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 import dearpygui.dearpygui as dpg
 
@@ -28,6 +28,9 @@ from ...common.gui import helpcard
 from ...common.gui import keyboardmark
 from ...common.gui import utils as guiutils
 from ...common.gui.tablecursor import TableCursor
+
+if TYPE_CHECKING:  # `filegrid` reaches torch, so it is imported lazily in `_the_grid`; this is
+    from ...common.gui import filegrid  # noqa: F401 -- ...what lets the two annotations name it anyway
 
 
 # Page Up and Page Down as a key handler actually receives them. `dpg.mvKey_Prior` and `dpg.mvKey_Next`
@@ -210,7 +213,7 @@ _EXTENSION_ICONS = {
 }
 
 
-def icon_name_for_extension(file_name: str) -> Optional[str]:
+def icon_name_for_extension(file_name: str) -> str | None:
     """Which icon `file_name`'s extension asks for, or `None` for a type with no icon of its own.
 
     Matched case-insensitively, so `PHOTO.JPG` gets the picture icon that `photo.jpg` does. The answer is
@@ -227,7 +230,7 @@ def icon_name_for_extension(file_name: str) -> Optional[str]:
     return None
 
 
-def _get_all_drives():
+def _get_all_drives() -> list[str]:
     """Mount points to offer in the shortcuts panel, one menu item each.
 
     Mount points, specifically: every entry has to be somewhere `chdir` can go, because that is the only
@@ -249,7 +252,7 @@ def _get_all_drives():
 _GRID_TICK_INTERVAL = 1.0 / 60
 
 
-def _first_letter(label: str) -> Optional[str]:
+def _first_letter(label: str) -> str | None:
     """The first letter of `label`, lowercased — or `None` where it has none at all.
 
     Non-letters are skipped rather than matched, which is what makes a mount point reachable by typing:
@@ -267,7 +270,7 @@ def _first_letter(label: str) -> Optional[str]:
     return None
 
 
-def _complete_from(text: str, candidates: Iterable[str]) -> Optional[str]:
+def _complete_from(text: str, candidates: Iterable[str]) -> str | None:
     """What `text` becomes when Tab completes it against `candidates`. `None` when there is nothing to add.
 
     The answer is the candidates' longest common prefix — Tab asks *"what do the things I am looking at
@@ -300,7 +303,7 @@ def _complete_from(text: str, candidates: Iterable[str]) -> Optional[str]:
     return common if case_insensitive else candidates[0][:len(common)]
 
 
-def _normalize_filter(entry: Union[str, tuple[str, Iterable[str]]]) -> tuple[str, Optional[tuple[str, ...]]]:
+def _normalize_filter(entry: str | tuple[str, Iterable[str]]) -> tuple[str, tuple[str, ...] | None]:
     """Normalize one `FileDialog` `filter_list` entry to a `(label, extensions)` pair.
 
     `extensions` is a tuple of lowercase suffixes, or `None` for the ".*" catch-all. A bare string is its
@@ -318,7 +321,7 @@ def _normalize_filter(entry: Union[str, tuple[str, Iterable[str]]]) -> tuple[str
 visible_dialog_instance = None  # fdialog is modal so There Can Be Only One (TM). If needed, could use a list, and check which one has keyboard focus, but that might not always work.
 
 
-def fdialog_hotkeys_callback(sender, app_data):
+def fdialog_hotkeys_callback(sender: int | str, app_data: Any) -> None:
     """Route a key press to whichever dialog is on screen.
 
     Registry-level concerns only — there is one global handler for every dialog, so its job is to decide
@@ -330,7 +333,7 @@ def fdialog_hotkeys_callback(sender, app_data):
     visible_dialog_instance._handle_key(app_data)
 
 
-def fdialog_key_release_callback(sender, app_data):
+def fdialog_key_release_callback(sender: int | str, app_data: Any) -> None:
     """Route a key release to whichever dialog is on screen. Same division of labour as the press handler."""
     if visible_dialog_instance is None:
         return
@@ -342,7 +345,7 @@ class FileDialog:
     _class_initialized = False
 
     @classmethod
-    def _initialize_class(cls):
+    def _initialize_class(cls) -> None:
         with cls._class_init_lock:
             # Everything cached here — icon textures, themes, the hotkey handler registry — belongs to the DPG
             # context that created it, and `dpg.destroy_context` takes it along while leaving this flag set. An
@@ -392,7 +395,7 @@ class FileDialog:
             # Both enabled states, because a theme component covers one of them. A file in a folder picker
             # is a *disabled* selectable, and the cursor must stay visible as it travels over one —
             # otherwise it would vanish over exactly the rows such a picker is mostly made of.
-            def _cursor_variant(align_x):
+            def _cursor_variant(align_x: bool) -> int | str:
                 with dpg.theme() as theme:
                     for enabled in (True, False):
                         with dpg.theme_component(dpg.mvAll, enabled_state=enabled):
@@ -1018,7 +1021,7 @@ class FileDialog:
     # help button, and `toolbutton_w` in the two that keep it in config.
     _TOOLBUTTON_W = 30
 
-    def _icon_font(self) -> Optional[int]:
+    def _icon_font(self) -> int | None:
         """The solid icon font, or `None` when nothing has booted the shared fonts.
 
         Asked with `getattr` rather than by membership, which is what `helpcard` does with the same env
@@ -1026,7 +1029,7 @@ class FileDialog:
         """
         return getattr(self.themes_and_fonts, "icon_font_solid", None)
 
-    def _add_toolbutton(self, glyph: str, texture: Optional[str], *, tag: str) -> Union[int, str]:
+    def _add_toolbutton(self, glyph: str, texture: str | None, *, tag: str) -> int | str:
         """Add one toolbar button to the current container, drawn from the icon font where there is one.
 
         `glyph`: the FontAwesome codepoint to draw, from `fa`.
@@ -1045,7 +1048,7 @@ class FileDialog:
             return dpg.add_image_button(texture, tag=tag)  # tag
         return dpg.add_button(label=glyph, width=self._TOOLBUTTON_W, tag=tag)  # tag
 
-    def _effective_target(self) -> Optional[str]:
+    def _effective_target(self) -> str | None:
         """What OK would return right now in a directory-picking mode. `None` in a file picker, which has
         no such notion — there, OK with nothing selected is a question rather than an answer.
 
@@ -1238,7 +1241,7 @@ class FileDialog:
 
     # high-level functions
 
-    def _cursor_entry(self):
+    def _cursor_entry(self) -> filelisting.FileEntry | None:
         """The listing entry the cursor is on, in whichever view is showing. `None` if there is none."""
         if self._grid_mode and self._grid is not None:
             return self._grid.current_entry
@@ -1247,7 +1250,7 @@ class FileDialog:
             return self._row_entries[idx]
         return None
 
-    def _paint_row(self, idx, is_cursor):
+    def _paint_row(self, idx: int, is_cursor: bool) -> None:
         """Draw row `idx` as the cursor row, or as an ordinary one.
 
         Rebinding themes rather than rebuilding the row: a listing can be thousands of rows deep and a
@@ -1259,7 +1262,7 @@ class FileDialog:
             for cell, base_theme, cursor_theme in self._row_themes[idx]:
                 dpg.bind_item_theme(cell, cursor_theme if is_cursor else base_theme)
 
-    def _row_metrics(self):
+    def _row_metrics(self) -> tuple[float, float] | None:
         """`(origin, pitch)` for the listing's rows — where row 0 starts, and how far apart rows sit.
 
         Measured, because neither number is the one that was asked for: cells created at
@@ -1288,7 +1291,7 @@ class FileDialog:
                 return self._row_metrics_cache
         return None
 
-    def _view_height(self):
+    def _view_height(self) -> float:
         """The visible height of the listing, measured on the container that reports one.
 
         Not the table: a DPG table has no `rect_size` in its state at all, so `get_widget_size` falls
@@ -1300,7 +1303,7 @@ class FileDialog:
             return height if height > 0 else 0
         return 0
 
-    def delete_table(self):
+    def delete_table(self) -> None:
         for child in dpg.get_item_children(f"explorer_{self.instance_tag}", 1):
             dpg.delete_item(child)
 
@@ -1311,7 +1314,7 @@ class FileDialog:
         return textwrap.fill(" ".join(extensions), width=72,
                              initial_indent="Matches: ", subsequent_indent="         ")
 
-    def _draw_sort_indicators(self):
+    def _draw_sort_indicators(self) -> None:
         """Redraw the triangle marking which criterion is active, and which way it points.
 
         Drawn rather than written: Raven's UI font is OpenSans, which has no triangle or arrow glyphs
@@ -1329,7 +1332,7 @@ class FileDialog:
                 points = [(2, 18), (12, 18), (7, 10)]
             dpg.draw_triangle(*points, color=color, fill=color, parent=drawlist)
 
-    def _filter_is_image_typed(self, label) -> bool:
+    def _filter_is_image_typed(self, label: str) -> bool:
         """Whether the named file type filter selects images and nothing else.
 
         The catch-all does not count: ".*" selects images *among* everything, and a directory of source
@@ -1362,7 +1365,7 @@ class FileDialog:
         """
         return not self.returns_dir
 
-    def _is_choosable(self, entry) -> bool:
+    def _is_choosable(self, entry: filelisting.FileEntry) -> bool:
         """Whether `entry` is a thing this dialog can return.
 
         One kind is returnable and the other is scenery, and which is which is `pick`'s whole job: a
@@ -1382,7 +1385,7 @@ class FileDialog:
         file_name = file_name.lower()
         return any(file_name.endswith(ext) for ext in self._active_extensions)
 
-    def _resize_grid(self):
+    def _resize_grid(self) -> None:
         """Match the grid to the area the table would have filled.
 
         Measured rather than computed: the shortcuts panel is resizable, so the listing's width is not
@@ -1407,7 +1410,7 @@ class FileDialog:
         else:  # not one of the offered items; read it as a literal extension, as the single-extension form did
             self._active_extensions = None if label == ".*" else (label.lower(),)
 
-    def get_directory_path(self, directory_name):
+    def get_directory_path(self, directory_name: str) -> str | None:
         """Where the shortcut named `directory_name` should go, or `None` if this user has no such place.
 
         `None` rather than a fallback path, because a shortcut that silently goes somewhere else is
@@ -1425,7 +1428,7 @@ class FileDialog:
             return None
         return str(directory_path)
 
-    def message_box(self, title, message):
+    def message_box(self, title: str, message: str) -> None:
         if not self.modal:
             with dpg.mutex():
                 viewport_width = dpg.get_viewport_client_width()
@@ -1457,7 +1460,7 @@ class FileDialog:
                                                                  message_duration=_REPORT_TEXT_SECONDS,
                                                                  text_color=_ALARM_RED))
 
-    def _grid_current_changed(self, entry):
+    def _grid_current_changed(self, entry: filelisting.FileEntry) -> None:
         """Single click in the grid: select, exactly as clicking a row does.
 
         The selection callback has already recorded the click; what is left is save mode's habit of
@@ -1473,7 +1476,7 @@ class FileDialog:
             dpg.set_value(f"ex_search_{self.instance_tag}", basename)
             self._update_search()
 
-    def _grid_selection_changed(self, entries):
+    def _grid_selection_changed(self, entries: list[filelisting.FileEntry]) -> None:
         """The grid's selection is the dialog's, filtered to what can actually be returned.
 
         This is what makes Ctrl+click mean in the grid what it means in the table. Without it the
@@ -1485,7 +1488,7 @@ class FileDialog:
         self.selected_files.extend(entry.path for entry in entries if self._is_choosable(entry))
         self._refresh_target_notification()
 
-    def _icon_for(self, entry) -> Union[str, int]:
+    def _icon_for(self, entry: filelisting.FileEntry) -> str | int:
         """The small icon shown at the left of `entry`'s row."""
         if entry.is_dir:
             return self.img_mini_folder
@@ -1496,7 +1499,7 @@ class FileDialog:
             return self.img_mini_document
         return getattr(self, f"img_{icon_name}")
 
-    def _install_filters(self, filter_list, file_filter=None) -> None:
+    def _install_filters(self, filter_list: list[str | tuple[str, list[str]]] | None, file_filter: str | None = None) -> None:
         """Recompute the offered file type filters. Touches no widgets; callers refresh the GUI."""
         self.filter_list = list(filter_list)
         self._filters = [_normalize_filter(entry) for entry in self.filter_list]
@@ -1520,7 +1523,7 @@ class FileDialog:
             else:
                 self.default_file_extension = None
 
-    def _row_extent(self, idx):
+    def _row_extent(self, idx: int) -> tuple[float, float] | None:
         """Where row `idx` sits inside the table's scrollable content, as `(top, height)`."""
         metrics = self._row_metrics()
         if metrics is None or not (0 <= idx < len(self._row_themes)):
@@ -1528,7 +1531,7 @@ class FileDialog:
         origin, pitch = metrics
         return origin + idx * pitch, pitch
 
-    def _rows_per_page(self):
+    def _rows_per_page(self) -> int:
         """Most of a screenful, keeping one row of context to read the new position against."""
         height = self._view_height()
         metrics = self._row_metrics()
@@ -1536,7 +1539,7 @@ class FileDialog:
             return 1
         return max(1, int(height / metrics[1]) - 1)
 
-    def _start_grid_ticker(self):
+    def _start_grid_ticker(self) -> None:
         """Run the grid's per-frame work on a thread of the dialog's own, for as long as it is on screen.
 
         The grid needs `update()` every frame and the decoder needs polling, and `FileDialog` is a
@@ -1554,7 +1557,7 @@ class FileDialog:
         if self._ticker is not None and self._ticker.is_alive():
             return
 
-        def tick_loop():
+        def tick_loop() -> None:
             while not self._ticker_stop.wait(_GRID_TICK_INTERVAL):
                 try:
                     # The app closing with the picker still open is the one exit this thread is not
@@ -1576,7 +1579,7 @@ class FileDialog:
                                         name=f"fdialog_grid_tick_{self.instance_tag}")
         self._ticker.start()
 
-    def _tile_icon_for(self, entry) -> Optional[str]:
+    def _tile_icon_for(self, entry: filelisting.FileEntry) -> str | None:
         """Which icon `entry`'s *tile* gets in grid view, or `None` to decode the image itself.
 
         `None` is what puts an entry in the thumbnail queue, so it is the answer for exactly the files
@@ -1592,7 +1595,7 @@ class FileDialog:
             return None
         return icon_name_for_extension(entry.name) or "document"
 
-    def sort_by(self, sort_key, descending=None):
+    def sort_by(self, sort_key: filelisting.SortKey, descending: bool = None) -> None:
         """Order the listing by `sort_key`, and rebuild it.
 
         `descending`: `None` (the default) is the click semantics — asking for the criterion already in
@@ -1606,7 +1609,7 @@ class FileDialog:
         self._draw_sort_indicators()
         self._update_search()  # re-lists the current directory under the current find query
 
-    def _scroll_row_into_view(self, idx):
+    def _scroll_row_into_view(self, idx: int) -> None:
         """Move the least that puts row `idx` on screen, and nothing at all when it already is.
 
         Scrolling only when the row is outside the visible band is what keeps arrow navigation from
@@ -1636,7 +1639,7 @@ class FileDialog:
                          f"scrolling to {max(0.0, float(new_top))}")
             dpg.set_y_scroll(table, max(0.0, float(new_top)))
 
-    def set_grid_mode(self, enabled, remember=True, rebuild=True):
+    def set_grid_mode(self, enabled: bool, remember: bool = True, rebuild: bool = True) -> None:
         """Switch between the table and the thumbnail grid.
 
         `remember`: whether this counts as the user's own choice, which then overrides the automatic
@@ -1664,16 +1667,16 @@ class FileDialog:
         if rebuild:
             self._update_search()  # rebuild into the view that is now on screen
 
-    def _apply_automatic_grid_mode(self, rebuild=True):
+    def _apply_automatic_grid_mode(self, rebuild: bool = True) -> None:
         """Turn the grid on for an image-typed filter, unless the user has said otherwise."""
         if self._grid_mode_chosen_by_user:
             return
         self.set_grid_mode(self._filter_is_image_typed(self.file_filter), remember=False, rebuild=rebuild)
 
-    def _thumbnails_checkbox_callback(self, sender, app_data):
+    def _thumbnails_checkbox_callback(self, sender: int | str, app_data: Any) -> None:
         self.set_grid_mode(app_data)
 
-    def set_show_hidden_files(self, enabled):
+    def set_show_hidden_files(self, enabled: bool) -> None:
         """Show or hide dotfiles and their platform equivalents, and re-list under the current query.
 
         The listing goes through the same rebuild a sort or a filter change does, so the cursor is
@@ -1687,10 +1690,10 @@ class FileDialog:
         self.show_hidden_files = enabled
         self._update_search()  # re-lists the current directory under the current find query
 
-    def _hidden_files_checkbox_callback(self, sender, app_data):
+    def _hidden_files_checkbox_callback(self, sender: int | str, app_data: Any) -> None:
         self.set_show_hidden_files(app_data)
 
-    def _make_sort_row(self):
+    def _make_sort_row(self) -> None:
         """The sort buttons, plus the two view toggles, on one row above the listing.
 
         The toggles sit next to them rather than off at the right edge, because the case the thumbnail
@@ -1743,7 +1746,7 @@ class FileDialog:
                              "and on Windows the ones the filesystem marks hidden. [Ctrl+H]")
         self._draw_sort_indicators()
 
-    def _reset_grid_mode_for_opening(self):
+    def _reset_grid_mode_for_opening(self) -> None:
         """Forget a hand-set view, so the automatic rule gets to decide again. Called on each opening.
 
         **The checkbox is per-opening**, and it has to be: a `FileDialog` is built once and lives as long
@@ -1763,14 +1766,14 @@ class FileDialog:
         else:
             self._apply_automatic_grid_mode(rebuild=False)
 
-    def on_path_enter(self):
+    def on_path_enter(self) -> None:
         typed = dpg.get_value(self.path_field)
         try:
             self.chdir(typed)
         except FileNotFoundError:
             self.message_box("Invalid path", f"No such file or directory: {typed}")
 
-    def open_place(self, sender, app_data, user_data):
+    def open_place(self, sender: int | str, app_data: Any, user_data: Any) -> None:
         """DPG GUI event handler: list the place this row stands for.
 
         `user_data`: The directory the row opens — one of the user's directories, or a drive's root. A
@@ -1843,7 +1846,7 @@ class FileDialog:
                 dpg.add_image_button(texture_tag=self.img_hard_disk, label=drive, user_data=drive,
                                      callback=self.open_place, parent=panel)
 
-    def _add_place_row(self, label: str, path: str, icon, *, parent: Union[str, int]) -> None:
+    def _add_place_row(self, label: str, path: str, icon: str, *, parent: str | int) -> None:
         """Build one row of the places panel: an icon, and a selectable that goes where the row says.
 
         `label`: what the row reads — a directory name for one of the user's places, the mount point for
@@ -1938,7 +1941,7 @@ class FileDialog:
             return height if height > 0 else 0
         return 0
 
-    def _place_extent(self, idx: int):
+    def _place_extent(self, idx: int) -> tuple[float, float] | None:
         """Where place row `idx` sits inside the panel's scrollable content, as `(top, height)`.
 
         Measured per row, where the listing extrapolates one pitch across all of its rows: the separator
@@ -1988,14 +1991,14 @@ class FileDialog:
                 return
             dpg.set_y_scroll(panel, max(0.0, float(new_top)))
 
-    def _deselect_recursive(self, root):
+    def _deselect_recursive(self, root: int | str) -> None:
         """Deselect all selectables inside DPG widget `root`, including `root` itself."""
         if dpg.get_item_type(root) == "mvAppItemType::mvSelectable":
             dpg.set_value(root, False)
         for item in dpg.get_item_children(root, slot=1):
             self._deselect_recursive(item)
 
-    def open_file(self, sender, app_data, user_data):  # `user_data`: [name, fullpath, timestamp, size]
+    def open_file(self, sender: int | str, app_data: Any, user_data: Any) -> str | None:  # `user_data`: [name, fullpath, timestamp, size]
         ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
 
         # Detect double-click.
@@ -2040,7 +2043,7 @@ class FileDialog:
                     self.selected_files.append(user_data[1])
                     self._refresh_target_notification()
 
-    def _mark_selected(self, path, selected) -> None:
+    def _mark_selected(self, path: str, selected: bool) -> None:
         """Record `path` as selected or not, leaving the widget that shows it alone.
 
         The bookkeeping half of a multi-selection change, shared by Ctrl+click and Ctrl+Space so that the
@@ -2079,7 +2082,7 @@ class FileDialog:
         dpg.set_value(cell, now_selected)
         self._mark_selected(entry.path, now_selected)
 
-    def _make_row(self, entry, callback, parent=None, selected_paths=()):
+    def _make_row(self, entry: filelisting.FileEntry, callback: Callable[[list[str]], None] | None, parent: int | str = None, selected_paths: set[str] = ()) -> None:
         """Build one table row from a `filelisting.FileEntry`.
 
         The entry carries everything the row needs, so nothing here consults the filesystem and nothing
@@ -2172,7 +2175,7 @@ class FileDialog:
                 else:
                     dpg.add_image(self.img_document, parent=drag_payload)
 
-    def _go_up_one_level(self, sender, app_data, user_data):
+    def _go_up_one_level(self, sender: int | str, app_data: Any, user_data: Any) -> None:
         """GUI callback: if this item double-clicked, go up one level."""
         ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
         current_time = time.time()
@@ -2186,7 +2189,7 @@ class FileDialog:
         if double_clicked:
             self.chdir("..")  # which clears the find field, as every route into it does
 
-    def set_type_filter(self, label):
+    def set_type_filter(self, label: str) -> None:
         """Select the file type filter by its label, exactly as picking it from the combo would.
 
         `label` is one of the labels derived from `filter_list` — a bare extension for a string entry,
@@ -2198,7 +2201,7 @@ class FileDialog:
         self._apply_automatic_grid_mode(rebuild=False)  # the listing is about to be rebuilt anyway
         self.reset_dir()
 
-    def set_filter_list(self, filter_list, file_filter=None):
+    def set_filter_list(self, filter_list: list[str | tuple[str, list[str]]] | None, file_filter: str | None = None) -> None:
         """Replace the offered file type filters, as `filter_list` in the constructor.
 
         For an app whose acceptable types depend on state that can change while it runs — a Librarian
@@ -2223,10 +2226,10 @@ class FileDialog:
         if dpg.get_item_configuration(self.tag)["show"]:  # tag
             self.reset_dir()
 
-    def filter_combo_selector(self, sender, app_data):
+    def filter_combo_selector(self, sender: int | str, app_data: Any) -> None:
         self.set_type_filter(dpg.get_value(sender))
 
-    def chdir(self, path):
+    def chdir(self, path: str) -> None:
         """Go to `path` and list it. The one place this dialog navigates; every route ends up here."""
         try:
             os.chdir(path)
@@ -2255,7 +2258,7 @@ class FileDialog:
         except NotADirectoryError as e:
             self.message_box("File dialog - not a directory", f"{path} is a file, not a folder.\n\nMore info:\n{e}")
 
-    def reset_dir(self, file_name_filter=None):
+    def reset_dir(self, file_name_filter: str | None = None) -> None:
         """Rebuild the listing of the working directory, optionally narrowed to `file_name_filter`.
 
         This *lists*; it does not navigate. Going somewhere is `chdir`, which moves the process and
@@ -2398,7 +2401,7 @@ class FileDialog:
         self._refresh_target_notification()
         self._recolor_find_field()
 
-    def _the_grid(self):
+    def _the_grid(self) -> "filegrid.FileGrid":
         """The grid view, built on first use.
 
         Deferred because building it costs the thumbnail decoder and its device — several seconds of
@@ -2424,7 +2427,7 @@ class FileDialog:
                                            on_activate=self._grid_activate)
         return self._grid
 
-    def _grid_activate(self, entry):
+    def _grid_activate(self, entry: filelisting.FileEntry) -> None:
         """Double click in the grid: descend into the directory, or accept the file."""
         if entry.is_dir:
             dpg.set_value(f"ex_search_{self.instance_tag}", "")
@@ -2436,7 +2439,7 @@ class FileDialog:
         self.selected_files.append(entry.path)
         self.ok()
 
-    def _activate_cursor_entry(self):
+    def _activate_cursor_entry(self) -> None:
         """Enter: go as deep as this entry allows.
 
         One sentence covers every mode, which is why the rule reads as a rule rather than a table: `..`
@@ -2459,7 +2462,7 @@ class FileDialog:
         self.selected_files.append(entry.path)
         self.ok()
 
-    def _help_hotkey_info(self):
+    def _help_hotkey_info(self) -> list[env]:
         """The keys this dialog answers to, as `helpcard` entries, in reading order.
 
         Built per instance rather than as a constant, because several keys exist only in some dialogs —
@@ -2519,7 +2522,7 @@ class FileDialog:
             env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
         ) if entry is not None]
 
-    def _the_help_card(self):
+    def _the_help_card(self) -> helpcard.HelpWindow:
         """The card listing this dialog's keys, built on first use.
 
         Deferred because most dialogs are never asked for it, and building one costs a window and a table
@@ -2826,7 +2829,7 @@ class FileDialog:
             if self._grid_is_available():
                 self.set_grid_mode(not self._grid_mode)
 
-    def _navigator(self):
+    def _navigator(self) -> "TableCursor | filegrid.FileGrid":
         """Whichever view is on screen, as the thing that answers to `navigate_*`.
 
         The two are interchangeable by construction rather than by adaptor — `TableCursor` was written to
@@ -2835,7 +2838,7 @@ class FileDialog:
         """
         return self._grid if (self._grid_mode and self._grid is not None) else self._table_cursor
 
-    def _write_field(self, widget: Union[str, int], name: str, text: str) -> bool:
+    def _write_field(self, widget: str | int, name: str, text: str) -> bool:
         """Put `text` into text field `widget`, called `name` in the log. Returns whether the write landed.
 
         Only safe once the caret has left that field, which is the caller's job to have arranged.
@@ -2982,7 +2985,7 @@ class FileDialog:
         dialog = self
 
         class _FocusWatch(gui_animation.Animation):
-            def __init__(self):
+            def __init__(self) -> None:
                 # Ambient, as `keyboardmark.install_focus_follower` is and for the same reason: this says
                 # where the keyboard is rather than that anything is happening, so it must not hold the
                 # frame rate up for as long as a dialog is open.
@@ -3139,7 +3142,7 @@ class FileDialog:
             index = len(labels) - 1
         self.set_type_filter(labels[index])
 
-    def show_file_dialog(self):
+    def show_file_dialog(self) -> None:
         # Timed alongside `reset_dir`'s own phases, because "the dialog takes a moment to appear" can mean
         # the listing, or the frame this waits for, and the two have nothing to do with each other. The
         # entry line also timestamps the moment this callback got to run, which is the other candidate: DPG
@@ -3178,7 +3181,7 @@ class FileDialog:
         self._repaint_home_mark()
         self._start_focus_watch()
 
-    def _stop_grid_ticker(self):
+    def _stop_grid_ticker(self) -> None:
         """Stop the grid's tick thread and wait for it to notice.
 
         Waiting matters: the thread calls DPG, and a DPG call after the context is destroyed is a segfault
@@ -3200,7 +3203,7 @@ class FileDialog:
         if ticker.is_alive():
             logger.warning(f"_stop_grid_ticker: instance '{self.tag}' ({self.instance_tag}), tick thread did not stop within the timeout")
 
-    def destroy(self):
+    def destroy(self) -> None:
         """Release what the dialog holds outside its widget tree. **Every app that builds one must call this.**
 
         Not optional and not merely tidy: an app that skips it can crash on exit. Call it once per dialog,
@@ -3242,7 +3245,7 @@ class FileDialog:
             self._grid.destroy()
             self._grid = None
 
-    def is_visible(self):
+    def is_visible(self) -> bool:
         """Return whether the dialog is currently on screen — its help card included.
 
         Apps ask this to suppress hotkeys and drops while a modal picker is up. Having it here is what keeps
@@ -3254,7 +3257,7 @@ class FileDialog:
         """
         return self._help_card_up or self._restore_pending or dpg.is_item_visible(self.tag)  # tag
 
-    def _forget_listing(self):
+    def _forget_listing(self) -> None:
         """Drop what the closed dialog knew about its listing, without touching the widgets.
 
         Closing used to rebuild the listing instead — `ok` did it twice, `cancel` once — which is work
@@ -3282,7 +3285,7 @@ class FileDialog:
         self._stop_cursor_pulse()
         self._stop_grid_ticker()
 
-    def refresh(self):
+    def refresh(self) -> None:
         cwd = os.getcwd()
         logger.debug(f"refresh: instance '{self.tag}' ({self.instance_tag}), refreshing at cwd = '{cwd}'")
         self.reset_dir()
@@ -3295,18 +3298,18 @@ class FileDialog:
         gui_animation.flash_button(button=self.button_refresh,
                                    duration=1.0)
 
-    def back_to_default_path(self):
+    def back_to_default_path(self) -> None:
         logger.debug(f"back_to_default_path: instance '{self.tag}' ({self.instance_tag}), going back to '{self.default_path}'")
         self.chdir(self.default_path)
         # Raven: Acknowledge the action in the GUI.
         gui_animation.flash_button(button=self.button_back_to_default_path,
                                    duration=1.0)
 
-    def _update_search(self):
+    def _update_search(self) -> None:
         res = dpg.get_value(f"ex_search_{self.instance_tag}")
         self.reset_dir(file_name_filter=res)
 
-    def ok(self):
+    def ok(self) -> None:
         """Close dialog and accept currently selected files.
 
         The list of selected files is sent to `callback`.
@@ -3376,7 +3379,7 @@ class FileDialog:
         # `portrait`, which does not exist, and the confirmation is skipped in exactly the case a user who
         # lets the dialog name the file for them will be in.
         if self.save_mode and self.default_file_extension is not None:
-            def ensure_ext(path):
+            def ensure_ext(path: str) -> str:
                 path_lower = path.lower()
                 if not any(path_lower.endswith(ext) for ext in self._all_extensions):  # any valid ext is fine, but if none match, add the default ext.
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), automatically adding default file extension '{self.default_file_extension}' to '{path}'.")
@@ -3420,7 +3423,7 @@ class FileDialog:
         self.last_path = os.getcwd()  # update remembered path when the dialog is closed with OK
         self._forget_listing()  # after the callback, which was handed `selected_files`
 
-    def cancel(self):
+    def cancel(self) -> None:
         """Close dialog without selecting any files.
 
         An empty list is sent to `callback`, so that your app can trigger any cleanup actions needed
@@ -3435,6 +3438,6 @@ class FileDialog:
         dpg.set_value(f"ex_search_{self.instance_tag}", "")  # clear the search when exiting
         self._forget_listing()
 
-    def change_callback(self, callback):
+    def change_callback(self, callback: Callable[[list[str]], None] | None) -> None:
         self.callback = callback
         dpg.configure_item(self.tag + "_return", callback=self.callback)
