@@ -746,40 +746,70 @@
 
 #### Raven-xdot-viewer
 
-- **The keyboard shortcuts work again from app start.** Ctrl+O, Ctrl+F, F1, F11 and the rest were dead until you clicked somewhere: the search field counts as focused from the moment the window appears, with nobody having touched it, and every shortcut was being held back for it. Typing in the search field still keeps the plain keys to itself, which is what the check was for.
+- **The keyboard shortcuts work again from app start.**
+  - `Ctrl+O`, `Ctrl+F`, `F1`, `F11` and the rest were dead until you clicked somewhere: the search field counts as focused from the moment the window appears, with nobody having touched it, and every shortcut was being held back for it.
+  - Typing in the search field still keeps the plain keys to itself, which is what the check was for.
 
-- Dismissing an error dialog no longer also acts on the graph behind it. The dialog floats over the canvas, so clicking its button re-centered the view on whichever node happened to sit under the pointer. 0.2.8 fixed the keyboard half of this; the mouse half was still open, because the graph's handlers are global — they fire wherever the cursor is — and decided "is the mouse over the graph?" geometrically, which cannot tell that a dialog is covering it.
+- **Dismissing an error dialog no longer also acts on the graph behind it.**
+  - The dialog floats over the canvas, so clicking its button re-centered the view on whichever node happened to sit under the pointer.
+  - 0.2.8 fixed the keyboard half of this; the mouse half was still open, because the graph's handlers are global — they fire wherever the cursor is — and decided "is the mouse over the graph?" geometrically, which cannot tell that a dialog is covering it.
 
-- Button flashes and error reports in the file dialog no longer fade in steps. The idle throttle, which drops the app to ~12 fps when nothing is happening, asked only the graph whether anything was animating — so a flash lasting a second, or a report standing for three, ran at the idle rate once the half second bought by your click had passed.
+- **Button flashes and error reports in the file dialog no longer fade in steps.**
+  - The idle throttle, which drops the app to a low frame rate when nothing is happening, asked only the graph whether anything was animating — so a flash lasting a second, or a report standing for three, ran at the idle rate once the half second bought by your click had passed.
 
 #### Constellation-wide
 
-- **Code backgrounds, underlines and code-block borders now appear in text that was hidden when it was drawn** — a collapsed thinking trace once expanded, and a help card's pages past the first. Such text used to be decorated while hidden, which draws nothing, and nothing redrew it.
+- **Code backgrounds, underlines and code-block borders now appear in text that was hidden when it was drawn** — a collapsed thinking trace once expanded, and a help card's pages past the first.
+  Such text used to be decorated while hidden, which draws nothing, and nothing redrew it.
 
-- **Markdown styling no longer lands beside its text after an emoji.** Each emoji — or any other character outside the Basic Multilingual Plane, such as mathematical letters — before a bold, italic, code or link span shifted that span one character to the right: in `😀 **bold** end`, the bold fell on "old " instead of "bold", and a link's colour sat one character off the same way. The emoji itself is still drawn as a missing-glyph box, the renderer having no emoji font yet. This affected chat messages and help cards alike.
+- **Markdown styling no longer lands beside its text after an emoji.**
+  - Each emoji — or any other character outside the Basic Multilingual Plane, such as mathematical letters — before a bold, italic, code or link span shifted that span one character to the right: in `😀 **bold** end`, the bold fell on "old " instead of "bold", and a link's colour sat one character off the same way.
+  - The emoji itself is still drawn as a missing-glyph box, the renderer having no emoji font yet.
+  - This affected chat messages and help cards alike.
 
-- **Closing an app no longer risks a crash on the way out.** The Markdown renderer runs background threads that keep drawing after the window is gone, and they were not stopped before the GUI was torn down — so on an unlucky close the app died with a segfault instead of exiting. Most likely while a message full of links was still being drawn, which is why it showed up when closing Raven-librarian during startup, but every app that renders Markdown could hit it, including ones that only ever show a help card. They are now stopped and waited for before teardown.
+- **Closing an app no longer risks a crash on the way out.**
+  - The Markdown renderer runs background threads that keep drawing after the window is gone, and they were not stopped before the GUI was torn down — so on an unlucky close the app died with a segfault instead of exiting.
+  - Most likely while a message full of links was still being drawn, which is why it showed up when closing Raven-librarian during startup, but every app that renders Markdown could hit it, including ones that only ever show a help card. They are now stopped and waited for before teardown.
 
-- **An app no longer runs at full frame rate for the rest of the session after Raven-server goes down.** Losing the video stream makes the avatar renderer pause itself, and pausing told the server first — the same server that had just gone away — so the call failed and the renderer stayed marked as running. The idle throttle reads that mark, so it never engaged again. Telling the server is now a courtesy done last, and a missing GUI widget cannot skip the mark either.
+- **An app no longer runs at full frame rate for the rest of the session after Raven-server goes down.**
+  - Losing the video stream makes the avatar renderer pause itself, and pausing told the server first — the same server that had just gone away — so the call failed and the renderer stayed marked as running. The idle throttle reads that mark, so it never engaged again.
+  - Telling the server is now a courtesy done last, and a missing GUI widget cannot skip the mark either.
 
-- **`&amp;` and `&nbsp;` no longer survive into text taken from a bibliography.** A database that exports HTML into a BibTeX field leaves them there, and Raven decoded the neighbouring entities (`&lt;`, `&le;`, `&auml;`) while passing these two through — so a title reading `Q&A` displayed as `Q&amp;A`, in the Visualizer's word cloud and info panel and in Librarian's citations alike. An escaped entity is still decoded only once, so a source that wrote `&amp;lt;` to mean a literal `&lt;` keeps saying that.
+- **`&amp;` and `&nbsp;` no longer survive into text taken from a bibliography.**
+  - A database that exports HTML into a BibTeX field leaves them there, and Raven decoded the neighbouring entities (`&lt;`, `&le;`, `&auml;`) while passing these two through — so a title reading `Q&A` displayed as `Q&amp;A`, in the Visualizer's word cloud and info panel and in Librarian's citations alike.
+  - An escaped entity is still decoded only once, so a source that wrote `&amp;lt;` to mean a literal `&lt;` keeps saying that.
 
-- **Dehyphenation no longer crashes on text that leaves a line with no words in it**, which could fail a Visualizer import part-way through a bibliography — losing the whole run — and made Raven-server's `sanitize` endpoint answer HTTP 400. Two things produce such a line, and both are handled now: a line holding only spaces, which is not the *empty* line that marks a paragraph break; and rejoining a sentence broken across a hyphen, which can take the last word off the line it came from.
+- **Dehyphenation no longer crashes on text that leaves a line with no words in it**, which could fail a Visualizer import part-way through a bibliography — losing the whole run — and made Raven-server's `sanitize` endpoint answer HTTP 400.
+  - Two things produce such a line, and both are handled now: a line holding only spaces, which is not the *empty* line that marks a paragraph break; and rejoining a sentence broken across a hyphen, which can take the last word off the line it came from.
 
-- **Bibliographies and imported documents now get the same defensive normalization as fetched web pages.** Invisible characters — zero-width spaces, the invisible "tag" block used to smuggle text past a human reader — are removed from BibTeX fields on import, and from every document the RAG indexer and chat attachments extract. Both kinds of text end up embedded, keyworded and, depending on your configuration, in a prompt, and neither was being cleaned; a page fetched from the web always was. Bidi marks are deliberately left alone, since right-to-left scripts use them legitimately.
+- **Bibliographies and imported documents now get the same defensive normalization as fetched web pages.**
+  - Invisible characters — zero-width spaces, the invisible "tag" block used to smuggle text past a human reader — are removed from BibTeX fields on import, and from every document the RAG indexer and chat attachments extract.
+  - Both kinds of text end up embedded, keyworded and, depending on your configuration, in a prompt, and neither was being cleaned; a page fetched from the web always was.
+  - Bidi marks are deliberately left alone, since right-to-left scripts use them legitimately.
 
-- **The file browser now says when it cannot open a folder.** Clicking a system directory, or one the OS will not let you read, did nothing whatsoever: the explanation was routed to a message box, and DPG will not draw one over a modal window — which every file browser in Raven is. So the dialog simply sat there, and the only account of what had happened went to a log nobody was reading. The reason now appears in red on the line above the buttons, and fades after a few seconds. Its other two reports — picking a file where a folder was expected, and a folder that cannot be listed at all — were lost the same way and arrive the same way now.
+- **The file browser now says when it cannot open a folder.**
+  - Clicking a system directory, or one the OS will not let you read, did nothing whatsoever: the explanation was routed to a message box, and DPG will not draw one over a modal window — which every file browser in Raven is. So the dialog simply sat there, and the only account of what had happened went to a log nobody was reading.
+  - The reason now appears in red on the line above the buttons, and fades after a few seconds.
+  - Its other two reports — picking a file where a folder was expected, and a folder that cannot be listed at all — were lost the same way and arrive the same way now.
 
-- **Clicking the file browser's type filter no longer costs you the keyboard.** Once you had clicked it — to read what the options were, say — the shortcuts that put the caret back in the name field (Ctrl+F, Tab, Esc) stopped doing anything, silently, for as long as that dialog stayed open. The same was true of OK and Cancel, which normally close the dialog and so never showed it, except when confirming an overwrite.
+- **Clicking the file browser's type filter no longer costs you the keyboard.**
+  - Once you had clicked it — to read what the options were, say — the shortcuts that put the caret back in the name field (`Ctrl+F`, `Tab`, `Esc`) stopped doing anything, silently, for as long as that dialog stayed open.
+  - The same was true of OK and Cancel, which normally close the dialog and so never showed it, except when confirming an overwrite.
 
-- **The file browser's shortcuts work on a desktop that is not in English.** Linux renames these directories on disk — a Finnish desktop has `~/Kuvat`, not `~/Pictures` — and the browser looked for the English names only, so on such a system every shortcut but *Home* failed to find its directory and reported an error as the dialog opened. It now reads the directories the desktop actually defines. A place you genuinely do not have is left out of the panel rather than offered and broken.
+- **The file browser's shortcuts work on a desktop that is not in English.**
+  - Linux renames these directories on disk — a Finnish desktop has `~/Kuvat`, not `~/Pictures` — and the browser looked for the English names only, so on such a system every shortcut but *Home* failed to find its directory and reported an error as the dialog opened.
+  - It now reads the directories the desktop actually defines. A place you genuinely do not have is left out of the panel rather than offered and broken.
   - Windows and macOS were never affected: they translate the name their file manager *shows* and keep the directory itself in English.
 
-- The file browser's second-click confirmation no longer offers to "overwrite" a folder. Where an app asks for a directory to write into and you name one that already exists, it still asks for the second click, but now says only that the folder exists — what becomes of what is already in it is the app's business, not the dialog's to promise.
+- **The file browser's second-click confirmation no longer offers to "overwrite" a folder.**
+  - Where an app asks for a directory to write into and you name one that already exists, it still asks for the second click, but now says only that the folder exists — what becomes of what is already in it is the app's business, not the dialog's to promise.
 
-- The file browser's shortcut to your pictures is now labelled **Pictures**, after the folder it opens. It said "Images" while going to `~/Pictures` — which is what Linux, macOS and Windows all call that folder.
+- **The file browser's shortcut to your pictures is now labelled *Pictures***, after the folder it opens.
+  It said "Images" while going to `~/Pictures` — which is what Linux, macOS and Windows all call that folder.
 
-- **The file browser closes faster, and the button that opens it no longer looks dead afterwards.** Closing it rebuilt the whole file listing — twice, if you picked something — although the listing was already hidden and gets rebuilt on the next open anyway. The apps run one action at a time, so whatever you clicked next had to wait for that wasted work, which is why the attach button could ignore a click, its own click animation included. On a directory of ~1600 files that was roughly half a second per close.
+- **The file browser closes faster, and the button that opens it no longer looks dead afterwards.**
+  - Closing it rebuilt the whole file listing — twice, if you picked something — although the listing was already hidden and gets rebuilt on the next open anyway.
+  - The apps run one action at a time, so whatever you clicked next had to wait for that wasted work, which is why the attach button could ignore a click, its own click animation included. On a directory of ~1600 files that was roughly half a second per close.
   - Long listings are cheaper to display too: the browser now draws only the rows on screen, where it used to draw all of them on every frame.
 
 ---
