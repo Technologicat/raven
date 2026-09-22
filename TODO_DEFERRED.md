@@ -207,15 +207,20 @@ Asked for by Juha the same day, and deliberately *not* done the same day: it was
 the thing being described, and a review of one's own afternoon is the one kind that cannot be done tired.
 Fresh eyes are the whole point of deferring it rather than the excuse for it.
 
-**Half done, 2026-09-21.** The source-checking half found three wrong claims and they are fixed: a gap
-box's second line attributed to the wrong kind, `Tab` still described as cycling three panes a release
-after the search row made it four, and two animation settings described as a pair when one rate now
-drives both. **The live half — open the app beside it and try each sentence — has not been done**, and is
-what this item is still open for. The block was restructured on 2026-09-22 along with the rest of 0.2.9,
-which moved sentences around without re-checking any of them against the running app.
+**Substantially done, and probably closeable.** The source-checking half, 2026-09-21, found three wrong
+claims and they are fixed: a gap box's second line attributed to the wrong kind, `Tab` still described as
+cycling three panes a release after the search row made it four, and two animation settings described as
+a pair when one rate now drives both.
 
-Juha's final read pass over 0.2.9, planned for 2026-09-23, is the natural moment: it is already a
-read-through, and this block is the one part of it written from memory rather than from a diff.
+**Juha then read the block through while doing the example reformattings, and it sounded right** (his
+account, 2026-09-22) — which is a fresh-eyes reading by the person who built the feature, and is most of
+what this item asked for. What it literally asked for, opening the app beside it and trying each
+sentence, has not been done and at this point is unlikely to repay the setup.
+
+So this is a candidate to close at the next triage rather than work to schedule. The remaining risk is
+narrow: a sentence that reads plausibly to somebody who knows the feature is exactly the kind a reading
+cannot catch, which is why the item was written — but two passes have now found three faults and then
+none, and the second pass is the one whose result counts.
 
 ## Widening the window feeds the chat log, which is the pane that wants it least
 

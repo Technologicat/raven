@@ -290,9 +290,11 @@ inherited:
   fault (two `Fixed` entries → one). Worth checking nothing unique to either half was lost.
 - **Two entries moved between component blocks** — the document-attachment fixes, from cherrypick to
   Raven-librarian, where they always belonged.
-- **The chat graph block has never been checked against the running app.** See `TODO_DEFERRED.md`, *"Read
-  the chat graph's changelog block back before it ships"*: its source half is done, its live half is not,
-  and yesterday's restructure moved those sentences around without re-verifying any of them.
+- ~~**The chat graph block**~~ — **already covered**, and needs no special attention tomorrow. Its
+  source-checking half found and fixed three wrong claims on the 21st, and Juha read the block through
+  while doing the example reformattings and found nothing jarring. `TODO_DEFERRED.md`'s *"Read the chat
+  graph's changelog block back before it ships"* is a candidate to close at the next triage rather than
+  work to schedule.
 - **The longest five entries are where documentation still hides**, per the `changelog` skill's own test.
   `python ~/.claude/skills/changelog/check_changelog_format.py CHANGELOG.md --report` prints them; as of
   the 22nd the chat graph entry leads at 1101 words, roughly three times the next.
