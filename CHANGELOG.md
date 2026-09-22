@@ -552,114 +552,117 @@
 
 #### Raven-avatar
 
-- **`bloom` now decides what is bright by the light a pixel emits rather than by the colour it carries.** In a straight-alpha frame those differ wherever a pixel is not fully opaque: the colour alone is what the pixel *would* look like if it were, which for a nearly transparent one can be a large number attached to almost no light. The old reading called such pixels highlights and then blurred that colour outward, so the avatar's antialiased outline picked up light from the empty space around it. The character itself is unaffected — the two readings agree wherever alpha is 1.
+- **`bloom` no longer draws a halo around the avatar's outline.**
+  - The antialiased edge picked up light from the empty space around the character. **The character itself was never affected** — the old and new readings agree wherever a pixel is fully opaque.
+  - **It now decides what is bright by the light a pixel emits rather than by the colour it carries.** In a straight-alpha frame those differ wherever a pixel is not fully opaque: the colour alone is what the pixel *would* look like if it were, which for a nearly transparent one can be a large number attached to almost no light. The old reading called such pixels highlights and blurred that colour outward.
 
 #### Raven-librarian
 
-- **On Windows, saving the chat no longer fails because another program has the file open for a moment** — an antivirus scanner checking what was just written, a search indexer, a sync client. The save is now tried again for up to ten seconds. This matters most at exit, where the chat is saved once with no later save to fall back on.
+- **On Windows, saving the chat no longer fails because another program has the file open for a moment** — an antivirus scanner checking what was just written, a search indexer, a sync client.
+  - The save is now tried again for up to ten seconds. This matters most at exit, where the chat is saved once with no later save to fall back on.
 
-- **Startup no longer sometimes fails its first resize with "Alias already exists".** Loading the avatar's settings and the startup resize could set up the avatar's backdrop at the same moment, and the resize that lost aborted before re-laying out the chat log for the window's size.
+- **Startup no longer sometimes fails its first resize with "Alias already exists".**
+  Loading the avatar's settings and the startup resize could set up the avatar's backdrop at the same moment, and the resize that lost aborted before re-laying out the chat log for the window's size.
 
-- **The avatar's expression is no longer lost when it changes while the avatar is asleep.** Switching to another chat sets the avatar's emotion from the message now on screen, and if the idle timeout had switched the video off, the change happened out of sight. The avatar now wakes and takes the expression once its video is back.
+- **The avatar's expression is no longer lost when it changes while the avatar is asleep.**
+  Switching to another chat sets the avatar's emotion from the message now on screen, and if the idle timeout had switched the video off, the change happened out of sight. The avatar now wakes and takes the expression once its video is back.
 
-- **The help card no longer describes the *Speculation* toggle**, which was removed earlier in this release. What it said about when a reply is marked *[no sources retrieved]* now matches what the app does: the marker follows *Documents*.
+- **The help card no longer describes the *Speculation* toggle**, which was removed earlier in this release.
+  What it said about when a reply is marked *[no sources retrieved]* now matches what the app does: the marker follows *Documents*.
 
-- **The AI character's own paragraphs no longer reach the model as a code block.** The character card is
-  Markdown, and the two paragraphs naming the character were indented four spaces — which is what a code
-  block *is* — while the rest of the card was not. The model was therefore shown the sentence establishing
-  who it is as if it were a listing.
+- **The AI character's own paragraphs no longer reach the model as a code block.**
+  - The character card is Markdown, and the two paragraphs naming the character were indented four spaces — which is what a code block *is* — while the rest of the card was not.
+  - The model was therefore shown the sentence establishing who it is as if it were a listing.
 
 - **A stored message now wears the face of the character that wrote it, not the one loaded right now.**
-  Every AI message was drawn with the currently configured character's icon, so a chat with turns by
-  several characters showed them all as the same one. A character we cannot place gets the generic AI
-  glyph rather than somebody else's face. Most visible in the chat graph, where a whole branch of them is
-  on screen at once.
+  - Every AI message was drawn with the currently configured character's icon, so a chat with turns by several characters showed them all as the same one. Most visible in the chat graph, where a whole branch of them is on screen at once.
+  - A character we cannot place gets the generic AI glyph rather than somebody else's face.
 
-- **Copying a long tool result now copies the whole document, not the part the chat log had room for.** A
-  fetched page too long to show inline is kept as an attachment and previewed as an excerpt; the copy
-  button was taking the preview.
-  - **Copying the whole chat log keeps the excerpt**, and now says so, naming the attachment and its
-    length. A log with several fetched pages inlined would be unreadable, and it is the log rather than a
-    single message that tends to get shared onward.
+- **Copying a long tool result now copies the whole document, not the part the chat log had room for.**
+  - A fetched page too long to show inline is kept as an attachment and previewed as an excerpt; the copy button was taking the preview.
+  - **Copying the whole chat log keeps the excerpt**, and now says so, naming the attachment and its length. A log with several fetched pages inlined would be unreadable, and it is the log rather than a single message that tends to get shared onward.
 
-- **Closing Librarian with `kill`, a logout or a session manager now saves your chat.** It saves once, when
-  it exits cleanly, and a termination signal never reached it: the audio library installs signal handlers
-  of its own that hand the signal to an event queue Raven does not read, so a plain `kill` was discarded
-  and did not even stop the app. Such a signal now ends the render loop the way the window's close button
-  does, and everything that runs on the way out — saving the chat, releasing the avatar on the server —
-  runs. Ctrl+C was never affected.
+- **Closing Librarian with `kill`, a logout or a session manager now saves your chat.**
+  - **It saves once, when it exits cleanly, and a termination signal never reached it**: the audio library installs signal handlers of its own that hand the signal to an event queue Raven does not read, so a plain `kill` was discarded and did not even stop the app.
+  - Such a signal now ends the render loop the way the window's close button does, and everything that runs on the way out — saving the chat, releasing the avatar on the server — runs.
+  - `Ctrl+C` was never affected.
 
-- **The mic's VU meter no longer shows a spurious peak when a recording starts.** The first moments of a capture carry a spike more than 25 dB above the room, gone by 220 ms — and it was the first thing the new *Measure the room* button measured. Levels are now disbelieved for the first 0.3 s of a capture. The audio itself is kept from the first frame.
+- **The mic's VU meter no longer shows a spurious peak when a recording starts.**
+  - The first moments of a capture carry a spike more than 25 dB above the room, gone by 220 ms — and it was the first thing the new *Measure the room* button measured. Levels are now disbelieved for the first 0.3 s of a capture.
+  - **The audio itself is kept from the first frame**, so nothing you said was ever lost.
 
-- **The send key now works when the composer does not have the cursor.** Ctrl+Enter (or Enter, depending on
-  your `send_message_key` setting) only sent while you were actually typing in the message field — so after
-  a send, or after clicking anywhere else, the key did nothing and the Send button was the only way. Most
-  visible when you want to send an *empty* message, which is how you ask the AI to take another turn on its
-  own: there was nothing to type, so there was nothing to press.
+- **The send key now works when the composer does not have the cursor.**
+  - `Ctrl+Enter` (or `Enter`, depending on your `send_message_key` setting) only sent while you were actually typing in the message field — so after a send, or after clicking anywhere else, the key did nothing and the Send button was the only way.
+  - Most visible when you want to send an *empty* message, which is how you ask the AI to take another turn on its own: there was nothing to type, so there was nothing to press.
 
-- **Continue no longer erases the message it was continuing** — on LM Studio and other backends without an
-  explicit continue flag, which is where it was broken. Asking the AI to carry on from where it stopped
-  replaced the reply with the continuation alone: a message reading *1. Spring / 2. Summer* came back as
-  *3. Autumn / 4. Winter*, and the first half was gone from the chat. Those backends send only the new
-  text, and Raven was storing that as the whole message. On oobabooga, which continues through a request
-  field of its own, Continue was already working and is untouched.
-  - **The thinking trace went the same way**, which is what you see if you stop a model mid-thought and
-    continue: the trace stayed on screen for the whole of the new generation and vanished when the message
-    completed. Both halves of a reply are now carried across.
-  - Continuing still records a new revision, so the message as it read before is kept in its edit history.
+- **Continue no longer erases the message it was continuing** — on LM Studio and other backends without an explicit continue flag, which is where it was broken.
+  - Asking the AI to carry on from where it stopped replaced the reply with the continuation alone: a message reading *1. Spring / 2. Summer* came back as *3. Autumn / 4. Winter*, and the first half was gone from the chat.
+  - Those backends send only the new text, and Raven was storing that as the whole message. On oobabooga, which continues through a request field of its own, Continue was already working and is untouched.
+  - **The thinking trace went the same way**, which is what you see if you stop a model mid-thought and continue: the trace stayed on screen for the whole of the new generation and vanished when the message completed. Both halves of a reply are now carried across.
+  - **Continuing still records a new revision**, so the message as it read before is kept in its edit history.
 
-- **An AI reply in progress no longer follows you into a different chat.** Starting a new chat, switching a
-  message's siblings, or jumping to where a branch continues while the AI was writing left that reply
-  running, and it then delivered itself into whatever conversation you had moved to — appearing as a reply
-  to a question asked on a different branch, and taking the chat position with it, so a message typed next
-  attached itself somewhere unexpected.
-  - The reply is not thrown away. It finishes on the branch it was generated for and is waiting there when
-    you come back to it, which is what a branching chat ought to do; what stops is its claim on the view.
+- **An AI reply in progress no longer follows you into a different chat.**
+  - Starting a new chat, switching a message's siblings, or jumping to where a branch continues while the AI was writing left that reply running, and it then delivered itself into whatever conversation you had moved to — appearing as a reply to a question asked on a different branch, and taking the chat position with it, so a message typed next attached itself somewhere unexpected.
+  - **The reply is not thrown away.** It finishes on the branch it was generated for and is waiting there when you come back to it, which is what a branching chat ought to do; what stops is its claim on the view.
 
-- **Cancel (Ctrl+G) now works while the model is still reading the conversation**, which on a long chat is
-  where most of the wait is. Cancelling asked the reply to stop at its next word, and before the first word
-  there is no next word — so through the whole prompt-reading phase, which can run to tens of seconds on a
-  branch with documents attached, the button did nothing. It now abandons the request outright, and the
-  backend stops working on it. Once text is arriving, cancelling behaves as it always did and keeps what has
-  been written so far.
+- **Cancel (`Ctrl+G`) now works while the model is still reading the conversation**, which on a long chat is where most of the wait is.
+  - Cancelling asked the reply to stop at its next word, and before the first word there is no next word — so through the whole prompt-reading phase, which can run to tens of seconds on a branch with documents attached, the button did nothing.
+  - It now abandons the request outright, and the backend stops working on it. Once text is arriving, cancelling behaves as it always did and keeps what has been written so far.
 
 - **The speculative prompt-reading Raven does while you are idle no longer holds up your next message.**
-  After a reply, Raven quietly asks the backend to read the current conversation, so the next turn starts
-  warm. That reading went on to the end whatever happened next — up to a minute on a large chat — and
-  anything you sent meanwhile waited behind it. It is now dropped the moment it stops being useful: when
-  you send, so your message goes straight out, and when you move to a different branch, which makes the
-  reading pointless anyway since it was warming the branch you left.
+  - After a reply, Raven quietly asks the backend to read the current conversation, so the next turn starts warm. That reading went on to the end whatever happened next — up to a minute on a large chat — and anything you sent meanwhile waited behind it.
+  - It is now dropped the moment it stops being useful: when you send, so your message goes straight out, and when you move to a different branch, which makes the reading pointless anyway since it was warming the branch you left.
 
-- **Send and Reroll now refuse while a reply is in progress**, rather than starting a second one alongside
-  it. Two replies writing the same conversation interleaved their results. The Send button says why in its
-  tooltip, and points at Cancel.
+- **Send and Reroll now refuse while a reply is in progress**, rather than starting a second one alongside it.
+  Two replies writing the same conversation interleaved their results. The Send button says why in its tooltip, and points at Cancel.
 
-- **Thinking that arrives with no opening tag is now moved into its bubble the moment the model stops thinking**, instead of staying in the answer until the whole reply finishes. Affects LLM backends that pass the model's raw stream through rather than separating the reasoning themselves — where a thinking model's chat template opens the block, so the stream carries only the close, and nothing before it says the text is a thought. In the chat log the reasoning moves into the trace and the answer starts fresh; in `raven-minichat`, which cannot unprint, the closing marker says retroactively what it covers.
+- **Thinking that arrives with no opening tag is now moved into its bubble the moment the model stops thinking**, instead of staying in the answer until the whole reply finishes.
+  - Affects LLM backends that pass the model's raw stream through rather than separating the reasoning themselves — where a thinking model's chat template opens the block, so the stream carries only the close, and nothing before it says the text is a thought.
+  - In the chat log the reasoning moves into the trace and the answer starts fresh; in `raven-minichat`, which cannot unprint, the closing marker says retroactively what it covers.
   - Not yet visible from the start of the thinking, which is the part that needs a signal the stream does not carry. Until the close arrives the reasoning is still shown as the answer.
 
-- **A crash while the chat datastore is being written can no longer destroy it.** The save serialized straight into `chat.json`, which truncates the file as its first act — so a process that died anywhere in the write left a fragment where the whole history had been, and a crash is exactly when you want that history. The new file is now written beside the old one and moved into place once it is complete and on disk, so what survives is either the previous save or the new one. Worst case you lose the current session rather than everything.
+- **A crash while the chat datastore is being written can no longer destroy it.**
+  - The save serialized straight into `chat.json`, which truncates the file as its first act — so a process that died anywhere in the write left a fragment where the whole history had been, and a crash is exactly when you want that history.
+  - The new file is now written beside the old one and moved into place once it is complete and on disk, so what survives is either the previous save or the new one.
+  - **Worst case you lose the current session rather than everything.**
 
-- **Markdown headings now render as headings in the chat log**, instead of arriving with their `#` markers intact. A heading is a block-level construct, and the chat view used to wrap every paragraph in a colour tag before handing it to the renderer — which makes the whole thing one paragraph, and a heading cannot occur inside one. The colour is passed alongside the text now. Models that organize a long answer under headings are the ones this was costing.
+- **Markdown headings now render as headings in the chat log**, instead of arriving with their `#` markers intact.
+  - A heading is a block-level construct, and the chat view used to wrap every paragraph in a colour tag before handing it to the renderer — which makes the whole thing one paragraph, and a heading cannot occur inside one. The colour is passed alongside the text now.
+  - Models that organize a long answer under headings are the ones this was costing.
 
-- **The context-fill readout no longer collapses to a fraction of the truth.** A chat with three papers attached, genuinely filling 68% of the window, could show `7%`: the readout takes its exact figure from the LLM backend, and LM Studio's can come back an order of magnitude short for a conversation it has already been asked about. Raven now disbelieves a figure far below its own estimate, and goes on showing the estimate's `~` rather than a confident wrong number.
+- **The context-fill readout no longer collapses to a fraction of the truth.**
+  - A chat with three papers attached, genuinely filling 68% of the window, could show `7%`: the readout takes its exact figure from the LLM backend, and LM Studio's can come back an order of magnitude short for a conversation it has already been asked about.
+  - Raven now disbelieves a figure far below its own estimate, and goes on showing the estimate's `~` rather than a confident wrong number.
 
-- **The app no longer freezes for seconds when you move to a part of the chat that has documents attached.** Switching a message's siblings, or otherwise moving through the chat, refreshes the context-fill readout — and that used to read every attached document to count it, extracting a PDF's text on the spot. Everything you typed during that wait arrived at the end of it, so the app read as hung. The readout now counts documents it has already read, leaves the rest to the check that follows a moment later, and shows `~` while any are outstanding.
+- **The app no longer freezes for seconds when you move to a part of the chat that has documents attached.**
+  - Switching a message's siblings, or otherwise moving through the chat, refreshes the context-fill readout — and that used to read every attached document to count it, extracting a PDF's text on the spot. Everything you typed during that wait arrived at the end of it, so the app read as hung.
+  - The readout now counts documents it has already read, leaves the rest to the check that follows a moment later, and shows `~` while any are outstanding.
   - The reading itself is no longer silent either: the new READING indicator is lit for as long as it takes, so the `~` has something beside it saying what is being waited for.
 
-- **Running `raven-librarian` and `raven-minichat` at once no longer loses one of the two sessions.** Each holds the whole chat datastore in memory and writes it back on exit, so whichever closed last silently discarded everything the other had done — including a chat you were in the middle of. The second app to start now says the datastore is already open, names it, and stops. Two Librarians did the same thing to each other, and are covered too.
-  - The claim is released when the process ends, crash included, so there is no stale lock to notice or clean up.
+- **Running `raven-librarian` and `raven-minichat` at once no longer loses one of the two sessions.**
+  - Each holds the whole chat datastore in memory and writes it back on exit, so whichever closed last silently discarded everything the other had done — including a chat you were in the middle of.
+  - The second app to start now says the datastore is already open, names it, and stops. Two Librarians did the same thing to each other, and are covered too.
+  - **The claim is released when the process ends, crash included**, so there is no stale lock to notice or clean up.
 
-- **The chat view now opens at the end of the conversation**, instead of part-way down it. On startup, and after jumping to a chat's continuation, the latest message could be below the fold — pressing End found it there, so nothing was missing, but the view had stopped short. The longer the conversation on screen, the further short it stopped.
+- **The chat view now opens at the end of the conversation**, instead of part-way down it.
+  - On startup, and after jumping to a chat's continuation, the latest message could be below the fold. **Pressing `End` found it there, so nothing was ever missing** — the view had simply stopped short.
+  - The longer the conversation on screen, the further short it stopped.
 
-- **The AI's opening greeting could be deleted, rerolled, continued and branched from**, none of which it is supposed to allow — and deleting it takes the entire chat below it. The four buttons ask one shared list whether the message is a greeting, and that list was computed lazily, so the first question consumed it and the rest were answered from what was left: nothing. Which reads as "not a greeting".
+- **The AI's opening greeting could be deleted, rerolled, continued and branched from**, none of which it is supposed to allow — and deleting it **destroys the entire chat below it**.
+  - The four buttons ask one shared list whether the message is a greeting, and that list was computed lazily, so the first question consumed it and the rest were answered from what was left: nothing. Which reads as "not a greeting".
 
-- Two tooltips still described the attachment store as holding images, which stopped being the whole story in 0.2.8 when documents became attachable. The two buttons that open that folder — one on an attached image, one on an attached document — also gave it two different names, though it is one folder.
+- **Two tooltips still described the attachment store as holding images**, which stopped being the whole story in 0.2.8 when documents became attachable.
+  - The two buttons that open that folder — one on an attached image, one on an attached document — also gave it two different names, though it is one folder.
 
-- **List bullets and numbers no longer strand themselves when the text above them moves.** Expanding or collapsing a message's thinking trace pushes the answer below it up or down — and the markers of any list in that answer stayed where they had first been drawn, leaving a column of orphaned numbers in the margin beside text that had walked off without them. They travel with their line now, which also covers window resizes and message edits. Affects every Raven app that renders Markdown, not just the chat.
+- **List bullets and numbers no longer strand themselves when the text above them moves.**
+  - Expanding or collapsing a message's thinking trace pushes the answer below it up or down — and the markers of any list in that answer stayed where they had first been drawn, leaving a column of orphaned numbers in the margin beside text that had walked off without them.
+  - They travel with their line now, which also covers window resizes and message edits. Affects every Raven app that renders Markdown, not just the chat.
 
 - **A thinking model's reasoning is now separated out even when it arrives without an opening tag.** Most current models are put *inside* the thinking block by their own chat template, so what reaches Raven carries only the closing `</think>` — and on a backend that hands over the raw stream rather than splitting the reasoning off itself, that left the whole trace stored as part of the answer, tags and all. It is recognized at the close now, so the message stores a clean answer and a separate trace, the same as on a backend that does the splitting. LM Studio does the splitting, so nothing changes there.
 
-- **A stopped reply from a thinking model no longer reports a fraction of the tokens it generated.** When the count has to be worked out locally — `config.llm_tokenizer_path` is set and the backend reported none, which is what happens when you stop a reply part-way through — only the visible answer was counted, while the elapsed time beside it covered the thinking as well. On a model that spends most of a turn reasoning, that left the `[Nt, Xs, Yt/s]` line under the message understating both figures by most of the turn.
+- **A stopped reply from a thinking model no longer reports a fraction of the tokens it generated.**
+  - When the count has to be worked out locally — `raven.librarian.config.llm_tokenizer_path` is set and the backend reported none, which is what happens when you stop a reply part-way through — only the visible answer was counted, while the elapsed time beside it covered the thinking as well.
+  - On a model that spends most of a turn reasoning, that left the `[Nt, Xs, Yt/s]` line under the message understating both figures by most of the turn.
 
 #### Raven-cherrypick
 
