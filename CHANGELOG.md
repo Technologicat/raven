@@ -388,7 +388,7 @@
     - The system prompt currently in use stays undeletable, as before.
   - Cleanup understands this: chats under an older system prompt are not offered for deletion as unreachable.
 
-- **"Branch from here" now works on the AI's opening greeting**, where it was refused before.
+- **Branching now works on the AI's opening greeting**, where it was refused before.
   - Branching sets where you are writing from and nothing else, so from a greeting it starts a new chat under that system prompt — which is a fair thing to want, and reachable anyway through the new-chat button.
   - It stays refused on a system prompt message, where it would leave you writing from a point that shows you none of the conversation.
 
@@ -431,29 +431,41 @@
 
 - **The info panel shows each item's authors and year on a line of their own, above the title.**
 
-- **The info panel's search counter stays up when no match is on screen**, reading `[–/N]`, so the count is there wherever the panel is scrolled. It used to disappear. Raven-librarian's chat search counter reads the same way.
+- **The info panel's search counter stays up when no match is on screen**, reading `[–/N]`, so the count is there wherever the panel is scrolled.
+  It used to disappear. Raven-librarian's chat search counter reads the same way.
 
-- **`Page Up`, `Page Down` and the up and down arrows scroll the info panel while you are typing a search**, so its results can be read down without leaving the field. Previously the field had to be left first, which only the mouse could do without losing or accepting the search.
+- **`Page Up`, `Page Down` and the up and down arrows scroll the info panel while you are typing a search**, so its results can be read down without leaving the field.
+  - **Previously the field had to be left first**, and the mouse was the only way to do that without losing or accepting what you had typed.
+  - **`Tab` now leaves it without doing either**, moving the keyboard between the search field and the info panel and keeping the search. `Shift+Tab` does the same: with two places to be, each direction is the other one.
 
-- **Keyword extraction now counts nouns and proper nouns, and leaves the verbs out.** A topic keyword is nearly always a noun, while the verbs of academic prose — *provide*, *improve*, *develop*, *investigate*, *identify*, *propose* — describe what a paper **does**, are the same in every field, and were crowding the head of the frequency list without saying anything. Measured on a corpus about AI in education: dropping them lifts *chatbot*, *agent*, *interaction*, *language* and *task* into the top of the list instead, and removes about a third of the distinct words.
+- **Keyword extraction now counts nouns and proper nouns, and leaves the verbs out.**
+  - A topic keyword is nearly always a noun, while the verbs of academic prose — *provide*, *improve*, *develop*, *investigate*, *identify*, *propose* — describe what a paper **does**, are the same in every field, and were crowding the head of the frequency list without saying anything.
+  - Dropping them lifts the topic nouns into the top of the list instead, and removes a large share of the distinct words.
   - This is why *learning* and *learn* are counted separately, and should be: as a noun it is the topic, as a verb it is prose, and they are different words. The verb sense is now dropped along with the rest.
   - Affects the word cloud, the per-entry keywords and the frequency-based cluster keywords, for datasets imported from now on. `nlptools.count_frequencies` takes `accepted_pos=None` for the old, wider behavior.
 
-- **An incomplete record is now imported rather than skipped.** A missing title, author or year each becomes `[Title not specified]`, `[Author not specified]` or `[Year not specified]`, and the import log names every one. Previously any of the three cost the record its place — so an export carrying the abstract, the DOI and everything else but the authors, which is a shape whole conference proceedings arrive in, lost those records entirely along with the abstracts that were the part worth reading.
+- **An incomplete record is now imported rather than skipped.**
+  - A missing title, author or year each becomes `[Title not specified]`, `[Author not specified]` or `[Year not specified]`, and the import log names every one.
+  - **Previously any of the three cost the record its place** — so an export carrying the abstract, the DOI and everything else but the authors, which is a shape whole conference proceedings arrive in, lost those records entirely along with the abstracts that were the part worth reading.
   - **The placeholders are shown, never analyzed.** The title one is Raven's word rather than the record's, and the same word on every such record, so feeding it to the keyword extractor and the semantic vector would gather those records into a cluster whose members share nothing but a field their database omitted. Both stages read the abstract alone instead — which also fills a gap they had: an entry with an abstract and no title previously had no case at all. Authors and year never reached those stages to begin with.
   - **A record with neither a title nor an abstract is skipped**, with a warning naming it. There is nothing to read, and its analysis text would have been the placeholder by itself.
   - A re-export writes the record's own author field back out, or nothing where it had none — never the placeholder, which would put Raven's words into somebody's bibliography as though a database had said them.
 
-- The info panel marks its ends when the mouse wheel *arrives* at one, where previously it only did so once you were already there and turned the wheel again. A single click of the wheel onto the end used to be silent.
+- **The info panel marks its ends when the mouse wheel *arrives* at one**, where previously it only did so once you were already there and turned the wheel again.
+  A single click of the wheel onto the end used to be silent.
 
-- A blue dot now marks the current info panel item — the same mark, in the same shape, that Raven-librarian puts beside the chat message its hotkeys will act on, in place of the glow the item's buttons used to have. It is drawn as part of the panel, so whatever covers the panel covers it too; the old glow floated on top of the word cloud window.
+- **A blue dot now marks the current info panel item** — the same mark, in the same shape, that Raven-librarian puts beside the chat message its hotkeys will act on, in place of the glow the item's buttons used to have.
+  It is drawn as part of the panel, so whatever covers the panel covers it too; the old glow floated on top of the word cloud window.
 
-- **The importer now strips the publisher's rights notice off an abstract**, so `© 2022 IEEE.` and `This article is distributed under the terms of the Creative Commons Attribution 4.0 License` stop being treated as part of what a paper says. A database export appends one to most abstracts it carries, and everything downstream then reads it as prose.
+- **The importer now strips the publisher's rights notice off an abstract**, so `© 2022 IEEE.` and `This article is distributed under the terms of the Creative Commons Attribution 4.0 License` stop being treated as part of what a paper says.
+  - A database export appends one to most abstracts it carries, and everything downstream then reads it as prose.
   - **The word cloud is where you will see it**, with publisher names and licence wording largely gone from it. A publisher named in the body of an abstract still counts, as it should. `publisher_stopwords` is still there and still works; it now has much less to do.
   - **A paper *about* copyright keeps every word.** That is the hard case, not the easy one — the phrases a notice is built from are also things an abstract on open licensing says. So the copyright sign is trusted on sight, while wording that is ordinary English (*All rights reserved*, *copyright held by*, a licence-grant clause) counts only where it opens a sentence, which is what appended boilerplate does and a clause inside an argument does not. A bare *copyright* is never a match, and only the tail of an abstract is examined at all.
   - Available as `raven.common.text.strip_boilerplate` for anything else reading a database-exported abstract, with `find_rights_notice` for a caller that wants to show what it removed rather than discard it.
 
-- **LLM cluster keywords are now made comparable across clusters.** Each cluster is keyworded on its own, so one concept came back under several spellings — an acronym in one cluster, its expansion in another, a stray capital in a third — and two clusters sharing a topic then looked no more alike than two that merely spelled one alike. A second pass over the whole vocabulary folds the variants together once every cluster has been seen.
+- **LLM cluster keywords are now made comparable across clusters.**
+  - **Each cluster is keyworded on its own**, so one concept came back under several spellings — an acronym in one cluster, its expansion in another, a stray capital in a third — and two clusters sharing a topic then looked no more alike than two that merely spelled one alike.
+  - A second pass over the whole vocabulary folds the variants together once every cluster has been seen.
   - **The model is asked for a mapping, not for a rewritten list, so the result can be checked.** A replacement is applied only when it is itself one of the keywords the first pass extracted, which means an invented or rephrased term cannot reach the dataset — it is dropped instead of trusted. Word clouds and cluster labels read the same list, so both get the benefit.
   - Only affects `clusters_keyword_method = "llm"`. The prompt is `config.clusters_llm_keyword_canonicalization_prompt`, and the log names every replacement it applies.
 

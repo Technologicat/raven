@@ -1938,7 +1938,7 @@ class DPGChatMessage:
         dpg.bind_item_font(f"message_new_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
         dpg.bind_item_theme(f"message_new_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
         new_branch_tooltip = dpg.add_tooltip(f"message_new_branch_button_{self.gui_uuid}")  # tag
-        dpg.add_text("Branch from this node [Ctrl+B]", parent=new_branch_tooltip)
+        dpg.add_text("Branch the chat here [Ctrl+B]", parent=new_branch_tooltip)
 
         # Delete subtree starting from this node (requires a confirmation click)
         #
