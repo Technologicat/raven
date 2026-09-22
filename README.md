@@ -23,6 +23,7 @@
     - [Raven-conference-timer: Countdown timer for talks](#raven-conference-timer-countdown-timer-for-talks)
     - [Raven-server: Web API server](#raven-server-web-api-server)
         - [Quickstart](#quickstart)
+    - [The file browser](#the-file-browser)
     - [Command-line tools](#command-line-tools)
         - [Document database](#document-database)
         - [Building a bibliography](#building-a-bibliography)
@@ -268,6 +269,12 @@ source no-hammer-hf.sh
 raven-server
 ```
 
+
+## The file browser
+
+Every app above opens the same file browser, so it is documented once: see
+[the file dialog manual](raven/vendor/file_dialog/file-dialog-manual.md). It can be driven entirely from
+the keyboard, and `F1` inside it lists the keys that particular dialog answers to.
 
 ## Command-line tools
 
