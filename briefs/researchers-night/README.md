@@ -241,6 +241,46 @@ rule and "an entry is not documentation", `Changed` overturned the before-pictur
 nobody was relying on the old behaviour, which is always in `Added` and never elsewhere), and `Fixed` gave
 one entry per fault, symptom above mechanism, and stating the bound where a fault could look like data loss.
 
+### What happened on 2026-09-22 — the changelog pass finished, and grew three manuals
+
+**Read this first if you are resuming.** The queue in the section below is current — items closed today
+say so in place — and this is what changed under it.
+
+**The 0.2.9 changelog pass is done**, all three sections. 140 top-level entries to 138, 18,449 words to
+17,163, sub-bullets 223 to 419, titled entries 9 to 85, and no hard-wrapped lines anywhere in the release
+section. The two entries that vanished were each one change written up twice — the help card (merged into
+`Changed`, Juha's call) and the thinking-tag fault (merged, titled on the symptom).
+
+**Three structural defects came out of it that were on nobody's list.** `#### Raven-avatar` appeared twice
+in `Changed` *and* twice in `Fixed`; two Librarian fixes about document attachments were filed under
+`#### Raven-cherrypick`, which has no documents; and the `raven-pdf2bib` entry opened with "The same for
+all eight extraction steps" with no antecedent in its block. The last two are one shape worth remembering:
+**a flat list tolerates a misplacement that grouping turns into a wrong claim**, and adding the component
+headings is what silently separated those entries from the neighbours they depended on.
+
+**Three documents exist that did not this morning**, all of them because the changelog pass kept finding
+material that had nowhere else to live:
+
+- `raven/common/video/postprocessor-filters.md` — every filter and parameter, **generated** from the
+  docstrings by `scripts/gen_postprocessor_manual.py` (with `--check` and its own tests).
+- `raven/vendor/file_dialog/file-dialog-manual.md` — the shared file browser, linked from the main README.
+- `~/.claude/skills/changelog/check_changelog_format.py` — the one-line-per-bullet rule, with tests,
+  beside the skill that states it. Fleet baseline: Raven 0, unpythonic 5, mcpyrate 7, chandra 21, pyan 138.
+
+**Code that changed, since a docs day is not supposed to have any.** The file dialog gained a help button
+and took the icon font, which needed `themes_and_fonts` as a constructor parameter at sixteen call sites;
+`fdialog.py` is now fully annotated and on modern typing spellings; and the pose editor boots the shared
+GUI machinery like every other app, which Juha approved by looking at it.
+
+**Two items filed to `TODO_DEFERRED.md`**: whether `fdialog` is one logical unit, and the pose editor's
+intermittent window size — the second with the one-launch `--repl` test that tells its two candidate
+causes apart, which is the whole reason it is worth an item.
+
+**Where to start tomorrow**, in Juha's order: the docs-coverage pass below (walk the curated changelog
+against the manuals), paired with the screenshot scan since both are one read-through; then the converters
+section; then the two checker builds; then screenshots. The dev-facing file dialog manual is after all of
+it, tomorrow at the earliest and possibly next week.
+
 ### The rest of the week, 2026-09-22 to 24 — the docs pass, ahead of message editing
 
 **Decided 2026-09-21 (Juha): documentation takes precedence over message editing for Tuesday to Thursday**,
