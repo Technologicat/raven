@@ -88,3 +88,12 @@ jobs:
 
       - name: Run tests
         run: pytest raven/ -v --tb=short -m "not ml"
+
+      # `raven/common/video/postprocessor-filters.md` is generated from the filter docstrings, and a
+      # generated file that is checked in looks exactly like a hand-written one — so an edited docstring
+      # leaves it stale with nothing to say so. One matrix entry is enough: the answer cannot differ by
+      # OS or Python version, the input being docstrings. It needs torch, which is why this is here in
+      # `test` rather than in `lint`.
+      - name: Check the generated filter manual is current
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: python scripts/gen_postprocessor_manual.py --check
