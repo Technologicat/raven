@@ -279,6 +279,19 @@ What is queued, all small and independent:
     analogy with `papers/`, which had just got one. The analogy was the flaw. Those eleven tools make
     decisions a reader has to understand; these four report or convert, and a table entry is the whole
     of what that needs. **An absent document is not by itself a gap.**
+  - **One loose end, and it is a structural question rather than a missing page** (Juha, 2026-09-22).
+    `raven-qoi2png` *is* a converter and may want a manual — which would belong in a converters section,
+    and there isn't one. The bibliography converters (`raven-wos2bib`, `raven-csv2bib`,
+    `raven-pdf2bib`) are documented in `raven/papers/README.md`, which suggests **`papers/` is the wrong
+    home for them**: what they have in common with `qoi2png` is being converters, not being about papers.
+    - **Decided: there is enough material for one** (Juha, 2026-09-22) — the various something-to-bib
+      converters plus `qoi2png`. So the docs-coverage pass has a converters section to build rather
+      than a question to answer, and `raven-dehyphenate` is a candidate for it too.
+  - **What `raven-dehyphenate` is, for whoever writes that up** (Juha, 2026-09-22): essentially a CLI
+    endpoint for the `dehyphenate` Python package, built because undoing line-break hyphenation is
+    sometimes a useful thing to do to PDF-extracted text and similar — and useful from the command line
+    rather than only from inside Python. That is the whole of its reason for existing, and a converters
+    section is where it would say so.
 - **Screenshots, and ffmpeg-captured GIFs of the animated features** — much of how Raven *feels* is motion,
   and no still shows it. Wants a session where taking the keyboard is expected.
   - **Roughly all the existing screenshots are out of date** (Juha, 2026-09-22), so this is a refresh

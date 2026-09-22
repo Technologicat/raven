@@ -1412,9 +1412,7 @@
   - The importer now sanitizes abstracts using the `sanitize` module of Raven-server. This feature is on by default.
     - This affects only new BibTeX imports. Existing datasets are not modified.
     - The feature can be turned off in `raven.visualizer.config`. See the `dehyphenate` setting.
-    - For each abstract, all paragraphs are sent together for processing. This may cause paragraphs to run together, if an abstract contains multiple paragraphs,
-      but is often the only way if the input text is REALLY broken and contains newlines at arbitrary places. It was felt this is preferable, because scientific
-      abstracts are often just one 200-word paragraph.
+    - For each abstract, all paragraphs are sent together for processing. This may cause paragraphs to run together, if an abstract contains multiple paragraphs, but is often the only way if the input text is REALLY broken and contains newlines at arbitrary places. It was felt this is preferable, because scientific abstracts are often just one 200-word paragraph.
     - Raven-server's `sanitize` module is used automatically, if the server is reachable and the module is loaded on the server; else the dehyphenator model is loaded locally.
 
 - *Raven-librarian*:
