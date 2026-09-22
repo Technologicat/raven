@@ -270,6 +270,27 @@ What is queued, all small and independent:
   `:construction:` after it was ready, the Visualizer still "in beta" in its own manual while the main
   README called it operational. Those three are fixed; the point of the pass is that finding them took
   someone reading, and nothing here checks a claim of that kind.
+- **The file dialog wants two manuals** (Juha, 2026-09-21). A user-facing one, linked from the main
+  README since the picker is shared by every app in the constellation, and a dev-facing one, possibly
+  built on the vendored `raven/vendor/file_dialog/README.md` — 51 lines, upstream's, and about
+  installing the widget rather than using it.
+  - **Recorded on 2026-09-22, a day late, because it had left no diff.** Nothing in `briefs/`,
+    `TODO.md` or `TODO_DEFERRED.md` named it, and it survived only because Juha repeated it from
+    memory. The decision-with-no-diff case, exactly as the rule describes it.
+  - **Most of the user-facing manual is already written, in the changelog.** The `Changed` →
+    Constellation-wide file dialog entry runs to 743 words of keyboard documentation — the longest
+    entry in 0.2.9 after the chat graph — and outside the dialog's own `F1` card it is the *only*
+    place that keyboard is written down. No README documents `Ctrl+L`, `Ctrl+B` or `Ctrl+Shift+F`.
+  - **The one exception is a sentence inside the Visualizer's *Limitations* list**, and it matters
+    because it is not redundant: *"Tab completes the filename"*, where the changelog says Tab moves the
+    caret between the find field and the listing. Both are true and each omits the other's half —
+    `fdialog.py`'s handler moves the caret *and* writes a completion on the way, in either direction
+    (checked 2026-09-22, the two readings looking like a contradiction and not being one). Whoever
+    writes the manual should treat both sources as partial.
+  - **So writing the manual and trimming that entry are one job**: move the material, leave a
+    pointer. That is the failure the `changelog` skill names — the entry keeps what a README should
+    have carried, and the README section it should have gone to never gets written.
+
 - **Cross-file anchors are unchecked.** `check_doc_links.py` validates `](#anchor)` within a document and
   is blind to `](../papers/README.md#heading)` — which is the identical failure it exists to prevent, and
   became routine only when the manuals started linking to each other on 2026-09-21. `slugify` and
