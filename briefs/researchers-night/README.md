@@ -260,6 +260,11 @@ What is queued, all small and independent:
   may well be enough for them; the question is worth asking before writing one.
 - **Screenshots, and ffmpeg-captured GIFs of the animated features** — much of how Raven *feels* is motion,
   and no still shows it. Wants a session where taking the keyboard is expected.
+  - **Roughly all the existing screenshots are out of date** (Juha, 2026-09-22), so this is a refresh
+    rather than an addition — and the moment to read the docs looking for places where a picture would
+    earn its place, rather than only re-taking the ones already there.
+  - **The file dialog manual wants two**, its list view and its thumbnail grid: it is a manual about a
+    thing with two looks, written without either of them on the page.
 - **The wrapped section in `Changed` → Raven-librarian.** 56 of the file's 65 remaining hard-wrapped runs
   are there, left over from a job reported as finished when it was half done. A wrap and a deliberate
   line break are the same shape to a whitespace-collapsing check, so the rule that distinguishes them is:
