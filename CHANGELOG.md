@@ -83,35 +83,44 @@
     - **A box that matched only in its reasoning quotes the trace, in the trace's own blue** — the colour the chat log paints one.
       So which kind of text the hit came out of is legible without a word for it. The `(1)` of `3 (1)` is in that same blue, for the same reason.
 
-- **A *Thinking* toggle.** On by default. Switch off to ask a reasoning model to just answer. It applies from the next reply onward, and to every round of a tool-using turn.
-  - **The switch does not touch tools.** It adds one field to the request and changes nothing else: the same tools are offered, and the same agent loop runs. Whether a model keeps reaching for them without its reasoning channel is the model's own business.
-  - **Nothing to configure per model.** It is sent as `reasoning_effort: "none"`, which LM Studio serves by rendering the model's *own* non-thinking branch — so a model that spells its thinking differently is covered without Raven knowing how it spells it. Tested across Qwen 3.6, Qwen 3.8 and Gemma 4.
-  - **Flipping it mid-conversation is free on Qwen and costs a full re-prefill on Gemma.** The two families put their thinking marker at opposite ends of the prompt, so only one of them can reuse the backend's already computed KV cache when the switch is flipped.
-  - The other two frontends reach it as well: `!thinking` in `raven-minichat`, and `thinking_enabled` on `raven.librarian.agent.turn` (Python API interface).
-    - It is **on** by default in both, since an agent loop is the shape a hard task takes and the reasoning is usually the point.
-    - A script doing a mechanical job — extract these keywords, normalize this citation — is where switching it off pays.
+- **A *Thinking* toggle.**
+  - On by default. Switch off to ask a reasoning model to just answer. It applies from the next reply onward, and to every round of a tool-using turn.
+  - **The switch does not touch tools.** It adds one field to the request and changes nothing else: the same tools are offered, and the same agent loop runs.
+    - Whether a model keeps reaching for them without its reasoning channel is the model's own business.
+  - **Nothing to configure per model.** It is sent as `reasoning_effort: "none"`, which LM Studio serves by rendering the model's *own* non-thinking branch, so a model that spells its thinking differently is covered without Raven knowing how it spells it.
+    - Tested across Qwen 3.6, Qwen 3.8 and Gemma 4.
+  - **Flipping it mid-conversation is free on Qwen and costs a full re-prefill on Gemma.** The two families put their thinking marker at opposite ends of the prompt, so only one of them can reuse the backend's already computed KV cache.
+  - **The other two frontends reach it as well**: `!thinking` in `raven-minichat`, and `thinking_enabled` on `raven.librarian.agent.turn`.
+    - On by default in both; a script doing a mechanical job — extract these keywords, normalize this citation — is where switching it off pays.
 
-- **A *Show thinking* toggle.** Off by default, so a thinking model's trace starts collapsed behind its cloud; turn it on and the thinking trace is shown as it arrives.
+- **A *Show thinking* toggle.**
+  - Off by default: a thinking model's trace starts collapsed behind its cloud, and turning the toggle on shows the trace as it arrives.
   - It takes effect from the next reply onward; the cloud, or `Ctrl+T`, opens the trace of a reply already on screen.
   - It says what is **shown**; whether the AI reasons at all is the *Thinking* toggle beside it.
 
-- **Librarian now says when Raven-server has gone away.** A row appears below the mode toggles, and stays until the server answers again; it names what stops working while it is down — the avatar, speech, subtitles, translation, the search over your documents and the AI's internet access — and what does not, the chat itself going to a separate LLM backend. Click it to retry immediately instead of waiting for the next check.
+- **Librarian says when Raven-server has gone away.**
+  - A row appears below the mode toggles and stays until the server answers again. Click it to retry immediately instead of waiting for the next check.
+  - It names what stops working while the server is down — the avatar, speech, subtitles, translation, the search over your documents and the AI's internet access — and what does not, the chat itself going to a separate LLM backend.
   - It sits outside the panel the avatar and the chat graph take turns in, so it is readable whichever of them is showing.
   - Shown only when something is wrong, plus a moment when the connection re-establishes.
 
-- **Every mode toggle now has a hotkey**, mnemonic on its label.
-  - `Alt+T` *Thinking*, `Alt+Shift+T` *Show thinking*, `Alt+I` *Internet*, `Alt+D` *Documents*, `Alt+G` *Chat graph*, `Alt+S` *Speech*, `Alt+C` *Subtitles* (captions).
-  - They work while you are typing, which is when you tend to want one — on noticing that the answer wants the web, or the documents. Each key is in its switch's tooltip, and the seven are tabulated in the README.
+- **A hotkey on every mode toggle**, mnemonic on its label.
+  - They work while you are typing, which is when you tend to want one — on noticing that the answer wants the web, or the documents.
+  - Each key is in its switch's tooltip, and they are tabulated in the README.
 
-- **The thinking cost is reported.** The thought bubble carries the same three figures the message does — tokens, wall time, speed — for the reasoning alone.
+- **The thinking cost is reported.**
+  - The thought bubble carries the same three figures the message does — tokens, wall time, speed — for the reasoning alone.
   - While a reply is being generated the cloud counts up (`Thinking… 12.4s, ~480t`), so a collapsed trace still says how long you have been waiting.
-  - The message's own line is unchanged, and still covers the whole reply. Hovering it opens the breakdown: prompt processing, thinking, answer, total. Those can differ startlingly — a reply reporting 44 t/s may turn out to actually have generated at 99 t/s, with over half the turn spent processing the prompt.
-  - Prompt processing gets a row of its own, because nothing is being generated during it: how long it takes, says how much of the prompt the backend's cache did not already hold. It is shown as a time and not a speed, since a warm KV cache still reports the whole prompt as its size.
+  - The message's own line is unchanged, and still covers the whole reply. Hovering it opens the breakdown: prompt processing, thinking, answer, total.
+    - Those can differ startlingly — a reply reporting 44 t/s may turn out to actually have generated at 99 t/s, with over half the turn spent processing the prompt.
+  - Prompt processing gets a row of its own, because nothing is being generated during it: how long it takes says how much of the prompt the backend's cache did not already hold.
+    - It is shown as a time and not a speed, since a warm KV cache still reports the whole prompt as its size.
   - A turn that asks for a tool instead of replying says **Tool call** rather than showing an answer of zero length.
-  - The same tooltip names **the model that produced that reply**, per message. In a branching chat the siblings of one node can come from different models, and a chat reloaded from disk predates whatever model is loaded now.
+  - The same tooltip names **the model that produced that reply**, per message.
+    - In a branching chat the siblings of one node can come from different models, and a chat reloaded from disk predates whatever model is loaded now.
 
-- **The thinking trace now lives in its bubble from the first word, and the cloud pulsates while the model is thinking.**
-  - The thinking trace now grows inside the bubble it will stay in, collapsed, with the cloud beside it breathing for as long as the reasoning lasts and settling when the answer begins.
+- **The thinking trace lives in its bubble from the first word, and the cloud pulsates while the model is thinking.**
+  - The trace grows inside the bubble it will stay in, collapsed, with the cloud beside it breathing for as long as the reasoning lasts and settling when the answer begins.
   - Same vocabulary as the INDEXING / DOCS / READING / SYSTEM / WEB indicators: pulsating means still working.
 
 - **`raven.librarian.agent`, a scripting surface over Librarian's LLM agent loop.**
@@ -131,55 +140,66 @@
     - The record says which ones the model actually wrote, so a second pass can re-run just the failed ones, and a retry branches beside the failed attempt rather than erasing it.
   - `raven.librarian.agent.describe_turn(...)` builds the same record from a stored conversation, so a batch that saved its chats can be analyzed afterwards without hand-rolling a tree walk.
 
-- **Exact context-fill counts, computed on your own machine**, by pointing `config.llm_tokenizer_path` at the folder where you keep your models. Raven finds the `.gguf` for the model the backend says it is serving and counts with that model's own vocabulary, so the readout shows `62%` instead of `~62%` — no longer an estimate, and no longer dependent on what the backend reports about its own prompts. A `.gguf` file or a HuggingFace tokenizer folder works too, if you would rather name one exactly.
+- **Exact context-fill counts, computed on your own machine.**
+  - Point `raven.librarian.config.llm_tokenizer_path` at the folder where you keep your models. Raven finds the `.gguf` for the model the backend says it is serving and counts with that model's own vocabulary, so the readout shows `62%` rather than `~62%`.
+    - A `.gguf` file or a HuggingFace tokenizer folder works too, if you would rather name one exactly.
   - **Where the backend runs does not matter, only whether you keep the model.** A model served from another machine counts exactly here as long as a copy of it is reachable by a file path from this one — local disk or a mount.
-  - It reads *past* the quantization: the file may be a different one from the backend's (`Q8_0` on disk, `Q4_K_XL` loaded) and still be the right vocabulary. Symbolic links are followed, so a folder of links into a central archive works.
+    - It reads *past* the quantization: the file may be a different one from the backend's (`Q8_0` on disk, `Q4_K_XL` loaded) and still be the right vocabulary.
+    - Symbolic links are followed, so a folder of links into a central archive works.
   - **Loading takes a few seconds and happens in the background**, so the readout starts out as an estimate and sharpens once it is ready. Nothing waits for it.
-  - **It checks itself against your backend before believing itself.** Once built, the tokenizer is asked to size two short pieces of text, and the backend is asked the same; they have to agree. Only then does the readout drop its `~`. This is what lets it work for any model family rather than a list someone compiled elsewhere — and it also catches a file that matched by name while belonging to a different model, which would otherwise look perfectly healthy.
-  - **Supported models: Qwen 3.5, 3.6 and 3.8, and Gemma 4.** Those are the two tokenizer constructions Raven assembles — the byte-level one most current families share, and Gemma's, which is built differently throughout. Other models using either construction are likely to work as well, since the check above is what decides, not a list.
-  - **It declines rather than guessing.** A file whose name only partly matches the model is not used — a publisher's prefix says who packaged the file, not whose vocabulary is inside. And if the backend cannot be asked to confirm the tokenizer at all, only constructions measured in advance are trusted; anything else keeps the estimate. Every refusal says why in the log, which also names which of the two is counting for you.
+  - **It checks itself against your backend before believing itself.** Once built, the tokenizer is asked to size two short pieces of text and the backend is asked the same; they have to agree, and only then does the readout drop its `~`.
+    - This is what lets it work for any model family rather than a list someone compiled elsewhere, and it catches a file that matched by name while belonging to a different model.
+  - **It declines rather than guessing.** A file whose name only partly matches the model is not used — a publisher's prefix says who packaged the file, not whose vocabulary is inside.
+    - If the backend cannot be asked to confirm the tokenizer at all, only constructions measured in advance are trusted; anything else keeps the estimate.
+    - Every refusal says why in the log, which also names which construction is counting for you.
+  - **Two tokenizer constructions are assembled**: the byte-level one most current families share, and Gemma's, which is built differently throughout. Measured on Qwen 3.5, 3.6 and 3.8, and Gemma 4; other models using either construction are likely to work, since the check above is what decides.
 
-- **A digital-glitch effect on the avatar when the conversation is swapped out from under it** — stepping to a sibling branch, jumping to where a branch continues, starting a new chat, or rerolling a reply. A branching chat can replace everything on screen between one message and the next, and nothing marked the seam.
+- **A digital-glitch effect on the avatar when the conversation is swapped out from under it.**
+  - Stepping to a sibling branch, jumping to where a branch continues, starting a new chat, or rerolling a reply. A branching chat can replace everything on screen between one message and the next, and the glitch marks the seam.
   - It runs on a clock of its own rather than for as long as the switch takes: long enough that a switch too fast to see still registers, and capped so that flicking through siblings reads as one glitch rather than a stutter of them.
   - Your own postprocessor chain is left alone. The effect is laid over whatever is configured and taken off again afterwards, so a customized avatar looks like itself either side of the seam.
-  - **The effect is yours to choose**, in `raven.librarian.config`: an on/off switch, the durations, and the effect itself as a fragment of a postprocessor chain. It is written in the same format the animator settings use, so a look built in *Raven-avatar-settings-editor* can be copied out of the saved JSON and pasted in — a colour drain, an analog tracking wobble, or nothing at all, if a glitching avatar is not to your taste.
+  - **The effect is yours to choose**, in `raven.librarian.config`: an on/off switch, the durations, and the effect itself as a fragment of a postprocessor chain.
+    - It is written in the same format the animator settings use, so a look built in *Raven-avatar-settings-editor* can be copied out of the saved JSON and pasted in — a colour drain, an analog tracking wobble, or nothing at all.
 
-- **A calculator the AI can reach for.** Ask for a total, a square root or a percentage and the model works it out with a real evaluator rather than predicting the digits — which removes an error class outright, however well it would have done the sum in its head. Nothing to switch on: it needs neither the documents nor the network, so it keeps working with both toggles off.
-  - Expressions are Python's, with the `math` module's functions available under their bare names — `sqrt(2)`, `pi`, `log(1000, 10)`. Nothing else is reachable: no variables, no attribute access, no statements, and no random numbers, a calculator that can answer the same question twice differently being worse than none.
+- **A calculator the AI can reach for.**
+  - Ask for a total, a square root or a percentage and the model works it out with a real evaluator rather than predicting the digits.
+  - Nothing to switch on: it needs neither the documents nor the network, so it keeps working with both toggles off.
+  - Expressions are Python's, with the `math` module's functions available under their bare names — `sqrt(2)`, `pi`, `log(1000, 10)`. Nothing else is reachable: no variables, no attribute access, no statements, and no random numbers.
   - An expression it cannot evaluate comes back as an explanation of what it does take, so the model can correct itself and answer rather than failing the turn.
 
-- **A reply that stopped early now says so.** Stopping the AI keeps what it had written, which is the point of the button — but what it keeps ends mid-sentence, and so does a model that finished tersely. A short grey line under the message now names the difference: *[Interrupted — the reply was stopped here]* for one you stopped, and *[Incomplete — Raven exited while this reply was being written]* for a chat that was closed mid-reply and reopened.
+- **A reply that stopped early says so.**
+  - Stopping the AI keeps what it had written, which is the point of the button — but what it keeps ends mid-sentence, and so does a model that finished tersely. A short grey line under the message names the difference.
+    - *[Interrupted — the reply was stopped here]* for one you stopped, and *[Incomplete — Raven exited while this reply was being written]* for a chat that was closed mid-reply and reopened.
   - The line is added when the message is drawn and never stored, so it is not part of the text the model sees if you continue the message, and not part of what an export or a script reads.
 
-- **A READING indicator**, lit while an attached document's text is being extracted. Arriving at a branch whose PDFs have not been read yet spends a second or two reading them before anything else can start, and nothing on screen said so. It gets its own row between DOCS and SYSTEM rather than sharing one of theirs: extraction is local work that happens before the backend sees anything, and what these indicators are for is saying *where* the time is going.
+- **A READING indicator**, lit while an attached document's text is being extracted.
+  - Arriving at a branch whose PDFs have not been read yet spends a second or two reading them before anything else can start.
+  - It gets a row of its own between DOCS and SYSTEM: extraction is local work that happens before the backend sees anything.
 
-- **An *Audio input* panel** (F9, or the sliders button beside the mic), for setting up the microphone where it will be used. The level at which the mic stops listening was previously fixed at -40 dBFS with a 1.5-second silence, which is a guess about a room — and a wrong guess costs either a recording that never ends by itself or a question cut off mid-sentence. All three settings are now controls, and what you set is remembered between runs.
-  - **The microphone itself is one of the controls**, and switching takes effect at once with the meter following — which is how you tell a noisy room from a noisy microphone, or compare two of them. The list is re-read each time the panel opens, so one plugged in mid-session appears. Monitoring inputs are left out of it, since recording one would transcribe whatever is being played, the AI's own voice included.
-  - **While the panel is open, Librarian listens without recording**: the level is live, nothing is kept, and nothing is sent to the AI. So the room's noise floor can be read off with the room as it actually is, which is the reading the threshold depends on and the one you cannot get by asking someone to speak into a form.
+- **An *Audio input* panel** (`F9`, or the sliders button beside the mic), for setting up the microphone where it will be used.
+  - The level at which the mic stops listening, and the silence that ends a recording, are yours to set rather than fixed guesses about a room — a wrong guess costs either a recording that never ends by itself or a question cut off mid-sentence. What you set is remembered between runs.
+  - **The microphone itself is one of the controls**, and switching takes effect at once with the meter following — which is how you tell a noisy room from a noisy microphone, or compare two of them.
+    - The list is re-read each time the panel opens, so one plugged in mid-session appears.
+    - Monitoring inputs are left out of it, since recording one would transcribe whatever is being played, the AI's own voice included.
+  - **While the panel is open, Librarian listens without recording**: the level is live, nothing is kept, and nothing is sent to the AI.
+    - So the room's noise floor can be read off with the room as it actually is, which is the reading the threshold depends on and the one you cannot get by asking someone to speak into a form.
   - ***Measure the room*** does the arithmetic: it takes the loudest moment of the last few seconds — the figure shown right above the button, so the readout previews what the button will do — and puts the threshold a little above it.
   - **The automatic stop can be switched off** entirely, leaving the mic button as the only way to end a recording. That is the fallback for a room too loud for any threshold to separate speech from noise, and it needs no restart.
   - The panel is not modal, because the calibration that matters is watching the meter while somebody actually speaks.
-  - Both VU meters draw the threshold as a gray line, and it now moves as you set it. Starting values come from `raven.client.config`; *Reset to configured defaults* puts them back.
+  - Both VU meters draw the threshold as a gray line, and it moves as you set it. Starting values come from `raven.client.config`; *Reset to configured defaults* puts them back.
 
-- **Ctrl+Home and Ctrl+End switch to the first and last sibling** of the marked chat message. Those were the two of the six sibling buttons with no key at all, so a fan of branches could be crossed one step or ten at a time from the keyboard but never jumped to its ends. Bare Home and End still scroll the chat log.
+- **`Ctrl+Home` and `Ctrl+End` switch to the first and last sibling** of the marked chat message.
+  Bare `Home` and `End` still scroll the chat log.
 
-- **The chat history is saved every minute while the app runs**, not only when it closes, so a crash loses at most the last minute of the conversation. Nothing is written while nothing has changed. The interval is `llm_autosave_interval` in `raven.librarian.config`; `None` goes back to saving only at exit.
+- **The chat history is saved every minute while the app runs**, not only when it closes.
+  A crash loses at most the last minute of the conversation, and nothing is written while nothing has changed. The interval is `raven.librarian.config.llm_autosave_interval`; `None` goes back to saving only at exit.
 
-- **The help card (F1) now turns pages.** Librarian's has three: the app's keyboard, the chat graph's own
-  keyboard with the prose that explains it, and *Features*. Arrow keys, `Home` and `End` turn them,
-  or the buttons at the top. The keyboard page is a reference you can screenshot and keep beside you, which
-  is what prose sharing the page had been taking away.
-  - **The prose pages read as two newspaper columns**, the left one finished before the right one starts —
-    a card this wide gives a single column lines too long to track back to the start of, and a section
-    split into a pair either side would have the eye crossing back and forth once per section.
-  - **Message attachments are described**, having been the previous release's headline feature and absent
-    from the card until now: what an attachment is for as against the document database, the two kinds and
-    what each asks of the model, the three ways to attach one, and where to clean up the ones nothing
-    refers to any more.
-  - **Flipping *Internet* or *Documents* is noted as costing a pause** on the next reply, the tool
-    declarations riding at the top of the conversation, so the whole chat has to be re-read.
-  - The card sizes itself to its tallest page and keeps that height, so turning a page does not resize the
-    window under you.
+- **The help card (`F1`) turns pages.**
+  - Librarian's are the app's keyboard, the chat graph's own keyboard with the prose that explains it, and *Features*. Arrow keys, `Home` and `End` turn them, or the buttons at the top.
+  - **The prose pages read as two newspaper columns**, the left one finished before the right one starts — a card this wide gives a single column lines too long to track back to the start of.
+  - **Message attachments are described**: what an attachment is for as against the document database, what each kind asks of the model, how to attach one, and where to clean up the ones nothing refers to any more.
+  - **Flipping *Internet* or *Documents* is noted as costing a pause** on the next reply, the tool declarations riding at the top of the conversation, so the whole chat has to be re-read.
+  - The card sizes itself to its tallest page and keeps that height, so turning a page does not resize the window under you.
 
 #### Raven-avatar
 
