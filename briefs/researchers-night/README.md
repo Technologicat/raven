@@ -285,8 +285,18 @@ What is queued, all small and independent:
     `raven-pdf2bib`) are documented in `raven/papers/README.md`, which suggests **`papers/` is the wrong
     home for them**: what they have in common with `qoi2png` is being converters, not being about papers.
     - **Decided: there is enough material for one** (Juha, 2026-09-22) — the various something-to-bib
-      converters plus `qoi2png`. So the docs-coverage pass has a converters section to build rather
-      than a question to answer, and `raven-dehyphenate` is a candidate for it too.
+      converters plus `qoi2png`. So the docs-coverage pass has a section to build rather than a question
+      to answer.
+    - **But "converters" is the wrong name for it**, because `raven-dehyphenate` plainly belongs and
+      converts nothing (Juha, same day). What the five share is what they do *not* do: they reshape
+      data without judging what is in it. `raven-deduplicate` decides two records are the same paper
+      and `raven-siftbib` decides one cannot be screened — calls a reader has to understand and may
+      disagree with. These make none. They change how the data is written, never what it says, which is
+      why undoing a PDF extractor's line-break hyphens sits beside unwrapping a container.
+      - Proposed title: **Converting and repairing**. It covers both halves and predicts where a new
+        tool goes. *Filters* is accurate in the Unix sense and unusable here, the postprocessor having
+        twenty-one of its own. Settle the wording when the section is written; the distinction is the
+        part worth keeping.
   - **What `raven-dehyphenate` is, for whoever writes that up** (Juha, 2026-09-22): essentially a CLI
     endpoint for the `dehyphenate` Python package, built because undoing line-break hyphenation is
     sometimes a useful thing to do to PDF-extracted text and similar — and useful from the command line
