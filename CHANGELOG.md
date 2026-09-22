@@ -208,6 +208,7 @@
   - **The particles carry a depth, and are the only thing in this pipeline that does** — the character is a flat billboard and the backdrop a flat plane. So focus lives inside this filter, and sharp glints and soft bokeh discs are one population at different distances from the focal plane.
   - **`aperture` is the one expensive setting.** Everything else is roughly free, `count` included; widening the aperture makes each splat larger and costs the square of it.
   - **With `bloom` switched off, bring `max_intensity` down to 1.0.** A mote's alpha is derived as the least that can carry its light, and the headroom above 1.0 is only safe while `bloom` is downstream to clamp it back down.
+  - Every parameter it takes is in the [filter manual](raven/common/video/postprocessor-filters.md#atmospheric_dust), and in the settings editor beside live controls.
 
 - **`crt`, a raster projection filter** — the avatar drawn by a scanning electron beam, through a phosphor mask, with the bright rows falling off as Gaussians into darkness between them rather than alternating hard between light and dark.
   - **It is in the default chain in place of `scanlines`**, which remains available as the cheap and simple version of the same idea.
@@ -216,6 +217,7 @@
   - **The mask pitch and the scanline period are in *output pixels*** rather than in fractions of the picture, so a chain tuned at one output size wants retuning at another — a 3-pixel triad is strongly visible at 1024 and invisible at 4K.
   - **Two of its parameters ship off, both for reasons that may not apply to you.** Phosphor persistence needs more frames per second than the avatar can currently afford, below which a trail reads as smearing; and the interlaced field alternation flickers, not being synchronized to your display's refresh.
   - **`brightness_compensation` is the knob to reach for first if the result looks bleached rather than rastered.** The scanlines and the mask both darken the picture and the filter drives the beam harder to compensate, as a real tube does; at the default that can push the brightest parts of a pale character into white.
+  - Every parameter it takes is in the [filter manual](raven/common/video/postprocessor-filters.md#crt), and in the settings editor beside live controls.
 
 - **An `enabled` switch on postprocessor chain entries**, default on.
   Set it to `false` to skip a filter while its settings stay in the chain, so a look you spent an evening tuning survives being switched off and back on. It belongs to the chain rather than to any filter, and works anywhere a postprocessor chain does.

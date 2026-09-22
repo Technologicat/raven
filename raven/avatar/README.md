@@ -207,6 +207,11 @@ beside live controls, so you read it while watching the effect on the character.
 `Postprocessor.get_filters()`, which is the definitive list; the catalogue below is the other question, the
 one the app cannot answer until you are already in it: **which** filters exist at all.
 
+**To read them away from the app**, see
+[the filter manual](../common/video/postprocessor-filters.md) — every filter, every parameter, its default
+and the range it is meaningful over. It is generated from the same docstrings the editor shows, so the two
+cannot disagree.
+
 A chain is a list of `(name, settings)` pairs in `postprocessor_chain` (see `postprocessor_defaults` in
 [`raven.server.config`](../server/config.py) for the one Raven ships), and any entry can carry
 `"enabled": false` to keep its settings while switching it off.
