@@ -63,8 +63,13 @@ def module_level_imports(path: pathlib.Path) -> set[str]:
     return out
 
 
+# The repository's own import roots. `scripts` is one because `scripts/tests/` imports the checkers it
+# tests, and a first-party name must not be reported as a package CI forgot to install.
+FIRST_PARTY = ("raven", "scripts")
+
+
 def first_party_deps(path: pathlib.Path, root: pathlib.Path) -> set[pathlib.Path]:
-    """`raven.*` modules this file imports at module level, as paths."""
+    """The repository's own modules that this file imports at module level, as paths."""
     deps, src = set(), path.read_text(errors="replace")
     for node in ast.parse(src).body:
         mods = []
@@ -76,7 +81,7 @@ def first_party_deps(path: pathlib.Path, root: pathlib.Path) -> set[pathlib.Path
                 if node.module:
                     base = base.joinpath(*node.module.split("."))
                 mods += [base.joinpath(a.name) for a in node.names] + [base]
-            elif node.module and node.module.startswith("raven"):
+            elif node.module and node.module.split(".")[0] in FIRST_PARTY:
                 base = root.joinpath(*node.module.split("."))
                 # Both readings, because `from raven.librarian import llmclient` names a *module*, while
                 # `from raven.librarian.chatutil import scrub` names a symbol inside one. Resolving only the
@@ -84,7 +89,7 @@ def first_party_deps(path: pathlib.Path, root: pathlib.Path) -> set[pathlib.Path
                 # of them, and which made this script quietly unable to find anything.
                 mods += [base.joinpath(a.name) for a in node.names] + [base]
         elif isinstance(node, ast.Import):
-            mods += [root.joinpath(*a.name.split(".")) for a in node.names if a.name.startswith("raven")]
+            mods += [root.joinpath(*a.name.split(".")) for a in node.names if a.name.split(".")[0] in FIRST_PARTY]
         for m in mods:
             for cand in (m.with_suffix(".py"), m / "__init__.py"):
                 if cand.is_file():
@@ -117,7 +122,7 @@ def guard_fires_in_ci(target: str, root: pathlib.Path, allowed: set[str], stdlib
     module works at all — the import runs and raises from somewhere further down.
     """
     top = target.split(".")[0]
-    if top != "raven":
+    if top not in FIRST_PARTY:
         return top not in stdlib and top.lower() not in allowed
     for candidate in (root.joinpath(*target.split(".")).with_suffix(".py"),
                       root.joinpath(*target.split(".")) / "__init__.py"):
@@ -137,10 +142,27 @@ def unsatisfied_imports(start: pathlib.Path, root: pathlib.Path,
         seen.add(current)
         queue += [d for d in first_party_deps(current, root) if d not in seen]
         missing = sorted(m for m in module_level_imports(current)
-                         if m not in stdlib and m != "raven" and m.lower() not in allowed)
+                         if m not in stdlib and m not in FIRST_PARTY and m.lower() not in allowed)
         if missing:
             findings.append(f"{current.relative_to(root)} imports {missing}")
     return findings
+
+
+def test_modules(root: pathlib.Path) -> list[pathlib.Path]:
+    """Every tracked test module, from wherever in the repository it lives.
+
+    Asking git rather than globbing a named tree, because pytest has no `testpaths` setting: it collects
+    from the whole repository, so a `scripts/tests/` module is collected in CI exactly like a package one.
+    This globbed `raven/**/tests/test_*.py` until `scripts/tests/` appeared in September 2026 and landed
+    outside it — a test there needing something CI lacks would have passed this check and failed on push,
+    which is the one failure this script exists to prevent. Naming the trees that have tests today would
+    reintroduce that the next time one appears; git knows them all.
+    """
+    tracked = subprocess.run(["git", "-C", str(root), "ls-files"],
+                             capture_output=True, text=True).stdout.split()
+    return sorted(root / p for p in tracked
+                  if (q := pathlib.PurePosixPath(p)).parent.name == "tests"
+                  and q.name.startswith("test_") and q.suffix == ".py")
 
 
 def main() -> None:
@@ -151,7 +173,7 @@ def main() -> None:
 
     findings: dict[str, list[str]] = {}
     n_modules = 0
-    for test in sorted(root.glob("raven/**/tests/test_*.py")):
+    for test in test_modules(root):
         # A module whose `importorskip` actually fires in CI is allowed to need anything: CI skips it
         # instead of erroring. Without this the report is dominated by tests that are already correct —
         # dearpygui, chromadb, kokoro and the rest are all deliberately absent and deliberately guarded.
@@ -183,6 +205,7 @@ def main() -> None:
         print(f"  {test}")
         for r in reasons:
             print(f"      {r}")
+    sys.exit(1)  # as every other checker here does, so this one can gate a push too
 
 
 if __name__ == "__main__":
