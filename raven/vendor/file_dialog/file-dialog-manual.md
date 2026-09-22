@@ -69,12 +69,12 @@ you are and in nobody's shortcuts. `Ctrl+L` puts the caret in it.
 
 **It says what `Enter` will do with it** as you type — green while it names a folder that exists, red
 once it cannot lead anywhere, and plain while you are on your way to one (partial match). So a path
-that is stale, or mistyped at the far end, shows it as you go rather than as a message box after you
-commit. Once `Enter` has taken you there the field goes plain again: the colours belong to the typing.
-A `~` is judged by the folder it stands for, while the field keeps showing what you typed.
+that is stale, or mistyped at the far end, shows it as you go. Once `Enter` has taken you there the
+field goes plain again: the colours belong to the typing. A `~` is judged by the folder it stands for
+(i.e. the home folder), while the field keeps showing what you typed.
 
-It does not complete with `Tab`, and does not need to — the find field does that better, a fragment at a
-time in any order.
+The path field does **not** complete with `Tab`, and does not need to — the find field does that better,
+a fragment at a time in any order.
 
 ## Choosing what the listing shows
 
@@ -84,7 +84,7 @@ listing narrow. `Esc` gives the keyboard back to the find field.
 
 A dialog whose caller named no types offers *all files* and nothing else, and **a folder picker offers no
 type filter at all** — choosing among folders is not something a type filter can narrow, since it applies
-to files and would hide the folders you navigate through to reach them.
+to files only.
 
 **Sorting.** `Ctrl+Shift+1` … `Ctrl+Shift+4` sort by name, date, type or size. Pressing the same one
 again reverses it.
@@ -94,13 +94,15 @@ choice holds until you change it back.
 
 **Thumbnails.** Where the dialog lists files at all, `Ctrl+T` switches between the list and a grid of
 image previews. In a folder picker the pictures are shown but dimmed and unclickable: they are there to
-tell you whether this is the right folder, not to be chosen.
+tell you whether this looks like the right folder — useful for visually confirming whether the folder
+you are about to pick contains the images you thought it does (photos, AI gens, and images downloaded
+from the internet often have generated filenames, making thumbnails the better choice for judging).
 
 ## Picking more than one file
 
-Where the dialog was opened for several files, `Ctrl+Space` marks or unmarks the entry under the cursor —
-what `Ctrl+click` does with the mouse. The line above the buttons updates as you mark, including when you
-mark a folder.
+Where the dialog was opened for several files, and the cursor is in the file list, `Ctrl+Space` marks
+or unmarks the entry under the cursor — the same action as `Ctrl+click` with the mouse. The line above
+the buttons updates as you mark, including when you mark a folder.
 
 ## Where the keyboard is
 
@@ -108,7 +110,7 @@ mark a folder.
 type list, the listing, or the shortcuts panel — so a chord that hands the keys elsewhere shows where
 they went.
 
-**A blue cursor, breathing slowly, marks the entry the keyboard is on.** The two can be lit at once on
+**A blue cursor, breathing slowly, marks the list entry the keyboard is on.** The two can be lit at once on
 purpose: the border says where the keys are, and the cursor says what `Enter` would act on, which in this
 dialog are different questions.
 
