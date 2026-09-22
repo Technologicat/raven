@@ -316,6 +316,9 @@
 - **The "data eyes" effect stays on for at least a second** before it fades, so a lookup that finishes quickly is still seen.
   A slow one keeps the effect on for as long as it runs, as before. The animator setting `data_eyes_min_duration` sets the minimum, next to `data_eyes_fadeout_duration`.
 
+- **The settings editor's fractional sliders now show the value they set**, where four of them showed it multiplied by ten with an `x 0.1` label to undo — upscale factor, animator speed, TTS speed and the lipsync AV offset.
+  The animator's speed slider was the worst of them, since its label said only "Speed", so the 3 on screen was a 0.3 with nothing saying so. They read `1.4`, `0.3`, `1.0` and `-0.8` now.
+
 #### Raven-librarian
 
 - **A character now declares itself, and switching character is one setting.**
@@ -436,7 +439,7 @@
 
 - **`Page Up`, `Page Down` and the up and down arrows scroll the info panel while you are typing a search**, so its results can be read down without leaving the field.
   - **Previously the field had to be left first**, and the mouse was the only way to do that without losing or accepting what you had typed.
-  - **`Tab` now leaves it without doing either**, moving the keyboard between the search field and the info panel and keeping the search. `Shift+Tab` does the same: with two places to be, each direction is the other one.
+  - **`Tab` now leaves it without doing either**, moving the keyboard between the search field and the info panel and keeping the search. `Shift+Tab` does the same.
 
 - **Keyword extraction now counts nouns and proper nouns, and leaves the verbs out.**
   - A topic keyword is nearly always a noun, while the verbs of academic prose — *provide*, *improve*, *develop*, *investigate*, *identify*, *propose* — describe what a paper **does**, are the same in every field, and were crowding the head of the frequency list without saying anything.
@@ -469,27 +472,29 @@
   - **The model is asked for a mapping, not for a rewritten list, so the result can be checked.** A replacement is applied only when it is itself one of the keywords the first pass extracted, which means an invented or rephrased term cannot reach the dataset — it is dropped instead of trusted. Word clouds and cluster labels read the same list, so both get the benefit.
   - Only affects `clusters_keyword_method = "llm"`. The prompt is `config.clusters_llm_keyword_canonicalization_prompt`, and the log names every replacement it applies.
 
-- The importer's two LLM steps — cluster keyword extraction and abstract summarization — no longer run as a conversation with the assistant character. Both outputs are parsed by the importer rather than read by a person, while the character card asks for Markdown, for a reported train of thought, and for conversational prose — all of which had to be undone before the result could be used. Each of the two prompts already states its own task, so what the character contributed was only the part working against it. Expect cleaner keyword lists, and summaries that start with the summary.
-
-#### Raven-avatar
-
-- **The settings editor's fractional sliders now show the value they set**, where four of them showed it multiplied by ten with an `x 0.1` label to undo — upscale factor, animator speed, TTS speed and the lipsync AV offset. The animator's speed slider was the worst of them, since its label said only "Speed", so the 3 on screen was a 0.3 with nothing saying so. They read `1.4`, `0.3`, `1.0` and `-0.8` now.
+- **The importer's two LLM steps no longer run as a conversation with the assistant character** — cluster keyword extraction and abstract summarization.
+  - Both outputs are parsed by the importer rather than read by a person, while the character card asks for Markdown, for a reported train of thought, and for conversational prose — all of which had to be undone before the result could be used.
+  - Each of the two prompts already states its own task, so what the character contributed was only the part working against it. Expect cleaner keyword lists, and summaries that start with the summary.
 
 #### Raven-cherrypick
 
-- **The thumbnail grid scrolls smoothly**, and flashes an arrow at the top or bottom edge as you arrive there, and again if you press or wheel further. It was the last view in the constellation that jumped. A rebuild — changing the filter, or the tile size — still repositions instantly, since gliding there would animate toward a position that is about to be corrected.
+- **The thumbnail grid scrolls smoothly**, and flashes an arrow at the top or bottom edge as you arrive there, and again if you press or wheel further.
+  - It was the last view in the constellation that jumped. A rebuild — changing the filter, or the tile size — still repositions instantly, since gliding there would animate toward a position that is about to be corrected.
   - `SMOOTH_SCROLLING`, `SMOOTH_SCROLLING_STEP_PARAMETER` and `SCROLL_ENDS_HERE_DURATION` in `raven/cherrypick/config.py` tune or disable both.
 
-- **"Open image folder" now shows you the pictures.** It opens in the thumbnail grid, listing a folder's images as you browse. Walk into a folder and press **Pick folder** to take the one you are looking at; clicking a folder and pressing the button still takes that one, and the line above the buttons names whichever it would be.
+- **"Open image folder" now shows you the pictures.**
+  - It opens in the thumbnail grid, listing a folder's images as you browse. Walk into a folder and press **Pick folder** to take the one you are looking at; clicking a folder and pressing the button still takes that one, and the line above the buttons names whichever it would be.
   - The images are there to be looked at, not picked — they are how you judge whether this is the right folder, instead of remembering what its name meant. So they are dimmed and do not respond to clicks, the answer this dialog gives being a folder.
 
-- **While comparing, picking the winner is now `Shift`+a digit** rather than the bare digit, and `1` means zoom to 1:1 everywhere — including inside compare mode, where it previously could not be reached from the keyboard at all. This is a change to a key you may have in your fingers, and the only one in this release.
+- **While comparing, picking the winner is now `Shift`+a digit** rather than the bare digit, and `1` means zoom to 1:1 everywhere.
+  - Including inside compare mode, where 1:1 previously could not be reached from the keyboard at all. This is a change to a key you may have in your fingers, and the only one in this release.
   - `1` is 1:1 in the chat graph and the graph viewer too, so it now means one thing across the constellation. A bare digit could not both do that and pick a winner; reaching for 1:1 while comparing would have thrown you out of compare mode instead.
   - `Numpad 1` works as well, for keyboard layouts where the main-row digits are shifted.
 
 #### Raven-pdf2bib
 
-- The same for all eight extraction steps — authors, title, keywords, abstract and the rest — which now run without the character, on prompts that already tell the model its answer "will be sent to a computer program that cannot understand natural language". The per-step progress letters on stderr are unchanged.
+- **The extraction steps no longer run as a conversation with the assistant character either** — authors, title, keywords, abstract and the rest.
+  - They run on prompts that already tell the model its answer "will be sent to a computer program that cannot understand natural language". The per-step progress letters on stderr are unchanged.
   - When a step fails, the error report shows the model's thinking trace and its final answer laid out the way Librarian's export buttons lay them out, so a trace in an error report and a trace in an exported chat read the same way. The usual cause of an empty step is the model overthinking until the token budget runs out, which is what the trace shows.
 
 #### Constellation-wide
