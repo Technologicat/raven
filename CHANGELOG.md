@@ -616,10 +616,12 @@
 - **Send and Reroll now refuse while a reply is in progress**, rather than starting a second one alongside it.
   Two replies writing the same conversation interleaved their results. The Send button says why in its tooltip, and points at Cancel.
 
-- **Thinking that arrives with no opening tag is now moved into its bubble the moment the model stops thinking**, instead of staying in the answer until the whole reply finishes.
-  - Affects LLM backends that pass the model's raw stream through rather than separating the reasoning themselves — where a thinking model's chat template opens the block, so the stream carries only the close, and nothing before it says the text is a thought.
-  - In the chat log the reasoning moves into the trace and the answer starts fresh; in `raven-minichat`, which cannot unprint, the closing marker says retroactively what it covers.
-  - Not yet visible from the start of the thinking, which is the part that needs a signal the stream does not carry. Until the close arrives the reasoning is still shown as the answer.
+- **A thinking model's reasoning no longer ends up as part of the answer.**
+  - Most current models are put *inside* the thinking block by their own chat template, so what reaches Raven carries only the closing `</think>`, and nothing before it says the text is a thought. On a backend that hands the raw stream over rather than splitting the reasoning off itself, the whole trace stayed in the answer, tags and all.
+  - It is recognized at the close now. **The stored message keeps a clean answer and a separate trace**, the same as on a backend that does the splitting.
+  - **In the chat log the reasoning moves into its bubble the moment the model stops thinking**, rather than staying in the answer until the whole reply finishes, and the answer then starts fresh. In `raven-minichat`, which cannot unprint, the closing marker says retroactively what it covers.
+  - Not yet caught at the *start* of the thinking, which needs a signal the stream does not carry. Until the close arrives the reasoning is still shown as the answer.
+  - LM Studio splits the reasoning off itself, so nothing changes there.
 
 - **A crash while the chat datastore is being written can no longer destroy it.**
   - The save serialized straight into `chat.json`, which truncates the file as its first act — so a process that died anywhere in the write left a fragment where the whole history had been, and a crash is exactly when you want that history.
@@ -657,8 +659,6 @@
 - **List bullets and numbers no longer strand themselves when the text above them moves.**
   - Expanding or collapsing a message's thinking trace pushes the answer below it up or down — and the markers of any list in that answer stayed where they had first been drawn, leaving a column of orphaned numbers in the margin beside text that had walked off without them.
   - They travel with their line now, which also covers window resizes and message edits. Affects every Raven app that renders Markdown, not just the chat.
-
-- **A thinking model's reasoning is now separated out even when it arrives without an opening tag.** Most current models are put *inside* the thinking block by their own chat template, so what reaches Raven carries only the closing `</think>` — and on a backend that hands over the raw stream rather than splitting the reasoning off itself, that left the whole trace stored as part of the answer, tags and all. It is recognized at the close now, so the message stores a clean answer and a separate trace, the same as on a backend that does the splitting. LM Studio does the splitting, so nothing changes there.
 
 - **A stopped reply from a thinking model no longer reports a fraction of the tokens it generated.**
   - When the count has to be worked out locally — `raven.librarian.config.llm_tokenizer_path` is set and the backend reported none, which is what happens when you stop a reply part-way through — only the visible answer was counted, while the elapsed time beside it covered the thinking as well.
