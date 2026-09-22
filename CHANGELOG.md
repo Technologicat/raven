@@ -664,6 +664,17 @@
   - When the count has to be worked out locally — `raven.librarian.config.llm_tokenizer_path` is set and the backend reported none, which is what happens when you stop a reply part-way through — only the visible answer was counted, while the elapsed time beside it covered the thinking as well.
   - On a model that spends most of a turn reasoning, that left the `[Nt, Xs, Yt/s]` line under the message understating both figures by most of the turn.
 
+- **Attaching a document no longer freezes the app while it is read.**
+  - Reading a large PDF takes seconds — nearly four, for an 8.5 MB paper — and it used to happen before the attachment appeared at all, with the whole GUI unresponsive meanwhile: no typing, no buttons, no hotkeys. The attachment chip now appears at once and reads its document in the background.
+  - The chip says which state it is in: **pulsating** while its text is being read, **calm** once it is ready, **red** if the document turns out to hold no text. Hovering a red chip — its icon or its filename — says what went wrong.
+  - **A message cannot be sent while an attachment is red, or still being read.** The send button is disabled and says why; the send key refuses with a flash.
+    - Previously a document with no readable text was reported in a dialog and then silently dropped, so the message went without it — which is the one outcome nobody wants, since you attached it for a reason. Remove the red chip (or wait) to send.
+  - The scanned-PDF case is the common one here: a page of images has nothing for a text extractor to find. Run it through OCR first.
+
+- **Attaching a document no longer reads it twice.**
+  - Its text was extracted once when you picked the file, to tell you straight away if a PDF turned out to be scanned pages with no text in them, and then extracted all over again when the message was sent.
+  - For a large paper each pass is seconds — nearly four, for an 8.5 MB one — so the wait happened twice for no reason. The first result is now kept and reused.
+
 #### Raven-cherrypick
 
 - **Compare mode no longer skips an image, and no longer leaves the wrong picture cached behind it.**
@@ -672,21 +683,21 @@
     - Thus, which image was displayed wrongly depended on where you cancelled, which is why it seemed to come and go: cancel on the frame you started from and nothing went wrong at all.
     - **No file was ever touched** — this was the in-memory cache of decoded images handing back the wrong one, and reopening the folder cleared it.
 
-- **Image loading robustified.** There was a race condition: a newly loaded image announced itself from a background thread while the previous one was still being drawn, and the announcement was cleared after that drawing finished rather than before it — so an announcement arriving mid-draw was discarded. Fixed.
+- **A newly loaded image sometimes never appeared.**
+  - It announced itself from a background thread while the previous one was still being drawn, and the announcement was cleared after that drawing finished rather than before it — so an announcement arriving mid-draw was discarded.
 
-- **The image-number indicator now follows the compare cycle.** The small number in the main view's bottom-left corner stayed on whichever image was current when you entered compare mode, so it named the wrong image for every frame of the loop while the overlay number and the grid highlight both moved. It now names the frame on screen, and goes back to the current image when you leave. The window title follows the cycle too, for the same reason — it named the image you had left behind.
+- **The image-number indicator now follows the compare cycle.**
+  - The small number in the main view's bottom-left corner stayed on whichever image was current when you entered compare mode, so it named the wrong image for every frame of the loop while the overlay number and the grid highlight both moved.
+  - It now names the frame on screen, and goes back to the current image when you leave. The window title follows the cycle too, for the same reason — it named the image you had left behind.
 
-- **Ctrl+Shift+C during a compare cycle no longer marks the wrong image as the winner.** Every other triage control is unavailable while comparing — the keys are ignored, the toolbar buttons and grid clicks are disabled — but this one chord slipped through, and it acted on whichever image was current *before* you started comparing rather than on anything you were looking at. Since marking moves files, that put a picture you had not chosen into `cherries/` and the rest of the compare set into `lemons/`. It is now ignored during the cycle, like the rest.
-  - The intended sequence is unchanged and still works: press the digit of the frame you want, which leaves compare mode on that image, then Ctrl+Shift+C to crown it.
+- **`Ctrl+Shift+C` during a compare cycle no longer marks the wrong image as the winner.**
+  - Every other triage control is unavailable while comparing — the keys are ignored, the toolbar buttons and grid clicks are disabled — but this one chord slipped through, and it acted on whichever image was current *before* you started comparing rather than on anything you were looking at.
+  - **Marking moves files**, so that put a picture you had not chosen into `cherries/` and the rest of the compare set into `lemons/`. It is now ignored during the cycle, like the rest.
+  - The intended sequence is unchanged and still works: press the digit of the frame you want, which leaves compare mode on that image, then `Ctrl+Shift+C` to crown it.
 
-- **Undo and redo are no longer available mid-comparison**, by button or by key. Both move files and then jump to what they moved, which left the grid pointing somewhere the cycle had not chosen. Ctrl+Z and Ctrl+Y were already ignored while comparing; Ctrl+Shift+Z and the two toolbar buttons were not. Leave compare mode and they work as before.
-
-- **Attaching a document no longer freezes the app while it is read.** Reading a large PDF takes seconds — nearly four, for an 8.5 MB paper — and it used to happen before the attachment appeared at all, with the whole GUI unresponsive meanwhile: no typing, no buttons, no hotkeys. The attachment chip now appears at once and reads its document in the background.
-  - The chip says which state it is in: **pulsating** while its text is being read, **calm** once it is ready, **red** if the document turns out to hold no text. Hovering a red chip — its icon or its filename — says what went wrong.
-  - **A message cannot be sent while an attachment is red, or still being read.** The send button is disabled and says why; the send key refuses with a flash. Previously a document with no readable text was reported in a dialog and then silently dropped, so the message went without it — which is the one outcome nobody wants, since you attached it for a reason. Remove the red chip (or wait) to send.
-  - The scanned-PDF case is the common one here: a page of images has nothing for a text extractor to find. Run it through OCR first.
-
-- **Attaching a document no longer reads it twice.** Its text was extracted once when you picked the file, to tell you straight away if a PDF turned out to be scanned pages with no text in them, and then extracted all over again when the message was sent. For a large paper each pass is seconds — nearly four, for an 8.5 MB one — so the wait happened twice for no reason. The first result is now kept and reused.
+- **Undo and redo are no longer available mid-comparison**, by button or by key.
+  - Both move files and then jump to what they moved, which left the grid pointing somewhere the cycle had not chosen.
+  - `Ctrl+Z` and `Ctrl+Y` were already ignored while comparing; `Ctrl+Shift+Z` and the two toolbar buttons were not. Leave compare mode and they work as before.
 
 #### Raven-visualizer
 
