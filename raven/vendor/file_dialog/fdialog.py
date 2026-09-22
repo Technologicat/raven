@@ -1,5 +1,17 @@
 # file_dialog 3.1
 # MIT licensed
+"""Raven's file browser: the dialog every app opens to pick or save a file.
+
+**This widget has a user manual, and it is the only place its keyboard is written down** outside the `F1`
+card built below — `file-dialog-manual.md`, beside this file and linked from Raven's main README. A change
+here that a user would notice wants a line there in the same commit: a new key, a moved control, a default
+that changes, a readout that means something new.
+
+Saying so here because there is nowhere else it would be seen. The manual documents behaviour that lives
+in this file, so the moment to remember it is while editing this file, and a doc nobody is reminded of is
+a doc that goes stale. `_help_hotkey_info` is the other half of the same obligation, and the two disagree
+as easily as either can drift from the code.
+"""
 
 __all__ = ["IMAGES_DIR", "icon_name_for_extension", "FileDialog"]
 

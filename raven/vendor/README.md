@@ -52,6 +52,12 @@ as Raven's to fix and extend rather than as pristine snapshots. `tha3` swaps `no
 in the hot paths, `DearPyGui_Markdown` is substantially robustified for background-threaded rendering,
 `anime4k` was cleaned up, and `kokoro_fastapi`'s writer differs from its upstream commit by some 70 lines.
 
+**`file_dialog` has a user manual of its own**, since by now it is Raven's file browser rather than a
+dependency: [`file_dialog/file-dialog-manual.md`](file_dialog/file-dialog-manual.md), also linked from the
+main README. It is the only place the dialog's keyboard is written down outside the `F1` card inside the
+dialog, so a change to `fdialog.py` that a user would notice wants a line there too. Noted here for
+anyone who arrives at this folder rather than at the file.
+
 **`file_dialog` is the far end of that spectrum, and is best read as a fork.** Measured 2026-08-14: 58
 commits over 20 months against an 1130-line module, the first in December 2024. Sorting, grouped and
 multi-extension type filters, smart-case fragment search, an animated OK button, click-twice overwrite
