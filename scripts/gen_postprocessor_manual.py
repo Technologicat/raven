@@ -12,8 +12,11 @@ header saying so; edit the docstrings in `raven/common/video/postprocessor.py` a
     python scripts/gen_postprocessor_manual.py            # write the file
     python scripts/gen_postprocessor_manual.py --check     # exit 1 if it is out of date
 
-`--check` is for release time. It cannot run in CI: importing the postprocessor needs torch, which
-`requirements-ci.txt` deliberately does not install.
+`--check` is currently a release-time step (Raven's `CLAUDE.md`, workflow rule 9). It *could* run in CI
+and does not yet: the postprocessor needs torch, which `requirements-ci.txt` lacks — but the workflows
+install the torch trio from PyTorch's CPU wheel index in a line of their own, on every OS in the matrix,
+so the dependency is there. CI would be the better trigger, catching a stale file on the push that
+staled it rather than at the next release.
 """
 
 import argparse
