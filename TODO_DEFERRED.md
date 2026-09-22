@@ -51,9 +51,14 @@ closed, which destroys the only specimen there will be for an unknown number of 
 - *The theme change the same day.* `setup_themes` sets roundings and two colours and touches neither
   padding nor item spacing, so the 40 px chrome budget the formula depends on is unchanged.
 
-Worth knowing that the budget is exact: the four panels are `512 + 0.8*512 + 0.8*512 + 512` = 1843.2, and
-the `+ 40` is precisely two window paddings plus three item spacings. Anything that changes either will
-clip the right-hand panel, which makes this formula worth a comment wherever it survives.
+Worth knowing that the budget is exact, and **exact on purpose** (Juha, 2026-09-22): the window is not
+meaningfully resizable, so it is meant to fit its contents and nothing more. The four panels are
+`512 + 0.8*512 + 0.8*512 + 512` = 1843.2, and the `+ 40` is precisely two window paddings plus three item
+spacings.
+
+So the zero slack is not the defect and must not be "fixed" by padding the formula. What it does mean is
+that anything nudging a panel width, the window padding or the item spacing clips the right-hand panel —
+so if this turns out not to be a frame-callback problem at all, that is the other place to look.
 
 Reported by Juha (2026-09-22), from a launch to check an unrelated theme change.
 
