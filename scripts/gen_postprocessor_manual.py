@@ -55,9 +55,9 @@ GUI_HINTS = {"!RGB": "an RGB colour"}
 UNIVERSAL_PARAM = "name"
 
 PREAMBLE = """\
-Twenty-one filters, applied in the order you list them. This page is the reference; \
-[`raven/avatar/README.md`](../../avatar/README.md#what-the-postprocessor-can-do) is the shorter \
-catalogue, and says how a chain is put together.
+{n_filters} filters, applied in the order you list them. This page is the reference; \
+[`raven/avatar/README.md`](../../avatar/README.md#the-postprocessor) is the shorter catalogue, and says \
+how a chain is put together.
 
 **The same material is in the app**, beside live controls: run `raven-avatar-settings-editor` and each \
 filter carries its own help there, which is the better place to read it while watching the effect on the \
@@ -119,7 +119,7 @@ def build(filters, anomalies):
            "",
            "# Postprocessor filters",
            "",
-           PREAMBLE,
+           PREAMBLE.format(n_filters=len(filters)),
            "**Contents:**",
            ""]
 

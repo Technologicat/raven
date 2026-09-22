@@ -15,7 +15,9 @@
 - [Introduction](#introduction)
 - [GUI apps](#gui-apps)
 - [Why anime?](#why-anime)
-- [Codebase structure](#codebase-structure)
+- [The upscaler](#the-upscaler)
+    - [What each one costs](#what-each-one-costs)
+- [The postprocessor](#the-postprocessor)
 - [Quick tips for character creation](#quick-tips-for-character-creation)
     - [Cel blending and animefx](#cel-blending-and-animefx)
 - [Troubleshooting](#troubleshooting)
@@ -23,6 +25,7 @@
     - [Low VRAM - what to do?](#low-vram---what-to-do)
     - [Missing THA3 model at startup](#missing-tha3-model-at-startup)
 - [Limitations](#limitations)
+- [Codebase structure](#codebase-structure)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
 
@@ -142,20 +145,7 @@ This visual style was chosen for three main reasons:
 - Aesthetics. The style looks nice.
 
 
-# Codebase structure
-
-Where to find the relevant files:
-
-- The server side implementation: [`raven.server.modules.avatar`](../server/modules/avatar.py)
-- The server side web API endpoints: [`raven.server.app`](../server/app.py) (**start here** when developing your own **JavaScript** apps)
-- Python bindings for the web API: [`raven.client.api`](../client/api.py) (**start here** when developing your own **Python** apps)
-- DPG GUI driver: [`raven.client.avatar_renderer`](../client/avatar_renderer.py)
-- The GUI apps: [`raven.avatar.pose_editor.app`](../avatar/pose_editor/app.py), [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py)
-- Assets: [`raven/avatar/assets/`](../avatar/assets/)
-
-Assets include character images (512x512 PNG RGBA), extra cels (512x512 PNG RGBA), backdrop images (any resolution and format), emotion templates (JSON), and animator settings (JSON).
-
-Backdrops are applied at the client side in [`raven.client.avatar_renderer`](../client/avatar_renderer.py). This works by rendering and optionally postprocessing a background texture, then blitting the video texture on top of it. See [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py) for a usage example.
+# The upscaler
 
 The upscaler supports five quality modes, selected via the `quality` parameter. **`UPSCALE_QUALITIES` in
 [`raven.common.video.upscaler`](../common/video/upscaler.py) is the definitive list**, with a one-line
@@ -172,7 +162,7 @@ does. Bicubic and Lanczos both have negative lobes, which overshoot at a step ed
 sharpening they are chosen for, but in alpha it produces out-of-range values, which is a halo around the
 silhouette rather than a soft edge.
 
-### What each one costs
+## What each one costs
 
 One 512×512 RGBA frame upscaled to 1024×1024, on an RTX 4090 Laptop GPU. **Read the ratios rather than the
 numbers** — the absolute figures are a fact about one card, and the picture on a smaller one is the same
@@ -195,9 +185,9 @@ figure here does not match what that app reports. The override dates from runnin
 where 25 did not hold; Librarian uses `bicubic` now, so whether it is still needed is an open question —
 see `TODO_DEFERRED.md`.
 
-The [video postprocessor](../common/video/postprocessor.py) is a set of custom pixel shaders implemented in PyTorch.
+# The postprocessor
 
-## What the postprocessor can do
+The [video postprocessor](../common/video/postprocessor.py) is a set of custom pixel shaders implemented in PyTorch.
 
 Twenty-one filters, applied in the order you list them.
 
@@ -431,6 +421,21 @@ The model files are shared between the live animator and the standalone pose edi
 
 - This software is not compatible with characters created for VTuber software, such as Live2D. Rather, this is an independent exploration of somewhat similar functionality, for providing a live anime avatar for AI characters.
 
+
+# Codebase structure
+
+Where to find the relevant files:
+
+- The server side implementation: [`raven.server.modules.avatar`](../server/modules/avatar.py)
+- The server side web API endpoints: [`raven.server.app`](../server/app.py) (**start here** when developing your own **JavaScript** apps)
+- Python bindings for the web API: [`raven.client.api`](../client/api.py) (**start here** when developing your own **Python** apps)
+- DPG GUI driver: [`raven.client.avatar_renderer`](../client/avatar_renderer.py)
+- The GUI apps: [`raven.avatar.pose_editor.app`](../avatar/pose_editor/app.py), [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py)
+- Assets: [`raven/avatar/assets/`](../avatar/assets/)
+
+Assets include character images (512x512 PNG RGBA), extra cels (512x512 PNG RGBA), backdrop images (any resolution and format), emotion templates (JSON), and animator settings (JSON).
+
+Backdrops are applied at the client side in [`raven.client.avatar_renderer`](../client/avatar_renderer.py). This works by rendering and optionally postprocessing a background texture, then blitting the video texture on top of it. See [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py) for a usage example.
 
 # License
 
