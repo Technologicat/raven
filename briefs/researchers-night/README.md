@@ -256,6 +256,17 @@ and a `raven-pdf2bib` invocation that had not worked since the backend became a 
 
 What is queued, all small and independent:
 
+- **Check the docs against the curated changelog** (Juha, 2026-09-22). The 0.2.9 pass has just produced a
+  reviewed list of everything new in this release, which is the one moment that list exists and is
+  trustworthy. Walk it against the manuals and ask, per entry, whether a user who did not read the
+  changelog would find the feature explained anywhere — and extend the docs where not.
+  - **The changelog is the index for this, not the source.** An entry says what changed; the manual has to
+    say what the thing *is* and how to drive it, which is the split the whole pass was enforcing. Several
+    entries now end in a pointer precisely because the material moved — the file dialog's keyboard, the
+    postprocessor's parameters, the overrides format — and those are the ones already done.
+  - Its natural pair is the screenshot scan below: both are a read-through of the docs asking what is
+    missing, and doing them in one pass is cheaper than twice.
+
 - **`raven/tools/`** — four console scripts and no README. Smaller than `papers/` was, and the main README
   may well be enough for them; the question is worth asking before writing one.
 - **Screenshots, and ffmpeg-captured GIFs of the animated features** — much of how Raven *feels* is motion,
@@ -279,6 +290,10 @@ What is queued, all small and independent:
   README since the picker is shared by every app in the constellation, and a dev-facing one, possibly
   built on the vendored `raven/vendor/file_dialog/README.md` — 51 lines, upstream's, and about
   installing the widget rather than using it.
+  - **The user-facing half landed 2026-09-22**, as `raven/vendor/file_dialog/file-dialog-manual.md`,
+    linked from the main README. **The dev-facing half is scheduled after the user-facing work** (Juha,
+    the same day): tomorrow at the earliest and possibly next week, this week's focus being what a user
+    reads.
   - **Recorded on 2026-09-22, a day late, because it had left no diff.** Nothing in `briefs/`,
     `TODO.md` or `TODO_DEFERRED.md` named it, and it survived only because Juha repeated it from
     memory. The decision-with-no-diff case, exactly as the rule describes it.
