@@ -265,11 +265,20 @@ What is queued, all small and independent:
   line break are the same shape to a whitespace-collapsing check, so the rule that distinguishes them is:
   a line after a bullet ending at its bold title is prose, a line after a bullet ending mid-sentence is a
   wrap. The invariant is the count of title-only bullets before and after.
+- **A full README pass** (Juha, 2026-09-22). Decided while fixing three status claims that had gone
+  stale in place — Raven advertised on PyPI where it is not published, Librarian marked
+  `:construction:` after it was ready, the Visualizer still "in beta" in its own manual while the main
+  README called it operational. Those three are fixed; the point of the pass is that finding them took
+  someone reading, and nothing here checks a claim of that kind.
 - **Cross-file anchors are unchecked.** `check_doc_links.py` validates `](#anchor)` within a document and
   is blind to `](../papers/README.md#heading)` — which is the identical failure it exists to prevent, and
   became routine only when the manuals started linking to each other on 2026-09-21. `slugify` and
   `heading_anchors` already do the work; the addition belongs in `check_file`, which is Raven-specific, so
   the character-for-character contract with `pyan/tests/test_docs.py` is untouched. Small.
+  - **It nearly bit on 2026-09-22.** Promoting the avatar README's postprocessor subsection to a section
+    deleted `#what-the-postprocessor-can-do`, which the new filter manual linked back to. Nothing
+    reported it; the four cross-file anchors touched that day were checked by hand with the checker's own
+    `slugify` and `heading_anchors`, which is the whole of what the addition would automate.
 - **Documented command lines are unchecked, and the obvious version of the check is worse than useless.**
   `check_usage_paths.py` verifies that every `python -m raven...` names a real module. It was the
   `raven-pdf2bib` line in the Visualizer manual that had gone stale — a positional backend URL that became
