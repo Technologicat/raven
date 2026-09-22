@@ -56,9 +56,13 @@ meaningfully resizable, so it is meant to fit its contents and nothing more. The
 `512 + 0.8*512 + 0.8*512 + 512` = 1843.2, and the `+ 40` is precisely two window paddings plus three item
 spacings.
 
-So the zero slack is not the defect and must not be "fixed" by padding the formula. What it does mean is
-that anything nudging a panel width, the window padding or the item spacing clips the right-hand panel —
-so if this turns out not to be a frame-callback problem at all, that is the other place to look.
+So the zero slack is not the defect and must not be "fixed" by padding the formula.
+
+**And the tight fit is not what went wrong here**, which the observed number settles rather than merely
+suggests. Something nudging a panel width, the window padding or the item spacing would clip the
+right-hand panel *inside an 1883 px window* — `tune_viewport` would still have set that width. The window
+measured 1600, which is `create_viewport`'s figure untouched, so the size was never applied at all and
+nothing about the contents can explain it. (Juha, 2026-09-22: nothing is nudging those sizes either.)
 
 Reported by Juha (2026-09-22), from a launch to check an unrelated theme change.
 
