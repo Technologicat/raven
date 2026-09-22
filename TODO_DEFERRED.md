@@ -207,6 +207,16 @@ Asked for by Juha the same day, and deliberately *not* done the same day: it was
 the thing being described, and a review of one's own afternoon is the one kind that cannot be done tired.
 Fresh eyes are the whole point of deferring it rather than the excuse for it.
 
+**Half done, 2026-09-21.** The source-checking half found three wrong claims and they are fixed: a gap
+box's second line attributed to the wrong kind, `Tab` still described as cycling three panes a release
+after the search row made it four, and two animation settings described as a pair when one rate now
+drives both. **The live half — open the app beside it and try each sentence — has not been done**, and is
+what this item is still open for. The block was restructured on 2026-09-22 along with the rest of 0.2.9,
+which moved sentences around without re-checking any of them against the running app.
+
+Juha's final read pass over 0.2.9, planned for 2026-09-23, is the natural moment: it is already a
+read-through, and this block is the one part of it written from memory rather than from a diff.
+
 ## Widening the window feeds the chat log, which is the pane that wants it least
 
 *Cluster: chat-graph-view · Cost: M · Gate: none · Filed: 2026-09-18*

@@ -276,7 +276,28 @@ GUI machinery like every other app, which Juha approved by looking at it.
 intermittent window size — the second with the one-launch `--repl` test that tells its two candidate
 causes apart, which is the whole reason it is worth an item.
 
-**Where to start tomorrow**, in Juha's order: the docs-coverage pass below (walk the curated changelog
+**Juha's final read pass over 0.2.9 comes first** (planned 2026-09-23), and these are the places worth
+aiming it, rather than reading 138 entries evenly. They are where a mistake would be mine rather than
+inherited:
+
+- **The avatar filter cut is the largest judgement of the day.** `atmospheric_dust` 444 words to 174 and
+  `crt` 345 to 251, on the grounds that per-parameter tuning lives in the settings editor and now in the
+  generated manual. If any of what went was something a reader meets without going looking, it should
+  come back.
+- **Four entries were retitled from mechanism to symptom**, which changes what a reader searches for:
+  `bloom`'s halo, the newly loaded image that never appeared, and the two in `Fixed` → Raven-librarian.
+- **Two merges recombined material**: the help card (`Added` + `Changed` → `Changed`) and the thinking-tag
+  fault (two `Fixed` entries → one). Worth checking nothing unique to either half was lost.
+- **Two entries moved between component blocks** — the document-attachment fixes, from cherrypick to
+  Raven-librarian, where they always belonged.
+- **The chat graph block has never been checked against the running app.** See `TODO_DEFERRED.md`, *"Read
+  the chat graph's changelog block back before it ships"*: its source half is done, its live half is not,
+  and yesterday's restructure moved those sentences around without re-verifying any of them.
+- **The longest five entries are where documentation still hides**, per the `changelog` skill's own test.
+  `python ~/.claude/skills/changelog/check_changelog_format.py CHANGELOG.md --report` prints them; as of
+  the 22nd the chat graph entry leads at 1101 words, roughly three times the next.
+
+**Then, in Juha's order**: the docs-coverage pass below (walk the curated changelog
 against the manuals), paired with the screenshot scan since both are one read-through; then the converters
 section; then the two checker builds; then screenshots. The dev-facing file dialog manual is after all of
 it, tomorrow at the earliest and possibly next week.
