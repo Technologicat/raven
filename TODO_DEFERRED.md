@@ -11,6 +11,52 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## The pose editor sometimes opens at its creation size, clipping the right-hand panel
+
+*Cluster: ? · Cost: ? · Gate: a specimen · Filed: 2026-09-22*
+
+`raven-avatar-pose-editor` computes its window size from the model's image size, in `tune_viewport`, on a
+frame-10 callback: `3.6 * image_size + 40` by `image_size + gui_extra_height + 16`, which is 1883x998 for
+THA3's 512 px. Seen once on 2026-09-22 at **1600x1032** instead — `create_viewport`'s hard-coded 1600x1000
+plus the title bar, i.e. with `tune_viewport`'s effect absent. The fourth panel (*Output index*, the save
+buttons, the FPS counter) is then clipped off the right edge.
+
+**Not reproduced.** The next launch, minutes later and on the same code, came up 1883x998 with DPG and the
+X server agreeing. So it is intermittent and settled per launch.
+
+**The diagnostic to run on the next bad instance**, which is why this item exists: launch with `--repl`
+(as everything should be anyway), and compare what DPG believes against what X shows.
+
+```
+printf 'import dearpygui.dearpygui as dpg\nprint(dpg.get_viewport_width())\n' | python -m unpythonic.net.client localhost
+xwininfo -id $(xdotool search --onlyvisible --name "pose editor" | head -1) | grep Width
+```
+
+- **Both 1600** — `tune_viewport` never ran, and the question is about the frame callback.
+- **DPG 1883, X 1600** — it ran and the resize did not land, and the question is about the window manager,
+  or about `set_viewport_resizable(False)` immediately after.
+
+Those are different bugs, and one launch tells them apart. Without the REPL a bad instance can only be
+closed, which destroys the only specimen there will be for an unknown number of launches.
+
+**Already ruled out, so nobody re-does it:**
+
+- *The float argument.* `3.6 * image_size + 40` is 1883.2, and `set_viewport_width` is documented `int` —
+  but `configure_viewport(width=1883.2)` is accepted and sets 1883, measured directly against dearpygui
+  2.3.1. Passing an int would be tidier and is not the bug.
+- *A colliding frame callback.* Only one `set_frame_callback(10, ...)` exists in the app, so DPG pitfall #3
+  does not apply here.
+- *Startup ordering.* `setup_dearpygui` -> `show_viewport` -> `set_frame_callback(10, ...)` -> render loop
+  is character-for-character the order the Visualizer, cherrypick and the xdot viewer use, and theirs work.
+- *The theme change the same day.* `setup_themes` sets roundings and two colours and touches neither
+  padding nor item spacing, so the 40 px chrome budget the formula depends on is unchanged.
+
+Worth knowing that the budget is exact: the four panels are `512 + 0.8*512 + 0.8*512 + 512` = 1843.2, and
+the `+ 40` is precisely two window paddings plus three item spacings. Anything that changes either will
+clip the right-hand panel, which makes this formula worth a comment wherever it survives.
+
+Reported by Juha (2026-09-22), from a launch to check an unrelated theme change.
+
 ## Is `fdialog` one logical unit, or is there a split hidden in it?
 
 *Cluster: file-dialog · Cost: ? · Gate: none · Filed: 2026-09-22*
