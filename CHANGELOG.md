@@ -556,6 +556,12 @@
   - The antialiased edge picked up light from the empty space around the character. **The character itself was never affected** — the old and new readings agree wherever a pixel is fully opaque.
   - **It now decides what is bright by the light a pixel emits rather than by the colour it carries.** In a straight-alpha frame those differ wherever a pixel is not fully opaque: the colour alone is what the pixel *would* look like if it were, which for a nearly transparent one can be a large number attached to almost no light. The old reading called such pixels highlights and blurred that colour outward.
 
+- **In the pose editor, keyboard shortcuts no longer fire behind a modal dialog.**
+  - Every failed character-image or emotion load is reported through one, and the guard that suppresses hotkeys did not count it as a dialog — so the `Enter` that dismissed the error also did whatever `Enter` does in the editor behind it.
+
+- **In the settings editor, the same guard missed the backdrop-image browser**, leaving hotkeys live while it was open.
+  The app's four other file dialogs were already covered.
+
 #### Raven-librarian
 
 - **On Windows, saving the chat no longer fails because another program has the file open for a moment** — an antivirus scanner checking what was just written, a search indexer, a sync client.
@@ -701,36 +707,42 @@
 
 #### Raven-visualizer
 
-- **Search highlighting now marks what was typed when it contains `+`, `*`, `?`, `|`, `^`, `$` or a backslash.** These were read as regex syntax: `C++` highlighted just the `C`, `a|b` every `a` and every `b`, and `^` or a backslash nothing at all. Which titles *match* was never affected, only the red marking inside them.
+- **Search highlighting now marks what was typed when it contains `+`, `*`, `?`, `|`, `^`, `$` or a backslash.**
+  - These were read as regex syntax: `C++` highlighted just the `C`, `a|b` every `a` and every `b`, and `^` or a backslash nothing at all.
+  - **Which titles *match* was never affected**, only the red marking inside them.
 
-- **The info panel's search counter and next button are right after going to one of the last matches.** Those matches cannot be scrolled to the top of the panel, so the counter named an earlier match that was still on screen, and *next* stayed enabled while doing nothing. The match you went to is now the current one until you scroll away. Likewise, *next* is now disabled when every match is above the view.
+- **The info panel's search counter and next button are right after going to one of the last matches.**
+  - Those matches cannot be scrolled to the top of the panel, so the counter named an earlier match that was still on screen, and *next* stayed enabled while doing nothing.
+  - The match you went to is now the current one until you scroll away. Likewise, *next* is now disabled when every match is above the view.
 
-- **Raven-visualizer starts even when the LLM backend is down.** With cluster keywords set to `"llm"` (or summaries on), the app used to exit at startup — no window, no message, exit status 255 — if the configured LLM backend did not answer. A feature that matters only while importing was killing every session, including the ones that never import anything. The check now runs when the importer window is opened; the app opens as usual and says nothing about a backend it is not going to use.
+- **Raven-visualizer starts even when the LLM backend is down.**
+  - With cluster keywords set to `"llm"` (or summaries on), the app used to exit at startup — no window, no message, exit status 255 — if the configured LLM backend did not answer. A feature that matters only while importing was killing every session, including the ones that never import anything.
+  - The check now runs when the importer window is opened; the app opens as usual and says nothing about a backend it is not going to use.
   - `raven-importer` still stops rather than starting, which is the right answer for a batch tool: the check runs before any of the expensive stages, so nothing is lost, and finishing with frequency keywords where LLM ones were asked for would write a dataset quietly worse than the one requested. It now names what needs the backend and exits **2**.
   - **A failed import exits nonzero at all now.** Any error used to be logged as a warning and the process then exited **0**, so an import that failed reported success to whatever ran it.
   - **`raven-importer` gained `--backend-url`**, to point one run at a different LLM backend — the same spelling every other Raven tool uses. It had `--server-url` but no way to say where the LLM was.
   - **In the Visualizer, an import whose backend is unreachable now finishes instead of failing.** It falls back to frequency keywords and skips summaries, and says which of those it did in a notice above the status line, with the backend it tried and what to do about it underneath. Stop is there for anyone who would rather start the backend and run the import again.
   - **A dataset now records which cluster keyword method actually built it.** Keywords look the same whichever way they were arrived at, so there was previously no telling a dataset built as configured from one built by the fallback above. Datasets written by earlier versions do not carry the field and load exactly as before.
 
-- **The wheel over the word cloud or the importer no longer disturbs what is behind them.** Both float
-  above the main window, and a wheel over either was taken as one over whatever its rectangle covered: the
-  info panel would flash its end-of-scroll marker, or the plot would refresh the tooltip under a pointer
-  that was not on it. The app now asks what the pointer is actually on rather than whether it lies within
-  a rectangle, which stays true of a rectangle with something drawn over it.
+- **The wheel over the word cloud or the importer no longer disturbs what is behind them.**
+  - Both float above the main window, and a wheel over either was taken as one over whatever its rectangle covered: the info panel would flash its end-of-scroll marker, or the plot would refresh the tooltip under a pointer that was not on it.
+  - The app now asks what the pointer is actually on rather than whether it lies within a rectangle, which stays true of a rectangle with something drawn over it.
 
-- **The LLM cluster-keyword step no longer builds a prompt too large to send.** Every entry of a cluster went into one prompt, which holds while the clusters are small and does not in general — on a corpus whose search aimed at one topic, the largest cluster can carry hundreds of entries, and with abstracts attached that is a prompt of a few hundred thousand tokens. The backend then either refuses it or silently drops the far end, and neither is a keyword list; the cluster it happened to was the largest one, whose label matters most.
+- **The LLM cluster-keyword step no longer builds a prompt too large to send.**
+  - Every entry of a cluster went into one prompt, which holds while the clusters are small and does not in general — on a corpus whose search aimed at one topic, the largest cluster can carry hundreds of entries, and with abstracts attached that is a prompt of a few hundred thousand tokens.
+  - The backend then either refuses it or silently drops the far end, and neither is a keyword list; the cluster it happened to was the largest one, whose label matters most.
   - An oversized cluster is now described from an even sample of it, spread from its centre outwards, so the label reflects the whole cluster rather than only its densest part. Which entries those are is worked out from the embeddings rather than from anything the clustering algorithm reports about its own members, so it reads the same whichever algorithm produced the clusters.
 
-- **A bibliography record that cannot be parsed no longer ends the import.** One bad record used to abort the run and discard every record already processed — an hour of work on a large bibliography, with no way to get past it — and whether a record is bad is a question of what some exporter wrote, not of anything visible beforehand. Such a record is now logged and skipped. Dehyphenation does not even cost you that: being cosmetic, a failure there leaves the abstract untidied and keeps the record.
+- **A bibliography record that cannot be parsed no longer ends the import.**
+  - **One bad record used to abort the run and discard every record already processed** — an hour of work on a large bibliography, with no way to get past it — and whether a record is bad is a question of what some exporter wrote, not of anything visible beforehand.
+  - Such a record is now logged and skipped. Dehyphenation does not even cost you that: being cosmetic, a failure there leaves the abstract untidied and keeps the record.
 
-- The info panel's smooth scroll is now really stopped when the panel's content is rebuilt, rather than being told to stop by a call that tidies up after it and leaves it running. A scroll in flight kept moving the panel through the swap, over the position the rebuild had just restored.
+- **The info panel's smooth scroll is now really stopped when the panel's content is rebuilt**, rather than being told to stop by a call that tidies up after it and leaves it running.
+  A scroll in flight kept moving the panel through the swap, over the position the rebuild had just restored.
 
-- **The plot's mouse hover and click-to-select now work on small datasets.** Finding the datapoints under the cursor asks for a fixed number of nearest neighbours, and a dataset with fewer points than that gets an answer padded out with placeholders; those were read as real datapoints. Below the threshold — a few dozen entries, which is an ordinary size for a focused bibliography — the hover highlight, the annotation tooltip and click-to-select therefore all did nothing at all.
-
-#### Raven-avatar
-
-- In the pose editor, keyboard shortcuts no longer fire behind a modal dialog. Every failed character-image or emotion load is reported through one, and the guard that suppresses hotkeys did not count it as a dialog — so the Enter that dismissed the error also did whatever Enter does in the editor behind it.
-- In the settings editor, the same guard missed the backdrop-image browser, leaving hotkeys live while it was open. The app's four other file dialogs were already covered.
+- **The plot's mouse hover and click-to-select now work on small datasets.**
+  - Finding the datapoints under the cursor asks for a fixed number of nearest neighbours, and a dataset with fewer points than that gets an answer padded out with placeholders; those were read as real datapoints.
+  - Below the threshold — a few dozen entries, which is an ordinary size for a focused bibliography — the hover highlight, the annotation tooltip and click-to-select therefore all did nothing at all.
 
 #### Raven-xdot-viewer
 
