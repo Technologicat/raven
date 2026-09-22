@@ -59,11 +59,11 @@
 - **Tool use** (tool-calling) for more fact grounding. The AI has access to tools provided by the *Librarian* software: websearch, web page fetching, and searching your document database itself when the automatic search did not find what it needed.
 - **Open source**. 2-clause BSD license.
 
-**:exclamation: *Raven-librarian* is currently under development. :exclamation:**
+*Raven-librarian* is fully operational, and under active development.
 
-Much (but not all) of the basic functionality is complete, the codebase should be in a semi-maintainable state, and most bugs have been squashed. If you find a bug that is not listed in [TODO.md](../../TODO.md), please [open an issue](https://github.com/Technologicat/raven/issues).
+The basic functionality is complete, the codebase should be in a semi-maintainable state, and most bugs have been squashed. If you find a bug that is not listed in [TODO.md](../../TODO.md), please [open an issue](https://github.com/Technologicat/raven/issues).
 
-That said, some important features are still missing, and others will be expanded upon, schedule and funding permitting.
+Features will still be added and expanded upon, schedule and funding permitting.
 
 # Features
 
