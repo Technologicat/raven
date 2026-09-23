@@ -304,6 +304,23 @@ against the manuals), paired with the screenshot scan since both are one read-th
 section; then the two checker builds; then screenshots. The dev-facing file dialog manual is after all of
 it, tomorrow at the earliest and possibly next week.
 
+**What is still open, audited 2026-09-23** — asked for because the week has produced a lot of small items
+and one falling through would not be the first (Juha). In the order above:
+
+1. ~~The docs-coverage pass~~ — **done**, and it grew the two app manuals with it.
+2. **The *Converting and repairing* section — not written, and this is the one that fell through.** It was
+   third in the order and the day went from the coverage walk straight to the Librarian block. Decided
+   2026-09-22 that there is enough material for it; the scope and the name question are settled below.
+3. **The two checker builds — both open.** Cross-file anchors in `check_doc_links.py` is the small one, and
+   it was used by hand twice on 2026-09-23 for want of existing. The `argparse`-validated command lines is
+   the build.
+4. **The screenshot and animation pass — tomorrow**, and the only item that needs the keyboard.
+5. **A full README pass — open.**
+6. **The dev-facing file dialog manual — open**, and still the last of the list by its own scheduling.
+
+Nothing else in the sprint is open: every brief in *What's here* is scheduled past the event or at v0.2.10,
+and the exhibit path has been clear since 2026-09-16.
+
 ### The rest of the week, 2026-09-22 to 24 — the docs pass, ahead of message editing
 
 **Decided 2026-09-21 (Juha): documentation takes precedence over message editing for Tuesday to Thursday**,
@@ -476,11 +493,9 @@ What is queued, all small and independent:
         exactly the motion these are being made for. Grab at 25–30 and decimate on the way to GIF.
       - The two-pass palette recipe (`palettegen` then `paletteuse`) is what separates a GIF that looks
         like the app from one that looks like 1998; a single-pass GIF encode quantizes per frame.
-- **The wrapped section in `Changed` → Raven-librarian.** 56 of the file's 65 remaining hard-wrapped runs
-  are there, left over from a job reported as finished when it was half done. A wrap and a deliberate
-  line break are the same shape to a whitespace-collapsing check, so the rule that distinguishes them is:
-  a line after a bullet ending at its bold title is prose, a line after a bullet ending mid-sentence is a
-  wrap. The invariant is the count of title-only bullets before and after.
+- ~~**The wrapped section in `Changed` → Raven-librarian.** 56 of the file's 65 remaining hard-wrapped runs
+  are there, left over from a job reported as finished when it was half done.~~ **Closed by Juha's polish
+  pass**; `check_changelog_format.py` reports no wrapped lines in any of the ten release sections.
 - **A full README pass** (Juha, 2026-09-22). Decided while fixing three status claims that had gone
   stale in place — Raven advertised on PyPI where it is not published, Librarian marked
   `:construction:` after it was ready, the Visualizer still "in beta" in its own manual while the main
