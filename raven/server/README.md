@@ -106,10 +106,12 @@ Historically, *Raven-server* began as a continuation of the discontinued *SillyT
 
 For a guaranteed-up-to-date list of available command-line options, run `raven-server --help`.
 
-It will print a usage summary and exit, like this (output as of v0.2.3):
+It will print a usage summary and exit, like this (output as of v0.2.9):
 
 ```
-usage: Raven-server [-h] [-v] [--config some.python.module] [--port PORT] [--listen] [--secure] [--max-content-length MAX_CONTENT_LENGTH]
+usage: Raven-server [-h] [-v] [--config some.python.module] [--port PORT] [--listen] [--secure]
+                    [--max-content-length MAX_CONTENT_LENGTH] [--vram-report PATH] [--log PATH]
+                    [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--repl [PORT]]
 
 Server for specialized local AI models, based on the discontinued SillyTavern-extras
 
@@ -123,7 +125,24 @@ options:
   --secure              Require an API key (will be auto-created first time, and printed to console each time on server startup)
   --max-content-length MAX_CONTENT_LENGTH
                         Set the max content length for the Flask app config.
+  --vram-report PATH    Write the per-module VRAM measurement to PATH as JSON (it is printed to the
+                        console either way). Measure on an otherwise idle GPU; the figures come from
+                        the driver, so anything else using the card lands in whichever module was
+                        loading at the time.
+  --log PATH            mirror stderr log to this file (overwritten each run)
+  --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
+                        root logger level (default: INFO)
+  --repl [PORT]         DEBUGGING AID, DANGEROUS: open an in-process REPL. A bare --repl uses 1337
+                        with its control channel on 8128, and is reached by `python -m
+                        unpythonic.net.client localhost`; --repl PORT uses PORT and PORT+1, reached
+                        by `python -m unpythonic.net.client localhost PORT PORT+1`. Anyone who can
+                        reach either port gets unauthenticated, unencrypted, arbitrary code execution
+                        inside this app, as you. Bound to localhost; use SSH port forwarding rather
+                        than exposing it. For debugging a running instance, where its log does not
+                        say enough.
 ```
+
+The last four are shared with the rest of the constellation; see [*Options every app takes*](../../README.md#options-every-app-takes) in the main README.
 
 The default port is 5100.
 

@@ -24,6 +24,8 @@
     - [Raven-server: Web API server](#raven-server-web-api-server)
         - [Quickstart](#quickstart)
     - [The file browser](#the-file-browser)
+    - [Dragging files in](#dragging-files-in)
+    - [Options every app takes](#options-every-app-takes)
     - [Command-line tools](#command-line-tools)
         - [Document database](#document-database)
         - [Building a bibliography](#building-a-bibliography)
@@ -275,6 +277,45 @@ raven-server
 Every app above opens the same file browser, so it is documented once: see
 [the file dialog manual](raven/vendor/file_dialog/file-dialog-manual.md). It can be driven entirely from
 the keyboard, and `F1` inside it lists the keys that particular dialog answers to.
+
+## Dragging files in
+
+Every GUI app accepts files dropped on it from your file manager. **What a drop means is whatever that app's open button already meant**, so there is nothing new to learn per app:
+
+| App | Drop this | and it |
+|---|---|---|
+| *Raven-librarian* | images, documents, or a mix of both | attaches them to your next message, exactly as the attach button does |
+| *Raven-visualizer* | a `.pickle` | opens that dataset |
+| | one or more `.bib` files | opens the importer with them filled in as its input |
+| *Raven-cherrypick* | a folder | opens it |
+| *Raven-xdot-viewer* | a `.dot`, `.xdot` or `.gv` | opens it |
+| *Raven-avatar-pose-editor* | an image with an alpha channel | loads it as the character |
+| | a `.json` | loads emotion templates |
+| *Raven-avatar-settings-editor* | an image with transparency | loads it as the character |
+| | any other image | loads it as the backdrop |
+| | a `.json` | loads animator settings |
+
+The settings editor has two image slots and a drag cannot be aimed at either — the windowing layer only reports a drop once you release the button, so there is nothing to highlight on the way — which is why the image itself decides: a character is a cutout, a backdrop is a full frame.
+
+Drop something an app cannot use and it says so, naming what you dropped and what would have worked. A drop that arrives while a dialog is open is ignored, so it cannot answer a question you are in the middle of.
+
+This works wherever the GUI toolkit's own windowing layer supports it: X11, macOS and Windows. Wayland is untested — please report if it does not work there.
+
+## Options every app takes
+
+Beside each tool's own options, several are spelled the same way everywhere. Not every tool takes every one of these; `--help` is authoritative for any given tool, and it is the up-to-date list.
+
+- **`--log PATH`** mirrors everything the tool logs to a file as well as to the terminal (overwriting it each run), and **`--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}`** sets how much that is.
+  - Worth knowing where to find, because several things Raven does report themselves *only* in the log: which records an import had to patch up, why a tokenizer was declined, which keyword replacements were applied. For a GUI app the launching terminal is often a window you are not looking at, which is what `--log` is for.
+  - On the GUI apps, `raven-server`, `raven-minichat`, `raven-importer`, and the bibliography tools that log — `raven-wos2bib`, `raven-csv2bib`, `raven-pdf2bib`, `raven-deduplicate`, `raven-siftbib`.
+- **`--server-url URL`** points the tool at a *Raven-server* other than the configured one, and **`--backend-url URL`** at a different LLM backend. Each is logged against the configured value it replaced.
+  - Handy for a one-off run against another machine without editing any settings — and for seeing how an app behaves when the thing is *not* there, by aiming it at a port nothing is listening on.
+  - `--server-url`: *Raven-librarian*, *Raven-visualizer*, *Raven-avatar-settings-editor*, `raven-minichat`, `raven-importer`, `raven-indexer`, `raven-pdf2bib`, `raven-dehyphenate`. `--backend-url`: *Raven-librarian*, *Raven-visualizer*, `raven-minichat`, `raven-importer`, `raven-pdf2bib`, `raven-deduplicate`.
+- **`--repl [PORT]`** opens an in-process REPL inside a running app, for inspecting one that came up wrong and is still running — where restarting it would destroy the evidence. Off unless asked for. On every GUI app, `raven-minichat` and `raven-server`.
+  - Connect with `python -m unpythonic.net.client localhost`. The app's own namespace is in scope.
+  - A bare `--repl` uses port 1337 with its control channel on 8128, which is what the client expects by default; `--repl PORT` uses PORT and PORT+1, reached with `python -m unpythonic.net.client localhost PORT PORT+1`.
+  - **Anyone who can reach either port gets unauthenticated, unencrypted, arbitrary code execution inside the app, as you.** It binds to localhost only. It is a debugging aid: do not leave it running, and forward a port over SSH rather than exposing one.
+- **`--version`** prints the version and exits, and **`--help`** prints the options. Every tool takes both, except `raven-check-audio-devices`, which takes no options at all and prints its version as it starts.
 
 ## Command-line tools
 
