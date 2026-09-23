@@ -323,8 +323,16 @@ and the exhibit path has been clear since 2026-09-16.
 
 ### How the sprint closes, decided 2026-09-23
 
-**The sprint is over once the docs are** (Juha). It ends with a stock-take rather than by simply stopping,
-and the shape of that is:
+**The sprint's work is over once the docs are** (Juha), with the event on the 25th. **The stock-take is
+what follows it, not part of it** — a job of its own, and not a small one: the TODO triage that *shaped*
+this sprint took several days, and there is no reason to expect the next one to be cheaper. So nothing
+below is Thursday's work.
+
+**Where exactly the sprint ends is a definition question** rather than a fact to look up (Juha,
+2026-09-23), and it matters only for what gets called what. The useful boundary is that the docs finish the
+*building*, and the stock-take starts the *next* planning — with the event sitting in between.
+
+Its shape:
 
 1. **Triage the TODOs** — both files.
 2. **Fix the small items left open as "do this the moment the sprint is over."** One is already known:
@@ -337,7 +345,8 @@ and the shape of that is:
    priority guessed now is worth more than no ordering at all, and less than one decided when the work is
    picked up.
 
-Then this folder moves to `briefs/done/`, as `librarian-extension/` did.
+Then this folder moves to `briefs/done/`, as `librarian-extension/` did. That last step is cheap and can
+happen whenever; the three above are the several-day part.
 
 **A postmortem is available cheaply, and is worth having rather than important** (Juha). Two sources, and
 between them they cover it:
@@ -602,6 +611,15 @@ What is queued, all small and independent:
         for exactly this reason and has been since `f5871d87` (2026-04-30), the fleet-wide
         `--log`/`--log-level` commit — the speed was a side effect of putting the parser above the
         imports, which is why it stopped "taking forever" without anyone setting out to fix it.
+      - **And the four module-body apps could not have got this wrong** (Juha's reading, 2026-09-23,
+        checked here). Their module body *is* the program, and `--help` exits from inside `parse_args`, so
+        a parser placed below the imports would build the whole GUI before printing its help. The shape
+        that makes those apps awkward in every other respect is the one that makes their `--help` correct
+        by construction.
+        - The three GUI apps with a real `main()` are *not* forced — `main()` builds the GUI after
+          parsing either way — and they put the parser at module top anyway, cherrypick with a comment
+          saying it is for the heavy imports. So they inherited the habit from the shape that needed it.
+        - The three slow ones are the CLI tools, where nothing forces the order and nobody chose one.
       - So the check costs about half a minute, which is fine beside everything else the checks run, and
         needs no parallelism or release-time gating to be affordable.
   - **Worth building** (Juha, 2026-09-21). It is a build rather than an addition, and it is the only thing
