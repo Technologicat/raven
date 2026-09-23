@@ -119,6 +119,13 @@ RULES = (
          shape=ENV_KEY_KWARG,
          targets=(Target("raven/cherrypick/README.md", section="# Keyboard reference"),),
          note_reverse=True),
+
+    Rule(what="Raven-xdot-viewer's hotkeys",
+         module="raven/xdot_viewer/app.py",
+         name="hotkey_info",
+         shape=ENV_KEY_KWARG,
+         targets=(Target("raven/xdot_viewer/README.md", section="# Keyboard reference"),),
+         note_reverse=True),
 )
 
 

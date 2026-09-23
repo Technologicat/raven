@@ -157,7 +157,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 
 <img src="img/xdot-viewer.png" alt="Screenshot of Raven-xdot-viewer" height=200/>
 
-- **Documentation**: WIP
+- **Documentation**: [XDot viewer user manual](raven/xdot_viewer/README.md)
 - **Goal**: View your `.dot` (`.gv`) and `.xdot` files in a GUI app with a focus on usability
   - **Status**: :white_check_mark: Fully operational prototype, usage: `raven-xdot-viewer myfile.xdot`
 - **Features**:
