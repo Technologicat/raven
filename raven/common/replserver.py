@@ -22,6 +22,19 @@ situation it answers is the one where nothing else helps — an instance that ca
 running, where the next launch will be fine and killing this one destroys the evidence. Intermittent
 font-atlas damage in the Markdown renderer is the standing example; a wedged unattended batch is the other.
 
+**Which tools should offer it: any that can run long.** The case it is for is not confined to GUI apps,
+and did not start with one — it comes from numerics, where an alpha-version script computes for a while,
+plots the result and saves nothing. Closing the plot window ends the process and the data with it, however
+much it had cost and however clearly it deserved another look. A REPL turns that into a session you can
+ask questions of. The same shape is what a long batch has: an indexing run, an import, a per-document LLM
+pass, anything holding hours of work in memory with no way in.
+
+Cheaper to reach for now than it was when it was built, too — writing throwing-away code against a live
+namespace is exactly what an AI agent is good at, so the affordance costs a sentence rather than an
+afternoon. Note this is the *inverse* of the anime maid form factor: not a machine conforming to an
+interface built for humans, but an interface that was always somewhat machine-shaped, which humans used to
+adapt to and agents simply find congenial.
+
 Two calls wire an app up: `add_argument` where it builds its parser, and `maybe_start` once the app is
 built. Both are deliberately separate — argparse happens before anything exists, and what a session should
 be able to reach does not exist until the app is up.
