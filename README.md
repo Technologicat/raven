@@ -197,7 +197,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
   - **Compare mode**: select 2–9 images and press Enter to cycle through them automatically.
     - Adjustable speed (0.5–15 FPS), pause/resume, zoom while cycling.
     - Numbered badges on grid tiles, large overlay number on the main view.
-    - Press a digit key (1–9) to pick a winner and exit.
+    - Press `Shift`+a digit (1–9) to pick a winner and exit. (Bare `1` is zoom to 1:1, everywhere in Raven.)
     - Press Ctrl+Shift+C (or Ctrl+Shift+click the "mark cherry" button) to commit the winner as cherry and the other compared images as lemon.
 
 
