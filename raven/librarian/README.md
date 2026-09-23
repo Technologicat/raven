@@ -680,6 +680,34 @@ Hover the dot and it says so.
 
 The hotkeys for all of these are collected in the [keyboard reference](#keyboard-reference).
 
+### What else a message can say about itself
+
+Below an AI message, in grey, is the line `[Nt, Xs, Yt/s]` — the tokens it generated, how long the turn
+took, and the speed between them. **Hover it** and two more things appear:
+
+- **Which model wrote this message.** Per message rather than per app: in a branching chat the siblings of
+  one node can come from different models, and a chat reloaded from disk predates whatever is loaded now.
+- **Where the reply's time went**, as a small table of up to four rows — prompt processing, thinking,
+  answer, total — with the time, the tokens and the speed for each. These can differ startlingly from the
+  headline figure: a reply reporting 44 t/s may have *generated* at 99 t/s, with over half the turn spent
+  reading the prompt.
+  - **Prompt processing gets a row because nothing is being generated during it.** Its length says how much
+    of the prompt the backend's cache did not already hold. It is shown as a time and not a speed, since a
+    warm cache still reports the whole prompt as its size.
+  - A turn that asked for a tool instead of replying says **Tool call** rather than claiming an answer of
+    zero length. The call's *time* is counted under thinking — it does not arrive as generated text, so
+    there is no way to see where the reasoning stopped and the call began — while its tokens are its own.
+
+**A reply that stopped early says so**, in a short grey line under the message:
+
+- *[Interrupted — the reply was stopped here]* for one you stopped with the Stop button or `Ctrl+G`.
+- *[Incomplete — Raven exited while this reply was being written]* for a chat that was closed mid-reply and
+  reopened.
+
+Worth having because a stopped reply looks exactly like a finished one — both end mid-thought often enough,
+and by the next session nobody remembers pressing the button. The line is drawn, never stored: it is not
+part of the text the model sees if you ask it to continue, and not part of what an export or a script reads.
+
 ## Mode toggles
 
 Below the avatar panel at the right, there are **mode toggles**, grouped by what they govern: what the AI may reach for, what the AI does when it answers, how the chat log is shown, and what the avatar does.
@@ -1158,6 +1186,33 @@ Areas to improve:
   - Ask *Librarian* a free-form question, let it highlight useful studies in *Visualizer* (based on document database search results)
 
 # Troubleshooting
+
+## The LLM backend is not answering
+
+*Librarian* opens anyway and tells you, instead of exiting — reading your past chats, cleaning up
+attachments and looking at your settings do not need a backend, so losing all of that because one is not
+running would be the wrong trade.
+
+A row appears above the message box saying which of the two things is wrong, in the words that say what to
+do about it: **nothing is answering at that address** (is the backend running? is the address right?), or
+**the backend is running with no model loaded** (load one).
+
+- **It clears itself.** Start the backend, or load a model, and a few seconds later the row turns green,
+  names the model now loaded, and goes away; *Librarian* then works as usual, with nothing to restart.
+- **Clicking the row checks immediately**, instead of waiting for the next check.
+- **Nothing is polled while the backend is healthy.** The row exists only while something is wrong, and the
+  checking stops the moment it clears.
+- A backend that goes away *mid-session* is reported by the reply that fails, which you can reroll once it
+  is back.
+
+`raven-minichat` does the same on the console, and keeps its REPL — `!history` and `!dump` work with
+nothing loaded. Its `!reconnect` command is the terminal's version of clicking the row.
+
+**The batch tools stop instead**, which is the right answer for a run that can take hours: `raven-pdf2bib`
+and `raven-importer` check before any of the expensive stages and exit, naming what needs the backend.
+That includes the case where the backend is up with no model loaded — which otherwise starts the run and
+fails every step, and reads as a bug in Raven, since the backend answers and nothing looks wrong until
+every extraction comes back empty.
 
 ## Start Raven-server *before* the LLM backend
 
