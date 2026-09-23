@@ -494,8 +494,11 @@ What is queued, all small and independent:
       - The two-pass palette recipe (`palettegen` then `paletteuse`) is what separates a GIF that looks
         like the app from one that looks like 1998; a single-pass GIF encode quantizes per frame.
 - ~~**The wrapped section in `Changed` → Raven-librarian.** 56 of the file's 65 remaining hard-wrapped runs
-  are there, left over from a job reported as finished when it was half done.~~ **Closed by Juha's polish
-  pass**; `check_changelog_format.py` reports no wrapped lines in any of the ten release sections.
+  are there, left over from a job reported as finished when it was half done.~~ **Closed 2026-09-22**, by
+  the pass that logged it — `Unwrap the last two lines in 0.2.4` was the end of it, and
+  `check_changelog_format.py` now reports none in any of the ten release sections. It stayed on the queue
+  a day and a half after it was done, which is the ordinary way an item goes stale: the entry that closes
+  one is rarely the entry that listed it.
 - **A full README pass** (Juha, 2026-09-22). Decided while fixing three status claims that had gone
   stale in place — Raven advertised on PyPI where it is not published, Librarian marked
   `:construction:` after it was ready, the Visualizer still "in beta" in its own manual while the main

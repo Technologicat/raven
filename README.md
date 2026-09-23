@@ -31,6 +31,7 @@
         - [Building a bibliography](#building-a-bibliography)
         - [From several databases into one bibliography](#from-several-databases-into-one-bibliography)
         - [Datasets and odds and ends](#datasets-and-odds-and-ends)
+        - [Converting and repairing](#converting-and-repairing)
         - [The rules these tools apply](#the-rules-these-tools-apply)
 - [Install & run](#install--run)
     - [From source](#from-source)
@@ -334,7 +335,7 @@ Beside the desktop apps, Raven installs a set of headless tools. They exist so t
 - **`raven-arxiv2bib`** turns identifiers into BibTeX, recording the version arXiv actually answered with.
 - **`raven-arxiv-download`** fetches the fulltext PDFs, for identifiers given on the command line or read out of a `.bib` with `--from-bib`. `--save-bib` writes the BibTeX from metadata it already had to fetch anyway, so you pay arXiv's politeness delays once instead of twice — which is what you want coming from bare identifiers, rather than from a search that handed you the bibliography already.
 - **`raven-burstbib`** splits a multi-entry `.bib` into one file per entry — which is what makes a bibliography usable as a document database, since otherwise the whole thing indexes as a single document.
-- **`raven-wos2bib`**, **`raven-csv2bib`**, **`raven-pdf2bib`** convert Web of Science exports, CSV, and PDF metadata into BibTeX.
+- The three that get an export *into* BibTeX in the first place — **`raven-wos2bib`**, **`raven-csv2bib`** and **`raven-pdf2bib`** — are under [*Converting and repairing*](#converting-and-repairing) below.
 - **`raven-fixbib`** repairs what a database export does to a `.bib`: entries naming the same field two or three times, field values whose braces do not balance, HTML character entities left behind by a database that exported its web page rather than its record, and a publisher's rights notice sitting inside the `abstract`. A parser refuses a broken entry whole — title, authors and all — so a search export can lose a large share of itself to faults nothing reports. `-n` says what it would repair and writes nothing, `-l` names every record rather than counting them, and your file is overwritten only if you ask with `-i`.
 - **`raven-deduplicate`** merges the copies a multi-database search leaves behind: the same paper once per database that indexes it, each in that database's dialect with a different subset of the fields filled in. Two keys decide, and neither is a guess — the DOI, and the title reduced until two databases' spellings of one title agree — unioned transitively, so a record sharing a DOI with one twin and a title with another brings all three together. The surviving copy is the most complete one, with every field it lacks filled in from a twin that has one, and every merge is written to an audit TSV.
 - **`raven-siftbib`** removes the records you cannot screen. A search export carries records of wildly uneven completeness, and one holding nothing but a title is not off topic — nobody can tell what it is — it just has no text to form a view about, and carrying it into the screening count overstates what was actually read. You say what a usable record must have (`--require abstract`, `--min-chars abstract=600` for the truncated teaser a publisher exports in place of one, `--require year`, as many as you like), and everything removed goes to an audit TSV naming the record, its venue and which criterion it failed. Deterministic and offline: no model, no network, same answer every time. Whether a record is *about* your subject is a judgement and a different question; this one only asks whether there is anything to judge.
@@ -359,11 +360,28 @@ Matching errs toward leaving duplicates rather than inventing them, because the 
 ### Datasets and odds and ends
 
 - **`raven-importer`** runs *Visualizer*'s import pipeline (BibTeX → analyzed dataset) without the GUI.
-- **`raven-dehyphenate`** undoes line-break hyphenation in text extracted from PDFs.
-- **`raven-qoi2png`** converts QOI images to PNG.
 - **`raven-check-cuda`** and **`raven-check-audio-devices`** report what the machine offers, which is usually the fastest way to settle an installation question.
 
 The other end-to-end recipes that chain these — [turning a folder of arXiv PDFs into a searchable database](raven/librarian/README.md#turning-a-folder-of-arxiv-pdfs-into-a-searchable-database), and [refreshing that collection when papers get new versions](raven/librarian/README.md#refreshing-a-collection-when-papers-get-new-versions) — are in the Librarian README.
+
+### Converting and repairing
+
+Five tools that **reshape data without judging what is in it**. They change how something is written, never what it says — which is what separates them from `raven-deduplicate`, which decides two records are the same paper, and `raven-siftbib`, which decides one cannot be screened. Those make calls you have to understand and may disagree with; these make none, and that is why undoing a PDF extractor's line-break hyphens sits beside unwrapping a container format.
+
+Reach for one when the data you have is the data you want, in the wrong shape.
+
+**Into BibTeX**, which is what the rest of the pipeline reads:
+
+- **`raven-wos2bib`** converts a Web of Science export.
+- **`raven-csv2bib`** converts a spreadsheet, once you have told it which column is which.
+- **`raven-pdf2bib`** reads conference abstracts as PDFs and asks an LLM for the fields. The only one of the five that is not deterministic, and its manual says at length why you should check its output.
+
+What each expects of its input, and what it does with a field it cannot read, is in the [paper tools manual](raven/papers/README.md#the-converters--getting-an-export-into-bibtex). They are documented there because that is where the workflow using them lives; what they have in common with the two below is the shape of the job, not the subject matter.
+
+**Text and images:**
+
+- **`raven-dehyphenate`** undoes line-break hyphenation — the `wave-\nlength` that a PDF text extractor leaves behind, rejoined into `wavelength`. It is essentially a command-line endpoint for the [`dehyphenate`](https://pypi.org/project/dehyphenate/) package, and it exists because this is a useful thing to do to extracted text and you do not always want to be inside Python to do it. Raven applies it internally too, on bibliographies at import and through the server's `sanitize` endpoint.
+- **`raven-qoi2png`** converts [QOI](https://qoiformat.org/) images to PNG. QOI is a lossless format that encodes and decodes far faster than PNG at a similar size, which makes it a good cache and interchange format and a poor one to hand to anything else — hence a converter.
 
 ### The rules these tools apply
 
