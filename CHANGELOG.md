@@ -650,7 +650,8 @@
   Switching to another chat sets the avatar's emotion from the message now on screen, and if the idle timeout had switched the video off, the change happened out of sight. The avatar now wakes and takes the expression once its video is back.
 
 - **The help card no longer describes the *Speculation* toggle**, which has been gone since v0.2.8.
-  What it said about when a reply is marked *[no sources retrieved]* now matches what the app does: the marker follows *Documents*.
+  - What it said about when a reply is marked *[no sources retrieved]* now matches what the app does: whether the marker is *shown at all* follows *Documents*.
+  - Worth stating alongside it, since the marker's wording is easy to read as being about documents only: **anything retrieved counts as a source** — a document match, an attachment, or a tool result, a fetched web page included.
 
 - **The character card no longer reaches the model as a code block.**
   - The character card is Markdown, and the two paragraphs naming the character were indented four spaces — which is what a code block *is* — while the rest of the card was not.
@@ -756,7 +757,8 @@
 
 - **Attaching a document no longer reads it twice.**
   - Its text was extracted once when you picked the file, to tell you straight away if a PDF turned out to be scanned pages with no text in them, and then extracted all over again when the message was sent.
-  - For a large file each pass is seconds, so the wait happened twice for no reason. The first result is now kept and reused. The cache is kept for the duration of the Librarian session.
+  - For a large file each pass is seconds, so the wait happened twice for no reason. The first result is now kept and reused.
+  - The cache is kept for the duration of the Librarian session, and is keyed by the file's contents, so it cannot go stale: a document whose bytes differ is a different entry.
 
 #### Raven-cherrypick
 
