@@ -909,6 +909,20 @@ See `dpg-notes.md` "Raven DPG app structure" section for layout patterns, startu
 
 **An `app.py` is an OS entry point, not a library module.** Most are wiring skeletons: parse the command line, build the GUI, instantiate the objects, run the DPG render loop (the manual `while dpg.is_dearpygui_running()` form, so the animator can be ticked). Anything that would be worth calling from elsewhere — or worth testing — belongs in another module, beside the thing it operates on.
 
+**Build the parser and call `parse_args` above the heavy imports**, in any entry point, GUI or CLI. `--help`
+and a rejected option both exit from inside `parse_args`, so everything imported above them is time spent
+to print a usage message — and a mistyped command line is the commonest reason anyone asks for one.
+
+- **Every GUI app does this, and four of them had no choice.** Where the module body *is* the program, a
+  parser placed below the imports would build the whole GUI before printing its help. The three with a
+  real `main()` are not forced and do it anyway.
+- **The CLI tools are where nothing enforces it**, and three of them pay for it: measured 2026-09-23,
+  `raven-indexer`, `raven-pdf2bib` and `raven-dehyphenate` take 8.5–9.3 s to answer `--help`, against a
+  median of 0.40 s across all 26 console scripts and 0.05–0.08 s for the GUI apps. They import
+  `..client.api` and friends at module scope and parse inside `main()`.
+- Where a tool genuinely needs a heavy import to *build* its parser — a default read from config — import
+  that one lazily inside the function that needs it, as `librarian.gguftokenizer` does.
+
 Two consequences worth stating, because both were learned the expensive way:
 
 - **Behaviour that lands in `app.py` is untested behaviour.** Importing a Raven `app.py` **runs that app** — there is no `main()` and no `__main__` guard, so the module body *is* the program: it parses the command line, builds the GUI and enters the render loop, all at import time. Failing on pytest's own argv is only the first thing that goes wrong, and feeding it a plausible argv would get further into starting an app rather than closer to a test. That is a fine property for an entry point and a fatal one for anything else: a function put there cannot be exercised at all. `raven.cherrypick.preload.donate_outgoing_image` lives where it does for this reason.
