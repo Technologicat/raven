@@ -201,6 +201,57 @@ Status messages are printed into the terminal window.
 
 **:exclamation: The BibTeX import process may take a very long time, from several minutes to hours, depending on how much data you have, and how the importer has been configured in [`raven.visualizer.config`](config.py). :exclamation:**
 
+## What the importer does to your records
+
+A database export is not tidy, and the importer makes a few decisions about it on the way in. They are worth
+knowing because they change what you see in the word cloud and in the info panel.
+
+**An incomplete record is imported, not dropped.** A missing title, author or year becomes
+`[Title not specified]`, `[Author not specified]` or `[Year not specified]`, and the import log names every
+one. Whole conference proceedings arrive without authors, and losing those records would lose the abstracts
+that were the part worth reading.
+
+- **The placeholders are shown, never analyzed.** They are Raven's words rather than the record's, and the
+  same words on every such record — so feeding them to the keyword extractor and the semantic vector would
+  gather those records into a cluster whose members share nothing but a field their database omitted. Both
+  stages read the abstract alone instead. (Authors and year never reached those stages anyway.)
+- **A record with neither a title nor an abstract is skipped**, with a warning naming it: there is nothing
+  to read.
+- **A re-export writes the record's own author field back out**, or nothing where it had none — never the
+  placeholder, which would put Raven's words into somebody's bibliography as though a database had said
+  them.
+
+**Keywords count nouns and proper nouns, and leave the verbs out.** A topic keyword is nearly always a noun,
+while the verbs of academic prose — *provide*, *improve*, *develop*, *investigate*, *propose* — describe what
+a paper *does*, are the same in every field, and crowd the head of the frequency list without saying
+anything. This is also why *learning* and *learn* are counted separately, and should be: as a noun it is the
+topic, as a verb it is prose. Affects the word cloud, the per-entry keywords and the frequency-based cluster
+keywords, for datasets imported from now on. `nlptools.count_frequencies` takes `accepted_pos=None` for the
+older, wider behaviour.
+
+**A publisher's rights notice is stripped off an abstract.** `© 2022 IEEE.` and *This article is distributed
+under the terms of the Creative Commons Attribution 4.0 License* stop being treated as part of what a paper
+says — which is where publisher names in your word cloud were coming from.
+
+- **A paper *about* copyright keeps every word**, which is the hard case: the phrases a notice is built from
+  are also things an abstract on open licensing says. So the copyright sign is trusted on sight, while
+  wording that is ordinary English (*All rights reserved*, *copyright held by*, a licence-grant clause)
+  counts only where it *opens* a sentence — which is what appended boilerplate does and a clause inside an
+  argument does not. A bare *copyright* is never a match, and only the tail of an abstract is examined.
+- `publisher_stopwords` in [`raven.visualizer.config`](config.py) still exists and still works; it now has
+  much less to do.
+
+**LLM cluster keywords are made comparable across clusters**, if you have set `clusters_keyword_method =
+"llm"`. Each cluster is keyworded on its own, so one concept can come back under several spellings — an
+acronym in one cluster, its expansion in another — and two clusters sharing a topic then look as if they do
+not. A second pass over the whole vocabulary folds the variants together once every cluster has been seen.
+
+- **The model is asked for a mapping, not for a rewritten list, so the result can be checked.** A
+  replacement is applied only when it is itself one of the keywords the first pass extracted, so an invented
+  or rephrased term cannot reach the dataset — it is dropped instead of trusted.
+- The prompt is `clusters_llm_keyword_canonicalization_prompt`, and the log names every replacement applied.
+  Word clouds and cluster labels read the same list, so both benefit.
+
 ## Good to know
 
 The BibTeX importer caches its intermediate data per input file, so you can include e.g. `file1.bib` into multiple different dataset files, and the expensive computations specific to `file1.bib` will only happen once, unless `file1.bib` itself changes. The caching mechanism checks the timestamps; when e.g. `file1.bib` is processed, computations are re-done if `file1.bib` has changed after the cache was last updated.
