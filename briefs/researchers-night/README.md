@@ -380,6 +380,10 @@ What is queued, all small and independent:
         context and no rule covering the question, so they came out shaped like ordinary Python. The
         script shape is what actually suits DPG — which is the argument against the four *gaining* a real
         `main()`, in the root `CLAUDE.md`, and says nothing about the three that have one.
+        - **The versions agree**, which is worth one line since it turns a recollection into something
+          checkable: the three are `raven-xdot-viewer` (v0.2.5), `raven-cherrypick` and
+          `raven-conference-timer` (both v0.2.6) — exactly the three apps carrying an *Added in* stamp in
+          the main README. The four with stubs are the ones that predate the marker.
         - **Not worth changing**, his call, the more so now that the checker reads both shapes. Recorded
           because the split looks like a decision and is not one: a future reader tidying it in either
           direction would be acting on a pattern nobody chose.
