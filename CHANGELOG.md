@@ -403,7 +403,7 @@
 
 - **The user data folder is now `~/.config/raven/librarian/`**, whereas previously it was `~/.config/raven/llmclient/`.
   - Named after the app you run rather than after the module that first wrote there.
-  - _It holds your chat history, your attachments, your document drop folder and its RAG index.
+  - It holds your chat history, your attachments, your document drop folder and its RAG index.
   - **Rename it by hand if you have one**: `mv ~/.config/raven/llmclient ~/.config/raven/librarian`.
     - Nothing migrates it for you, and a Librarian that finds neither starts a fresh chat history rather than saying anything is wrong. Done now, while Librarian has no outside users, precisely so the migration code never has to exist.
 
@@ -435,7 +435,7 @@
     - The arrows behave as they do on any other message; at the top of the chat they step between system prompts instead of between replies.
     - You can use this to switch between system prompts stored in the chat datastore. Alternatively, you can use the chat graph view to switch between them.
   - **A system prompt can be deleted when it is not the one in use.**
-    - This **destroys the chats** held under it with it — which is the point, since in the datastore, those chats hang from that system prompt
+    - This **destroys the chats** held under it with it — which is the point, since in the datastore, those chats hang from that system prompt.
     - Deleting a system prompt leaves you where a new chat under the system prompt you land on would begin (on the AI greeting attached to that prompt), rather than on the bare prompt.
     - The system prompt currently in use stays undeletable, as before.
   - Cleanup understands this: chats under an older system prompt are **not** offered for deletion as unreachable.
@@ -621,7 +621,7 @@
   - **The backend URL naming your other machine, the audio device that exists only on this machine, your own name** — those stop being edits to tracked files that a `git pull` may want to change underneath you, and stop showing up in `git status`.
   - Editing a `config.py` directly still works, and is unchanged; `overrides.json` is an alternative.
   - **Only settings that already exist can be overridden**: a misspelled name, or a value of the wrong kind, is reported in the log and ignored rather than quietly becoming a setting nothing reads. A file with a syntax error is reported too, and Raven starts anyway on the shipped defaults.
-  - The format — including how to reach a setting held inside another, and how to comment one out — is in the README's *Configuration* section.
+  - The format — including how to reach a setting held inside another, and how to comment one out — is in the README, under [*Settings that belong to your machine, not to Raven*](README.md#settings-that-belong-to-your-machine-not-to-raven).
 
 ### Fixed
 
