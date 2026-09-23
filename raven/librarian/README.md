@@ -94,7 +94,7 @@ More generally, for changing the direction of the conversation, the chat support
 
 It is possible to permanently forget a subtree by **deleting** it. This will also delete all messages downstream of the deleted node, and cannot be undone.
 
-The chat tree is stored (by default) in `~/.config/raven/llmclient/chat.json`, with any attachments beside it in `chat.sidecars/`. Upgrading from an older Raven, which called these `data.json` and `data.images/`, renames them on first start.
+The chat tree is stored (by default) in `~/.config/raven/librarian/chat.json`, with any attachments beside it in `chat.sidecars/`. Upgrading from an older Raven, which called these `data.json` and `data.images/`, renames them on first start.
 
 The **SYS** node is updated each time *Librarian* starts, using the currently configured system prompt from [`raven.librarian.config`](config.py). The node is updated in-place, via the node versioning mechanism: a new revision of the content is created, and the old one is deleted.
 
@@ -223,7 +223,7 @@ Everything above is read for its **text layer only**. Whatever a document says t
 - A **slide deck that is mostly diagrams** imports only its titles and whatever prose it has. Its notes, if it has any, are often the more useful half in this situation.
 - A **web page that builds its content with JavaScript** has nothing to read in its markup, so it imports as empty. This covers both the saved shell of a dynamic site (whose content was never in the file - fetch the URL with the AI's `webfetch` tool instead) and a self-contained single-file app that carries its data inline as a script (whose content *is* in the file, but in a form we do not currently read). Nothing here runs a page's scripts: putting a file in the documents folder must never be enough to make it execute.
 
-**To manage the content of the document database**, use a file manager: just put your document files in the document database directory. By default, *Librarian* looks for documents in `~/.config/raven/llmclient/documents`. The path can be configured in [`raven.librarian.config`](config.py).
+**To manage the content of the document database**, use a file manager: just put your document files in the document database directory. By default, *Librarian* looks for documents in `~/.config/raven/librarian/documents`. The path can be configured in [`raven.librarian.config`](config.py).
 
 The document database directory can have subdirectories - so feel free to create them to organize your document collection. This is useful for splitting the DB into broad umbrella topics (AI research, engineering sciences, ...). As of v0.2.4, all documents still live in the same search namespace. We plan to add scoping support later, to allow limiting the search to a given topic.
 
@@ -241,7 +241,7 @@ The search index syncs automatically:
   - The update may take some time if there are many (hundreds) of documents.
   - The semantic embedding uses the `embeddings` module of *Raven-server*, so it can benefit from GPU acceleration.
 
-If the search index ever becomes corrupted - or if you need to force a full rebuild for any reason - you can simply delete the search index directory while *Librarian* is not running. A full search index rebuild will then automatically take place when *Librarian* is started. By default, the index is stored in `~/.config/raven/llmclient/rag_index`.
+If the search index ever becomes corrupted - or if you need to force a full rebuild for any reason - you can simply delete the search index directory while *Librarian* is not running. A full search index rebuild will then automatically take place when *Librarian* is started. By default, the index is stored in `~/.config/raven/librarian/rag_index`.
 
 ### Indexing from the command line: `raven-indexer`
 
@@ -281,7 +281,7 @@ A common starting point is a directory of papers downloaded from arXiv over the 
 
 ```bash
 raven-arxiv2id -i ~/papers | raven-arxiv2bib -o papers.bib   # identifiers -> metadata
-raven-burstbib papers.bib -o ~/.config/raven/llmclient/documents
+raven-burstbib papers.bib -o ~/.config/raven/librarian/documents
 raven-indexer                                                 # or just start Librarian
 ```
 
@@ -446,9 +446,14 @@ This is a programming library rather than a product: what it offers is programma
 
 We also provide **speech recognition**, so that at your option, you can use your mic to talk with the AI.
 
-The avatar's expression is updated every few seconds while the LLM is writing. *Librarian* uses a sentiment analysis AI model to detect the most likely emotion from recent text streamed by the LLM, and then sends the resulting emotion label to the avatar subsystem for animation. The avatar's emotion updates while the LLM is thinking as well as while it is writing the final response. This is the same approach as used by SillyTavern for character expressions.
+*Librarian* uses a sentiment analysis AI model to detect the most likely emotion from the AI's text, and then sends the resulting emotion label to the avatar subsystem for animation. This is the same approach as used by SillyTavern for character expressions.
 
-When the **Speech** toggle in the *Librarian* window (below the avatar video panel) is **ON**, the avatar will speak the LLM's response once the message is complete. Only the part the LLM "writes out loud" is spoken; thought blocks are skipped by the speech subsystem. For the whole duration of the speech, the avatar's expression will be the last one from the LLM text analysis.
+**What the face answers to depends on whether the AI is speaking**, because that is what decides whether you are reading the reply or listening to it:
+
+- With **Speech** off, the expression is updated every few seconds while the LLM is writing, from the text as it arrives — while the LLM is thinking as well as while it is writing the final response. The streaming text is what you are reading, so it is what the face answers to.
+- With **Speech** on, the expression stays neutral while the reply is being written, and changes as each sentence *starts to be spoken*, from that sentence and the few before it. Otherwise the face would be showing the mood of a sentence the voice has not reached yet. Speaking a message again (`Ctrl+S`, or its speak button) does the same.
+
+When the **Speech** toggle in the *Librarian* window (below the avatar video panel) is **ON**, the avatar will speak the LLM's response once the message is complete. Only the part the LLM "writes out loud" is spoken; thought blocks are skipped by the speech subsystem.
 
 When both the **Speech** and the **Subtitles** toggles are **ON**, the speech is machine-translated and subtitled one sentence at a time. The subtitle for each sentence is shown while that sentence is being spoken.
 
@@ -692,7 +697,7 @@ The next two are about the AI's reasoning: whether it happens at all, and whethe
 - **Subtitles**
   - The **Speech** and **Subtitles** mode toggles control features of the AI avatar. See [AI avatar and voice mode](#ai-avatar-and-voice-mode).
 
-The toggles persist across sessions. They are stored in the app state file, which by default is saved in `~/.config/raven/llmclient/state.json`. The file is loaded at app startup, and saved at app exit.
+The toggles persist across sessions. They are stored in the app state file, which by default is saved in `~/.config/raven/librarian/state.json`. The file is loaded at app startup, saved at app exit, and saved every minute while the app runs, so a crash costs at most the last minute. The interval is `llm_autosave_interval` in [`raven.librarian.config`](config.py); `None` goes back to saving only at exit. The same applies to the chat history itself, in `chat.json` beside it.
 
 ## Keyboard reference
 
