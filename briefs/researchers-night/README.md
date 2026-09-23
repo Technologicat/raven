@@ -356,11 +356,12 @@ between them they cover it:
   That is the part the changelog cannot show, because it is about what was *planned* and what happened to
   the plan — which is the input a future sprint's estimates want.
 
-**One thing to carry out before archiving**: the capture-toolchain survey under the screenshot pass is
-durable knowledge rather than a sprint decision, and belongs in the fleet-wide `live-gui-testing` skill —
-which already covers launching, driving and screenshotting a GUI on the dev machine's own X session, and
-of which capture is the missing half. Agreed 2026-09-23; done as part of the screenshot pass, so that the
-recipe written down is the one that was actually used.
+~~**One thing to carry out before archiving**: the capture-toolchain survey under the screenshot pass is
+durable knowledge rather than a sprint decision, and belongs in the fleet-wide `live-gui-testing` skill.~~
+**Moved 2026-09-23**, as *Capturing motion*, marked untested — **and the pass's job is to replace it with
+what actually worked.** It went early rather than after the pass because the sprint log is the only place
+it otherwise lives, and whether tomorrow's session can see that log depends on whether the session is a
+fresh one (Juha). The skill loads on demand and does not.
 
 **And one item for the stock-take's own list: the main README is becoming a god document** (Juha,
 2026-09-23 — *"or given how disorganized it's also becoming, perhaps a goddess document"*). It now carries
