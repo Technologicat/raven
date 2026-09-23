@@ -184,6 +184,50 @@ As someone on the internet pointed out, the term *hallucination* is misleading, 
 
 As of 12/2025, many LLM frontends still operate in the paradigm of a traditional linear chat history. Many support some form of branching, but no AI chat app seems to have taken the idea to its logical conclusion yet. *SillyTavern* offers swipes and arbitrary branching, but uses a linear storage format ([*Timelines*](https://github.com/SillyTavern/SillyTavern-Timelines) is a hack on top of that). Loom ([original](https://github.com/socketteer/loom); [obsidian](https://github.com/cosmicoptima/loom)) is probably still the only natively multiversal LLM GUI (predating *Raven-librarian*); and it is focused on text completion via base models, not chat.
 
+## Searching the chat
+
+The row across the top of the window searches what you have said and what the AI has said back. It works as
+you type: the matches turn **red and bold** in the chat log, and the chat does not move under you while the
+highlighting updates — including text scrolled out of view above.
+
+`Ctrl+F` puts the caret in the field, `Ctrl+Shift+F` clears the search.
+
+**What matches.** Every word you type must occur in the message, in any order, and a word with a capital
+letter in it matches case exactly. `cat photo` finds *photocatalytic*. This is the same search
+*Raven-visualizer* uses, so learning one teaches the other.
+
+**The unit is the message**, not the word: going to a match takes you to the message that matched, and the
+counter counts messages. A message matching six times is one match.
+
+**Two checkboxes say where else to look.** *Thinking* searches the reasoning traces, and going to a match
+inside a collapsed trace opens it; *Tool results* searches what tools returned — fetched web pages, search
+results, documents. `Alt+H` and `Alt+R` toggle them. Traces start off and tool results on, and both are
+remembered between sessions.
+
+**Stepping through the matches**, with the arrow buttons beside the field or from the keyboard:
+
+| Key | |
+|---|---|
+| `F3` / `Shift+F3` | the next / previous matching message in the conversation you are reading |
+| `Ctrl+F3` / `Ctrl+Shift+F3` | the next / previous match **anywhere in the chat graph** — other branches, and the chats held under older character cards |
+| `Enter` in the field | go to the first match and stop typing, so `F3` carries on from there |
+
+The counter beside the arrows says which match is at the top of the view, of how many, and it follows as you
+scroll rather than only when you press a key. There are two counters, one per pair of arrows: the branch you
+are reading, and the whole tree.
+
+`F3` walks what the chat log can show you, which is one branch. **`Ctrl+F3` walks everything**, in reading
+order over the whole forest, and shows the chat graph if the avatar has the panel. Being navigation, it
+*previews* a match rather than switching the conversation to it — see [Chat graph](#chat-graph) for what
+that distinction buys you.
+
+**With a search active, the graph marks what matched.** Every box that matches wears a count above it —
+`3 (1)` being three matches, one of them inside a thinking trace — and shows the first match in its own
+text, in the same red the chat log uses, so what a box matched on is readable without opening it. A box that
+matched *only* in its reasoning quotes the trace instead, in the trace's own blue, and the `(1)` is in that
+same blue for the same reason. A dashed **…N more** box counts the matches in everything it stands for, so a
+result never hides behind one.
+
 ## Document database
 
 The document database gives the LLM fact grounding via retrieval-augmented generation (RAG). The context is engineered from two directions. An automatic search runs before the AI replies, using your latest message as the search query, and its results are injected into the LLM's context. The LLM can then search the database again itself, as a tool call, once it has seen what that first search returned — which is what lets it recover when your phrasing and the documents' phrasing do not line up.
@@ -662,9 +706,7 @@ The first two each govern one group of tools (see [Tools](#tools) above), and ne
   - If **ON**, autosearch the document database each time you send a message to the AI, and inject the search results into the LLM's context.
     - The *automatic* search is rather rudimentary: the query is always the user's latest message (in the current linearized view, after sending the current message if any). The LLM's own `search_documents` tool is what covers the cases where that guess is poor — it can search again with a query it wrote after reading the first results.
     - This may make the LLM's prompt processing time much longer, especially if you have set up a high limit for the number of search results.
-      - A **SYSTEM** indicator will glow at the upper left corner of the avatar panel while the LLM is processing the prompt.
-        - Progress information for this is not available via the OpenAI-compatible web API, so it's a generic glowing indicator only.
-        - See the terminal window where your LLM backend is running if you want to see the progress and processing speed.
+      - A **SYSTEM** indicator will glow at the upper left corner of the avatar panel while the LLM is processing the prompt. See [What the indicators say](#what-the-indicators-say) below.
     - This may also derail your discussion (depending on your particular LLM), if the document database does not cover the topic you are discussing with the AI.
   - If **OFF**, do not autosearch the document database, and do not offer the document tools.
     - This is useful when you know your topic doesn't need information from the documents you have fed into *Librarian*'s document database, for shorter processing times and less potential confusion.
@@ -698,6 +740,26 @@ The next two are about the AI's reasoning: whether it happens at all, and whethe
   - The **Speech** and **Subtitles** mode toggles control features of the AI avatar. See [AI avatar and voice mode](#ai-avatar-and-voice-mode).
 
 The toggles persist across sessions. They are stored in the app state file, which by default is saved in `~/.config/raven/librarian/state.json`. The file is loaded at app startup, saved at app exit, and saved every minute while the app runs, so a crash costs at most the last minute. The interval is `llm_autosave_interval` in [`raven.librarian.config`](config.py); `None` goes back to saving only at exit. The same applies to the chat history itself, in `chat.json` beside it.
+
+## What the indicators say
+
+Five small labels can light in the upper left corner of the avatar panel, saying what *Librarian* is busy with while you wait. Each appears only while its work is running, and the visible ones stack top-down in the order below — which is roughly the order a question passes through them.
+
+| | Lit while |
+|---|---|
+| **INDEXING** | your document database is being indexed: new or changed files are being read and added to the search index. It carries a progress figure beside it |
+| **DOCS** | the document database is being searched — the automatic search before a reply, or the AI's own `search_documents` tool. Also carries progress |
+| **READING** | an attached document's text is being extracted. Arriving at a branch whose PDFs have not been read yet spends a second or two here before anything else can start |
+| **SYSTEM** | the LLM backend has your conversation and has not started writing yet. This is prompt processing |
+| **WEB** | the AI is reaching the network, through `websearch` or `webfetch` |
+
+**Pulsating means still working**, which is the same vocabulary the thinking cloud uses beside a reply. Nothing pulsating and nothing lit means nothing is being waited for.
+
+Two of them are worth knowing about before they surprise you:
+
+- **INDEXING and DOCS are separate rows because they can run at once.** Indexing is not a mode the app is in — you can search, and chat, while it continues in the background.
+- **SYSTEM can take a while and shows no progress.** Prompt processing is the phase where a long conversation, or a batch of injected search results, is read by the backend before a single word comes back, and an OpenAI-compatible API offers no way to ask how far along it is. So the indicator is a light rather than a bar. The terminal window running your LLM backend usually does report the progress and the speed, if you want the number.
+  - How much of a wait this is depends on what the backend's cache already holds, which is why the same chat can answer instantly once and slowly after you change something near the top of it. The per-message timing tooltip breaks a completed reply down into prompt processing, thinking and answer.
 
 ## Keyboard reference
 
@@ -750,9 +812,7 @@ through as they are typed for.
 
 ### Search
 
-The search field across the top of the window searches the branch on screen as you type, and marks the matches
-in red. The **Thinking** and **Tool results** checkboxes beside it say whether thinking traces and tool
-results are searched too.
+What these do, and what matches, is in [Searching the chat](#searching-the-chat) above.
 
 | Key | Action |
 |---|---|
