@@ -181,7 +181,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 
 <img src="img/cherrypick.png" alt="Screenshot of Raven-cherrypick" height=200/>
 
-- **Documentation**: WIP
+- **Documentation**: [Cherrypick user manual](raven/cherrypick/README.md)
 - **Goal**: Triage a folder of images into cherries (keepers), lemons (rejects), and neutral.
   - **Status**: :white_check_mark: Fully operational prototype, usage: `raven-cherrypick some/path/to/images/`
 - **Features**:
@@ -917,7 +917,12 @@ We run the [Chroma](https://www.trychroma.com/) local search engine backend in i
 
 To the best of our knowledge, any other packages we use do not collect any telemetry data.
 
-For Librarian, we **strongly recommend** self-hosting a local LLM via [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui), which can run quantized GGUF models on your GPU, also with partial offloading for low-VRAM environments. It comes with several backends out of the box, including Llama.cpp. It's easy, 100% local, and works well.
+For Librarian, we **strongly recommend** self-hosting a local LLM, so that your conversations never leave your machine. Two backends we can speak for, both of which run quantized GGUF models on your GPU with partial offloading for low-VRAM environments:
+
+- [**LM Studio**](https://lmstudio.ai/) is what we run day to day, and the one to assume if you are following along. It installs as an ordinary desktop application, finds and downloads models for you, and needs no setup beyond starting its local server.
+- [**oobabooga/text-generation-webui**](https://github.com/oobabooga/text-generation-webui) is the open-source alternative, and comes with several inference backends out of the box, including llama.cpp. Installing it asks about as much of you as installing Raven does, which is the fair way to put it — the trade is that LM Studio is closed source and the quicker of the two to get answering, while ooba is open source. Either way there are two things to set up, Raven and a backend.
+
+Either way the model runs on your own hardware, which is the part that matters here.
 
 However, at your choice, Raven should be able to connect to an OpenAI-compatible cloud LLM API (opt-in via `raven.librarian.config`). We do **not** recommend doing so, for privacy reasons; nor is supporting this use case a priority for development. Several different dialects of "*OpenAI compatible*" exist, so some *Raven-librarian* features (such as token count and continuing the AI's message) might not work on backends Raven has not been tested with.
 

@@ -112,6 +112,13 @@ RULES = (
          shape=ENV_KEY_KWARG,
          targets=(Target("raven/visualizer/README.md", section="## Keyboard reference"),),
          note_reverse=True),
+
+    Rule(what="Raven-cherrypick's hotkeys",
+         module="raven/cherrypick/app.py",
+         name=("hotkey_info", "compare_hotkey_info"),  # the card's keyboard page, and its compare-mode page
+         shape=ENV_KEY_KWARG,
+         targets=(Target("raven/cherrypick/README.md", section="# Keyboard reference"),),
+         note_reverse=True),
 )
 
 
@@ -125,14 +132,51 @@ def normalize(name: str) -> str:
     return "".join(name.split()).lower().strip("\"'`")
 
 
-def module_level_value(tree: ast.Module, name: str) -> Optional[ast.expr]:
-    """Return the expression assigned to module-level `name`, or `None` if there is no such assignment."""
+def assigned_value(tree: ast.Module, name: str) -> Optional[ast.expr]:
+    """Return the expression assigned to `name` anywhere in the module, or `None` if it is never assigned.
+
+    Module level first, and a nested scope only when there is none — which is the whole reason this looks
+    past `tree.body` at all. Where an app builds its help card decides where the list lives: Librarian and
+    the Visualizer build theirs at module scope, Raven-cherrypick inside the function that builds its GUI,
+    and that is an accident of how each app is written rather than anything a reader of the README could
+    see. A checker that only reads one of the two shapes silently covers whichever apps happen to use it.
+
+    Raises `LookupError` when a nested name is assigned more than once, since then there is no telling
+    which one the card is built from.
+    """
     for node in tree.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id == name:
                     return node.value
-    return None
+    nested = [node.value for node in ast.walk(tree)
+              if isinstance(node, ast.Assign)
+              for target in node.targets
+              if isinstance(target, ast.Name) and target.id == name]
+    if len(nested) > 1:
+        raise LookupError(f"`{name}` is assigned {len(nested)} times, so which one builds the card is ambiguous")
+    return nested[0] if nested else None
+
+
+def key_alternatives(cell: str) -> List[str]:
+    """Every key a help-card cell names, as separate names.
+
+    A cell may name a pair, `"F3 / Shift+F3"`, as `check_hotkey_tooltips` also knows, and each key is
+    checked on its own. Split on the spaced slash only, so a key such as `Numpad /` stays whole.
+
+    A trailing parenthesis holds a second set of spellings for the same actions — Raven-cherrypick writes
+    `"Left / Right (A / D)"` for a pair reachable either way — and both sets are keys. Splitting on the
+    slash alone yields `Right (A` and `D)`, which are not keys and which no README could name, so a cell
+    written this way would be permanently unmatchable rather than merely unchecked.
+
+    Note the outside of the parenthesis is taken as written, so `"Page Up / Down (Q / E)"` offers `Down`
+    rather than `Page Down` — the card's own shorthand, which nothing here can expand.
+    """
+    match = re.fullmatch(r"(.*?)\s*\(([^()]*)\)\s*", cell)
+    if match:
+        outside, inside = match.groups()
+        return outside.split(" / ") + inside.split(" / ")
+    return cell.split(" / ")
 
 
 def read_option_names(path: pathlib.Path, name: str, shape: str) -> Tuple[List[str], List[str]]:
@@ -142,9 +186,9 @@ def read_option_names(path: pathlib.Path, name: str, shape: str) -> Tuple[List[s
     which nothing can be checked.
     """
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    value = module_level_value(tree, name)
+    value = assigned_value(tree, name)
     if value is None:
-        raise LookupError(f"{path}: no module-level assignment to `{name}`")
+        raise LookupError(f"{path}: no assignment to `{name}`")
 
     names: List[str] = []
     unresolved: List[str] = []
@@ -168,10 +212,7 @@ def read_option_names(path: pathlib.Path, name: str, shape: str) -> Tuple[List[s
                     continue
                 if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
                     if keyword.value.value:  # a blank entry is a spacer row
-                        # A cell may name a pair, `"F3 / Shift+F3"`, as `check_hotkey_tooltips` also knows; each
-                        # key is checked on its own. Split on the spaced slash only, so a key such as `Numpad /`
-                        # stays whole.
-                        names.extend(keyword.value.value.split(" / "))
+                        names.extend(key_alternatives(keyword.value.value))
                 else:
                     unresolved.append(ast.unparse(keyword.value))
     else:
