@@ -327,6 +327,35 @@ What is queued, all small and independent:
     say what the thing *is* and how to drive it, which is the split the whole pass was enforcing. Several
     entries now end in a pointer precisely because the material moved — the file dialog's keyboard, the
     postprocessor's parameters, the overrides format — and those are the ones already done.
+  - **What the walk found, 2026-09-23.** The list is here rather than in `TODO_DEFERRED.md` because it is a
+    week's work being done, not a backlog. Struck through as each lands.
+    - ~~Four corrections — documentation that was *wrong*, which is worse than missing.~~ Done: the user
+      data folder named as `llmclient/` in five places in the Librarian README (two of them paths a reader
+      types), the app state "saved at app exit" where it is now also saved every minute, the avatar's
+      expression described as following the streaming text with speech on, and cherrypick's winner key,
+      which the main README still gave as a bare digit.
+    - ~~Constellation-wide: drag-and-drop, and the shared options.~~ Done — `README.md` → *Dragging files
+      in* and *Options every app takes*, and the server's usage block, which was stamped v0.2.3.
+    - **Raven-librarian**, in the order they were found: chat search has no prose anywhere, only a keyboard
+      table; the five indicator lights (INDEXING / DOCS / READING / SYSTEM / WEB) are named nowhere but one
+      passing mention of SYSTEM; the backend-down row; four omissions in the chat graph section (the box
+      decorations, the search marks, the transition animation and its three settings, and the panel-sharing
+      rule — including that a reply will not speak itself while the graph is up with *Subtitles* on, which
+      is a "why has it gone silent" question); the *[Interrupted]* / *[Incomplete]* markers; the
+      branch-switch glitch effect and its config; and the per-message cost tooltip, whose cloud half is
+      documented and whose message half is not.
+    - **Raven-visualizer**: the importer's four behaviour changes — placeholders instead of skipped records,
+      nouns-only keywords, rights-notice stripping, LLM keyword canonicalization. All four change what comes
+      out of an import and the manual describes none of them.
+    - **`raven-minichat` gets a section in the Librarian manual rather than a manual of its own** (Juha,
+      2026-09-23): it is maintained as a code example — what a minimal client needs, kept in sight — rather
+      than as something users are expected to run. Its REPL commands (`!thinking`, `!internet`,
+      `!reconnect`, `!history`, `!dump`) are written down nowhere at present.
+    - **Raven-cherrypick and Raven-xdot-viewer have no manual at all**, which is a gap from having been in
+      a hurry rather than a decision (Juha, 2026-09-23). Write them if the week has room.
+  - **`--qr` stays undocumented, on purpose** (Juha, 2026-09-23). It is for the dev team advertising at a
+    public demo, not a feature users are meant to find. Recorded because a deliberate omission is invisible
+    to exactly this pass, which found it as a gap and would find it again next time.
   - Its natural pair is the screenshot scan below: both are a read-through of the docs asking what is
     missing, and doing them in one pass is cheaper than twice.
 
