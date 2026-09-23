@@ -321,6 +321,45 @@ and one falling through would not be the first (Juha). In the order above:
 Nothing else in the sprint is open: every brief in *What's here* is scheduled past the event or at v0.2.10,
 and the exhibit path has been clear since 2026-09-16.
 
+### How the sprint closes, decided 2026-09-23
+
+**The sprint is over once the docs are** (Juha). It ends with a stock-take rather than by simply stopping,
+and the shape of that is:
+
+1. **Triage the TODOs** — both files.
+2. **Fix the small items left open as "do this the moment the sprint is over."** One is already known:
+   **`raven-indexer`, `raven-pdf2bib` and `raven-dehyphenate` spend eight or nine seconds before they can
+   print `--help`**, because they import the client stack at module scope and parse argv inside `main()`.
+   A typo in a command line therefore costs nine seconds to be told about. Two candidate fixes, S each —
+   parse above the imports as the fast tools do, or make the client imports lazy as `gguftokenizer` does
+   (Juha's suggestion, and the one that helps a real run too). Found by measuring for the checker above.
+3. **Move what remains into future sprints, with tentative priorities.** Tentative is the point: a
+   priority guessed now is worth more than no ordering at all, and less than one decided when the work is
+   picked up.
+
+Then this folder moves to `briefs/done/`, as `librarian-extension/` did.
+
+**A postmortem is available cheaply, and is worth having rather than important** (Juha). Two sources, and
+between them they cover it:
+
+- **The changelog tells the main story already** — 0.2.9 is pretty much what happened over the last month.
+- **The other half is in this file**: compare each *"X days out"* section against what was actually done.
+  That is the part the changelog cannot show, because it is about what was *planned* and what happened to
+  the plan — which is the input a future sprint's estimates want.
+
+**One thing to carry out before archiving**: the capture-toolchain survey under the screenshot pass is
+durable knowledge rather than a sprint decision, and belongs in the fleet-wide `live-gui-testing` skill —
+which already covers launching, driving and screenshotting a GUI on the dev machine's own X session, and
+of which capture is the missing half. Agreed 2026-09-23; done as part of the screenshot pass, so that the
+recipe written down is the one that was actually used.
+
+**And one item for the stock-take's own list: the main README is becoming a god document** (Juha,
+2026-09-23 — *"or given how disorganized it's also becoming, perhaps a goddess document"*). It now carries
+seven app summaries, three shared-behaviour sections, a five-part command-line index, a per-platform
+install guide, configuration, privacy and the rest. The docs week added three of those sections to it,
+which is how it got noticed. **A refactor after the sprint**, not before: the material is right and the
+container is wrong, and splitting it while the manuals are still being written would move things twice.
+
 ### The rest of the week, 2026-09-22 to 24 — the docs pass, ahead of message editing
 
 **Decided 2026-09-21 (Juha): documentation takes precedence over message editing for Tuesday to Thursday**,
@@ -544,8 +583,29 @@ What is queued, all small and independent:
   `--backend-url`, and two now-required options missing — and **a check that the script name exists would
   have passed it**, the script being real and unchanged. Validating what actually broke means parsing each
   documented command line with that tool's own `argparse` parser and seeing whether it is accepted.
-  - **Worth building** (Juha, 2026-09-21). It is a build rather than an addition — it has to import each
-    tool to reach its parser — and it is the only thing that would catch an instruction a reader is meant
+  - **Do not import the tools: run each with `--help` in a subprocess** (Juha, 2026-09-23, correcting the
+    design sketched here). Importing is what makes this expensive *and* dangerous — an `app.py` has no
+    `main()` guard, so importing one **runs the app**, and a checker has no business starting GUI windows.
+    A subprocess asking for `--help` has neither problem and needs no import whitelist.
+    - **What that buys and what it costs.** The option names and the usage line come back as text, so the
+      check becomes "does every option in the documented command line appear, and is every required one
+      present" — which is what actually broke in the `raven-pdf2bib` line. It is parsing help output
+      rather than consulting the parser, so it is looser than the original sketch and enormously safer.
+    - **Measured 2026-09-23, because both guesses about the cost were wrong.** All 26 console scripts,
+      `--help` each: **36.5 s total, median 0.40 s** — so neither "glacial" nor "a couple of seconds per
+      app" describes it. Nearly all of it is three tools: `raven-indexer` 9.3 s, `raven-pdf2bib` 8.8 s,
+      `raven-dehyphenate` 8.5 s. The rest are under a second, and the GUI apps are the *fastest* things
+      measured, at 0.05–0.08 s.
+      - **What separates them is where argv is parsed**, not what the tool does. The fast ones build the
+        parser and call `parse_args` at module top, *above* the heavy imports; the three slow ones parse
+        inside `main()`, after module-scope imports of `..client.api` and friends. Librarian is instant
+        for exactly this reason and has been since `f5871d87` (2026-04-30), the fleet-wide
+        `--log`/`--log-level` commit — the speed was a side effect of putting the parser above the
+        imports, which is why it stopped "taking forever" without anyone setting out to fix it.
+      - So the check costs about half a minute, which is fine beside everything else the checks run, and
+        needs no parallelism or release-time gating to be affordable.
+  - **Worth building** (Juha, 2026-09-21). It is a build rather than an addition, and it is the only thing
+    that would catch an instruction a reader is meant
     to type, which nothing else in the toolchain looks at and nobody here runs, the console scripts being
     right there.
 
