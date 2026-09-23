@@ -361,8 +361,24 @@ What is queued, all small and independent:
       edit this section* — so it wants `M-x markdown-toc-refresh-toc` from someone in Emacs rather than a
       hand edit. It predates *Chat graph*, *Scripting*, *Keyboard reference* and *AI transparency*, so it
       was already behind before today's three sections.
-    - **Raven-cherrypick and Raven-xdot-viewer have no manual at all**, which is a gap from having been in
-      a hurry rather than a decision (Juha, 2026-09-23). Write them if the week has room.
+    - ~~**Raven-cherrypick and Raven-xdot-viewer have no manual at all**, which is a gap from having been in
+      a hurry rather than a decision (Juha, 2026-09-23). Write them if the week has room.~~ **Both written
+      2026-09-23**, and `README.md` now has no *Documentation: WIP* left anywhere.
+      - **Both were written from the app's own `F1` card** — its `hotkey_info`, and the prose on its
+        Features page — rather than reconstructed from the source, which is why they cost an afternoon
+        between them rather than a day each. A card is already a curated, reviewed account of the app; what
+        a manual adds is the room to say the things a card has no space for.
+      - **`check_option_lists.py` now covers both**, so a keyboard table cannot drift from the card it was
+        copied out of. That needed two capabilities it lacked, and in each case the new app was simply the
+        first to need one: reading a list assigned *inside a function* (four apps build their card at module
+        scope, three inside `main()`), and expanding a cell like `Left / Right (A / D)`, which the old split
+        turned into the non-keys `Right (A` and `D)` — so such a row was unmatchable by any README rather
+        than merely unchecked.
+      - **Why three apps have a working `main()` and four have a `pass` stub is unexplained** (raised by
+        Juha, 2026-09-23, on seeing the checker change). The script shape is what suits DPG, which is the
+        argument against the four *gaining* one — see the root `CLAUDE.md` — and says nothing about why the
+        three have one. **Not worth changing**, his call, the more so now that the checker reads both
+        shapes.
   - **`--qr` stays undocumented, on purpose** (Juha, 2026-09-23). It is for the dev team advertising at a
     public demo, not a feature users are meant to find. Recorded because a deliberate omission is invisible
     to exactly this pass, which found it as a gap and would find it again next time.
@@ -411,6 +427,40 @@ What is queued, all small and independent:
     earn its place, rather than only re-taking the ones already there.
   - **The file dialog manual wants two**, its list view and its thumbnail grid: it is a manual about a
     thing with two looks, written without either of them on the page.
+  - **Scheduled for 2026-09-24, the full pass, stills and animation captures together** (Juha, 2026-09-23).
+    It is the last item of the docs week and the one that cannot be done at a desk by one of us alone: it
+    takes the keyboard, and it takes somebody looking at what came out.
+    - **What the day's writing has added to the list**, all of it prose that describes something moving:
+      the chat graph, which has no picture anywhere and is 0.2.9's largest feature — it wants a still *and*
+      a capture of the morph, which is the whole argument for the animation; Librarian's search row and its
+      match marks in the graph; the five indicator lights; the avatar's branch-switch glitch, which is a
+      second capture; and the two new manuals, which ship with one screenshot each and describe several
+      things a picture would settle faster — cherrypick's compare mode above all.
+    - **Cherrypick's and the xdot viewer's existing screenshots are the two oldest in the tree**, both from
+      the release that introduced each app, so they are refreshes rather than additions like the rest.
+    - **The capture toolchain is undecided, and neither of us has done this before** (Juha, 2026-09-23).
+      Surveyed the same day so the decision costs a minute tomorrow rather than an hour:
+      - **What is already installed covers it**: ffmpeg 7.1.1 with `x11grab` and a GIF encoder, plus
+        ImageMagick. Nothing else on the machine — no `peek`, `byzanz-record` or `gifsicle`.
+      - **Recommendation: use ffmpeg and install nothing.** Not because the alternatives are bad but
+        because ffmpeg is *scriptable*, which decides who does what: the agent runs the capture against a
+        window geometry while the maintainer drives the app. A GUI recorder puts both jobs on the person at
+        the keyboard, which is the scarce resource in the room.
+        - `gifsicle` is the one worth installing *if needed* — lossy re-compression and frame differencing,
+          for a GIF that comes out too large after ffmpeg's own palette pass. Judge from the first capture
+          rather than in advance.
+      - **GIF rather than a video file, for anything embedded in a manual.** A GitHub README renders an
+        animated GIF from a repo-relative path; a repo-relative `.mp4` is believed not to play there, video
+        embedding being for files uploaded through GitHub's own CDN. That belief is what the choice rests
+        on and it is *not* verified — one pushed test file settles it, and is worth doing before making
+        many.
+      - **Size is a repo cost and not a package cost**: `pyproject.toml`'s `includes = ["raven"]` means
+        `img/` never enters the wheel. So the constraint is clone size alone.
+      - **Capture above the rate being captured.** Raven's GUI apps idle at `GUI_IDLE_FRAMERATE` (twelve)
+        and return to full speed while anything animates, so a capture pinned at the idle rate would alias
+        exactly the motion these are being made for. Grab at 25–30 and decimate on the way to GIF.
+      - The two-pass palette recipe (`palettegen` then `paletteuse`) is what separates a GIF that looks
+        like the app from one that looks like 1998; a single-pass GIF encode quantizes per frame.
 - **The wrapped section in `Changed` → Raven-librarian.** 56 of the file's 65 remaining hard-wrapped runs
   are there, left over from a job reported as finished when it was half done. A wrap and a deliberate
   line break are the same shape to a whitespace-collapsing check, so the rule that distinguishes them is:
