@@ -336,21 +336,31 @@ What is queued, all small and independent:
       which the main README still gave as a bare digit.
     - ~~Constellation-wide: drag-and-drop, and the shared options.~~ Done — `README.md` → *Dragging files
       in* and *Options every app takes*, and the server's usage block, which was stamped v0.2.3.
-    - **Raven-librarian**, in the order they were found: chat search has no prose anywhere, only a keyboard
+    - ~~**Raven-librarian**, in the order they were found: chat search has no prose anywhere, only a keyboard
       table; the five indicator lights (INDEXING / DOCS / READING / SYSTEM / WEB) are named nowhere but one
       passing mention of SYSTEM; the backend-down row; four omissions in the chat graph section (the box
       decorations, the search marks, the transition animation and its three settings, and the panel-sharing
       rule — including that a reply will not speak itself while the graph is up with *Subtitles* on, which
       is a "why has it gone silent" question); the *[Interrupted]* / *[Incomplete]* markers; the
       branch-switch glitch effect and its config; and the per-message cost tooltip, whose cloud half is
-      documented and whose message half is not.
-    - **Raven-visualizer**: the importer's four behaviour changes — placeholders instead of skipped records,
+      documented and whose message half is not.~~ Done.
+      - **It found a missing changelog entry, not only missing prose.** The grey line above a message gained
+        the model that wrote it — and the tool that answered, for a tool result — in `5a730043`, nine days
+        after the tooltip got the same fact in `621c5b5e`. The entry had been written for the tooltip and
+        never followed the feature, so the metadata line was undocumented and the tooltip was presented as
+        where you learn the model, where it repeats it. Both fixed; the duplication itself is left alone.
+    - ~~**Raven-visualizer**: the importer's four behaviour changes — placeholders instead of skipped records,
       nouns-only keywords, rights-notice stripping, LLM keyword canonicalization. All four change what comes
-      out of an import and the manual describes none of them.
-    - **`raven-minichat` gets a section in the Librarian manual rather than a manual of its own** (Juha,
+      out of an import and the manual describes none of them.~~ Done, as *What the importer does to your
+      records*, beside the import instructions rather than in *Good to know*.
+    - ~~**`raven-minichat` gets a section in the Librarian manual rather than a manual of its own** (Juha,
       2026-09-23): it is maintained as a code example — what a minimal client needs, kept in sight — rather
       than as something users are expected to run. Its REPL commands (`!thinking`, `!internet`,
-      `!reconnect`, `!history`, `!dump`) are written down nowhere at present.
+      `!reconnect`, `!history`, `!dump`) are written down nowhere at present.~~ Done.
+    - **The Librarian README's table of contents is stale**, and is `markdown-toc` output marked *don't
+      edit this section* — so it wants `M-x markdown-toc-refresh-toc` from someone in Emacs rather than a
+      hand edit. It predates *Chat graph*, *Scripting*, *Keyboard reference* and *AI transparency*, so it
+      was already behind before today's three sections.
     - **Raven-cherrypick and Raven-xdot-viewer have no manual at all**, which is a gap from having been in
       a hurry rather than a decision (Juha, 2026-09-23). Write them if the week has room.
   - **`--qr` stays undocumented, on purpose** (Juha, 2026-09-23). It is for the dev team advertising at a

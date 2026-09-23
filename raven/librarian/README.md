@@ -541,11 +541,12 @@ When both the **Speech** and the **Subtitles** toggles are **ON**, the speech is
 
 For configuring the AI's voice and the subtitles, see [Configuration](#configuration).
 
-**When the conversation is swapped out from under it, the avatar glitches.** Stepping to a sibling branch, jumping to where a branch continues, starting a new chat, or rerolling a reply can replace everything on screen between one message and the next, and the effect marks that seam.
+**A digital-glitch effect plays on the avatar when the conversation is swapped out from under it** — stepping to a sibling branch, jumping to where a branch continues, starting a new chat, or rerolling a reply.
 
-- It runs on a clock of its own rather than for as long as the switch takes: long enough that a switch too fast to see still registers (`avatar_discontinuity_effect_floor`), and capped (`…_ceiling`) so that holding a navigation key down reads as one glitch rather than a stutter of them.
-- **Your own postprocessor chain is left alone.** The effect is appended to whatever is configured and taken off again afterwards, so a customized avatar looks like itself either side of the seam.
-- **The effect is yours to choose**, in [`raven.librarian.config`](config.py): `avatar_discontinuity_effect_enabled` switches the whole thing off, and `avatar_discontinuity_effect` is the effect itself, as a fragment of a postprocessor chain. It is written in exactly the format the animator settings use — so build a look in *Raven-avatar-settings-editor*, save, and copy the entries you want out of the saved JSON. A colour drain, an analog tracking wobble, or nothing at all.
+- It runs on a clock of its own: long enough that a switch too fast to see still registers, and capped so that flicking through siblings reads as one glitch. `avatar_discontinuity_effect_floor` and `…_ceiling` are those two durations.
+- Your own postprocessor chain is left alone. The effect is laid over whatever is configured and taken off again afterwards, so a customized avatar looks like itself either side of the seam.
+- **The effect is yours to choose**, in [`raven.librarian.config`](config.py): `avatar_discontinuity_effect_enabled` is the on/off switch, and `avatar_discontinuity_effect` is the effect itself, as a fragment of a postprocessor chain.
+  - It is written in the same format the animator settings use, so a look built in *Raven-avatar-settings-editor* can be copied out of the saved JSON and pasted in — a colour drain, an analog tracking wobble, or nothing at all.
 
 The avatar has an optional, configurable timeout, after which the avatar video will turn off if there is no activity (to save GPU and CPU compute resources, as well as to eliminate unnecessary fan noise when running on a laptop). The avatar wakes up immediately when there is activity (e.g. navigating the chat tree, rerolling a message, sending a new message to the AI, or asking the avatar to speak a previous message again).
 
