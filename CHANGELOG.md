@@ -98,15 +98,24 @@
   - It takes effect from the next reply onward; the cloud, or `Ctrl+T`, opens the trace of a reply already on screen.
   - It says what is **shown**; whether the AI reasons at all is the *Thinking* toggle beside it.
 
+- **A hotkey on every mode toggle**, mnemonic on its label.
+  - They work while you are typing, which is when you tend to want one — on noticing that the answer wants the web, or the documents.
+  - Each key is in its switch's tooltip, and they are tabulated in the README.
+
 - **Librarian says when Raven-server has gone away.**
   - A row appears below the mode toggles and stays until the server answers again. Click it to retry immediately instead of waiting for the next check.
   - It names what stops working while the server is down — the avatar, speech, subtitles, translation, the search over your documents and the AI's internet access — and what does not, the chat itself going to a separate LLM backend.
   - It sits outside the panel the avatar and the chat graph take turns in, so it is readable whichever of them is showing.
   - Shown only when something is wrong, plus a moment when the connection re-establishes.
 
-- **A hotkey on every mode toggle**, mnemonic on its label.
-  - They work while you are typing, which is when you tend to want one — on noticing that the answer wants the web, or the documents.
-  - Each key is in its switch's tooltip, and they are tabulated in the README.
+- **A READING indicator**, lit while an attached document's text is being extracted.
+  - Arriving at a branch whose PDFs have not been read yet spends a second or two reading them before anything else can start, hence this indicator.
+  - It appears in the avatar panel along with DOCS or SYSTEM.
+  - Extraction is local work that happens before the backend sees anything.
+
+- **The thinking trace lives in its bubble from the first word, and the cloud pulsates while the model is thinking.**
+  - The trace grows inside the bubble it will stay in, collapsed, with the cloud beside it breathing for as long as the reasoning lasts and settling when the answer begins.
+  - Same vocabulary as the INDEXING / DOCS / READING / SYSTEM / WEB indicators: pulsating means still working.
 
 - **The thinking cost is reported.**
   - The thought bubble carries the same three figures the message does — tokens, wall time, speed — for the reasoning alone.
@@ -118,10 +127,6 @@
   - A turn that asks for a tool instead of replying says **Tool call** rather than showing an answer of zero length.
   - The same tooltip names **the model that produced that reply**, per message.
     - In a branching chat the siblings of one node can come from different models, and a chat reloaded from disk predates whatever model is loaded now.
-
-- **The thinking trace lives in its bubble from the first word, and the cloud pulsates while the model is thinking.**
-  - The trace grows inside the bubble it will stay in, collapsed, with the cloud beside it breathing for as long as the reasoning lasts and settling when the answer begins.
-  - Same vocabulary as the INDEXING / DOCS / READING / SYSTEM / WEB indicators: pulsating means still working.
 
 - **`raven.librarian.agent`, a scripting surface over Librarian's LLM agent loop.**
   - This allows you to drive Librarian's engine from your own Python, with your document corpus, the branching chat tree and the tool-calling all in play.
@@ -141,22 +146,26 @@
   - `raven.librarian.agent.describe_turn(...)` builds the same record from a stored conversation, so a batch that saved its chats can be analyzed afterwards without hand-rolling a tree walk.
 
 - **Exact context-fill counts, computed on your own machine.**
-  - Point `raven.librarian.config.llm_tokenizer_path` at the folder where you keep your models. Raven finds the `.gguf` for the model the backend says it is serving and counts with that model's own vocabulary, so the readout shows `62%` rather than `~62%`.
+  - Point `raven.librarian.config.llm_tokenizer_path` at the folder where you keep your models.
+    - Raven finds the `.gguf` for the model the backend says it is serving and counts with that model's own vocabulary, so the readout shows `62%` rather than `~62%`.
     - A `.gguf` file or a HuggingFace tokenizer folder works too, if you would rather name one exactly.
-  - **Where the backend runs does not matter, only whether you keep the model.** A model served from another machine counts exactly here as long as a copy of it is reachable by a file path from this one — local disk or a mount.
-    - It reads *past* the quantization: the file may be a different one from the backend's (`Q8_0` on disk, `Q4_K_XL` loaded) and still be the right vocabulary.
+  - **Where the backend runs does not matter, only whether you keep the model.**
+    - A model served from another machine counts exactly here as long as a copy of it is reachable by a file path from this one — local disk or a mount.
+    - The exact quantization type does not matter: the file is allowed to be different from the backend's (`Q8_0` on disk, `Q4_K_XL` loaded).
     - Symbolic links are followed, so a folder of links into a central archive works.
-  - **Loading takes a few seconds and happens in the background**, so the readout starts out as an estimate and sharpens once it is ready. Nothing waits for it.
-  - **It checks itself against your backend before believing itself.** Once built, the tokenizer is asked to size two short pieces of text and the backend is asked the same; they have to agree, and only then does the readout drop its `~`.
-    - This is what lets it work for any model family rather than a list someone compiled elsewhere, and it catches a file that matched by name while belonging to a different model.
-  - **It declines rather than guessing.** A file whose name only partly matches the model is not used — a publisher's prefix says who packaged the file, not whose vocabulary is inside.
-    - If the backend cannot be asked to confirm the tokenizer at all, only constructions measured in advance are trusted; anything else keeps the estimate.
-    - Every refusal says why in the log, which also names which construction is counting for you.
-  - **Two tokenizer constructions are assembled**: the byte-level one most current families share, and Gemma's, which is built differently throughout. Measured on Qwen 3.5, 3.6 and 3.8, and Gemma 4; other models using either construction are likely to work, since the check above is what decides.
+  - **Loading takes a few seconds and happens in the background**, so the readout starts out as an estimate and sharpens once it is ready.
+  - **It checks itself against your backend before believing itself.**
+    - Once built, the tokenizer is asked to size two short pieces of text and the backend is asked the same; they have to agree, and only then does the readout drop its `~`.
+    - This is what lets it work for any model family, and it catches a file that matched by name while belonging to a different model.
+  - **It declines rather than guessing.**
+    - A tokenizer file whose name only partly matches the model is not used.
+    - In the case where the backend cannot be asked to confirm the tokenizer at all, only models we (the developers) have tested are trusted; anything else keeps the estimate.
+    - Every refusal says why in the log (in the terminal that started Librarian; or start with `--log my_filename.log`), which also names which construction is counting for you.
+  - **Two tokenizer constructions are assembled**: the byte-level one most current families share, and Gemma's, which is built differently throughout. We have tested Qwen 3.5, 3.6 and 3.8, and Gemma 4; other models using either construction are likely to work.
 
 - **A digital-glitch effect on the avatar when the conversation is swapped out from under it.**
-  - Stepping to a sibling branch, jumping to where a branch continues, starting a new chat, or rerolling a reply. A branching chat can replace everything on screen between one message and the next, and the glitch marks the seam.
-  - It runs on a clock of its own rather than for as long as the switch takes: long enough that a switch too fast to see still registers, and capped so that flicking through siblings reads as one glitch rather than a stutter of them.
+  - Stepping to a sibling branch, jumping to where a branch continues, starting a new chat, or rerolling a reply.
+  - It runs on a clock of its own: long enough that a switch too fast to see still registers, and capped so that flicking through siblings reads as one glitch.
   - Your own postprocessor chain is left alone. The effect is laid over whatever is configured and taken off again afterwards, so a customized avatar looks like itself either side of the seam.
   - **The effect is yours to choose**, in `raven.librarian.config`: an on/off switch, the durations, and the effect itself as a fragment of a postprocessor chain.
     - It is written in the same format the animator settings use, so a look built in *Raven-avatar-settings-editor* can be copied out of the saved JSON and pasted in — a colour drain, an analog tracking wobble, or nothing at all.
@@ -168,82 +177,93 @@
   - An expression it cannot evaluate comes back as an explanation of what it does take, so the model can correct itself and answer rather than failing the turn.
 
 - **A reply that stopped early says so.**
-  - Stopping the AI keeps what it had written, which is the point of the button — but what it keeps ends mid-sentence, and so does a model that finished tersely. A short grey line under the message names the difference.
+  - Stopping the AI keeps what it had written, which is the point of the cancel button — but what it keeps ends mid-sentence. A short grey line under the message now mentions the generation was interrupted.
     - *[Interrupted — the reply was stopped here]* for one you stopped, and *[Incomplete — Raven exited while this reply was being written]* for a chat that was closed mid-reply and reopened.
-  - The line is added when the message is drawn and never stored, so it is not part of the text the model sees if you continue the message, and not part of what an export or a script reads.
+  - The line is added when the message is drawn and never stored on disk, so if you ask the AI to continue the message, that line is not part of the text the model sees. Likewise, it is not part of what an export or a script reads.
 
-- **A READING indicator**, lit while an attached document's text is being extracted.
-  - Arriving at a branch whose PDFs have not been read yet spends a second or two reading them before anything else can start.
-  - It gets a row of its own between DOCS and SYSTEM: extraction is local work that happens before the backend sees anything.
-
-- **An *Audio input* panel** (`F9`, or the sliders button beside the mic), for setting up the microphone where it will be used.
-  - The level at which the mic stops listening, and the silence that ends a recording, are yours to set rather than fixed guesses about a room — a wrong guess costs either a recording that never ends by itself or a question cut off mid-sentence. What you set is remembered between runs.
-  - **The microphone itself is one of the controls**, and switching takes effect at once with the meter following — which is how you tell a noisy room from a noisy microphone, or compare two of them.
-    - The list is re-read each time the panel opens, so one plugged in mid-session appears.
+- **An *Audio input* panel** (`F9`, or the sliders button beside the mic), for setting up the microphone for voice mode.
+  - The level at which the mic stops listening, and the length of silence that ends a recording, are yours to set. What you set is remembered between runs.
+  - **A microphone device chooser** is one of the controls. Switching takes effect immediately, with the meter following.
+    - The list is re-read each time the panel opens, so one plugged in mid-session appears if you re-open the panel.
     - Monitoring inputs are left out of it, since recording one would transcribe whatever is being played, the AI's own voice included.
   - **While the panel is open, Librarian listens without recording**: the level is live, nothing is kept, and nothing is sent to the AI.
-    - So the room's noise floor can be read off with the room as it actually is, which is the reading the threshold depends on and the one you cannot get by asking someone to speak into a form.
-  - ***Measure the room*** does the arithmetic: it takes the loudest moment of the last few seconds — the figure shown right above the button, so the readout previews what the button will do — and puts the threshold a little above it.
-  - **The automatic stop can be switched off** entirely, leaving the mic button as the only way to end a recording. That is the fallback for a room too loud for any threshold to separate speech from noise, and it needs no restart.
-  - The panel is not modal, because the calibration that matters is watching the meter while somebody actually speaks.
-  - Both VU meters draw the threshold as a gray line, and it moves as you set it. Starting values come from `raven.client.config`; *Reset to configured defaults* puts them back.
+    - This allows seeing the room's noise floor.
+  - ***Measure the room*** does the arithmetic: it takes the loudest moment of the last few seconds — the figure shown right above the button, so the peak readout previews what the button will do — and puts the threshold a little above it.
+  - **The automatic stop can be switched off** entirely, leaving the mic button as the only way to end a recording. That is the fallback for a room too loud for any threshold to separate speech from noise.
+  - Both VU meters draw the threshold as a gray line, and it moves as you set it.
+  - Starting values come from `raven.client.config`; *Reset to configured defaults* puts them back.
 
-- **`Ctrl+Home` and `Ctrl+End` switch to the first and last sibling** of the marked chat message.
+- **`Ctrl+Home` and `Ctrl+End` switch to the first and last sibling** of the chat message that has the blue keyboard mark.
   Bare `Home` and `End` still scroll the chat log.
 
 - **The chat history is saved every minute while the app runs**, not only when it closes.
-  A crash loses at most the last minute of the conversation, and nothing is written while nothing has changed. The interval is `raven.librarian.config.llm_autosave_interval`; `None` goes back to saving only at exit.
+  - A crash loses at most the last minute of the conversation, and nothing is written while nothing has changed.
+  - The interval is `raven.librarian.config.llm_autosave_interval`; `None` goes back to saving only at exit.
 
 #### Raven-avatar
 
 - **`atmospheric_dust`, light-catching motes drifting in the air around the character** — dust in a sunbeam, or with different tuning something nearer to pollen, snow or petals.
   - In the default chain, at the head of it: the dust is composited before the camera looks at the scene, so the particles are framed by the zoom and lit by the capture optics exactly as the character is.
-  - **The particles carry a depth, and are the only thing in this pipeline that does** — the character is a flat billboard and the backdrop a flat plane. So focus lives inside this filter, and sharp glints and soft bokeh discs are one population at different distances from the focal plane.
-  - **`aperture` is the one expensive setting.** Everything else is roughly free, `count` included; widening the aperture makes each splat larger and costs the square of it.
-  - **With `bloom` switched off, bring `max_intensity` down to 1.0.** A mote's alpha is derived as the least that can carry its light, and the headroom above 1.0 is only safe while `bloom` is downstream to clamp it back down.
-  - Every parameter it takes is in the [filter manual](raven/common/video/postprocessor-filters.md#atmospheric_dust), and in the settings editor beside live controls.
+  - **The particles carry a depth, and are the only thing in this pipeline that does**.
+    - The character is a flat billboard, and the backdrop a flat plane.
+    - So focus lives inside this filter, and sharp glints and soft bokeh discs are one population at different distances from the focal plane.
+  - **`aperture` is the one expensive setting.**
+    - Everything else is roughly free, `count` included, as the splat is batched on the GPU; widening the aperture makes each splat larger and costs the square of the size.
+  - **With `bloom` switched off, bring `max_intensity` down to 1.0.**
+    - A mote's alpha is derived as the least that can carry its light, and the headroom above 1.0 is only safe while `bloom` is downstream to clamp it back down (with its HDR to LDR exposure conversion).
+  - Every parameter the filter takes is in the [filter manual](raven/common/video/postprocessor-filters.md#atmospheric_dust), and in the settings editor beside live controls.
 
-- **`crt`, a raster projection filter** — the avatar drawn by a scanning electron beam, through a phosphor mask, with the bright rows falling off as Gaussians into darkness between them rather than alternating hard between light and dark.
-  - **It is in the default chain in place of `scanlines`**, which remains available as the cheap and simple version of the same idea.
-  - **`alpha_mode` picks which device is being simulated**, and both readings are in-world: a display whose tube is simply off between the lines, so the gaps are dark, or the raster on alpha instead, so the gaps go transparent and the backdrop shows through between the lines.
+- **`crt`, a raster projection filter** — simulates a cathode ray tube (CRT), for a retrofuturistic look.
+  - The avatar is drawn by a scanning electron beam, through a phosphor mask, with the bright rows falling off as Gaussians into darkness between them.
+  - **It is now in the default chain in place of `scanlines`**, which remains available as the cheap and simple version of the same idea that alternates hard between light and dark.
+  - **`alpha_mode` picks the channel for rastering and darkening**: a display whose tube is simply off between the lines, so the gaps are dark, or the raster on alpha instead, so the gaps go transparent and the backdrop shows through between the lines.
     - The see-through-ness of the default chain is `translucent_display`'s job, one filter above, which is a single control rather than two that have to be tuned against each other.
   - **The mask pitch and the scanline period are in *output pixels*** rather than in fractions of the picture, so a chain tuned at one output size wants retuning at another — a 3-pixel triad is strongly visible at 1024 and invisible at 4K.
-  - **Two of its parameters ship off, both for reasons that may not apply to you.** Phosphor persistence needs more frames per second than the avatar can currently afford, below which a trail reads as smearing; and the interlaced field alternation flickers, not being synchronized to your display's refresh.
-  - **`brightness_compensation` is the knob to reach for first if the result looks bleached rather than rastered.** The scanlines and the mask both darken the picture and the filter drives the beam harder to compensate, as a real tube does; at the default that can push the brightest parts of a pale character into white.
-  - Every parameter it takes is in the [filter manual](raven/common/video/postprocessor-filters.md#crt), and in the settings editor beside live controls.
+  - **Two of its parameters ship off, both for reasons that may not apply to you.**
+    - Phosphor persistence needs more frames per second than the avatar can currently afford, below which a trail reads as a broken mix of overlaid still frames rather than as a continuous ghosting phenomenon.
+    - The interlaced field alternation flickers, the avatar's render rate not being synchronized to your display's refresh.
+      - The app itself **does** use vsync, so tearing cannot occur.
+      - The issue is rather that each avatar frame, due to the timing of its arrival, spans a varying number of display refreshes, which breaks the steady alternating look that is crucial for interlacing to work properly.
+  - **`brightness_compensation` is the knob to reach for first if the result looks bleached rather than rastered.**
+    - The scanlines and the mask both darken the picture and the filter drives the beam harder to compensate, as a real tube does; at the default that can push the brightest parts of a pale character into white.
+  - Every parameter the filter takes is in the [filter manual](raven/common/video/postprocessor-filters.md#crt), and in the settings editor beside live controls.
 
 - **An `enabled` switch on postprocessor chain entries**, default on.
-  Set it to `false` to skip a filter while its settings stay in the chain, so a look you spent an evening tuning survives being switched off and back on. It belongs to the chain rather than to any filter, and works anywhere a postprocessor chain does.
+  Set it to `false` to skip a filter while its settings stay in the chain, so a look you spent a while tuning survives being switched off and back on.
+  - It is handled by the chain rather than by any individual filter, and works anywhere a postprocessor chain does.
 
 - **The settings editor says where the keyboard is, and `Ctrl+Space` reaches the text-to-speak field.**
-  - The emotion chooser, the voice chooser and that field carry the blue pulse the rest of the constellation uses for the same thing. DPG draws nothing of its own on any of the three, so a focused control would otherwise be indistinguishable from an unfocused one.
-  - `Ctrl+Space` is what Raven-librarian uses for its composer.
+  - The emotion chooser, the voice chooser and that field carry the blue pulse the rest of the constellation uses for the same thing.
+  - `Ctrl+Space` matches what Raven-librarian uses to focus its message composer.
 
 - **`lanczos` as an upscaler quality**, alongside `bilinear` and `bicubic`.
-  - The sharpest of the three that skip Anime4K, and still under half the cost of Anime4K's `low` — worth trying if bicubic looks soft to you but the neural upscaler is more than your GPU has to spare.
+  - The sharpest of the three that skip Anime4K, and still under half the cost of Anime4K's `low` — worth trying if bicubic looks soft to you, but the neural upscaler is more than your GPU has to spare.
   - It is the same resampler Raven uses for still images everywhere else.
-  - As with bicubic, the character's silhouette is scaled bilinearly, since a ringing alpha reads as a halo.
+  - As with bicubic, the character's silhouette is scaled bilinearly, since a ringing alpha channel reads as a halo.
+  - Note that in practice, when postprocessor effects are in use, `bicubic` often looks good enough, and is cheaper than `lanczos`.
 
 #### Raven-fixbib
 
 - **Records naming the same field twice are repaired too**, which is how a database export arrives.
-  - A ProQuest record carries a separate `annote` for its copyright statement, its last-updated date and its subject terms, and BibTeX has no way to say that, so the parser rejects the entry whole — title, authors and all.
+  - A ProQuest record carries a separate `annote` for its copyright statement, its last-updated date and its subject terms, and BibTeX has no way to spell multiple copies of the same field key in the same record, so the parser rejects the entry whole — title, authors and all.
   - The repeats are merged into one field, values kept and joined by newlines, and everything else in the record is left character for character as it was.
   - **This can account for a large share of a file**, so a `.bib` assembled from several databases is worth running through this before trusting a count of it.
 
 - **Every report names the fault**, so an unreadable `.bib` says what is wrong with it and not merely how much.
   - Each line carries the record's key, its line number in *your* file, which of the two faults it is, and the specifics — which fields repeat, which look unbalanced, or the parser's own complaint where it is neither.
   - An author reading `Bloggs, PhD, MSc, Joan` is reported as *too many commas* rather than as a suspected brace problem.
-  - `--list` names every record that was repaired, not just how many. Off by default, since a database export can need repairing a thousand times over.
+  - `--list` names every record that was repaired, not just how many. Off by default.
 
-- **HTML left in the field values is decoded**, which is the one fault here that afflicts records a parser is perfectly happy with.
-  - A database that exports its web page rather than its record leaves entities behind, and a title meaning `Q&A` reaches your citations, your word cloud and your typeset bibliography as `Q\&amp;A`.
-  - The result is BibTeX rather than plain text: a decoded character that BibTeX reserves is escaped on the way out, so `&amp;` becomes `\&` and the file stays as readable as it was. `--keep-entities` switches the whole thing off.
+- **Spurious HTML in the field values is decoded**, which is the one fault here that afflicts records a parser is perfectly happy with.
+  - A database that exports its web page rather than its record leaves entities behind, so a title meaning `Q&A` would reach your citations, your word cloud and your typeset bibliography as `Q\&amp;A`.
+  - The result is BibTeX rather than plain text: a decoded character that BibTeX reserves is escaped on the way out, so `&amp;` becomes `\&` and the file stays as readable as it was.
+  - `--keep-entities` switches this feature off.
 
 - **A publisher's rights notice is moved out of the `abstract` into a `copyright` field of its own.**
-  - It is not what the paper says, and anything reading the abstract as prose has to cope with it — it is why a publisher's name turns up in a word cloud. This does once, in the file, what you would otherwise strip by hand before every analysis.
-  - **Moved, not deleted.** In a bibliography merged from several database exports the notice is often the only thing saying which export a record came from, and `raven-deduplicate` keeps *all* of them when it merges — so a merged record's `copyright` field names every source it came from. `--keep-notices` switches it off.
+  - The rights notice is not part of what the paper says, and anything reading the abstract as prose has to cope with it — hence publisher's names may turn up in a word cloud. This does once, in the file, what you would otherwise have to strip by hand before analysis.
+  - **Moved, not deleted.** In a bibliography merged from several database exports, the notice is often the only thing saying which export a record came from, and `raven-deduplicate` keeps *all* of them when it merges — so a merged record's `copyright` field names every source it came from.
   - What each of these repairs does in detail — how repeats are merged, which entities are dropped rather than decoded, and what happens to a record that already has a `copyright` field — is in the [paper tools manual](raven/papers/README.md#raven-fixbib--repairing-a-database-export).
+  - `--keep-notices` switches this feature off.
 
 #### Raven-deduplicate
 
@@ -256,152 +276,181 @@
 
   - **An audit TSV is written beside the output**, one row per merge: what was kept, what was merged away, which key matched, and every value that differed. A review has to answer for the number of duplicates it removed, and this is what that number is computed from.
   - **Nothing is written unless you ask.** Without `-o` the run reports what it would do; your inputs are never modified either way.
-  - **`--judge` additionally asks an LLM about the near misses** — titles that no exact key joined, and merges whose records disagree about the DOI. Off by default, since it needs a backend.
+  - **`--judge` additionally asks an LLM about the near misses** — titles that no exact key joined, and merges whose records disagree about the DOI.
+    - Off by default, since it needs an LLM backend to act as the judge.
+    - The LLM is called through the same machinery Librarian uses. The same settings apply.
   - **The rules it applies are documented**: what counts as the same paper, what a DOI decides and what it does not, what a merge keeps, and why it errs toward leaving duplicates. See the [paper tools manual](raven/papers/README.md#raven-deduplicate--merging-a-multi-database-search).
 
 #### Raven-siftbib
 
 - **A new tool, `raven-siftbib`**, for the records a literature search returns that a review cannot actually use.
-  A record carrying nothing but a title is not off topic — nobody can tell what it is — it simply has no text to screen on, and a screening pass has to account for it rather than quietly carry it into the count. This removes such records and writes down what went.
+  A record carrying nothing but a title is not strictly speaking off topic — since nobody can tell what it is — it simply has no text to screen on, and a screening pass has to account for it rather than quietly carry it into the count. This removes such records and writes down what went.
 
   ```
   raven-siftbib corpus.bib --require abstract
   ```
 
-  - **The criterion is yours, not the tool's.** `--require FIELD` keeps the records carrying that field; `--min-chars FIELD=N` keeps those whose field reaches a given length. A run naming no criteria is refused rather than defaulted.
-  - **`--min-chars` is for the field that is present and useless.** Publishers routinely export a truncated teaser in place of the abstract, a sentence or two ending mid-word, which satisfies `--require abstract` while telling a screener nothing.
-  - **An audit TSV records what came out and why**, one row per removed record. `--dry-run` reports what would go and writes nothing; the input file is never modified.
+  - **The criterion is yours.** `--require FIELD` keeps the records carrying that field; `--min-chars FIELD=N` keeps those whose field reaches a given length.
+    - A run naming no criteria is refused rather than defaulted.
+  - **`--min-chars` is for fields that are present but useless.**
+    - Publishers sometimes export a truncated teaser in place of the abstract, a sentence or two ending mid-word, which satisfies a bare `--require abstract`, while still not being useful for screening.
+  - **An audit TSV records what came out and why**, one row per removed record.
+    - `--dry-run` reports what would go and writes nothing; the input file is never modified.
   - **Deterministic and offline.** No model, no network. Whether a record is *about* the right subject is a judgement rather than a test, and belongs to a different tool.
   - The criteria, the two output files and what the audit holds are in the [paper tools manual](raven/papers/README.md#raven-siftbib--removing-what-a-review-cannot-screen).
 
 #### Raven-xdot-viewer
 
-- **A label your graph set in bold or italic comes out that way.**
+- **Graph labels now support bold and italic** when the graph says to use it.
   - GraphViz records the font it resolved into the xdot it writes, and the viewer honours it.
-  - **The face is taken from the graph; the typeface is not.** A graph asking for `Times-Bold` is drawn in Raven's own font, in bold — matching the weight and the slant, not the family. A font name that spells its style some other way is drawn regular.
+  - **The face is taken from the graph; the typeface is not.**
+    - A graph asking for `Times-Bold` is drawn in Raven's own font, in bold — matching the weight and the slant, not the family.
+    - A font name that spells its style some other way is drawn regular.
 
 #### Constellation-wide
 
 - **`--qr`**, which puts a scannable "Get Raven" code in the corner of any GUI app.
-  - For running Raven where people are watching: a visitor sees a demo for a minute and walks off, and nobody writes down a URL. Off unless asked for.
-  - The URL comes from the installed package's own metadata, so it cannot drift from where Raven actually lives. Running from a source checkout, where there is no metadata to read, the overlay declines instead of showing a wrong address.
-  - The corner it sits in stays clickable, and it costs no framerate in an app that is otherwise idle.
+  - For running Raven where people are watching: a visitor sees a demo for a minute and walks off. Nobody writes down a URL, but scanning a QR code is much quicker. Off unless asked for.
+  - The URL comes from the installed package's own metadata. Running from a source checkout, where there is no metadata to read, the overlay declines instead of showing a wrong address.
+    - Note that usually, Raven *is* installed - into its own venv that sits beside the source tree. The QR code works fine also in this case.
+  - This is a visual overlay only. The corner the overlay sits in stays clickable, and it costs no framerate in an app that is otherwise idle.
 
 - **Drag files straight in from the file manager.**
-  Every GUI app accepts a drop.
-  - **What a drop means is whatever that app's open button already meant.**
+  - Every GUI app accepts a drop.
+  - A drop that arrives while a dialog is open is ignored.
+  - **What a drop means is whatever that app's open button already means.**
     - *Raven-librarian*: images and documents are attached to your next message, exactly as the attach button does — mixed drops included.
-    - *Raven-visualizer*: a `.pickle` opens that dataset; `.bib` files open the importer with them already filled in as input.
+    - *Raven-visualizer*: a `.pickle` opens that dataset; one or more `.bib` files open the importer dialog, with those files already filled in as inputs.
     - *Raven-cherrypick*: a folder opens it.
     - *Raven-xdot-viewer*: a `.dot`, `.xdot` or `.gv` opens it.
     - *Raven-avatar-pose-editor*: an image with an alpha channel loads as the character; a `.json` loads emotion templates.
     - *Raven-avatar-settings-editor*: an image with transparency loads as the character, any other image as the backdrop, and a `.json` as animator settings.
-      - It has two image slots and a drag cannot be aimed at either — the drop only reports itself on release — so the image decides: a character is a cutout, a backdrop is a full frame.
+      - It has two image slots and a drag cannot be aimed at either — due to technical limitations, the drop event only materializes when the mouse button is released so we cannot highlight the target that would accept a drop being hovered — so the image decides: a character is a cutout, a backdrop is a full frame.
   - Drop something an app cannot use and it says so, naming what you dropped and what would have worked, rather than doing nothing.
-  - A drop that arrives while a dialog is open is ignored, so it cannot answer a question you are in the middle of.
-  - Works wherever the GUI toolkit's own windowing layer does: X11, macOS and Windows. Wayland is untested — please report if it does not work there.
+  - The drop feature works wherever the GUI toolkit's own windowing layer does: X11, macOS and Windows.
+    - **Wayland is untested** — please report if it does not work there.
 
 - **`--repl`**, on every app and on the server: an in-process REPL for inspecting a running instance, off unless asked for.
   - `python -m unpythonic.net.client localhost` connects, and the app's own namespace is in scope.
-  - For the case nothing else covers — an instance that came up *wrong* and is still running, where the next launch will be fine and killing this one destroys the evidence.
-  - **It is unauthenticated, unencrypted, arbitrary code execution inside the app, as you.** Bound to localhost. A debugging aid: do not leave it running, and forward a port over SSH rather than exposing one.
+  - For debugging intermittent issues — an instance that came up *wrong* and is still running, where the next launch will be fine and killing this one destroys the evidence.
+  - **It is unauthenticated, unencrypted, arbitrary code execution inside the app, under your credentials, as a feature.**
+    - Bound to localhost only.
+    - **A debugging aid**: do not leave it running, and if you must access it remotely, forward a port over SSH rather than exposing one.
 
 ### Changed
 
 #### Raven-avatar
 
-- **The settings editor separates its postprocessor filters with a rule.**
-  The panel lists every filter one after another, and there are enough of them now that where one ends and the next begins had become a thing to work out rather than a thing to see.
+- **The settings editor separates its postprocessor filters with a horizontal rule (line).**
+  The panel lists every filter one after another, and there are enough of them now that where one ends and the next begins would not otherwise be clear at a glance.
 
 - **The "data eyes" effect stays on for at least a second** before it fades, so a lookup that finishes quickly is still seen.
   A slow one keeps the effect on for as long as it runs, as before. The animator setting `data_eyes_min_duration` sets the minimum, next to `data_eyes_fadeout_duration`.
 
-- **The settings editor's fractional sliders now show the value they set**, where four of them showed it multiplied by ten with an `x 0.1` label to undo — upscale factor, animator speed, TTS speed and the lipsync AV offset.
+- **The settings editor's fractional sliders now show the value they set**, where four of them showed it multiplied by ten with an `x 0.1` label — upscale factor, animator speed, TTS speed and the lipsync AV offset.
   The animator's speed slider was the worst of them, since its label said only "Speed", so the 3 on screen was a 0.3 with nothing saying so. They read `1.4`, `0.3`, `1.0` and `-0.8` now.
 
 #### Raven-librarian
 
-- **A character now declares itself, and switching character is one setting.**
-  - A character is a JSON file — `aria1.json` — stating what it is *called* and which voice it speaks in. Everything else sits beside it under the same stem and is optional: `aria1.md` is its personality, `aria1.png` its avatar image, and `aria1_icon.png` the glyph beside its chat messages.
-  - **`llm_char_name` then selects a character by that name.** Set it to `"Aria"` and the card, the voice and the face all follow; the two match on the string inside the JSON, so a character's filenames need not resemble its name.
-  - **It used to be four settings that had to be edited into agreement**, and a mismatch showed as the new face answering in the old voice, or as the previous character.
-  - **A character need not have a face.** One with a card and no image is an ordinary character, which is what a terminal frontend such as `raven-minichat` wants anyway. An image with no JSON still animates everywhere it did before, but cannot be selected by name.
+- **A Librarian character now declares itself, and switching to a different character is one setting.**
+  - A Librarian character is a JSON file — `aria1.json` — stating what it is *called* and which voice it speaks in.
+  - Everything else sits beside it under the same stem and is optional:
+    - `aria1.md` is its personality — character instructions for the LLM,
+    - `aria1.png` is its avatar image,
+    - `aria1_icon.png` is the glyph beside its chat messages, used both in the chat log and in the chat graph.
+  - **`llm_char_name` then selects a character by that name.** This setting lives in `raven.librarian.config`.
+    - Set it to `"Aria"` and the card, the voice and the face all follow.
+    - This matches on the string inside the JSON, so a character's filenames need not resemble its name.
+  - **It used to be four settings that had to be edited into agreement**. A mismatch showed as the new face answering in the old voice, or as the previous character.
+  - **A character need not have a face.** One with a card and no image is an ordinary character, which is what a terminal frontend such as `raven-minichat` wants anyway. An image with no JSON still animates everywhere it did before (particularly in the avatar settings editor), but cannot be selected by name, as a Librarian character.
 
 - **The AI is told what its setup is, once, instead of each character card saying so.**
   - The line framing the introductory block moved out of the character cards, where every author of one had to know to repeat it, and is now added automatically whenever a character is present.
-  - **Its wording changed, because the old one was untrue.** It used to say you could not see the text — while Librarian shows its system prompt on purpose. It now says what was actually wanted: the setup is the AI's own ground, to be spoken *from* rather than quoted back or pointed at.
-  - **It is added to each request rather than kept in the chat**, so the system prompt display shows it under *Added to every request, not stored*, alongside the date and the loaded model, instead of it reading as prose you had written and could edit.
-  - **A horizontal rule now separates every part of the setup** — the notice, the system prompt, the character card, the user card — where previously only the end of the block was marked.
+  - **Its wording changed, because the old one was untrue.**
+    - It used to say you could not see the text — while Librarian shows its system prompt on purpose.
+    - It now says what was actually wanted: the setup is the AI's own ground, to be spoken *from* rather than quoted back or pointed at.
+  - **It is added to each request rather than kept in the chat**.
+    - The system prompt display in the chat log shows it under *Added to every request, not stored*, alongside the date and the loaded model, instead of it reading as prose you had written and could edit.
+  - **A horizontal rule (line) now separates every part of the setup** — the notice, the system prompt, the character card, the user card — where previously only the end of the block was marked.
     - Three separately authored pieces run together read as one, and the user card in particular used to begin mid-flow, right after whatever sentence the character card ended on.
 
-- **You can tell the AI who *you* are, the same way a character says who it is.**
-  - Make `~/.config/raven/librarian/users/` and put a `juha.json` in it naming you, with an optional `juha.md` describing you and an optional `juha_icon.png` for your messages in the chat; `llm_user_name` then selects it by that name.
-  - Nothing ships — Raven has no sensible default for somebody it has never met — and without a profile you have a name and nothing else, exactly as before.
-  - **Your messages can carry your own icon.** Until now the user always got the generic glyph, there being nowhere to declare another.
+- **You can tell the AI who *you* are.**
+  - Create a folder `~/.config/raven/librarian/users/`, and put a `juha.json` in it naming you, with an optional `juha.md` describing you, and an optional `juha_icon.png` for your messages in the chat.
+  - **`llm_user_name` then selects it by that name.** This setting lives in `raven.librarian.config`.
+  - Nothing ships — Raven has no sensible default for somebody it has never met — and without a profile you have a default name *User* and nothing else, exactly as before.
+  - **Your messages can carry your own user-profile-specific icon.**
+    - Until now the user always got the generic glyph, there being nowhere to declare another.
   - It is a directory rather than one file, so a name can select from several: a shared machine, or a work profile and a personal one, is then a matter of changing `llm_user_name`.
-  - `prompts/user.md` is gone, replaced by this. It shipped empty, so nothing is lost.
 
 - **Hovering a message's role icon in the chat log names who wrote it.**
-  The log carries a timestamp and the text but no name, so the icon was the only indication of the speaker — and a message by a character or a user profile other than the configured one draws the generic glyph, where the name was not on screen at all.
+  - The chat log carries a timestamp and the text but no name, so the icon was the only indication of the speaker.
 
 - **The help card (`F1`) has pages.**
-  - The keys are on the first one, with nothing else, so it is now a reference you can screenshot and keep open while you learn them. The chat graph's own keyboard is on the second, with the prose that explains it, and everything else the card says *about* Librarian is on *Features*.
-  - Turn them with `Left` / `Right`, or `Home` / `End` for the ends, or the buttons in the card's new toolbar.
-  - **The card had run out of room**, and every addition for months had been bought by cutting something else: the hotkey table was at its rebalancing floor, a separator row was spent to win back a line, and the chat graph's own keys never made it onto the card at all.
-  - **The prose pages read as two newspaper columns**, the left one finished before the right one starts — a card this wide gives a single column lines too long to track back to the start of.
-  - **Message attachments are described**: what an attachment is for as against the document database, what each kind asks of the model, how to attach one, and where to clean up the ones nothing refers to any more.
-  - **Flipping *Internet* or *Documents* is noted as costing a pause** on the next reply, the tool declarations riding at the top of the conversation, so the whole chat has to be re-read.
-  - The card sizes itself to its tallest page and keeps that height, so turning a page does not resize the window under you.
+  - The hotkey reference is on the first page, with nothing else, so you can now screenshot it and keep it open in an image viewer while you learn the shortcuts.
+  - The chat graph's own keyboard is on the second page, with the prose that explains it, and everything else the card says *about* Librarian is on the third page, *Features*.
+  - Turn pages with `Left` / `Right`, or `Home` / `End` for the ends, or the buttons in the card's new toolbar.
+  - **The prose pages read as two newspaper columns**, for readability.
+  - **Message attachments are described**: what an attachment is for (in contrast with the document database), what each kind asks of the model, how to attach one, and where to clean up the ones nothing refers to any more.
+  - **Flipping *Internet* or *Documents* is noted as costing a pause** on the next reply. The tool declarations ride at the top of the conversation, so to switch the model's access to one or more tools, the whole chat has to be re-read.
+  - The card sizes itself to its tallest page and keeps that height, so turning a page does not resize the help window under you.
 
-- **The prompt texts are Markdown files now**, under `raven/librarian/prompts/`.
-  - Any of them can be overridden from `~/.config/raven/librarian/prompts/` without touching the installed copy. That folder's `README.md` documents the template variables and what each file is for.
-  - **`{model}` and `{context_length}` are gone from prompts.** A prompt is built once at startup and stored as the message a chat is rooted at, so either would freeze at the value it had then while neither fact is stable.
-    - Both are stated automatically in the per-turn system message instead, so you lose nothing by not writing them. A prompt still using one now fails at startup, naming it.
+- **The prompt texts are read from Markdown files now.**
+  - The defaults ship under `raven/librarian/prompts/`. That folder's `README.md` documents the template variables and what each file is for.
+  - Any of them can be overridden from `~/.config/raven/librarian/prompts/` (create the folder if needed) without touching the installed copy.
+  - **`{model}` and `{context_length}` are gone from prompts.**
+    - A prompt is built once at startup and stored as the message a chat is rooted at, so either would freeze at the value it had then while neither fact is stable.
+    - Both are stated automatically in the per-turn system message instead, so you lose nothing by not writing them. A prompt for a previous version of Raven, still using one, now fails at startup, naming the issue.
 
-- **The user data folder is now `~/.config/raven/librarian/`**, where it was `~/.config/raven/llmclient/`.
-  - Named after the app you run rather than after the module that first wrote there. It holds your chat history, your attachments, your document drop folder and its RAG index, so it is a folder people look at.
-  - **Move it by hand if you have one**: `mv ~/.config/raven/llmclient ~/.config/raven/librarian`.
+- **The user data folder is now `~/.config/raven/librarian/`**, whereas previously it was `~/.config/raven/llmclient/`.
+  - Named after the app you run rather than after the module that first wrote there.
+  - _It holds your chat history, your attachments, your document drop folder and its RAG index.
+  - **Rename it by hand if you have one**: `mv ~/.config/raven/llmclient ~/.config/raven/librarian`.
     - Nothing migrates it for you, and a Librarian that finds neither starts a fresh chat history rather than saying anything is wrong. Done now, while Librarian has no outside users, precisely so the migration code never has to exist.
 
-- **The *Tools* mode toggle is now *Internet*, and it no longer overrides *Documents*.**
+- **The *Tools* mode toggle has been split to separate *Internet* and *Documents* toggles.**
   - Each switch governs one group of tools outright — *Internet* the two that reach the network (`websearch`, `webfetch`), *Documents* the three that read your document database — so all four combinations mean something.
-  - **Previously *Tools* sat above both**: with it off and *Documents* on, you had switched your documents on and the AI still could not search them, and nothing about a switch named "Tools" suggested it overruled the one named after the thing it was overruling.
   - **Your setting carries over.** A stored *Tools* preference becomes the *Internet* setting on first start, which keeps the intent: the old switch governed web access too, so a user who had tools off gets the network off.
   - `get_current_time` answers to neither switch and is always available. The current time is injected into every reply regardless of both toggles, so withholding the tool would leave the AI reading a call it could not resolve.
-  - In `raven-minichat`, `!tools` becomes `!internet`.
+  - In `raven-minichat`, the `!tools` toggle no longer exists; the `!internet` toggle has been added.
 
 - **Librarian now opens even when the LLM backend cannot answer**, and says so instead of exiting.
-  - **Previously a backend that was not running ended the app at startup with an error code**, which the past chats, the cleanup dialog and the settings did not need.
+  - **Previously a backend that was not running ended the app at startup with an error code** — although just reading past chats does not even use the backend.
   - A row above the message box reports what is wrong, in the words that say what to do about it — nothing is answering at that address (is the server running? is the address right?), or the server is running with no model loaded (load one).
-  - It clears itself. Start the server, or load a model, and the row turns green a few seconds later, names the model now loaded, and goes away. Clicking it checks immediately instead of waiting for the next check.
+  - It clears itself when the issue is gone. Start the server, or load a model, and the row turns green a few seconds later, names the model now loaded, and goes away. Clicking it checks immediately instead of waiting for the next check.
+    - After the check goes green, Librarian again works as normal.
   - Nothing is polled while the backend is healthy — the row only exists while something is wrong, and the checking stops the moment it clears.
-  - A backend that goes away *mid-session* is still reported by the reply that fails, which you can reroll. This row is about the state you start in.
+  - A backend that goes away *mid-session* is still additionally reported by the reply that fails, which you can reroll.
   - `raven-minichat` does the same and keeps the REPL — `!history` and `!dump` work with nothing loaded — reporting the verdict on the console. Its `!reconnect` command is the terminal's version of clicking the row.
-  - `raven-pdf2bib` and `raven-importer` still exit instead, because they can run for hours — and they now also stop when the backend is *running with no model loaded*, which previously started the run and failed every step. That one reads as a bug in Raven when it is not caught: the backend answers, so nothing looks wrong until every extraction comes back empty. Neither recovers from a backend that goes away mid-run; that is still a run to restart.
+  - `raven-pdf2bib` and `raven-importer` still exit instead, because they can run for hours — and they now also stop when the backend is *running with no model loaded*, which previously started the run and failed every step.
+    - That one would read as a bug in Raven if not caught: the backend answers, so nothing looks wrong until every extraction comes back empty.
+    - Neither pdf2bib nor the importer recover from a backend that goes away mid-run; that is still a run to restart.
 
 - **Editing the system prompt no longer rewrites the one your existing chats were held under.**
   - Previously the stored system prompt was overwritten at every app start, so a conversation you had last month silently acquired today's instructions and there was no way to see what it had actually been written against.
-  - Now the datastore keeps one system prompt per distinct text, and a chat stays rooted at the one it was held under. Changing the prompt back reuses the earlier one rather than making a third.
+  - Now the datastore keeps one system prompt per distinct text, and a chat stays rooted at the one it was held under. Changing the prompt back reuses the earlier one rather than creating an identical copy.
   - **On first start after upgrading, your existing chats appear under a second system prompt** — the text they were stored with, which differs from the current one.
     - Nothing is lost or moved: the app opens where you left off, and the older ones can be reached from the chat graph view.
-  - **The branch arrows now work on the system prompt message**, which is how you switch between system prompts stored in the chat datastore.
-    - They behave as they do on any other message; at the top of the chat they step between system prompts instead of between replies.
-  - **A system prompt can be deleted when it is not the one in use**, and this destroys the chats held under it with it — which is the point, since that is the only thing those chats hang from.
+    - However, starting a new chat will do so on the new v0.2.9 system prompt.
+  - **The branch arrows in the chat log now work on the system prompt message.**
+    - The arrows behave as they do on any other message; at the top of the chat they step between system prompts instead of between replies.
+    - You can use this to switch between system prompts stored in the chat datastore. Alternatively, you can use the chat graph view to switch between them.
+  - **A system prompt can be deleted when it is not the one in use.**
+    - This **destroys the chats** held under it with it — which is the point, since in the datastore, those chats hang from that system prompt
     - Deleting a system prompt leaves you where a new chat under the system prompt you land on would begin (on the AI greeting attached to that prompt), rather than on the bare prompt.
     - The system prompt currently in use stays undeletable, as before.
-  - Cleanup understands this: chats under an older system prompt are not offered for deletion as unreachable.
+  - Cleanup understands this: chats under an older system prompt are **not** offered for deletion as unreachable.
 
 - **Branching now works on the AI's opening greeting**, where it was refused before.
-  - Branching sets where you are writing from and nothing else, so from a greeting it starts a new chat under that system prompt — which is a fair thing to want, and reachable anyway through the new-chat button.
-  - It stays refused on a system prompt message, where it would leave you writing from a point that shows you none of the conversation.
+  - Branching sets where you are writing from and nothing else, so from a greeting it starts a new chat — which is a fair thing to want, and actually the same action as clicking the new-chat button.
+  - It stays refused on a system prompt message.
 
 - **The chat datastore is now `chat.json`, with its attachments in `chat.sidecars/` beside it.**
-  - They were `data.json` and `data.images/` — the first said nothing about what was in it, and the second was named when images were the only thing you could attach, which stopped being true once documents could be.
-  - **Both are renamed on first start, together**, so there is nothing to do.
-  - A `data.json` is adopted only if it actually reads as a chat datastore. The name is generic enough to belong to something else entirely, and the file is looked for beside whatever datastore path you configured — so if you have pointed Raven at a directory of your own, an unrelated `data.json` there is left alone.
+  - In v0.2.8, they were `data.json` and `data.images/` — the first said nothing about what was in it, and the second was named when images were the only thing you could attach, which stopped being true once documents could be.
+  - **Both are automatically renamed on first start, together**, so there is nothing to do.
+  - A `data.json` is adopted only if it actually looks like a chat datastore on the inside. The name is generic enough to belong to something else entirely, and the file is looked for beside whatever datastore path you configured — so if you have pointed Raven at a directory of your own, an unrelated `data.json` there is left alone.
 
 - **The chat log now marks its ends when you reach them with the mouse wheel**, as it already did when you got there with the keyboard.
-  The wheel is scrolled by the GUI toolkit itself, so nothing in Raven was watching it.
+  - The wheel is scrolled by the GUI toolkit itself, so nothing in Raven was watching it.
 
 - **The per-message hotkeys act on the message you are looking at**, rather than on the last one in the chat.
   - Scroll back and reroll, branch, speak, edit or step between siblings, and it happens to the bottommost message whose buttons are on screen — a blue dot beside them says which one that is.
@@ -410,19 +459,21 @@
 
 - **The SYSTEM indicator now lights while the idle prefill is being read**, as it already did for a turn.
   - SYSTEM means the backend has a prompt and has emitted nothing yet, which is exactly what a prefill is — but only a turn raised it, so the app looked idle throughout.
-  - Against a cold cache that is the better part of a minute with the GPU at its busiest and nothing on screen saying so.
+  - Against a cold KV cache, the prefill can take a while with the GPU at its busiest.
 
 - **`Esc` in the message composer now clears what you have written.**
-  - It used to put back whatever the field held when your caret last entered it — so the same key cleared the box or restored an older draft depending on where you had last clicked, which is not a difference you can see from the screen.
+  - In v0.2.8, it used to put back whatever the field held when your caret last entered it.
   - With text in the field, `Esc` clears it; press it again to leave the field.
 
-- **The app starts with the keyboard in the chat log**, where it used to start in the message composer.
-  `Ctrl+Space`, or a click, puts the caret in the composer. `startup_keyboard_home = "composer"` in `raven.librarian.config` starts with the caret there instead.
+- **The app starts with the keyboard in the chat log**.
+  `Ctrl+Space`, or a click, puts the caret in the composer.
+  - If you instead want the composer focused at startup, set `startup_keyboard_home = "composer"` in `raven.librarian.config`.
 
-- **`Ctrl+P` pings the avatar**: it wakes the avatar if it is asleep, and plays the "notice" lines above its head.
+- **`Ctrl+P` pings the avatar**: it wakes the avatar if it is asleep (video off), and plays the "notice" lines above its head (if available for the current character).
 
 - **Sending an empty message does nothing by default**, where it used to ask the AI to take another turn.
-  The request then ends on the AI's own reply, and current models mostly answer that with an empty message. `llm_allow_empty_send` in `raven.librarian.config` switches the old behaviour back on, in both Raven-librarian and `raven-minichat`.
+  - The request then ends on the AI's own reply, and current models mostly answer that with an empty message.
+  - `llm_allow_empty_send` in `raven.librarian.config` switches the old behaviour back on, in both Raven-librarian and `raven-minichat`.
 
 - **With speech on, the avatar's expression follows what it is saying.**
   - **It used to react to the reply as the text streamed in**, so the face was already showing the mood of a sentence the voice had not reached yet.
@@ -435,10 +486,11 @@
 - **The info panel shows each item's authors and year on a line of their own, above the title.**
 
 - **The info panel's search counter stays up when no match is on screen**, reading `[–/N]`, so the count is there wherever the panel is scrolled.
-  It used to disappear. Raven-librarian's chat search counter reads the same way.
+  - Raven-librarian's chat search counter reads the same way.
+  - In previous versions of Raven, Visualizer's search counter used to disappear while no match was on screen.
 
 - **`Page Up`, `Page Down` and the up and down arrows scroll the info panel while you are typing a search**, so its results can be read down without leaving the field.
-  - **Previously the field had to be left first**, and the mouse was the only way to do that without losing or accepting what you had typed.
+  - **Previously the field had to be left first**, and the mouse was the only way to do that without losing (`Esc`) or accepting (`Enter`) what you had typed.
   - **`Tab` now leaves it without doing either**, moving the keyboard between the search field and the info panel and keeping the search. `Shift+Tab` does the same.
 
 - **Keyword extraction now counts nouns and proper nouns, and leaves the verbs out.**
@@ -448,78 +500,94 @@
   - Affects the word cloud, the per-entry keywords and the frequency-based cluster keywords, for datasets imported from now on. `nlptools.count_frequencies` takes `accepted_pos=None` for the old, wider behavior.
 
 - **An incomplete record is now imported rather than skipped.**
-  - A missing title, author or year each becomes `[Title not specified]`, `[Author not specified]` or `[Year not specified]`, and the import log names every one.
+  - A missing title, author or year each becomes `[Title not specified]`, `[Author not specified]` or `[Year not specified]`, and the import log names every one (look in the terminal where you started Visualizer, or start with `--log my_filename.log`).
   - **Previously any of the three cost the record its place** — so an export carrying the abstract, the DOI and everything else but the authors, which is a shape whole conference proceedings arrive in, lost those records entirely along with the abstracts that were the part worth reading.
-  - **The placeholders are shown, never analyzed.** The title one is Raven's word rather than the record's, and the same word on every such record, so feeding it to the keyword extractor and the semantic vector would gather those records into a cluster whose members share nothing but a field their database omitted. Both stages read the abstract alone instead — which also fills a gap they had: an entry with an abstract and no title previously had no case at all. Authors and year never reached those stages to begin with.
-  - **A record with neither a title nor an abstract is skipped**, with a warning naming it. There is nothing to read, and its analysis text would have been the placeholder by itself.
+  - **The placeholders are shown, never analyzed.** The title one is Raven's word rather than the record's, and the same word on every such record, so feeding it to the keyword extractor and the semantic vector would gather those records into a cluster whose members share nothing but a field their database omitted.
+    - Both stages read the abstract alone instead — which also fills a gap they had: an entry with an abstract and no title previously had no case at all. Authors and year never reached those stages to begin with.
+  - **A record with neither a title nor an abstract is skipped**, with a warning naming it.
+    - There is nothing to read, and its analysis text would have been the placeholder by itself.
   - A re-export writes the record's own author field back out, or nothing where it had none — never the placeholder, which would put Raven's words into somebody's bibliography as though a database had said them.
 
-- **The info panel marks its ends when the mouse wheel *arrives* at one**, where previously it only did so once you were already there and turned the wheel again.
-  A single click of the wheel onto the end used to be silent.
+- **The info panel marks its ends when the mouse wheel *arrives* at one**, where previously it only did so once you were already there and turned the wheel one more notch.
 
 - **A blue dot now marks the current info panel item** — the same mark, in the same shape, that Raven-librarian puts beside the chat message its hotkeys will act on, in place of the glow the item's buttons used to have.
-  It is drawn as part of the panel, so whatever covers the panel covers it too; the old glow floated on top of the word cloud window.
+  - It is drawn as part of the panel, so whatever covers the panel covers it too; up to v0.2.8, the old glow (incorrectly) floated on top of the word cloud window.
 
 - **The importer now strips the publisher's rights notice off an abstract**, so `© 2022 IEEE.` and `This article is distributed under the terms of the Creative Commons Attribution 4.0 License` stop being treated as part of what a paper says.
-  - A database export appends one to most abstracts it carries, and everything downstream then reads it as prose.
-  - **The word cloud is where you will see it**, with publisher names and licence wording largely gone from it. A publisher named in the body of an abstract still counts, as it should. `publisher_stopwords` is still there and still works; it now has much less to do.
-  - **A paper *about* copyright keeps every word.** That is the hard case, not the easy one — the phrases a notice is built from are also things an abstract on open licensing says. So the copyright sign is trusted on sight, while wording that is ordinary English (*All rights reserved*, *copyright held by*, a licence-grant clause) counts only where it opens a sentence, which is what appended boilerplate does and a clause inside an argument does not. A bare *copyright* is never a match, and only the tail of an abstract is examined at all.
-  - Available as `raven.common.text.strip_boilerplate` for anything else reading a database-exported abstract, with `find_rights_notice` for a caller that wants to show what it removed rather than discard it.
+  - A database export often appends one to abstracts it carries; everything downstream would then read it as prose.
+  - **The word cloud is where you will see the difference**, with publisher names and licence wording largely gone from it.
+    - A publisher named in the body of an abstract still counts, as it should.
+    - `publisher_stopwords` in `raven.visualizer.config` still exists and still works; it now has much less to do.
+  - **A paper *about* copyright keeps every word.**
+    - That is the hard case — the phrases a notice is built from are also things a scientific abstract discussing open licensing says.
+    - So the copyright sign is trusted on sight, while wording that is ordinary English (*All rights reserved*, *copyright held by*, a licence-grant clause) counts only where it opens a sentence, which is what appended boilerplate does and a clause inside an argument does not.
+    - A bare *copyright* is never a match, and only the tail of an abstract is examined at all.
+  - From Python, available as `raven.common.text.strip_boilerplate` for anything else reading a database-exported abstract, with `find_rights_notice` for a caller that wants to show what it removed rather than discard it.
 
 - **LLM cluster keywords are now made comparable across clusters.**
-  - **Each cluster is keyworded on its own**, so one concept came back under several spellings — an acronym in one cluster, its expansion in another, a stray capital in a third — and two clusters sharing a topic then looked no more alike than two that merely spelled one alike.
-  - A second pass over the whole vocabulary folds the variants together once every cluster has been seen.
-  - **The model is asked for a mapping, not for a rewritten list, so the result can be checked.** A replacement is applied only when it is itself one of the keywords the first pass extracted, which means an invented or rephrased term cannot reach the dataset — it is dropped instead of trusted. Word clouds and cluster labels read the same list, so both get the benefit.
-  - Only affects `clusters_keyword_method = "llm"`. The prompt is `config.clusters_llm_keyword_canonicalization_prompt`, and the log names every replacement it applies.
+  - Only affects `clusters_keyword_method = "llm"`.
+    - The prompt is `config.clusters_llm_keyword_canonicalization_prompt`, and the log names every replacement it applies. (See the terminal you started Visualizer from, or start with `--log my_filename.log`.)
+  - **Each cluster is keyworded on its own**, so one concept can come back under several spellings — an acronym in one cluster, its expansion in another, a stray capital in a third — which would cause two clusters sharing a topic looking as if they didn't.
+    - Now a second pass over the whole vocabulary folds the variants together once every cluster has been seen.
+  - **The LLM is asked for a mapping, not for a rewritten list, so the result can be checked.**
+    - A replacement is applied only when it is itself one of the keywords the first pass extracted, which means an invented or rephrased term cannot reach the dataset — it is dropped instead of trusted.
+  - Word clouds and cluster labels read the same list, so both benefit from this.
 
 - **The importer's two LLM steps no longer run as a conversation with the assistant character** — cluster keyword extraction and abstract summarization.
   - Both outputs are parsed by the importer rather than read by a person, while the character card asks for Markdown, for a reported train of thought, and for conversational prose — all of which had to be undone before the result could be used.
-  - Each of the two prompts already states its own task, so what the character contributed was only the part working against it. Expect cleaner keyword lists, and summaries that start with the summary.
+  - Each of the two prompts already states its own task, so the character card was not needed there.
 
 #### Raven-cherrypick
 
 - **The thumbnail grid scrolls smoothly**, and flashes an arrow at the top or bottom edge as you arrive there, and again if you press or wheel further.
-  - It was the last view in the constellation that jumped. A rebuild — changing the filter, or the tile size — still repositions instantly, since gliding there would animate toward a position that is about to be corrected.
+  - It was the last view in the constellation that jumped. A rebuild — changing the filter, or the tile size — still repositions instantly.
   - `SMOOTH_SCROLLING`, `SMOOTH_SCROLLING_STEP_PARAMETER` and `SCROLL_ENDS_HERE_DURATION` in `raven/cherrypick/config.py` tune or disable both.
 
 - **"Open image folder" now shows you the pictures.**
-  - It opens in the thumbnail grid, listing a folder's images as you browse. Walk into a folder and press **Pick folder** to take the one you are looking at; clicking a folder and pressing the button still takes that one, and the line above the buttons names whichever it would be.
+  - It opens in the thumbnail grid, listing the current folder's images as you browse.
+  - Walk into a folder and press **Pick folder** to take the one you are looking at.
+    - Clicking a folder and pressing the button still takes that one, and the line above the buttons names whichever would be picked.
   - The images are there to be looked at, not picked — they are how you judge whether this is the right folder, instead of remembering what its name meant. So they are dimmed and do not respond to clicks, the answer this dialog gives being a folder.
 
-- **While comparing, picking the winner is now `Shift`+a digit** rather than the bare digit, and `1` means zoom to 1:1 everywhere.
-  - Including inside compare mode, where 1:1 previously could not be reached from the keyboard at all. This is a change to a key you may have in your fingers, and the only one in this release.
+- **While comparing, picking the winner is now `Shift`+a digit** rather than the bare digit, so that the hotkey `1` means "zoom to 1:1" everywhere.
+  - Including in Cherrypick, and also in compare mode, where 1:1 previously could not be reached from the keyboard at all. This is a change to a key you may have in your fingers, and the only one in this release.
   - `1` is 1:1 in the chat graph and the graph viewer too, so it now means one thing across the constellation. A bare digit could not both do that and pick a winner; reaching for 1:1 while comparing would have thrown you out of compare mode instead.
-  - `Numpad 1` works as well, for keyboard layouts where the main-row digits are shifted.
+  - `Numpad 1` works as well, for keyboard layouts where the main-row digits are shifted (such as azerty).
 
 #### Raven-pdf2bib
 
-- **The extraction steps no longer run as a conversation with the assistant character either** — authors, title, keywords, abstract and the rest.
-  - They run on prompts that already tell the model its answer "will be sent to a computer program that cannot understand natural language". The per-step progress letters on stderr are unchanged.
-  - When a step fails, the error report shows the model's thinking trace and its final answer laid out the way Librarian's export buttons lay them out, so a trace in an error report and a trace in an exported chat read the same way. The usual cause of an empty step is the model overthinking until the token budget runs out, which is what the trace shows.
+- **The extraction steps no longer run as a conversation with the assistant character** — authors, title, keywords, abstract and the rest.
+  - They run on prompts that already tell the model its answer "will be sent to a computer program that cannot understand natural language". The per-step progress indicators on stderr are unchanged.
+  - When a step fails, the error report shows the model's thinking trace and its final answer laid out the way Librarian's export buttons lay them out, so a trace in an error report and a trace in an exported chat read the same way.
+    - The usual cause of an empty step is the model overthinking until the token budget runs out, which is what the trace shows.
 
 #### Constellation-wide
 
 - **The file dialog can be driven from the keyboard.**
-  Every app that opens a file browser gets this.
+  Every app that opens a file browser has this.
   - **`Enter` goes as deep as the entry allows** — into the directory under the cursor, or accepting the file under it where there is nothing deeper — and **`Ctrl+Enter` accepts where you are**, as the OK button does. A line above the buttons names the path OK would return, and updates as you move.
-  - **The parts that were mouse-only are reachable now**: the shortcuts panel down the left side, the file type list, and a path field for the paths that do not come from browsing — one pasted from a terminal, or a root like `/mnt` that is nowhere near where you are.
-    - **The path field says what `Enter` will do with it** — green while it names a folder that exists, red once it cannot lead anywhere, and plain while you are on your way to one. So a path that is stale, or mistyped at the far end, shows it as you go.
-  - **`F1` lists the keys**, on a card that names the dialog it belongs to and offers only what that dialog can actually do: marking appears where several files may be picked, thumbnails where there are files to show, and the text field is described as finding or as naming according to whether you are opening or saving.
+  - **The parts that were mouse-only are keyboard-reachable now**: the shortcuts panel down the left side, the file type list, and a path field for the paths that do not come from browsing — one pasted from a terminal or from an external file browser, or a root like `/mnt` that is nowhere near where you are.
+    - **The path field (`Ctrl+L`) says what `Enter` will do with it** — green while it names a folder that exists, red once it cannot lead anywhere, and plain while you are on your way to one (partial match). So a path that is stale, or mistyped at the far end, shows it as you go.
+      - The path field does not have completion; that is what the filter (`Ctrl+F`) field is for (and it supports fragment search, e.g. "cat photo" for "photocatalytic").
+  - **`F1` (or clicking the new help button) lists the keys**, on a help card that names the dialog it belongs to and offers only what that dialog instance can actually do.
+    - Help on marking appears for a dialog where several files may be picked.
+    - Help for thumbnails appears where there are files to show.
+    - The text field is described as finding or as naming according to whether you are opening or saving.
   - Every key, and what each view does with it, is in the [file dialog manual](raven/vendor/file_dialog/file-dialog-manual.md).
 
 - **The file dialog's find field says whether it found anything.**
-  Its text turns green while something in the folder matches what you have typed and red when nothing does — the same colours Raven-visualizer's search field uses — so a listing that has gone empty is distinguishable at a glance from a typo.
-  - Typing `..` counts as a match: the way up answers a search like any other name.
+  - Its text turns green while something in the folder matches what you have typed and red when nothing does — the same colours Raven-visualizer's search field uses — so a listing that has gone empty is distinguishable at a glance from a typo.
+  - Typing `..` counts as a match: this way, the standard "up" path answers a search like any other name.
   - A save dialog leaves the field uncoloured, since there it names the file to be written, and a name nothing matches is the ordinary case.
 
 - **The file dialog offers file types only where an app asked for them.**
-  - **A dialog whose caller named no types used to list some 170 extensions** — `.vhd`, `.qcow2`, `.msi` and the rest — a menu of formats the app has nothing to do with; in a folder picker it filtered a listing that holds no files at all. It now offers "all files" and nothing else.
-  - **A folder picker offers no file types at all**, the `Show` control and the two keys that reach it being gone there. A type filter applies to files only.
+  - **A dialog whose caller named no types used to list some 170 extensions** — `.vhd`, `.qcow2`, `.msi` and the rest — a menu of formats the app mostly has nothing to do with; in a folder picker it filtered a listing that holds no files at all. These cases now offer "all files" and nothing else.
+  - **A folder picker offers no file types at all**, the `Show` control and the two keys that reach it being gone there. A type filter applies only when picking or saving files.
     - This also takes away the blank `Show` box that the pose editor's *Save all emotion templates* used to show, and Raven-cherrypick's *Open image folder* loses it too.
 
 - **The cursor breathes.**
   The blue mark showing which entry the keyboard is on now pulses slowly, in the file dialog's list and in every thumbnail grid — Raven-cherrypick's included, where it is the same mark on a tile.
-  - It costs no frame rate when nothing else is happening: apps that drop to a low frame rate while you read keep doing so, and the pulse simply runs at that rate.
+  - It costs no frame rate when nothing else is happening: apps that drop to a low frame rate while you read keep doing so, and the pulse simply runs at that rate (framerate-compensated so the animation speed is not affected).
 
 - **A blue border says which control has the arrow keys.**
   - In the file dialog it marks whichever control the caret is in — the find field, the path field, the file type list, the listing, the shortcuts panel — so a chord that hands the keys elsewhere shows where they went.
@@ -531,22 +599,29 @@
   - **Whether they were shown was fixed when the app built its dialog**, with no control at all, so a dotfile — or a config directory in a folder picker — was simply out of reach.
   - The choice holds until you change it back.
 
+- **The file dialog's sort now works via buttons, not via table headings.**
+  - This was necessary for technical reasons; particularly, to have the uniform sorting UX for the list and thumbnail-grid views.
+  - The table heading row can still be used for drag-resizing the columns, but clicking the headings now does nothing.
+
 - **The file dialog is resizable, and opens larger.**
   - Drag its border when a directory warrants more rows than the default shows; every app that opens a file browser gets this. The new default is chosen so that reaching for the border should be the exception rather than the routine.
   - It will not shrink past the point where its own controls stop fitting — the sort buttons are fixed-width and cannot reflow, so below that size the Thumbnails checkbox would be clipped off the edge.
   - In the thumbnail view, the tiles reflow to fill the new width as you drag.
 
-- **Your own settings can live outside the repository now.**
+- **One idle frame rate for the whole constellation, and it now actually means a rate.**
+  - Every Raven GUI app drops to a low frame rate while nothing is happening, to conserve GPU and CPU — thus reducing wasted electricity, saving a laptop's battery life, and helping fans to run quieter.
+    - That rate is a single setting now — `GUI_IDLE_FRAMERATE` in [`raven.config`](raven/config.py), so changing it reaches every app at once. The default is unchanged from v0.2.8, at twelve frames a second.
+  - **Raven holds that rate even when frames are expensive.**
+    - Up to v0.2.8, the throttle used to sleep a fixed interval *on top of* whatever the frame had already cost, so the two agreed only while frames were nearly free. A view whose frame took 60 ms landed nearer seven frames a second than the twelve asked for, the throttle taking its cut from a rate that was already low.
+    - As of v0.2.9, it now sleeps out what is left of the frame's budget, so a heavy view idles at the rate you set. Past the budget there is no sleep at all and the app runs flat out, which is what a cap on rate rather than on effort means.
+  - If you had edited `IDLE_SLEEP_S` or `INPUT_ACTIVE_S` in an app's `config.py`, those are gone. Set `GUI_IDLE_FRAMERATE` — frames per second, where the old one was seconds per frame — and `GUI_INPUT_ACTIVE_S` in the top-level `raven.config` instead.
+
+- **Your own settings overrides can live outside Raven's source tree now.**
   - Put them in `~/.config/raven/overrides.json`, keyed by config module (`"raven.librarian.config": {"llm_backend_url": "..."}`), and they win over what `config.py` ships.
-  - **The backend URL naming your other box, the audio device that exists only on this machine, your own name** — those stop being edits to tracked files that a `git pull` may want to change underneath you, and stop showing up in `git status`.
-  - Editing `config.py` directly still works and is unchanged; this is an alternative for the settings that are yours rather than Raven's.
+  - **The backend URL naming your other machine, the audio device that exists only on this machine, your own name** — those stop being edits to tracked files that a `git pull` may want to change underneath you, and stop showing up in `git status`.
+  - Editing a `config.py` directly still works, and is unchanged; `overrides.json` is an alternative.
   - **Only settings that already exist can be overridden**: a misspelled name, or a value of the wrong kind, is reported in the log and ignored rather than quietly becoming a setting nothing reads. A file with a syntax error is reported too, and Raven starts anyway on the shipped defaults.
   - The format — including how to reach a setting held inside another, and how to comment one out — is in the README's *Configuration* section.
-
-- **One idle frame rate for the whole constellation, and it now means a rate.**
-  - Every Raven GUI app drops to a low frame rate while nothing is happening. That rate is a single setting now — `GUI_IDLE_FRAMERATE` in [`raven.config`](raven/config.py) — rather than the same two numbers copied into each app's own `config.py`, so changing it reaches every window at once. The default is unchanged at twelve frames a second.
-  - **It holds that rate when frames are expensive.** The throttle used to sleep a fixed interval *on top of* whatever the frame had already cost, so the two agreed only while frames were nearly free: a view whose frame took 60 ms landed nearer seven frames a second than the twelve asked for, the throttle taking its cut from a rate that was already low. It now sleeps out what is left of the frame's budget, so a heavy view idles at the rate you set. Past the budget there is no sleep at all and the app runs flat out, which is what a cap on rate rather than on effort means.
-  - If you had edited `IDLE_SLEEP_S` or `INPUT_ACTIVE_S` in an app's `config.py`, those are gone. Set `GUI_IDLE_FRAMERATE` — frames per second, where the old one was seconds per frame — and `GUI_INPUT_ACTIVE_S` in `raven.config` instead.
 
 ### Fixed
 
@@ -554,58 +629,56 @@
 
 - **`bloom` no longer draws a halo around the avatar's outline.**
   - The antialiased edge picked up light from the empty space around the character. **The character itself was never affected** — the old and new readings agree wherever a pixel is fully opaque.
-  - **It now decides what is bright by the light a pixel emits rather than by the colour it carries.** In a straight-alpha frame those differ wherever a pixel is not fully opaque: the colour alone is what the pixel *would* look like if it were, which for a nearly transparent one can be a large number attached to almost no light. The old reading called such pixels highlights and blurred that colour outward.
+  - **It now decides what is bright by the light a pixel emits rather than by the colour it carries.**
+    - In a straight-alpha frame, those differ wherever a pixel is not fully opaque: the colour alone is what the pixel *would* look like if it were, which for a nearly transparent one can be a large number attached to almost no light. The old reading called such pixels highlights and blurred that colour outward.
 
 - **In the pose editor, keyboard shortcuts no longer fire behind a modal dialog.**
   - Every failed character-image or emotion load is reported through one, and the guard that suppresses hotkeys did not count it as a dialog — so the `Enter` that dismissed the error also did whatever `Enter` does in the editor behind it.
 
 - **In the settings editor, the same guard missed the backdrop-image browser**, leaving hotkeys live while it was open.
-  The app's four other file dialogs were already covered.
+  - The app's four other file dialogs were already covered.
 
 #### Raven-librarian
 
-- **On Windows, saving the chat no longer fails because another program has the file open for a moment** — an antivirus scanner checking what was just written, a search indexer, a sync client.
-  - The save is now tried again for up to ten seconds. This matters most at exit, where the chat is saved once with no later save to fall back on.
+- **On Windows, saving the chat no longer fails if another program happens to have the file open for a moment** — an antivirus scanner checking what was just written, a search indexer, a sync client.
+  - The save is now tried again for up to ten seconds. This matters most at exit, with no later save to fall back on.
 
 - **Startup no longer sometimes fails its first resize with "Alias already exists".**
   Loading the avatar's settings and the startup resize could set up the avatar's backdrop at the same moment, and the resize that lost aborted before re-laying out the chat log for the window's size.
 
-- **The avatar's expression is no longer lost when it changes while the avatar is asleep.**
+- **The avatar's expression is no longer lost when it changes while the avatar is asleep (video off).**
   Switching to another chat sets the avatar's emotion from the message now on screen, and if the idle timeout had switched the video off, the change happened out of sight. The avatar now wakes and takes the expression once its video is back.
 
-- **The help card no longer describes the *Speculation* toggle**, which has been gone since 0.2.8.
+- **The help card no longer describes the *Speculation* toggle**, which has been gone since v0.2.8.
   What it said about when a reply is marked *[no sources retrieved]* now matches what the app does: the marker follows *Documents*.
 
-- **The AI character's own paragraphs no longer reach the model as a code block.**
+- **The character card no longer reaches the model as a code block.**
   - The character card is Markdown, and the two paragraphs naming the character were indented four spaces — which is what a code block *is* — while the rest of the card was not.
   - The model was therefore shown the sentence establishing who it is as if it were a listing.
 
-- **A stored message now wears the face of the character that wrote it, not the one loaded right now.**
-  - Every AI message was drawn with the currently configured character's icon, so a chat with turns by several characters showed them all as the same one. Most visible in the chat graph, where a whole branch of them is on screen at once.
-  - A character we cannot place gets the generic AI glyph rather than somebody else's face.
+- **A stored message now wears the icon of the character that wrote it, not the one loaded right now.**
+  - Up to v0.2.8, every AI message was drawn with the currently configured character's icon, so a chat with turns by several characters showed them all as the same one. Most visible in the chat graph (new in v0.2.9), where a whole branch of them is on screen at once.
+  - A character that cannot be identified (via the same mechanism as `llm_char_name`) gets the generic AI glyph rather than somebody else's face.
 
 - **Copying a long tool result now copies the whole document, not the part the chat log had room for.**
-  - A fetched page too long to show inline is kept as an attachment and previewed as an excerpt; the copy button was taking the preview.
-  - **Copying the whole chat log keeps the excerpt**, and now says so, naming the attachment and its length. A log with several fetched pages inlined would be unreadable, and it is the log rather than a single message that tends to get shared onward.
+  - A fetched page too long to show inline is kept as an attachment and previewed as an excerpt; the copy button was incorrectly taking just the preview.
+  - **Copying the whole chat log keeps the excerpt**, and now says so, naming the attachment and its length. A log with several fetched long pages inlined would be unreadable, and it is the log rather than a single message that tends to get shared onward.
 
 - **Closing Librarian with `kill`, a logout or a session manager now saves your chat.**
-  - **It saves once, when it exits cleanly, and a termination signal never reached it**: the audio library installs signal handlers of its own that hand the signal to an event queue Raven does not read, so a plain `kill` was discarded and did not even stop the app.
+  - Up to v0.2.8, it saved once, when it exited cleanly, and a termination signal never reached it.
+    - The audio library installs signal handlers of its own that hand the signal to an event queue Raven does not read, so a plain `kill` was discarded and did not even stop the app.
   - Such a signal now ends the render loop the way the window's close button does, and everything that runs on the way out — saving the chat, releasing the avatar on the server — runs.
-  - `Ctrl+C` was never affected.
-
-- **The mic's VU meter no longer shows a spurious peak when a recording starts.**
-  - The first moments of a capture carry a spike more than 25 dB above the room, gone by 220 ms — and it was the first thing the new *Measure the room* button measured. Levels are now disbelieved for the first 0.3 s of a capture.
-  - **The audio itself is kept from the first frame**, so nothing you said was ever lost.
+  - Pressing `Ctrl+C` in the terminal where you started Librarian was never affected by this issue; it has always triggered a clean exit.
 
 - **The send key now works when the composer does not have the cursor.**
   - `Ctrl+Enter` (or `Enter`, depending on your `send_message_key` setting) only sent while you were actually typing in the message field — so after a send, or after clicking anywhere else, the key did nothing and the Send button was the only way.
-  - Most visible when you want to send an *empty* message, which is how you ask the AI to take another turn on its own: there was nothing to type, so there was nothing to press.
+  - Most visible when you want to send an *empty* message, which is how you ask the AI to take another turn on its own (when this feature is enabled in `raven.librarian.config`): there was nothing to type, so there was nothing to press.
 
 - **Continue no longer erases the message it was continuing** — on LM Studio and other backends without an explicit continue flag, which is where it was broken.
   - Asking the AI to carry on from where it stopped replaced the reply with the continuation alone: a message reading *1. Spring / 2. Summer* came back as *3. Autumn / 4. Winter*, and the first half was gone from the chat.
   - Those backends send only the new text, and Raven was storing that as the whole message. On oobabooga, which continues through a request field of its own, Continue was already working and is untouched.
   - **The thinking trace went the same way**, which is what you see if you stop a model mid-thought and continue: the trace stayed on screen for the whole of the new generation and vanished when the message completed. Both halves of a reply are now carried across.
-  - **Continuing still records a new revision**, so the message as it read before is kept in its edit history.
+  - **Continuing still records a new revision**, so the message as it read before is kept in the chat message's edit history. Unlike reroll, it does not spawn a new sibling.
 
 - **An AI reply in progress no longer follows you into a different chat.**
   - Starting a new chat, switching a message's siblings, or jumping to where a branch continues while the AI was writing left that reply running, and it then delivered itself into whatever conversation you had moved to — appearing as a reply to a question asked on a different branch, and taking the chat position with it, so a message typed next attached itself somewhere unexpected.
@@ -613,53 +686,55 @@
 
 - **Cancel (`Ctrl+G`) now works while the model is still reading the conversation**, which on a long chat is where most of the wait is.
   - Cancelling asked the reply to stop at its next word, and before the first word there is no next word — so through the whole prompt-reading phase, which can run to tens of seconds on a branch with documents attached, the button did nothing.
-  - It now abandons the request outright, and the backend stops working on it. Once text is arriving, cancelling behaves as it always did and keeps what has been written so far.
+  - It now abandons the request outright, and the backend stops working on it. Once text is arriving, cancelling behaves as it always did, and keeps what the model wrote so far.
 
 - **The speculative prompt-reading Raven does while you are idle no longer holds up your next message.**
-  - After a reply, Raven quietly asks the backend to read the current conversation, so the next turn starts warm. That reading went on to the end whatever happened next — up to a minute on a large chat — and anything you sent meanwhile waited behind it.
-  - It is now dropped the moment it stops being useful: when you send, so your message goes straight out, and when you move to a different branch, which makes the reading pointless anyway since it was warming the branch you left.
+  - After a reply, Raven quietly asks the backend to read the current conversation, so the next turn's KV cache starts warm, so that the model starts replying immediately.
+    - That reading went on to the end whatever happened next — up to a minute on a large chat — and anything you sent meanwhile waited behind it.
+  - The speculative read is now dropped the moment it stops being useful: when you send, so your message goes straight out, and when you move to a different branch, which makes the reading pointless anyway since it was warming the branch you left.
 
 - **Send and Reroll now refuse while a reply is in progress**, rather than starting a second one alongside it.
-  Two replies writing the same conversation interleaved their results. The Send button says why in its tooltip, and points at Cancel.
+  - Two replies writing the same conversation interleaved their results. The Send button says why in its tooltip, and points at Cancel.
 
 - **A thinking model's reasoning no longer ends up as part of the answer.**
-  - Most current models are put *inside* the thinking block by their own chat template, so what reaches Raven carries only the closing `</think>`, and nothing before it says the text is a thought. On a backend that hands the raw stream over rather than splitting the reasoning off itself, the whole trace stayed in the answer, tags and all.
+  - Most current models are put *inside* the thinking block by their own chat template, so what reaches Raven carries only the closing `</think>`, and nothing before it says the text is a thought. On a backend that hands the raw stream over to Raven rather than splitting the reasoning off itself, the whole trace stayed in the answer, tags and all.
   - It is recognized at the close now. **The stored message keeps a clean answer and a separate trace**, the same as on a backend that does the splitting.
   - **In the chat log the reasoning moves into its bubble the moment the model stops thinking**, rather than staying in the answer until the whole reply finishes, and the answer then starts fresh. In `raven-minichat`, which cannot unprint, the closing marker says retroactively what it covers.
-  - Not yet caught at the *start* of the thinking, which needs a signal the stream does not carry. Until the close arrives the reasoning is still shown as the answer.
-  - LM Studio splits the reasoning off itself, so nothing changes there.
+  - Not caught at the *start* of the thinking, which needs a signal the stream does not carry. Until the close arrives the reasoning is still shown as the answer.
+  - LM Studio splits the reasoning off itself, so nothing changes there — thoughts render into the thought bubble right from the start.
 
-- **A crash while the chat datastore is being written can no longer destroy it.**
-  - The save serialized straight into `chat.json`, which truncates the file as its first act — so a process that died anywhere in the write left a fragment where the whole history had been, and a crash is exactly when you want that history.
+- **A crash while the chat datastore is being written can no longer destroy the datastore.**
+  - The save serialized straight into `chat.json`, which truncates the file as its first act — so a process that died anywhere in the write left a fragment where the whole history had been.
   - The new file is now written beside the old one and moved into place once it is complete and on disk, so what survives is either the previous save or the new one.
   - **Worst case you lose the current session rather than everything.**
+    - And in most cases, not even that much — since as mentioned in the *Added* section above, v0.2.9 autosaves the chat history once a minute whenever anything has changed there.
 
 - **Markdown headings now render as headings in the chat log**, instead of arriving with their `#` markers intact.
   - A heading is a block-level construct, and the chat view used to wrap every paragraph in a colour tag before handing it to the renderer — which makes the whole thing one paragraph, and a heading cannot occur inside one. The colour is passed alongside the text now.
-  - Models that organize a long answer under headings are the ones this was costing.
+  - Models that organize a long answer under headings (such as Qwen) are the ones this was costing.
 
 - **The context-fill readout no longer collapses to a fraction of the truth.**
-  - A chat with three papers attached, genuinely filling 68% of the window, could show `7%`: the readout takes its exact figure from the LLM backend, and LM Studio's can come back an order of magnitude short for a conversation it has already been asked about.
-  - Raven now disbelieves a figure far below its own estimate, and goes on showing the estimate's `~` rather than a confident wrong number.
+  - In v0.2.8, a chat with three papers attached, genuinely filling 68% of the window, could show `7%`: the readout takes its exact figure from the LLM backend, and LM Studio's can come back an order of magnitude short for a conversation it has already been asked about.
+  - As of v0.2.9, Raven now disbelieves a figure far below its own estimate, and goes on showing the estimate's `~` rather than a confident wrong number.
 
 - **The app no longer freezes for seconds when you move to a part of the chat that has documents attached.**
-  - Switching a message's siblings, or otherwise moving through the chat, refreshes the context-fill readout — and that used to read every attached document to count it, extracting a PDF's text on the spot. Everything you typed during that wait arrived at the end of it, so the app read as hung.
+  - Switching between a message's siblings, or otherwise moving through the chat, refreshes the context-fill readout — and that used to read every attached document to count it, extracting a PDF's text on the spot. Everything you typed during that wait arrived at the end of it, so the app read as hung.
   - The readout now counts documents it has already read, leaves the rest to the check that follows a moment later, and shows `~` while any are outstanding.
-  - The reading itself is no longer silent either: the new READING indicator is lit for as long as it takes, so the `~` has something beside it saying what is being waited for.
+  - The reading itself is no longer silent either: the new READING indicator (in the avatar panel) is lit for as long as it takes, so the `~` has something beside it saying what is being waited for.
 
 - **Running `raven-librarian` and `raven-minichat` at once no longer loses one of the two sessions.**
   - Each holds the whole chat datastore in memory and writes it back on exit, so whichever closed last silently discarded everything the other had done — including a chat you were in the middle of.
-  - The second app to start now says the datastore is already open, names it, and stops. Two Librarians did the same thing to each other, and are covered too.
+  - The second app to start now says the datastore is already open, names it, and stops. Two Librarian instances did the same thing to each other, and are covered too.
   - **The claim is released when the process ends, crash included**, so there is no stale lock to notice or clean up.
 
 - **The chat view now opens at the end of the conversation**, instead of part-way down it.
   - On startup, and after jumping to a chat's continuation, the latest message could be below the fold. **Pressing `End` found it there, so nothing was ever missing** — the view had simply stopped short.
   - The longer the conversation on screen, the further short it stopped.
 
-- **The AI's opening greeting could be deleted, rerolled, continued and branched from**, none of which it is supposed to allow — and deleting it **destroys the entire chat below it**.
-  - The four buttons ask one shared list whether the message is a greeting, and that list was computed lazily, so the first question consumed it and the rest were answered from what was left: nothing. Which reads as "not a greeting".
+- **The AI's opening greeting could be deleted, rerolled, continued and branched from**, none of which it is supposed to allow — and deleting it **destroys all chats below it**.
+  - The four buttons ask one shared list whether the message is a greeting, and that list was computed lazily, so the first question consumed it and the rest were answered from what was left: nothing. Which reads as "not a greeting". This is now fixed.
 
-- **Two tooltips still described the attachment store as holding images**, which stopped being the whole story in 0.2.8 when documents became attachable.
+- **Two tooltips described the attachment store as holding images**, which stopped being the whole story once documents became attachable.
   - The two buttons that open that folder — one on an attached image, one on an attached document — also gave it two different names, though it is one folder.
 
 - **List bullets and numbers no longer strand themselves when the text above them moves.**
@@ -671,15 +746,17 @@
   - On a model that spends most of a turn reasoning, that left the `[Nt, Xs, Yt/s]` line under the message understating both figures by most of the turn.
 
 - **Attaching a document no longer freezes the app while it is read.**
-  - Reading a large PDF takes seconds — nearly four, for an 8.5 MB paper — and it used to happen before the attachment appeared at all, with the whole GUI unresponsive meanwhile: no typing, no buttons, no hotkeys. The attachment chip now appears at once and reads its document in the background.
+  - Reading a large PDF takes a while — for example, nearly four seconds for an 8.5 MB paper — and it used to happen before the attachment appeared at all, with the whole GUI unresponsive meanwhile: no typing, no buttons, no hotkeys. The attachment chip now appears at once and reads its document in the background.
   - The chip says which state it is in: **pulsating** while its text is being read, **calm** once it is ready, **red** if the document turns out to hold no text. Hovering a red chip — its icon or its filename — says what went wrong.
-  - **A message cannot be sent while an attachment is red, or still being read.** The send button is disabled and says why; the send key refuses with a flash.
-    - Previously a document with no readable text was reported in a dialog and then silently dropped, so the message went without it — which is the one outcome nobody wants, since you attached it for a reason. Remove the red chip (or wait) to send.
-  - The scanned-PDF case is the common one here: a page of images has nothing for a text extractor to find. Run it through OCR first.
+    - Previously a document with no readable text was reported in a dialog and then silently dropped, so the message went without it.
+    - The scanned-PDF case is a common cause of a text extraction: a page of images has nothing for a text extractor to find. Run it through an OCR app first (e.g. `ocrmypdf`), and attach the resulting text instead.
+  - **A message cannot be sent while an attachment is red, or still being read.**
+    - The send button is disabled and says why; the send key refuses, flashing the send button red.
+    - To send, wait until the read completes; and if an attachment went red, remove it.
 
 - **Attaching a document no longer reads it twice.**
   - Its text was extracted once when you picked the file, to tell you straight away if a PDF turned out to be scanned pages with no text in them, and then extracted all over again when the message was sent.
-  - For a large paper each pass is seconds — nearly four, for an 8.5 MB one — so the wait happened twice for no reason. The first result is now kept and reused.
+  - For a large file each pass is seconds, so the wait happened twice for no reason. The first result is now kept and reused. The cache is kept for the duration of the Librarian session.
 
 #### Raven-cherrypick
 
@@ -699,9 +776,9 @@
 - **`Ctrl+Shift+C` during a compare cycle no longer marks the wrong image as the winner.**
   - Every other triage control is unavailable while comparing — the keys are ignored, the toolbar buttons and grid clicks are disabled — but this one chord slipped through, and it acted on whichever image was current *before* you started comparing rather than on anything you were looking at.
   - **Marking moves files**, so that put a picture you had not chosen into `cherries/` and the rest of the compare set into `lemons/`. It is now ignored during the cycle, like the rest.
-  - The intended sequence is unchanged and still works: press the digit of the frame you want, which leaves compare mode on that image, then `Ctrl+Shift+C` to crown it.
+  - The intended sequence is unchanged and still works: press the `Shift+digit` of the frame you want, which leaves compare mode on that image, then `Ctrl+Shift+C` to crown it.
 
-- **Undo and redo are no longer available mid-comparison**, by button or by key.
+- **Undo and redo are no longer (incorrectly) available mid-comparison**, by button or by key.
   - Both move files and then jump to what they moved, which left the grid pointing somewhere the cycle had not chosen.
   - `Ctrl+Z` and `Ctrl+Y` were already ignored while comparing; `Ctrl+Shift+Z` and the two toolbar buttons were not. Leave compare mode and they work as before.
 
@@ -718,7 +795,7 @@
 - **Raven-visualizer starts even when the LLM backend is down.**
   - With cluster keywords set to `"llm"` (or summaries on), the app used to exit at startup — no window, no message, exit status 255 — if the configured LLM backend did not answer. A feature that matters only while importing was killing every session, including the ones that never import anything.
   - The check now runs when the importer window is opened; the app opens as usual and says nothing about a backend it is not going to use.
-  - `raven-importer` still stops rather than starting, which is the right answer for a batch tool: the check runs before any of the expensive stages, so nothing is lost, and finishing with frequency keywords where LLM ones were asked for would write a dataset quietly worse than the one requested. It now names what needs the backend and exits **2**.
+  - `raven-importer` (the CLI tool) still stops rather than starting, which is the right answer for a batch tool: the check runs before any of the expensive stages, so nothing is lost, and finishing with frequency keywords where LLM ones were asked for would write a dataset quietly worse than the one requested. It now names what needs the backend and exits **2**.
   - **A failed import exits nonzero at all now.** Any error used to be logged as a warning and the process then exited **0**, so an import that failed reported success to whatever ran it.
   - **`raven-importer` gained `--backend-url`**, to point one run at a different LLM backend — the same spelling every other Raven tool uses. It had `--server-url` but no way to say where the LLM was.
   - **In the Visualizer, an import whose backend is unreachable now finishes instead of failing.** It falls back to frequency keywords and skips summaries, and says which of those it did in a notice above the status line, with the backend it tried and what to do about it underneath. Stop is there for anyone who would rather start the backend and run the import again.
@@ -735,10 +812,10 @@
 
 - **A bibliography record that cannot be parsed no longer ends the import.**
   - **One bad record used to abort the run and discard every record already processed** — an hour of work on a large bibliography, with no way to get past it — and whether a record is bad is a question of what some exporter wrote, not of anything visible beforehand.
-  - Such a record is now logged and skipped. Dehyphenation does not even cost you that: being cosmetic, a failure there leaves the abstract untidied and keeps the record.
+  - Such a record is now logged and skipped. A failed dehyphenation does not even cost you that: being cosmetic, a failure there leaves the abstract untidied and keeps the record.
 
 - **The info panel's smooth scroll is now really stopped when the panel's content is rebuilt**, rather than being told to stop by a call that tidies up after it and leaves it running.
-  A scroll in flight kept moving the panel through the swap, over the position the rebuild had just restored.
+  - A scroll in flight kept moving the panel through the swap, over the position the rebuild had just restored.
 
 - **The plot's mouse hover and click-to-select now work on small datasets.**
   - Finding the datapoints under the cursor asks for a fixed number of nearest neighbours, and a dataset with fewer points than that gets an answer padded out with placeholders; those were read as real datapoints.
@@ -752,7 +829,7 @@
 
 - **Dismissing an error dialog no longer also acts on the graph behind it.**
   - The dialog floats over the canvas, so clicking its button re-centered the view on whichever node happened to sit under the pointer.
-  - 0.2.8 fixed the keyboard half of this; the mouse half was still open, because the graph's handlers are global — they fire wherever the cursor is — and decided "is the mouse over the graph?" geometrically, which cannot tell that a dialog is covering it.
+  - v0.2.8 fixed the keyboard half of this; the mouse half was still open, because the graph's handlers are global — they fire wherever the cursor is — and decided "is the mouse over the graph?" geometrically, which cannot tell that a dialog is covering it. The app now asks what the pointer is actually on.
 
 - **Button flashes and error reports in the file dialog no longer fade in steps.**
   - The idle throttle, which drops the app to a low frame rate when nothing is happening, asked only the graph whether anything was animating — so a flash lasting a second, or a report standing for three, ran at the idle rate once the half second bought by your click had passed.
@@ -763,13 +840,13 @@
   Such text used to be decorated while hidden, which draws nothing, and nothing redrew it.
 
 - **Markdown styling no longer lands beside its text after an emoji.**
-  - Each emoji — or any other character outside the Basic Multilingual Plane, such as mathematical letters — before a bold, italic, code or link span shifted that span one character to the right: in `😀 **bold** end`, the bold fell on "old " instead of "bold", and a link's colour sat one character off the same way.
+  - Each emoji — or any other character outside the Basic Multilingual Plane (BMP), such as mathematical letters — before a bold, italic, code or link span shifted that span one character to the right: in `😀 **bold** end`, the bold fell on "old " instead of "bold", and a link's colour sat one character off the same way.
   - The emoji itself is still drawn as a missing-glyph box, the renderer having no emoji font yet.
   - This affected chat messages and help cards alike.
 
 - **Closing an app no longer risks a crash on the way out.**
   - The Markdown renderer runs background threads that keep drawing after the window is gone, and they were not stopped before the GUI was torn down — so on an unlucky close the app died with a segfault instead of exiting.
-  - Most likely while a message full of links was still being drawn, which is why it showed up when closing Raven-librarian during startup, but every app that renders Markdown could hit it, including ones that only ever show a help card. They are now stopped and waited for before teardown.
+  - Most likely while a Librarian message full of links was still being drawn in the chat log, which is why it showed up when closing Raven-librarian during startup, but every app that renders Markdown could hit it, including ones that only ever show a help card. The Markdown threads are now stopped and waited for before teardown.
 
 - **An app no longer runs at full frame rate for the rest of the session after Raven-server goes down.**
   - Losing the video stream makes the avatar renderer pause itself, and pausing told the server first — the same server that had just gone away — so the call failed and the renderer stayed marked as running. The idle throttle reads that mark, so it never engaged again.
@@ -779,18 +856,19 @@
   - A database that exports HTML into a BibTeX field leaves them there, and Raven decoded the neighbouring entities (`&lt;`, `&le;`, `&auml;`) while passing these two through — so a title reading `Q&A` displayed as `Q&amp;A`, in the Visualizer's word cloud and info panel and in Librarian's citations alike.
   - An escaped entity is still decoded only once, so a source that wrote `&amp;lt;` to mean a literal `&lt;` keeps saying that.
 
-- **Dehyphenation no longer crashes on text that leaves a line with no words in it**, which could fail a Visualizer import part-way through a bibliography — losing the whole run — and made Raven-server's `sanitize` endpoint answer HTTP 400.
+- **Dehyphenation no longer crashes on text that leaves a line with no words in it.**
+  - This could fail a Visualizer import part-way through a bibliography — losing the whole run — and made Raven-server's `sanitize` endpoint answer HTTP 400.
   - Two things produce such a line, and both are handled now: a line holding only spaces, which is not the *empty* line that marks a paragraph break; and rejoining a sentence broken across a hyphen, which can take the last word off the line it came from.
 
 - **Bibliographies and imported documents now get the same defensive normalization as fetched web pages.**
-  - Invisible characters — zero-width spaces, the invisible "tag" block used to smuggle text past a human reader — are removed from BibTeX fields on import, and from every document the RAG indexer and chat attachments extract.
+  - Invisible characters — zero-width spaces, the invisible "tag" block used to [smuggle text](https://embracethered.com/blog/ascii-smuggler.html) past a human reader — are removed from BibTeX fields on import, and from every document the RAG indexer and chat attachments extract.
   - Both kinds of text end up embedded, keyworded and, depending on your configuration, in a prompt, and neither was being cleaned; a page fetched from the web always was.
   - Bidi marks are deliberately left alone, since right-to-left scripts use them legitimately.
 
 - **The file browser now says when it cannot open a folder.**
   - Clicking a system directory, or one the OS will not let you read, did nothing whatsoever: the explanation was routed to a message box, and DPG will not draw one over a modal window — which every file browser in Raven is. So the dialog simply sat there, and the only account of what had happened went to a log nobody was reading.
   - The reason now appears in red on the line above the buttons, and fades after a few seconds.
-  - Its other two reports — picking a file where a folder was expected, and a folder that cannot be listed at all — were lost the same way and arrive the same way now.
+  - The dialog's other two error reports — picking a file where a folder was expected, and a folder that cannot be listed at all — were lost the same way, and arrive the same way now.
 
 - **Clicking the file browser's type filter no longer costs you the keyboard.**
   - Once you had clicked it — to read what the options were, say — the shortcuts that put the caret back in the name field (`Ctrl+F`, `Tab`, `Esc`) stopped doing anything, silently, for as long as that dialog stayed open.
@@ -801,16 +879,16 @@
   - It now reads the directories the desktop actually defines. A place you genuinely do not have is left out of the panel rather than offered and broken.
   - Windows and macOS were never affected: they translate the name their file manager *shows* and keep the directory itself in English.
 
-- **The file browser's second-click confirmation no longer offers to "overwrite" a folder.**
+- **The file browser's second-click confirmation wording no longer suggests it would "overwrite" a folder.**
   - Where an app asks for a directory to write into and you name one that already exists, it still asks for the second click, but now says only that the folder exists — what becomes of what is already in it is the app's business, not the dialog's to promise.
 
 - **The file browser's shortcut to your pictures is now labelled *Pictures***, after the folder it opens.
   It said "Images" while going to `~/Pictures` — which is what Linux, macOS and Windows all call that folder.
 
-- **The file browser closes faster, and the button that opens it no longer looks dead afterwards.**
+- **The file browser closes faster, and the button that opened it no longer looks dead afterwards.**
   - Closing it rebuilt the whole file listing — twice, if you picked something — although the listing was already hidden and gets rebuilt on the next open anyway.
   - The apps run one action at a time, so whatever you clicked next had to wait for that wasted work, which is why the attach button could ignore a click, its own click animation included. On a directory of ~1600 files that was roughly half a second per close.
-  - Long listings are cheaper to display too: the browser now draws only the rows on screen, where it used to draw all of them on every frame.
+  - Long listings are now cheaper to display too: the browser now draws only the rows on screen, where it used to draw all of them on every frame.
 
 ---
 
