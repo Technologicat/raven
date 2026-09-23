@@ -177,6 +177,16 @@ The last group in the graph's toolbar offers the same six steps to the pointer �
 
 The cursor is the same mark whether you put it there with the mouse or the keys, so the two can be mixed freely: click a box, step off it with the arrows, press Enter.
 
+**Every box says who is speaking and what they attached.** The speaker's icon — the same one the chat log uses, your character's own where it has one — sits on the box's left edge, and anything the message carries fans off its right edge: images as a deck of thumbnails, a document as its file type's icon. Both hang *outside* the box, so neither costs the message's own words any room, and a long stack is abbreviated to the first two, the last two and a count.
+
+**The picture is redrawn with an animation, not a cut.** Stepping to another branch, opening a gap, going back or forward, a reply arriving — the box you are working with stays where it is on screen and the rest rearranges around it, so you can see where things went instead of having to find them again. Three settings in [`raven.librarian.config`](config.py) if you would rather it did not: `chat_graph_animate_transitions` switches the morph off, `chat_graph_animate_view` switches off the graph's own pan and zoom, and `chat_graph_transition_rate` is the one speed both run at.
+
+**The graph and the avatar take turns at the panel**, and the *Chat graph* checkbox is your preference for which to show when both have something to offer. The avatar's video pauses while the graph covers it, and whenever the avatar has nothing to show — while its video is starting up, or once it has switched itself off after a spell of quiet — the graph stands in.
+
+- **A reply does not speak itself while the graph is up and *Subtitles* is on.** Subtitles are drawn in the avatar's panel, so the graph covers them; rather than speak a captioned reply whose captions nobody can see, *Librarian* leaves it unspoken.
+  - With *Subtitles* **off**, replies speak as usual with the graph up, because then nothing is being hidden.
+  - `Ctrl+S` and a message's speak button always speak, captions or no. An explicit request is an explicit request.
+
 
 ### Notes
 
@@ -484,6 +494,34 @@ The reference documentation is the module's own docstrings — `agent.turn` carr
 
 This is a programming library rather than a product: what it offers is programmatic access to Raven's own corpus, chat tree and provenance machinery, and it is deliberately not a generic agent harness. Note also that it drives the *LLM* over your document database. Building and refreshing the index itself is a separate job, and belongs to [`raven-indexer`](#indexing-from-the-command-line-raven-indexer) above.
 
+## `raven-minichat`, the same backend from a terminal
+
+A readline REPL on the same engine and the same chat datastore as the GUI app: no avatar, no attachments,
+no graph, and the branching history, the document database and the tool loop all present. It is maintained
+primarily as a **worked example of what a minimal client needs** — kept in sight so that the answer stays
+short — which makes it the thing to read if you are writing a frontend of your own.
+
+Note that the two frontends share one chat history, so they cannot run at the same time: whichever starts
+second says the datastore is already open, names it, and stops.
+
+Type your message and press Enter; `Ctrl+D` exits. Everything else is a `!` command, and they tab-complete:
+
+| | |
+|---|---|
+| `!help` | show the command list again |
+| `!clear` | start a new chat |
+| `!history` | print a cleaned-up transcript of the branch you are on |
+| `!dump` | the raw contents of the chat node datastore, node IDs included |
+| `!head <node-id>` | switch to another branch, by an ID from `!dump` |
+| `!reroll` | regenerate the latest AI reply, as a new sibling |
+| `!thinking`, `!internet`, `!docs` | the mode toggles, the same three the GUI has. Bare, each toggles and reports; `!thinking True` / `!thinking False` set it outright |
+| `!model`, `!models` | which model is in use; which the backend offers |
+| `!reconnect` | re-probe the LLM backend, after starting it or loading a model |
+
+It opens with no backend the same way the GUI does, reporting the verdict on the console — `!history` and
+`!dump` work with nothing loaded, and `!reconnect` is the terminal's version of clicking the GUI's status
+row.
+
 # AI avatar and voice mode
 
 *Librarian* features an anime-style, **animated, lipsynced, talking AI avatar**, with optional machine-translated **subtitles**, or alternatively, optional **closed-captioning** without translation.
@@ -502,6 +540,12 @@ When the **Speech** toggle in the *Librarian* window (below the avatar video pan
 When both the **Speech** and the **Subtitles** toggles are **ON**, the speech is machine-translated and subtitled one sentence at a time. The subtitle for each sentence is shown while that sentence is being spoken.
 
 For configuring the AI's voice and the subtitles, see [Configuration](#configuration).
+
+**When the conversation is swapped out from under it, the avatar glitches.** Stepping to a sibling branch, jumping to where a branch continues, starting a new chat, or rerolling a reply can replace everything on screen between one message and the next, and the effect marks that seam.
+
+- It runs on a clock of its own rather than for as long as the switch takes: long enough that a switch too fast to see still registers (`avatar_discontinuity_effect_floor`), and capped (`…_ceiling`) so that holding a navigation key down reads as one glitch rather than a stutter of them.
+- **Your own postprocessor chain is left alone.** The effect is appended to whatever is configured and taken off again afterwards, so a customized avatar looks like itself either side of the seam.
+- **The effect is yours to choose**, in [`raven.librarian.config`](config.py): `avatar_discontinuity_effect_enabled` switches the whole thing off, and `avatar_discontinuity_effect` is the effect itself, as a fragment of a postprocessor chain. It is written in exactly the format the animator settings use — so build a look in *Raven-avatar-settings-editor*, save, and copy the entries you want out of the saved JSON. A colour drain, an analog tracking wobble, or nothing at all.
 
 The avatar has an optional, configurable timeout, after which the avatar video will turn off if there is no activity (to save GPU and CPU compute resources, as well as to eliminate unnecessary fan noise when running on a laptop). The avatar wakes up immediately when there is activity (e.g. navigating the chat tree, rerolling a message, sending a new message to the AI, or asking the avatar to speak a previous message again).
 
