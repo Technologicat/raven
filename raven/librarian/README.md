@@ -726,11 +726,15 @@ The hotkeys for all of these are collected in the [keyboard reference](#keyboard
 
 ### What else a message can say about itself
 
-Below an AI message, in grey, is the line `[Nt, Xs, Yt/s]` — the tokens it generated, how long the turn
-took, and the speed between them. **Hover it** and two more things appear:
+**Above** each message, in grey: when it was written, which revision is on screen, and in brackets what
+produced it — the model, for an AI reply, and the tool that answered, for a tool result. Both are per
+message rather than per app, which matters in a branching chat: the siblings of one node can come from
+different models, and a chat reloaded from disk predates whatever is loaded now. The chat graph spells it
+the same way in a box's speaker line, so the two views name one thing one way.
 
-- **Which model wrote this message.** Per message rather than per app: in a branching chat the siblings of
-  one node can come from different models, and a chat reloaded from disk predates whatever is loaded now.
+**Below** an AI message, also in grey, is the line `[Nt, Xs, Yt/s]` — the tokens it generated, how long the
+turn took, and the speed between them. **Hover it** for the breakdown:
+
 - **Where the reply's time went**, as a small table of up to four rows — prompt processing, thinking,
   answer, total — with the time, the tokens and the speed for each. These can differ startlingly from the
   headline figure: a reply reporting 44 t/s may have *generated* at 99 t/s, with over half the turn spent

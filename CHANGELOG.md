@@ -125,8 +125,9 @@
   - Prompt processing gets a row of its own, because nothing is being generated during it: how long it takes says how much of the prompt the backend's cache did not already hold.
     - It is shown as a time and not a speed, since a warm KV cache still reports the whole prompt as its size.
   - A turn that asks for a tool instead of replying says **Tool call** rather than showing an answer of zero length.
-  - The same tooltip names **the model that produced that reply**, per message.
-    - In a branching chat the siblings of one node can come from different models, and a chat reloaded from disk predates whatever model is loaded now.
+- **Each message says what produced it**, on the grey line above it that already says when: the model, for an AI reply, and the tool that answered, for a tool result.
+  - Per message rather than per app. In a branching chat the siblings of one node can come from different models, and a chat reloaded from disk predates whatever model is loaded now.
+  - The chat graph spells it the same way in a box's speaker line, and the per-message timing tooltip repeats it, so wherever you are looking the answer is to hand.
 
 - **`raven.librarian.agent`, a scripting surface over Librarian's LLM agent loop.**
   - This allows you to drive Librarian's engine from your own Python, with your document corpus, the branching chat tree and the tool-calling all in play.
