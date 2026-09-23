@@ -47,6 +47,7 @@ import subprocess
 import sys
 
 __all__ = ["slugify", "heading_anchors", "toc_anchors", "dangling_links", "toc_problems",
+           "cross_file_anchor_links", "cross_file_problems",
            "tracked_markdown", "check_file", "main"]
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -54,6 +55,10 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 # A list item that is nothing but a link to an anchor in this same document.
 TOC_ENTRY = re.compile(r"^\s*- \[.*\]\(#([^)]+)\)\s*$")
 ANCHOR_LINK = re.compile(r"\[[^\]]*\]\(#([^)]+)\)")
+# A link into a *heading of another document*: `[text](../papers/README.md#what-it-repairs)`. The same
+# failure `ANCHOR_LINK` exists to catch, one file over — and the commoner one now that the manuals link to
+# each other, since renaming a heading is a local edit whose consequences are not.
+CROSS_FILE_ANCHOR = re.compile(r"\[[^\]]*\]\(([^)#\s]+)#([^)\s]+)\)")
 # An inline code span. A whole link inside one is being *quoted*, not made.
 INLINE_CODE = re.compile(r"`[^`]*`")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*$")
@@ -173,6 +178,53 @@ def tracked_markdown() -> list[pathlib.Path]:
     return [REPO_ROOT / name for name in listing.split("\0") if name]
 
 
+def cross_file_anchor_links(lines):
+    """`(target, anchor)` for every link into another document's heading, fences and code spans skipped.
+
+    Same exclusions as `dangling_links`, for the same reason: a document explaining the syntax is writing
+    *about* a link rather than making one. External links are dropped here rather than by the caller —
+    `https://example.com/page#section` matches the shape and names no file we could read.
+    """
+    found = []
+    in_fence = False
+    for line in lines:
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        for target, anchor in CROSS_FILE_ANCHOR.findall(INLINE_CODE.sub("", line)):
+            if "://" in target or target.startswith("mailto:"):
+                continue
+            found.append((target, anchor))
+    return found
+
+
+def cross_file_problems(path: pathlib.Path, lines) -> list[str]:
+    """Cross-file anchor links from `path` that land nowhere, as lines ready to print.
+
+    Raven-specific, and deliberately not folded into `dangling_links`: that function and `toc_problems`
+    are character-identical to pyan's copies (see this module's docstring), and resolving a path needs to
+    know where the document *is*, which those signatures do not say.
+
+    Only Markdown targets are checked. A link into a `.py` carries a line anchor or a fragment GitHub
+    invents, and neither is a heading; a target that does not exist at all is reported, since that is the
+    same rot one step earlier.
+    """
+    problems = []
+    for target, anchor in cross_file_anchor_links(lines):
+        resolved = (path.parent / target).resolve()
+        if not resolved.is_file():
+            problems.append(f"link points at a file that does not exist: {target}#{anchor}")
+            continue
+        if resolved.suffix.lower() != ".md":
+            continue
+        headings = set(heading_anchors(resolved.read_text(encoding="utf-8").splitlines()))
+        if anchor not in headings:
+            problems.append(f"link points at no heading in {target}: #{anchor}")
+    return problems
+
+
 def check_file(path: pathlib.Path, *, require_complete_toc: bool) -> list[str]:
     """Everything wrong with one document's internal links, as lines ready to print.
 
@@ -190,6 +242,7 @@ def check_file(path: pathlib.Path, *, require_complete_toc: bool) -> list[str]:
         if not require_complete_toc:
             problems = [p for p in problems if not p.startswith(TOC_COMPLETENESS_PREFIX)]
     problems += [f"link points at no heading: #{a}" for a in dangling_links(lines)]
+    problems += cross_file_problems(path, lines)
     return problems
 
 

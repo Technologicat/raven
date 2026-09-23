@@ -12,7 +12,7 @@ The cases are the ones from `pyan/tests/test_docs.py`, which the checker's logic
 `&` case that the copy was written to get right.
 """
 
-from scripts.check_doc_links import dangling_links, slugify, toc_problems
+from scripts.check_doc_links import cross_file_problems, dangling_links, slugify, toc_problems
 
 # A document whose table of contents and headings agree, used as the baseline that every other case
 # perturbs. If this one ever reports a problem, the perturbed cases prove nothing.
@@ -130,3 +130,57 @@ def test_completeness_is_reported_separately_from_the_other_toc_faults():
     assert [p for p in problems if p.startswith(TOC_COMPLETENESS_PREFIX)] == [
         f"{TOC_COMPLETENESS_PREFIX}buried"]
     assert [p for p in problems if not p.startswith(TOC_COMPLETENESS_PREFIX)] == []
+
+
+# --- Cross-file anchors: a link into another document's heading ---------------------------------------
+#
+# The same fault `dangling_links` catches, one file over, and the one that became routine when the manuals
+# started linking to each other. Every case here needs a real file on disk, since resolving the target is
+# half of what is being tested, so they use `tmp_path` rather than the string fixtures above.
+
+
+def _doc(tmp_path, name, text):
+    """Write `text` to `name` under `tmp_path`, and return its path."""
+    path = tmp_path / name
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_a_link_into_another_documents_heading_is_accepted(tmp_path):
+    _doc(tmp_path, "target.md", "# Configuration\n")
+    source = _doc(tmp_path, "source.md", "See [there](target.md#configuration).\n")
+    assert cross_file_problems(source, source.read_text().splitlines()) == []
+
+
+def test_a_link_into_a_heading_that_does_not_exist_is_reported(tmp_path):
+    """The control for the case above: the accept must be a verdict rather than a silent skip."""
+    _doc(tmp_path, "target.md", "# Configuration\n")
+    source = _doc(tmp_path, "source.md", "See [there](target.md#no-such-heading).\n")
+    assert cross_file_problems(source, source.read_text().splitlines()) == [
+        "link points at no heading in target.md: #no-such-heading"]
+
+
+def test_a_link_into_a_file_that_does_not_exist_is_reported(tmp_path):
+    """Rot one step earlier than a renamed heading, and it reads the same to whoever clicks it."""
+    source = _doc(tmp_path, "source.md", "See [there](gone.md#anything).\n")
+    assert cross_file_problems(source, source.read_text().splitlines()) == [
+        "link points at a file that does not exist: gone.md#anything"]
+
+
+def test_an_external_url_with_a_fragment_is_not_a_cross_file_link(tmp_path):
+    """`https://example.com/page#section` has the shape and names no file we could read."""
+    source = _doc(tmp_path, "source.md", "See [there](https://example.com/page#section).\n")
+    assert cross_file_problems(source, source.read_text().splitlines()) == []
+
+
+def test_a_cross_file_link_inside_a_code_span_is_quoted_rather_than_made(tmp_path):
+    """Same exclusion as `dangling_links`, and the briefs are full of prose about this syntax."""
+    source = _doc(tmp_path, "source.md", "The notation `[x](target.md#anchor)` is what it walks.\n")
+    assert cross_file_problems(source, source.read_text().splitlines()) == []
+
+
+def test_a_link_into_a_non_markdown_file_is_left_alone(tmp_path):
+    """A fragment on a `.py` is a line number or something GitHub invents, never a heading."""
+    _doc(tmp_path, "mod.py", "x = 1\n")
+    source = _doc(tmp_path, "source.md", "See [there](mod.py#L1).\n")
+    assert cross_file_problems(source, source.read_text().splitlines()) == []
