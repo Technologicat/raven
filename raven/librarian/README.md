@@ -30,7 +30,7 @@
     - [Scripting](#scripting)
     - [`raven-minichat`, the same backend from a terminal](#raven-minichat-the-same-backend-from-a-terminal)
 - [AI avatar and voice mode](#ai-avatar-and-voice-mode)
-        - [Setting up the mic](#setting-up-the-mic)
+    - [Setting up the mic](#setting-up-the-mic)
     - [100% privacy-first](#100-privacy-first)
     - [Notes](#notes-2)
 - [GUI walkthrough](#gui-walkthrough)
@@ -589,7 +589,7 @@ The audio is transcribed into text and sent to the LLM, just as if you had typed
 
 Voice input is still young; voice message editing is missing, for example. We intend to expand this later.
 
-### Setting up the mic
+## Setting up the mic
 
 How quiet counts as "finished speaking" depends on the room, so it is a control rather than a setting you are expected to get right in advance. Click the **sliders button** (next to the mic) or press **F9** to open the **Audio input** panel.
 
