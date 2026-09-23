@@ -374,11 +374,15 @@ What is queued, all small and independent:
         scope, three inside `main()`), and expanding a cell like `Left / Right (A / D)`, which the old split
         turned into the non-keys `Right (A` and `D)` — so such a row was unmatchable by any README rather
         than merely unchecked.
-      - **Why three apps have a working `main()` and four have a `pass` stub is unexplained** (raised by
-        Juha, 2026-09-23, on seeing the checker change). The script shape is what suits DPG, which is the
-        argument against the four *gaining* one — see the root `CLAUDE.md` — and says nothing about why the
-        three have one. **Not worth changing**, his call, the more so now that the checker reads both
-        shapes.
+      - **Why three apps have a working `main()` and four have a `pass` stub: authorship, not design**
+        (Juha, 2026-09-23, on seeing the checker change). The stub-shaped ones are his originals; the
+        others were built from *"let's build an app that…"* in a session with no existing `app.py` in
+        context and no rule covering the question, so they came out shaped like ordinary Python. The
+        script shape is what actually suits DPG — which is the argument against the four *gaining* a real
+        `main()`, in the root `CLAUDE.md`, and says nothing about the three that have one.
+        - **Not worth changing**, his call, the more so now that the checker reads both shapes. Recorded
+          because the split looks like a decision and is not one: a future reader tidying it in either
+          direction would be acting on a pattern nobody chose.
   - **`--qr` stays undocumented, on purpose** (Juha, 2026-09-23). It is for the dev team advertising at a
     public demo, not a feature users are meant to find. Recorded because a deliberate omission is invisible
     to exactly this pass, which found it as a gap and would find it again next time.
@@ -430,12 +434,19 @@ What is queued, all small and independent:
   - **Scheduled for 2026-09-24, the full pass, stills and animation captures together** (Juha, 2026-09-23).
     It is the last item of the docs week and the one that cannot be done at a desk by one of us alone: it
     takes the keyboard, and it takes somebody looking at what came out.
-    - **What the day's writing has added to the list**, all of it prose that describes something moving:
-      the chat graph, which has no picture anywhere and is 0.2.9's largest feature — it wants a still *and*
-      a capture of the morph, which is the whole argument for the animation; Librarian's search row and its
-      match marks in the graph; the five indicator lights; the avatar's branch-switch glitch, which is a
-      second capture; and the two new manuals, which ship with one screenshot each and describe several
-      things a picture would settle faster — cherrypick's compare mode above all.
+    - **The rule is *anything that moves*** (Juha, 2026-09-23). The animated GUI is a large part of what
+      Raven is, and it is the whole of what a still cannot show, so the list below is a starting set rather
+      than a scope.
+      - **The avatar**, which is the clearest case in the constellation: a character that breathes, sways,
+        blinks, lipsyncs and reacts, described in every manual by still pictures of it holding a pose.
+      - **The chat graph** — no picture anywhere, 0.2.9's largest feature. A still *and* a capture of the
+        morph, the morph being the whole argument for having animated it.
+      - **Cherrypick's compare mode**, which is a thing that blinks and is therefore undescribable in a
+        still by construction.
+      - **The avatar's branch-switch glitch**, which lasts under a second and is the point of it.
+      - Librarian's search row and its match marks in the graph; the five indicator lights, which pulsate
+        to mean *still working*; the smooth scrolling and the end-of-list arrows; the keyboard mark's
+        breathing, which is one idea shared across every app and reads as such only in motion.
     - **Cherrypick's and the xdot viewer's existing screenshots are the two oldest in the tree**, both from
       the release that introduced each app, so they are refreshes rather than additions like the rest.
     - **The capture toolchain is undecided, and neither of us has done this before** (Juha, 2026-09-23).
