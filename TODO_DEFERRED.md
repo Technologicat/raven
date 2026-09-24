@@ -4126,9 +4126,9 @@ in the regular face only — bold text in the same message kept both letters.
     controlled before and after.
   - The probes are in the session log only; the shape is a DPG window in the app with `add_text` items bound
     to `font_attributes.Default._fonts[20]`, driven through `--repl`.
-- **Not a sighting: underscores vanishing from the chat graph's labels below 1:1** (2026-09-24). Their
-  brightness varies with sub-pixel phase during an animated zoom, which is sampling rather than a glyph
-  missing from the atlas — see "Thin strokes in the chat graph's scaled labels shimmer and drop out".
+- **Not a sighting: underscores vanishing from the chat graph's labels below 1:1** (2026-09-24). Magnified,
+  the stroke is there at very low coverage, and a batch of new glyphs did not change it — antialiasing, not
+  a glyph missing from the atlas. See "Thin strokes in the chat graph's labels go faint at some zooms".
 - **So a startup glyph warm-up would narrow the window without closing it**: printable ASCII and Latin-1
   loaded early would be safe, and any character first seen later (a Greek letter in an abstract) would
   still meet the race. It also has to genuinely draw — ImGui skips transparent and clipped text — and a
