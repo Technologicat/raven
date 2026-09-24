@@ -5,7 +5,7 @@
 -----
 
 <p align="center">
-<img src="../../img/xdot-viewer.png" alt="Screenshot of Raven-xdot-viewer" width="500"/> <br/>
+<img src="../../img/xdot-viewer.png" alt="Screenshot of Raven-xdot-viewer" width="800"/> <br/>
 <i>Raven-xdot-viewer displays a GraphViz graph, and lets you walk it.</i>
 </p>
 
@@ -107,6 +107,11 @@ The rules are the constellation's, the same ones *Raven-visualizer* and *Raven-l
 
 `Enter` in the field accepts the search and jumps to the first match; `Esc` cancels the edit and hands the
 keyboard back to the graph.
+
+<p align="center">
+<img src="../../img/xdot-viewer-search.png" alt="A graph with the nodes matching the search 'loop' highlighted" width="500"/> <br/>
+<i>Searching for <code>loop</code>: the four matching nodes are highlighted, and the status line counts them.</i>
+</p>
 
 
 # Dark mode
