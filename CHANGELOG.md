@@ -565,6 +565,11 @@
   - When a step fails, the error report shows the model's thinking trace and its final answer laid out the way Librarian's export buttons lay them out, so a trace in an error report and a trace in an exported chat read the same way.
     - The usual cause of an empty step is the model overthinking until the token budget runs out, which is what the trace shows.
 
+#### Raven-xdot-viewer
+
+- **Small labels are sharper when zoomed out.**
+  - Graph text is drawn from fonts prepared at a set of sizes, and there are now more of them at the small end, so a zoomed-out label is drawn close to its own size instead of stretched or shrunk from a distant one.
+
 #### Constellation-wide
 
 - **The file dialog can be driven from the keyboard.**
