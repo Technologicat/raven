@@ -172,6 +172,11 @@ Switch on **Chat graph** in the mode toggles, and the tree is drawn where the av
 
 What you see is the branch you are on, drawn as a vertical spine, with a few siblings either side of it at each level. One of those levels is every chat ever started under the current character card, which is as close as this format comes to a list of recent chats. Anything left out is drawn as a clickable **…N more**, so a box with no visible links means the tree really does end there.
 
+<p align="center">
+<img src="../../img/chatgraph.png" alt="The chat graph panel, showing one branch of the chat tree"/> <br/>
+<i>The branch you are on, from the system prompt at the top down to <b>HEAD</b>, with its siblings either side and the rest of the tree behind <b>…N more</b> boxes. The orange boxes are a tool call and its result.</i>
+</p>
+
 Clicking is in two steps, and the first one changes nothing:
 
 - **Click a message** to look at it. If it is on the branch you are on, the chat log scrolls to it. If it is on another branch, the graph redraws around it, bringing its own siblings and continuations into view.
@@ -204,6 +209,11 @@ The cursor is the same mark whether you put it there with the mouse or the keys,
 **Every box says who is speaking and what they attached.** The speaker's icon — the same one the chat log uses, your character's own where it has one — sits on the box's left edge, and anything the message carries fans off its right edge: images as a deck of thumbnails, a document as its file type's icon. Both hang *outside* the box, so neither costs the message's own words any room, and a long stack is abbreviated to the first two, the last two and a count.
 
 **The picture is redrawn with an animation, not a cut.** Stepping to another branch, opening a gap, going back or forward, a reply arriving — the box you are working with stays where it is on screen and the rest rearranges around it, so you can see where things went instead of having to find them again. Three settings in [`raven.librarian.config`](config.py) if you would rather it did not: `chat_graph_animate_transitions` switches the morph off, `chat_graph_animate_view` switches off the graph's own pan and zoom, and `chat_graph_transition_rate` is the one speed both run at.
+
+<p align="center">
+<img src="../../img/chatgraph-morph.gif" alt="The chat graph rearranging itself as the conversation switches between two branches"/> <br/>
+<i>Switching branches twice. The box you acted on stays where it is on screen, and the rest of the tree rearranges around it.</i>
+</p>
 
 **The graph and the avatar take turns at the panel**, and the *Chat graph* checkbox is your preference for which to show when both have something to offer. The avatar's video pauses while the graph covers it, and whenever the avatar has nothing to show — while its video is starting up, or once it has switched itself off after a spell of quiet — the graph stands in.
 
