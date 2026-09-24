@@ -519,6 +519,19 @@ What is queued, all small and independent:
         breathing, which is one idea shared across every app and reads as such only in motion.
     - **Cherrypick's and the xdot viewer's existing screenshots are the two oldest in the tree**, both from
       the release that introduced each app, so they are refreshes rather than additions like the rest.
+    - **Progress, 2026-09-24 midday.** The protocol is in the `live-gui-testing` skill; stills go through
+      the desktop's window screenshot (frame kept, `0.2.9-dev` in the title bar accepted), clips through
+      `x11grab -window_id` and `gifsicle --lossy=30`.
+      - **Done, Librarian**: both headline shots (avatar, chat graph); the chat graph still and its morph;
+        the avatar waking, a web search's tool calls, speech with subtitles, the glitch; the notice lines
+        (avatar manual) from a ping.
+      - **Remaining, still in Librarian** (Juha): the attachment cleanup dialog, which has no screenshot at
+        all, and the file dialog in both looks — list view and thumbnail grid — for its manual.
+      - **Remaining, the other apps**, oldest first: the Visualizer (main, help card, open file, word cloud,
+        the importer's three), then cherrypick with its compare mode, the xdot viewer, the conference
+        timer, the two avatar editors, the server.
+      - **Not yet captured from the motion list**: the keyboard mark's breathing, smooth scrolling and the
+        end-of-list arrows. (The indicator lights are in the web-search and wake clips.)
     - **The capture toolchain is undecided, and neither of us has done this before** (Juha, 2026-09-23).
       Surveyed the same day so the decision costs a minute tomorrow rather than an hour:
       - **What is already installed covers it**: ffmpeg 7.1.1 with `x11grab` and a GIF encoder, plus
