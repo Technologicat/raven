@@ -544,6 +544,9 @@ What is queued, all small and independent:
         fresh threads — about ten lines in `raven/vendor/DearPyGui_Markdown/__init__.py` — plus a test that
         Markdown renders after a shutdown. The five: `test_fontsetup.py`, `test_audio_input_panel.py`,
         `test_chatgraph_panel.py`, `test_thumbnail_pipeline.py`, and `DearPyGui_Markdown/tests/test_text_size.py`.
+      - **Retake the avatar shots for a proper manual version.** The CRT look does not scale well in them
+        (Juha): the clips and stills taken on 2026-09-24 are fine for 0.2.9 and want redoing later, likely
+        with a chain suited to screenshots.
       - **Check which shell edits the Claude Code harness renders as diffs**, before deciding whether the
         dotclaude rule "edit files with the edit tools, not with shell text-munging" can go. On 2026-09-24 a
         `cat >>` append to a tracked file rendered as a diff in the session (it had not a few days earlier),
