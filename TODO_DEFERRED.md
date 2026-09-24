@@ -4243,7 +4243,7 @@ Discovered while committing the chat-template fix (2026-07-19).
 
 ## Thin strokes in the chat graph's scaled labels shimmer and drop out
 
-*Cluster: markdown-renderer · Cost: ? · Gate: none · Filed: 2026-09-24*
+*Cluster: chat-graph · Cost: ? · Gate: none · Filed: 2026-09-24*
 
 Below 1:1 the chat graph's labels lose one-pixel strokes: after `B` framed a branch, `/wiki/Main_Page` drew
 as `/wiki/Main Page`, and during an animated zoom the underscore's brightness varies as if it lands on a
