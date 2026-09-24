@@ -1965,6 +1965,16 @@ plumbing:
 Both are cheap. Neither is worth guessing at, since the answer is a judgement about what the audience should
 read the effect as meaning.
 
+## The data eyes are nearly invisible after the postprocessor
+
+*Cluster: avatar · Cost: ? · Gate: none · Filed: 2026-09-24 · See also: "Two loose ends on what the data eyes mean"*
+
+The effect — green, scrolling terminal-text lines in the character's eyes while a tool runs — is there in a
+recording of a web-search turn, but the postprocessor all but hides it: Juha could make it out only on a
+magnified crop of the eyes, and did not notice it live (2026-09-24, Aria, the default postprocessor chain).
+A signal nobody sees is not a signal. Brighter cels, or exempting the eyes from whichever filter washes them
+out, are the obvious directions; which filter does it is the first thing to find out.
+
 ## Attachment state is carried by colour and hover alone
 
 *Cluster: librarian-attachments · Cost: ? · Gate: ? · Filed: 2026-08-13*
