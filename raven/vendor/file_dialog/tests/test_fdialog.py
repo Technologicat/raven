@@ -16,6 +16,7 @@ that the dialog routes the Find field through it.
 import os
 import pathlib
 import shutil
+import sys
 import threading
 from unittest import mock
 
@@ -1457,6 +1458,8 @@ def test_letters_do_nothing_unless_the_panel_has_the_keys(dialog):
     assert dialog._places_cursor.current == before
 
 
+@pytest.mark.skipif(sys.platform == "win32",
+                    reason="Windows will not delete a directory that is a process's working directory, so the case cannot arise there")
 class TestRefreshingAFolderDeletedUnderneath:
     """The dialog lives in the process's working directory, which a deleted folder leaves pointing at nothing.
 
