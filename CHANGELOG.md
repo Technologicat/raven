@@ -2,7 +2,7 @@
 
 **Releases:**
 
-- [0.2.9 (in progress) — *"Pleiades"* edition](#029-in-progress--pleiades-edition)
+- [0.2.9 (24 September 2026) — *"Pleiades"* edition](#029-24-september-2026--pleiades-edition)
 - [0.2.8 (7 August 2026)](#028-7-august-2026)
 - [0.2.7 (22 April 2026)](#027-22-april-2026)
 - [0.2.6 (9 April 2026)](#026-9-april-2026)
@@ -13,7 +13,7 @@
 - [0.2.1 (18 June 2025)](#021-18-june-2025)
 - [0.1.x and older](#01x-and-older)
 
-## 0.2.9 (in progress) — *["Pleiades"](https://en.wikipedia.org/wiki/Pleiades)* edition
+## 0.2.9 (24 September 2026) — *["Pleiades"](https://en.wikipedia.org/wiki/Pleiades)* edition
 
 ### Added
 
