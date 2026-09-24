@@ -642,7 +642,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 # leaving the pane.
                 self._set_cursor(self._cursor_home(chat_graph))  # which redraws
             elif ring_on_screen:
-                self.refresh()
+                # Only the ring's style changed, so the view stays where the reader left it. Following the
+                # anchor here would glide the cursor's box to the middle -- a move nobody asked for, on
+                # every click into or out of the pane, away from a framing such as `B`'s.
+                self.refresh(follow=False)
 
     has_keyboard = property(fget=_get_has_keyboard, fset=_set_has_keyboard,
                             doc="Whether the keys are going to this panel. Set by the app, which owns the "
@@ -949,22 +952,25 @@ class DPGChatGraphPanel(gui_animation.Animation):
             dpg.set_item_height(self._canvas, self._graph_h(height))
         self._widget.set_size(self._graph_w(width), self._graph_h(height))
 
-    def refresh(self) -> None:
+    def refresh(self, follow: bool = True) -> None:
         """Rebuild the picture from the datastore, keeping the reader where they were looking.
 
         Called for itself whenever the forest or HEAD changes; call it directly after doing something the
         change counter cannot see.
+
+        `follow`: Whether the view then glides to put the cursor (or HEAD) in the middle. `False` leaves the
+                  view where it is, for a rebuild that changes how something is drawn and not what is there.
         """
         try:
             with timer() as tictoc:
-                self._rebuild()
+                self._rebuild(follow=follow)
         finally:
             # In a `finally` because `_rebuild` returns early on a picture it cannot draw, and that costs
             # time too. This is the expensive path and the one the readout is for.
             self._rebuild_time.add_datapoint(tictoc.dt)
 
-    def _rebuild(self) -> None:
-        """The rebuild itself. Split from `refresh` only so that the timing there wraps all of it."""
+    def _rebuild(self, follow: bool = True) -> None:
+        """The rebuild itself. Split from `refresh` only so that the timing there wraps all of it. `follow` as there."""
         with self._lock:
             self._view_state.head_node_id = self.app_state["HEAD"]
             self._view_state.new_chat_node_id = self.app_state.get("new_chat_HEAD")
@@ -1043,6 +1049,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
             self._framed = True
             self._frame_on_head(chat_graph, animate=False)
             self._remember_view()  # the view opened on is the one Back should eventually reach
+        elif not follow:
+            pass
         elif chat_graph.graph.get_node_by_name(anchor) is not None:
             self._widget.pan_to_node(anchor)
         else:

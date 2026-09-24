@@ -274,6 +274,32 @@ class TestTheCursorOutlivesTheKeyboard:
         built.has_keyboard = True
         assert self.ring_colors(built, ids["taken"]) == [chatgraph.PREVIEW_COLOR]
 
+    def test_the_keys_coming_and_going_leave_the_view_where_it_is(self, panel):
+        # Only the ring's colour changes, so nothing on screen should move -- least of all away from a
+        # framing the reader chose, such as `B`'s, towards the cursor's box.
+        #
+        # Framed at 1:1 on another box rather than with `B` itself: this fixture's graph fits the test
+        # viewport whole at `B`'s zoom, where the clamp pins every pan to one place and a follow could
+        # not move anything.
+        built, _forest, _app_state, ids, _calls = panel
+        viewport = built._widget._viewport
+        built.has_keyboard = True
+        built._set_cursor(ids["taken"])
+        built._widget.set_zoom(1.0, animate=False)
+        built._widget.pan_to_node(ids["taken"], animate=False)
+        centred_on_cursor = (viewport.pan_x.target, viewport.pan_y.target)
+        built._widget.pan_to_node(ids["not_taken"], animate=False)
+        framed = (viewport.pan_x.target, viewport.pan_y.target, viewport.zoom.target)
+        assert framed[:2] != pytest.approx(centred_on_cursor), \
+            "the view lands where following the cursor would, so this fixture cannot see a follow"
+
+        built.has_keyboard = False
+        assert (viewport.pan_x.target, viewport.pan_y.target, viewport.zoom.target) == pytest.approx(framed), \
+            "the keys leaving moved the view"
+        built.has_keyboard = True
+        assert (viewport.pan_x.target, viewport.pan_y.target, viewport.zoom.target) == pytest.approx(framed), \
+            "the keys coming back moved the view"
+
 
 class TestLeavingTheGraph:
     """How the keyboard gets back out, which is the half a pane that can take focus also owes.
