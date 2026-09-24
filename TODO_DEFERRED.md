@@ -4247,10 +4247,13 @@ Discovered while committing the chat-template fix (2026-07-19).
 
 Below 1:1 the chat graph's labels lose one-pixel strokes: after `B` framed a branch, `/wiki/Main_Page` drew
 as `/wiki/Main Page`, and during an animated zoom the underscore's brightness varies as if it lands on a
-pixel row at some scales and between two at others (Juha). At 1:1 it draws correctly.
+pixel row at some scales and between two at others (Juha). At `B`'s zoom for that branch it is gone
+completely; at 1:1 it draws correctly.
 
-That is the signature of sampling a scaled texture — a stroke thinner than a pixel after scaling, bilinear
-and no mipmaps. Whether the labels are scaled at all is the open question: the renderer binds the nearest
+That is the signature of sampling a scaled texture without mipmaps: below 1:1 neighbouring screen pixels
+sample more than one texel apart, so a one-texel stroke can fall on a row that is never sampled — gone
+entirely at one scale and phase, partly back at the next. (Inferred from the symptoms, not read from the
+renderer.) Whether the labels are scaled at all is the open question: the renderer binds the nearest
 rung of a font ladder (`fontsetup.load_font_ladders`) and asks `draw_text` for the exact size, and what
 ImGui 1.92 does with a size that differs from its font's — scale the rung's baked glyphs, or bake the face
 afresh at that size — is in `ImDrawList::AddText`. `load_font_ladders` says "the renderer scales between
