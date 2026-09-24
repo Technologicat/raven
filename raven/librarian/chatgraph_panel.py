@@ -85,7 +85,10 @@ def _toolbar_tooltip_text(caption: str) -> str:
 # Font atlas sizes for graph labels. The renderer picks whichever is closest to the size it is drawing at,
 # so this is a ladder rather than a choice: a label is legible at one zoom and unreadable at the next, and
 # scaling one atlas across that range is what makes it look smeared. Same ladder `raven-xdot-viewer` uses.
-_GRAPH_TEXT_FONT_SIZES = (4, 8, 16, 32, 64)
+#
+# Denser at the small end, where zooming out spends most of its time: a power-of-two ladder leaves a label up
+# to a third off its rung's size -- at 12 px, either 8 magnified 1.5× or 16 shrunk to 0.75×.
+_GRAPH_TEXT_FONT_SIZES = (4, 6, 8, 12, 16, 32, 64)
 
 
 class DPGChatGraphPanel(gui_animation.Animation):

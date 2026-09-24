@@ -48,8 +48,9 @@ FILE_RELOAD_POLL_INTERVAL = 2.0
 HIGHLIGHT_FADE_DURATION = 2.0
 
 # Font atlas sizes (px) for graph text rendering.
-# The renderer picks whichever is closest to the rendered text size.
-GRAPH_TEXT_FONT_SIZES = [4, 8, 16, 32, 64]
+# The renderer picks whichever is closest to the rendered text size. Denser at the small end, where a
+# zoomed-out graph's labels are drawn.
+GRAPH_TEXT_FONT_SIZES = [4, 6, 8, 12, 16, 32, 64]
 
 # GraphViz layout engines for the filter selector.
 # "[as-is]" shows the original layout (fast path for .xdot files,

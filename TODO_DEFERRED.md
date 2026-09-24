@@ -4255,16 +4255,12 @@ Ruled out on the live instance at that zoom (labels at 17.53 px, captions at 12.
 
 - **The text**: the label holds the underscore.
 - **The atlas glyph drop**: the whole glyph batch drawn at 17.53 px on every rung left it as it was.
-- **Scaling between ladder rungs**: the ladder is 4, 8, 16, 32, 64, so 17.53 px came from the 16 rung
-  magnified 1.1×; with an 18 rung added and the label confirmed bound to it, nothing changed.
+- **Scaling between ladder rungs**: the ladder was then 4, 8, 16, 32, 64, so 17.53 px came from the 16
+  rung magnified 1.1×; with an 18 rung added and the label confirmed bound to it, nothing changed.
 
 The direction to try is snapping the label's origin to whole pixels — the renderer places text at
 `sy - font_size_px * 0.8`, which is fractional at nearly every zoom — so the stroke lands on one row
 instead of straddling two. Whether ImGui then snaps the glyph quads itself is worth reading first.
-
-**Separately, the ladder is sparse at the low end** (Juha): the captions at 12.27 px take the 16 rung,
-which is minification (0.77×). Rungs at 6 and 12 would draw those near native size. Worth doing on its
-own; it does not touch the case above.
 
 ## The font atlas refresh flashes briefly at startup
 
