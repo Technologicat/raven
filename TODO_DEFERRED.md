@@ -4126,13 +4126,9 @@ in the regular face only — bold text in the same message kept both letters.
     controlled before and after.
   - The probes are in the session log only; the shape is a DPG window in the app with `add_text` items bound
     to `font_attributes.Default._fonts[20]`, driven through `--repl`.
-- **Possibly a third sighting, unconfirmed: underscores in the chat graph's labels, zoom-dependent.**
-  After `B` framed a branch below 1:1, `/wiki/Main_Page` drew as `/wiki/Main Page` in two boxes; at 1:1
-  the same labels drew the underscore (2026-09-24). Under ImGui 1.92 each text size is its own baked copy
-  of a font, so a size first needed on zooming is loaded later than the startup refresh covers. Equally
-  consistent with an underscore at a fractional size falling just outside its clip. The discriminating
-  test is the heal probe at that zoom: a large batch of never-seen glyphs drawn at the graph's current
-  label size — if the underscores come back, it is this defect.
+- **Not a sighting: underscores vanishing from the chat graph's labels below 1:1** (2026-09-24). Their
+  brightness varies with sub-pixel phase during an animated zoom, which is sampling rather than a glyph
+  missing from the atlas — see "Thin strokes in the chat graph's scaled labels shimmer and drop out".
 - **So a startup glyph warm-up would narrow the window without closing it**: printable ASCII and Latin-1
   loaded early would be safe, and any character first seen later (a Greek letter in an abstract) would
   still meet the race. It also has to genuinely draw — ImGui skips transparent and clipped text — and a
@@ -4245,6 +4241,22 @@ above.
 
 Discovered while committing the chat-template fix (2026-07-19).
 
+## Thin strokes in the chat graph's scaled labels shimmer and drop out
+
+*Cluster: markdown-renderer · Cost: ? · Gate: none · Filed: 2026-09-24*
+
+Below 1:1 the chat graph's labels lose one-pixel strokes: after `B` framed a branch, `/wiki/Main_Page` drew
+as `/wiki/Main Page`, and during an animated zoom the underscore's brightness varies as if it lands on a
+pixel row at some scales and between two at others (Juha). At 1:1 it draws correctly.
+
+That is the signature of sampling a scaled texture — a stroke thinner than a pixel after scaling, bilinear
+and no mipmaps. Whether the labels are scaled at all is the open question: the renderer binds the nearest
+rung of a font ladder (`fontsetup.load_font_ladders`) and asks `draw_text` for the exact size, and what
+ImGui 1.92 does with a size that differs from its font's — scale the rung's baked glyphs, or bake the face
+afresh at that size — is in `ImDrawList::AddText`. `load_font_ladders` says "the renderer scales between
+rungs", which may predate DPG 2.3. If it scales, denser rungs (or always picking the rung *above* the
+requested size, so it only ever scales down a little) are the cheap directions.
+
 ## The font atlas refresh flashes briefly at startup
 
 *Cluster: markdown-renderer · Cost: S–M · Gate: none · Filed: 2026-09-24 · See also: "The Markdown renderer drops text"*
@@ -4261,9 +4273,10 @@ Two directions:
 - **Hide what shows**, once it is known which it is — a zero border size in the window's theme, say.
 - **Load the glyphs without drawing them**, which would make the window unnecessary. ImGui 1.92 loads a
   glyph when it is first looked up, and measuring text looks it up too, so `dpg.get_text_size(batch,
-  font=face)` might load the batch with nothing drawn at all. Unverified: whether measuring *rasterizes* a
-  glyph or only fetches its advance width is the question, and only rasterizing would force the upload.
-  ImGui's source settles it. If it rasterizes, the window goes, and the flash with it.
+  font=face)` might load the batch with nothing drawn at all. **Probably not**: `investigations/graph-font-atlas/`
+  measured Greek and Cyrillic correctly at 1024 px in a process that had never drawn either, which says
+  measuring answers from the font's metrics without rasterizing — and only rasterizing would force the
+  upload. ImGui's source would settle it; until then, hiding what shows is the likelier fix.
 
 ## A wrapped line in the Markdown renderer sometimes keeps the space it wrapped at
 

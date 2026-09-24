@@ -291,7 +291,8 @@ new question about an object. Restarting to investigate destroys the evidence, a
 fault the next launch will not reproduce it.
 
 **The standing example is the intermittent Markdown-renderer glyph drop** (`TODO_DEFERRED.md`, "The
-Markdown renderer drops text"). It is settled per launch, and there is no usable rate: it can turn up on
+Markdown renderer drops text"). It persists for the run until something repairs it (since 2026-09-24 every
+app runs a repair a few seconds after startup), and there is no usable rate: it can turn up on
 consecutive runs and then stay away for a hundred launches (Juha, 2026-09-15), so a damaged instance is the
 only specimen there will be until the next one happens.
 

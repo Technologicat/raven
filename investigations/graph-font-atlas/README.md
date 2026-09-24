@@ -55,7 +55,8 @@ Raven has two font problems and they are easy to conflate — the first version 
   `add_font_range` into a deprecated no-op, so nothing configures them by hand any more; see
   `raven/common/gui/fontsetup.py` and `raven/common/gui/tests/test_fontsetup.py`.
 - **The intermittent drop at ordinary sizes** — `TODO_DEFERRED.md`, *"The Markdown renderer drops text"* —
-  which is unexplained, settled per launch, and has the atlas as its standing suspect. Nothing here
+  which is unexplained, persists within a run until a large batch of new glyphs repairs it, and has the
+  atlas as its standing suspect. Nothing here
   reproduces it. What this work does is add twenty more `(face, size)` rungs to a process that already has
   an unexplained fault around building them, which is a reason to watch for a specimen rather than to expect
   one.
