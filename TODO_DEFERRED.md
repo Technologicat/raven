@@ -4243,17 +4243,16 @@ Discovered while committing the chat-template fix (2026-07-19).
 *Cluster: markdown-renderer · Cost: S–M · Gate: none · Filed: 2026-09-24 · See also: "The Markdown renderer drops text"*
 
 `animation.GlyphAtlasRefresh`, which every app runs about three seconds after its first frame, shows as a
-brief flash (Juha, 2026-09-24, on Librarian — while the chat log was still building, so possibly a rebuild
-of that coinciding rather than the refresh itself). It draws its glyph batch nearly transparent (alpha
-1/255), one face per frame in a window at the viewport's top-left, so the batch itself should not be
-visible; an unattributed flash is more likely the atlas re-upload that the refresh exists to cause, which
-would redraw everything once.
+brief flash of its own window at the viewport's top-left (Juha, 2026-09-24, on Librarian). The window is
+meant to be invisible — no title bar, no background, and its text themed to alpha 1/255 — so something in
+it is drawn anyway. Not established which: the window's border (ImGui draws one even with no background),
+or the text theme not taking effect and the batch drawing at full alpha. One frame-rate screen capture
+across the refresh tells the two apart.
 
-Two directions, and the first decides whether the second is needed:
+Two directions:
 
-- **Find out what flashes.** A screen capture across the refresh at full frame rate, compared against a
-  launch with the refresh removed, says whether it is the batch, the re-upload, or the chat log building.
-- **Load the glyphs without drawing them.** ImGui 1.92 loads a glyph when it is first looked up, and
+- **Hide what shows**, once it is known which it is — a zero border size in the window's theme, say.
+- **Load the glyphs without drawing them**, which would make the window unnecessary. ImGui 1.92 loads a glyph when it is first looked up, and
   measuring text looks it up too, so `dpg.get_text_size(batch, font=face)` might load the batch with nothing
   drawn at all. Unverified: whether measuring *rasterizes* a glyph or only fetches its advance width is the
   question, and only rasterizing would force the upload. ImGui's source settles it. If it rasterizes, the
