@@ -3362,12 +3362,14 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     # that absence clears itself: speaking wakes the avatar, the video
                                     # returns, and the graph steps aside with the captions visible again.
                                     avatar_panel_covered=(lambda: app_state["chat_graph_shown"]),
+                                    on_search_results_changed=_update_search_row,
+                                    # A navigation moves the graph with it: preview dropped, cursor on the new
+                                    # HEAD. Left alone, the graph keeps drawing whatever it was previewing --
+                                    # which may be an older card's tree, where the new HEAD is not even in the
+                                    # picture. Hidden or not, so that a graph shown later opens where the
+                                    # conversation now is.
+                                    on_navigate=chat_graph_panel.go_to_head,
                                     executor=bg)
-chat_controller.on_search_results_changed = _update_search_row
-# A navigation moves the graph with it: preview dropped, cursor on the new HEAD. Left alone, the graph keeps
-# drawing whatever it was previewing -- which may be an older card's tree, where the new HEAD is not even in
-# the picture. Hidden or not, so that a graph shown later opens where the conversation now is.
-chat_controller.on_navigate = chat_graph_panel.go_to_head
 
 def _get_cleanup_roots() -> tuple[str, ...]:
     """The node IDs a cleanup must keep everything reachable from: **every** root, each of which is a system

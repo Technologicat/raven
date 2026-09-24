@@ -4079,6 +4079,8 @@ class DPGChatController:
                  web_indicator_widget: str | int,
                  is_any_modal_window_visible: Callable[[], bool] | None = None,
                  avatar_panel_covered: Callable[[], bool] | None = None,
+                 on_search_results_changed: Callable[[], None] | None = None,
+                 on_navigate: Callable[[], None] | None = None,
                  executor: concurrent.futures.Executor | None = None):
         """Controller for LLM scaffold to GUI integration.
 
@@ -4169,6 +4171,13 @@ class DPGChatController:
                                 Like `is_any_modal_window_visible`, a callable rather than a value: the app
                                 layer owns its panels and this layer must not import it.
 
+        `on_search_results_changed`: Called with no arguments when the search's match count or the current
+                                     match's position changes, so the app can update its search row.
+
+        `on_navigate`: Called with no arguments after the chat log navigates — a branch, a sibling switch, a
+                       jump to a continuation, a new chat through `navigated` — as opposed to HEAD moving
+                       because the conversation grew.
+
         `web_indicator_widget`: DPG tag or ID of the widget to show while a "websearch" tool call is in progress.
 
         `executor`: A `ThreadPoolExecutor` or something duck-compatible with it. Used for background tasks.
@@ -4243,11 +4252,8 @@ class DPGChatController:
         # `open_thinking_trace_when_it_matches`. `None` whenever nothing is awaited, which is nearly always.
         self._node_awaiting_trace_open = None
         # Called with no arguments whenever any of the four above changes, so the app can redraw its search row.
-        # Set by the app; `None` until then.
-        self.on_search_results_changed = None
-        # Called after the chat log navigates -- a branch, a sibling switch, a jump to a continuation -- as
-        # opposed to HEAD moving because the conversation grew. Set by the app; `None` until then.
-        self.on_navigate = None
+        self.on_search_results_changed = on_search_results_changed
+        self.on_navigate = on_navigate
 
         # The keyboard mark on the current message's button row, built on first use by
         # `update_current_message_mark`. One mark that moves, rather than one per message: a chat has as
