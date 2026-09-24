@@ -2861,7 +2861,15 @@ def build(datastore: chattree.Forest,
     # rectangles clips the SYS pill off the top of the view.
     spine_nodes = [nodes_by_name[node_id] for node_id in visible_spine if node_id in nodes_by_name]
     if spine_nodes:
-        spine_bbox = _content_bbox(spine_nodes)
+        x1, y1, x2, y2 = _content_bbox(spine_nodes)
+        # Horizontally, centred on the column the boxes stand in. What hangs off the boxes is lopsided --
+        # the avatar overhangs the left edge by far more than HEAD's highlight does the right -- so the
+        # drawn extent's own centre sits off the column, and a frame of this would not line up with one
+        # centred on HEAD. Widened to the larger overhang on both sides, so everything drawn still fits.
+        box_x1, _, box_x2, _ = xdotgraph.union_of_boxes(node.get_bounding_box() for node in spine_nodes)
+        column_x = (box_x1 + box_x2) / 2
+        half_width = max(column_x - x1, x2 - column_x)
+        spine_bbox = (column_x - half_width, y1, column_x + half_width, y2)
     else:  # nothing of the branch survived; framing the whole picture is the only answer left
         spine_bbox = (0.0, 0.0, graph.width, graph.height)
 

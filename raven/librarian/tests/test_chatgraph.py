@@ -2059,6 +2059,29 @@ class TestGeometry:
 
         assert built.spine_bbox[1] <= min(shape_tops)
 
+    def test_the_branchs_frame_is_centred_on_the_column(self):
+        """`B` frames this, and the crosshair centres HEAD's own box, so the two should agree about where
+        the branch is. What is drawn hangs off the boxes unevenly -- the avatar far over the left edge --
+        so a frame around the drawn extent alone would sit off the column."""
+        forest = Forest()
+        system = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        greeting = forest.create_node(payload("assistant", "hello there"), parent_id=system)
+        user = forest.create_node(payload("user", "hello"), parent_id=greeting)
+        built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=user, new_chat_node_id=greeting),
+                                icon_for=by_role(ROLE_ICONS))
+
+        spine_nodes = [built.graph.get_node_by_name(node_id) for node_id in (system, greeting, user)]
+        box_x1 = min(node.get_bounding_box()[0] for node in spine_nodes)
+        box_x2 = max(node.get_bounding_box()[2] for node in spine_nodes)
+        drawn_x1 = min(node.get_drawn_bounding_box()[0] for node in spine_nodes)
+        drawn_x2 = max(node.get_drawn_bounding_box()[2] for node in spine_nodes)
+        assert (box_x1 - drawn_x1) != pytest.approx(drawn_x2 - box_x2), \
+            "what is drawn overhangs both sides equally, so this fixture cannot detect an off-centre frame"
+
+        x1, _, x2, _ = built.spine_bbox
+        assert (x1 + x2) / 2 == pytest.approx((box_x1 + box_x2) / 2)
+        assert x1 <= drawn_x1 and x2 >= drawn_x2, "centring must not cut off what is drawn"
+
     def test_the_picture_starts_at_the_origin(self):
         # `Viewport.zoom_to_fit` fits the box (0, 0)-(width, height) and nothing else, so content placed
         # outside it is simply not framed.
