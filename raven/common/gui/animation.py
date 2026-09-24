@@ -921,18 +921,33 @@ def set_text_under_flash(widget: Union[str, int, object], text: str) -> None:
 # three frames to land when re-issued, so this leaves plenty of room without asking forever.
 _CARET_REQUEST_MAX_FRAMES = 10
 
+# How many consecutive frames the field must hold the caret before the request counts as landed. One is not
+# enough: at a fresh Raven-librarian launch, New chat's caret arrived and was taken away on the very next
+# frame (traced 2026-09-24), and a request that had already finished did not ask again. A tooltip measuring
+# new text holds focus for two frames, so three outlasts it.
+_CARET_REQUEST_STABLE_FRAMES = 3
+
 class CaretRequest(Animation):
-    """Give a text field the caret, and keep asking each frame until it has it. See `give_caret`."""
+    """Give a text field the caret, and keep asking each frame until it has held it for a few frames. See `give_caret`."""
 
     def __init__(self, field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES):
         super().__init__()
         self.field = field
+        self.max_frames = max_frames
         self.frames_left = max_frames
+        self.frames_held = 0
 
     def render_frame(self, t: int) -> sym:
         with guiutils.nonexistent_ok():
             if dpg.is_item_active(self.field):
-                return action_finish
+                self.frames_held += 1
+                if self.frames_held >= _CARET_REQUEST_STABLE_FRAMES:
+                    logger.debug(f"CaretRequest.render_frame: '{self.field}' has held the caret for {self.frames_held} frames, after {self.max_frames - self.frames_left} repeated requests; done.")
+                    return action_finish
+                return action_continue  # has it; asking again would only disturb it, so watch
+            if self.frames_held:
+                logger.debug(f"CaretRequest.render_frame: '{self.field}' had the caret for {self.frames_held} frames and lost it; asking again.")
+            self.frames_held = 0
             if self.frames_left <= 0:
                 logger.debug(f"CaretRequest.render_frame: gave up giving '{self.field}' the caret: still not active after the last of its frames.")
                 return action_cancel
@@ -950,8 +965,9 @@ def give_caret(field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) ->
     """Put the caret in the text field `field` (DPG tag or ID), even if something else claims focus meanwhile.
 
     Use in place of `dpg.focus_item` wherever the point is to let the user type. Asks at once, and then, while
-    the field is shown, once per frame until it is active, for at most `max_frames` frames. A field that is
-    not shown gets the single request and no more. Callable from any thread.
+    the field is shown, once per frame until it has stayed active for a few frames in a row, for at most
+    `max_frames` frames of asking. A field that is not shown gets the single request and no more. Callable
+    from any thread.
 
     Returns the `CaretRequest` the global `animator` runs, or `None` if the field is not shown.
     """

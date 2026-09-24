@@ -551,6 +551,22 @@ class TestGiveCaret:
         assert animation.give_caret(field) is None
         assert not any(isinstance(a, animation.CaretRequest) for a in animation.animator._animations)
 
+    def test_a_caret_taken_away_the_frame_after_it_lands_is_asked_for_again(self, field_window, monkeypatch):
+        # Traced at a fresh Librarian launch: New chat's caret landed, and the next frame something took it.
+        # A request that finished on the first active frame never asked again, so the caret stayed lost.
+        window, field = field_window
+        activity = iter([True, False, False, True, True, True])
+        monkeypatch.setattr(animation.dpg, "is_item_active", lambda item: next(activity))
+        asked = []
+        monkeypatch.setattr(animation.dpg, "focus_item", lambda item: asked.append(item))
+        request = animation.CaretRequest(field)
+
+        outcomes = [request.render_frame(time.monotonic_ns()) for _ in range(6)]
+        assert outcomes[0] is animation.action_continue, "finished on the first active frame"
+        assert asked, "the caret was lost and the request never asked for it again"
+        assert outcomes[:5] == [animation.action_continue] * 5
+        assert outcomes[5] is animation.action_finish, "held for three frames and still not finished"
+
     def test_a_request_stops_asking_once_its_window_is_hidden(self, field_window):
         window, field = field_window
         request = animation.give_caret(field)
