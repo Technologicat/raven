@@ -424,6 +424,8 @@ def main() -> int:
     # without them it would open onto a namespace holding almost nothing this app is made of.
     replserver.maybe_start(args.repl, {**globals(), **locals()}, f"Raven-conference-timer {__version__}")
 
+    gui_animation.animator.add(gui_animation.GlyphAtlasRefresh())  # repairs glyphs the font atlas sometimes leaves blank at startup
+
     # --- Render loop ---
     logger.info("App render loop starting.")
     exitcode = 0

@@ -1424,3 +1424,61 @@ class TestSmoothScrollingShift:
         assert animation.SmoothScrolling.shift(scroll_target, 26) == 526
         assert glide.target_y_scroll == 926
         assert glide.prev_frame_new_y_scroll is None, "an unstarted scroll must still read its start from DPG"
+
+
+@pytest.fixture
+def four_faces(dpg_context, monkeypatch):
+    """Four real DPG fonts standing in for the Markdown renderer's body faces."""
+    from raven.common.gui import utils as guiutils
+    from raven.vendor.DearPyGui_Markdown import font_attributes
+    with dpg.font_registry() as registry:
+        fonts = [dpg.add_font(guiutils.get_font_path("OpenSans", variant=variant), 20)
+                 for variant in ("Regular", "Bold", "Italic", "BoldItalic")]
+    for face, font in zip((font_attributes.Default, font_attributes.Bold,
+                           font_attributes.Italic, font_attributes.BoldItalic), fonts):
+        monkeypatch.setattr(face, "font", font)
+    yield fonts
+    dpg.delete_item(registry)
+
+
+class TestGlyphAtlasRefresh:
+    SECOND = 10**9
+
+    def test_it_does_not_hold_the_app_at_full_frame_rate(self):
+        assert animation.GlyphAtlasRefresh().ambient
+
+    def test_nothing_is_drawn_before_the_delay(self, four_faces):
+        refresh = animation.GlyphAtlasRefresh(delay=3.0)
+        assert refresh.render_frame(0) is animation.action_continue
+        assert refresh.render_frame(int(2.9 * self.SECOND)) is animation.action_continue
+        assert refresh.window is None
+
+    def test_each_face_is_drawn_in_turn_and_then_removed(self, four_faces):
+        refresh = animation.GlyphAtlasRefresh(delay=1.0, frames_per_face=2)
+        t = 0
+        refresh.render_frame(t)  # the first frame starts the clock
+        faces_seen = []
+        for _ in range(100):  # bounded: a refresh that never finishes must fail here rather than hang
+            t += self.SECOND
+            if refresh.render_frame(t) is not animation.action_continue:
+                break
+            lines = dpg.get_item_children(refresh.window, slot=1)
+            assert lines, "a frame after the delay drew nothing"
+            fonts = {dpg.get_item_font(line) for line in lines}
+            assert len(fonts) == 1, "one face per frame, so the batch fits a small window"
+            faces_seen.append(fonts.pop())
+        else:
+            pytest.fail("the refresh never finished")
+        # Each face for exactly its two frames, in order.
+        assert faces_seen == [font for font in four_faces for _ in range(2)]
+        window, theme = refresh.window, refresh.theme
+        refresh.finish()
+        assert not dpg.does_item_exist(window)
+        assert not dpg.does_item_exist(theme)
+
+    def test_a_face_is_drawn_with_the_whole_batch(self, four_faces):
+        refresh = animation.GlyphAtlasRefresh(delay=0.0, frames_per_face=1)
+        refresh.render_frame(0)
+        text = "".join(dpg.get_value(line) for line in dpg.get_item_children(refresh.window, slot=1))
+        assert text == animation._ATLAS_REFRESH_GLYPHS
+        refresh.finish()

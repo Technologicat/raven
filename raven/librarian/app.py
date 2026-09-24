@@ -3730,6 +3730,8 @@ quitsignal.install(dpg.stop_dearpygui)
 # gets, and by this point they are every widget, controller and panel the app has, plus `dpg` itself.
 replserver.maybe_start(opts.repl, globals(), f"Raven-librarian {__version__}")
 
+gui_animation.animator.add(gui_animation.GlyphAtlasRefresh())  # repairs glyphs the font atlas sometimes leaves blank at startup
+
 logger.info("App render loop starting.")
 
 exitcode = 0

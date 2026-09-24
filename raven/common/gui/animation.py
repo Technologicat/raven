@@ -1,4 +1,24 @@
-"""General framework for DPG GUI animations."""
+"""General framework for DPG GUI animations.
+
+Anything that changes over frames — a flash, a glide, a pulsating glow, a request repeated until it lands —
+is an `Animation` registered with the global `animator`. Each Raven app's render loop calls
+`animator.render_frame()` once per frame, just before `dpg.render_dearpygui_frame()`, and the animator calls
+`render_frame(t)` on every registered animation in turn, on the render thread.
+
+To write one, subclass `Animation`:
+
+- `__init__`: call `super().__init__(ambient=...)` first. `ambient=True` marks an animation that belongs to the
+  GUI's resting state (an indicator that pulsates for as long as it exists); the default, transient, says
+  something is happening, and holds the app at full frame rate while it runs (`Animator.transient_count`).
+- `render_frame(self, t)`: draw one frame. `t` is `time.monotonic_ns()` at the start of the frame, and
+  `self.t0` is when the animation was added. Return `action_continue` to be called again next frame,
+  `action_finish` to end and have `finish` called, or `action_cancel` to end without it.
+- `finish(self)`: put back whatever the animation borrowed or built. Called on `action_finish` and by
+  `animator.cancel`.
+
+Then `animator.add(MyAnimation(...))`, from any thread. `CaretRequest` is the smallest complete example;
+`WidgetFlash` shows borrowing a widget's state and giving it back.
+"""
 
 __all__ = ["action_continue", "action_finish", "action_cancel",  # return values for `render_frame`
            "Animator", "animator",  # controller and its global instance (need only one per app)
@@ -6,6 +26,7 @@ __all__ = ["action_continue", "action_finish", "action_cancel",  # return values
            "Dimmer",  # overlays
            "WidgetFlash", "flash_button", "highlight_widget", "set_text_under_flash",  # the flash animation, its two conveniences, and writing to a widget one has borrowed
            "CaretRequest", "give_caret",  # putting the caret in a text field, against whatever else claims focus
+           "GlyphAtlasRefresh",  # a one-off repair of the font atlas, which every app adds before its render loop
            "SmoothScrolling", "WidgetSwap",  # animations: a glide, and a swap that holds the view still
            "pulsating_alpha", "pulsation_envelope",  # utilities: the alpha a pulsating animation yields, and the curve it follows
            "PulsatingColor",  # ...which this one uses
@@ -27,6 +48,8 @@ from ..smoothvalue import SmoothInt, CALIBRATION_FPS
 import dearpygui.dearpygui as dpg
 
 from .. import numutils
+
+from ...vendor.DearPyGui_Markdown import font_attributes as markdown_fonts
 
 from . import utils as guiutils
 
@@ -941,6 +964,90 @@ def give_caret(field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) ->
         if guiutils.is_shown_all_the_way_up(field):
             return animator.add(CaretRequest(field, max_frames=max_frames))
     return None
+
+# --------------------------------------------------------------------------------
+
+# Printable ASCII, Latin-1, Latin Extended-A, Greek and Cyrillic: several hundred glyphs per face, most of which
+# an app will not have drawn in its first seconds.
+_ATLAS_REFRESH_GLYPHS = "".join(chr(c) for c in (*range(0x20, 0x7F), *range(0xA0, 0x100), *range(0x100, 0x180),
+                                                 *range(0x391, 0x3CA), *range(0x410, 0x450)))
+_ATLAS_REFRESH_LINE_LENGTH = 48  # characters; ~500 px at 20 px, so one face's batch fits the smallest app window
+
+class GlyphAtlasRefresh(Animation):
+    """Once, a few seconds into the app's life, make DPG upload its font atlas whole.
+
+    Draws a batch of glyphs the app is unlikely to have needed yet in each of the Markdown faces, one face per
+    frame, nearly transparent, then removes them. Add one to `animator` just before the app's render loop
+    starts: `animator.add(GlyphAtlasRefresh())`. Every Raven app does.
+
+    `delay`: seconds after the first rendered frame before drawing anything.
+    `frames_per_face`: how many frames each face's batch stays up.
+    """
+
+    # What this repairs: DPG 2.3 is built on ImGui 1.92, whose atlas loads glyphs as text first needs them,
+    # and every so often one comes out blank — advance width kept, pixels missing — in a single face, for the
+    # rest of the run. Drawing that glyph again does not repair it. Drawing a large batch of glyphs the atlas
+    # has never held does, at once and everywhere on screen, which fits a grown atlas being uploaded whole.
+    # The repair is observed; the mechanism is inferred. It runs after the startup content has been built,
+    # because that is when the damage has been seen to happen, and it cannot help with a glyph that goes
+    # blank later.
+    #
+    # Nearly transparent rather than transparent, because ImGui skips drawing text whose alpha is zero, and
+    # text it does not draw loads no glyphs. Likewise the batch must be inside the viewport, since clipped
+    # text is not drawn either.
+
+    def __init__(self, delay: float = 3.0, frames_per_face: int = 2):
+        super().__init__(ambient=True)  # waits for seconds with nothing to show, so it must not hold the app at full frame rate
+        self.delay_ns = int(delay * 10**9)
+        self.frames_per_face = frames_per_face
+        self.first_frame_t = None
+        self.frame_index = 0  # frames since drawing began
+        self.window = None
+        self.theme = None
+
+    def _faces(self) -> list[int]:
+        # Filled in when `guiutils.setup_markdown` configures the renderer.
+        maybe_fonts = [markdown_fonts.Default.font, markdown_fonts.Bold.font,
+                       markdown_fonts.Italic.font, markdown_fonts.BoldItalic.font]
+        return [font for font in maybe_fonts if font]
+
+    def render_frame(self, t: int) -> sym:
+        if self.first_frame_t is None:
+            self.first_frame_t = t
+        if t - self.first_frame_t < self.delay_ns:
+            return action_continue
+
+        faces = self._faces()
+        face_index, frame_in_face = divmod(self.frame_index, self.frames_per_face)
+        self.frame_index += 1
+        if face_index >= len(faces):
+            return action_finish
+
+        if self.window is None:
+            with dpg.theme() as self.theme:
+                with dpg.theme_component(dpg.mvAll):
+                    dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255, 1))
+            self.window = dpg.add_window(pos=(0, 0), autosize=True,
+                                         no_title_bar=True, no_background=True, no_move=True, no_resize=True,
+                                         no_scrollbar=True, no_collapse=True, no_saved_settings=True,
+                                         no_focus_on_appearing=True, no_bring_to_front_on_focus=True)
+            dpg.bind_item_theme(self.window, self.theme)
+        if frame_in_face == 0:
+            dpg.delete_item(self.window, children_only=True)
+            for start in range(0, len(_ATLAS_REFRESH_GLYPHS), _ATLAS_REFRESH_LINE_LENGTH):
+                line = dpg.add_text(_ATLAS_REFRESH_GLYPHS[start:start + _ATLAS_REFRESH_LINE_LENGTH], parent=self.window)
+                dpg.bind_item_font(line, faces[face_index])
+        return action_continue
+
+    def finish(self) -> None:
+        with guiutils.nonexistent_ok():
+            if self.window is not None:
+                dpg.delete_item(self.window)
+            if self.theme is not None:
+                dpg.delete_item(self.theme)
+        self.window = None
+        self.theme = None
+        logger.info("GlyphAtlasRefresh.finish: font atlas refresh done.")
 
 # --------------------------------------------------------------------------------
 

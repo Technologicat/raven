@@ -842,6 +842,10 @@
 
 #### Constellation-wide
 
+- **Letters that go missing from text at startup now come back by themselves.**
+  - Once in a while an app starts with one letter drawn as a blank gap wherever it appears in one font style — every `k` in plain text, say, while bold text keeps them.
+  - A few seconds after startup, every app now makes the GUI toolkit redraw its font data, which puts such letters back. This is a workaround: it covers damage done during startup, where it has been seen, but a letter lost later in a session stays lost until a restart.
+
 - **Code backgrounds, underlines and code-block borders now appear in text that was hidden when it was drawn** — a collapsed thinking trace once expanded, and a help card's pages past the first.
   Such text used to be decorated while hidden, which draws nothing, and nothing redrew it.
 

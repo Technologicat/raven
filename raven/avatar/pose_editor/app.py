@@ -1563,6 +1563,8 @@ def update_animations():
 # Last, so a session opens onto a fully built app; this module's globals are what it gets.
 replserver.maybe_start(args.repl, globals(), f"Raven-avatar-pose-editor {__version__}")
 
+gui_animation.animator.add(gui_animation.GlyphAtlasRefresh())  # repairs glyphs the font atlas sometimes leaves blank at startup
+
 logger.info("App render loop starting.")
 exitcode = 0
 try:
