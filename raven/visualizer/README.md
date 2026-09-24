@@ -122,12 +122,7 @@ Pressing the Ctrl+I hotkey again closes the window.
 
 ### Save imported dataset as
 
-Click on the hard disk icon (next to the heading "*Output dataset file*") in the *BibTeX import window*, or press Ctrl+S while the *BibTeX import window* is open. A **save-as dialog** opens:
-
-<p align="center">
-<img src="../../img/screenshot-save-dataset-as.png" alt="Screenshot of Raven's save-as dialog" width="800"/> <br/>
-<i>The save-as dialog for selecting a filename for the dataset to be created.</i>
-</p>
+Click on the hard disk icon (next to the heading "*Output dataset file*") in the *BibTeX import window*, or press Ctrl+S while the *BibTeX import window* is open. A **save-as dialog** opens, for choosing the filename of the dataset to be created. It is the file dialog every Raven app shares, described in [its own manual](../vendor/file_dialog/file-dialog-manual.md).
 
 Double-clicking a directory in the list goes into that directory. Double-clicking the ".." directory goes one level up.
 
@@ -151,12 +146,7 @@ Pressing Esc cancels the save-as dialog.
 
 ### Select input BibTeX files
 
-To select input files, click the folder icon (next to the heading "*Input BibTeX files*"), or press Ctrl+O while the *BibTeX import window* is open. A **file picker dialog** opens:
-
-<p align="center">
-<img src="../../img/screenshot-select-bibtex-files.png" alt="Screenshot of Raven's file picker" width="800"/> <br/>
-<i>The file picker for input BibTeX files.</i>
-</p>
+To select input files, click the folder icon (next to the heading "*Input BibTeX files*"), or press Ctrl+O while the *BibTeX import window* is open. A **file picker dialog** opens, for choosing the input BibTeX files — the same [file dialog](../vendor/file_dialog/file-dialog-manual.md).
 
 The file picker works similarly to the save-as dialog, but with a **Search files** field replacing the save-as filename field.
 
@@ -389,12 +379,7 @@ raven-visualizer
 
 ## Load a dataset file in the GUI
 
-To load your dataset file, click on the *Open dataset* button in the toolbar, or press Ctrl+O, thus bringing up this dialog:
-
-<p align="center">
-<img src="../../img/screenshot-open-file.png" alt="Screenshot of Raven's open dataset dialog" width="800"/> <br/>
-<i>Opening an imported dataset for visualization.</i>
-</p>
+To load your dataset file, click on the *Open dataset* button in the toolbar, or press Ctrl+O, which opens the [file dialog](../vendor/file_dialog/file-dialog-manual.md) for picking it.
 
 The *Open dataset* dialog is a file picker, which works similarly to the file picker in the *BibTeX import window*.
 
