@@ -419,6 +419,11 @@ A result from the **document database** is shown differently, and never becomes 
 
 Attachments are stored beside the chat, **content-addressed** — identical bytes are stored once, however many messages refer to them, and a page fetched twice is one file when it has not changed and two when it has, so a message keeps the version it actually saw. They are sized against the context window along with everything else: several large attachments in one conversation share the room that is left, rather than one of them silently pushing the others out. Anything no longer referenced by any message can be reviewed and cleaned up from the GUI, with the option to rescue a copy first.
 
+<p align="center">
+<img src="../../img/librarian-cleanup.png" alt="The Clean up chat data dialog, listing two images and a document that no message refers to" width="700"/> <br/>
+<i>The cleanup dialog, opened from the broom button under <b>Maintenance</b>. It is a dry run: nothing is deleted until <b>Clean up &amp; save</b>, and <b>Save all to staging</b> keeps a copy of everything listed first.</i>
+</p>
+
 **Copying gives you different things depending on what you asked for**, and the difference is exactly this excerpt:
 
 - **Copy one message** (the copy button on it) and you get that message's content in full. Where the log shows the opening of a fetched page, the clipboard gets the whole page — you asked for that message, so you get its data as it stands.
