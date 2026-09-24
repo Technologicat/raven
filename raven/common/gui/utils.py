@@ -459,17 +459,21 @@ def setup_themes() -> env:
 # DPG item management
 # ---------------------------------------------------------------------------
 
-def _exception_chain_mentions(exc, text: str) -> bool:
+def _exception_chain_mentions(exc, text: str, case_sensitive: bool = True) -> bool:
     """Whether `text` appears in `exc` or anywhere along its `__cause__` chain."""
     # The string check is ugly but necessary given DPG's refusal to use a proper exception subclass.
     # The chain walk is not optional: what surfaces at the call site is a `SystemError` saying only that
     # some built-in "returned a result with an exception set", and DPG's own message is its cause.
     # TODO: tighten to a specific exception type if DPG ever provides one
-    return any(text in str(cause) for cause in _causes(exc))
+    if case_sensitive:
+        return any(text in str(cause) for cause in _causes(exc))
+    return any(text.lower() in str(cause).lower() for cause in _causes(exc))
 
 def _is_dpg_item_not_found(exc):
     """Check exception chain for DPG 'item not found' error (code 1005)."""
-    return _exception_chain_mentions(exc, "Item not found")
+    # Case-insensitive, because DPG spells it both ways: "Item not found" when the item being operated on
+    # is gone, "Theme item not found" when the one gone is a theme being bound to it.
+    return _exception_chain_mentions(exc, "item not found", case_sensitive=False)
 
 def _is_dpg_parent_gone(exc):
     """Check exception chain for DPG's 'parent could not be deduced' error (code 1011)."""

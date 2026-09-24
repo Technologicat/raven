@@ -324,6 +324,20 @@ class TestNonexistentOkAndWhatDPGSaysAboutDeadItems:
             dpg.set_value(dead, 1)
         assert guiutils._is_dpg_item_not_found(excinfo.value)
 
+    def test_binding_a_dead_theme_says_theme_item_not_found(self, probe_window):
+        # The same [1005], with the dead thing being the theme rather than the widget, and DPG spelling it with
+        # a lowercase "item". Met at an app's shutdown: a keyboard mark handing its widget back a theme that had
+        # already been deleted, which the guard around it let through.
+        with dpg.theme() as theme:
+            pass
+        dpg.delete_item(theme)
+        with pytest.raises(Exception) as excinfo:
+            dpg.bind_item_theme("nonexistent_ok_probe_window", theme)  # tag
+        assert "Theme item not found" in str(excinfo.value), "DPG words this differently now; check the matcher"
+        assert guiutils._is_dpg_item_not_found(excinfo.value)
+        with guiutils.nonexistent_ok():
+            dpg.bind_item_theme("nonexistent_ok_probe_window", theme)  # tag
+
     def test_adding_under_a_dead_parent_says_something_else_entirely(self, probe_window):
         dead = self._dead_item()
         with pytest.raises(Exception) as excinfo:
