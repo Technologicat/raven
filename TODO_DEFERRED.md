@@ -4238,6 +4238,27 @@ above.
 
 Discovered while committing the chat-template fix (2026-07-19).
 
+## The font atlas refresh flashes briefly at startup
+
+*Cluster: markdown-renderer · Cost: S–M · Gate: none · Filed: 2026-09-24 · See also: "The Markdown renderer drops text"*
+
+`animation.GlyphAtlasRefresh`, which every app runs about three seconds after its first frame, shows as a
+brief flash (Juha, 2026-09-24, on Librarian — while the chat log was still building, so possibly a rebuild
+of that coinciding rather than the refresh itself). It draws its glyph batch nearly transparent (alpha
+1/255), one face per frame in a window at the viewport's top-left, so the batch itself should not be
+visible; an unattributed flash is more likely the atlas re-upload that the refresh exists to cause, which
+would redraw everything once.
+
+Two directions, and the first decides whether the second is needed:
+
+- **Find out what flashes.** A screen capture across the refresh at full frame rate, compared against a
+  launch with the refresh removed, says whether it is the batch, the re-upload, or the chat log building.
+- **Load the glyphs without drawing them.** ImGui 1.92 loads a glyph when it is first looked up, and
+  measuring text looks it up too, so `dpg.get_text_size(batch, font=face)` might load the batch with nothing
+  drawn at all. Unverified: whether measuring *rasterizes* a glyph or only fetches its advance width is the
+  question, and only rasterizing would force the upload. ImGui's source settles it. If it rasterizes, the
+  refresh needs no window, and the flash — if it is the batch — goes with it.
+
 ## A wrapped line in the Markdown renderer sometimes keeps the space it wrapped at
 
 *Cluster: markdown-renderer · Cost: ? · Gate: none · Filed: 2026-09-09*
