@@ -502,15 +502,16 @@ def _get_all_greeting_node_ids(datastore: chattree.Forest) -> list[str]:
     So a greeting is identified by where it sits and by who said it: a direct child of a root — every root
     being a system prompt node — that the *assistant* wrote. Position alone is not enough. HEAD can rest on
     a root, and a message sent from there lands beside the greetings; taking it for one would disable its
-    own reroll, continue, branch and delete buttons, leaving the user with a message they cannot remove.
+    own reroll and continue buttons, and — as the last one under its card — its delete button too, leaving
+    the user with a message they cannot remove.
 
     Not memoized, unlike the scan it is built on: greetings come and go with the cards they hang from — a
     card deleted in the GUI takes its greetings with it — and a cached list would keep answering with them.
     The cost without a cache is a child lookup per system prompt, of which there are as many as the user has
     distinct prompts; the part that is worth caching is the scan over every node, and that still is.
 
-    Returns a list rather than a lazy iterable, deliberately. Each caller asks it four times — reroll,
-    continue, branch, delete — and a generator answers the first question and then reports that it is empty.
+    Returns a list rather than a lazy iterable, deliberately. Each caller asks it more than once — reroll,
+    continue, delete — and a generator answers the first question and then reports that it is empty.
     """
     greeting_node_ids = []
     for system_prompt_node_id in _get_all_system_prompt_node_ids(datastore=datastore):
@@ -518,6 +519,41 @@ def _get_all_greeting_node_ids(datastore: chattree.Forest) -> list[str]:
             if datastore.get_payload(node_id)["message"]["role"] == "assistant":
                 greeting_node_ids.append(node_id)
     return greeting_node_ids
+
+def _is_deletable(datastore: chattree.Forest,
+                  node_id: str | None,
+                  configured_system_prompt_node_id: str,
+                  configured_greeting_node_id: str,
+                  greeting_node_ids: list[str]) -> bool:
+    """Whether the delete button on the message at `node_id` may delete it, together with everything below it.
+
+    Not deletable: a message not linked to a chat node (`node_id` is `None`), the system prompt and greeting
+    the app is currently configured with, and the last greeting under any system prompt. Everything else is.
+
+    `greeting_node_ids`: from `_get_all_greeting_node_ids`.
+    """
+    # The configured system prompt and greeting would take the chat the user is in, and the app recreates
+    # both at the next start anyway.
+    #
+    # Any *other* system prompt or greeting may go, and taking its subtree along is the point rather than a
+    # side effect: those are the chats held under that card, or started from that greeting, and this is where
+    # a judgement about which ones are still wanted belongs. The datastore keeps one card per variety and
+    # never collects them (a root is reachable by construction), so without this there would be no way to be
+    # rid of one.
+    #
+    # A greeting goes only while another remains under its card. Every card is created with its greeting, so
+    # the rest of the app has never met a card without one — deleting another card, for one, steps down from
+    # the card it lands on to reach a greeting. To be rid of the last greeting, delete its card, which takes
+    # the greeting along.
+    if node_id is None:
+        return False
+    if node_id in (configured_system_prompt_node_id, configured_greeting_node_id):
+        return False
+    if node_id in greeting_node_ids:
+        siblings, _ = datastore.get_siblings(node_id)
+        if sum(sibling in greeting_node_ids for sibling in siblings) == 1:
+            return False
+    return True
 
 def _highlights_anything(text: str, maybe_highlight: tuple | None) -> bool:
     """Whether search highlighting `maybe_highlight` (a `chatsearch.SearchQuery.highlight`, or `None`) marks anything in `text`."""
@@ -1941,21 +1977,12 @@ class DPGChatMessage:
         dpg.add_text("Branch the chat here [Ctrl+B]", parent=new_branch_tooltip)
 
         # Delete subtree starting from this node (requires a confirmation click)
-        #
-        # NOTE: We disallow deleting the AI's initial greeting, any message not linked to a chat node in the
-        #       datastore, and the system prompt node the app is *currently configured with* — deleting that
-        #       one would take the chat the user is in, and the app would recreate it at the next start.
-        #
-        #       Any *other* system prompt node may be deleted, and taking its subtree along is the point
-        #       rather than a side effect: those are the chats held under that card, and this is where a
-        #       judgement about which cards are still wanted belongs. The datastore keeps one card per
-        #       variety and never collects them (a root is reachable by construction), so without this there
-        #       would be no way to be rid of one. With a single root the test degenerates to the old
-        #       behaviour, that root being the configured one.
-        configured_system_prompt_node_id = self.parent_view.chat_controller.app_state["system_prompt_node_id"]
-        delete_enabled = ((node_id is not None) and
-                          (node_id != configured_system_prompt_node_id) and
-                          (node_id not in greeting_node_ids))
+        app_state = self.parent_view.chat_controller.app_state
+        delete_enabled = _is_deletable(datastore=self.parent_view.chat_controller.datastore,
+                                       node_id=node_id,
+                                       configured_system_prompt_node_id=app_state["system_prompt_node_id"],
+                                       configured_greeting_node_id=app_state["new_chat_HEAD"],
+                                       greeting_node_ids=greeting_node_ids)
         def delete_subtree_callback():
             current_time = time.monotonic_ns()
             if self.last_delete_click_time is not None:

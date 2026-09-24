@@ -439,6 +439,9 @@
     - This **destroys the chats** held under it with it — which is the point, since in the datastore, those chats hang from that system prompt.
     - Deleting a system prompt leaves you where a new chat under the system prompt you land on would begin (on the AI greeting attached to that prompt), rather than on the bare prompt.
     - The system prompt currently in use stays undeletable, as before.
+  - **Likewise, an AI greeting can be deleted when it is not the one in use** — for example, one left behind by an earlier character.
+    - This destroys the chats started from it.
+    - The last greeting under a system prompt stays; to be rid of it, delete the system prompt.
   - Cleanup understands this: chats under an older system prompt are **not** offered for deletion as unreachable.
 
 - **Branching now works on the AI's opening greeting**, where it was refused before.
@@ -733,8 +736,8 @@
   - On startup, and after jumping to a chat's continuation, the latest message could be below the fold. **Pressing `End` found it there, so nothing was ever missing** — the view had simply stopped short.
   - The longer the conversation on screen, the further short it stopped.
 
-- **The AI's opening greeting could be deleted, rerolled, continued and branched from**, none of which it is supposed to allow — and deleting it **destroys all chats below it**.
-  - The four buttons ask one shared list whether the message is a greeting, and that list was computed lazily, so the first question consumed it and the rest were answered from what was left: nothing. Which reads as "not a greeting". This is now fixed.
+- **The AI's opening greeting could be rerolled and continued**, which it is not supposed to allow — and the greeting in use could be deleted, which **destroys all chats below it**.
+  - The buttons ask one shared list whether the message is a greeting, and that list was computed lazily, so the first question consumed it and the rest were answered from what was left: nothing. Which reads as "not a greeting". This is now fixed.
 
 - **Two tooltips described the attachment store as holding images**, which stopped being the whole story once documents became attachable.
   - The two buttons that open that folder — one on an attached image, one on an attached document — also gave it two different names, though it is one folder.
