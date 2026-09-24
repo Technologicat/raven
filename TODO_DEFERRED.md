@@ -4241,24 +4241,30 @@ above.
 
 Discovered while committing the chat-template fix (2026-07-19).
 
-## Thin strokes in the chat graph's scaled labels shimmer and drop out
+## Thin strokes in the chat graph's labels go faint at some zooms
 
-*Cluster: chat-graph · Cost: ? · Gate: none · Filed: 2026-09-24*
+*Cluster: chat-graph · Cost: S? · Gate: none · Filed: 2026-09-24*
 
-Below 1:1 the chat graph's labels lose one-pixel strokes: after `B` framed a branch, `/wiki/Main_Page` drew
-as `/wiki/Main Page`, and during an animated zoom the underscore's brightness varies as if it lands on a
-pixel row at some scales and between two at others (Juha). At `B`'s zoom for that branch it is gone
-completely; at 1:1 it draws correctly.
+At some zoom levels the chat graph's labels draw one-pixel strokes so faintly they read as missing: after
+`B` framed a branch, `/wiki/Main_Page` looked like `/wiki/Main Page`. Magnified, the underscore is there —
+one pale row of low coverage (Juha's crop). During an animated zoom its brightness rises and falls with the
+scale, and at 1:1 it draws normally. So it is antialiasing: a stroke about a pixel thick, landing across
+two pixel rows at a fractional position, splits its coverage between them.
 
-That is the signature of sampling a scaled texture without mipmaps: below 1:1 neighbouring screen pixels
-sample more than one texel apart, so a one-texel stroke can fall on a row that is never sampled — gone
-entirely at one scale and phase, partly back at the next. (Inferred from the symptoms, not read from the
-renderer.) Whether the labels are scaled at all is the open question: the renderer binds the nearest
-rung of a font ladder (`fontsetup.load_font_ladders`) and asks `draw_text` for the exact size, and what
-ImGui 1.92 does with a size that differs from its font's — scale the rung's baked glyphs, or bake the face
-afresh at that size — is in `ImDrawList::AddText`. `load_font_ladders` says "the renderer scales between
-rungs", which may predate DPG 2.3. If it scales, denser rungs (or always picking the rung *above* the
-requested size, so it only ever scales down a little) are the cheap directions.
+Ruled out on the live instance at that zoom (labels at 17.53 px, captions at 12.27 px):
+
+- **The text**: the label holds the underscore.
+- **The atlas glyph drop**: the whole glyph batch drawn at 17.53 px on every rung left it as it was.
+- **Scaling between ladder rungs**: the ladder is 4, 8, 16, 32, 64, so 17.53 px came from the 16 rung
+  magnified 1.1×; with an 18 rung added and the label confirmed bound to it, nothing changed.
+
+The direction to try is snapping the label's origin to whole pixels — the renderer places text at
+`sy - font_size_px * 0.8`, which is fractional at nearly every zoom — so the stroke lands on one row
+instead of straddling two. Whether ImGui then snaps the glyph quads itself is worth reading first.
+
+**Separately, the ladder is sparse at the low end** (Juha): the captions at 12.27 px take the 16 rung,
+which is minification (0.77×). Rungs at 6 and 12 would draw those near native size. Worth doing on its
+own; it does not touch the case above.
 
 ## The font atlas refresh flashes briefly at startup
 
