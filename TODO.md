@@ -917,7 +917,14 @@ every tier, chosen on measurements rather than reputation.
 
 - **[Low]** Voice command interface: split transcribed text to words, check first two words for command prefix, trigger command processor for the rest. Low priority.
 
-- **[Low]** Long subtitle splitter: we now have audio length per sentence.
+- **[Medium]** Long subtitle splitter — **for 0.2.10** (Juha, 2026-09-24). The subtitler shows one card per
+  sentence, so a long sentence becomes a card of up to ten lines covering half the avatar; professional
+  subtitling splits a sentence across several cards. The timing is already there: TTS returns per-word
+  timestamps (they drive the lipsync), so each part can go up when its first word is spoken, rather than
+  dividing the sentence's audio length evenly. Open question: where to split in the *translated* text, whose
+  words do not line up one-to-one with the spoken English — splitting the English first and translating each
+  part is the simple answer, at some cost in translation quality across the cut. Seen while recording the
+  manual's avatar clips, which were chosen to avoid the long cards.
 
 - **[Low]** Edit spoken message before sending.
 
