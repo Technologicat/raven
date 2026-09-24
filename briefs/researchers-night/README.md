@@ -538,8 +538,8 @@ What is queued, all small and independent:
         link to the file dialog manual), cherrypick (headline, thumbnails filling in, compare-pick-crown as
         a clip), and the xdot viewer (dash styles as headline, a search in the *Searching* section).
       - **Skipped for 0.2.9, evening of 2026-09-24** (Juha): the conference timer, the two avatar editors
-        and the server. Their screenshots are from 0.2.4–0.2.7, older than the rest now, but not wrong
-        enough to hold the release.
+        and the server — of the remaining apps, only the xdot viewer's needed updating for 0.2.9. Their
+        screenshots are from 0.2.4–0.2.7, and are the oldest in the tree now.
     - **Bumped to next week, 2026-09-24** (Juha), to be cleaned up with the rest of this file:
       - **Make `dpg_markdown.shutdown` restartable, then have the test fixtures call `guiutils.teardown`.**
         Five fixtures call `bootup` without `teardown`, a contract violation since `teardown` arrived. They
