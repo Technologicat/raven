@@ -102,6 +102,12 @@ the cycle chose rather than on one you did.
 Made as they are needed and kept in memory, never on disk. **A tile shows noise until its thumbnail has been
 built** — that is what the noise is, not a damaged image.
 
+<p align="center">
+<img src="../../img/cherrypick-thumbnails-loading.png" alt="The thumbnail grid half built: the top rows show pictures, the rest noise" height="500"/>
+<img src="../../img/cherrypick-thumbnails-filling.gif" alt="The thumbnail grid filling in as a folder opens" height="500"/> <br/>
+<i>Left: a folder just opened, its thumbnails half built. Right: the same, as it happens — about a second and a half for 122 images.</i>
+</p>
+
 Scaling is GPU-accelerated and mipmapped, so a tile is a properly downsampled picture rather than a
 point-sampled one, at any size. **Ctrl+1** to **Ctrl+5** set the tile size (32, 64, 128, 256 or 512 pixels).
 
