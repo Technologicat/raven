@@ -533,7 +533,13 @@ What is queued, all small and independent:
       - **Not yet captured from the motion list**: the keyboard mark's breathing, smooth scrolling and the
         end-of-list arrows. (The indicator lights are in the web-search and wake clips.)
       - **Done since**: the file dialog in both looks (taken in the folder
-        `scripts/make_screenshot_demo_folder.py` rebuilds), and the attachment cleanup dialog.
+        `scripts/make_screenshot_demo_folder.py` rebuilds), and the attachment cleanup dialog. Then the
+        Visualizer (main window, help card, importer, word cloud; its three file-dialog shots replaced by a
+        link to the file dialog manual), cherrypick (headline, thumbnails filling in, compare-pick-crown as
+        a clip), and the xdot viewer (dash styles as headline, a search in the *Searching* section).
+      - **Skipped for 0.2.9, evening of 2026-09-24** (Juha): the conference timer, the two avatar editors
+        and the server. Their screenshots are from 0.2.4–0.2.7, older than the rest now, but not wrong
+        enough to hold the release.
     - **Bumped to next week, 2026-09-24** (Juha), to be cleaned up with the rest of this file:
       - **Make `dpg_markdown.shutdown` restartable, then have the test fixtures call `guiutils.teardown`.**
         Five fixtures call `bootup` without `teardown`, a contract violation since `teardown` arrived. They
