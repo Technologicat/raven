@@ -1970,8 +1970,8 @@ read the effect as meaning.
 *Cluster: avatar · Cost: ? · Gate: none · Filed: 2026-09-24 · See also: "Two loose ends on what the data eyes mean"*
 
 The effect — green, scrolling terminal-text lines in the character's eyes while a tool runs — is there in a
-recording of a web-search turn, but the postprocessor all but hides it: Juha could make it out only on a
-magnified crop of the eyes, and did not notice it live (2026-09-24, Aria).
+recording of a web-search turn, but the postprocessor all but hides it: noticeable at full size only when
+you know where to look, and Juha did not notice it live (2026-09-24, Aria).
 A signal nobody sees is not a signal. Brighter cels, or exempting the eyes from whichever filter washes them
 out, are the obvious directions; which filter does it is the first thing to find out.
 
