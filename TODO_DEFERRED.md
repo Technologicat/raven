@@ -4029,7 +4029,7 @@ its own fix, and lives in "Emoji support in the Markdown renderer" below.
 
 ## The Markdown renderer drops text — one character, or most of a section
 
-*Cluster: markdown-renderer · Cost: ? · Gate: none — deprioritized past RN2026 unless time appears · Filed: 2026-07-19 · Updated: 2026-09-09*
+*Cluster: markdown-renderer · Cost: ? · Gate: none — deprioritized past RN2026 unless time appears · Filed: 2026-07-19 · Updated: 2026-09-24*
 
 **Not scheduled before the exhibit, though not ruled out either** (Juha, 2026-09-09): two and a half weeks
 left and a queue ahead of it, so it goes if there is time and not otherwise. The atlas hypothesis below predicts the outcome
@@ -4081,6 +4081,38 @@ afternoon, of the same binary against the same string, drew it correctly.
 
 Worth having because it is the cheapest reproduction so far — one app, one page, a string that is in the
 source rather than in a model's output, and a rate of roughly one launch in four.
+
+**2026-09-24: the first sighting in an instance launched with `--repl`, and it overturns "settled per
+launch".** Librarian, DPG 2.3.1, the system prompt in the chat view: lowercase `k` and capital `S` blank
+with their advance widths kept (*"ma e sense"*, *"ilograms"*, *"[ ystem information"*, *"I O format"*),
+in the regular face only — bold text in the same message kept both letters.
+
+- **The text items held the right strings.** Read back over the REPL: every damaged line was a `mvText`
+  bound to the regular face's font (id 26), with its `k`s and `S`s present. So nothing upstream of the
+  draw dropped a character; the face drew them blank.
+- **It healed inside the running instance, with no restart — at the moment a REPL probe ran.** Juha was
+  watching the window and saw the damaged lines turn correct as it happened; screenshots bracket it at
+  09:48:51.8 (damaged, 4.5 s after the render loop started) and 09:49:47 (correct). Two probes ran in that
+  minute, and the heal was seen with the second: a window drawing the whole alphabet and the digits in each
+  of the four body faces. The first only read the font items' configuration, and ran while the window was
+  probably covered, so it is not strictly excluded — only unobserved. Nothing font-related is in the log.
+- **So the atlas hypothesis survives, but not its corollary**, and "restart until it comes up clean" is not
+  the only remedy. A glyph missing and then present is consistent with DPG 2.3's automatic character
+  ranges — glyphs reach the atlas as text needs them, so drawing characters the atlas does not yet hold
+  forces a rebuild, and a rebuild could pick up glyphs an earlier one missed. That mechanism is inferred,
+  not read from DPG's source.
+- **DPG 2.3.1 is built on ImGui 1.92.5** (the version string, `ImFontBaked` and `RendererHasTextures` are
+  all in `_dearpygui.so`) — the release that made the atlas *dynamic*: glyphs are rasterized when first
+  needed and reach the GPU as incremental texture updates. That fits the signature — metrics present
+  (advance kept) while pixels are not (a missed or overwritten upload), healed by a later update — and
+  Raven builds Markdown on background threads, which would race a first-use glyph against the render
+  thread's upload. Inferred, not read from DPG's source; but it moves the place to look from "atlas
+  packing" to DPG's texture-update path.
+- **So a startup glyph warm-up would narrow the window without closing it**: printable ASCII and Latin-1
+  loaded early would be safe, and any character first seen later (a Greek letter in an abstract) would
+  still meet the race. It also has to genuinely draw — ImGui skips transparent and clipped text — and a
+  defect at roughly one launch in four needs many clean launches before its absence means anything.
+- Built at the time: the four body faces at size 20 only (ids 26–29); `H1`–`H6` not yet built.
 
 **Where to start looking, and how to look at a *live* bad instance** (2026-09-09). Every Raven app now takes
 `--repl`, which opens an in-process REPL (`raven.common.replserver`); so a launch that comes up damaged can
