@@ -358,8 +358,8 @@ between them they cover it:
 
 ~~**One thing to carry out before archiving**: the capture-toolchain survey under the screenshot pass is
 durable knowledge rather than a sprint decision, and belongs in the fleet-wide `live-gui-testing` skill.~~
-**Moved 2026-09-23**, as *Capturing motion*, marked untested — **and the pass's job is to replace it with
-what actually worked.** It went early rather than after the pass because the sprint log is the only place
+**Moved 2026-09-23**, as *Capturing motion*, marked untested — and **replaced 2026-09-24 with what actually
+worked**, on the pass's first capture: grab by window id, not a screen region. It went early rather than after the pass because the sprint log is the only place
 it otherwise lives, and whether tomorrow's session can see that log depends on whether the session is a
 fresh one (Juha). The skill loads on demand and does not.
 
