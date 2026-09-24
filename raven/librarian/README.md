@@ -683,11 +683,16 @@ The default character (Aria) comes with a full set of extra cels, for documentat
 
 # GUI walkthrough
 
-The Librarian main window is split in two main parts: the linearized chat view on the left, and the AI avatar (and mode toggles) on the right:
+The Librarian main window is split in two main parts: the linearized chat view on the left, and on the right the AI avatar — or the [chat graph](#chat-graph), which takes the avatar's panel — with the mode toggles below it:
 
 <p align="center">
-<img src="../../img/screenshot-librarian.png" alt="Screenshot of Raven-librarian" width="800"/> <br/>
-<i>The main window of Raven-librarian.</i>
+<img src="../../img/screenshot-librarian.png" alt="Screenshot of Raven-librarian, with the AI avatar" width="800"/> <br/>
+<i>The main window of Raven-librarian, with the AI avatar.</i>
+</p>
+
+<p align="center">
+<img src="../../img/screenshot-librarian-graph.png" alt="Screenshot of Raven-librarian, with the chat graph" width="800"/> <br/>
+<i>The same window with the chat graph in the right panel.</i>
 </p>
 
 Basic **conversation flow** in *Librarian* works like in many LLM chatbot applications:

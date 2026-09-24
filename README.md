@@ -96,7 +96,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 
 ## Raven-librarian: Multiversal LLM frontend
 
-<img src="img/screenshot-librarian.png" alt="Screenshot of Raven-librarian" height="200"/>
+<img src="img/screenshot-librarian.png" alt="Screenshot of Raven-librarian, with the AI avatar" height="200"/> <img src="img/screenshot-librarian-graph.png" alt="Screenshot of Raven-librarian, with the chat graph" height="200"/>
 
 - **Documentation**: [Librarian user manual](raven/librarian/README.md) (under development)
 - **Goal**: Pick up where *Visualizer*'s screening leaves off — a few hundred papers, still far more than anyone can read. Talk with a local LLM for synthesis, clarifications, speculation, ...
