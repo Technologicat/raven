@@ -4111,6 +4111,21 @@ in the regular face only — bold text in the same message kept both letters.
   Raven builds Markdown on background threads, which would race a first-use glyph against the render
   thread's upload. Inferred, not read from DPG's source; but it moves the place to look from "atlas
   packing" to DPG's texture-update path.
+- **A second specimen on the very next launch, and a controlled heal** (10:23, same day, Librarian
+  relaunched after a code change). Capital `O` blank in the regular face (*"You are N T automatically
+  updated"*, *"in IS format"*). With REPL probes into that instance:
+  - **A blank glyph stays blank.** Still damaged a minute later, after the chat graph had drawn plenty of
+    ordinary new text in the same face — so new text as such does not heal it.
+  - **A fresh item drawing it is blank too.** `"NOT|O|o0Q"` bound to the regular face drew as
+    `"N T| |o0Q"`, two minutes into the run: the atlas holds a blank `O` for that face, independent of which
+    item asks. Drawing the glyph does not repair it.
+  - **A large batch of never-seen glyphs repairs it at once.** 249 characters from Latin Extended-A, Greek
+    and Cyrillic, drawn in the regular face, and within a second every blank `O` — in the chat and in the
+    probe — was drawn correctly. That fits "the atlas grew, and a grown atlas is uploaded whole", which
+    would also explain the morning's heal (the alphabet in four faces). Still inferred, but now against a
+    controlled before and after.
+  - The probes are in the session log only; the shape is a DPG window in the app with `add_text` items bound
+    to `font_attributes.Default._fonts[20]`, driven through `--repl`.
 - **So a startup glyph warm-up would narrow the window without closing it**: printable ASCII and Latin-1
   loaded early would be safe, and any character first seen later (a Greek letter in an abstract) would
   still meet the race. It also has to genuinely draw — ImGui skips transparent and clipped text — and a
