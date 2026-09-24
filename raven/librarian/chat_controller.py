@@ -1963,6 +1963,7 @@ class DPGChatMessage:
         def branch_chat_callback():
             self.parent_view.chat_controller.app_state["HEAD"] = node_id
             self.parent_view.build()
+            self.parent_view.chat_controller.navigated()
         if branch_enabled:
             self.gui_button_callbacks["branch"] = branch_chat_callback  # stash it so we can call it from the hotkey handler
         dpg.add_button(label=fa.ICON_CODE_BRANCH,
@@ -2129,6 +2130,7 @@ class DPGChatMessage:
                     # one, and the avatar reports that the way this app reports everything else - visually.
                     self.parent_view.chat_controller.mark_discontinuity()
                     self.parent_view.build(scroll_target_node_id=node_id)
+                    self.parent_view.chat_controller.navigated()
             return navigate_to_sibling_callback
         def make_show_chat_continuation(message_node_id: str) -> Callable:
             def show_chat_continuation_callback():
@@ -2139,6 +2141,7 @@ class DPGChatMessage:
                     # replaced by a different one, and the avatar reports the discontinuity.
                     self.parent_view.chat_controller.mark_discontinuity()
                     self.parent_view.build()  # let it scroll to end
+                    self.parent_view.chat_controller.navigated()
             return show_chat_continuation_callback
 
         # Only messages attached to a datastore chat node can have siblings or a chat continuation in the datastore
@@ -4242,6 +4245,9 @@ class DPGChatController:
         # Called with no arguments whenever any of the four above changes, so the app can redraw its search row.
         # Set by the app; `None` until then.
         self.on_search_results_changed = None
+        # Called after the chat log navigates -- a branch, a sibling switch, a jump to a continuation -- as
+        # opposed to HEAD moving because the conversation grew. Set by the app; `None` until then.
+        self.on_navigate = None
 
         # The keyboard mark on the current message's button row, built on first use by
         # `update_current_message_mark`. One mark that moves, rather than one per message: a chat has as
@@ -4549,6 +4555,11 @@ class DPGChatController:
             self.search_match_index, self.search_can_go_back, self.search_can_go_forward = position
             if self.on_search_results_changed is not None:
                 self.on_search_results_changed()
+
+    def navigated(self) -> None:
+        """Report that HEAD was moved by a navigation rather than by the conversation growing. See `on_navigate`."""
+        if self.on_navigate is not None:
+            self.on_navigate()
 
     def _search_matches_changed(self) -> None:
         self._search_jump = None  # an index into the old matches

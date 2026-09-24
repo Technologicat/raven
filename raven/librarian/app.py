@@ -2084,6 +2084,7 @@ with timer() as tim:
                         # avatar was in.
                         chat_controller.mark_discontinuity()
                         chat_controller.view.build()
+                        chat_controller.navigated()
                         # The flash below rewrites the button's tooltip, and a tooltip measuring new text takes a
                         # plain `focus_item` request for itself, so ask in the way that keeps asking.
                         _give_caret_to("chat_field")  # tag  # Focus the chat field for convenience, since the whole point of a new chat is to immediately start a new conversation.
@@ -3363,6 +3364,10 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     avatar_panel_covered=(lambda: app_state["chat_graph_shown"]),
                                     executor=bg)
 chat_controller.on_search_results_changed = _update_search_row
+# A navigation moves the graph with it: preview dropped, cursor on the new HEAD. Left alone, the graph keeps
+# drawing whatever it was previewing -- which may be an older card's tree, where the new HEAD is not even in
+# the picture. Hidden or not, so that a graph shown later opens where the conversation now is.
+chat_controller.on_navigate = chat_graph_panel.go_to_head
 
 def _get_cleanup_roots() -> tuple[str, ...]:
     """The node IDs a cleanup must keep everything reachable from: **every** root, each of which is a system
