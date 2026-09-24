@@ -92,6 +92,11 @@ another in the same spot on screen: differences that are invisible side by side 
 - **Ctrl+Shift+C** afterwards crowns the image you picked: it becomes a cherry and the rest of the compared
   set become lemons, as one undoable action.
 
+<p align="center">
+<img src="../../img/cherrypick-compare.gif" alt="Three images cycling in compare mode, one picked with Shift+2 and then crowned" width="800"/> <br/>
+<i>Three images in compare mode, the badge in the corner saying which is showing. <b>Shift+2</b> picks the second, and <b>Ctrl+Shift+C</b> crowns it: a cherry, and the other two lemons.</i>
+</p>
+
 Compare mode is an overlay: your triage marks, the selection and the filter are untouched by entering or
 leaving it. The triage controls are deliberately unavailable while it runs, since they would act on an image
 the cycle chose rather than on one you did.
