@@ -570,6 +570,8 @@
 
 #### Raven-xdot-viewer
 
+- **The search field wears the blue keyboard mark while it has the caret**, as in the other apps.
+
 - **Small labels are sharper when zoomed out.**
   - Graph text is drawn from fonts prepared at a set of sizes, and there are now more of them at the small end, so a zoomed-out label is drawn close to its own size instead of stretched or shrunk from a distant one.
 

@@ -874,6 +874,8 @@ def main() -> int:
     # a focused combo, so without this the key appears to do nothing at all — the same blue pulse every
     # Raven app uses for *the keyboard is here*.
     keyboardmark.install_focus_follower(list(_combobox_choice_map.keys()))
+    # And the search field, when it has the caret — as Librarian's and the Visualizer's do.
+    keyboardmark.install_caret_follower([_app_state["search_input"]])
 
     # --- Start app ---
     dpg.set_primary_window("main_window", True)
