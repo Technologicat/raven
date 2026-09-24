@@ -7,6 +7,12 @@ editors, and *Raven-xdot-viewer*. So it is documented once, here, rather than in
 It can be driven entirely from the keyboard. If you would rather click with the mouse, everything below
 has a control to click, and the keys are an alternative rather than a requirement.
 
+<p align="center">
+<img src="../../../img/filedialog-list.png" alt="The file dialog in list view" width="800"/> <br/>
+<i>The file dialog in list view, here as Raven-librarian's attach dialog. The blue outline on the find
+field is where the keyboard is.</i>
+</p>
+
 **Contents:**
 
 - [Finding a file by typing](#finding-a-file-by-typing)
@@ -97,6 +103,11 @@ image previews. In a folder picker the pictures are shown but dimmed and unclick
 tell you whether this looks like the right folder — useful for visually confirming whether the folder
 you are about to pick contains the images you thought it does (photos, AI gens, and images downloaded
 from the internet often have generated filenames, making thumbnails the better choice for judging).
+
+<p align="center">
+<img src="../../../img/filedialog-grid.png" alt="The file dialog in thumbnail view" width="800"/> <br/>
+<i>The same folder with thumbnails.</i>
+</p>
 
 ## Picking more than one file
 
