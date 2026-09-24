@@ -5,7 +5,7 @@
 -----
 
 <p align="center">
-<img src="../../img/xdot-viewer.png" alt="Screenshot of Raven-xdot-viewer" width="800"/> <br/>
+<img src="../../img/xdot-viewer.png" alt="Screenshot of Raven-xdot-viewer" width="500"/> <br/>
 <i>Raven-xdot-viewer displays a GraphViz graph, and lets you walk it.</i>
 </p>
 
