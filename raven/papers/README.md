@@ -84,6 +84,8 @@ Eleven command-line tools for the part of a literature review that happens befor
 
 **`--save-bib file.bib` writes the metadata that was already fetched**, so downloading a set of papers and building its bibliography costs one set of politeness delays rather than two.
 
+**`--from-bib file.bib` reads the identifiers out of a bibliography** instead of the command line. `raven-arxiv-search` writes its results as one, so a query becomes fulltext in two commands with no identifiers to shuffle in between.
+
 ## The converters — getting an export into BibTeX
 
 All three write BibTeX to stdout, so redirect them, and all three read several inputs as one corpus.
@@ -260,6 +262,8 @@ It carries Raven's version, so a method section can cite a published tool.
 
 - `--audit PATH` puts it elsewhere.
 - `--no-audit` declines it, at the cost of the only record of what the merge did. A merge cannot be read back out of the merged file.
+
+The audit is tab-separated, exactly as the `.tsv` says. Worth knowing when you open it in a spreadsheet: LibreOffice defaults to separating on tabs *and* spaces, so every title scatters across a dozen columns and the file looks corrupt. The separators are checkboxes in the import dialog that comes up as the file opens — clear *Space*, keep *Tab* — and they are easy to walk straight past.
 
 ### `--judge`: asking an LLM about the near misses
 

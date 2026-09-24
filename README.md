@@ -29,7 +29,6 @@
     - [Command-line tools](#command-line-tools)
         - [Document database](#document-database)
         - [Building a bibliography](#building-a-bibliography)
-        - [From several databases into one bibliography](#from-several-databases-into-one-bibliography)
         - [Datasets and odds and ends](#datasets-and-odds-and-ends)
         - [Converting and repairing](#converting-and-repairing)
         - [The rules these tools apply](#the-rules-these-tools-apply)
@@ -330,32 +329,14 @@ Beside the desktop apps, Raven installs a set of headless tools. They exist so t
 
 ### Building a bibliography
 
-- **`raven-arxiv-search`** runs a boolean search against arXiv and writes the matching papers to a BibTeX file (`-o/--output`, defaulting to `<query_file>.bib`, or `results.bib` when the query is given with `-q`). Its output is already a bibliography, so it feeds `raven-arxiv-download --from-bib` directly — query to fulltext in two commands, with no identifiers to shuffle in between.
-- **`raven-arxiv2id`** scans a directory for arXiv identifiers in PDF filenames, keeping the newest version of each paper. `--strip-versions` drops the version suffix, which is how a collection gets refreshed to the current revisions.
-- **`raven-arxiv2bib`** turns identifiers into BibTeX, recording the version arXiv actually answered with.
-- **`raven-arxiv-download`** fetches the fulltext PDFs, for identifiers given on the command line or read out of a `.bib` with `--from-bib`. `--save-bib` writes the BibTeX from metadata it already had to fetch anyway, so you pay arXiv's politeness delays once instead of twice — which is what you want coming from bare identifiers, rather than from a search that handed you the bibliography already.
-- **`raven-burstbib`** splits a multi-entry `.bib` into one file per entry — which is what makes a bibliography usable as a document database, since otherwise the whole thing indexes as a single document.
+Each of these is documented in the [paper tools manual](raven/papers/README.md); what follows is only which to reach for.
+
+- **`raven-arxiv-search`**, **`raven-arxiv2id`**, **`raven-arxiv2bib`** and **`raven-arxiv-download`** search arXiv, pull identifiers out of filenames, turn identifiers into BibTeX, and fetch the fulltext PDFs. See [*The arXiv tools*](raven/papers/README.md#the-arxiv-tools).
+- **`raven-fixbib`** repairs what a database export does to a `.bib`, before a parser refuses the damaged entries whole. See [its section](raven/papers/README.md#raven-fixbib--repairing-a-database-export).
+- **`raven-deduplicate`** merges the copies a multi-database search leaves behind, writing an audit of every merge. See [its section](raven/papers/README.md#raven-deduplicate--merging-a-multi-database-search).
+- **`raven-siftbib`** removes the records a review cannot screen, on criteria you name. See [its section](raven/papers/README.md#raven-siftbib--removing-what-a-review-cannot-screen).
+- **`raven-burstbib`** splits a bibliography into one file per entry, which is what makes it usable as a document database. See [its section](raven/papers/README.md#raven-burstbib--one-file-per-record).
 - The three that get an export *into* BibTeX in the first place — **`raven-wos2bib`**, **`raven-csv2bib`** and **`raven-pdf2bib`** — are under [*Converting and repairing*](#converting-and-repairing) below.
-- **`raven-fixbib`** repairs what a database export does to a `.bib`: entries naming the same field two or three times, field values whose braces do not balance, HTML character entities left behind by a database that exported its web page rather than its record, and a publisher's rights notice sitting inside the `abstract`. A parser refuses a broken entry whole — title, authors and all — so a search export can lose a large share of itself to faults nothing reports. `-n` says what it would repair and writes nothing, `-l` names every record rather than counting them, and your file is overwritten only if you ask with `-i`.
-- **`raven-deduplicate`** merges the copies a multi-database search leaves behind: the same paper once per database that indexes it, each in that database's dialect with a different subset of the fields filled in. Two keys decide, and neither is a guess — the DOI, and the title reduced until two databases' spellings of one title agree — unioned transitively, so a record sharing a DOI with one twin and a title with another brings all three together. The surviving copy is the most complete one, with every field it lacks filled in from a twin that has one, and every merge is written to an audit TSV.
-- **`raven-siftbib`** removes the records you cannot screen. A search export carries records of wildly uneven completeness, and one holding nothing but a title is not off topic — nobody can tell what it is — it just has no text to form a view about, and carrying it into the screening count overstates what was actually read. You say what a usable record must have (`--require abstract`, `--min-chars abstract=600` for the truncated teaser a publisher exports in place of one, `--require year`, as many as you like), and everything removed goes to an audit TSV naming the record, its venue and which criterion it failed. Deterministic and offline: no model, no network, same answer every time. Whether a record is *about* your subject is a judgement and a different question; this one only asks whether there is anything to judge.
-
-### From several databases into one bibliography
-
-Search Scopus, Web of Science, ProQuest, Springer and arXiv for the same question and you have five exports holding the same papers over and over. One command turns them into something citable:
-
-```bash
-raven-deduplicate scopus.bib wos.bib proquest.bib springer.bib arxiv.bib \
-    -o deduped.bib
-```
-
-Several files are read as one corpus, so there is nothing to concatenate first, and `raven-fixbib`'s repair is applied on the way in — a record the parser would refuse is still counted, so the number you get is honest without your having run the two tools in sequence. Reach for `raven-fixbib` itself when you want the repair in the *files*, which is a different thing from wanting it in the count.
-
-Without `-o` the run reports what it would do and writes nothing; your inputs are never modified either way. The `.bib` is what you came for, and the audit written beside it is what lets you stand behind it: a row per merge naming what was kept, what was merged away, which key matched, and every value that differed from the one kept. The bibliography is the output with lasting value; the audit is a record of due diligence, for the point in a review where you have to say how many duplicates you removed and answer for the number.
-
-The audit is tab-separated, exactly as the `.tsv` says. Worth knowing when you open it in a spreadsheet: LibreOffice defaults to separating on tabs *and* spaces, so every title scatters across a dozen columns and the file looks corrupt. The separators are checkboxes in the import dialog that comes up as the file opens — clear *Space*, keep *Tab* — and they are easy to walk straight past.
-
-Matching errs toward leaving duplicates rather than inventing them, because the two failures cost differently — a missed merge leaves a visible duplicate that a reviewer can act on, while a false merge deletes a paper from the review and nothing downstream can notice. `--judge` additionally asks an LLM about the near-misses no exact key joined; it needs an LLM backend, so it is off by default, and a verdict the records themselves contradict is dropped rather than acted on.
 
 ### Datasets and odds and ends
 
