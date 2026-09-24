@@ -15,6 +15,7 @@ that the dialog routes the Find field through it.
 
 import os
 import pathlib
+import shutil
 import threading
 from unittest import mock
 
@@ -1454,6 +1455,49 @@ def test_letters_do_nothing_unless_the_panel_has_the_keys(dialog):
     letter_press(dialog, "p")
     assert dialog._caret_home is CaretHome.FIELD
     assert dialog._places_cursor.current == before
+
+
+class TestRefreshingAFolderDeletedUnderneath:
+    """The dialog lives in the process's working directory, which a deleted folder leaves pointing at nothing.
+
+    `os.getcwd()` then raises, everywhere the dialog asks it — so before this, F5 and the refresh button did
+    nothing at all, silently, which is exactly when a user reaches for them. Met by rebuilding a folder the
+    dialog was open in: same path, new directory, and the dialog stuck in the old one.
+    """
+
+    @staticmethod
+    def _enter(dialog, tmp_path):
+        folder = tmp_path / "rebuilt"
+        folder.mkdir()
+        (folder / "before.txt").touch()
+        dialog.chdir(str(folder))
+        return folder
+
+    @staticmethod
+    def _assert_cwd_is_gone():
+        with pytest.raises(FileNotFoundError):
+            os.getcwd()
+
+    def test_a_folder_rebuilt_at_the_same_path_is_re_entered(self, dialog, tmp_path):
+        folder = self._enter(dialog, tmp_path)
+        shutil.rmtree(folder)
+        folder.mkdir()
+        (folder / "after.txt").touch()
+        self._assert_cwd_is_gone()  # the control: the dialog really is stranded in the deleted one
+
+        dialog.refresh()
+        assert os.getcwd() == str(folder)
+        assert "after.txt" in shown(dialog)
+
+    def test_a_folder_that_is_gone_falls_back_to_its_nearest_parent_and_says_so(self, dialog, tmp_path):
+        folder = self._enter(dialog, tmp_path)
+        shutil.rmtree(folder)
+        self._assert_cwd_is_gone()
+
+        dialog.modal = True  # so the message lands on the target line, where a test can read it
+        dialog.refresh()
+        assert os.getcwd() == str(tmp_path)
+        assert str(folder) in dpg.get_value(dialog.text_target)
 
 
 def test_refreshing_re_reads_the_drives(dialog):

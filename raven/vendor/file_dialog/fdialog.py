@@ -3304,7 +3304,11 @@ class FileDialog:
         self._stop_grid_ticker()
 
     def refresh(self) -> None:
-        cwd = os.getcwd()
+        try:
+            cwd = os.getcwd()
+            maybe_lost = None
+        except FileNotFoundError:  # the folder the dialog was in has been deleted underneath it
+            cwd, maybe_lost = self._reenter_lost_folder()
         logger.debug(f"refresh: instance '{self.tag}' ({self.instance_tag}), refreshing at cwd = '{cwd}'")
         self.reset_dir()
         # The panel too, not just the listing. Re-reading the machine is most of what F5 is *for* here: a
@@ -3312,9 +3316,33 @@ class FileDialog:
         # restarted, before it could be browsed to.
         if self.user_style in (0, 1):
             self._build_places_panel()
+        if maybe_lost is not None:  # after the listing, which would otherwise overwrite the message line
+            self.message_box("File dialog - folder gone",
+                             f"{maybe_lost} no longer exists; showing {cwd}.")
         # Raven: Acknowledge the action in the GUI.
         gui_animation.flash_button(button=self.button_refresh,
                                    duration=1.0)
+
+    def _reenter_lost_folder(self) -> tuple[str, str | None]:
+        """Leave a working directory that has been deleted, for the folder the user was looking at.
+
+        That folder is known by its *path* — the path field shows it — even though the directory the process
+        is in is gone. If the path exists again, a folder rebuilt under the same name, go into that one;
+        otherwise into the nearest parent that still exists.
+
+        Returns `(where the dialog now is, maybe_lost)`, `maybe_lost` being the folder that is gone, or `None`
+        when the same path could be re-entered.
+        """
+        remembered = os.path.normpath(dpg.get_value(self.path_field) or self.default_path)
+        path = remembered
+        while not os.path.isdir(path):
+            parent = os.path.dirname(path)
+            if parent == path:  # the root is always there; stop regardless, rather than loop forever
+                break
+            path = parent
+        os.chdir(path)
+        logger.info(f"_reenter_lost_folder: instance '{self.tag}' ({self.instance_tag}): working directory was deleted; now in '{path}' (was showing '{remembered}')")
+        return path, (remembered if path != remembered else None)
 
     def back_to_default_path(self) -> None:
         logger.debug(f"back_to_default_path: instance '{self.tag}' ({self.instance_tag}), going back to '{self.default_path}'")

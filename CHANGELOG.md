@@ -850,6 +850,10 @@
 
 #### Constellation-wide
 
+- **Refreshing the file dialog now works after the folder it is showing has been deleted.**
+  - Before, `F5` and the refresh button silently did nothing, which is exactly when you reach for them.
+  - A folder deleted and recreated under the same name — rebuilt by a script, say — is now simply listed again. One that is gone for good sends the dialog to its nearest remaining parent, and the dialog says so.
+
 - **Letters that go missing from text at startup now come back by themselves.**
   - Once in a while an app starts with one letter drawn as a blank gap wherever it appears in one font style — every `k` in plain text, say, while bold text keeps them.
   - A few seconds after startup, every app now makes the GUI toolkit redraw its font data, which puts such letters back. This is a workaround: it covers damage done during startup, where it has been seen, but a letter lost later in a session stays lost until a restart.
