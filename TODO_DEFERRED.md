@@ -4252,11 +4252,11 @@ across the refresh tells the two apart.
 Two directions:
 
 - **Hide what shows**, once it is known which it is — a zero border size in the window's theme, say.
-- **Load the glyphs without drawing them**, which would make the window unnecessary. ImGui 1.92 loads a glyph when it is first looked up, and
-  measuring text looks it up too, so `dpg.get_text_size(batch, font=face)` might load the batch with nothing
-  drawn at all. Unverified: whether measuring *rasterizes* a glyph or only fetches its advance width is the
-  question, and only rasterizing would force the upload. ImGui's source settles it. If it rasterizes, the
-  refresh needs no window, and the flash — if it is the batch — goes with it.
+- **Load the glyphs without drawing them**, which would make the window unnecessary. ImGui 1.92 loads a
+  glyph when it is first looked up, and measuring text looks it up too, so `dpg.get_text_size(batch,
+  font=face)` might load the batch with nothing drawn at all. Unverified: whether measuring *rasterizes* a
+  glyph or only fetches its advance width is the question, and only rasterizing would force the upload.
+  ImGui's source settles it. If it rasterizes, the window goes, and the flash with it.
 
 ## A wrapped line in the Markdown renderer sometimes keeps the space it wrapped at
 
