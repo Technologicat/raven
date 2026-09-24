@@ -2963,10 +2963,16 @@ class FileDialog:
         the dialog has the caret at all. A **modal** dialog always does, which is why the two questions
         were one until this dialog could be opened non-modally.
 
-        Asked of the window rather than of a widget: `is_item_focused` answers for a top-level window, and
-        it is true while any of its children holds the focus — which is what "typing goes here" means.
+        So a modal dialog has it for as long as it is shown. A non-modal one is asked of the window rather
+        than of a widget: `is_item_focused` answers for a top-level window, and it is true while any of its
+        children holds the focus — which is what "typing goes here" means.
         """
+        # Not the focus question for a modal as well: DPG reports a modal window unfocused even while its
+        # own find field has the caret, measured on Raven-librarian's attach dialog, so every modal dialog
+        # would have shown no keyboard mark at all.
         with guiutils.nonexistent_ok():
+            if self.modal:
+                return bool(dpg.is_item_shown(self.tag))  # tag
             return bool(dpg.is_item_focused(self.tag))  # tag
         return False
 

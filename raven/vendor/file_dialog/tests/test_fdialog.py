@@ -2674,3 +2674,18 @@ class TestTheCaretMarkFollowsTheFocus:
         monkeypatch.setattr(built, "has_keyboard", lambda: True)
         built._sync_home_marks_to_focus()
         assert self._lit(built) == [fdialog.CaretHome.FIELD]
+
+    def test_a_shown_modal_dialog_has_the_keyboard_whatever_focus_reports(self, make_dialog):
+        # The test above stubs `has_keyboard`, so it never asked the real one. And the real one asked focus
+        # for a modal too — where DPG reports the modal window unfocused even with the caret in its find
+        # field, measured live in Raven-librarian's attach dialog. So every modal dialog showed no mark.
+        built = make_dialog(modal=True)
+        dpg.show_item(built.tag)
+        assert not dpg.is_item_focused(built.tag), "the window reports focus here, so this cannot tell the two answers apart"
+        assert built.has_keyboard()
+
+    def test_a_non_modal_dialog_asks_the_focus(self, make_dialog):
+        built = make_dialog(modal=False)
+        dpg.show_item(built.tag)
+        assert not dpg.is_item_focused(built.tag)
+        assert not built.has_keyboard()
