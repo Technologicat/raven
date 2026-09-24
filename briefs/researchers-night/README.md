@@ -532,6 +532,24 @@ What is queued, all small and independent:
         timer, the two avatar editors, the server.
       - **Not yet captured from the motion list**: the keyboard mark's breathing, smooth scrolling and the
         end-of-list arrows. (The indicator lights are in the web-search and wake clips.)
+      - **Done since**: the file dialog in both looks (taken in the folder
+        `scripts/make_screenshot_demo_folder.py` rebuilds), and the attachment cleanup dialog.
+    - **Bumped to next week, 2026-09-24** (Juha), to be cleaned up with the rest of this file:
+      - **Make `dpg_markdown.shutdown` restartable, then have the test fixtures call `guiutils.teardown`.**
+        Five fixtures call `bootup` without `teardown`, a contract violation since `teardown` arrived. They
+        cannot simply start calling it: `shutdown` sets a module-level `_stopping` event that is never
+        cleared, and every entry point checks it first, so a test module calling `teardown` would silently
+        disable Markdown rendering for every module after it in the same pytest process. The fix is to clear
+        `_stopping` and reset the workers' started flags once they have joined, so the next use starts
+        fresh threads — about ten lines in `raven/vendor/DearPyGui_Markdown/__init__.py` — plus a test that
+        Markdown renders after a shutdown. The five: `test_fontsetup.py`, `test_audio_input_panel.py`,
+        `test_chatgraph_panel.py`, `test_thumbnail_pipeline.py`, and `DearPyGui_Markdown/tests/test_text_size.py`.
+      - **Check which shell edits the Claude Code harness renders as diffs**, before deciding whether the
+        dotclaude rule "edit files with the edit tools, not with shell text-munging" can go. On 2026-09-24 a
+        `cat >>` append to a tracked file rendered as a diff in the session (it had not a few days earlier),
+        but the harness labels that view "a convenience view, not a review or audit". Untested: `sed -i`, a
+        Python `write_text`, a new file, a move, anything outside the working directory. One scratch file
+        per shape settles it.
     - **The capture toolchain is undecided, and neither of us has done this before** (Juha, 2026-09-23).
       Surveyed the same day so the decision costs a minute tomorrow rather than an hour:
       - **What is already installed covers it**: ffmpeg 7.1.1 with `x11grab` and a GIF encoder, plus
