@@ -146,7 +146,7 @@ Pressing Esc cancels the save-as dialog.
 
 ### Select input BibTeX files
 
-To select input files, click the folder icon (next to the heading "*Input BibTeX files*"), or press Ctrl+O while the *BibTeX import window* is open. A **file picker dialog** opens, for choosing the input BibTeX files — the same [file dialog](../vendor/file_dialog/file-dialog-manual.md).
+To select input files, click the folder icon (next to the heading "*Input BibTeX files*"), or press Ctrl+O while the *BibTeX import window* is open. A **file picker dialog** opens, for choosing the input BibTeX files. It is the file dialog every Raven app shares, described in [its own manual](../vendor/file_dialog/file-dialog-manual.md).
 
 The file picker works similarly to the save-as dialog, but with a **Search files** field replacing the save-as filename field.
 
