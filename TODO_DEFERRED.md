@@ -4080,7 +4080,10 @@ afternoon, of the same binary against the same string, drew it correctly.
   atlas, and losing both is losing one glyph twice rather than one ligature once.
 
 Worth having because it is the cheapest reproduction so far — one app, one page, a string that is in the
-source rather than in a model's output, and a rate of roughly one launch in four.
+source rather than in a model's output. **It has no usable rate** (Juha, 2026-09-24): it can turn up on
+consecutive launches and then stay away for tens or hundreds — none at all in September until the 24th.
+An earlier version of this entry said "roughly one launch in four", which was one afternoon's cluster
+rather than a rate.
 
 **2026-09-24: the first sighting in an instance launched with `--repl`, and it overturns "settled per
 launch".** Librarian, DPG 2.3.1, the system prompt in the chat view: lowercase `k` and capital `S` blank
@@ -4111,7 +4114,8 @@ in the regular face only — bold text in the same message kept both letters.
 - **So a startup glyph warm-up would narrow the window without closing it**: printable ASCII and Latin-1
   loaded early would be safe, and any character first seen later (a Greek letter in an abstract) would
   still meet the race. It also has to genuinely draw — ImGui skips transparent and clipped text — and a
-  defect at roughly one launch in four needs many clean launches before its absence means anything.
+  defect with no usable rate cannot be shown fixed by its absence; the evidence for a fix has to come
+  from understanding the mechanism.
 - Built at the time: the four body faces at size 20 only (ids 26–29); `H1`–`H6` not yet built.
 
 **Where to start looking, and how to look at a *live* bad instance** (2026-09-09). Every Raven app now takes
