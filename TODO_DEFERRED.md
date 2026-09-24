@@ -4126,6 +4126,13 @@ in the regular face only — bold text in the same message kept both letters.
     controlled before and after.
   - The probes are in the session log only; the shape is a DPG window in the app with `add_text` items bound
     to `font_attributes.Default._fonts[20]`, driven through `--repl`.
+- **Possibly a third sighting, unconfirmed: underscores in the chat graph's labels, zoom-dependent.**
+  After `B` framed a branch below 1:1, `/wiki/Main_Page` drew as `/wiki/Main Page` in two boxes; at 1:1
+  the same labels drew the underscore (2026-09-24). Under ImGui 1.92 each text size is its own baked copy
+  of a font, so a size first needed on zooming is loaded later than the startup refresh covers. Equally
+  consistent with an underscore at a fractional size falling just outside its clip. The discriminating
+  test is the heal probe at that zoom: a large batch of never-seen glyphs drawn at the graph's current
+  label size — if the underscores come back, it is this defect.
 - **So a startup glyph warm-up would narrow the window without closing it**: printable ASCII and Latin-1
   loaded early would be safe, and any character first seen later (a Greek letter in an abstract) would
   still meet the race. It also has to genuinely draw — ImGui skips transparent and clipped text — and a
