@@ -214,6 +214,9 @@
     - A mote's alpha is derived as the least that can carry its light, and the headroom above 1.0 is only safe while `bloom` is downstream to clamp it back down (with its HDR to LDR exposure conversion).
   - Every parameter the filter takes is in the [filter manual](raven/common/video/postprocessor-filters.md#atmospheric_dust), and in the settings editor beside live controls.
 
+- **The `zoom` filter can upscale with Lanczos or bicubic interpolation**, as `quality="lanczos"` and `quality="bicubic"`.
+  - The zoom crops, then scales the crop back up to full size; its choices were bilinear or Anime4K. Lanczos is the sharpest resampler that runs no neural net, so it sits between the two in both look and cost.
+
 - **`crt`, a raster projection filter** — simulates a cathode ray tube (CRT), for a retrofuturistic look.
   - The avatar is drawn by a scanning electron beam, through a phosphor mask, with the bright rows falling off as Gaussians into darkness between them.
   - **It is now in the default chain in place of `scanlines`**, which remains available as the cheap and simple version of the same idea that alternates hard between light and dark.

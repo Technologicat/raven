@@ -102,8 +102,8 @@ The default settings zoom to the head/shoulders of most characters.
   Center position of zoom on y axis, where image is [-1, 1], negative upward.
 - **`factor`** — default `2.0`, range `1.0` to `4.0`
   Zoom by this much. Values larger than 1.0 zoom in. At exactly 1.0, the zoom filter is disabled.
-- **`quality`** — default `low`, one of `low`, `high`, `ultra`
-  One of: "low": geometric distortion with bilinear interpolation (fast) "high": crop, then low-quality Anime4K upscale (fast-ish) "ultra": crop, then high-quality Anime4K upscale How much quality you need depends on what other filters are enabled, how large `factor` is, and how large the final size of the avatar is. If you upscale the avatar by 2x, without much other postprocessing than this zoom filter, and zoom in by `factor=4.0`, then the "ultra" quality may be necessary, and might still not look good. But if you use lots of other filters, and limit to at most `factor=2.0`, then even "low" might look acceptable. Dynamic only to save compute; we cache the distortion mesh and upscaler.
+- **`quality`** — default `low`, one of `low`, `bicubic`, `lanczos`, `high`, `ultra`
+  One of: "low": geometric distortion with bilinear interpolation (fast) "bicubic": crop, then bicubic upscale (fast) "lanczos": crop, then Lanczos upscale (fast; the sharpest that runs no neural net) "high": crop, then low-quality Anime4K upscale (fast-ish) "ultra": crop, then high-quality Anime4K upscale How much quality you need depends on what other filters are enabled, how large `factor` is, and how large the final size of the avatar is. If you upscale the avatar by 2x, without much other postprocessing than this zoom filter, and zoom in by `factor=4.0`, then the "ultra" quality may be necessary, and might still not look good. But if you use lots of other filters, and limit to at most `factor=2.0`, then even "low" might look acceptable. Dynamic only to save compute; we cache the distortion mesh and upscaler.
 
 ## `bloom`
 

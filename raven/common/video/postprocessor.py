@@ -373,6 +373,13 @@ class HistogramEqualizer:
 _MAX_BLUR_KERNEL = 21
 _MAX_SPLAT_KERNEL = 129
 
+# The `zoom` filter's `quality` -> the `Upscaler` quality it crops and upscales with. Only `"low"` is absent:
+# that one warps the image instead, and needs no upscaler.
+_ZOOM_UPSCALER_QUALITY = {"bicubic": "bicubic",
+                          "lanczos": "lanczos",
+                          "high": "low",  # small Anime4K
+                          "ultra": "high"}  # large Anime4K
+
 def _blur_kernel_size(sigma: float) -> int:
     """Gaussian blur kernel size for a given sigma.
 
@@ -1074,7 +1081,7 @@ class Postprocessor:
     @with_metadata(center_x=[-1.0, 1.0],
                    center_y=[-1.0, 1.0],
                    factor=[1.0, 4.0],
-                   quality=["low", "high", "ultra"],
+                   quality=["low", "bicubic", "lanczos", "high", "ultra"],
                    name=["!ignore"],
                    _priority=-1.0)
     def zoom(self, image: torch.tensor, *,
@@ -1094,6 +1101,8 @@ class Postprocessor:
                   At exactly 1.0, the zoom filter is disabled.
         `quality`: One of:
                    "low": geometric distortion with bilinear interpolation (fast)
+                   "bicubic": crop, then bicubic upscale (fast)
+                   "lanczos": crop, then Lanczos upscale (fast; the sharpest that runs no neural net)
                    "high": crop, then low-quality Anime4K upscale (fast-ish)
                    "ultra": crop, then high-quality Anime4K upscale
 
@@ -1128,14 +1137,13 @@ class Postprocessor:
             meshy = center_y + (self._meshy - center_y) / factor  # y coordinate, [h, w]
             grid = torch.stack((meshx, meshy), 2)  # [h, w, x/y]
             grid = grid.unsqueeze(0)  # batch of one
-            if quality in ("high", "ultra"):  # need an Anime4K?
+            if quality != "low":  # crop, then upscale
                 old_upscaler = self.zoom_data[name]["upscaler"] if name in self.zoom_data else None
                 old_quality = self.zoom_data[name]["quality"] if name in self.zoom_data else None
                 if size_changed or old_upscaler is None or quality != old_quality:
-                    upscaler_quality = "high" if quality == "ultra" else "low"
                     upscaler = Upscaler(device=self.device, dtype=self.dtype,
                                         upscaled_width=w, upscaled_height=h,
-                                        preset="C", quality=upscaler_quality)
+                                        preset="C", quality=_ZOOM_UPSCALER_QUALITY[quality])
                 else:
                     upscaler = old_upscaler  # only factor/center changed - save some compute by recycling the existing upscaler.
             else:
@@ -1152,7 +1160,7 @@ class Postprocessor:
             warped = torch.nn.functional.grid_sample(image_batch, grid, mode="bilinear", padding_mode="border", align_corners=False)
             warped = warped.squeeze(0)  # [1, c, h, w] -> [c, h, w]
             image[:, :, :] = warped
-        else:  # "high" or "ultra" - crop, then Anime4K upscale
+        else:  # crop, then upscale
             g = grid.squeeze(0)
             top_left_xy = g[0, 0]
             bottom_right_xy = g[-1, -1]

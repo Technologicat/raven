@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from raven.common.video.colorspace import rgb_to_yuv
-from raven.common.video.postprocessor import _MAX_SPLAT_KERNEL, vhs_noise, isotropic_noise, Postprocessor
+from raven.common.video.postprocessor import _MAX_SPLAT_KERNEL, _ZOOM_UPSCALER_QUALITY, vhs_noise, isotropic_noise, Postprocessor
 
 
 # ---------------------------------------------------------------------------
@@ -1130,6 +1130,27 @@ class TestZoomEffect:
         # The bright region should now be larger
         bright_count = (image[0] > 0.5).sum().item()
         assert bright_count > 4 * 4  # original was 4×4 pixels
+
+
+class TestZoomQualities:
+    """The crop-and-upscale qualities, and the table that maps each to the `Upscaler` doing the work."""
+
+    def test_every_offered_quality_is_one_the_filter_can_run(self):
+        # The settings editor offers what the metadata lists; a quality listed there and missing from the
+        # table would be a menu entry that raises a KeyError when chosen.
+        offered = set(Postprocessor.zoom.metadata["quality"])
+        assert offered == {"low"} | set(_ZOOM_UPSCALER_QUALITY)
+
+    @pytest.mark.parametrize("quality", ["bicubic", "lanczos"])
+    def test_a_non_neural_quality_upscales_with_its_own_resampler(self, quality):
+        pp = _make_postprocessor()
+        image = torch.zeros(4, 64, 128, dtype=torch.float32)
+        image[:3, 30:34, 62:66] = 1.0
+        image[3, :, :] = 1.0
+        pp.zoom(image, factor=2.0, center_x=0.0, center_y=0.0, quality=quality)
+        assert pp.zoom_data["zoom0"]["upscaler"].quality == quality
+        assert image.shape == (4, 64, 128)
+        assert (image[0] > 0.5).sum().item() > 4 * 4, "the centre was not magnified"
 
 
 # ---------------------------------------------------------------------------
