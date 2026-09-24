@@ -587,6 +587,11 @@ For configuring the AI's voice and the subtitles, see [Configuration](#configura
 
 **A digital-glitch effect plays on the avatar when the conversation is swapped out from under it** — stepping to a sibling branch, jumping to where a branch continues, starting a new chat, or rerolling a reply.
 
+<p align="center">
+<img src="../../img/avatar-glitch.gif" alt="The avatar glitching briefly as a new chat is started" width="600"/> <br/>
+<i>The glitch, as a new chat is started.</i>
+</p>
+
 - It runs on a clock of its own: long enough that a switch too fast to see still registers, and capped so that flicking through siblings reads as one glitch. `avatar_discontinuity_effect_floor` and `…_ceiling` are those two durations.
 - Your own postprocessor chain is left alone. The effect is laid over whatever is configured and taken off again afterwards, so a customized avatar looks like itself either side of the seam.
 - **The effect is yours to choose**, in [`raven.librarian.config`](config.py): `avatar_discontinuity_effect_enabled` is the on/off switch, and `avatar_discontinuity_effect` is the effect itself, as a fragment of a postprocessor chain.

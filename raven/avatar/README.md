@@ -5,8 +5,8 @@
 -----
 
 <p align="center">
-<img src="../../img/avatar-notice-lines.png" alt="Animefx example" width="800"/> <br/>
-<i>The upgraded engine in Raven-avatar provides <b>animefx</b>, such as these notice lines, which appear briefly when she becomes surprised.</i>
+<img src="../../img/avatar-notice-lines.png" alt="Animefx example: notice lines above the avatar's head" width="600"/> <br/>
+<i>The upgraded engine in Raven-avatar provides <b>animefx</b>, such as these notice lines, which appear briefly when she becomes surprised — or, in Raven-librarian, when you ping her with <code>Ctrl+P</code>.</i>
 </p>
 
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
