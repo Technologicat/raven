@@ -439,6 +439,11 @@ When tool use technology is integrated into a chatbot, this yields a lightweight
 <i>An LLM-based AI agent <a href="https://simonwillison.net/2025/Sep/18/agents/">runs tools in a loop</a>. (Images created with Qwen-Image.)</i>
 </p>
 
+<p align="center">
+<img src="../../img/librarian-websearch.gif" alt="Raven-librarian during a web search: tool calls and their results arriving in the chat log"/> <br/>
+<i>The loop in <i>Librarian</i>: asked for recent cosmology news, the AI searches the web, and each call and each result appears in the chat log as it happens.</i>
+</p>
+
 How tool use works:
 
 - As part of the system prompt, the LLM receives specifications about available tools, in JSON format.
@@ -573,6 +578,11 @@ When the **Speech** toggle in the *Librarian* window (below the avatar video pan
 
 When both the **Speech** and the **Subtitles** toggles are **ON**, the speech is machine-translated and subtitled one sentence at a time. The subtitle for each sentence is shown while that sentence is being spoken.
 
+<p align="center">
+<img src="../../img/avatar-speech.gif" alt="The avatar speaking, with a Finnish subtitle for each sentence" width="600"/> <br/>
+<i>The avatar speaking an English reply, each sentence subtitled as it is spoken — here translated into Finnish. The subtitle language is <code>translator_target_lang</code> in <a href="config.py"><code>raven.librarian.config</code></a>; set it to <code>None</code> to caption the speech untranslated instead.</i>
+</p>
+
 For configuring the AI's voice and the subtitles, see [Configuration](#configuration).
 
 **A digital-glitch effect plays on the avatar when the conversation is swapped out from under it** — stepping to a sibling branch, jumping to where a branch continues, starting a new chat, or rerolling a reply.
@@ -583,6 +593,11 @@ For configuring the AI's voice and the subtitles, see [Configuration](#configura
   - It is written in the same format the animator settings use, so a look built in *Raven-avatar-settings-editor* can be copied out of the saved JSON and pasted in — a colour drain, an analog tracking wobble, or nothing at all.
 
 The avatar has an optional, configurable timeout, after which the avatar video will turn off if there is no activity (to save GPU and CPU compute resources, as well as to eliminate unnecessary fan noise when running on a laptop). The avatar wakes up immediately when there is activity (e.g. navigating the chat tree, rerolling a message, sending a new message to the AI, or asking the avatar to speak a previous message again).
+
+<p align="center">
+<img src="../../img/avatar-wake.gif" alt="The chat graph standing in for a sleeping avatar, then the avatar waking and taking the panel back" width="600"/> <br/>
+<i>While the avatar sleeps, the chat graph stands in for it. Sending a question wakes the avatar, which takes the panel back; the <b>WEB</b> label at the top left says the AI is searching the web.</i>
+</p>
 
 Currently, the avatar cannot be completely disabled. *Librarian* expects the `avatar` module of *Raven-server* to be running, and will always load the avatar. We recognize this option would be useful for low-VRAM environments, and intend to add it later. The right-side panel now has something else to show while the avatar is hidden — the [chat graph](#chat-graph) — which was the missing piece; what remains is not loading the avatar at all.
 
