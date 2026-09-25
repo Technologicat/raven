@@ -11,6 +11,27 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## Make websearch cancellable
+
+*Cluster: librarian-cancel · Cost: M · Gate: none · Filed: 2026-09-25 · See also: `investigations/abort-inflight-request/`*
+
+Cancel stops the LLM invocation, but a turn that is inside a tool call cannot be stopped: a websearch runs
+until Raven-server answers or `network_timeout` expires. The abort handle the turn already carries
+(`scaffold.ai_turn`'s `maybe_abort`) goes to `llmclient.invoke` only. `_perform_and_store_tool_calls` never
+receives it, and neither do `llmtools.websearch` or `api.websearch_search`, which is a plain non-streaming
+`requests.post`.
+
+Passing the handle down is plumbing. The cost is in the mechanism: `netutil.Abort` can only abandon a
+request once a `Response` exists (`arm(response)`), because it works by shutting down the socket underneath
+one. In `invoke` that leaves a window of about 0.1 s before the headers arrive. For a websearch, the whole
+wait falls in that window, since the server scrapes the SERP before it sends anything. So `Abort` needs a way
+to reach the connection before any response exists. Two candidates, neither checked yet: grab the socket at
+connect time through a custom transport adapter, or run the request on a worker thread and stop waiting for it.
+
+`webfetch` is the sibling and has the same gap, and its headless-browser tier makes it the slower of the
+two. Whether it goes in the same change is open. Also open: whether the server should stop scraping once
+the client has gone away. That only saves server work, so it is secondary.
+
 ## An override cannot set a setting to `None` unless it ships as `None`
 
 *Cluster: configoverrides · Cost: M · Gate: none · Filed: 2026-09-25*
