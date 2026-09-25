@@ -11,6 +11,15 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## Rerolling a reply that called a tool can leave the vertical spacing wrong
+
+*Cluster: librarian-chat-view · Cost: ? · Gate: none · Filed: 2026-09-25*
+
+Juha noticed that rerolling an AI reply that made a tool call sometimes leaves incorrect vertical spacing in
+the chat view. Not reproduced yet, and not yet known which gap is wrong: around the tool-call or
+tool-response messages, or around the rerolled reply itself. The first step is to reproduce it with
+`--repl` and a screenshot, and then compare a rerolled turn against a freshly generated one.
+
 ## Make websearch cancellable
 
 *Cluster: librarian-cancel · Cost: M · Gate: none · Filed: 2026-09-25 · See also: `investigations/abort-inflight-request/`*
