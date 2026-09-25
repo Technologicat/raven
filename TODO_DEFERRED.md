@@ -11,6 +11,25 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## An override cannot set a setting to `None` unless it ships as `None`
+
+*Cluster: configoverrides · Cost: M · Gate: none · Filed: 2026-09-25*
+
+`raven.configoverrides._coerce` checks an override against the type of the shipped default, so a JSON `null`
+is refused for any setting whose default is not already `None`. Several settings document `None` as their off
+switch while shipping a number: `avatar_config.idle_off_timeout` ("seconds, or `None` to disable") and
+`emotion_autoreset_interval` in `raven.librarian.config`, at least. Setting either to `null` in
+`overrides.json` logs a `_coerce` warning and leaves the shipped default in force. For now, the workaround
+is a very large number (`1e9`), which works only because both settings are compared as `elapsed > timeout`.
+
+Decided: accept `null` **only where the setting declares that it may be `None`**, rather than accepting `null`
+everywhere — accepting it everywhere would let a setting that cannot take `None` fail later, far from the
+file that set it. There is no way to declare this yet, and designing one is most of the work. It has to
+reach into `env`s and nested containers, which is where these settings live, so a module-level registry of
+dotted names is one candidate, and a marker on the value itself is another.
+
+Found 2026-09-25, when disabling idle-off for a live event.
+
 ## The pose editor sometimes opens at its creation size, clipping the right-hand panel
 
 *Cluster: ? · Cost: ? · Gate: a specimen · Filed: 2026-09-22*
