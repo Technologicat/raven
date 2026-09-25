@@ -1198,9 +1198,10 @@ the files in full.
   agreement — the name, the image, the voice, and which card the code picked — and a mismatch showed as
   the new face answering in the old voice, or as the previous character.
 - **A declared character wins over the fallbacks.** `avatar_config.image_path` and `avatar_config.voice`
-  still hold values, but they apply only when `llm_char_name` names nobody. To give a declared character a
-  face or a voice other than its own, change them in its `.json` — or edit the derivation in
-  [`config.py`](config.py), which is two lines and says so.
+  still hold values, but each applies only where the named character has none of its own — including when
+  `llm_char_name` names nobody. To give a declared character a face or a voice other than its own, change
+  them in its `.json`. The name is resolved when the app starts, so setting `llm_char_name` in the
+  override file brings the character's face and voice along with it.
 - **A character with no declaration animates exactly as before.** The avatar system loads an image by path
   and never asks for a name, so this changes nothing for the pose editor, the settings editor, or a
   Librarian pointed at an undeclared image. What such a character cannot do is supply a card, a voice or a

@@ -68,6 +68,8 @@ with timer() as tim:
 
     from .. import config as global_config
 
+    from ..avatar import characters as avatar_characters  # who the shipped characters are, by name
+
     from ..client import api  # Raven-server support
     from ..client.avatar_controller import DPGAvatarController
     from ..client.avatar_renderer import DPGAvatarRenderer
@@ -3309,7 +3311,10 @@ with dpg.handler_registry(tag="librarian_handler_registry"):  # global (whole vi
 
 logger.info("App bootup...")
 
-avatar_instance_id = api.avatar_load(librarian_config.avatar_config.image_path)
+avatar_image_path, avatar_voice = avatar_characters.face_and_voice(librarian_config.llm_char_name,
+                                                                   librarian_config.avatar_config.image_path,
+                                                                   librarian_config.avatar_config.voice)
+avatar_instance_id = api.avatar_load(avatar_image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
 avatar_controller = DPGAvatarController(stop_tts_button_gui_widget="chat_stop_speech_button",  # tag
                                         on_tts_idle=None,
@@ -3323,7 +3328,7 @@ avatar_controller = DPGAvatarController(stop_tts_button_gui_widget="chat_stop_sp
                                         executor=bg)  # use the same thread pool as our main task manager
 avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=avatar_instance_id,
                                                            avatar_renderer=dpg_avatar_renderer,
-                                                           voice=librarian_config.avatar_config.voice,
+                                                           voice=avatar_voice,
                                                            voice_speed=librarian_config.avatar_config.voice_speed,
                                                            emotion_blacklist=librarian_config.avatar_config.emotion_blacklist,
                                                            emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
@@ -3334,13 +3339,13 @@ avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=av
                                                            # already taken. A lambda because the handler
                                                            # takes the instance and this one wants none of it.
                                                            on_idle=lambda config: _apply_panel_occupancy())
-avatar_controller.tts.warmup(voice=librarian_config.avatar_config.voice)
+avatar_controller.tts.warmup(voice=avatar_voice)
 
 chat_controller = DPGChatController(llm_settings=llm_settings,
                                     datastore=datastore,
                                     retriever=retriever,
                                     app_state=app_state,
-                                    avatar_image_path=librarian_config.avatar_config.image_path,
+                                    avatar_image_path=avatar_image_path,
                                     avatar_controller=avatar_controller,
                                     avatar_record=avatar_record,
                                     themes_and_fonts=themes_and_fonts,

@@ -57,7 +57,7 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 __all__ = ["METADATA_EXT", "CARD_EXT", "IMAGE_EXT", "ICON_SUFFIX",
            "VERSION_KEY", "FORMAT_VERSION",
            "Character",
-           "scan", "characters", "rescan", "find"]
+           "scan", "characters", "rescan", "find", "face_and_voice"]
 
 import dataclasses
 import json
@@ -244,3 +244,24 @@ def find(name: str | None) -> Character | None:
     if name is None:
         return None
     return characters().get(name)
+
+
+def face_and_voice(name: str | None,
+                   fallback_image_path: pathlib.Path,
+                   fallback_voice: str) -> tuple[pathlib.Path, str]:
+    """Return `(image_path, voice)` for the character called `name`.
+
+    Each half is the character's own where it declares one, and the corresponding fallback otherwise —
+    including when no declaration claims `name` at all. A character with no face is an ordinary state,
+    but an avatar panel needs *some* image to animate, which is what the fallback image is for.
+    """
+    character = find(name)
+    if character is None:
+        logger.info(f"face_and_voice: no character declared under the name '{name}'; using the fallback "
+                    "image and voice, and the AI gets no character card.")
+        return fallback_image_path, fallback_voice
+    if character.image_path is None:
+        logger.info(f"face_and_voice: character '{name}' declares no avatar image; using the fallback image, "
+                    "while the character's own card and voice are used.")
+    return (character.image_path if character.image_path is not None else fallback_image_path,
+            character.voice if character.voice is not None else fallback_voice)

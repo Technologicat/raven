@@ -12,7 +12,6 @@ import pathlib
 from unpythonic.env import env
 
 from .. import avatar  # for `avatar.assets_path`
-from ..avatar import characters as avatar_characters  # who the shipped characters are, by name
 from .. import config as global_config
 from .. import configoverrides
 
@@ -695,30 +694,14 @@ llm_greeting = "How can I help you today?"
 # --------------------------------------------------------------------------------
 # The AI's avatar character in the Raven-librarian GUI.
 
-# Who `llm_char_name` names, if anyone declares that name. `None` when nobody does, which is an ordinary
-# state: a character needs no declaration to be animated, only to be found by name.
-_character = avatar_characters.find(llm_char_name)
-if _character is None:
-    logger.info(f"No character declared under the name '{llm_char_name}'; `avatar_config` below supplies "
-                "the image and the voice, and the AI gets no character card. See `raven.avatar.characters`.")
-elif _character.image_path is None:
-    # A declared character with no face of its own. Its card and its voice are used; the image below is
-    # whatever this file names, since Librarian's avatar panel needs *some* image to animate.
-    logger.info(f"Character '{llm_char_name}' declares no avatar image; `avatar_config` below supplies "
-                "the face, while the character's own card and voice are used.")
-
 avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image size (512x512); this and "upscale" below are used for determining the pixel-perfect texture size for the client.
-                    # The character's own, where `llm_char_name` names one. That is what makes the name the
-                    # single setting: switching character used to mean editing these two and the card to
-                    # agree with it, and a mismatch showed as the new face answering in the old voice.
-                    #
-                    # The fallbacks are for a character with no declaration, and are also what to edit if
-                    # you want a face and a voice that are deliberately not the named character's.
-                    image_path=(_character.image_path
-                                if _character is not None and _character.image_path is not None
-                                else avatar.assets_path("characters", "other", "aria1.png")),
-                    voice=(_character.voice if _character is not None and _character.voice is not None
-                           else "af_nova"),  # See `raven-avatar-settings-editor`.
+                    # Fallbacks. The face and the voice are the character's own, where `llm_char_name`
+                    # names a declared character that has them; these two apply only where it does not.
+                    # Resolved when the app starts (`raven.avatar.characters.face_and_voice`) rather than
+                    # here, so that an `llm_char_name` set in the override file brings its face and voice
+                    # along: overrides are applied at the end of this module, after anything derived here.
+                    image_path=avatar.assets_path("characters", "other", "aria1.png"),
+                    voice="af_nova",  # See `raven-avatar-settings-editor`.
                     voice_speed=1.0,  # Nominal = 1.0. Too high causes skipped words. If you want to change it, find a good value with `raven-avatar-settings-editor`.
                     video_offset=-0.8,  # TTS AV sync setting, seconds. Positive = shift video later w.r.t. audio. Find a good value for your system with `raven-avatar-settings-editor`.
                     emotion_blacklist=["desire", "love"],  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.

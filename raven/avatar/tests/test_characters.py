@@ -193,6 +193,38 @@ class TestFind:
         assert characters.find(None) is None
 
 
+class TestFaceAndVoice:
+    """What the avatar panel animates and speaks with, for a name that may or may not be a character."""
+
+    @pytest.fixture
+    def cast(self, monkeypatch, tmp_path):
+        declare(tmp_path, "jj1", declared(name="Juha", voice="am_echo"))
+        declare(tmp_path, "faceless1", declared(name="Faceless", voice="bf_emma"), image=False)
+        declare(tmp_path, "mute1", declared(name="Mute"))
+        monkeypatch.setattr(characters, "assets_path", lambda *parts: tmp_path)
+        return tmp_path
+
+    FALLBACK_IMAGE = "fallback.png"
+    FALLBACK_VOICE = "af_nova"
+
+    def face_and_voice(self, name):
+        return characters.face_and_voice(name, self.FALLBACK_IMAGE, self.FALLBACK_VOICE)
+
+    def test_a_declared_character_brings_its_own_face_and_voice(self, cast):
+        image_path, voice = self.face_and_voice("Juha")
+        assert image_path == cast / "jj1.png"
+        assert voice == "am_echo"
+
+    def test_a_name_nobody_claims_gets_both_fallbacks(self, cast):
+        assert self.face_and_voice("Nobody At All") == (self.FALLBACK_IMAGE, self.FALLBACK_VOICE)
+
+    def test_a_character_with_no_face_keeps_its_voice(self, cast):
+        assert self.face_and_voice("Faceless") == (self.FALLBACK_IMAGE, "bf_emma")
+
+    def test_a_character_with_no_voice_keeps_its_face(self, cast):
+        assert self.face_and_voice("Mute") == (cast / "mute1.png", self.FALLBACK_VOICE)
+
+
 class TestTheScanIsCached:
     def test_rescan_picks_up_a_change(self, monkeypatch, tmp_path):
         """The cache is what makes a per-drawn-message lookup cheap; `rescan` is the way out of it."""
