@@ -484,39 +484,34 @@ obvious guess is that the two are coupled.
 
 Raised while rewriting that notice (2026-09-09).
 
-## Nothing maps a character's name to its picture, so only the configured one can wear its own face
+## Only the configured character wears its own icon in the chat log and graph
 
-*Cluster: chat-graph · Cost: M · Gate: needs a design decision — see the three shapes below · Filed: 2026-09-08 · Narrowed: 2026-09-08*
+*Cluster: chat-graph · Cost: S · Gate: none · Filed: 2026-09-08 · Narrowed: 2026-09-25*
 
-**The defect this was filed for is fixed.** A stored message no longer wears the *current* character's
-face: both views ask `DPGChatController.icon_texture_for(role, persona)` with the persona stored on the
-message, `chatgraph.build` takes an `icon_for` resolver instead of a role-keyed table, and the role-keyed
-table is private with no `"assistant"` entry in it. A character we cannot place gets the generic AI glyph
-— the HAL 9000 eye — rather than somebody else's face.
+A stored message's glyph comes from `DPGChatController.icon_texture_for(role, persona)`, which both views
+ask with the persona stored on the message. It returns a character's own icon only when that persona is the
+*configured* character; every other character gets the generic AI glyph (the HAL 9000 eye). So after
+switching `llm_char_name` from Aria to Juha, Aria's earlier messages lose her icon. That is the intended
+fallback — never somebody else's face — but it is plain, and the reason for it is gone.
 
-**What is left is that "cannot place" covers everyone but one.** Half the mapping already exists and is a
-convention: a character image `aria1.png` has a sidecar `aria1_icon.png` beside it, which Librarian reads
-and the avatar system skips. The missing half is the first step — nothing says that the name *"Aria"* is
-the character in `aria1.png`. `llm_char_name` and `avatar_config.image_path` are independent settings a
-user changes together; the assets are bare `.png` files with no metadata beside them (checked 2026-09-08:
-nothing but images under `raven/avatar/assets/characters/`); and a payload's `general_metadata` carries
-only `timestamp`, `datetime` and `persona`. So the configured character gets its icon and every other one
-falls back, which is correct but plain.
+**The mapping this was waiting for now exists.** `raven.avatar.characters` (0.2.9) maps a name to a
+`Character`, and `Character.icon_path` is its chat glyph. The controller does not use it yet:
+`_load_instance_textures` still finds the configured character's icon from `avatar_image_path` by the
+`_icon` filename convention, and loads only that one.
 
-The resolver is one method with the whole policy in it, so whichever shape is chosen lands there:
+**The fix:** at construction, load one texture per declared character that has an `icon_path`, into a
+`{name: texture}` table; `icon_texture_for` then looks the persona up in it, falling back to the generic
+glyph. `avatar_image_path` is then no longer needed for the icon. The cast is small (two declared today), so
+loading all of it eagerly is cheap. That avoids the lazy load-and-cache on a worker this item used to call
+for, which assumed the characters would be found by scanning the datastore. A character declared *while the
+app runs* would not get its icon until restart. That seems acceptable, since `characters()` caches its own
+scan anyway.
 
-- **A name → icon table in `librarian_config`.** Explicit, and a second thing to keep in step with
-  `llm_char_name` / `image_path` — the two that already have to be changed together.
-- **A per-character metadata file beside the assets**, naming the character and pointing at its images.
-  More work, and the thing that would let a character be *chosen* by name anywhere else too.
-- **Store the character's image path in `general_metadata` when the message is written.** No lookup at
-  all afterwards, and it is the only shape that stays right when a character is renamed or removed — but
-  it does nothing for messages already on disk, which is the whole existing cast.
+**Do the user side at the same time.** It has the same shape: `userprofile.find` maps a name to a profile
+with an `icon_path`, and only the configured user's icon is loaded. A chat written under another user name
+falls back to the generic glyph in the same way.
 
-Whichever it is, the loading wants the path `DPGChatController` already uses for inline images:
-load-and-cache on first use, on a worker, with the two `split_frame`s that needs. That covers a character
-first seen *after* startup, which a startup scan of the datastore would not — and it is why no scan is
-needed (Juha's observation, 2026-09-08, made while the scan was still the assumed shape).
+Narrowed 2026-09-25, while fixing the character override.
 
 ## A metrics readout for the chat graph, and a placement bug in the avatar's
 
