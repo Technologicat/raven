@@ -27,6 +27,11 @@ raven/avatar/assets/characters/00_workfiles/parody/
 # Session logs written by the apps' --log CLI option.
 *.log
 
+# Caches the Visualizer's importer writes beside whatever it imported. Derived from that data, so wherever the
+# data is private — a corpus under `investigations/`, for one — the cache is too.
+*_embeddings_cache.npz
+*_nlp_cache.pickle
+
 # Claude Code's per-machine permission grants: personal, and full of absolute local paths.
 # Deliberately narrow rather than ignoring `.claude/` wholesale — the skills beside it are
 # version-controlled on purpose, so they travel with the code they document.
