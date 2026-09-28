@@ -781,9 +781,10 @@ class FileDialog:
                             dpg.set_item_callback(self.button_back_to_default_path, self.back_to_default_path)
                             dpg.set_item_callback(self.button_help, self._show_help_card)
 
-                            self.path_field = dpg.add_input_text(hint="Path", on_enter=True, callback=self.on_path_enter,
-                                                                 default_value=os.getcwd(), width=-1,
-                                                                 tag=f"ex_path_input_{self.instance_tag}")
+                            with self._field_scope():
+                                self.path_field = dpg.add_input_text(hint="Path", on_enter=True, callback=self.on_path_enter,
+                                                                     default_value=os.getcwd(), width=-1,
+                                                                     tag=f"ex_path_input_{self.instance_tag}")
                             with dpg.tooltip(self.path_field):
                                 dpg.add_text("Folder to browse — paste or type a path, then Enter [Ctrl+L]")
 
@@ -814,7 +815,14 @@ class FileDialog:
 
                         with dpg.group(horizontal=True) as self._find_row:  # marked, not the field; see `_path_row`
                             search_hint = "Search files [Ctrl+F]" if not save_mode else "Filename to save as [Ctrl+F]"
-                            self.search_field = dpg.add_input_text(hint=search_hint, callback=self._update_search, tag=f"ex_search_{self.instance_tag}", width=-1)
+                            with self._field_scope():
+                                self.search_field = dpg.add_input_text(hint=search_hint, callback=self._update_search, tag=f"ex_search_{self.instance_tag}", width=-1)
+
+                            # A click has to set the home that Ctrl+F does, as the path field's does for
+                            # Ctrl+L, or the mark stays on whichever home the keys had before.
+                            with dpg.item_handler_registry() as search_field_registry:
+                                dpg.add_item_activated_handler(callback=self._on_search_field_activated)
+                            dpg.bind_item_handler_registry(self.search_field, search_field_registry)
 
                             # One theme, bound once, whose color is then moved by `set_value` — rebinding a
                             # fresh theme per keystroke would leak one per character typed.
@@ -1041,6 +1049,18 @@ class FileDialog:
         """
         return getattr(self.themes_and_fonts, "icon_font_solid", None)
 
+    @staticmethod
+    def _field_scope() -> int | str:
+        """A container for one text field, giving it a keyboard-navigation scope of its own. Use with `with`."""
+        # The dialog defines Tab itself, and ImGui steps its own focus on Tab as well, to another text field
+        # in the same navigation scope. With the find and path fields in one scope, every Tab put the caret
+        # in the path field for a frame, which lit it and fired its activation handlers. Each in a scope of
+        # its own, ImGui's step has no other field to go to. See `dpg-notes.md`, "Tab reaches a global
+        # handler and still moves ImGui's nav, after a programmatic focus".
+        return dpg.child_window(width=-1, auto_resize_y=True, border=False,
+                                no_scrollbar=True, no_scroll_with_mouse=True,
+                                flattened_navigation=False)
+
     def _add_toolbutton(self, glyph: str, texture: str | None, *, tag: str) -> int | str:
         """Add one toolbar button to the current container, drawn from the icon font where there is one.
 
@@ -1211,20 +1231,19 @@ class FileDialog:
 
     def _on_path_field_deactivated(self) -> None:
         """The path field lost the caret: the keys go back where they were before it took them."""
-        # Back to *whichever* home that was, rather than to the find field, because this pair of handlers
-        # fires without anyone having asked for it. ImGui spends Tab on keyboard navigation whenever the
-        # find field holds the caret and got it from `focus_item` rather than from a click — Ctrl+F, Ctrl+L,
-        # or arriving anywhere via `chdir` — and the item it navigates *to* is this field. So a Tab meant
-        # for the listing produced an activation and a deactivation a frame apart, and a handler that
-        # assumed the way out of here is always the find field wrote `FIELD` over the `LISTING` that Tab had
-        # just set. The arrow keys then did nothing and a second Tab could not get out either, since every
-        # Tab was undone the same way.
+        # Back to *whichever* home that was, rather than to the find field: leaving by Escape, by Tab or by
+        # a click elsewhere each has its own destination, and this handler cannot tell which it was.
         #
         # Guarded as well as remembered, because deactivation is also what *leaving deliberately* looks
         # like: Tab out of here sets the listing as the home and the deactivation follows a frame later, so
-        # an unconditional write would silently undo that instead.
+        # an unconditional write would silently undo that instead. The guard also makes the order of this
+        # and `_on_search_field_activated` immaterial when a click moves the caret from here to there.
         if self._caret_home is CaretHome.PATH:
             self._caret_home = self._home_before_path
+
+    def _on_search_field_activated(self) -> None:
+        """The find field just took the caret, by click or by Ctrl+F: record where the keys go."""
+        self._caret_home = CaretHome.FIELD
 
     def _relayout(self) -> None:
         """Re-align the bottom rows against the window's *current* width.
@@ -2638,7 +2657,7 @@ class FileDialog:
         if self._restore_pending:
             return  # between the card and the dialog, with neither on the screen to act on
 
-        # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the navigation history —
+        # TODO (briefs/filedialog-navigation-history-brief.md): the navigation history —
         # TODO: Alt+Left / Alt+Right, Ctrl+Left / Ctrl+Right in the listing, and the mouse's own back
         # TODO: and forward buttons.
         shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
@@ -2647,11 +2666,9 @@ class FileDialog:
         # Tab swaps the caret's two homes. It never inserts anything into an `InputText`, so the key is
         # ours to define, and this is the only way to reach the state where the find field is inactive.
         #
-        # It does not follow that ImGui leaves the key alone. Measured 2026-08-21 on DPG 2.3.1: when the
-        # find field holds a caret it got from `focus_item` rather than from a click, ImGui spends Tab on
-        # keyboard navigation as well, and moves to the path field — which then reports itself activated
-        # and, a frame later, deactivated. Both handlers reach `_caret_home`, so what this branch decides
-        # has to survive being straddled by that pair. `_on_path_field_deactivated` is where it is made to.
+        # It does not follow that ImGui leaves the key alone: it steps its own focus to another text field
+        # in the same navigation scope. Each of the two fields has a scope of its own, which leaves the step
+        # nowhere to go — see `_field_scope`.
         if key == dpg.mvKey_Tab:
             if self._caret_home is CaretHome.LISTING:
                 # Written before the caret returns, the field being writable only while it does not have
@@ -3073,10 +3090,10 @@ class FileDialog:
         #
         # *Which* target is not free to choose, and not for a visual reason. `focus_item` cannot move
         # focus from outside a child window to inside one; measured across every source/target pair, that
-        # is the only refused direction. The find field lives in the listing's child window, so parking
+        # is the only refused direction. The find field lives inside the explorer's child window, so parking
         # below it — on the OK button, say — makes every later Ctrl+F and Tab-back an outside-to-inside
         # request, which is ignored in silence: the caret never returns and typing goes nowhere. The
-        # refresh button shares the child window with the field, so the return trip stays inside it.
+        # refresh button is inside that child window too, so the return trip starts from a child.
         #
         # A button is also safe to park on: DPG leaves ImGui's keyboard-nav activation off, so a focused
         # button ignores Space and Enter instead of pressing itself. Pinned by

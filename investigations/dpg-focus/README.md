@@ -175,16 +175,11 @@ because both land in `raven/common/gui/animation.py` and are better done togethe
   running app's window with `ffmpeg -f x11grab` at 60 fps and ranks the frames by how much the region of
   interest stands out, so a 25–100 ms artifact can be found and looked at. Screenshots cannot: `import`
   costs 50–200 ms a frame and samples roughly one in five.
-  - **The open question it was built for is still open.** `FileDialog`'s path field goes *active* for a few
-    frames on every Tab — active meaning the caret, hence select-all, hence a blue flash in a field nobody
-    touched. That much is measured, by this script and by logging focus state per frame from the grid's
-    tick thread. What puts it there is not known, and three plausible mechanisms have been falsified.
-  - **A lead, 2026-09-28, untested here:** ImGui's own Tab step, confined by `flattened_navigation`.
-    Raven-librarian had the same shape — a caret flashing in a field nobody touched on every Tab — and it
-    went away with `flattened_navigation=False` on the child holding the composer (`dpg-notes.md` → "Tab
-    reaches a global handler and still moves ImGui's nav, after a programmatic focus"). The file dialog's
-    find and path fields share one child, so the same remedy there means giving the find field a scope of
-    its own.
+  - **The question it was built for is answered (2026-09-28).** `FileDialog`'s path field went *active* for
+    a frame on every Tab — active meaning the caret, hence select-all, hence a blue flash in a field nobody
+    touched. It was ImGui's own Tab step, which lands on another text field in the same navigation scope;
+    each field now has a scope of its own. `dpg-notes.md` → "Tab reaches a global handler and still moves
+    ImGui's nav, after a programmatic focus" has the measurement and the remedy.
 
 The python probes are all self-driving: run one and read the table. Re-run after a DPG upgrade that might have touched focus
 handling — the send path in `raven/librarian/app.py` and the search-accept path in `raven/visualizer/app.py`

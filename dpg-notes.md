@@ -1431,9 +1431,17 @@ frame in the search field above. With `flattened_navigation=False` on that child
 nothing else about Tab changed that anyone could see. It was confirmed live through `--repl`, with
 `configure_item` taking effect at runtime.
 
-So the remedy for a stray step is to confine it: put the widget the keyboard is leaving in a child whose
-navigation is not flattened, holding nothing a step could visibly land on. Whether a step with nowhere else
-to go re-activates the widget it started from was not measured.
+**The step goes to another text field, wrapping round.** `FileDialog` showed which, measured the same day
+by logging each field's `is_item_active` per frame: its find and path fields shared one scope, and every
+Tab left the path field active for exactly one frame, in both directions — from the find field, and from
+the button focus was parked on. Moving the park to a checkbox *after* the find field changed nothing, so the
+step does not stop at buttons: it went on, wrapped, and landed on the only other text field. That it skips
+everything but text fields is inferred from that, not read in ImGui's source.
+
+So the remedy is to leave the step no other text field to reach: **each text field in a navigation scope
+of its own** — a borderless child window with `flattened_navigation=False` around it
+(`FileDialog._field_scope`), or, where a child already holds just the one field, that child unflattened, as
+Librarian's is. A step back onto the field it started from showed nothing visible in either app.
 
 ## `is_key_down` is sampled when the callback runs, not when the key was pressed
 

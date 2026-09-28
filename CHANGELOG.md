@@ -26,6 +26,11 @@
   - In v0.2.9 that first press appeared to do nothing, and a second press opened the dialog normally. Clicking the attach button was not affected.
 - **Tab to the composer or the graph no longer flashes a caret in the search field for a moment.**
 
+#### Constellation-wide
+
+- **Tab in the file dialog no longer lights up the path field for a moment.**
+- **Clicking the file dialog's find field now moves the blue keyboard mark there.** In v0.2.9 the mark stayed where it was, on the listing or the path field, while the typing went to the find field.
+
 ## 0.2.9 (24 September 2026) — *["Pleiades"](https://en.wikipedia.org/wiki/Pleiades)* edition
 
 ### Added
