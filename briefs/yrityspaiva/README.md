@@ -1,0 +1,55 @@
+# Yrityspäivä sprint
+
+*A sprint README is the sprint's decision log, not an introduction to it: what was scheduled and in which
+order, what was cut and on what argument, what was learned while building each item. Most of it is here
+because it produced no diff and would otherwise be re-decided from scratch.*
+
+**Deadline: 8 October 2026** — Yrityspäivä. The same system as Researchers' Night, demoed to an SME
+audience. Opened 2026-09-28, from the maintainer's post-event list and the issues flagged
+live on the Night.
+
+## Done
+
+- **Librarian's attach dialog closed itself on the first Ctrl+Shift+O after launch** (flagged live on the
+  Night). Traced to a hidden `Tooltip` window being shown in the frame the modal opened; fixed in
+  `raven.common.gui.tooltip`, which now shows no window for a text change nobody is looking at. The same fix
+  removed the blue-border flicker the `give_caret` retry had made visible on Tab. Write-up in `dpg-notes.md`.
+- **Tab flashed a caret in Librarian's search field for a frame.** ImGui's own Tab step, confined with
+  `flattened_navigation=False` on the composer's child window. The Visualizer was checked live and needs
+  nothing; Raven-cherrypick gives nothing focus programmatically and so sees no step.
+- **Server autostart** and **the DB behind the server** are written up for later —
+  `briefs/server-autostart-brief.md`, and brief 13's *Where the database lives*. Neither is for this demo.
+
+## Queue, in order
+
+1. **`FileDialog`'s path field going active on Tab** — the open question in `investigations/dpg-focus/`,
+   probed now while the Tab mechanism is fresh. The lead is the same `flattened_navigation` confinement;
+   the find and path fields share a child, so the find field would need a scope of its own.
+2. **The small items**, all decided, in this order:
+   1. **XDot viewer search keys follow the Visualizer's.** Enter accepts and parks focus on a button (never
+      `focus_item` on a child window); no Escape branch of its own; Tab moves between the field and the
+      view; Ctrl+Shift+F clears. See the Visualizer's hotkey handler, whose comments carry the reasons.
+   2. **Avatar pane indicators: DOCS becomes DOCUMENTS, WEB becomes INTERNET**, matching what the rest of
+      the GUI calls those features. The others stay. Rename the code's internal names and comments to
+      match, so the code says what the screen says.
+   3. **App titles take the command-name form, `Raven-<app>`** — the changelog headings' form:
+      `Raven-cherrypick`, `Raven-xdot-viewer`, `Raven-conference-timer`, `Raven-avatar-pose-editor`,
+      `Raven-avatar-settings-editor`; Librarian and Visualizer already comply. Check the standalone
+      `xdotwidget` demo's title too. The `live-gui-testing` skill (in `~/.claude`) cites the inconsistency
+      and wants updating afterwards.
+   4. **A Librarian quickstart**: install an LLM backend such as LM Studio; in LM Studio, enable the
+      Developer tab in its settings, switch the API on in that tab, and load the model *on the Developer
+      tab* so it is served through the API; then start Raven-server; then start Librarian. Also fix the
+      README's backend section, which says LM Studio "needs no setup beyond starting its local server".
+   5. **Avatar timing breakdown in the debug overlay**: pose, upscale and postprocessor times, beside the
+      render/encode/output ones already there. The server's `render` figure covers all three today. The
+      animator very likely has the timings already (the upscaler's is `tim_upscale`); this is sending them
+      in `X-Server-Stats` and showing them.
+3. **Delete a subtree from the chat graph** — medium. A toolbar button with the usual double-press and red
+   warning flash, deleting the subtree at the cursor. Disabled on the active system prompt node and the
+   active AI greeting, which are the only nodes whose deletion would break the running instance. A hotkey
+   *different* from the chat log's Ctrl+Shift+Delete, so a reader cannot delete the wrong data by habit,
+   and as hard to hit by accident — to be proposed.
+4. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
+   Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
+   that folder into `done/`.

@@ -9,8 +9,8 @@ what stops "done" from being applied to something that was never going to be fin
   one as a brief would freeze decisions nobody has made yet. A sketch graduates by producing a brief, not by
   becoming one. Each carries a status line saying which parts are decided. See `design/README.md`.
 
-- **One folder per sprint**, named for its scope — currently `librarian-extension/` and
-  `researchers-night/`. Implementation briefs for work that has been decided on, each folder with
+- **One folder per sprint**, named for its scope — currently `librarian-extension/`,
+  `researchers-night/` and `yrityspaiva/`. Implementation briefs for work that has been decided on, each folder with
   its own `README.md` for ordering and its own `done/` for the ones that have closed. A sprint folder is a
   working set, so it also holds unnumbered briefs and its session records.
 
