@@ -6862,3 +6862,18 @@ the reply into sentences the way the TTS preprocessor does, classify each with t
 
 Until then, an emotion that keeps looking wrong can be switched off in `emotion_blacklist`, in
 `raven.librarian.config`.
+
+## Edit an AI reply's thinking trace, to unwedge a model stuck in a loop
+
+*Cluster: message-editing · Cost: ? · Gate: Continue resuming an incomplete thinking trace · Filed: 2026-09-28 · See also: `briefs/yrityspaiva/README.md`, message editing v1*
+
+Message editing v1 (2026-09-28) edits a message's text only; an AI reply's thinking trace carries over
+untouched. The maintainer's use case for editing the trace too: a model stuck in a loop while thinking can
+sometimes be unwedged by cutting the loop out of its trace and continuing.
+
+The editing half is small — a second field, and `chatutil.revise_message_text` replacing `reasoning_content`
+as well. **The gate is the other half**: Continue has to resume the *thinking*, which is probably not
+supported yet (maintainer's recollection). Checked only this far: on a backend that continues by prefill,
+`llmclient.invoke` seeds the old `reasoning_content` into the stored result, but whether the trace reaches
+the model on the wire, so that the model picks up mid-thought, is unchecked. Find that out first; the editor
+is worth building only once Continue can use what it produces.
