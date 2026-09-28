@@ -1909,8 +1909,9 @@ Two limits on the answer, both measured 2026-09-28 on DPG 2.3.1 over `--repl`:
   The file dialog's listing reported hovered only on its border, and False over its rows and the blank
   space below them. A drawlist is not a window, so a panel of drawn tiles answers True across the tiles,
   which is why the thumbnail grid can ask it of its panel.
-- **A press on a window makes it unhovered from the next frame** until one frame after the release: the
-  pressed window's own item is active, and that blocks the hover. A global click handler runs on DPG's
+- **A press on a window makes it unhovered from the next frame** until one frame after the release —
+  presumably because the press makes the window's own item active, which blocks hover; that part was not
+  read in ImGui's source. A global click handler runs on DPG's
   callback thread with nothing ordering it before that frame, so one that asks *now* sometimes gets False
   and drops the click — intermittently, since it depends on when the callback runs. Sample the hover per
   frame while the button is up and ask the sample (`ThumbnailGrid._hit_test`).
