@@ -37,6 +37,7 @@ __all__ = [  # The parts a message is made of, and reading them back
            # Walking and mending a chat
            "linearize_chat", "descend_to_latest",
            "get_all_system_prompt_node_ids", "get_all_greeting_node_ids", "is_deletable", "delete_subtree",
+           "is_editable", "revise_message_text",
            "compute_auto_allowed_hosts",
            "upgrade_datastore", "factory_reset_datastore",
            "remove_persona_from_start_of_line",
@@ -1390,6 +1391,65 @@ def delete_subtree(datastore: chattree.Forest, node_id: str, head_node_id: str) 
             new_head_node_id = descend_to_latest(datastore, new_head_node_id, recursive=False)
 
     return new_head_node_id, branch_changed
+
+def is_editable(datastore: chattree.Forest,
+                node_id: Optional[str],
+                greeting_node_ids: List[str]) -> bool:
+    """Return whether the text of the message at `node_id` may be edited.
+
+    Editable: a message the user sent, and a reply the AI wrote. Not editable: a message not linked to a
+    chat node (`node_id` is `None`), a system prompt, a greeting, and a tool result.
+
+    `greeting_node_ids`: from `get_all_greeting_node_ids`, taken for the same reason `is_deletable` takes it.
+    """
+    # A greeting is an assistant message, so it is excluded by ID; a system prompt and a tool result are
+    # excluded by their role, below.
+    if node_id is None or node_id in greeting_node_ids:
+        return False
+    role = datastore.get_payload(node_id)["message"]["role"]
+    return role in ("user", "assistant")
+
+def revise_message_text(payload: Dict[str, Any], text: str) -> Dict[str, Any]:
+    """Return a new payload: `payload` with its message text replaced by `text`, for `chattree.Forest.add_revision`.
+
+    `text`: the new text, without the persona prefix — as `get_node_message_text_without_persona` returns
+            it. The prefix is put back when the old text had one, so the revision reads as its original did.
+
+    Everything but the text carries over: attachments, the thinking trace, tool calls, and the generation
+    and retrieval metadata. The text parts are replaced by one part holding `text`, at the position of the
+    first of them, so an attachment keeps its place relative to the words; an empty `text` leaves no text
+    part at all. The general metadata gets a fresh timestamp, it being when this revision was written.
+
+    `payload` is not modified.
+    """
+    new_payload = copy.deepcopy(payload)
+    message = new_payload["message"]
+    persona = new_payload["general_metadata"]["persona"]
+    old_content = message.get("content") or []
+
+    old_text = content_to_text(old_content)
+    had_prefix = (persona is not None and
+                  (not old_text or re.match(f"^{re.escape(persona)}:", old_text) is not None))
+    if had_prefix and text:  # as `scrub` does: a speaker label with nothing spoken is not added
+        text = f"{persona}: {text}"
+
+    new_content = []
+    text_placed = False
+    for part in old_content:
+        if part.get("type") == "text":
+            if not text_placed and text:
+                new_content.append(text_content_part(text))
+            text_placed = True
+            continue
+        new_content.append(part)
+    if not text_placed and text:
+        new_content.insert(0, text_content_part(text))
+    message["content"] = new_content
+
+    timestamp, unused_weekday, isodate, isotime = make_timestamp()
+    new_payload["general_metadata"]["timestamp"] = timestamp
+    new_payload["general_metadata"]["datetime"] = f"{isodate} {isotime}"
+    return new_payload
 
 def compute_auto_allowed_hosts(datastore: chattree.Forest,
                                node_id: str,

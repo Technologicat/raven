@@ -128,7 +128,7 @@ See the figure for a schematic illustration.
 
 With this storage scheme, a chat branch is just its **HEAD** pointer; roughly, like in `git`. This makes some actions cheap. For example, starting a new chat only resets the **HEAD** pointer to the AI's greeting (labeled **NEW** in the figure).
 
-The nodes are versioned, for an upcoming editing feature for fixing typos and making similar small edits that don't change the flow of the chat (i.e. meant for use in cases where any messages downstream of the edit still make sense as-is). By design, each version is immutable - like the revisions of a GitHub issue comment.
+The nodes are versioned. **Editing** a message adds a new version of it, and the chat carries on from the new text; the old version is kept. Editing is meant for fixing typos, trimming a long reply before sharing a chat log, and similar small edits that don't change the flow of the chat — the messages below the edited one are left as they are, so they should still make sense afterwards. By design, each version is immutable - like the revisions of a GitHub issue comment.
 
 Normally, when you write and send a new message to the AI, it is added below the **HEAD**, and it then becomes the new **HEAD**. The AI then replies. The AI's reply is added below your message, and becomes the new **HEAD**.
 
@@ -786,7 +786,11 @@ Hover the dot and it says so.
   - Only works when **Speech** is enabled in the mode toggles. Upon clicking this, the avatar speaks the message through the TTS subsystem.
   - If additionally **Subtitles** is enabled in the mode toggles, the avatar's speech is subtitled (or closed-captioned) in the language set in [`raven.librarian.config`](config.py).
   - See [AI avatar and voice mode](#ai-avatar-and-voice-mode).
-- Edit *(placeholder button; feature to be added later)*
+- Edit (your messages and AI replies) (Ctrl+E)
+  - The text opens in place, in an editable field. **Save** (the send key, Ctrl+Enter or Enter as configured) stores it as a new revision of the message; **Cancel** (Esc) leaves the message as it was. While the field has the caret, the chat's hotkeys stay out of the way.
+  - Only the text is edited. Attachments stay attached, and an AI reply keeps its thinking trace and the record of which model wrote it.
+  - The revision number in the grey line above the message goes up by one.
+  - Refused while a reply is being written. Not available on the system prompt, the greeting, or a tool result.
 - Branch (Ctrl+B)
   - Set this message as the current **HEAD**.
     - Branching does not make any changes to the chat datastore - it only sets the **HEAD** pointer.
@@ -1001,6 +1005,7 @@ The blue dot says which message these act on: the bottommost one whose whole but
 | `Ctrl+S` | Speak it |
 | `Ctrl+C` | Copy it to the clipboard — while the message field does not hold the caret |
 | `Ctrl+Shift+C` | ...with its node ID and metadata included |
+| `Ctrl+E` | Edit it (your messages and AI replies), as a new revision. The send key saves, `Esc` cancels |
 | `Ctrl+B` | Branch the chat here — roll the conversation back to it |
 | `Ctrl+Shift+Delete` | Delete it and everything below it. Twice to confirm; there is no undo |
 | `Ctrl+Left` / `Ctrl+Right` | Previous / next sibling |

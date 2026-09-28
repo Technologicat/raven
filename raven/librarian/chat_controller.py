@@ -173,6 +173,13 @@ _BUILD_SCROLL_WAIT_FRAMES = 60
 # family both in what it means and in how it looks.
 _JUMP_TO_LATEST_COLOR = (180, 180, 180)
 
+# The field a message opens into for editing: as tall as the text's line count, within these bounds, plus
+# room for the frame padding and a horizontal scrollbar — the field does not wrap, so a paragraph is one
+# line and usually wider than the field.
+_EDITOR_MIN_LINES = 3
+_EDITOR_MAX_LINES = 20
+_EDITOR_EXTRA_H = 24  # pixels
+
 # --------------------------------------------------------------------------------
 
 role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gui_config.chat_color_ai_back},
@@ -1507,7 +1514,7 @@ class DPGChatMessage:
         greeting_node_ids = chatutil.get_all_greeting_node_ids(datastore=self.parent_view.chat_controller.datastore)
 
         self._build_regeneration_buttons(g, greeting_node_ids)
-        self._build_edit_button(g)
+        self._build_edit_button(g, greeting_node_ids)
         self._build_branching_buttons(g, system_prompt_node_ids, greeting_node_ids)
         self._build_tool_approval_button(g)
         self._build_navigation_buttons(g)
@@ -1832,24 +1839,32 @@ class DPGChatMessage:
         else:
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
-    def _build_edit_button(self, g) -> None:
-        """Build the revise button. It is in the row, and disabled: the action is not implemented yet.
+    def _build_edit_button(self, g, greeting_node_ids) -> None:
+        """Build the edit button, which opens the message's text for editing in place.
 
         `g`: the horizontal group the buttons go into.
         """
-        # TODO: when revising is implemented, give it a hotkey as well — `Ctrl+E` is free and mnemonic.
-        # It is stashed in `gui_button_callbacks` like the others, bound beside the per-message keys in
-        # `app.py`, and named in the caption below.
-        dpg.add_button(label=fa.ICON_PENCIL,
-                       callback=lambda: None,  # TODO
-                       enabled=False,
-                       width=gui_config.toolbutton_w,
-                       tag=f"chat_edit_button_{self.gui_uuid}",
-                       parent=g)
-        dpg.bind_item_font(f"chat_edit_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-        dpg.bind_item_theme(f"chat_edit_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
-        edit_tooltip = dpg.add_tooltip(f"chat_edit_button_{self.gui_uuid}")  # tag
-        dpg.add_text("Edit (revise)", parent=edit_tooltip)
+        view = self.parent_view
+        edit_enabled = chatutil.is_editable(datastore=view.chat_controller.datastore,
+                                            node_id=self.node_id,
+                                            greeting_node_ids=greeting_node_ids)
+        def edit_callback() -> None:
+            maybe_refusal = view.start_editing(self.node_id)
+            if maybe_refusal is not None:
+                gui_animation.flash_button(button=edit_button, tooltip=edit_tooltip,
+                                           ok=False, message=maybe_refusal,
+                                           duration=gui_config.acknowledgment_duration)
+        if edit_enabled:
+            self.gui_button_callbacks["edit"] = edit_callback
+        edit_button = dpg.add_button(label=fa.ICON_PENCIL,
+                                     callback=edit_callback,
+                                     enabled=edit_enabled,
+                                     width=gui_config.toolbutton_w,
+                                     tag=f"chat_edit_button_{self.gui_uuid}",
+                                     parent=g)
+        dpg.bind_item_font(edit_button, self.parent_view.themes_and_fonts.icon_font_solid)
+        dpg.bind_item_theme(edit_button, "disablable_widget_theme")  # tag
+        edit_tooltip = self._add_tooltip(edit_button, "Edit this message, as a new revision [Ctrl+E]")
 
     def _build_branching_buttons(self, g, system_prompt_node_ids, greeting_node_ids) -> None:
         """Build the two buttons that change the tree: branch the chat here, and delete this node with all below it.
@@ -2178,6 +2193,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
 
         Automatically parse the content from the chat node, and add the text to the GUI.
         """
+        if self.parent_view.edit_node_id == self.node_id:
+            self.parent_view.capture_edit_draft()  # before this rebuild replaces the field holding it
+
         node_payload = self.parent_view.chat_controller.datastore.get_payload(self.node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
         message = node_payload["message"]
         role = message["role"]
@@ -2199,6 +2217,12 @@ class DPGCompleteChatMessage(DPGChatMessage):
         reasoning_content = message.get("reasoning_content") or ""
         if reasoning_content.strip():
             self.add_paragraph(reasoning_content, is_thought=True)
+
+        # Open for editing, the text goes into a field in place of the paragraphs, and the rest of the message
+        # — attachments, tool calls — renders as it always does.
+        editing = (self.parent_view.edit_node_id == self.node_id)
+        if editing:
+            self._render_editor()
 
         # Render the content parts in order, stacked vertically. A text part renders as markdown
         # paragraphs; multiple text parts (e.g. one per websearch result) stack into the message's vertical
@@ -2233,7 +2257,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
         for part in message.get("content") or []:
             part_type = part.get("type")
             if part_type == "text":
-                if not gutter_wanted:
+                if editing:
+                    pass
+                elif not gutter_wanted:
                     self._render_text_paragraphs(chatutil.remove_persona_from_start_of_line(persona=persona, text=part["text"]))
                 elif not body_rendered:
                     # Rendered at the position of the *first* text part, so the body still precedes any chip
@@ -2279,6 +2305,40 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                           name=function.get("name", "?"),
                                           arguments=function.get("arguments", ""),
                                           tool_call_id=tool_call.get("id"))
+
+    def _render_editor(self) -> None:
+        """Render this message's text as an editable field, with Save and Cancel below it.
+
+        The field holds the draft the view has kept, if any, and the stored text otherwise.
+        """
+        view = self.parent_view
+        text = view.edit_draft
+        if text is None:
+            unused_role, unused_persona, text = chatutil.get_node_message_text_without_persona(view.chat_controller.datastore, self.node_id)
+        n_lines = min(max(text.count("\n") + 1, _EDITOR_MIN_LINES), _EDITOR_MAX_LINES)
+        with self.paragraphs_lock:
+            view.gui_edit_field = dpg.add_input_text(multiline=True,
+                                                     default_value=text,
+                                                     # The composer's chords, so the fingers need not change:
+                                                     # `True` <=> Enter saves (see where "chat_field" is built).
+                                                     ctrl_enter_for_new_line=(librarian_config.send_message_key == "enter"),
+                                                     width=self.get_chat_text_width(),
+                                                     height=n_lines * gui_config.font_size + _EDITOR_EXTRA_H,
+                                                     tag=f"chat_edit_field_{self.gui_uuid}",
+                                                     parent=self.gui_text_group)
+            save_key = "Ctrl+Enter" if librarian_config.send_message_key == "ctrl+enter" else "Enter"
+            row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
+            view.gui_edit_save_button = dpg.add_button(label="Save",
+                                                       callback=lambda: view.finish_editing(save=True),
+                                                       tag=f"chat_edit_save_button_{self.gui_uuid}",
+                                                       parent=row)
+            view.gui_edit_save_tooltip = self._add_tooltip(view.gui_edit_save_button,
+                                                           f"Save the text as a new revision of this message [{save_key}]")
+            cancel_button = dpg.add_button(label="Cancel",
+                                           callback=lambda: view.finish_editing(save=False),
+                                           tag=f"chat_edit_cancel_button_{self.gui_uuid}",
+                                           parent=row)
+            dpg.add_text("Close the editor, keeping the message as it was [Esc]", parent=dpg.add_tooltip(cancel_button))
 
     def _render_gutter_and_body(self, *,
                                 texts: list[str],
@@ -2825,6 +2885,15 @@ class DPGLinearizedChatView:
         # writer, while the readers are the LLM task thread comparing a value it captured earlier.
         self._user_scroll_generation = 0
 
+        # The message open for editing, if any, and what has been typed into it. Held here rather than on the
+        # message, because a view rebuild — a window resize, for one — replaces every message instance, and an
+        # edit should come through that with its text intact. One at a time.
+        self.edit_node_id: str | None = None
+        self.edit_draft: str | None = None  # `None` until something has been captured from the field
+        self.gui_edit_field = None  # populated by the edited message's `build`
+        self.gui_edit_save_button = None  # ...and these, which report a refused save
+        self.gui_edit_save_tooltip = None
+
         # Flashes an arrow band at whichever end a scroll came to rest against. Attached per scroll rather
         # than owned by the animation, because whether an arrival is worth announcing depends on who asked
         # for it — see `_set_y_scroll`.
@@ -3267,6 +3336,105 @@ class DPGLinearizedChatView:
                 if dpg_chat_message.node_id == node_id:
                     return dpg_chat_message
         return None
+
+    # --------------------------------------------------------------------------------
+    # Editing a message
+
+    def capture_edit_draft(self) -> None:
+        """Remember what is in the edit field, so the edited message can be rebuilt without losing it."""
+        if self.gui_edit_field is None:
+            return
+        with guiutils.nonexistent_ok():
+            maybe_value = dpg.get_value(self.gui_edit_field)
+            if maybe_value is not None:
+                self.edit_draft = maybe_value
+
+    def start_editing(self, node_id: str) -> str | None:
+        """Open the message showing `node_id` for editing, and put the caret in it.
+
+        Ask `chatutil.is_editable` first. Asking for the message already open puts the caret back in it.
+
+        Returns `None` when done, or, when refused, a short reason for the caller to show.
+        """
+        if self.edit_node_id == node_id:
+            if self.gui_edit_field is not None:
+                self.chat_controller.give_caret(self.gui_edit_field)
+            return None
+        if self.edit_node_id is not None:
+            return "Another message is open for editing."
+        maybe_refusal = self.chat_controller.edit_refusal()
+        if maybe_refusal is not None:
+            return maybe_refusal
+        message = self.find_message(node_id)
+        if message is None:
+            return "This message is not in the chat log."
+        self.edit_node_id = node_id
+        self.edit_draft = None
+        message.rebuild_in_place()
+        self.chat_controller.give_caret(self.gui_edit_field)
+        return None
+
+    def finish_editing(self, save: bool) -> str | None:
+        """Close the message open for editing, saving what was typed as a new revision if `save`.
+
+        Saving text identical to the message's is the same as cancelling: no revision is made.
+
+        Returns `None` when done, or, when the save is refused, a short reason, which is also flashed on the
+        Save button. A refused save leaves the message open, with what was typed still in it.
+        """
+        node_id = self.edit_node_id
+        if node_id is None:
+            return None
+        if save:
+            self.capture_edit_draft()
+            unused_role, unused_persona, old_text = chatutil.get_node_message_text_without_persona(self.chat_controller.datastore, node_id)
+            new_text = (self.edit_draft if self.edit_draft is not None else old_text).strip()
+            if new_text != old_text.strip():
+                maybe_refusal = self.chat_controller.revise_message(node_id, new_text)
+                if maybe_refusal is not None:
+                    if self.gui_edit_save_button is not None:
+                        gui_animation.flash_button(button=self.gui_edit_save_button, tooltip=self.gui_edit_save_tooltip,
+                                                   ok=False, message=maybe_refusal,
+                                                   duration=gui_config.acknowledgment_duration)
+                    return maybe_refusal
+        self.edit_node_id = None
+        self.edit_draft = None
+        self.gui_edit_field = None
+        self.gui_edit_save_button = None
+        self.gui_edit_save_tooltip = None
+        maybe_message = self.find_message(node_id)
+        if maybe_message is not None:
+            maybe_message.rebuild_in_place()
+        self.chat_controller.give_keyboard_to_log()
+        return None
+
+    def handle_edit_key(self, key: int, ctrl: bool) -> bool:
+        """Offer a key to the message open for editing. Returns whether it was taken.
+
+        While the edit field holds the caret, every key is taken, so no hotkey acts on the chat mid-edit.
+        The commit chord — the composer's send key — saves, and Esc cancels.
+        """
+        field = self.gui_edit_field
+        if self.edit_node_id is None or field is None:
+            return False
+        active = focused = False
+        with guiutils.nonexistent_ok():
+            active = dpg.is_item_active(field)
+            focused = dpg.is_item_focused(field)
+        if not (active or focused):  # also the answer when the field has just gone away
+            return False
+        # Both chords reach the field before they reach this handler, and both deactivate it — the commit
+        # chord validates the edit, and Esc reverts it — so the key that has just ended an edit reads
+        # focused and not active. Measured for the commit chord in
+        # `investigations/dpg-focus/commit_chord_dispatch_probe.py`.
+        commit_needs_ctrl = (librarian_config.send_message_key == "ctrl+enter")
+        if key == dpg.mvKey_Return and ctrl == commit_needs_ctrl:
+            self.finish_editing(save=True)
+            return True
+        if key == dpg.mvKey_Escape:
+            self.finish_editing(save=False)
+            return True
+        return active
 
     def jump_to_node(self, node_id: str) -> int | None:
         """Scroll to the message showing chat node `node_id` and flash it.
@@ -3805,6 +3973,13 @@ class DPGLinearizedChatView:
         if head_node_id is None:  # use current HEAD from app_state?
             head_node_id = self.chat_controller.app_state["HEAD"]
         node_id_history = self.chat_controller.datastore.linearize_up(head_node_id)
+        # An edit survives a rebuild of the branch it is on, a resize for one, and ends with a branch it is not.
+        self.capture_edit_draft()
+        self.gui_edit_field = None
+        if self.edit_node_id is not None and self.edit_node_id not in node_id_history:
+            logger.info(f"DPGLinearizedChatView.build: the message open for editing, '{self.edit_node_id}', is not on the new branch; discarding the edit.")
+            self.edit_node_id = None
+            self.edit_draft = None
         with self.chat_controller.current_chat_history_lock:
             self.chat_controller.current_chat_history.clear()
             self.chat_controller.clear_search_matches()  # refilled message by message, as the branch is added below
@@ -3973,6 +4148,8 @@ class DPGChatController:
                  avatar_panel_covered: Callable[[], bool] | None = None,
                  on_search_results_changed: Callable[[], None] | None = None,
                  on_navigate: Callable[[], None] | None = None,
+                 give_caret: Callable[[str | int], None] | None = None,
+                 give_keyboard_to_log: Callable[[], None] | None = None,
                  executor: concurrent.futures.Executor | None = None):
         """Controller for LLM scaffold to GUI integration.
 
@@ -4070,6 +4247,13 @@ class DPGChatController:
                        jump to a continuation, a new chat through `navigated` — as opposed to HEAD moving
                        because the conversation grew.
 
+        `give_caret`: Called with a text field's DPG tag or ID, to put the caret there — as when a message
+                      opens for editing. `None` means `raven.common.gui.animation.give_caret`. The app passes
+                      its own, which also releases whatever else was holding the keyboard.
+
+        `give_keyboard_to_log`: Called with no arguments to hand the keyboard back to the chat log, as when an
+                                edit is saved or cancelled. `None` means nothing is done.
+
         `web_indicator_widget`: DPG tag or ID of the widget to show while a "websearch" tool call is in progress.
 
         `executor`: A `ThreadPoolExecutor` or something duck-compatible with it. Used for background tasks.
@@ -4146,6 +4330,8 @@ class DPGChatController:
         # Called with no arguments whenever any of the four above changes, so the app can redraw its search row.
         self.on_search_results_changed = on_search_results_changed
         self.on_navigate = on_navigate
+        self.give_caret = give_caret if give_caret is not None else gui_animation.give_caret
+        self.give_keyboard_to_log = give_keyboard_to_log if give_keyboard_to_log is not None else (lambda: None)
 
         # The keyboard mark on the current message's button row, built on first use by
         # `update_current_message_mark`. One mark that moves, rather than one per message: a chat has as
@@ -4672,6 +4858,45 @@ class DPGChatController:
         self.app_state["HEAD"] = new_head_node_id
         if branch_changed:
             self.view.build()
+        return None
+
+    def edit_refusal(self) -> str | None:
+        """Return why an edit would be refused right now, as a short reason for a button, or `None` if it would not.
+
+        The edit counterpart of `delete_refusal`: asked when editing starts, and again by `revise_message`.
+        """
+        # A turn finishes the node it is writing into by replacing that node's active revision in place
+        # (`overwrite_active_revision`), so an edit landing there mid-reply would be the revision replaced.
+        # Refused outright rather than per node, as a delete is: a reply is a moment away.
+        if self.is_generating():
+            return "Not while a reply is being written."
+        return None
+
+    def revise_message(self, node_id: str, text: str) -> str | None:
+        """Replace the text of the message at `node_id` by adding a revision holding `text`, and make it active.
+
+        The one route to an edit. Ask `chatutil.is_editable` first; this checks `edit_refusal`, and refuses
+        an empty `text` on a message with no attachment or tool call to keep it from being empty.
+
+        `text`: the new text, without the persona prefix (see `chatutil.revise_message_text`).
+
+        Redraws nothing: the message being edited is the caller's to rebuild.
+
+        Returns `None` when done, or, when refused, a short reason for the caller to show.
+        """
+        maybe_refusal = self.edit_refusal()
+        if maybe_refusal is not None:
+            logger.info(f"DPGChatController.revise_message: refusing to edit '{node_id}': {maybe_refusal}")
+            return maybe_refusal
+        old_payload = self.datastore.get_payload(node_id)
+        old_message = old_payload["message"]
+        if not text.strip() and not (old_message.get("tool_calls") or
+                                     any(part.get("type") != "text" for part in old_message.get("content") or [])):
+            logger.info(f"DPGChatController.revise_message: refusing to edit '{node_id}': nothing would be left of it")
+            return "Nothing would be left. To remove the message, delete it."
+        revision_id = self.datastore.add_revision(node_id, chatutil.revise_message_text(old_payload, text))
+        logger.info(f"DPGChatController.revise_message: node '{node_id}' is now at revision {revision_id}.")
+        self.update_context_fill_indicator()  # the branch's text changed
         return None
 
     def get_current_message(self) -> DPGChatMessage | None:

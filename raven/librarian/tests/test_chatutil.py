@@ -1678,6 +1678,98 @@ class TestDeleteSubtree:
         assert chatutil.delete_subtree(f, card2, message) == (message, True)
 
 
+class TestIsEditable:
+    """The edit button's gate: whose text may be edited."""
+
+    @staticmethod
+    def editable(f, node_id):
+        return chatutil.is_editable(datastore=f, node_id=node_id,
+                                    greeting_node_ids=chatutil.get_all_greeting_node_ids(f))
+
+    def test_a_user_message_and_an_ai_reply_are(self, two_card_forest, chat_payload):
+        f, _card1, _card2, _greeting1, _greeting2, message = two_card_forest
+        reply = f.create_node(chat_payload("assistant", "a reply", 3), parent_id=message)
+        assert self.editable(f, message)
+        assert self.editable(f, reply)
+
+    def test_a_card_a_greeting_and_a_tool_result_are_not(self, two_card_forest, chat_payload):
+        f, card1, _card2, greeting1, _greeting2, message = two_card_forest
+        tool_result = f.create_node(chat_payload("tool", "what the tool returned", 3), parent_id=message)
+        assert not self.editable(f, card1)
+        assert not self.editable(f, greeting1)
+        assert not self.editable(f, tool_result)
+
+    def test_a_message_not_in_the_datastore_is_not(self, two_card_forest):
+        f, *_ = two_card_forest
+        assert not self.editable(f, None)
+
+
+class TestReviseMessageText:
+    """An edit's new revision: the old payload with only its text, and its timestamp, changed."""
+
+    @staticmethod
+    def payload(llm_settings, role, text, **kwargs):
+        return chatutil.create_payload(llm_settings, chatutil.create_chat_message(llm_settings, role=role, text=text, **kwargs))
+
+    def test_the_persona_prefix_is_kept(self, llm_settings):
+        old = self.payload(llm_settings, "assistant", "Hello there, with a typo.")
+        assert chatutil.content_to_text(old["message"]["content"]).startswith("Aria: ")  # so the test means something
+        new = chatutil.revise_message_text(old, "Hello there.")
+        assert chatutil.content_to_text(new["message"]["content"]) == "Aria: Hello there."
+
+    def test_no_prefix_is_added_where_there_was_none(self, llm_settings):
+        old = self.payload(llm_settings, "user", "no speaker label here", add_persona=False)
+        assert old["general_metadata"]["persona"] is not None, "without a persona, this fixture cannot tell the two rules apart"
+        new = chatutil.revise_message_text(old, "still none")
+        assert chatutil.content_to_text(new["message"]["content"]) == "still none"
+
+    def test_attachments_keep_their_place_around_the_words(self, llm_settings):
+        old = self.payload(llm_settings, "user", "look at these")
+        image_a, image_b = chatutil.image_content_part("sidecar:a.png"), chatutil.image_content_part("sidecar:b.png")
+        old["message"]["content"] = [image_a, *old["message"]["content"], image_b]
+        new = chatutil.revise_message_text(old, "look at this pair")
+        assert new["message"]["content"] == [image_a, chatutil.text_content_part("User: look at this pair"), image_b]
+
+    def test_several_text_parts_become_one(self, llm_settings):
+        old = self.payload(llm_settings, "user", "first")
+        old["message"]["content"].append(chatutil.text_content_part(" second"))
+        new = chatutil.revise_message_text(old, "merged")
+        assert new["message"]["content"] == [chatutil.text_content_part("User: merged")]
+
+    def test_empty_text_leaves_no_text_part(self, llm_settings):
+        old = self.payload(llm_settings, "user", "caption for an image")
+        image = chatutil.image_content_part("sidecar:a.png")
+        old["message"]["content"].append(image)
+        new = chatutil.revise_message_text(old, "")
+        assert new["message"]["content"] == [image]
+
+    def test_everything_but_the_text_carries_over(self, llm_settings):
+        old = self.payload(llm_settings, "assistant", "a long reply", reasoning_content="thinking about it",
+                           tool_calls=[{"type": "function", "id": "call_1", "function": {"name": "f", "arguments": "{}"}}])
+        old["generation_metadata"] = {"model": "some-model", "n_tokens": 12, "dt": 0.5}
+        old["retrieval"] = {"query": "q", "results": []}
+        new = chatutil.revise_message_text(old, "a short reply")
+        for key in ("reasoning_content", "tool_calls", "role"):
+            assert new["message"][key] == old["message"][key]
+        assert new["generation_metadata"] == old["generation_metadata"]
+        assert new["retrieval"] == old["retrieval"]
+        assert new["general_metadata"]["persona"] == old["general_metadata"]["persona"]
+
+    def test_the_timestamp_is_the_revisions_own(self, llm_settings):
+        old = self.payload(llm_settings, "user", "typo")
+        old["general_metadata"]["timestamp"] = 0
+        old["general_metadata"]["datetime"] = "1970-01-01 00:00:00"
+        new = chatutil.revise_message_text(old, "fixed")
+        assert new["general_metadata"]["timestamp"] > 0
+        assert new["general_metadata"]["datetime"] != "1970-01-01 00:00:00"
+
+    def test_the_old_payload_is_not_modified(self, llm_settings):
+        old = self.payload(llm_settings, "user", "original")
+        snapshot = copy.deepcopy(old)
+        chatutil.revise_message_text(old, "revised")
+        assert old == snapshot
+
+
 class TestLatestUserMessageText:
     """The RAG query a turn falls back on when the user did not just type something.
 

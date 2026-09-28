@@ -20,6 +20,11 @@
 
 #### Raven-librarian
 
+- **Messages can be edited.**
+  - The pencil button, or **Ctrl+E**, opens the text of your message or an AI reply in place. The send key saves it, **Esc** cancels.
+  - An edit is a new revision: the old text is kept, and the revision number in the grey line above the message goes up. The messages below are left as they are, so this is for small edits — fixing a typo, trimming a long reply before sharing a chat log.
+  - Only the text changes. Attachments, an AI reply's thinking trace and the record of which model wrote it carry over.
+  - Not available on the system prompt, the greeting or a tool result, and refused while a reply is being written.
 - **The chat graph can delete a message and everything below it.**
   - The toolbar's trash can **destroys** the message under the cursor and every branch below it, with no undo; **Shift+Delete** does the same from the keyboard. Two presses on the same message, as in the chat log.
   - A branch other than the one you are on can be deleted without leaving where you are. If you were inside what you deleted, you land on a neighbouring message.

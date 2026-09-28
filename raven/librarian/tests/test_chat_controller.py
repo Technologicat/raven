@@ -25,7 +25,7 @@ pytest.importorskip("raven.librarian.chat_controller")  # noqa: E402 -- still re
 from unpythonic.env import env  # noqa: E402 -- the class; `from unpythonic import env` gets the submodule
 
 from raven.common import bgtask  # noqa: E402
-from raven.librarian import chat_controller  # noqa: E402
+from raven.librarian import chat_controller, chatutil  # noqa: E402
 
 
 def message_over(forest):
@@ -690,6 +690,47 @@ class TestDeletingASubtree:
         assert controller.delete_subtree(elsewhere) is None
         assert elsewhere not in f.nodes and controller.app_state["HEAD"] == message
         assert controller.builds == 0, "a delete nowhere near the branch on screen rebuilt the chat log"
+
+
+class TestRevisingAMessage:
+    """The one route to an edit: a new revision holding the new text, refused when it must be."""
+
+    @staticmethod
+    def _controller(forest, generating=False):
+        """A controller with just what `revise_message` touches."""
+        controller = chat_controller.DPGChatController.__new__(chat_controller.DPGChatController)
+        controller.datastore = forest
+        controller.is_generating = lambda: generating
+        controller.update_context_fill_indicator = lambda: None
+        return controller
+
+    def test_an_edit_adds_a_revision_and_makes_it_active(self, two_card_forest):
+        f, _card1, _card2, _greeting1, _greeting2, message = two_card_forest
+        old_revision = f.get_revision(message)
+        assert self._controller(f).revise_message(message, "an edited user message") is None
+        assert f.get_revision(message) != old_revision
+        assert old_revision in f.get_revisions(message), "the old revision is kept"
+        assert chatutil.content_to_text(f.get_payload(message)["message"]["content"]) == "an edited user message"
+
+    def test_refused_while_a_turn_is_in_flight(self, two_card_forest):
+        # A turn finishes its node by replacing the active revision, which an edit there would then be.
+        f, _card1, _card2, _greeting1, _greeting2, message = two_card_forest
+        controller = self._controller(f, generating=True)
+        maybe_refusal = controller.revise_message(message, "edited mid-turn")
+        assert isinstance(maybe_refusal, str) and maybe_refusal
+        assert controller.edit_refusal() == maybe_refusal, "a button asking first would be told something else"
+        assert len(f.get_revisions(message)) == 1
+        assert self._controller(f).edit_refusal() is None  # the control: no turn, no refusal
+
+    def test_emptying_a_message_with_nothing_else_in_it_is_refused(self, two_card_forest):
+        f, _card1, _card2, _greeting1, _greeting2, message = two_card_forest
+        assert isinstance(self._controller(f).revise_message(message, "  \n"), str)
+        assert len(f.get_revisions(message)) == 1
+        # The control: with an attachment left, the message is not empty, and the edit goes through.
+        payload = f.get_payload(message)
+        payload["message"]["content"].append(chatutil.image_content_part("sidecar:a.png"))
+        assert self._controller(f).revise_message(message, "") is None
+        assert f.get_payload(message)["message"]["content"] == [chatutil.image_content_part("sidecar:a.png")]
 
 
 class TestSteppingTheSearch:
