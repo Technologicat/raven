@@ -29,27 +29,24 @@ live on the Night.
     was up.
   - A tile's tooltip wore the listing's blue border when the listing had the keys. Fixed with
     `keyboardmark.shield_tooltip`.
+- **The XDot viewer's search keys follow the Visualizer's** — Tab between the field and the graph,
+  Ctrl+Shift+F to clear, and every hand-back of the keys parks focus on a button rather than on the graph
+  widget's group. Its open dialog also gained a *Graph files* filter, default, covering every supported type.
+- **Librarian's indicators say DOCUMENTS and INTERNET**, as the toggles do, and only their icons pulsate;
+  the names hold still. The phase reset per indicator stays, out of step with INDEXING's red: visibility of a
+  briefly shown indicator was preferred over breathing in step, which the code now says.
+- **Every app's window title is `Raven-<app>`**, as its command is.
 - **Server autostart** and **the DB behind the server** are written up for later —
   `briefs/server-autostart-brief.md`, and brief 13's *Where the database lives*. Neither is for this demo.
 
 ## Queue, in order
 
-1. **The small items**, all decided, in this order:
-   1. **XDot viewer search keys follow the Visualizer's.** Enter accepts and parks focus on a button (never
-      `focus_item` on a child window); no Escape branch of its own; Tab moves between the field and the
-      view; Ctrl+Shift+F clears. See the Visualizer's hotkey handler, whose comments carry the reasons.
-   2. **Avatar pane indicators: DOCS becomes DOCUMENTS, WEB becomes INTERNET**, matching what the rest of
-      the GUI calls those features. The others stay. Rename the code's internal names and comments to
-      match, so the code says what the screen says.
-   3. **App titles take the command-name form, `Raven-<app>`** — the changelog headings' form:
-      `Raven-cherrypick`, `Raven-xdot-viewer`, `Raven-conference-timer`, `Raven-avatar-pose-editor`,
-      `Raven-avatar-settings-editor`; Librarian and Visualizer already comply. The `live-gui-testing` skill (in `~/.claude`) cites the inconsistency
-      and wants updating afterwards.
-   4. **A Librarian quickstart**: install an LLM backend such as LM Studio; in LM Studio, enable the
+1. **The small items**, in this order:
+   1. **A Librarian quickstart**: install an LLM backend such as LM Studio; in LM Studio, enable the
       Developer tab in its settings, switch the API on in that tab, and load the model *on the Developer
       tab* so it is served through the API; then start Raven-server; then start Librarian. Also fix the
       README's backend section, which says LM Studio "needs no setup beyond starting its local server".
-   5. **Avatar timing breakdown in the debug overlay**: pose, upscale and postprocessor times, beside the
+   2. **Avatar timing breakdown in the debug overlay**: pose, upscale and postprocessor times, beside the
       render/encode/output ones already there. The server's `render` figure covers all three today. The
       animator very likely has the timings already (the upscaler's is `tim_upscale`); this is sending them
       in `X-Server-Stats` and showing them.
