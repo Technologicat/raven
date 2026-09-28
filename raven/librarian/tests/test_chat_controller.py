@@ -675,9 +675,11 @@ class TestDeletingASubtree:
         controller = self._controller(f, message, generating=True)
         maybe_refusal = controller.delete_subtree(message)
         assert isinstance(maybe_refusal, str) and maybe_refusal
+        assert controller.delete_refusal() == maybe_refusal, "a button asking first would be told something else"
         assert message in f.nodes and controller.app_state["HEAD"] == message and controller.builds == 0
         # The control: the same delete, with no turn, goes through.
         controller = self._controller(f, message)
+        assert controller.delete_refusal() is None
         assert controller.delete_subtree(message) is None
         assert message not in f.nodes and controller.app_state["HEAD"] == greeting1 and controller.builds == 1
 

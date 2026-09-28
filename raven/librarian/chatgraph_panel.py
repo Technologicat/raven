@@ -21,6 +21,7 @@ __all__ = ["DPGChatGraphPanel"]
 import dataclasses
 import logging
 import threading
+import time
 import uuid
 import weakref
 from typing import Callable, List, Optional, Set, Tuple, Union
@@ -36,6 +37,7 @@ from ..common.running_average import RunningAverage
 from ..common.gui import animation as gui_animation
 from ..common.gui import fontsetup
 from ..common.gui import keyboardmark
+from ..common.gui import tooltip as gui_tooltip
 from ..common.gui import utils as guiutils
 from ..common.gui.xdotwidget import graph as xdotgraph
 from ..common.gui.xdotwidget import renderer as xdotrenderer
@@ -46,6 +48,7 @@ from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from . import chatgraph
 from . import chatsearch
 from . import chattree
+from . import chatutil
 from . import config as librarian_config
 
 gui_config = librarian_config.gui_config
@@ -113,6 +116,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
                  height: int,
                  on_preview: Optional[Callable[[str], None]] = None,
                  on_commit: Optional[Callable[[str], None]] = None,
+                 on_delete: Optional[Callable[[str], Optional[str]]] = None,
+                 delete_refusal: Optional[Callable[[], Optional[str]]] = None,
                  input_blocked: Optional[Callable[[], bool]] = None,
                  on_focus_requested: Optional[Callable[[], None]] = None,
                  on_focus_released: Optional[Callable[[], None]] = None,
@@ -136,6 +141,15 @@ class DPGChatGraphPanel(gui_animation.Animation):
                       it instead.
         `on_commit`: Called with a chat node ID when the reader deliberately moves HEAD there. The caller
                      does the moving; the panel sees the result the way it sees any other change.
+        `on_delete`: Called with a chat node ID when the reader has confirmed deleting it and everything
+                     below it. The caller deletes, and moves HEAD if it was in the subtree; the panel sees
+                     the result as above. Returns `None` when done, or a short reason when it refused,
+                     which the delete button then flashes. `None` (the default) leaves the delete button
+                     disabled throughout.
+        `delete_refusal`: Asked on the delete button's first press: a short reason why a delete would be
+                          refused right now, or `None` if it would not. A refusal is flashed then, rather
+                          than after the reader has confirmed. `None` (the default) never refuses early;
+                          `on_delete` may still refuse.
         `input_blocked`: Predicate answering "is something on top of me?", passed to the widget. Its mouse
                          handlers are global, so without this the click that dismisses a dialog also lands
                          on the graph behind it. This panel's own click handler honours it too, for the
@@ -182,6 +196,12 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self.themes_and_fonts = themes_and_fonts
         self._on_preview = on_preview
         self._on_commit = on_commit
+        self._on_delete = on_delete
+        self._delete_refusal = delete_refusal
+        # The first press of a delete, as `(chat node ID, monotonic ns)`. The node is part of it because
+        # this button follows the cursor: a second press confirms only the node the first one armed, so a
+        # cursor moved in between cannot turn one confirmation into the deletion of something else.
+        self._delete_armed: Optional[Tuple[str, int]] = None
         self._on_focus_requested = on_focus_requested
         self._on_focus_released = on_focus_released
         self._input_blocked = input_blocked
@@ -243,6 +263,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._seen_head: Optional[str] = None
 
         self._commit_button_tag = f"chat_graph_commit_button_{self.gui_uuid}"  # tag
+        self._delete_button_tag = f"chat_graph_delete_button_{self.gui_uuid}"  # tag
+        self._delete_tooltip: Optional[gui_tooltip.Tooltip] = None  # built with the toolbar
         self._fold_button_tag = f"chat_graph_fold_button_{self.gui_uuid}"  # tag
         self._dark_mode_button_tag = f"chat_graph_dark_mode_button_{self.gui_uuid}"  # tag
         self._back_button_tag = f"chat_graph_back_button_{self.gui_uuid}"  # tag
@@ -377,7 +399,13 @@ class DPGChatGraphPanel(gui_animation.Animation):
         are.
         """
         def add_button(icon: str, callback: Callable, caption: str, tag: str,
-                       enabled: bool = True, solid: bool = True) -> None:
+                       enabled: bool = True, solid: bool = True,
+                       flashable: bool = False) -> Optional[gui_tooltip.Tooltip]:
+            """Add one toolbar button with its tooltip.
+
+            `flashable`: give it a self-sizing `Tooltip`, which a flash can write a message into, and
+                         return that. Otherwise a plain DPG tooltip, and `None`.
+            """
             dpg.add_button(label=icon, callback=callback, width=gui_config.toolbutton_w,
                            enabled=enabled, tag=tag)
             font = (self.themes_and_fonts.icon_font_solid if solid
@@ -402,8 +430,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
             # cause and was fixed by the frame poll it shared a commit with. Recorded because the
             # suspicion is the obvious one to have again.
             self._toolbar_captions[tag] = caption
+            if flashable:
+                return gui_tooltip.Tooltip(tag, _toolbar_tooltip_text(caption))
             with dpg.tooltip(tag):  # tag
                 dpg.add_text(_toolbar_tooltip_text(caption))
+            return None
 
         with dpg.group(horizontal=True, parent=self._container) as self._toolbar_group:
             add_button(fa.ICON_SQUARE, lambda: self._widget.zoom_to_fit(),
@@ -460,6 +491,14 @@ class DPGChatGraphPanel(gui_animation.Animation):
                        "Switch to the previewed branch [Enter]\n(or click its box a second time)\n\n"
                        "The cursor appears on HEAD when the graph takes\nthe keyboard, and the arrows move it from there.",
                        self._commit_button_tag, enabled=False)
+            # Beside the commit button, the other one here that changes the conversation. Its key is not the
+            # chat log's Ctrl+Shift+Delete, so that a reader cannot carry the habit from one view into the
+            # other and delete what the *other* one is pointing at; Shift+Delete is what deleting without
+            # a wastebasket is in a file manager, which is what this is.
+            self._delete_tooltip = add_button(fa.ICON_TRASH_CAN, self._delete_cursor,
+                                              "Delete this message and ALL below it [Shift+Delete]\n"
+                                              "Twice to confirm. Cannot be undone.",
+                                              self._delete_button_tag, enabled=False, flashable=True)
 
             guiutils.add_toolbar_separator(horizontal=True, toolbar_extent=_TOOLBAR_H,
                                            size=gui_config.toolbar_separator_w, line=False)
@@ -702,7 +741,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             else:
                 return False
             return True
-        # Shift+arrows pan. Panning is the secondary gesture here -- the mouse drags, the wheel zooms, and
+        # Shift+arrows pan, and Shift+Delete deletes. Panning is the secondary gesture here -- the mouse drags, the wheel zooms, and
         # what the *keyboard* wants from a graph it can commit from is to move between boxes, which is
         # what the bare arrows do.
         if shift:
@@ -714,6 +753,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 self._widget.pan_by(dx=+_PAN_AMOUNT, dy=0)
             elif key == dpg.mvKey_Right:
                 self._widget.pan_by(dx=-_PAN_AMOUNT, dy=0)
+            # Through the button's own callable, so the key gets the two-press confirmation and the flash
+            # asking for the second press lands on the button it would otherwise have needed.
+            elif key == dpg.mvKey_Delete:
+                self._delete_cursor()
             else:
                 return False
             return True
@@ -1384,6 +1427,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
         self._widget.destroy()
         with guiutils.nonexistent_ok():
             dpg.delete_item(self._handler_registry)
+        if self._delete_tooltip is not None:  # a window at the root, so deleting the container misses it
+            self._delete_tooltip.destroy()
         with guiutils.nonexistent_ok():
             dpg.delete_item(self._container)
 
@@ -1698,6 +1743,79 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # the gesture just sent them. Last, so an app that acts on this sees a picture already redrawn.
         self._release_focus()
 
+    # ------------------------------------------------------------------
+    # Deleting
+
+    def _cursor_deletable_node_id(self) -> Optional[str]:
+        """Return the chat node the delete button would act on, or `None` if it would act on nothing.
+
+        The message under the cursor, when `chatutil.is_deletable` allows it — which it does not for the
+        system prompt and greeting the app is running with, nor for the last greeting under any card.
+        """
+        node_id = self._cursor_chat_node_id()
+        if node_id is None or self._on_delete is None:
+            return None
+        with self.datastore.lock:
+            if node_id not in self.datastore.nodes:  # the poll has not caught up with a delete yet
+                return None
+            deletable = chatutil.is_deletable(datastore=self.datastore,
+                                              node_id=node_id,
+                                              configured_system_prompt_node_id=self.app_state["system_prompt_node_id"],
+                                              configured_greeting_node_id=self.app_state["new_chat_HEAD"],
+                                              greeting_node_ids=chatutil.get_all_greeting_node_ids(self.datastore))
+        return node_id if deletable else None
+
+    def _delete_cursor(self) -> None:
+        """Toolbar button and Shift+Delete: delete the message under the cursor with everything below it.
+
+        The first press arms and flashes red asking for a second; a second press on the same message within
+        `gui_config.delete_confirm_duration` deletes it, through `on_delete`.
+        """
+        node_id = self._cursor_deletable_node_id()
+        if node_id is None:
+            return
+
+        def flash_refusal(message: str) -> None:
+            self._delete_armed = None  # nothing is armed after a refusal
+            gui_animation.flash_button(button=self._delete_button_tag, tooltip=self._delete_tooltip,
+                                       ok=False, message=message,
+                                       duration=gui_config.acknowledgment_duration)
+
+        # Before arming, so a refusal comes on the first press rather than after the reader confirmed.
+        maybe_refusal = self._delete_refusal() if self._delete_refusal is not None else None
+        if maybe_refusal is not None:
+            flash_refusal(maybe_refusal)
+            return
+
+        now = time.monotonic_ns()
+        maybe_armed = self._delete_armed
+        confirmed = False
+        if maybe_armed is not None:
+            armed_node_id, armed_at = maybe_armed
+            confirmed = (armed_node_id == node_id and
+                         now - armed_at < gui_config.delete_confirm_duration * 10**9)
+
+        if not confirmed:
+            self._delete_armed = (node_id, now)
+            gui_animation.animator.add(gui_animation.WidgetFlash(target=self._delete_button_tag,
+                                                                 duration=gui_config.delete_confirm_duration,
+                                                                 also_flash=(self._delete_tooltip.window,
+                                                                             self._delete_tooltip.caption),
+                                                                 message="Press again to confirm.\nDeletion CANNOT BE UNDONE.",
+                                                                 message_target=self._delete_tooltip,
+                                                                 flash_color=(255, 32, 32),  # red: this one destroys data
+                                                                 text_color=(255, 255, 255)))
+            return
+
+        self._delete_armed = None
+        maybe_refusal = self._on_delete(node_id)  # asks again: a reply may have started since the first press
+        if maybe_refusal is not None:
+            flash_refusal(maybe_refusal)
+            return
+        # The forest changed under the picture; redraw now rather than at the next poll, so the buttons
+        # stop offering to act on a box that is gone. The cursor relands where its box used to be.
+        self.refresh()
+
     def _update_cursor_buttons(self) -> None:
         """Enable each button that acts on the cursor exactly when the cursor gives it something to do,
         and say where in its run of siblings the cursor is standing.
@@ -1716,6 +1834,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         prev_enabled = maybe_position is not None and first > 0
         next_enabled = maybe_position is not None and first < maybe_position[2] - 1
         for tag, enabled in ([(self._commit_button_tag, self._cursor_chat_node_id() is not None),
+                              (self._delete_button_tag, self._cursor_deletable_node_id() is not None),
                               (self._fold_button_tag, self._round_at_cursor() is not None)]
                              + [(tag, prev_enabled) for tag in self._prev_sibling_button_tags]
                              + [(tag, next_enabled) for tag in self._next_sibling_button_tags]):

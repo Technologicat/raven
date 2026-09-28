@@ -24,6 +24,7 @@ from raven.common.gui.xdotwidget import graph as xdotgraph  # noqa: E402 -- afte
 from raven.librarian import chatgraph  # noqa: E402 -- after importorskip by design
 from raven.librarian import chatgraph_panel  # noqa: E402 -- after importorskip by design
 from raven.librarian import chatsearch  # noqa: E402 -- after importorskip by design
+from raven.librarian import chatutil  # noqa: E402 -- after importorskip by design
 from raven.librarian.chattree import Forest  # noqa: E402 -- after importorskip by design
 
 
@@ -418,6 +419,166 @@ class TestCommit:
         highlight.update()
         assert not highlight.is_animating()
         assert built._widget.get_highlighted_nodes() == set(), "the fade left a permanent mark behind"
+
+
+# ---------------------------------------------------------------------------
+# Deleting a subtree
+# ---------------------------------------------------------------------------
+
+class TestDelete:
+    """The toolbar's trash can and Shift+Delete: two presses on the same message, and never on the running chat's roots."""
+
+    @pytest.fixture
+    def deleting(self, dpg_context):
+        """A panel that can delete, over a card, its greeting, and a fork below them.
+
+            system -> greeting -> user -> taken -> taken_tip        <- HEAD is here
+                                       -> not_taken -> not_taken_tip
+
+        The system prompt and the greeting are the ones the app is running with. `on_delete` does the
+        controller's half, as `Calls.commit` does the app's: a delete that only recorded itself would leave
+        the forest untouched, and every test of what follows would test nothing.
+        """
+        themes_and_fonts = dpg_context
+        forest = Forest()
+        ids = {}
+        ids["system"] = forest.create_node(payload("system", "you are helpful"), parent_id=None)
+        ids["greeting"] = forest.create_node(payload("assistant", "hello!"), parent_id=ids["system"])
+        ids["user"] = forest.create_node(payload("user", "which way"), parent_id=ids["greeting"])
+        ids["taken"] = forest.create_node(payload("assistant", "this way"), parent_id=ids["user"])
+        ids["taken_tip"] = forest.create_node(payload("user", "onwards"), parent_id=ids["taken"])
+        ids["not_taken"] = forest.create_node(payload("assistant", "or that way"), parent_id=ids["user"])
+        ids["not_taken_tip"] = forest.create_node(payload("user", "elsewhere"), parent_id=ids["not_taken"])
+
+        app_state = {"HEAD": ids["taken_tip"],
+                     "system_prompt_node_id": ids["system"],
+                     "new_chat_HEAD": ids["greeting"]}
+        deleted = []
+        refusal = [None]  # what the caller answers with; a test sets it to have the delete refused
+
+        def delete_refusal():
+            return refusal[0]
+
+        def on_delete(node_id):
+            deleted.append(node_id)
+            if refusal[0] is not None:
+                return refusal[0]
+            app_state["HEAD"], _ = chatutil.delete_subtree(forest, node_id, app_state["HEAD"])
+            return None
+
+        with dpg.window() as holder:
+            built = chatgraph_panel.DPGChatGraphPanel(
+                gui_parent=holder, datastore=forest, app_state=app_state,
+                themes_and_fonts=themes_and_fonts, width=400, height=300, show=True,
+                on_delete=on_delete, delete_refusal=delete_refusal)
+        built.refresh()
+
+        yield built, forest, app_state, ids, deleted, refusal
+
+        built.destroy()
+        dpg.delete_item(holder)
+        # The presses started flashes, and the flash tooltip its updater; nothing here renders the frames
+        # that would end them. With their widgets gone, each ends on the first frame it is given.
+        for _ in range(3):
+            gui_animation.animator.render_frame()
+
+    def test_enabled_exactly_on_a_message_it_may_delete(self, deleting):
+        built, forest, app_state, ids, deleted, refusal = deleting
+        tag = built._delete_button_tag
+        assert not dpg.is_item_enabled(tag), "enabled with no cursor, so there is nothing it could delete"  # tag
+        built._set_cursor(ids["not_taken"])
+        assert dpg.is_item_enabled(tag), "disabled on an ordinary message"  # tag
+        for running in ("system", "greeting"):
+            built._set_cursor(ids[running])
+            assert not dpg.is_item_enabled(tag), f"offered to delete the running chat's {running}"  # tag
+
+    def test_disabled_throughout_without_a_caller_to_do_it(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built._set_cursor(ids["not_taken"])
+        assert not dpg.is_item_enabled(built._delete_button_tag)
+
+    def test_the_first_press_deletes_nothing_and_the_second_deletes(self, deleting):
+        built, forest, app_state, ids, deleted, refusal = deleting
+        built._set_cursor(ids["not_taken"])
+        press(built._delete_button_tag)
+        assert deleted == [] and ids["not_taken"] in forest.nodes, "one press deleted, with no confirmation"
+        press(built._delete_button_tag)
+        assert deleted == [ids["not_taken"]]
+        assert ids["not_taken"] not in forest.nodes and ids["not_taken_tip"] not in forest.nodes
+        assert app_state["HEAD"] == ids["taken_tip"], "HEAD moved, though the deleted branch was not the one it was on"
+        assert built._chat_graph.graph.get_node_by_name(ids["not_taken"]) is None, "the deleted box is still drawn"
+
+    def test_deleting_the_branch_head_is_on_moves_head_off_it(self, deleting):
+        built, forest, app_state, ids, deleted, refusal = deleting
+        built._set_cursor(ids["taken"])
+        press(built._delete_button_tag)
+        press(built._delete_button_tag)
+        assert ids["taken_tip"] not in forest.nodes
+        assert app_state["HEAD"] == ids["not_taken"]
+
+    def test_a_second_press_on_another_message_only_arms_that_one(self, deleting):
+        # The button follows the cursor, so one confirmation must not carry across to a different message.
+        built, forest, app_state, ids, deleted, refusal = deleting
+        built._set_cursor(ids["not_taken"])
+        press(built._delete_button_tag)
+        built._set_cursor(ids["not_taken_tip"])
+        press(built._delete_button_tag)
+        assert deleted == [], "a press armed on one message confirmed the deletion of another"
+        press(built._delete_button_tag)
+        assert deleted == [ids["not_taken_tip"]]
+
+    def test_a_second_press_too_late_only_arms_again(self, deleting):
+        built, forest, app_state, ids, deleted, refusal = deleting
+        built._set_cursor(ids["not_taken"])
+        press(built._delete_button_tag)
+        # Wind the first press back past the window rather than sleeping through it.
+        node_id, armed_at = built._delete_armed
+        built._delete_armed = (node_id, armed_at - int(2e9 * chatgraph_panel.gui_config.delete_confirm_duration))
+        press(built._delete_button_tag)
+        assert deleted == [], "a press long after the first still confirmed it"
+
+    def test_a_refusal_comes_on_the_first_press_and_arms_nothing(self, deleting):
+        # The reader is not asked to confirm a delete that would not happen.
+        built, forest, app_state, ids, deleted, refusal = deleting
+        refusal[0] = "Not now."
+        built._set_cursor(ids["not_taken"])
+        press(built._delete_button_tag)
+        assert built._delete_armed is None, "a refused press armed the delete anyway"
+        # The refusal lifts; the next press is then a first press, and deletes nothing yet.
+        refusal[0] = None
+        press(built._delete_button_tag)
+        assert deleted == [] and ids["not_taken"] in forest.nodes, "a refused press counted as the first of two"
+        press(built._delete_button_tag)
+        assert deleted == [ids["not_taken"]]
+
+    def test_a_refusal_at_the_second_press_leaves_everything_in_place(self, deleting):
+        # A reply can start between the two presses, so the caller is asked again when it comes to it.
+        built, forest, app_state, ids, deleted, refusal = deleting
+        built._set_cursor(ids["not_taken"])
+        press(built._delete_button_tag)
+        refusal[0] = "Not now."
+        built._delete_refusal = None  # only the caller's own check is left to catch it
+        press(built._delete_button_tag)
+        assert deleted == [ids["not_taken"]], "the caller was never asked, so this refused nothing"
+        assert ids["not_taken"] in forest.nodes
+        assert built._cursor_name == ids["not_taken"]
+        assert built._delete_armed is None
+
+    def test_shift_delete_is_the_same_two_presses(self, deleting):
+        built, forest, app_state, ids, deleted, refusal = deleting
+        built._set_cursor(ids["not_taken"])
+        assert built.handle_key(dpg.mvKey_Delete, shift=True)
+        assert deleted == []
+        assert built.handle_key(dpg.mvKey_Delete, shift=True)
+        assert deleted == [ids["not_taken"]]
+
+    def test_the_chat_logs_delete_key_is_not_claimed_here(self, deleting):
+        # A different key from the chat log's, so the habit cannot carry from one view to the other.
+        built, forest, app_state, ids, deleted, refusal = deleting
+        built._set_cursor(ids["not_taken"])
+        assert not built.handle_key(dpg.mvKey_Delete, ctrl=True, shift=True)
+        assert not built.handle_key(dpg.mvKey_Delete)
+        assert deleted == []
 
 
 # ---------------------------------------------------------------------------

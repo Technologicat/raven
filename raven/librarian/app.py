@@ -1824,6 +1824,8 @@ with timer() as tim:
                     height=avatar_panel_h,
                     on_preview=lambda node_id: chat_controller.view.jump_to_node(node_id),
                     on_commit=lambda node_id: switch_to_chat_node(node_id),
+                    on_delete=lambda node_id: chat_controller.delete_subtree(node_id),
+                    delete_refusal=lambda: chat_controller.delete_refusal(),
                     input_blocked=lambda: is_any_modal_window_visible(),
                     # Through a lambda, as `input_blocked` above is and for the same reason: both are
                     # defined further down this module than the panel is built.
@@ -2405,6 +2407,7 @@ chat_graph_hotkey_info = (env(key_indent=0, key="Ctrl+Shift+G", action_indent=0,
                           env(key_indent=0, key="Enter", action_indent=0, action="Look at it", notes="Again to switch. Opens a gap box"),
                           env(key_indent=0, key="Esc", action_indent=0, action="Put the cursor away, then leave", notes="Leaves at once if none is shown"),
                           env(key_indent=0, key="Backspace", action_indent=0, action="Fold an opened tool round back up", notes="From anywhere inside the round"),
+                          env(key_indent=0, key="Shift+Delete", action_indent=0, action="Delete it and all below it", notes="Twice to confirm. No undo"),
                           helpcard.hotkey_blank_entry,
                           env(key_indent=0, key="Ctrl+Right / Ctrl+Left", action_indent=0, action="Next / previous sibling", notes="Drawn or not; the window follows"),
                           env(key_indent=1, key="Ctrl+Shift+Right / Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),

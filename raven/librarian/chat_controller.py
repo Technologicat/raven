@@ -529,7 +529,6 @@ class DPGChatMessage:
 
         # for "delete subtree" confirmation (cannot be undone)
         self.last_delete_click_time = None
-        self.confirm_duration = 2.0
 
     def _get_text(self) -> str:
         with self.paragraphs_lock:
@@ -1897,24 +1896,34 @@ class DPGChatMessage:
                                                configured_greeting_node_id=app_state["new_chat_HEAD"],
                                                greeting_node_ids=greeting_node_ids)
         def delete_subtree_callback():
+            def flash_refusal(message: str) -> None:
+                self.last_delete_click_time = None  # nothing is armed after a refusal
+                gui_animation.flash_button(button=delete_subtree_button, tooltip=delete_subtree_tooltip,
+                                           ok=False, message=message,
+                                           duration=gui_config.acknowledgment_duration)
+
+            # Before arming, so a refusal comes on the first press rather than after the reader confirmed.
+            maybe_refusal = self.parent_view.chat_controller.delete_refusal()
+            if maybe_refusal is not None:
+                flash_refusal(maybe_refusal)
+                return
+
             current_time = time.monotonic_ns()
             if self.last_delete_click_time is not None:
-                double_okd = (current_time - self.last_delete_click_time < self.confirm_duration * 10**9)
+                double_okd = (current_time - self.last_delete_click_time < gui_config.delete_confirm_duration * 10**9)
             else:
                 double_okd = False
             self.last_delete_click_time = current_time
 
             if double_okd:
                 # On success the view is rebuilt and this button goes with it, so only a refusal has a
-                # button left to flash.
+                # button left to flash. Asked again inside, since a reply may have started since the first press.
                 maybe_refusal = self.parent_view.chat_controller.delete_subtree(node_id)
                 if maybe_refusal is not None:
-                    gui_animation.flash_button(button=delete_subtree_button, tooltip=delete_subtree_tooltip,
-                                               ok=False, message=maybe_refusal,
-                                               duration=gui_config.acknowledgment_duration)
+                    flash_refusal(maybe_refusal)
             else:
                 gui_animation.animator.add(gui_animation.WidgetFlash(target=delete_subtree_button,
-                                                                     duration=self.confirm_duration,
+                                                                     duration=gui_config.delete_confirm_duration,
                                                                      also_flash=(delete_subtree_tooltip.window, delete_subtree_tooltip.caption),
                                                                      message="Press again to confirm.\nDeletion CANNOT BE UNDONE.",
                                                                      message_target=delete_subtree_tooltip,
@@ -4633,24 +4642,36 @@ class DPGChatController:
         """
         return self.chat_exchange_task_manager.has_tasks() or self.ai_turn_task_manager.has_tasks()
 
+    def delete_refusal(self) -> str | None:
+        """Return why a delete would be refused right now, as a short reason for a button, or `None` if it would not.
+
+        Asked by a delete button on its *first* press, so the refusal comes before the reader is asked to
+        confirm something that would not happen. `delete_subtree` asks again, the answer being able to
+        change between the two presses.
+        """
+        # Refused while a turn is in flight, and for data integrity rather than compute: the turn is writing
+        # into the tree, and a subtree holding the node it writes into would be deleted from under it. A turn
+        # records that node only as it starts each round, so answering exactly for one particular delete
+        # would have to reason about the windows where it has not yet — a queued turn, a user message not
+        # yet written. A reply is a moment away, so refusing outright is the cheap and safe answer.
+        if self.is_generating():
+            return "Not while a reply is being written."
+        return None
+
     def delete_subtree(self, node_id: str) -> str | None:
         """Delete the message at `node_id` with everything below it, moving HEAD off it if it was there.
 
         The one route to a delete, for every view that offers one. Ask `chatutil.is_deletable` first; this
-        checks only what can change between building a button and pressing it.
+        checks only what can change between building a button and pressing it, which is `delete_refusal`.
 
         Rebuilds the chat log when the deletion touched the branch it shows, and leaves it alone otherwise.
 
         Returns `None` when done, or, when refused, a short reason for the caller to show on its button.
         """
-        # Refused while a turn is in flight, and for data integrity rather than compute: the turn is writing
-        # into the tree, and a subtree holding the node it writes into would be deleted from under it. A turn
-        # records that node only as it starts each round, so answering exactly for this one delete would
-        # have to reason about the windows where it has not yet — a queued turn, a user message not yet
-        # written. A reply is a moment away, so refusing outright is the cheap and safe answer.
-        if self.is_generating():
-            logger.info(f"DPGChatController.delete_subtree: a turn is in flight; refusing to delete '{node_id}'.")
-            return "Not while a reply is being written."
+        maybe_refusal = self.delete_refusal()
+        if maybe_refusal is not None:
+            logger.info(f"DPGChatController.delete_subtree: refusing to delete '{node_id}': {maybe_refusal}")
+            return maybe_refusal
         new_head_node_id, branch_changed = chatutil.delete_subtree(self.datastore, node_id, self.app_state["HEAD"])
         self.app_state["HEAD"] = new_head_node_id
         if branch_changed:

@@ -210,6 +210,8 @@ The box at the very top, **…N more cards**, is the one exception to "under the
 
 When the AI calls tools, each result it gets back is a message of its own, and a turn that made several of them would otherwise fill the picture with plumbing. So a round of three or more results is drawn as one **…N more** box hanging between the message that asked and the answer that followed; clicking it draws the results, and each is then an ordinary message you can look at and switch to. Smaller rounds are simply drawn, there being nothing to gain by hiding one message behind one box. To put an opened round away again, press **Backspace** or use the toolbar's fold button — either one, from anywhere inside the round.
 
+The toolbar's trash can **destroys** the message under the cursor together with everything below it, in every branch, which is how a whole side conversation goes in one act — including one far from the chat you are in, which stays where it is. Like the chat log's delete it takes two presses, here on the same message, and there is no undo; **Shift+Delete** does the same from the keyboard. It is disabled on the system prompt and greeting the app is running with, and on the last greeting under any card, and refused while a reply is being written. If the chat you are in was inside what you deleted, you land on a neighbouring message, as with the chat log's delete.
+
 **Tab** moves the keyboard between the message composer, the chat log and the graph, and **clicking anywhere in the graph** sends it there too. The pane holding it wears a blue mark, and only one ever does; with no mark showing anywhere, the keys are the chat log's, where they scroll.
 
 Once the graph has the keyboard it can be driven from there alone, pointer or no pointer. The keys below, and the ones named in the toolbar's tooltips, work while it holds them. The tooltips name their keys whether it holds them or not, so a graph key that seems dead usually means the blue mark is somewhere else. The **arrow keys** move a cursor, drawn as a dotted ring around the box it is on: down and up follow the conversation, left and right step along the siblings at that level. **Enter** does to the box under the cursor exactly what clicking it does: a message switches the chat to it, a **…N more** opens it. The cursor appears on HEAD the moment the graph takes the keyboard, so the arrows move it straight away and there is nothing to summon first. **Esc** puts the cursor away, and **Backspace** closes an opened tool round.
@@ -792,7 +794,8 @@ Hover the dot and it says so.
 - Delete (Ctrl+Shift+Delete)
   - Permanently destroy the subtree starting at this message (this message and all messages below it, in any branch).
   - Requires two clicks — or two presses of the hotkey — to prevent accidental deletion.
-  - The hotkey is deliberately awkward: this is the only hotkey that destroys data.
+  - Refused while a reply is being written.
+  - The hotkey is deliberately awkward, being one of the two that destroy data. The other is the chat graph's **Shift+Delete**, deliberately a different key, so that a habit from one view cannot delete what the other is pointing at.
 - Navigate chat tree
   - Switch to first sibling (Ctrl+Home)
     - Switch to the oldest sibling node at this position (numbered "1")
@@ -1045,6 +1048,7 @@ passes on anything it does not claim, so `F1` and the rest still work from insid
 | `Enter` | Do what clicking the box under the cursor does: preview it, or commit on the second press — which also hands the keyboard back to the chat log |
 | `Esc` | Put the cursor away; press again, or once with no cursor showing, to leave for the chat log |
 | `Backspace` | Fold an opened tool round back up |
+| `Shift+Delete` | Delete the message under the cursor and everything below it. Twice to confirm; there is no undo |
 | `Shift+Up` / `Shift+Down` / `Shift+Left` / `Shift+Right` | Pan |
 | `Ctrl+Left` / `Ctrl+Right` | Previous / next sibling at this level |
 | `Ctrl+Shift+Left` / `Ctrl+Shift+Right` | Ten siblings left / right |
