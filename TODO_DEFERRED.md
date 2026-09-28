@@ -351,7 +351,8 @@ DPG's multiline `InputText` is ImGui's, and it carries limitations Raven works a
 Two are known and neither is a bug we could report:
 
 - **No dynamic wrap.** Text does not reflow to the width of the box, which is the one thing a chat composer
-  most wants.
+  most wants. Librarian's message editor (2026-09-28) is a second user with the same limit, and a worse
+  case of it: an AI reply's paragraph is one long line, where a composed message is usually short.
 - **Escape's meaning is not ours to choose.** ImGui's Escape does not *commit* a multiline field the way it
   commits a single-line one, so making the key mean anything at all takes `escape_clears_all` — which
   splits the gesture: a press on a field with text clears it and leaves it active, and only a press on an

@@ -840,8 +840,6 @@ every tier, chosen on measurements rather than reputation.
 
 - **[Medium]** Ctrl+F find in current chat: incremental fragment search; reuse existing generic infrastructure from Visualizer/XDot viewer.
 
-- **[Medium]** Message editing: use chattree's revision system.
-
 - **[Medium]** Bilingual chat display / on-demand translation of user input. Raven is English-only because Qwen (and Gemma, and Gemini) understand Finnish but can't *produce* acceptable Finnish. Translating Finnish *input* into English is feasible — `opus-mt-tc-big-fi-en` is already in `server/config.py`'s `translation_models`, commented out to save VRAM on smaller setups — but it needs UX work, not just the model:
   - A silently-applied wrong translation is worse than no translation, so auto-translated text must be prominently marked as such.
   - The original wording must be preserved in the datastore, never replaced by its translation.
