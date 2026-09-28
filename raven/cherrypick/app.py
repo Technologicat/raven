@@ -1755,12 +1755,12 @@ def main() -> int:
         helpcard.hotkey_new_column,
 
         # --- Column 3: Zoom, Compare, App (17 rows) ---
-        env(key_indent=0, key="+  / Numpad +", action_indent=0, action="Zoom in", notes=""),
-        env(key_indent=0, key="-  / Numpad -", action_indent=0, action="Zoom out", notes=""),
+        env(key_indent=0, key="+ / Numpad +", action_indent=0, action="Zoom in", notes=""),
+        env(key_indent=0, key="- / Numpad -", action_indent=0, action="Zoom out", notes=""),
         env(key_indent=0, key="Mouse wheel", action_indent=0, action="Zoom at the cursor", notes=""),
         env(key_indent=0, key="F", action_indent=0, action="Zoom to fit", notes=""),
         env(key_indent=0, key="Shift+F", action_indent=0, action="Toggle the fit cap", notes="No upscale"),
-        env(key_indent=0, key="1  / Numpad 1", action_indent=0, action="Zoom to 1:1", notes="Also while comparing"),
+        env(key_indent=0, key="1 / Numpad 1", action_indent=0, action="Zoom to 1:1", notes="Also while comparing"),
         env(key_indent=0, key="Mouse drag", action_indent=0, action="Pan the image", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="Tab", action_indent=0, action="Focus the image pane", notes=""),
@@ -1778,10 +1778,10 @@ def main() -> int:
         env(key_indent=0, key="Esc", action_indent=0, action="Exit, restoring the image", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="Space", action_indent=0, action="Pause / resume", notes=""),
-        env(key_indent=0, key=",  / .", action_indent=0, action="Slower / faster", notes=""),
+        env(key_indent=0, key=", / .", action_indent=0, action="Slower / faster", notes=""),
         env(key_indent=0, key="M", action_indent=0, action="Back to the default speed", notes=""),
         helpcard.hotkey_blank_entry,
-        env(key_indent=0, key="1  / Numpad 1", action_indent=0, action="Zoom to 1:1", notes="As on the Keyboard page"),
+        env(key_indent=0, key="1 / Numpad 1", action_indent=0, action="Zoom to 1:1", notes="As on the Keyboard page"),
     )
 
     def _render_compare_help(self: helpcard.HelpWindow, gui_parent) -> None:
