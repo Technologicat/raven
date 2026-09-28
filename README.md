@@ -674,6 +674,8 @@ Raven's device settings ship as `"gpu"`, which is an instruction to detect rathe
 get_device_and_dtype: 'gpu' autodetect resolved to MPS (device_string='mps').
 ```
 
+Raven is developed and tested on NVIDIA GPUs. The other backends are meant to work with no configuration, but we cannot test them all here, and **XPU in particular has not been tried at all**. If something is broken on yours, please [open an issue](https://github.com/Technologicat/raven/issues).
+
 With one GPU in the machine that is the whole story, and nothing below is needed. To pin a backend rather than detect it, write its device string — `"cuda:0"`, `"mps"`, `"xpu"`, `"vulkan"` — into the config modules named just below. Raven refuses to guess when two different vendors are active at once (an NVIDIA card alongside an Intel Arc, say): it stops and names the candidates, and you pick one the same way.
 
 If your machine has multiple GPUs, there are two ways to tell Raven which GPU to use.
