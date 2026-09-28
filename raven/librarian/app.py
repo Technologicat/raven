@@ -226,8 +226,8 @@ with timer() as tim:
 
     # animation for the gray indicator icons — DOCUMENTS, READING, SYSTEM, INTERNET (cyclic, runs in the background)
     #
-    # The controller resets its phase when a turn starts, so an indicator that shows only briefly does so at a
-    # phase where it is clearly visible. That puts it out of step with INDEXING's red, which keeps its own
+    # The controller resets its phase whenever one of those indicators appears, so an indicator that shows only
+    # briefly does so at a phase where it is clearly visible. That puts it out of step with INDEXING's red, which keeps its own
     # phase; visibility was preferred over breathing in step (Juha, 2026-09-28).
     with dpg.theme(tag="my_pulsating_gray_text_theme"):
         with dpg.theme_component(dpg.mvAll):
