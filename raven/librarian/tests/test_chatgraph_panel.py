@@ -358,6 +358,26 @@ class TestCommit:
         assert calls.committed == []
         assert calls.previewed == [ids["taken"], ids["system"]]
 
+    def test_the_click_that_brings_the_keyboard_to_head_does_not_commit(self, panel):
+        # Taking the keyboard puts the cursor on HEAD, and clicking the graph is one way to give it the
+        # keyboard -- so the click lands on a box the cursor is already on. It is still a first click.
+        built, forest, app_state, ids, calls = panel
+        head = app_state["HEAD"]
+        built.has_keyboard = True  # what the app does with the click's focus request, before the click lands
+        assert built._cursor_name == head, "the cursor did not appear on HEAD, so this cannot tell anything"
+        click(built, head)
+        assert calls.committed == [] and calls.focus_releases == 0, "the click that brought the keys committed and gave them back"
+        click(built, head)
+        assert calls.committed == [head], "a second, deliberate click on HEAD did not commit"
+
+    def test_an_arrow_planting_the_cursor_is_not_a_preview_either(self, panel):
+        built, forest, app_state, ids, calls = panel
+        built._set_cursor(None)
+        built._move_cursor("down")  # plants it on HEAD without moving it
+        assert built._cursor_name == app_state["HEAD"]
+        click(built, app_state["HEAD"])
+        assert calls.committed == []
+
     def test_the_toolbar_button_commits_the_previewed_node(self, panel):
         built, forest, app_state, ids, calls = panel
         click(built, ids["not_taken"])

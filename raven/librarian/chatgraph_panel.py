@@ -240,6 +240,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # box as well as on a message — see `chatgraph.ViewState.cursor_name`. Mirrored into the view
         # state, which is what draws the ring; kept here too so the panel can answer without a rebuild.
         self._cursor_name: Optional[str] = None
+        # Whether the panel put the cursor where it is, rather than the reader; see `_set_cursor`.
+        self._cursor_placed_by_panel = False
         # The running search. `_search_matches` is every matching node in forest preorder, which is the
         # order stepping between them follows; the counts the boxes draw live in the view state. A counter
         # rather than a flag, so a rebuild can record which search it drew and a search arriving while one
@@ -682,7 +684,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 # press moves it, rather than being spent conjuring it. `_move_cursor` still conjures for
                 # the one route that gets here without passing through this: `Esc` putting it away without
                 # leaving the pane.
-                self._set_cursor(self._cursor_home(chat_graph))  # which redraws
+                self._set_cursor(self._cursor_home(chat_graph), placed_by_panel=True)  # which redraws
             elif ring_on_screen:
                 # Only the ring's style changed, so the view stays where the reader left it. Following the
                 # anchor here would glide the cursor's box to the middle -- a move nobody asked for, on
@@ -1572,8 +1574,11 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
     def _click_chat_node(self, ref: chatgraph.ChatNodeRef) -> None:
         """Preview a chat node — or commit to it, if the cursor was already on it."""
+        # A cursor the panel put here itself is not a preview. It appears on HEAD when the graph takes the
+        # keyboard -- and a click on the graph is one way to give it that, so the click that brings the
+        # keys would otherwise find the cursor already on HEAD, commit, and hand the keys straight back.
         with self._lock:
-            already_previewed = (ref.node_id == self._cursor_name)
+            already_previewed = (ref.node_id == self._cursor_name and not self._cursor_placed_by_panel)
             chat_graph = self._chat_graph
         if already_previewed:
             self._commit(ref.node_id)
@@ -1883,11 +1888,14 @@ class DPGChatGraphPanel(gui_animation.Animation):
             return None
         return first, (first if last is None else last), len(siblings)
 
-    def _set_cursor(self, name: Optional[str]) -> None:
+    def _set_cursor(self, name: Optional[str], placed_by_panel: bool = False) -> None:
         """Move the cursor to a box, or clear it, and redraw so the ring moves with it.
 
         `name`: A graph node name, as `chatgraph.ViewState.cursor_name` takes — so a gap box is as
                 addressable as a message.
+        `placed_by_panel`: Whether the panel put it there on its own, rather than the reader putting it
+                           there by acting on that box. A click on a box the panel placed the cursor on
+                           previews it, where a click on a box the reader placed it on commits.
 
         The mark lives in the picture rather than in the widget's highlight state. That state is shared
         with hover and has one pair of colours, so a cursor drawn through it is indistinguishable from a
@@ -1901,7 +1909,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # something else as well — a level's window, the focused branch — and one that happened to leave
         # the cursor where it was would silently lose its own change. A rebuild costs about a millisecond
         # and none of these paths is hot.
-        self._set_cursor_fields(name)
+        self._set_cursor_fields(name, placed_by_panel=placed_by_panel)
         # The rebuild answers the buttons on its way out, so setting the fields first is what makes them
         # describe where the cursor has just been put rather than where it was.
         self.refresh()
@@ -1922,7 +1930,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
         if chat_graph is None:
             return
         if at is None:
-            self._set_cursor(self._cursor_home(chat_graph))
+            self._set_cursor(self._cursor_home(chat_graph), placed_by_panel=True)
             return
         stepped = chatgraph.neighbor_of(chat_graph.graph, at, direction)
         if stepped is None:  # the edge of the picture; staying put is the answer
@@ -2040,10 +2048,14 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 return node_id
         return None
 
-    def _set_cursor_fields(self, name: Optional[str]) -> None:
-        """Put the cursor at `name` without redrawing. For callers that are inside a rebuild already."""
+    def _set_cursor_fields(self, name: Optional[str], placed_by_panel: bool = False) -> None:
+        """Put the cursor at `name` without redrawing. For callers that are inside a rebuild already.
+
+        `placed_by_panel`: As `_set_cursor` takes it.
+        """
         with self._lock:
             self._cursor_name = name
+            self._cursor_placed_by_panel = placed_by_panel
             self._view_state.cursor_name = name
 
     def _reland_cursor(self, chat_graph: chatgraph.ChatGraph) -> None:
@@ -2077,7 +2089,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             landed = self._what_was_above(name, chat_graph)
         if landed is None and self._view_state.head_node_id in chat_graph.refs:
             landed = self._view_state.head_node_id
-        self._set_cursor_fields(landed)
+        self._set_cursor_fields(landed, placed_by_panel=True)  # a box the reader did not act on
 
     def _what_was_above(self, name: str, chat_graph: chatgraph.ChatGraph) -> Optional[str]:
         """Return the box that stood above `name` in the *previous* picture, if it is still in this one.
