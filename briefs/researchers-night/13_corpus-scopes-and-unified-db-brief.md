@@ -264,6 +264,22 @@ when it runs. Everything in this section is [P] and wants arguing with.
 
 ---
 
+## Where the database lives
+
+**[N] Once the databases are unified, the natural home for the DB lock is Raven-server** (Juha, 2026-09-28).
+Every app would then reach the DB through the server, and several apps could use it at once without
+clobbering it. Today `raven.common.datastorelock` is advisory between apps, and all it can do is make the
+second one refuse to start.
+
+**This is a plumbing change, not only a new home for a lock** (Juha's point). If only the server touches the
+DB, `HybridIR` has to be reached through it, the way `MaybeRemoteService` reaches the ML models — a remote
+path for the index where there is currently only the in-process one.
+
+**The open question is server-optional mode.** The Visualizer runs without Raven-server by design, and
+autostart (`briefs/server-autostart-brief.md`) is meant to make the server easy to have, not mandatory. How
+an app in local mode shares the DB with a server-mode app, without breaking in whatever mix of the two a user
+ends up running, needs designing rather than assuming.
+
 ## What the design session has to settle
 
 Collected so the session has an agenda rather than a pile:
@@ -277,6 +293,8 @@ Collected so the session has an agenda rather than a pile:
    the index. Three stores currently believe different things about who is authoritative.
 4. **Whether the TOC (§4) is one mechanism or two** — the always-on names-and-counts, and `describe_scope`.
 5. **Migration.** Existing hybridir datastores and existing Visualizer datasets both predate all of this.
+6. **Whether the DB moves behind the server**, and what local mode does then. See *Where the database
+   lives*.
 
 ## The release this lands in has a name waiting for it
 

@@ -114,6 +114,9 @@ silence is what let the once-only behaviour read as an oversight rather than as 
 **Today it does not**: `api.test_connection()` at startup exits with 255 if the server does not answer. The
 goal is to start anyway, with the status row up, and connect when the server appears.
 
+**Server autostart depends on this** (`briefs/server-autostart-brief.md`): an app that starts the server
+itself will always be up long before the server has loaded its models, so this case stops being rare.
+
 **The connect path already exists as a startup step**, and the work is largely making it re-runnable:
 `_load_initial_animator_settings` (frame callback 2) loads the animator settings, calls `api.avatar_start`,
 starts the renderer, loads the backdrop, and warms up the TTS. That has to become something the server
