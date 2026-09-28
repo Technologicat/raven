@@ -668,7 +668,7 @@ This sets up the library paths and `$PATH` so that Raven finds the CUDA librarie
 
 ### Choose which GPU to use (optional)
 
-Raven's device settings ship as `"gpu"`, which is an instruction to detect rather than the name of a device. It probes the backends Raven knows — CUDA (which is also how an AMD card under ROCm presents itself to PyTorch), MPS (Apple Silicon), XPU (Intel Arc), Vulkan — takes the one it finds, and says which at startup:
+Raven's device settings ship as `"gpu"`, which is an instruction to detect rather than the name of a device. It probes the backends Raven knows — CUDA (which is also how an AMD card under ROCm presents itself to PyTorch), MPS (Apple Silicon), XPU (Intel Arc), Vulkan (only with a PyTorch built for it; the standard packages do not include it) — takes the one it finds, and says which at startup:
 
 ```
 get_device_and_dtype: 'gpu' autodetect resolved to MPS (device_string='mps').
