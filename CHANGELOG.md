@@ -22,6 +22,8 @@
 
 - **Setting `llm_char_name` in `overrides.json` now brings the character's face and voice along.**
   - Before, only the name and the card changed, and the avatar stayed Aria's, speaking in her voice.
+- **The first Ctrl+Shift+O after starting the app no longer closes the attach dialog as it opens.**
+  - In v0.2.9 that first press appeared to do nothing, and a second press opened the dialog normally. Clicking the attach button was not affected.
 
 ## 0.2.9 (24 September 2026) — *["Pleiades"](https://en.wikipedia.org/wiki/Pleiades)* edition
 

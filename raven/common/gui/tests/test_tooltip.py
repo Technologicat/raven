@@ -93,20 +93,23 @@ class TestText:
         tip = Tooltip(target, "before")
         tip.text = "after"  # returns immediately; the updater carries it
 
-    def test_a_queued_change_lands_over_the_next_three_frames(self, target):
+    def test_a_queued_change_to_a_shown_tooltip_lands_over_the_next_three_frames(self, target, monkeypatch):
         """One tick to apply it offscreen, `_SETTLE_FRAMES` more there, and it is placed on the last of them.
 
         The offscreen step is the whole trick, so it is what the first tick has to do: parking the window
         where the mis-sized frames cannot be seen, rather than skipping frames that have to happen
         somewhere. Two of them are needed and not one — see `_SETTLE_FRAMES`.
         """
+        monkeypatch.setattr(dpg, "is_item_hovered", lambda item: True)
         tip = Tooltip(target, "before")
+        tip._on_hover(None, None, None)
         tip.text = "after"
         assert tip.text == "before", "queued, not yet applied"
         assert tip in tooltip_module._pending
 
         animation.animator.render_frame()
         assert tip.text == "after", "applied, and the window is resizing offscreen"
+        assert dpg.get_item_pos(tip.window)[1] >= dpg.get_viewport_client_height(), "parked while it resizes"
 
         for _ in range(tooltip_module._SETTLE_FRAMES - 1):
             animation.animator.render_frame()
@@ -114,7 +117,8 @@ class TestText:
 
         animation.animator.render_frame()
         assert tip not in tooltip_module._pending, "settled"
-        assert not dpg.is_item_shown(tip.window), "and hidden again, since nothing is hovering the target"
+        assert dpg.is_item_shown(tip.window), "and on screen, since the target is still hovered"
+        assert dpg.get_item_pos(tip.window)[1] < dpg.get_viewport_client_height(), "placed at the cursor"
 
     def test_it_is_not_placed_while_the_reported_size_is_still_the_old_one(self, target, monkeypatch):
         """`get_item_rect_size` catches up a frame later than the window itself does.
@@ -147,12 +151,51 @@ class TestText:
         flipped_above_the_cursor = near_the_bottom[1] - tip.offset[1] - reported[0][1]
         assert dpg.get_item_pos(tip.window)[1] == pytest.approx(flipped_above_the_cursor)
 
-    def test_a_change_to_an_unhovered_tooltip_is_still_settled(self, target):
-        """Otherwise the resize is merely deferred to the next hover, which is the same glitch, later."""
+    def test_a_change_to_an_unhovered_tooltip_never_shows_its_window(self, target, monkeypatch):
+        """A tooltip nobody is looking at must not put a window on the screen, even an offscreen one.
+
+        Showing a window takes the keyboard focus for the frames it is up, whatever its
+        `no_focus_on_appearing` says — so a flashed message landing in an unhovered tooltip took the caret
+        away from a text field that had just been asked for it, and closed a modal dialog opening in the
+        same frame. The text is applied at once instead, and the resize waits for the next hover.
+        """
+        shown = []
+        real_show_item = dpg.show_item
+        monkeypatch.setattr(dpg, "show_item", lambda item: (shown.append(item), real_show_item(item)))
+
         tip = Tooltip(target, "before")
-        assert not tip._shown
         tip.text = "after"
-        assert tip in tooltip_module._pending, "queued even though nothing is on screen"
+        for _ in range(tooltip_module._SETTLE_FRAMES + 2):
+            animation.animator.render_frame()
+
+        assert tip.text == "after", "applied"
+        assert tip.window not in shown, "the window was shown although nothing hovers the target"
+        assert tip not in tooltip_module._pending, "nothing left in flight"
+
+    def test_a_change_made_while_unhovered_is_settled_when_the_tooltip_next_appears(self, target, monkeypatch):
+        """Otherwise the next hover draws one frame at the old size, which is the glitch this class exists for."""
+        monkeypatch.setattr(dpg, "is_item_hovered", lambda item: True)
+        tip = Tooltip(target, "one line")
+        tip.text = "three\nlines\nof it"
+        animation.animator.render_frame()  # applied while nothing is hovering
+
+        tip._on_hover(None, None, None)
+        assert dpg.is_item_shown(tip.window)
+        assert dpg.get_item_pos(tip.window)[1] >= dpg.get_viewport_client_height(), "appears offscreen first"
+        assert tip in tooltip_module._pending, "and settles there"
+
+        for _ in range(tooltip_module._SETTLE_FRAMES):
+            animation.animator.render_frame()
+        assert tip not in tooltip_module._pending
+        assert dpg.get_item_pos(tip.window)[1] < dpg.get_viewport_client_height(), "then placed at the cursor"
+
+    def test_a_hover_with_no_change_since_the_last_one_is_placed_at_once(self, target, monkeypatch):
+        """The settling costs two frames of latency, so a tooltip whose text has not changed does not pay it."""
+        monkeypatch.setattr(dpg, "is_item_hovered", lambda item: True)
+        tip = Tooltip(target, "static")
+        tip._on_hover(None, None, None)
+        assert dpg.get_item_pos(tip.window)[1] < dpg.get_viewport_client_height()
+        assert tip not in tooltip_module._pending
 
 
 class TestVisibility:

@@ -325,12 +325,12 @@ def test_the_caret_survives_a_stretch_of_frames_on_its_own(widgets):
     assert dpg.is_item_active(widgets.field) is True
 
 
-def test_rewriting_a_tooltip_does_not_cost_the_caret(widgets):
+def test_rewriting_a_tooltip_does_not_cost_the_caret(widgets, monkeypatch):
     """Assigning to `Tooltip.text` must not disturb whatever holds the keyboard.
 
-    It resizes by parking its window offscreen, setting the text and showing it there — three window
-    operations per assignment, and an app that keeps a caption in step with some state performs them
-    whenever that state moves. Librarian's chat graph did, on nine tooltips at once, and its composer was
+    A tooltip on screen resizes by parking its window offscreen, setting the text and showing it there —
+    three window operations per assignment, and an app that keeps a caption in step with some state performs
+    them whenever that state moves. Hovered here, since an unhovered tooltip only takes the text. Librarian's chat graph did, on nine tooltips at once, and its composer was
     observed activating on a click and going inactive 25 ms later with nothing else touching focus. The
     hint was made static instead, which removed the symptom without establishing the cause; this is the
     test that decides whether the cause was here.
@@ -338,8 +338,12 @@ def test_rewriting_a_tooltip_does_not_cost_the_caret(widgets):
     A failure is not a defect in the caller: it says a shared component cannot be driven from state while
     a text field is in use, which is worth knowing at `flash_button` and the audio panel too.
     """
+    real_is_item_hovered = dpg.is_item_hovered
+    monkeypatch.setattr(dpg, "is_item_hovered", lambda item: item == widgets.button or real_is_item_hovered(item))
     tip = tooltip.Tooltip(widgets.button, "before")
+    tip._on_hover(None, None, None)
     render_with_animations()
+    assert dpg.is_item_shown(tip.window), "the fixture never put the tooltip on screen"
 
     dpg.focus_item(widgets.field)
     render_with_animations()
@@ -353,30 +357,62 @@ def test_rewriting_a_tooltip_does_not_cost_the_caret(widgets):
         "rewriting a tooltip took the caret out of a text field that had it"
 
 
-def _focus_request_in_a_fresh_context(how: str) -> bool:
-    """Whether the field got the caret, asked for `how` ("plain" or "give_caret"), in a fresh-launch state.
+def _in_a_fresh_context(how: str, *flags: str) -> bool:
+    """Run `focus_request_subprocess.py` in a fresh-launch state, and return its verdict.
 
-    Run in a process of its own: see `focus_request_subprocess.py` for why it cannot be done here.
+    `how` is "plain" or "give_caret" (did the field get the caret?) or "modal" (is the modal still open?).
+    `flags` are passed through: "hovered", "bystander". Run in a process of its own: see the script for why
+    it cannot be done here.
     """
     script = pathlib.Path(__file__).with_name("focus_request_subprocess.py")
-    completed = subprocess.run([sys.executable, str(script), how], capture_output=True, text=True, timeout=120)
+    completed = subprocess.run([sys.executable, str(script), how, *flags], capture_output=True, text=True, timeout=120)
     lines = [line for line in completed.stdout.splitlines() if line.startswith("RESULT ")]
     assert lines, f"the subprocess reported nothing (exit {completed.returncode}):\n{completed.stderr[-2000:]}"
-    return lines[-1] == "RESULT active=True"
+    return lines[-1].endswith("=True")
 
 
-def test_give_caret_lands_where_a_plain_focus_request_is_swallowed_by_a_tooltip_rewrite(mapped_gui_context):
-    """A text field only asked for the caret loses the request to a `Tooltip` rewriting its text meanwhile.
+@pytest.mark.parametrize("hovered", [(), ("hovered",)], ids=["unhovered", "hovered"])
+@pytest.mark.parametrize("how", ["plain", "give_caret"])
+def test_a_tooltip_rewrite_does_not_swallow_a_pending_focus_request(mapped_gui_context, how, hovered):
+    """At a fresh launch, a text field just asked for the caret gets it, though a `Tooltip` rewrites its text meanwhile.
 
-    `focus_item` is applied on a later frame, and the tooltip shows its window for the frames it measures in.
-    Raven-librarian's New chat did exactly that — focus the composer, then flash the button with a message in
-    its tooltip — and at a fresh launch the composer never got the caret. `test_rewriting_a_tooltip_does_not_
-    cost_the_caret` is the other half: a field that already *has* the caret keeps it.
+    `focus_item` is applied on a later frame, and a hidden window shown in between takes the keyboard focus
+    instead, whatever its `no_focus_on_appearing` says. Raven-librarian's New chat asks for the composer's
+    caret and then flashes its button with a message in the tooltip, so a tooltip that showed its window to
+    measure the message left the composer without the caret. `test_rewriting_a_tooltip_does_not_cost_the_
+    caret` is the other half: a field that already *has* the caret keeps it.
 
-    The first assertion is the control. If it starts failing, DPG has stopped swallowing the request, and
-    `animation.give_caret` has become unnecessary.
+    The first assertion is the control: a plain request, and a hidden window shown where the tooltip would
+    have been rewritten.
     """
-    assert _focus_request_in_a_fresh_context("plain") is False, \
-        "a plain request survived the rewrite, so this cannot tell `give_caret` from `focus_item`"
-    assert _focus_request_in_a_fresh_context("give_caret") is True, \
-        "`give_caret` was swallowed by the tooltip's rewrite too"
+    assert _in_a_fresh_context("plain", "bystander") is False, \
+        "a request survived a hidden window being shown, so this fixture cannot see the failure it tests for"
+    assert _in_a_fresh_context(how, *hovered) is True, "rewriting the tooltip swallowed the focus request"
+
+
+def test_give_caret_lands_where_a_plain_focus_request_is_swallowed(mapped_gui_context):
+    """`animation.give_caret` gets the caret into a field despite a hidden window being shown meanwhile.
+
+    What it is for: it asks again each frame until the field is active, so a window that takes the focus for
+    a frame or two delays the caret rather than losing it. The first assertion is the control. If it starts
+    failing, DPG has stopped letting a shown window take a pending request, and `give_caret` has nothing left
+    to defend against.
+    """
+    assert _in_a_fresh_context("plain", "bystander") is False, \
+        "a plain request survived, so this cannot tell `give_caret` from `focus_item`"
+    assert _in_a_fresh_context("give_caret", "bystander") is True, "`give_caret` was swallowed too"
+
+
+@pytest.mark.parametrize("hovered", [(), ("hovered",)], ids=["unhovered", "hovered"])
+def test_a_tooltip_rewrite_does_not_close_a_modal_opening_in_the_same_frame(mapped_gui_context, hovered):
+    """At a fresh launch, a modal opened while a `Tooltip` rewrites its text stays open.
+
+    A hidden window shown while a modal is opening closes the modal, through its `on_close`. Raven-librarian's
+    attach dialog was dismissed this way on its first opening, the attach button's flash having rewritten the
+    tooltip in the same frame — so the dialog took two presses of its hotkey to open.
+
+    The first assertion is the control, showing a hidden window where the tooltip would have been rewritten.
+    """
+    assert _in_a_fresh_context("modal", "bystander") is False, \
+        "the modal survived a hidden window being shown, so this fixture cannot see the failure it tests for"
+    assert _in_a_fresh_context("modal", *hovered) is True, "rewriting the tooltip closed the modal"

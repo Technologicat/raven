@@ -923,8 +923,8 @@ _CARET_REQUEST_MAX_FRAMES = 10
 
 # How many consecutive frames the field must hold the caret before the request counts as landed. One is not
 # enough: at a fresh Raven-librarian launch, New chat's caret arrived and was taken away on the very next
-# frame (traced 2026-09-24), and a request that had already finished did not ask again. A tooltip measuring
-# new text holds focus for two frames, so three outlasts it.
+# frame (traced 2026-09-24), and a request that had already finished did not ask again. A hidden window being
+# shown holds focus for two frames (measured on a tooltip's), so three outlasts it.
 _CARET_REQUEST_STABLE_FRAMES = 3
 
 class CaretRequest(Animation):
@@ -971,9 +971,10 @@ def give_caret(field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) ->
 
     Returns the `CaretRequest` the global `animator` runs, or `None` if the field is not shown.
     """
-    # A single `focus_item` is a request ImGui applies on a later frame, and a window shown in between takes
-    # the focus instead: a `tooltip.Tooltip` measuring new text does exactly that, for two frames, whatever
-    # its `no_focus_on_appearing` says. So the request is repeated until it has visibly landed. See
+    # A single `focus_item` is a request ImGui applies on a later frame, and a hidden window shown in between
+    # takes the focus instead, for a frame or two, whatever its `no_focus_on_appearing` says. So the request is
+    # repeated until it has visibly landed. `tooltip.Tooltip` shows no window for a text change nobody is
+    # looking at, so this is the defence against everything else that does. See
     # `investigations/dpg-focus/focus_request_vs_tooltip_probe.py`.
     with guiutils.nonexistent_ok():
         dpg.focus_item(field)

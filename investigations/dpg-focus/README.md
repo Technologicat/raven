@@ -168,8 +168,8 @@ because both land in `raven/common/gui/animation.py` and are better done togethe
   each frame lands within three. Environment switches vary one thing at a time (`PROBE_CHILD_PANEL`,
   `PROBE_NEW_TEXT`, `PROBE_PARK_ON_TOOLTIP_TARGET`). Each arm runs in its own process. Added 2026-09-15,
   DPG 2.3.1, when Raven-librarian's New chat was found leaving the composer without the caret. Takes the
-  keyboard for a few seconds. The write-up is `dpg-notes.md` → "A `focus_item` still pending is lost to a
-  window being shown".
+  keyboard for a few seconds. The write-up is `dpg-notes.md` → "A hidden window being shown takes the focus
+  — from a pending `focus_item`, and from an opening modal".
 
 - `catch_visual_flash.sh` — not a probe but the instrument that worked when three probes did not. Records a
   running app's window with `ffmpeg -f x11grab` at 60 fps and ranks the frames by how much the region of

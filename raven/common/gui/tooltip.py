@@ -251,6 +251,7 @@ class Tooltip:
         self._shown = False
         self._pending_text = None  # queued by `text`, applied by `_advance` on the render thread
         self._settle_countdown = 0  # ...and placed once this many further frames have gone by offscreen
+        self._resize_on_show = False  # the text changed while hidden, so the next hover settles it offscreen first
         self._text_lock = threading.Lock()
 
         # Explicit parents, no `with`: Raven-librarian builds a tooltip per chat message, from background
@@ -299,8 +300,9 @@ class Tooltip:
     def _set_text(self, text: str) -> None:
         """Set the text, keeping the window's size correct on every frame that reaches the screen.
 
-        Callable from any thread, including the render loop. The change is queued and applied over the next
-        two frames by the updater, so this returns before the new text is on screen.
+        Callable from any thread, including the render loop. The change is queued and applied by the updater,
+        so this returns before the new text is on screen. A tooltip on screen takes it over the next three
+        frames; a hidden one takes the text on the next frame and resizes when it next appears.
         """
         with self._text_lock:
             self._pending_text = text
@@ -311,7 +313,10 @@ class Tooltip:
 
                         Assignable from any thread. The assignment returns before the new text is on
                         screen: making the window the right size for it, and being able to read that size
-                        back, takes a frame each, so the change is applied over the next three.""")
+                        back, takes a frame each, so on a tooltip that is showing the change is applied over
+                        the next three. A hidden tooltip puts no window on the screen for it: the text lands
+                        on the next frame, and the resize happens offscreen when the tooltip next appears,
+                        which delays that appearance by two frames.""")
 
     def _advance(self) -> None:
         """Carry a queued text change one frame further. Called by the updater, on the render thread.
@@ -320,7 +325,8 @@ class Tooltip:
         just changed is drawn once at the old size — clipped when the text grew, skirted when it shrank.
         The way around it is to let those frames happen where nobody is looking: park the window offscreen
         and show it *there* (a hidden item is not laid out at all, so hiding it merely postpones the bad
-        frame), let `_SETTLE_FRAMES` pass, and only then bring it to the cursor.
+        frame), let `_SETTLE_FRAMES` pass, and only then bring it to the cursor. A tooltip that is not on
+        screen only takes the text here; `_on_hover` does the parking when it next appears.
 
         Hence a small state machine rather than a wait. Waiting is the natural way to write this —
         `guiutils.wait_for_resize` exists for it — but the wait cannot be performed by the thread that
@@ -334,10 +340,23 @@ class Tooltip:
             applied = False
             with guiutils.nonexistent_ok():
                 if dpg.get_value(self.caption) != pending:
-                    guiutils.park_offscreen(self.window)  # offscreen, but drawn
+                    # Not shown: apply the text and leave the resize to the next hover. Showing the window
+                    # here, even offscreen, gives it the keyboard focus for the frames it is up, whatever
+                    # `no_focus_on_appearing` says (measured on DPG 2.3.1, see `dpg-notes.md`) — which took
+                    # the caret from a field just asked for it, and closed a modal opening that same frame.
+                    #
+                    # Decided under the lock, so a hover landing meanwhile either sees the flag or has
+                    # already set `_shown` and gets the offscreen settle below.
+                    with self._text_lock:
+                        shown = self._shown
+                        if not shown:
+                            self._resize_on_show = True
+                    if shown:
+                        guiutils.park_offscreen(self.window)  # offscreen, but drawn
                     dpg.set_value(self.caption, pending)
-                    dpg.show_item(self.window)
-                    applied = True
+                    if shown:
+                        dpg.show_item(self.window)
+                        applied = True
             if applied:
                 with self._text_lock:
                     self._settle_countdown = _SETTLE_FRAMES
@@ -404,12 +423,26 @@ class Tooltip:
         """DPG GUI event handler: the mouse is over `target`. Fires every frame it stays there."""
         if self._shown:
             return
-        with guiutils.nonexistent_ok():
-            self._place()
-            dpg.show_item(self.window)
+        with self._text_lock:
+            in_flight = self._pending_text is not None or self._settle_countdown
+            settle = self._resize_on_show and not in_flight
+            self._resize_on_show = False
             self._shown = True
-        if not self._shown:  # the target went away between the handler firing and the placement
+        placed = False
+        with guiutils.nonexistent_ok():
+            if in_flight or settle:  # the text changed since the window was last laid out, so resize it first
+                guiutils.park_offscreen(self.window)
+            else:
+                self._place()
+            dpg.show_item(self.window)
+            placed = True
+        if not placed:  # the target went away between the handler firing and the placement
+            self._shown = False
             return
+        if settle:
+            with self._text_lock:
+                self._settle_countdown = _SETTLE_FRAMES
+            _note_work(_pending, self)
         _note_work(_visible, self)
 
     def _hide(self) -> None:
@@ -430,6 +463,7 @@ class Tooltip:
         with self._text_lock:  # a change still in flight has nowhere to land now
             self._pending_text = None
             self._settle_countdown = 0
+            self._resize_on_show = False
         with _update_lock:
             _pending.discard(self)
         with guiutils.nonexistent_ok():
