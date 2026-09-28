@@ -36,25 +36,24 @@ live on the Night.
   the names hold still. The phase reset per indicator stays, out of step with INDEXING's red: visibility of a
   briefly shown indicator was preferred over breathing in step, which the code now says.
 - **Every app's window title is `Raven-<app>`**, as its command is.
+- **A Librarian quickstart**, at the top of its README: LM Studio set up, Raven-server started, the model
+  loaded, then Librarian — server before model, as the troubleshooting section explains for a shared GPU.
+  The appendix now names LM Studio first, and says an 8 GB card runs Librarian with a 4B-class model and the
+  server in low-VRAM mode. The main README says which GPU backends are untested (ROCm, XPU) and asks for
+  reports.
+- **The avatar's render time broken down by phase** on the debug overlay, timed with `torch.Event` so the
+  numbers are true without slowing the renderer. That retired `metrics_enabled`, whose device syncs existed
+  only to make the old per-phase timers true, and the server's DEBUG log lost its per-frame lines.
 - **Server autostart** and **the DB behind the server** are written up for later —
   `briefs/server-autostart-brief.md`, and brief 13's *Where the database lives*. Neither is for this demo.
 
 ## Queue, in order
 
-1. **The small items**, in this order:
-   1. **A Librarian quickstart**: install an LLM backend such as LM Studio; in LM Studio, enable the
-      Developer tab in its settings, switch the API on in that tab, and load the model *on the Developer
-      tab* so it is served through the API; then start Raven-server; then start Librarian. Also fix the
-      README's backend section, which says LM Studio "needs no setup beyond starting its local server".
-   2. **Avatar timing breakdown in the debug overlay**: pose, upscale and postprocessor times, beside the
-      render/encode/output ones already there. The server's `render` figure covers all three today. The
-      animator very likely has the timings already (the upscaler's is `tim_upscale`); this is sending them
-      in `X-Server-Stats` and showing them.
-2. **Delete a subtree from the chat graph** — medium. A toolbar button with the usual double-press and red
+1. **Delete a subtree from the chat graph** — medium. A toolbar button with the usual double-press and red
    warning flash, deleting the subtree at the cursor. Disabled on the active system prompt node and the
    active AI greeting, which are the only nodes whose deletion would break the running instance. A hotkey
    *different* from the chat log's Ctrl+Shift+Delete, so a reader cannot delete the wrong data by habit,
    and as hard to hit by accident — to be proposed.
-3. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
+2. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.
