@@ -679,6 +679,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 ring_on_screen = self._cursor_name is not None
                 # Coming back to the graph is not a second act on the box the ring was left on. The click
                 # that brings the keyboard back may land on that very box, and must not switch branch.
+                # (`Enter` is not affected; see `_click_chat_node`.)
                 if self._has_keyboard:
                     self._cursor_placed_by_panel = True
                 chat_graph = self._chat_graph
@@ -1543,10 +1544,12 @@ class DPGChatGraphPanel(gui_animation.Animation):
             chat_graph = self._chat_graph
         if chat_graph is None:
             return
-        self._activate(element.internal_name)
+        self._activate(element.internal_name, by_pointer=True)
 
-    def _activate(self, name: str) -> None:
+    def _activate(self, name: str, by_pointer: bool = False) -> None:
         """Do to the box called `name` whatever acting on it means.
+
+        `by_pointer`: Whether this is a click, rather than `Enter`; see `_click_chat_node`.
 
         The one place that answers it, because a click and `Enter` must not be able to disagree: the
         keyboard's whole claim on this view is that it reaches the same things the pointer does, and two
@@ -1560,7 +1563,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
             return
 
         if isinstance(ref, chatgraph.ChatNodeRef):
-            self._click_chat_node(ref)
+            self._click_chat_node(ref, by_pointer=by_pointer)
         elif isinstance(ref, chatgraph.SiblingGapRef):
             self._move_sibling_window(ref)
         elif isinstance(ref, chatgraph.DepthGapRef):
@@ -1576,13 +1579,20 @@ class DPGChatGraphPanel(gui_animation.Animation):
         # no-op, so the ones that only scrolled the chat log cost nothing and need no special case.
         self._remember_view()
 
-    def _click_chat_node(self, ref: chatgraph.ChatNodeRef) -> None:
-        """Preview a chat node — or commit to it, if the cursor was already on it."""
-        # A cursor the panel put here itself is not a preview. It appears on HEAD when the graph takes the
-        # keyboard -- and a click on the graph is one way to give it that, so the click that brings the
-        # keys would otherwise find the cursor already on HEAD, commit, and hand the keys straight back.
+    def _click_chat_node(self, ref: chatgraph.ChatNodeRef, by_pointer: bool = False) -> None:
+        """Preview a chat node — or commit to it, if the cursor was already on it.
+
+        `by_pointer`: Whether this is a click. A click on the box the panel placed the cursor on previews;
+                      `Enter` there commits, as it does on any box the cursor is on.
+        """
+        # A click is the one act that can also be the one bringing the keyboard to the graph: taking the
+        # keyboard puts the cursor on HEAD, or leaves it where it was, so that click finds the cursor
+        # already on its box and would commit and hand the keys straight back. `Enter` arrives with the
+        # keyboard already here, so for it the box under the cursor is the one being looked at, and a
+        # second preview of it would do nothing.
         with self._lock:
-            already_previewed = (ref.node_id == self._cursor_name and not self._cursor_placed_by_panel)
+            already_previewed = (ref.node_id == self._cursor_name and
+                                 not (by_pointer and self._cursor_placed_by_panel))
             chat_graph = self._chat_graph
         if already_previewed:
             self._commit(ref.node_id)
@@ -1894,7 +1904,8 @@ class DPGChatGraphPanel(gui_animation.Animation):
                 addressable as a message.
         `placed_by_panel`: Whether the panel put it there on its own, rather than the reader putting it
                            there by acting on that box. A click on a box the panel placed the cursor on
-                           previews it, where a click on a box the reader placed it on commits.
+                           previews it, where a click on a box the reader placed it on commits. `Enter`
+                           commits either way.
 
         The mark lives in the picture rather than in the widget's highlight state. That state is shared
         with hover and has one pair of colours, so a cursor drawn through it is indistinguishable from a

@@ -382,6 +382,18 @@ class TestCommit:
         click(built, ids["not_taken"])
         assert calls.committed == [ids["not_taken"]], "a deliberate second click did not switch"
 
+    def test_enter_on_the_box_the_cursor_is_on_commits_whoever_put_it_there(self, panel):
+        # Enter arrives with the keyboard already here, so it cannot be the act that brought it; and the
+        # box under the cursor is already the one on show, so a first Enter that only previewed it again
+        # would do nothing at all.
+        built, forest, app_state, ids, calls = panel
+        head = app_state["HEAD"]
+        built.has_keyboard = True
+        assert built._cursor_name == head and built._cursor_placed_by_panel, \
+            "the panel did not place the cursor, so this cannot tell anything"
+        assert built.handle_key(dpg.mvKey_Return)
+        assert calls.committed == [head], "Enter on the cursor the panel placed did nothing"
+
     def test_an_arrow_planting_the_cursor_is_not_a_preview_either(self, panel):
         built, forest, app_state, ids, calls = panel
         built._set_cursor(None)
