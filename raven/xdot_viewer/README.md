@@ -106,7 +106,8 @@ The rules are the constellation's, the same ones *Raven-visualizer* and *Raven-l
   and not *bastion*.
 
 `Enter` in the field accepts the search and jumps to the first match; `Esc` cancels the edit and hands the
-keyboard back to the graph.
+keyboard back to the graph. **Tab** moves the keyboard between the search field and the graph, keeping what is
+typed, and **Ctrl+Shift+F** clears the search.
 
 <p align="center">
 <img src="../../img/xdot-viewer-search.png" alt="A graph with the nodes matching the search 'loop' highlighted" width="500"/> <br/>
@@ -129,8 +130,10 @@ The same table is on the app's own **F1** card, which is the copy to trust if th
 |---|---|---|
 | `Ctrl+O` | Open a file | |
 | `Ctrl+F` | Focus the search field | |
-| `Enter` | Accept and jump to the first match | when focused |
-| `Esc` | Cancel the edit and unfocus | when focused |
+| `Tab` | Search field or graph view | keeps what is typed |
+| `Enter` | Accept and jump to the first match | while typing in the search field |
+| `Esc` | Cancel the edit, and unfocus | while typing in the search field |
+| `Ctrl+Shift+F` | Clear the search | |
 | `F3` | Jump to the next match | |
 | `Shift+F3` | Jump to the previous match | |
 | `Ctrl+E` | Focus the layout engine selector | |

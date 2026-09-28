@@ -108,6 +108,8 @@ SIGNED_OFF: Dict[str, Dict[str, str]] = {
     "raven/xdot_viewer": {
         "Enter": "accepts the search and jumps to the first match; the field has no accept button",
         "Esc": "hands the caret back from the search field or the engine selector; no widget does that",
+        "Tab": "moves the keyboard between the search field and the graph; no widget does that",
+        "Ctrl+Shift+F": "clears the search; there is no clear button, where the Visualizer's names this key",
         "Arrow keys": "pan the view, and nothing in the toolbar pans",
         "Mouse wheel": "zooms at the pointer, which no button can do — a button has no pointer position to zoom at",
         "Mouse drag": "pans, as the arrow keys do, and by the same argument",

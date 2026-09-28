@@ -16,6 +16,14 @@
 
 ## 0.2.10 (in progress)
 
+### Changed
+
+#### Raven-xdot-viewer
+
+- **The search field's keys now work as in Raven-visualizer.**
+  - **Tab** moves the keyboard between the search field and the graph, keeping what is typed.
+  - **Ctrl+Shift+F** clears the search.
+
 ### Fixed
 
 #### Raven-librarian

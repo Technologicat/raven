@@ -43,8 +43,7 @@ live on the Night.
       match, so the code says what the screen says.
    3. **App titles take the command-name form, `Raven-<app>`** — the changelog headings' form:
       `Raven-cherrypick`, `Raven-xdot-viewer`, `Raven-conference-timer`, `Raven-avatar-pose-editor`,
-      `Raven-avatar-settings-editor`; Librarian and Visualizer already comply. Check the standalone
-      `xdotwidget` demo's title too. The `live-gui-testing` skill (in `~/.claude`) cites the inconsistency
+      `Raven-avatar-settings-editor`; Librarian and Visualizer already comply. The `live-gui-testing` skill (in `~/.claude`) cites the inconsistency
       and wants updating afterwards.
    4. **A Librarian quickstart**: install an LLM backend such as LM Studio; in LM Studio, enable the
       Developer tab in its settings, switch the API on in that tab, and load the model *on the Developer

@@ -328,6 +328,25 @@ def _prev_match(*_args) -> None:
             _set_status(f"Match: {desc} ({count} total)")
 
 
+def _clear_search() -> None:
+    """Empty the search field and the search it committed. Ctrl+Shift+F.
+
+    Safe to call whether or not the field holds the caret, which is what lets the hotkey arrive mid-word.
+    """
+    guiutils.set_input_text("search_input", "", park_focus_on="next_match_button")  # tag
+    _do_search()
+    gui_animation.give_caret("search_input")  # tag
+
+
+def _give_keyboard_to_view() -> None:
+    """Take the caret out of the search field, so the graph view's bare keys answer again."""
+    # Parked on a button, the one thing that deactivates a text field from outside, and a focused button
+    # ignores Space and Enter. Not on the view's own group: what `focus_item` does to a container is not
+    # something to rely on — on a child window it activates the first navigable item inside, which can hand
+    # the caret straight back (`dpg-notes.md`, "Keyboard input").
+    dpg.focus_item("next_match_button")  # tag
+
+
 def _zoom_to_fit(*_args) -> None:
     """Zoom to fit the entire graph."""
     widget = _app_state["widget"]
@@ -484,9 +503,7 @@ def _browse_combo(combo_tag, key):
     choices, callback = _combobox_choice_map[combo_tag]
 
     if key == dpg.mvKey_Escape:
-        widget = _app_state["widget"]
-        if widget is not None:
-            dpg.focus_item(widget.get_dpg_widget_id())
+        _give_keyboard_to_view()
         return True
 
     current = dpg.get_value(combo_tag)
@@ -565,18 +582,25 @@ def _on_key(sender, app_data) -> None:
     #   - the help card (search "HelpWindow")
     #   - any tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
 
-    # Only the two chords that *commit* the search edit belong to the field, and they are gated on
+    # Only Enter, which *commits* the search edit, belongs to the field, and it is gated on
     # `is_item_focused` because committing deactivates it — a handler asking `is_item_active` would run
     # after the state it tests for had already cleared. Everything else must fall through: ImGui gives nav
     # focus to the first navigable item of a window by itself, so this field reports focused with nobody
     # having touched it, and gating the *whole* handler on that took Ctrl+O and its siblings out from app
-    # start. See `dpg-notes.md`, "Keyboard input"; `raven-visualizer` carries the same pair.
-    if dpg.is_item_focused("search_input") and key in (dpg.mvKey_Return, dpg.mvKey_Escape):  # tag
-        if key == dpg.mvKey_Return:  # accept and unfocus
-            dpg.focus_item(widget.get_dpg_widget_id())
-            widget.next_match()  # jump the view to the first match
-        elif key == dpg.mvKey_Escape:  # unfocus and cancel current search edit (handled by the text input internally, by sending a change event; but we need to handle the keyboard focus)
-            dpg.focus_item(widget.get_dpg_widget_id())
+    # start. See `dpg-notes.md`, "Keyboard input"; `raven-visualizer` handles its search field the same way.
+    #
+    # Escape needs no branch of its own: ImGui's `InputText` cancels the edit and deactivates itself, and
+    # deactivated is exactly what the bare-key branch below tests for.
+    if dpg.is_item_focused("search_input") and key == dpg.mvKey_Return:  # tag  # regardless of modifier state, as in the Visualizer
+        _give_keyboard_to_view()
+        _next_match()  # jump the view to the first match
+    # Tab moves the keyboard between the search field and the graph view, keeping what is typed: with two
+    # places to be, Shift+Tab does the same.
+    elif key == dpg.mvKey_Tab and not ctrl_pressed:
+        if dpg.is_item_active("search_input"):  # tag
+            _give_keyboard_to_view()
+        else:
+            gui_animation.give_caret("search_input")  # tag
     elif ctrl_pressed and shift_pressed:
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         if key == dpg.mvKey_M:
@@ -587,12 +611,13 @@ def _on_key(sender, app_data) -> None:
             dpg.show_font_manager()
         elif key == dpg.mvKey_L:
             dpg.show_style_editor()
+        elif key == dpg.mvKey_F:  # not a debug key: Ctrl+F puts the caret in the search field, this, with Shift, empties it
+            _clear_search()
     elif ctrl_pressed:
         if key == dpg.mvKey_O:
             _show_open_dialog()
         elif key == dpg.mvKey_F:
-            if _app_state["search_input"] is not None:
-                dpg.focus_item(_app_state["search_input"])
+            gui_animation.give_caret("search_input")  # tag
         elif key == dpg.mvKey_E:
             dpg.focus_item("filter_combo")
     # *Active*, not *focused*: the caret really being in the search field is what must silence the bare
@@ -801,8 +826,10 @@ def main() -> int:
         # Column 1: search & file
         env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a file", notes=""),
         env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus the search field", notes=""),
-        env(key_indent=1, key="Enter", action_indent=0, action="Accept and jump to the first match", notes="When focused"),
-        env(key_indent=1, key="Esc", action_indent=0, action="Cancel the edit and unfocus", notes="When focused"),
+        env(key_indent=1, key="Tab", action_indent=0, action="Search field or graph view", notes="Keeps what is typed"),
+        env(key_indent=1, key="Enter", action_indent=0, action="Accept and jump to the first match", notes="While typing in the search field"),
+        env(key_indent=1, key="Esc", action_indent=0, action="Cancel the edit, and unfocus", notes="While typing in the search field"),
+        env(key_indent=0, key="Ctrl+Shift+F", action_indent=0, action="Clear the search", notes=""),
         env(key_indent=0, key="F3", action_indent=0, action="Jump to the next match", notes=""),
         env(key_indent=0, key="Shift+F3", action_indent=0, action="Jump to the previous match", notes=""),
         env(key_indent=0, key="Ctrl+E", action_indent=0, action="Focus the layout engine selector", notes=""),
