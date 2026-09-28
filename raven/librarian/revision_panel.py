@@ -104,8 +104,8 @@ class DPGRevisionPanel:
             self._has_been_positioned = True
         else:
             dpg.show_item(self.window_id)
-        # Asked for until it lands, rather than once. Opened by a click on a revision number, the click's own
-        # handling in the chat log takes the focus back after a single request.
+        # Asked for until it lands, rather than once: opened by a click on a revision number, a single request
+        # did not land, where the same request from the hotkey did. Why is not established; see `dpg-notes.md`.
         if 0 <= self._cursor.current < len(self._rows):
             self._cancel_focus_request()
             self._focus_request = gui_animation.give_focus(self._rows[self._cursor.current][1])
