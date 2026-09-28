@@ -22,7 +22,7 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "nonexistent_ok",
            "maybe_delete_item", "has_child_items", "find_hidden_ancestor", "is_shown_all_the_way_up", "item_identifiers", "describe_item",
 
-           "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y", "DPG_SCROLLBAR_SIZE",  # default-theme metrics Raven has to know
+           "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y", "DPG_SCROLLBAR_SIZE", "DPG_BORDER_COLOR",  # default-theme metrics Raven has to know
 
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
            "get_mouse_relative_pos", "is_mouse_on_widget",
@@ -696,6 +696,7 @@ DPG_WINDOW_PADDING = 8  # mvStyleVar_WindowPadding; both components are 8 in the
 DPG_ITEM_SPACING_X = 8  # mvStyleVar_ItemSpacing[0]; the gap a horizontal group leaves between two items
 DPG_FRAME_PADDING_Y = 3  # mvStyleVar_FramePadding[1] (the x component is 4, and is not needed so far)
 DPG_SCROLLBAR_SIZE = 14  # mvStyleVar_ScrollbarSize; the width a vertical scrollbar takes off a scrollable region
+DPG_BORDER_COLOR = (78, 78, 78, 255)  # mvThemeCol_Border; read off DPG 2.3.1's style editor, 2026-09-28
 
 
 def get_widget_pos(widget: str | int) -> tuple[int, int]:

@@ -31,6 +31,7 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 __all__ = ["COLOR", "PULSE_SECONDS",  # the vocabulary
            "join_pulse", "leave_pulse", "pulse_is_running",  # the one rhythm, for a widget that paints itself
            "DOT_GLYPH", "DOT_SLOT_W", "add_dot",  # the glyph a DOT mark lights
+           "shield_tooltip",  # for a tooltip under a marked panel
            "MarkKind", "Mark", "install_caret_follower", "install_focus_follower"]  # the mark as a component
 
 import logging
@@ -159,7 +160,7 @@ def _get_unlit_dot_theme() -> str | int:
     current and gives back when it moves on.
     """
     global _unlit_dot_theme
-    if _unlit_dot_theme is None:
+    if _unlit_dot_theme is None or not dpg.does_item_exist(_unlit_dot_theme):  # it dies with its DPG context
         # Explicit parents rather than `with`, because this is built on *first use* and its callers build
         # widgets on background threads. The container stack is global, so a `with` here would splice this
         # theme into whatever container that thread happened to be filling.
@@ -189,6 +190,32 @@ def add_dot(*,
     dot = dpg.add_text(DOT_GLYPH, parent=parent, **kwargs)
     dpg.bind_item_theme(dot, _get_unlit_dot_theme())
     return dot
+
+
+# --------------------------------------------------------------------------------
+# Shielding a tooltip from a mark it sits under
+
+_unmarked_theme = None  # created on first use by `shield_tooltip`
+
+
+def shield_tooltip(tooltip: str | int) -> None:
+    """Keep a mark on an enclosing panel off `tooltip` (DPG tag or ID).
+
+    A theme composes down the parent chain, and a tooltip opened from a widget inside a marked `PANEL` is on
+    that chain: without this it wears the mark's border colour, lit or not, and its padding. Call it on any
+    tooltip built inside a panel that can be marked.
+    """
+    global _unmarked_theme
+    # Checked for existence as well as for `None`: the theme dies with the DPG context that made it, and a
+    # process can build more than one, as a test suite does.
+    if _unmarked_theme is None or not dpg.does_item_exist(_unmarked_theme):
+        # Explicit parents rather than `with`, for the reason given in `_get_unlit_dot_theme`.
+        _unmarked_theme = dpg.add_theme()
+        component = dpg.add_theme_component(dpg.mvAll, parent=_unmarked_theme)
+        dpg.add_theme_color(dpg.mvThemeCol_Border, guiutils.DPG_BORDER_COLOR, parent=component)
+        dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, guiutils.DPG_WINDOW_PADDING, guiutils.DPG_WINDOW_PADDING,
+                            parent=component)
+    dpg.bind_item_theme(tooltip, _unmarked_theme)
 
 
 # --------------------------------------------------------------------------------
@@ -249,6 +276,8 @@ class Mark:
                   So the remedy is structural: mark **an inner window holding only the thing being
                   marked**, with the buttons and their tooltips outside it. That is usually the better
                   layout regardless — the mark then frames the content rather than the chrome above it.
+                  Where the tooltips belong to the content itself, as a thumbnail grid's do, pass each one
+                  to `shield_tooltip`.
 
         `kind`: See `MarkKind`. Which of the two border styles is set, or `DOT` for a glyph that is coloured
                 instead of outlined.

@@ -24,6 +24,7 @@ dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed
 
 from raven.common.gui import animation as gui_animation  # noqa: E402 -- after importorskip by design
 from raven.common.gui import keyboardmark  # noqa: E402 -- ditto
+from raven.common.gui import utils as guiutils  # noqa: E402 -- ditto
 
 
 @pytest.fixture(scope="module")
@@ -298,6 +299,26 @@ class TestMovingMark:
 
 # --------------------------------------------------------------------------------
 # What the mark says when you hover it
+
+class TestShieldTooltip:
+    """A tooltip under a marked panel wears the mark's border colour unless it has a theme of its own."""
+
+    def test_a_shielded_tooltip_wears_the_default_border(self, make_widget):
+        tooltip = dpg.add_tooltip(make_widget())
+        keyboardmark.shield_tooltip(tooltip)
+        theme = dpg.get_item_theme(tooltip)
+        assert theme, "no theme was bound"
+        colors = [dpg.get_value(item) for component in dpg.get_item_children(theme, slot=1)
+                  for item in dpg.get_item_children(component, slot=1)
+                  if dpg.get_item_type(item) == "mvAppItemType::mvThemeColor"]
+        assert [tuple(round(c) for c in color[:4]) for color in colors] == [guiutils.DPG_BORDER_COLOR]
+
+    def test_every_tooltip_shares_one_theme(self, make_widget):
+        tooltips = [dpg.add_tooltip(make_widget(suffix=str(n))) for n in range(2)]
+        for tooltip in tooltips:
+            keyboardmark.shield_tooltip(tooltip)
+        assert dpg.get_item_theme(tooltips[0]) == dpg.get_item_theme(tooltips[1])
+
 
 class TestTooltip:
     """A tooltip that outlives the mark promises the keyboard is somewhere it is not.

@@ -818,6 +818,7 @@ class ThumbnailGrid:
             # Tooltip with the full label (on the tile group, not the drawlist).
             tooltip = dpg.add_tooltip(tile_tag)  # explicit parent; see the note at the handler registry
             dpg.add_text(self._labels[idx], parent=tooltip)
+            keyboardmark.shield_tooltip(tooltip)  # the panel holding the grid may wear a mark
 
             # Draw tile contents.
             self._draw_tile(idx, dl_tag)
