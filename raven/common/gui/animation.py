@@ -16,7 +16,7 @@ To write one, subclass `Animation`:
 - `finish(self)`: put back whatever the animation borrowed or built. Called on `action_finish` and by
   `animator.cancel`.
 
-Then `animator.add(MyAnimation(...))`, from any thread. `CaretRequest` is the smallest complete example;
+Then `animator.add(MyAnimation(...))`, from any thread. `FocusRequest` is the smallest complete example;
 `WidgetFlash` shows borrowing a widget's state and giving it back.
 """
 
@@ -25,7 +25,7 @@ __all__ = ["action_continue", "action_finish", "action_cancel",  # return values
            "Animation", "Overlay",  # base classes
            "Dimmer",  # overlays
            "WidgetFlash", "flash_button", "flash_delete_confirmation", "highlight_widget", "set_text_under_flash",  # the flash animation, its three conveniences, and writing to a widget one has borrowed
-           "CaretRequest", "give_caret",  # putting the caret in a text field, against whatever else claims focus
+           "FocusRequest", "give_focus", "give_caret",  # putting the focus on a widget, or the caret in a text field, against whatever else claims focus
            "GlyphAtlasRefresh",  # a one-off repair of the font atlas, which every app adds before its render loop
            "SmoothScrolling", "WidgetSwap",  # animations: a glide, and a swap that holds the view still
            "pulsating_alpha", "pulsation_envelope",  # utilities: the alpha a pulsating animation yields, and the curve it follows
@@ -963,41 +963,68 @@ _CARET_REQUEST_MAX_FRAMES = 10
 # shown holds focus for two frames (measured on a tooltip's), so three outlasts it.
 _CARET_REQUEST_STABLE_FRAMES = 3
 
-class CaretRequest(Animation):
-    """Give a text field the caret, and keep asking each frame until it has held it for a few frames. See `give_caret`."""
+class FocusRequest(Animation):
+    """Give a widget the focus, and keep asking each frame until it has held it for a few frames.
 
-    def __init__(self, field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES):
+    See `give_caret` and `give_focus`, which are how to make one.
+
+    `widget`: DPG tag or ID of the widget.
+    `max_frames`: how many frames of asking before giving up.
+    `holds`: `f(widget) -> bool`, whether the widget has what was asked for. `None` (default) means
+             `dpg.is_item_active`, for a text field, which has the caret only while active; `give_focus` passes
+             `dpg.is_item_focused`, for anything else.
+    `what`: what is being given, for the log.
+    """
+
+    def __init__(self, widget: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES,
+                 holds: Callable[[str | int], bool] | None = None, what: str = "the caret"):
         super().__init__()
-        self.field = field
+        self.widget = widget
         self.max_frames = max_frames
+        self.holds = holds if holds is not None else (lambda widget: dpg.is_item_active(widget))  # looked up per call
+        self.what = what
         self.frames_left = max_frames
         self.frames_held = 0
 
     def render_frame(self, t: int) -> sym:
         with guiutils.nonexistent_ok():
-            if dpg.is_item_active(self.field):
+            if self.holds(self.widget):
                 self.frames_held += 1
                 if self.frames_held >= _CARET_REQUEST_STABLE_FRAMES:
-                    logger.debug(f"CaretRequest.render_frame: '{self.field}' has held the caret for {self.frames_held} frames, after {self.max_frames - self.frames_left} repeated requests; done.")
+                    logger.debug(f"FocusRequest.render_frame: '{self.widget}' has held {self.what} for {self.frames_held} frames, after {self.max_frames - self.frames_left} repeated requests; done.")
                     return action_finish
                 return action_continue  # has it; asking again would only disturb it, so watch
             if self.frames_held:
-                logger.debug(f"CaretRequest.render_frame: '{self.field}' had the caret for {self.frames_held} frames and lost it; asking again.")
+                logger.debug(f"FocusRequest.render_frame: '{self.widget}' had {self.what} for {self.frames_held} frames and lost it; asking again.")
             self.frames_held = 0
             if self.frames_left <= 0:
-                logger.debug(f"CaretRequest.render_frame: gave up giving '{self.field}' the caret: still not active after the last of its frames.")
+                logger.debug(f"FocusRequest.render_frame: gave up giving '{self.widget}' {self.what}: still without it after the last of its frames.")
                 return action_cancel
             # Hidden since the request was made: asking again would only pull focus toward a window nobody
             # can see.
-            if not guiutils.is_shown_all_the_way_up(self.field):
-                logger.debug(f"CaretRequest.render_frame: gave up giving '{self.field}' the caret: it is no longer shown.")
+            if not guiutils.is_shown_all_the_way_up(self.widget):
+                logger.debug(f"FocusRequest.render_frame: gave up giving '{self.widget}' {self.what}: it is no longer shown.")
                 return action_cancel
             self.frames_left -= 1
-            dpg.focus_item(self.field)
+            dpg.focus_item(self.widget)
             return action_continue
-        return action_cancel  # reached only when the field has gone away
+        return action_cancel  # reached only when the widget has gone away
 
-def give_caret(field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) -> CaretRequest | None:
+def give_focus(widget: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) -> FocusRequest | None:
+    """Give `widget` (DPG tag or ID) DPG's focus, even if something else claims it meanwhile.
+
+    `give_caret`'s sibling, for a widget that is not a text field — a list row, a button — where the focus is
+    what says the keys go there. Same repetition and limits; callable from any thread.
+
+    Returns the `FocusRequest` the global `animator` runs, or `None` if the widget is not shown.
+    """
+    with guiutils.nonexistent_ok():
+        dpg.focus_item(widget)
+        if guiutils.is_shown_all_the_way_up(widget):
+            return animator.add(FocusRequest(widget, max_frames=max_frames, holds=lambda w: dpg.is_item_focused(w), what="the focus"))
+    return None
+
+def give_caret(field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) -> FocusRequest | None:
     """Put the caret in the text field `field` (DPG tag or ID), even if something else claims focus meanwhile.
 
     Use in place of `dpg.focus_item` wherever the point is to let the user type. Asks at once, and then, while
@@ -1005,7 +1032,7 @@ def give_caret(field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) ->
     `max_frames` frames of asking. A field that is not shown gets the single request and no more. Callable
     from any thread.
 
-    Returns the `CaretRequest` the global `animator` runs, or `None` if the field is not shown.
+    Returns the `FocusRequest` the global `animator` runs, or `None` if the field is not shown.
     """
     # A single `focus_item` is a request ImGui applies on a later frame, and a hidden window shown in between
     # takes the focus instead, for a frame or two, whatever its `no_focus_on_appearing` says. So the request is
@@ -1015,7 +1042,7 @@ def give_caret(field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) ->
     with guiutils.nonexistent_ok():
         dpg.focus_item(field)
         if guiutils.is_shown_all_the_way_up(field):
-            return animator.add(CaretRequest(field, max_frames=max_frames))
+            return animator.add(FocusRequest(field, max_frames=max_frames))
     return None
 
 # --------------------------------------------------------------------------------
