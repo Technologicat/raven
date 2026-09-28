@@ -158,6 +158,19 @@ class TableCursor:
             self._notify()
             self._scroll_to_current()
 
+    def set_current_key(self, key: Any, *, anchor: bool = True) -> bool:
+        """Move the cursor to the row identified by `key`, as `set_current` does by index.
+
+        Returns whether `key` is in the listing; if it is not, the cursor stays where it was.
+        """
+        with self._lock:
+            try:
+                idx = self._keys.index(key)
+            except ValueError:
+                return False
+            self.set_current(idx, anchor=anchor)
+            return True
+
     # ------------------------------------------------------------------
     # Navigation — the names `ThumbnailGrid` uses, so a key handler can drive either
     # ------------------------------------------------------------------

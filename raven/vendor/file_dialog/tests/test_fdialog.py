@@ -1058,14 +1058,14 @@ def test_leaving_the_path_field_deliberately_is_not_undone_by_the_deactivation(d
 
 
 def test_the_path_field_puts_the_keys_back_where_it_found_them(dialog):
-    """The pair fires without anyone having asked for it, so the second half must not invent a destination.
+    """An activation and deactivation nobody asked for must leave the home where it was.
 
-    ImGui spends Tab on keyboard navigation whenever the find field holds a caret it got from `focus_item`
-    rather than from a click — Ctrl+F, Ctrl+L, or arriving anywhere via `chdir` — and the field it navigates
-    to is the path field. So a Tab meant for the listing arrives here as an activation and a deactivation a
-    frame apart, straddling the home that Tab has just set. Assuming the way out is always the find field
-    wrote `FIELD` over that `LISTING`: the Tab was swallowed, the arrow keys went dead, and a second Tab
-    could not get out either, being undone the same way.
+    ImGui's own Tab step produces exactly that pair on the path field whenever it shares a navigation scope
+    with another text field: a Tab meant for the listing arrives here as an activation and a deactivation a
+    frame apart, straddling the home that Tab has just set. The fields have scopes of their own (pinned by
+    `test_each_text_field_has_a_navigation_scope_of_its_own`); this pins what happens if a pair arrives
+    anyway. Assuming the way out is always the find field would write `FIELD` over that `LISTING`, and the
+    arrow keys would go dead.
     """
     dialog._focus_listing()
     assert dialog._caret_home is CaretHome.LISTING
@@ -1109,6 +1109,62 @@ def test_clicking_the_path_field_means_what_the_key_means(dialog, tmp_path):
 
     dialog._handle_key(dpg.mvKey_Return)
     assert os.path.realpath(os.getcwd()) == os.path.realpath(str(tmp_path))
+
+
+def test_clicking_the_find_field_means_what_ctrl_f_means(dialog):
+    """Otherwise the typing goes to the find field while the mark stays on the listing."""
+    bound = dpg.get_item_info(dialog.search_field)["handlers"]
+    kinds = {dpg.get_item_type(handler) for handler in dpg.get_item_children(bound, slot=1)}
+    assert "mvAppItemType::mvActivatedHandler" in kinds
+
+    dialog._focus_listing()
+    dialog._on_search_field_activated()  # as DPG's handler does, on the click
+    assert dialog._caret_home is CaretHome.FIELD
+
+
+def test_a_click_on_a_row_gives_the_listing_the_keys_and_the_cursor(dialog, tmp_path):
+    """Otherwise the mark stays on the find field, and the arrow keys go there, after clicking a file."""
+    for name in ("a.txt", "b.txt", "c.txt"):
+        pathlib.Path(tmp_path, name).touch()
+    dialog.chdir(str(tmp_path))
+    clicked = str(pathlib.Path(tmp_path, "c.txt"))
+    assert dialog._table_cursor.current_key != clicked, "the cursor is on the clicked row already"
+
+    dialog._focus_field()
+    dialog.last_click_time = 0.0  # a single click, not the second half of a double
+    with dpg.window() as host:
+        row = dpg.add_selectable(label="c.txt")  # stands in for a listing row, which is what `open_file` is bound to
+    try:
+        dialog.open_file(row, True, ["c.txt", clicked, 0.0, 0])
+    finally:
+        dpg.delete_item(host)
+    assert dialog._caret_home is CaretHome.LISTING
+    assert dialog._table_cursor.current_key == clicked
+
+
+def test_a_click_on_a_tile_gives_the_listing_the_keys(make_dialog, tmp_path):
+    for name in DIRECTORY_CONTENTS:
+        pathlib.Path(tmp_path, name).touch()
+    d = make_dialog(show_thumbnails=True)
+    assert d._grid is not None
+    assert d._grid._on_entry_clicked == d._grid_clicked, "the grid does not report its clicks to the dialog"
+
+    d._focus_field()
+    d._grid_clicked(d._grid.entries[0])  # as the grid does, on the click
+    assert d._caret_home is CaretHome.LISTING
+
+
+def test_each_text_field_has_a_navigation_scope_of_its_own(dialog):
+    """ImGui steps its own focus on Tab, to another text field in the same scope.
+
+    Sharing one, every Tab left the path field active for a frame: it lit up, and fired the handlers that
+    move the caret's home.
+    """
+    scopes = [dpg.get_item_parent(field) for field in (dialog.path_field, dialog.search_field)]
+    assert scopes[0] != scopes[1]
+    for scope in scopes:
+        assert dpg.get_item_type(scope) == "mvAppItemType::mvChildWindow"
+        assert dpg.get_item_configuration(scope)["flattened_navigation"] is False
 
 
 def test_arriving_somewhere_takes_the_color_away_again(dialog, tmp_path):

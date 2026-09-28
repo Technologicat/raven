@@ -29,7 +29,10 @@
 #### Constellation-wide
 
 - **Tab in the file dialog no longer lights up the path field for a moment.**
-- **Clicking the file dialog's find field now moves the blue keyboard mark there.** In v0.2.9 the mark stayed where it was, on the listing or the path field, while the typing went to the find field.
+- **The file dialog's blue keyboard mark now follows a click.** In v0.2.9 it stayed where it was, and the keys went with it.
+  - Clicking the find field puts the mark there.
+  - Clicking a row or a tile puts it on the listing, so the arrow keys move through the listing. In the table, the cursor also moves to the row clicked, as it already did in the grid.
+  - A click on the empty space below a short listing does not.
 
 ## 0.2.9 (24 September 2026) — *["Pleiades"](https://en.wikipedia.org/wiki/Pleiades)* edition
 

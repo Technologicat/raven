@@ -99,6 +99,7 @@ class FileGrid(ThumbnailGrid):
                  on_current_entry_changed: Optional[Callable[[Optional[FileEntry]], None]] = None,
                  on_selection_changed_entries: Optional[Callable[[list[FileEntry]], None]] = None,
                  on_activate: Optional[Callable[[FileEntry], None]] = None,
+                 on_entry_clicked: Optional[Callable[[FileEntry], None]] = None,
                  **grid_kwargs):
         """
         *icon_assets*: ``{name: (width, height, flat RGBA floats)}`` — the shape `dpg.load_image` returns,
@@ -130,9 +131,9 @@ class FileGrid(ThumbnailGrid):
             bounds what is kept for folders no longer on screen.
         *settle_time*: seconds the on-screen set must hold still before decoding starts. What stops a scroll
             from cancelling and restarting the decoder on the way past every row.
-        *on_current_entry_changed*, *on_selection_changed_entries*, *on_activate*: as `ThumbnailGrid`'s
-            `on_current_changed`, `on_selection_changed` and `on_double_click`, but handed `FileEntry`
-            objects rather than indices. `on_activate` is what a double-click means here: descend into the
+        *on_current_entry_changed*, *on_selection_changed_entries*, *on_activate*, *on_entry_clicked*: as
+            `ThumbnailGrid`'s `on_current_changed`, `on_selection_changed`, `on_double_click` and `on_click`,
+            but handed `FileEntry` objects rather than indices. `on_activate` is what a double-click means here: descend into the
             directory, or choose the file.
 
         Remaining keyword arguments go to `ThumbnailGrid`.
@@ -149,6 +150,7 @@ class FileGrid(ThumbnailGrid):
         self._on_current_entry_changed = on_current_entry_changed
         self._on_selection_changed_entries = on_selection_changed_entries
         self._on_activate = on_activate
+        self._on_entry_clicked = on_entry_clicked
 
         device_string, dtype = deviceinfo.get_device_and_dtype({"device_string": thumbnail_device,
                                                                 "dtype": thumbnail_dtype})
@@ -166,6 +168,7 @@ class FileGrid(ThumbnailGrid):
                          on_current_changed=self._current_changed,
                          on_selection_changed=self._selection_changed,
                          on_double_click=self._double_clicked,
+                         on_click=self._clicked,
                          **grid_kwargs)
 
         self._icons = TileIconCache(tile_size, order=lanczos_order)
@@ -490,6 +493,14 @@ class FileGrid(ThumbnailGrid):
             entry = self._entries[idx] if 0 <= idx < len(self._entries) else None
         if entry is not None:
             self._on_activate(entry)
+
+    def _clicked(self, idx: int) -> None:
+        if self._on_entry_clicked is None:
+            return
+        with self._lock:
+            entry = self._entries[idx] if 0 <= idx < len(self._entries) else None
+        if entry is not None:
+            self._on_entry_clicked(entry)
 
     def _refresh_placeholders(self) -> None:
         """Fill the placeholder pool for the current tile size."""

@@ -78,6 +78,20 @@ def test_a_panel_narrower_than_one_tile_still_has_a_column(make_grid):
     assert make_grid(width=10).n_cols == 1
 
 
+def test_a_click_on_a_tile_is_reported_after_it_has_moved_the_cursor(make_grid, monkeypatch):
+    """What `on_click` is for: a caller learning that the user clicked, as opposed to the cursor moving."""
+    clicks = []
+    grid = make_grid(on_click=lambda idx: clicks.append((idx, grid.current)))
+
+    monkeypatch.setattr(grid, "_hit_test", lambda: None)
+    grid._on_click_handler(None, None)
+    assert clicks == [], "a click between the tiles was reported"
+
+    monkeypatch.setattr(grid, "_hit_test", lambda: 3)
+    grid._on_click_handler(None, None)
+    assert clicks == [(3, 3)]
+
+
 # --------------------------------------------------------------------------------
 # Hit testing — the arithmetic the layout exists to serve
 

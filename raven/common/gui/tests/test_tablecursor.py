@@ -138,6 +138,17 @@ def test_the_cursor_goes_home_when_its_entry_comes_back(make_cursor):
     assert cursor.current_key == "a"
 
 
+def test_the_cursor_can_be_moved_by_key(make_cursor):
+    """What a click on a row has in hand: the entry it names, not where that entry sits."""
+    cursor = make_cursor()
+    cursor.set_listing(["a", "b", "c"], listing_key="/dir")
+    assert cursor.set_current_key("c") is True
+    assert cursor.current == 2
+
+    assert cursor.set_current_key("nowhere") is False
+    assert cursor.current == 2, "a key not in the listing moved the cursor"
+
+
 def test_moving_the_cursor_adopts_the_new_entry(make_cursor):
     """The escape hatch: a deliberate move re-anchors, so the cursor stops trying to go home."""
     cursor = make_cursor()

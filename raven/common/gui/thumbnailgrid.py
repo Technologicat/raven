@@ -93,6 +93,7 @@ class ThumbnailGrid:
                  on_current_changed: Optional[Callable] = None,
                  on_selection_changed: Optional[Callable] = None,
                  on_double_click: Optional[Callable] = None,
+                 on_click: Optional[Callable] = None,
                  label_height: int = 18,
                  font_size: int = 20,
                  frame_padding_y: int = 3,
@@ -118,6 +119,9 @@ class ThumbnailGrid:
         *on_current_changed*: callback ``f(idx)`` when the current entry changes.
         *on_selection_changed*: callback ``f()`` when the multi-selection changes.
         *on_double_click*: callback ``f(idx)`` on double-click.
+        *on_click*: callback ``f(idx)`` on a single click on a tile, after the click has moved the cursor and
+            the selection. Unlike *on_current_changed*, this says the user clicked; the cursor also moves by
+            keyboard.
         *label_height*: height reserved for the filename label below each tile.
         *font_size*, *frame_padding_y*, *item_spacing_x*, *item_spacing_y*, *scrollbar_size*: DPG's own
             metrics, which the layout arithmetic has to match because it is computed rather than measured.
@@ -149,6 +153,7 @@ class ThumbnailGrid:
         self._on_current_changed = on_current_changed
         self._on_selection_changed = on_selection_changed
         self._on_double_click = on_double_click
+        self._on_click = on_click
         self._debug = debug
 
         self._label_height = label_height
@@ -246,7 +251,7 @@ class ThumbnailGrid:
         # DPG's container stack is one process-wide global. See `dpg-notes.md`, "DPG parent management".
         registry = dpg.add_handler_registry(tag=self._handler_tag)
         dpg.add_mouse_click_handler(button=dpg.mvMouseButton_Left,
-                                    callback=self._on_click,
+                                    callback=self._on_click_handler,
                                     parent=registry)
         dpg.add_mouse_double_click_handler(button=dpg.mvMouseButton_Left,
                                            callback=self._on_double_click_handler,
@@ -1056,7 +1061,7 @@ class ThumbnailGrid:
     # Internal: mouse handlers
     # ------------------------------------------------------------------
 
-    def _on_click(self, sender, app_data) -> None:
+    def _on_click_handler(self, sender, app_data) -> None:
         """Handle single click on a tile."""
         with self._lock:
             if not self.input_enabled:
@@ -1071,7 +1076,7 @@ class ThumbnailGrid:
                 inside = guiutils.is_mouse_on_widget(self._child_window_tag)
                 local_x, local_y = guiutils.get_mouse_relative_pos(self._child_window_tag)
                 content_y = local_y + dpg.get_y_scroll(self._child_window_tag)
-                logger.info(f"ThumbnailGrid._on_click: inside={inside} local=({local_x:.0f},{local_y:.0f}) "
+                logger.info(f"ThumbnailGrid._on_click_handler: inside={inside} local=({local_x:.0f},{local_y:.0f}) "
                             f"y_scroll={dpg.get_y_scroll(self._child_window_tag):.0f} "
                             f"content_y={content_y:.0f} row_h={self._row_height:.0f} "
                             f"col_w={self._col_width:.0f} "
@@ -1081,7 +1086,7 @@ class ThumbnailGrid:
                 # Where the panel is believed to be, against where the mouse actually was. An offset
                 # between the two is invisible in the numbers above — every click simply misses — and it
                 # is the failure this pair exists to make legible.
-                logger.info(f"ThumbnailGrid._on_click: mouse={dpg.get_mouse_pos(local=False)} "
+                logger.info(f"ThumbnailGrid._on_click_handler: mouse={dpg.get_mouse_pos(local=False)} "
                             f"widget_pos={guiutils.get_widget_pos(self._child_window_tag)} "
                             f"widget_size={guiutils.get_widget_size(self._child_window_tag)}")
 
@@ -1110,6 +1115,9 @@ class ThumbnailGrid:
                 self.set_current(idx)
 
             self._last_click_idx = idx
+
+        if self._on_click is not None:  # outside the lock: this is the caller's code, not ours
+            self._on_click(idx)
 
     def _on_wheel(self, sender, app_data) -> None:
         """Flash the end when the wheel is turned against it.

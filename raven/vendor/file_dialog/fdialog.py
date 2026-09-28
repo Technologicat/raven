@@ -2032,6 +2032,10 @@ class FileDialog:
     def open_file(self, sender: int | str, app_data: Any, user_data: Any) -> str | None:  # `user_data`: [name, fullpath, timestamp, size]
         ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
 
+        # A click on a row gives the listing the keys. Not `_focus_listing`, which also parks the focus:
+        # the click has already taken the caret out of whichever field had it.
+        self._caret_home = CaretHome.LISTING
+
         # Detect double-click.
         # double_clicked = dpg.is_mouse_button_double_clicked(dpg.mvMouseButton_Left)  # TODO: doesn't work, why?
         current_time = time.time()
@@ -2046,6 +2050,9 @@ class FileDialog:
             self._mark_selected(user_data[1], dpg.get_value(sender) is True)
         # Single selection
         else:
+            # The keyboard cursor follows a bare click, as it does in the grid; a Ctrl+click leaves it.
+            if user_data is not None:
+                self._table_cursor.set_current_key(user_data[1])
             dpg.set_value(sender, False)  # unselect this item  (TODO: why? double-click handling?)
 
             if double_clicked:
@@ -2455,8 +2462,13 @@ class FileDialog:
                                            allow_multi_select=self.multi_selection,
                                            on_current_entry_changed=self._grid_current_changed,
                                            on_selection_changed_entries=self._grid_selection_changed,
-                                           on_activate=self._grid_activate)
+                                           on_activate=self._grid_activate,
+                                           on_entry_clicked=self._grid_clicked)
         return self._grid
+
+    def _grid_clicked(self, entry: filelisting.FileEntry) -> None:
+        """A click on a tile gives the listing the keys, as a click on a table row does."""
+        self._caret_home = CaretHome.LISTING
 
     def _grid_activate(self, entry: filelisting.FileEntry) -> None:
         """Double click in the grid: descend into the directory, or accept the file."""
