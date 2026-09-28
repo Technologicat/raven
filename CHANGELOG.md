@@ -70,6 +70,7 @@
 - **Tab to the composer or the graph no longer flashes a caret in the search field for a moment.**
 - **Clicking the chat graph to give it the keyboard no longer switches branch.**
   - In v0.2.9 a click on the box the cursor was on counted as the second of the two clicks that switch branch — HEAD's box, where the cursor appears when the graph takes the keyboard, or the box it was left on before you went elsewhere. So the click switched branch and handed the keyboard straight back to the chat log. Tabbing to the graph and then clicking that box did the same.
+- **Librarian could occasionally close by itself while redrawing a message**, with *"Unhandled exception in render loop"* in the log. Nothing was lost beyond what the once-a-minute autosave had not yet written.
 - **Deleting a message is refused while a reply is being written.**
   - In v0.2.9 the delete went through, and deleting a message above the reply in progress destroyed the reply along with it, while it was still being written. The button now flashes red and says why.
 

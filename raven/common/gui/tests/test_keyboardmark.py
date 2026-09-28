@@ -282,6 +282,18 @@ class TestMovingMark:
         assert mark.lit is False
         assert not keyboardmark.pulse_is_running()
 
+    def test_a_target_deleted_before_it_was_marked_leaves_the_mark_on_nothing(self, make_widget, quiet_pulse):
+        # A per-frame caller picks the target while another thread may delete it: Librarian rebuilding a
+        # message took the dot the mark was about to move onto, and the error ended the render loop.
+        first = make_widget("button", "1")
+        doomed = make_widget("button", "2")
+        mark = keyboardmark.Mark(first)
+        dpg.delete_item(doomed)
+        assert not dpg.does_item_exist(doomed), "the target still exists, so this cannot test a deleted one"
+        mark.target = doomed
+        assert mark.target is None
+        assert theme_items(first) == [], "the widget the mark left kept the mark's theme"
+
     def test_moving_a_mark_says_nothing_in_the_log(self, make_widget, quiet_pulse, caplog):
         """The warning is for a call site that displaced a theme by accident, which a move never is."""
         first = make_widget("button", "1")

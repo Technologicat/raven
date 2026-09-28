@@ -401,8 +401,18 @@ class Mark:
             self._target = target
             self._previous_theme = None
             if target is not None:
-                self._previous_theme = dpg.get_item_theme(target)
-                dpg.bind_item_theme(target, self._theme)
+                # EAFP: a per-frame caller picks the target from widgets another thread may delete — a message
+                # rebuilt mid-frame takes its mark's dot with it — so the handle can expire between being
+                # chosen and being marked. Then the mark is on nothing, and the caller's next frame picks again.
+                marked = False
+                with guiutils.nonexistent_ok():
+                    self._previous_theme = dpg.get_item_theme(target)
+                    dpg.bind_item_theme(target, self._theme)
+                    marked = True
+                if not marked:
+                    self._target = None
+                    self._previous_theme = None
+                    return
                 self._build_tooltip()
 
     target = property(fget=_get_target, fset=_set_target,
