@@ -1423,6 +1423,18 @@ programmatic focus and not the route that caused it. Traced by logging every wri
 with a stack and a thread name — worth reaching for early here, since the two writes come from DPG's own
 handlers and appear nowhere in the app's key path.
 
+**Where ImGui's step can land is set by `flattened_navigation`, and every child window defaults to `True`.**
+A flattened child shares its parent's navigation scope, so the step can leave it for any item in the
+window. Raven-librarian showed the visible form, measured 2026-09-28: the composer and its send button sit
+in the `chat_controls` child, and on every Tab to the composer or the graph the caret flashed for about a
+frame in the search field above. With `flattened_navigation=False` on that child the flash is gone, and
+nothing else about Tab changed that anyone could see. It was confirmed live through `--repl`, with
+`configure_item` taking effect at runtime.
+
+So the remedy for a stray step is to confine it: put the widget the keyboard is leaving in a child whose
+navigation is not flattened, holding nothing a step could visibly land on. Whether a step with nowhere else
+to go re-activates the widget it started from was not measured.
+
 ## `is_key_down` is sampled when the callback runs, not when the key was pressed
 
 Modifier state is read *inside* the handler, and handlers are dispatched per frame — so the answer

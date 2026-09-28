@@ -1410,11 +1410,16 @@ with timer() as tim:
                                                          height=chat_panel_h)
 
                 chat_controls_w, chat_controls_h = _get_chat_controls_base_size()
+                # Not flattened, so that ImGui's own Tab stepping stays inside this child. Tab is ours to define
+                # (`_cycle_keyboard_home`), and ImGui acts on it too: from the composer or the send button,
+                # both in here, it would otherwise step into the search field above for a frame before our
+                # handler's focus lands, flashing a caret there on every Tab.
                 with dpg.child_window(tag="chat_controls",
                                       width=chat_controls_w,
                                       height=chat_controls_h,
                                       no_scrollbar=True,
-                                      no_scroll_with_mouse=True):
+                                      no_scroll_with_mouse=True,
+                                      flattened_navigation=False):
                     with dpg.group():  # composer: vertical stack (backend status pill / multiline text field / staged-image strip / toolbar)
                         # LLM backend status. Hidden whenever the backend is answering and has something to
                         # answer with, which is the ordinary case — so this is a row that normally isn't

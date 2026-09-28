@@ -1159,6 +1159,11 @@ def _on_key(sender, app_data) -> None:
             grid.toggle_select(grid.current)
 
     # Focus toggle.
+    #
+    # ImGui acts on Tab as well, stepping its own keyboard focus once anything has been given focus with
+    # `focus_item` — nothing here does, so the step never happens. A text field entered that way would change
+    # that, and wants its container's `flattened_navigation` off: see `dpg-notes.md`, "Tab reaches a global
+    # handler and still moves ImGui's nav, after a programmatic focus".
     elif key == dpg.mvKey_Tab:
         if iv is not None:
             iv.focused = not iv.focused
