@@ -24,7 +24,7 @@ __all__ = ["action_continue", "action_finish", "action_cancel",  # return values
            "Animator", "animator",  # controller and its global instance (need only one per app)
            "Animation", "Overlay",  # base classes
            "Dimmer",  # overlays
-           "WidgetFlash", "flash_button", "highlight_widget", "set_text_under_flash",  # the flash animation, its two conveniences, and writing to a widget one has borrowed
+           "WidgetFlash", "flash_button", "flash_delete_confirmation", "highlight_widget", "set_text_under_flash",  # the flash animation, its three conveniences, and writing to a widget one has borrowed
            "CaretRequest", "give_caret",  # putting the caret in a text field, against whatever else claims focus
            "GlyphAtlasRefresh",  # a one-off repair of the font atlas, which every app adds before its render loop
            "SmoothScrolling", "WidgetSwap",  # animations: a glide, and a swap that holds the view still
@@ -848,6 +848,30 @@ def flash_button(*,
                              message_target=message_target,
                              flash_color=((96, 128, 96) if ok else (150, 96, 96)),
                              text_color=((180, 255, 180) if ok else (255, 180, 180))))
+
+def flash_delete_confirmation(*,
+                              button: str | int,
+                              duration: float,
+                              tooltip: object,
+                              message: str = "Press again to confirm.\nDeletion CANNOT BE UNDONE.") -> None:
+    """Flash a delete button bright red, asking for the second press that confirms it.
+
+    The warning half of a two-press delete; the button's own callback decides what counts as the second
+    press. Louder than `flash_button`'s failure red, because what it warns of destroys data.
+
+    `button`: the delete button (DPG tag or ID).
+    `duration`: how long the flash lasts, in seconds — best the same window the second press is accepted in,
+                so the warning is up exactly while it applies.
+    `tooltip`: the button's `tooltip.Tooltip`, which shows `message` for the duration and flashes along.
+    `message`: what the tooltip says meanwhile.
+    """
+    animator.add(WidgetFlash(target=button,
+                             duration=duration,
+                             also_flash=(tooltip.window, tooltip.caption),
+                             message=message,
+                             message_target=tooltip,
+                             flash_color=(255, 32, 32),
+                             text_color=(255, 255, 255)))
 
 def highlight_widget(*,
                      widget: str | int,

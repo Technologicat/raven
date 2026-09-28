@@ -1806,14 +1806,9 @@ class DPGChatGraphPanel(gui_animation.Animation):
 
         if not confirmed:
             self._delete_armed = (node_id, now)
-            gui_animation.animator.add(gui_animation.WidgetFlash(target=self._delete_button_tag,
-                                                                 duration=gui_config.delete_confirm_duration,
-                                                                 also_flash=(self._delete_tooltip.window,
-                                                                             self._delete_tooltip.caption),
-                                                                 message="Press again to confirm.\nDeletion CANNOT BE UNDONE.",
-                                                                 message_target=self._delete_tooltip,
-                                                                 flash_color=(255, 32, 32),  # red: this one destroys data
-                                                                 text_color=(255, 255, 255)))
+            gui_animation.flash_delete_confirmation(button=self._delete_button_tag,
+                                                    tooltip=self._delete_tooltip,
+                                                    duration=gui_config.delete_confirm_duration)
             return
 
         self._delete_armed = None

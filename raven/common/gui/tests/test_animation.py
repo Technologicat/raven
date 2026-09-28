@@ -451,6 +451,22 @@ class TestFlashButtonTooltipAdapter:
             tip.destroy()
 
 
+class TestFlashDeleteConfirmation:
+    """The warning a two-press delete flashes on its first press."""
+
+    def test_it_asks_for_the_second_press_through_the_tooltip(self, widgets):
+        _, button = widgets
+        tip = tooltip.Tooltip(button, "Delete")
+        try:
+            animation.flash_delete_confirmation(button=button, duration=5.0, tooltip=tip)
+            flash = animation.WidgetFlash.instances[button]
+            assert flash.also_flash == (tip.window, tip.caption)
+            assert flash.message_target is tip
+            assert "again" in flash.message and "CANNOT BE UNDONE" in flash.message
+        finally:
+            tip.destroy()
+
+
 class TestDeduplication:
     def test_second_flash_on_the_same_widget_does_not_reify(self, widgets):
         """At most one flash owns a widget; the loser goes into ghost mode."""

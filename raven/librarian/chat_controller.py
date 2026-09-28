@@ -1922,13 +1922,9 @@ class DPGChatMessage:
                 if maybe_refusal is not None:
                     flash_refusal(maybe_refusal)
             else:
-                gui_animation.animator.add(gui_animation.WidgetFlash(target=delete_subtree_button,
-                                                                     duration=gui_config.delete_confirm_duration,
-                                                                     also_flash=(delete_subtree_tooltip.window, delete_subtree_tooltip.caption),
-                                                                     message="Press again to confirm.\nDeletion CANNOT BE UNDONE.",
-                                                                     message_target=delete_subtree_tooltip,
-                                                                     flash_color=(255, 32, 32),  # red: this one destroys data
-                                                                     text_color=(255, 255, 255)))
+                gui_animation.flash_delete_confirmation(button=delete_subtree_button,
+                                                        tooltip=delete_subtree_tooltip,
+                                                        duration=gui_config.delete_confirm_duration)
         # The key goes through this same callable, so it inherits the two-press confirmation rather than
         # having one of its own — and the flash that asks for the second press is on the button the key
         # acts on, which is also the message the blue dot is beside.
