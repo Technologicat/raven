@@ -88,6 +88,9 @@ _app_state = {
 }
 
 _filedialog_open = None  # initialized after DPG setup
+
+# The file types the viewer opens, in the order the file dialog lists them.
+_SUPPORTED_EXTENSIONS = (".xdot", ".dot", ".gv")
 _help_window = None  # initialized after DPG setup
 _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
@@ -207,7 +210,7 @@ def _load_file(filepath: Union[pathlib.Path, str]) -> Optional[str]:
 
     else:
         _show_error("Unsupported Format",
-                    f"Unsupported file type: '{ext}'. Supported: .xdot, .dot, .gv")
+                    f"Unsupported file type: '{ext}'. Supported: {', '.join(_SUPPORTED_EXTENSIONS)}")
         return None
 
 
@@ -707,7 +710,9 @@ def main() -> int:
                                   themes_and_fonts=themes_and_fonts,
                                   tag="open_file_dialog",
                                   callback=_open_file_dialog_callback,
-                                  filter_list=[".xdot", ".dot", ".gv"],
+                                  # Every supported type first, and so the default: a user looking for a graph
+                                  # should not need to remember which of the formats it was saved in.
+                                  filter_list=[("Graph files", _SUPPORTED_EXTENSIONS), *_SUPPORTED_EXTENSIONS],
                                   default_path=cwd)
 
     # --- Build GUI ---
@@ -916,9 +921,9 @@ def main() -> int:
     # Accept graph files dragged in from the file manager, same effect as the open dialog. This goes right
     # after `show_viewport` because that call is what makes DPG's window reachable through GLFW on this
     # thread; earlier, or from anywhere else, the handle is not there to install against.
-    filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_extension(".xdot", ".dot", ".gv"),
+    filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_extension(*_SUPPORTED_EXTENSIONS),
                                                              handler=lambda paths: _open_file(paths[0]),
-                                                             label="a graph file (.dot, .xdot, .gv)",
+                                                             label=f"a graph file ({', '.join(_SUPPORTED_EXTENSIONS)})",
                                                              multiple=False)],
                                           reference_window="main_window",  # tag
                                           what="Raven-xdot-viewer",

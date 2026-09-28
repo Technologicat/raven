@@ -28,6 +28,7 @@
 - **The search field's keys now work as in Raven-visualizer.**
   - **Tab** moves the keyboard between the search field and the graph, keeping what is typed.
   - **Ctrl+Shift+F** clears the search.
+- **The open dialog shows every supported graph file by default**, `.xdot`, `.dot` and `.gv` together, under a new *Graph files* filter. The single-type filters remain.
 
 #### Constellation-wide
 
