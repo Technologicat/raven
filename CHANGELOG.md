@@ -16,12 +16,23 @@
 
 ## 0.2.10 (in progress)
 
+### Added
+
+#### Raven-avatar
+
+- **The debug overlay breaks the avatar's render time down**, into posing, upscaling and postprocessing, the cel machinery, and the rest. Timed on the GPU itself, so the numbers are true without slowing the renderer. Toggle the overlay with **Ctrl+Shift+M**.
+
 ### Changed
 
 #### Raven-librarian
 
 - **The avatar panel's DOCS and WEB indicators now read DOCUMENTS and INTERNET**, as the toggles below them are called.
 - **In those indicators, only the icon pulsates now.** The names hold still, in their row's colour. In v0.2.9 some rows pulsated their name as well and some did not.
+
+#### Raven-avatar
+
+- **The `metrics_enabled` animator setting is gone.** The timing it logged is now on the debug overlay, and in the server's log every 5 seconds at `--log-level DEBUG`, without slowing the renderer. An animator settings file that still names it loads with a warning that it is ignored.
+- **The server's DEBUG log no longer fills with per-frame lines** while the avatar animates.
 
 #### Raven-xdot-viewer
 

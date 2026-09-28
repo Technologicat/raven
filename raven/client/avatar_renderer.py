@@ -87,7 +87,8 @@ class ResultFeedReader:
           with keys `{"enabled", "left", "top", "right", "bottom"}`).
         - `full_size` is `(w, h)` of the uncropped output (from `X-Full-Size`).
         - `server_stats` is the server-side per-phase timing averages:
-              render/encode/wait/output ms + fps, plus target_fps
+              render/encode/wait/output ms + fps, plus target_fps, plus the render time's breakdown by
+              phase, ms + fps each (the phases are `raven.server.modules.avatar.RENDER_PHASES`)
           from the `X-Server-Stats` header — useful for enriching the client-side FPS counter.
 
         If not running, raises `TypeError`.
@@ -926,7 +927,26 @@ class DPGAvatarRenderer:
                 line2 = (f"Server: render {server_stats['render_ms']:.1f}ms [{server_stats['render_fps']:.1f} FPS] | "
                          f"encode {server_stats['encode_ms']:.1f}ms [{server_stats['encode_fps']:.1f} FPS] | "
                          f"output {server_stats['output_ms']:.1f}ms [{server_stats['output_fps']:.1f} FPS]; target {server_stats['target_fps']:.1f} FPS")
-                return f"{line1}\n{line2}"
+                if "pose_ms" not in server_stats:  # a server that does not break the render time down
+                    return f"{line1}\n{line2}"
+                # Where the render time goes, in the order the phases run: the image work, then getting it out.
+                def describe(phases):
+                    return " | ".join(f"{label} {server_stats[f'{phase}_ms']:.1f}ms [{server_stats[f'{phase}_fps']:.1f} FPS]"
+                                      for phase, label in phases
+                                      if f"{phase}_ms" in server_stats)
+                # Grouped by what a reader is asking rather than in the order the frame runs them: the stages
+                # that cost, then the cel machinery, then the rest and getting the frame out, which are normally
+                # a fraction of a millisecond and are shown so that the day one is not, it is visible. All ten
+                # do not fit on one line anyway.
+                render_lines = [f"{title}: " + describe(phases)
+                                for title, phases in (("Render", (("pose", "pose"), ("upscale", "upscale"), ("postprocess", "postprocess"))),
+                                                      ("Cels", (("celblend", "blend"), ("animefx", "animefx"))),
+                                                      ("Other", (("normalize", "normalize"), ("crop", "crop"))),
+                                                      ("Output", (("gamma", "gamma"), ("dataformat", "format"), ("tocpu", "to CPU"))))]
+                # A blank line between the groups — the stream, where the render time goes, the rest — so the
+                # overlay reads as three short blocks rather than one wall of numbers.
+                costly, cels, other, output = render_lines
+                return "\n\n".join(["\n".join(group) for group in ((line1, line2), (costly, cels), (other, output))])
 
             def maybe_set_fps_counter(text):
                 with guiutils.nonexistent_ok():

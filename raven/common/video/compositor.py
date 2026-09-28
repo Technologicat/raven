@@ -65,10 +65,7 @@ def render_celstack(base_image: torch.tensor, celstack: List[Tuple[str, float]],
     The return value is a tensor of shape [c, h, w], containing the final blended image.
     """
     if not celstack:
-        logger.debug("compose_cels: Celstack is empty, returning base image as-is.")
         return base_image.clone()  # always cloned, because the caller may directly modify the result.
-
-    logger.debug(f"compose_cels: Composing {celstack}.")
 
     out = base_image.clone()
     for celname, strength in celstack:

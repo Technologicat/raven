@@ -37,6 +37,7 @@ import copy
 import functools
 import importlib
 import io
+import contextlib
 import json
 import logging
 import math
@@ -47,6 +48,7 @@ import time
 import numpy as np
 import sys
 import threading
+from collections.abc import Iterator
 from typing import Any, BinaryIO, Dict, List, Mapping, Optional, Tuple
 import uuid
 
@@ -640,8 +642,8 @@ def result_feed(instance_id: str) -> Response:
                     x_crop_header = f"X-Crop: {json.dumps(crop_snapshot, separators=(',', ':'))}\r\n".encode()
                     x_full_size_header = f"X-Full-Size: {full_w} {full_h}\r\n".encode()
 
-                    # Per-phase server-side timing stats. Non-intrusive, available whether `metrics_enabled`
-                    # is on or not. Clients may display these alongside their own receive-side FPS.
+                    # Per-phase server-side timing stats, always on and costing the renderer nothing. Clients
+                    # may display these alongside their own receive-side FPS.
                     render_avg_sec = animator.render_duration_statistics.average()
                     encode_avg_sec = encoder.encode_duration_statistics.average()
                     wait_avg_sec = encoder.wait_duration_statistics.average()
@@ -658,6 +660,14 @@ def result_feed(instance_id: str) -> Response:
                         "output_fps": round(_fps_from(output_avg_sec), 1),
                         "target_fps": round(animator.target_fps, 1),
                     }
+                    # Where the render time goes, timed by the device itself; see `Animator._choose_phase_clock`.
+                    # Left out on a device that cannot time it, so the client shows no breakdown rather than a
+                    # wrong one.
+                    if animator.breaks_down_render_time:
+                        for phase, statistics in animator.phase_duration_statistics.items():
+                            avg_sec = statistics.average()
+                            server_stats[f"{phase}_ms"] = round(1000 * avg_sec, 1)
+                            server_stats[f"{phase}_fps"] = round(_fps_from(avg_sec), 1)
                     x_server_stats_header = f"X-Server-Stats: {json.dumps(server_stats, separators=(',', ':'))}\r\n".encode()
 
                     yield (b"--frame\r\n" +
@@ -717,6 +727,12 @@ def result_feed(instance_id: str) -> Response:
 # --------------------------------------------------------------------------------
 # Internal stuff
 
+# The phases of a frame's render that are timed separately, in the order they run. Each is reported in the
+# per-frame `X-Server-Stats` header as `<phase>_ms` and `<phase>_fps`. Between them they are the whole of the
+# GPU work in `render_ms`; what is left is the Python bookkeeping around it.
+RENDER_PHASES = ("celblend", "pose", "normalize", "animefx", "crop", "upscale", "postprocess",
+                 "gamma", "dataformat", "tocpu")
+
 class Animator:
     """uWu Waifu"""
 
@@ -741,6 +757,11 @@ class Animator:
         self.postprocessor = Postprocessor(device,
                                            dtype=self.poser.dtype)  # dtype must match `output_image` in `Animator.render_animation_frame`
         self.render_duration_statistics = RunningAverage()  # used for FPS compensation in animation routines
+        # Where the render time goes, for the client's debug overlay, per phase in `RENDER_PHASES`: see `_phase_mark`.
+        self.phase_duration_statistics = {phase: RunningAverage() for phase in RENDER_PHASES}
+        self._phase_clock = None  # how the phases are timed on this device, decided on first use; see `_choose_phase_clock`
+        self._phase_events = None  # a start and an end `torch.Event` per phase, reused frame to frame, when that is how
+        self._frame_phase_marks = {}  # phase -> (start, end) marks of the frame being rendered; see `_timed_phase`
         self.animator_thread = None
 
         self.source_image: Optional[torch.tensor] = None
@@ -1086,9 +1107,6 @@ class Animator:
         # Doesn't matter that `n` isn't an integer, since the power function over the reals is continuous and we just want a reasonable scaling here.
         p_scaled = 1.0 - (1.0 - p_orig)**n
         should_blink = (random.random() <= p_scaled)
-
-        debug_fps = round(avg_render_fps, 1)
-        logger.debug(f"animate_blinking: p @ {CALIBRATION_FPS} FPS = {p_orig}, scaled p @ {debug_fps:.1f} FPS = {p_scaled:0.6g}")
 
         # Prevent blinking too fast in succession.
         time_now = time.monotonic_ns()
@@ -1583,8 +1601,6 @@ class Animator:
         dt = 1.0 / avg_render_fps
         step = smoothvalue.fps_corrected_step(rate, dt)
 
-        logger.debug(f"interpolate: rate @ {smoothvalue.CALIBRATION_FPS} FPS = {rate}, step @ {avg_render_fps:.1f} FPS = {step:0.6g}")
-
         # NOTE: When interpolation is applied to a pose, this overwrites blinking, talking, and breathing, but that doesn't matter,
         # because we apply this interpolator first. The other animation drivers may then partially overwrite our result.
         EPSILON = 1e-8
@@ -1602,6 +1618,73 @@ class Animator:
 
     # --------------------------------------------------------------------------------
     # Animation logic
+
+    def _choose_phase_clock(self) -> str:
+        """How this device's render phases can be timed: `"clock"`, `"events"`, or `"none"`."""
+        # Events, because on an accelerator the work is queued: the clock around a phase measures how long it
+        # took to *queue*, and making each phase wait for the device, to get a true reading, slows the renderer.
+        # An event is timestamped by the device as its stream reaches it, and waits for nothing. On the CPU the
+        # work is done where it is called, so the clock is exact.
+        if torch.device(self.device).type == "cpu":
+            return "clock"
+        try:
+            events = [torch.Event(device=self.device, enable_timing=True) for _ in range(2 * len(RENDER_PHASES))]
+            events[0].record()
+            events[1].record()
+            events[1].synchronize()
+            events[0].elapsed_time(events[1])
+        except Exception as exc:  # a backend without timed events: report no breakdown rather than a wrong one
+            logger.warning(f"Animator._choose_phase_clock: instance '{self.instance_id}': device '{self.device}' cannot time events, so the render time is not broken down: {type(exc)}: {exc}")
+            return "none"
+        self._phase_events = events
+        return "events"
+
+    def _get_breaks_down_render_time(self) -> bool:
+        """Whether the render time is being broken down into phases on this device."""
+        return self._phase_clock in ("clock", "events")
+    breaks_down_render_time = property(fget=_get_breaks_down_render_time,
+                                       doc="Whether the per-phase averages mean anything on this device yet. Read-only.")
+
+    @contextlib.contextmanager
+    def _timed_phase(self, phase: str) -> Iterator[None]:
+        """Time the work in the `with` block as `phase`, one of `RENDER_PHASES`.
+
+        Records its marks for `render_animation_frame` to read, into `self._frame_phase_marks`, once the frame's
+        work is done; nothing is waited for here.
+        """
+        index = RENDER_PHASES.index(phase)
+        start = self._phase_mark(2 * index)
+        yield
+        self._frame_phase_marks[phase] = (start, self._phase_mark(2 * index + 1))
+
+    def _phase_mark(self, index: int) -> torch.Event | float | None:
+        """Mark a point in this frame's render. `index` picks one of the reusable events, two per phase.
+
+        Read an interval between two marks with `_phase_seconds`, once the frame's work is done. `None` when
+        this device's phases cannot be timed.
+        """
+        if self._phase_clock is None:
+            self._phase_clock = self._choose_phase_clock()
+        if self._phase_clock == "clock":
+            return time.perf_counter()
+        if self._phase_clock == "none":
+            return None
+        event = self._phase_events[index]
+        event.record()
+        return event
+
+    @staticmethod
+    def _phase_seconds(start: torch.Event | float | None, end: torch.Event | float | None) -> float | None:
+        """Seconds between two marks from `_phase_mark`, or `None` if they are not timed.
+
+        For events, call only once the device has reached `end`.
+        """
+        if start is None or end is None:
+            return None
+        if isinstance(start, float):
+            return end - start
+        end.synchronize()  # a no-op once the frame has been copied to the CPU, which is where this is called
+        return start.elapsed_time(end) / 1000  # milliseconds -> seconds
 
     def render_animation_frame(self) -> None:
         """Render an animation frame.
@@ -1640,12 +1723,6 @@ class Animator:
         crop_snapshot = dict(self._settings["crop"])
         do_crop = crop_snapshot["enabled"]
 
-        metrics_enabled = self._settings["metrics_enabled"]
-        def maybe_sync_cuda():
-            if metrics_enabled:
-                torch.cuda.synchronize()
-
-        maybe_sync_cuda()
         time_render_start = time.monotonic_ns()
 
         self.emotion = self.pending_emotion  # update from pending emotion at start of frame (this avoids a race condition between `set_emotion` and `render_animation_frame`)
@@ -1695,36 +1772,31 @@ class Animator:
             self.current_celstack = self.animate_eye_waver(strength, self.current_celstack)
 
         with torch.inference_mode():
-            # Detailed performance measurement protocol: sync CUDA (i.e. finish pending async CUDA operations), start timer, do desired CUDA operation(s), sync CUDA again, stop timer.
-            with timer() as tim_celblend:
+            with self._timed_phase("celblend"):
                 blended_source_image = compositor.render_celstack(self.source_image, self.current_celstack, self.torch_cels)
                 # data range [0, 1] -> [-1, 1], for poser
                 blended_source_image.mul_(2.0)
                 blended_source_image.sub_(1.0)
-                maybe_sync_cuda()
 
             # - [0]: model's output index for the full result image
             # - model's data range is [-1, +1], linear intensity ("gamma encoded")
-            with timer() as tim_pose:
+            with self._timed_phase("pose"):
                 pose = torch.tensor(self.current_pose, device=self.device, dtype=self.poser.get_dtype())
                 output_image = self.poser.pose(blended_source_image, pose)[0]
-                maybe_sync_cuda()
 
             # data range [-1, 1] -> [0, 1], for the rest of processing
-            with timer() as tim_normalize:
+            with self._timed_phase("normalize"):
                 output_image.add_(1.0)
                 output_image.mul_(0.5)
-                maybe_sync_cuda()
 
             # Cel-based anime effects that go *around* the character.
             # Note we build an independent celstack (and separately at each frame) for these.
             # Apply these after posing, but before upscaling or postprocessing.
-            with timer() as tim_animefx:
+            with self._timed_phase("animefx"):
                 if self._settings["animefx_enabled"]:
                     fx_celstack = [(celname, 0.0) for celname in self.torch_cels if celname.startswith("fx_")]  # TODO: do this efficiently
                     fx_celstack = self.animate_animefx(fx_celstack)
                     output_image = compositor.render_celstack(output_image, fx_celstack, self.torch_cels)
-                    maybe_sync_cuda()
 
             # Crop → upscale → postprocess. The crop goes BEFORE the upscaler so that with an expensive
             # upscaler (Anime4K) and an aggressive crop, the upscaler only processes the kept region —
@@ -1739,7 +1811,7 @@ class Animator:
                 upscale_factor_for_header = self.upscale_factor if self.upscale_factor is not None else 1.0
                 full_size = (int(w_poser * upscale_factor_for_header), int(h_poser * upscale_factor_for_header))
 
-                with timer() as tim_crop:
+                with self._timed_phase("crop"):
                     if do_crop:
                         c, h, w = output_image.shape
                         x1 = int(crop_snapshot["left"] * w)
@@ -1747,9 +1819,8 @@ class Animator:
                         y1 = int(crop_snapshot["top"] * h)
                         y2 = int(crop_snapshot["bottom"] * h)
                         output_image = output_image[:, y1:y2, x1:x2]
-                        maybe_sync_cuda()
 
-                with timer() as tim_upscale:
+                with self._timed_phase("upscale"):
                     if self.upscaler is not None:
                         # Track the cropped size through upscale: with crop-before-upscale, the target
                         # is `upscale_factor × cropped_poser_size`, which changes whenever the crop
@@ -1761,29 +1832,24 @@ class Animator:
                         target_h = int(cropped_h * self.upscale_factor)
                         self.upscaler.reconfigure_output_size(target_w, target_h)
                         output_image = self.upscaler.upscale(output_image)
-                        maybe_sync_cuda()
 
-                with timer() as tim_postproc:
+                with self._timed_phase("postprocess"):
                     # Postprocessor re-inits its per-resolution state lazily on first render_into at a
                     # new size, so no explicit reconfigure is needed here even after the crop changes.
                     # (See raven/common/video/postprocessor.py:512.)
                     self.postprocessor.render_into(output_image)  # apply pixel-space glitch artistry
-                    maybe_sync_cuda()
 
-            with timer() as tim_gamma:
+            with self._timed_phase("gamma"):
                 output_image[:3, :, :] = torch_linear_to_srgb(output_image[:3, :, :])  # apply gamma correction
-                maybe_sync_cuda()
 
             # convert [c, h, w] float -> [h, w, c] uint8
-            with timer() as tim_dataformat:
+            with self._timed_phase("dataformat"):
                 c, h, w = output_image.shape
                 output_image = torch.transpose(output_image.reshape(c, h * w), 0, 1).reshape(h, w, c)
                 output_image = (255.0 * output_image).byte()
-                maybe_sync_cuda()
 
-            with timer() as tim_sendtocpu:
+            with self._timed_phase("tocpu"):
                 output_image_numpy = output_image.detach().cpu().numpy()
-                maybe_sync_cuda()
 
         # Update the last-emotion state last, so that all animation drivers have access to the old emotion, too.
         self.last_emotion = self.emotion
@@ -1798,9 +1864,11 @@ class Animator:
         if self.source_image is not None:
             render_elapsed_sec = (time_now - time_render_start) / 10**9
             self.render_duration_statistics.add_datapoint(render_elapsed_sec)
-
-        if metrics_enabled:
-            logger.info(f"total {1000 * render_elapsed_sec:0.1f} ms; cel blending {1000 * tim_celblend.dt:0.1f} ms, pose {1000 * tim_pose.dt:0.1f} ms, norm {1000 * tim_normalize.dt:0.1f} ms, animefx {1000 * tim_animefx.dt:0.1f} ms, upscale {1000 * tim_upscale.dt:0.1f} ms, crop {1000 * tim_crop.dt:0.1f} ms, post {1000 * tim_postproc.dt:0.1f} ms, gamma {1000 * tim_gamma.dt:0.1f} ms, chw->hwc {1000 * tim_dataformat.dt:0.1f} ms, to CPU {1000 * tim_sendtocpu.dt:0.1f} ms")
+            # The copy to the CPU above has waited for the device, so every mark has been reached by now.
+            for phase, (start, end) in self._frame_phase_marks.items():
+                seconds = self._phase_seconds(start, end)
+                if seconds is not None:
+                    self.phase_duration_statistics[phase].add_datapoint(seconds)
 
         # Set the new rendered frame as the output image, and mark the frame as ready for consumption.
         with self.output_lock:
@@ -1814,8 +1882,12 @@ class Animator:
             avg_render_sec = self.render_duration_statistics.average()
             msec = round(1000 * avg_render_sec, 1)
             fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
+            breakdown = ""
+            if self.breaks_down_render_time:
+                breakdown = "; " + ", ".join(f"{phase} {1000 * statistics.average():.1f}ms"
+                                             for phase, statistics in self.phase_duration_statistics.items())
             logger.debug(f"render_animation_frame (avatar instance '{self.instance_id}'): "
-                         f"render {msec:.1f}ms [{fps} FPS available]")
+                         f"render {msec:.1f}ms [{fps} FPS available]{breakdown}")
             self.last_report_time = time_now
 
 # --------------------------------------------------------------------------------

@@ -85,7 +85,6 @@
                      "duration": 0.25,
                      "cels": ["fx_exclaim1", "fx_exclaim2", "fx_exclaim3"]}]
     ],
- "metrics_enabled": false,
  "postprocessor_chain": [["atmospheric_dust", {}],
                          ["bloom", {}],
                          ["chromatic_aberration", {}],

@@ -288,9 +288,6 @@ animator_defaults = {
     # "bicubic": very fast, often acceptable quality; "lanczos": fast, sharper than bicubic.
     "upscale_quality": "bicubic",
 
-    # Performance profiling settings.
-    "metrics_enabled": False,  # Detailed performance logging for the renderer; slows the renderer down, but shows where the rendering time goes. Average FPS calculation is always on, and doesn't slow down anything.
-
     # Canvas cropping settings.
     #
     # If the avatar does not occupy the whole 512x512 canvas, it is possible to cut away the empty space from the edges,
