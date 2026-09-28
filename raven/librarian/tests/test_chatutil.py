@@ -1499,6 +1499,120 @@ class TestDescendToLatest:
         assert chatutil.descend_to_latest(f, greeting2, recursive=False) == greeting2
 
 
+class TestSystemPromptNodeIds:
+    def test_every_root_is_a_system_prompt_node(self, two_card_forest):
+        f, card1, card2, _greeting1, _greeting2, _message = two_card_forest
+        assert set(chatutil.get_all_system_prompt_node_ids(f)) == {card1, card2}
+
+    def test_a_deleted_card_drops_out(self, two_card_forest):
+        f, card1, card2, _greeting1, _greeting2, _message = two_card_forest
+        assert card2 in chatutil.get_all_system_prompt_node_ids(f)  # so the cache has an answer to go stale
+        f.delete_subtree(card2)
+        assert chatutil.get_all_system_prompt_node_ids(f) == [card1]
+
+    def test_a_card_added_later_is_found(self, two_card_forest, chat_payload):
+        # The scan is cached, so this asks whether the cache notices the forest changing. A script building a
+        # forest of its own can add a root at any time, which the app never does after startup.
+        f, card1, card2, _greeting1, _greeting2, _message = two_card_forest
+        assert set(chatutil.get_all_system_prompt_node_ids(f)) == {card1, card2}
+        card3 = f.create_node(chat_payload("system", "a third card", 0), parent_id=None)
+        assert set(chatutil.get_all_system_prompt_node_ids(f)) == {card1, card2, card3}
+
+    def test_each_forest_gets_its_own_answer(self, two_card_forest):
+        # The cache holds one forest; asking about another must not be answered from it.
+        f, card1, card2, _greeting1, _greeting2, _message = two_card_forest
+        assert set(chatutil.get_all_system_prompt_node_ids(f)) == {card1, card2}
+        assert chatutil.get_all_system_prompt_node_ids(chattree.Forest()) == []
+
+    def test_the_caller_cannot_change_the_cached_answer(self, two_card_forest):
+        f, card1, card2, _greeting1, _greeting2, _message = two_card_forest
+        chatutil.get_all_system_prompt_node_ids(f).clear()
+        assert set(chatutil.get_all_system_prompt_node_ids(f)) == {card1, card2}
+
+
+class TestGreetingNodeIds:
+    def test_every_greeting_under_every_card_is_listed(self, two_card_forest):
+        f, _card1, _card2, greeting1, greeting2, message = two_card_forest
+        greeting_node_ids = chatutil.get_all_greeting_node_ids(f)
+        assert set(greeting_node_ids) == {greeting1, greeting2}
+        assert message not in greeting_node_ids
+
+    def test_the_same_question_gets_the_same_answer_every_time(self, two_card_forest):
+        # The button gates on one message -- reroll, continue, delete -- each ask this list whether the
+        # message is a greeting, and they ask the object they were handed once. A lazily evaluated answer
+        # is consumed by the first question, so the rest are answered from the leftovers, which reads as
+        # "no": a greeting's continue button comes up live, and so does the delete button of the last
+        # greeting under a card.
+        f, _card1, _card2, greeting1, _greeting2, _message = two_card_forest
+        greeting_node_ids = chatutil.get_all_greeting_node_ids(f)
+        assert [greeting1 in greeting_node_ids for _ in range(4)] == [True] * 4
+
+    def test_a_deleted_card_takes_its_greetings_out_of_the_list(self, two_card_forest):
+        # The root scan underneath is cached, and `get_children` raises on a node that is gone, so a stale
+        # cache would fail here rather than merely answer wrong.
+        f, _card1, card2, greeting1, greeting2, _message = two_card_forest
+        assert greeting2 in chatutil.get_all_greeting_node_ids(f)  # so the cache has an answer to go stale
+        f.delete_subtree(card2)
+        greeting_node_ids = chatutil.get_all_greeting_node_ids(f)
+        assert greeting1 in greeting_node_ids
+        assert greeting2 not in greeting_node_ids
+
+    def test_a_message_the_user_sent_is_not_a_greeting_however_it_sits(self, two_card_forest, chat_payload):
+        # HEAD can rest on a system prompt node — deleting another card lands there — and a message sent
+        # from there attaches beside the greetings. Going by position alone would call it one, and a
+        # greeting has its reroll and continue buttons taken away, and its delete button too if it is the
+        # last one under its card: the user would be left with a message of their own that they cannot remove.
+        f, card1, _card2, _greeting1, _greeting2, _message = two_card_forest
+        typed_at_the_root = f.create_node(chat_payload("user", "sent with HEAD on the card", 3), parent_id=card1)
+        assert typed_at_the_root not in chatutil.get_all_greeting_node_ids(f)
+
+
+class TestIsDeletable:
+    """The delete button's gate: which messages may be deleted, with everything below them."""
+
+    @staticmethod
+    def deletable(f, node_id, configured_card, configured_greeting):
+        return chatutil.is_deletable(datastore=f,
+                                     node_id=node_id,
+                                     configured_system_prompt_node_id=configured_card,
+                                     configured_greeting_node_id=configured_greeting,
+                                     greeting_node_ids=chatutil.get_all_greeting_node_ids(f))
+
+    def test_an_ordinary_message_is_deletable(self, two_card_forest):
+        f, card1, _card2, greeting1, _greeting2, message = two_card_forest
+        assert self.deletable(f, message, card1, greeting1)
+
+    def test_a_message_not_in_the_datastore_is_not(self, two_card_forest):
+        f, card1, _card2, greeting1, _greeting2, _message = two_card_forest
+        assert not self.deletable(f, None, card1, greeting1)
+
+    def test_the_configured_card_and_greeting_are_not(self, two_card_forest, chat_payload):
+        f, card1, _card2, greeting1, _greeting2, _message = two_card_forest
+        f.create_node(chat_payload("assistant", "a second greeting under card 1", 1), parent_id=card1)
+        assert not self.deletable(f, card1, card1, greeting1)
+        # Not the last greeting under its card, so only its being the configured one keeps it.
+        assert not self.deletable(f, greeting1, card1, greeting1)
+
+    def test_another_card_is_deletable(self, two_card_forest):
+        f, card1, card2, greeting1, _greeting2, _message = two_card_forest
+        assert self.deletable(f, card2, card1, greeting1)
+
+    def test_another_greeting_is_deletable_while_its_card_keeps_one(self, two_card_forest, chat_payload):
+        f, card1, card2, greeting1, greeting2, _message = two_card_forest
+        another = f.create_node(chat_payload("assistant", "a second greeting under card 2", 1), parent_id=card2)
+        assert self.deletable(f, greeting2, card1, greeting1)
+        assert self.deletable(f, another, card1, greeting1)
+
+    def test_the_last_greeting_under_a_card_is_not(self, two_card_forest, chat_payload):
+        # A card without a greeting is a state nothing else in the app can produce, and code that steps
+        # down from a card to reach one assumes it cannot exist.
+        f, card1, card2, greeting1, greeting2, _message = two_card_forest
+        assert not self.deletable(f, greeting2, card1, greeting1)
+        # A message typed with HEAD on the card sits beside the greeting, and is not a second greeting.
+        f.create_node(chat_payload("user", "sent with HEAD on the card", 3), parent_id=card2)
+        assert not self.deletable(f, greeting2, card1, greeting1)
+
+
 class TestLatestUserMessageText:
     """The RAG query a turn falls back on when the user did not just type something.
 

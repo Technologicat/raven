@@ -36,6 +36,7 @@ __all__ = [  # The parts a message is made of, and reading them back
 
            # Walking and mending a chat
            "linearize_chat", "descend_to_latest",
+           "get_all_system_prompt_node_ids", "get_all_greeting_node_ids", "is_deletable",
            "compute_auto_allowed_hosts",
            "upgrade_datastore", "factory_reset_datastore",
            "remove_persona_from_start_of_line",
@@ -1256,6 +1257,92 @@ def descend_to_latest(datastore: chattree.Forest, start_node_id: str, recursive:
     if not recursive:
         return latest_node_id
     return descend_to_latest(datastore, latest_node_id)
+
+# The root scan's last answer, as `(datastore, generation, root node IDs)`. One entry, because a process
+# works on one datastore at a time, and keyed on the forest's change counter, so a node added or deleted
+# anywhere invalidates it — including a new root, which a script building forests of its own may add at any
+# time. Holds the forest strongly, which costs at most the one forest.
+_root_scan_cache: Optional[Tuple[chattree.Forest, int, List[str]]] = None
+
+def get_all_system_prompt_node_ids(datastore: chattree.Forest) -> List[str]:
+    """Return the IDs of every system prompt node in `datastore`.
+
+    There are as many as there are distinct system prompts the datastore has seen: `appstate` keeps one root
+    per variety of card, so a chat written under an older card is rooted at its own. Every root is a system
+    prompt node, which is what makes the root scan the whole answer.
+
+    The scan is O(n) over the forest, and the chat log asks once per message it builds, so the answer is
+    cached until the forest next changes.
+    """
+    global _root_scan_cache
+    with datastore.lock:
+        generation = datastore.generation
+        maybe_cached = _root_scan_cache
+        if maybe_cached is not None:
+            cached_datastore, cached_generation, cached_root_node_ids = maybe_cached
+            if cached_datastore is datastore and cached_generation == generation:
+                return list(cached_root_node_ids)
+        root_node_ids = datastore.get_all_root_nodes()
+        _root_scan_cache = (datastore, generation, root_node_ids)
+        return list(root_node_ids)
+
+def get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
+    """Return the IDs of every AI greeting in `datastore`, under every system prompt.
+
+    Since the AI's greeting can be changed in the config, the greeting used in any given stored chat is NOT
+    necessarily the *current* greeting (`app_state["new_chat_HEAD"]`).
+
+    So a greeting is identified by where it sits and by who said it: a direct child of a root — every root
+    being a system prompt node — that the *assistant* wrote. Position alone is not enough. HEAD can rest on
+    a root, and a message sent from there lands beside the greetings; taking it for one would disable its
+    own reroll and continue buttons, and — as the last one under its card — its delete button too, leaving
+    the user with a message they cannot remove.
+
+    Returns a list rather than a lazy iterable, deliberately. Each caller asks it more than once — reroll,
+    continue, delete — and a generator answers the first question and then reports that it is empty.
+    """
+    greeting_node_ids = []
+    for system_prompt_node_id in get_all_system_prompt_node_ids(datastore):
+        for node_id in datastore.get_children(system_prompt_node_id):
+            if datastore.get_payload(node_id)["message"]["role"] == "assistant":
+                greeting_node_ids.append(node_id)
+    return greeting_node_ids
+
+def is_deletable(datastore: chattree.Forest,
+                 node_id: Optional[str],
+                 configured_system_prompt_node_id: str,
+                 configured_greeting_node_id: str,
+                 greeting_node_ids: List[str]) -> bool:
+    """Return whether the message at `node_id` may be deleted, together with everything below it.
+
+    Not deletable: a message not linked to a chat node (`node_id` is `None`), the system prompt and greeting
+    the app is currently configured with, and the last greeting under any system prompt. Everything else is.
+
+    `greeting_node_ids`: from `get_all_greeting_node_ids`. Taken rather than computed, because a caller
+    building a row of messages asks this once per message and can compute that list once.
+    """
+    # The configured system prompt and greeting would take the chat the user is in, and the app recreates
+    # both at the next start anyway.
+    #
+    # Any *other* system prompt or greeting may go, and taking its subtree along is the point rather than a
+    # side effect: those are the chats held under that card, or started from that greeting, and this is where
+    # a judgement about which ones are still wanted belongs. The datastore keeps one card per variety and
+    # never collects them (a root is reachable by construction), so without this there would be no way to be
+    # rid of one.
+    #
+    # A greeting goes only while another remains under its card. Every card is created with its greeting, so
+    # the rest of the app has never met a card without one — deleting another card, for one, steps down from
+    # the card it lands on to reach a greeting. To be rid of the last greeting, delete its card, which takes
+    # the greeting along.
+    if node_id is None:
+        return False
+    if node_id in (configured_system_prompt_node_id, configured_greeting_node_id):
+        return False
+    if node_id in greeting_node_ids:
+        siblings, _ = datastore.get_siblings(node_id)
+        if sum(sibling in greeting_node_ids for sibling in siblings) == 1:
+            return False
+    return True
 
 def compute_auto_allowed_hosts(datastore: chattree.Forest,
                                node_id: str,

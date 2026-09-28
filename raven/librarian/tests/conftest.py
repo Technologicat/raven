@@ -34,9 +34,9 @@ def two_card_forest():
     """Two system prompts, each with its own greeting, and one message under the first.
 
     The shape `appstate` produces once the datastore has seen more than one system prompt: every root is a
-    system prompt node, and its children are the greetings recorded under it. Shared, because two modules
-    ask questions of it — `chatutil.descend_to_latest` about where a descent lands, and `chat_controller`
-    about which nodes are greetings.
+    system prompt node, and its children are the greetings recorded under it. Here rather than in one test
+    module because the tree-shape questions asked of it — where a descent lands, which nodes are greetings,
+    which may be deleted — are the kind more than one module ends up asking.
     """
     f = chattree.Forest()
     card1 = f.create_node(chat_node_payload("system", "system prompt 1"), parent_id=None)

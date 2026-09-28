@@ -50,7 +50,7 @@ import webbrowser
 
 import dearpygui.dearpygui as dpg
 
-from unpythonic import box, memoize, sym, unbox
+from unpythonic import box, sym, unbox
 from unpythonic.env import env
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
@@ -322,8 +322,6 @@ def format_message_metadata_line(node_payload: dict, role: str, revision: int) -
         line = f"{line} [{maybe_producer}]"
     return line
 
-
-@memoize
 def format_generation_stats(*, n_tokens: int, dt: float, exact: bool = True, label: str | None = None) -> str:
     """Format a token count, a wall time and the speed between them, as the chat log shows them.
 
@@ -467,93 +465,6 @@ def _incompleteness_note(generation_metadata: dict) -> str | None:
         # when the datastore is read back was cut off by the app going away rather than by the user.
         return "[Incomplete — Raven exited while this reply was being written]"
     return None
-
-def _scan_for_root_nodes(datastore: chattree.Forest) -> list[str]:
-    """The O(n) scan behind `_get_all_system_prompt_node_ids`, memoized on its own so the result can be filtered.
-
-    Memoized because it would otherwise run once per chat message widget created, over the whole datastore.
-    Safe to cache because roots are only ever *created* while the app state loads, before any of this
-    exists. They can still go away — see the caller, which is where that is dealt with.
-    """
-    return datastore.get_all_root_nodes()
-
-def _get_all_system_prompt_node_ids(datastore: chattree.Forest) -> list[str]:
-    """As it says on the tin.
-
-    There are as many as there are distinct system prompts the datastore has seen: `appstate` keeps one root
-    per variety of card, so a chat written under an older card is rooted at its own. Every root is a system
-    prompt node, which is what makes `get_all_root_nodes` the whole answer.
-
-    The scan is cached, but the answer is not: a card that is not the one in use can be deleted from the
-    GUI, so the cached list is filtered against the live nodes before it is returned. Skipping that filter
-    would leave this returning IDs of nodes that no longer exist — and `_get_all_greeting_node_ids` asks
-    `get_children` about each of these, which raises on a node that is gone.
-
-    See also `_get_all_greeting_node_ids`.
-    """
-    return [node_id for node_id in _scan_for_root_nodes(datastore) if node_id in datastore.nodes]
-
-def _get_all_greeting_node_ids(datastore: chattree.Forest) -> list[str]:
-    """As it says on the tin.
-
-    Since the AI's greeting can be changed in the config, the greeting used in any given stored chat
-    is NOT necessarily the *current* greeting (`app_state["new_chat_HEAD"]`).
-
-    So a greeting is identified by where it sits and by who said it: a direct child of a root — every root
-    being a system prompt node — that the *assistant* wrote. Position alone is not enough. HEAD can rest on
-    a root, and a message sent from there lands beside the greetings; taking it for one would disable its
-    own reroll and continue buttons, and — as the last one under its card — its delete button too, leaving
-    the user with a message they cannot remove.
-
-    Not memoized, unlike the scan it is built on: greetings come and go with the cards they hang from — a
-    card deleted in the GUI takes its greetings with it — and a cached list would keep answering with them.
-    The cost without a cache is a child lookup per system prompt, of which there are as many as the user has
-    distinct prompts; the part that is worth caching is the scan over every node, and that still is.
-
-    Returns a list rather than a lazy iterable, deliberately. Each caller asks it more than once — reroll,
-    continue, delete — and a generator answers the first question and then reports that it is empty.
-    """
-    greeting_node_ids = []
-    for system_prompt_node_id in _get_all_system_prompt_node_ids(datastore=datastore):
-        for node_id in datastore.get_children(system_prompt_node_id):
-            if datastore.get_payload(node_id)["message"]["role"] == "assistant":
-                greeting_node_ids.append(node_id)
-    return greeting_node_ids
-
-def _is_deletable(datastore: chattree.Forest,
-                  node_id: str | None,
-                  configured_system_prompt_node_id: str,
-                  configured_greeting_node_id: str,
-                  greeting_node_ids: list[str]) -> bool:
-    """Whether the delete button on the message at `node_id` may delete it, together with everything below it.
-
-    Not deletable: a message not linked to a chat node (`node_id` is `None`), the system prompt and greeting
-    the app is currently configured with, and the last greeting under any system prompt. Everything else is.
-
-    `greeting_node_ids`: from `_get_all_greeting_node_ids`.
-    """
-    # The configured system prompt and greeting would take the chat the user is in, and the app recreates
-    # both at the next start anyway.
-    #
-    # Any *other* system prompt or greeting may go, and taking its subtree along is the point rather than a
-    # side effect: those are the chats held under that card, or started from that greeting, and this is where
-    # a judgement about which ones are still wanted belongs. The datastore keeps one card per variety and
-    # never collects them (a root is reachable by construction), so without this there would be no way to be
-    # rid of one.
-    #
-    # A greeting goes only while another remains under its card. Every card is created with its greeting, so
-    # the rest of the app has never met a card without one — deleting another card, for one, steps down from
-    # the card it lands on to reach a greeting. To be rid of the last greeting, delete its card, which takes
-    # the greeting along.
-    if node_id is None:
-        return False
-    if node_id in (configured_system_prompt_node_id, configured_greeting_node_id):
-        return False
-    if node_id in greeting_node_ids:
-        siblings, _ = datastore.get_siblings(node_id)
-        if sum(sibling in greeting_node_ids for sibling in siblings) == 1:
-            return False
-    return True
 
 def _highlights_anything(text: str, maybe_highlight: tuple | None) -> bool:
     """Whether search highlighting `maybe_highlight` (a `chatsearch.SearchQuery.highlight`, or `None`) marks anything in `text`."""
@@ -1593,8 +1504,8 @@ class DPGChatMessage:
         self._build_copy_button(g)
 
         # These are needed for enabling/disabling some buttons.
-        system_prompt_node_ids = _get_all_system_prompt_node_ids(datastore=self.parent_view.chat_controller.datastore)
-        greeting_node_ids = _get_all_greeting_node_ids(datastore=self.parent_view.chat_controller.datastore)
+        system_prompt_node_ids = chatutil.get_all_system_prompt_node_ids(datastore=self.parent_view.chat_controller.datastore)
+        greeting_node_ids = chatutil.get_all_greeting_node_ids(datastore=self.parent_view.chat_controller.datastore)
 
         self._build_regeneration_buttons(g, greeting_node_ids)
         self._build_edit_button(g)
@@ -1777,7 +1688,7 @@ class DPGChatMessage:
         """Build the three buttons that act on the AI's own output: run it again, continue it, speak it.
 
         `g`: the horizontal group the buttons go into.
-        `greeting_node_ids`: from `_get_all_greeting_node_ids`; a greeting is not rerolled or continued.
+        `greeting_node_ids`: from `chatutil.get_all_greeting_node_ids`; a greeting is not rerolled or continued.
         """
         role = self.role
         node_id = self.node_id
@@ -1979,11 +1890,11 @@ class DPGChatMessage:
 
         # Delete subtree starting from this node (requires a confirmation click)
         app_state = self.parent_view.chat_controller.app_state
-        delete_enabled = _is_deletable(datastore=self.parent_view.chat_controller.datastore,
-                                       node_id=node_id,
-                                       configured_system_prompt_node_id=app_state["system_prompt_node_id"],
-                                       configured_greeting_node_id=app_state["new_chat_HEAD"],
-                                       greeting_node_ids=greeting_node_ids)
+        delete_enabled = chatutil.is_deletable(datastore=self.parent_view.chat_controller.datastore,
+                                               node_id=node_id,
+                                               configured_system_prompt_node_id=app_state["system_prompt_node_id"],
+                                               configured_greeting_node_id=app_state["new_chat_HEAD"],
+                                               greeting_node_ids=greeting_node_ids)
         def delete_subtree_callback():
             current_time = time.monotonic_ns()
             if self.last_delete_click_time is not None:
