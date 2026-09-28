@@ -44,23 +44,32 @@ live on the Night.
 - **The avatar's render time broken down by phase** on the debug overlay, timed with `torch.Event` so the
   numbers are true without slowing the renderer. That retired `metrics_enabled`, whose device syncs existed
   only to make the old per-phase timers true, and the server's DEBUG log lost its per-frame lines.
+- **Delete a subtree from the chat graph** (2026-09-28). A trash can on the toolbar after the branch button,
+  and **Shift+Delete** — chosen as the file-manager "delete, no wastebasket" key, and different from the chat
+  log's Ctrl+Shift+Delete so a habit cannot carry across. Two presses, and the second confirms only the
+  message the first one armed, since this button follows the cursor.
+  - Both views go through `DPGChatController.delete_subtree`, over `chatutil.delete_subtree` and
+    `chatutil.is_deletable`, which moved down so the graph could reach them. HEAD moves only when the subtree
+    held it, and the chat log rebuilds only when the deleted node's parent is on its branch.
+  - Found on the way: the chat log's delete ran during a reply, and could delete the node being written
+    into. Now refused while a turn is in flight, on the first press. A per-delete check was priced and
+    rejected — a turn's write point does not exist yet while it is queued, which is where it would go wrong.
+  - Found in live testing: the click that gave the graph the keyboard committed, because taking the keyboard
+    puts the cursor on HEAD and the click then read as a second click. The cursor now records whether the
+    panel placed it, and coming back to the graph never counts as a second click on the ringed box
+    (maintainer's call).
 - **Server autostart** and **the DB behind the server** are written up for later —
   `briefs/server-autostart-brief.md`, and brief 13's *Where the database lives*. Neither is for this demo.
 
 ## Queue, in order
 
-1. **Delete a subtree from the chat graph** — medium. A toolbar button with the usual double-press and red
-   warning flash, deleting the subtree at the cursor. Disabled on the active system prompt node and the
-   active AI greeting, which are the only nodes whose deletion would break the running instance. A hotkey
-   *different* from the chat log's Ctrl+Shift+Delete, so a reader cannot delete the wrong data by habit,
-   and as hard to hit by accident — to be proposed.
-2. **Message editing v1** (added 2026-09-28). Floated for the Night and set aside for the docs pass, which
+1. **Message editing v1** (added 2026-09-28). Floated for the Night and set aside for the docs pass, which
    was the right call — people scanned the QR code there, and an up-to-date manual is what they meet. The
    material is in `briefs/researchers-night/README.md`, "Message editing joins the slack" and "Message editing
    v1 moves behind all of it": the backend is complete and tested, every message row already carries a
    disabled pencil button with `Ctrl+E` reserved, and the open question is what the UI does about replies
    below an edited message. The manual's own promise bounds it — small edits that do not change the flow of
    the chat — which may settle most of that question; the building session decides.
-3. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
+2. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.
