@@ -278,7 +278,9 @@ path for the index where there is currently only the in-process one.
 **The open question is server-optional mode.** The Visualizer runs without Raven-server by design, and
 autostart (`briefs/server-autostart-brief.md`) is meant to make the server easy to have, not mandatory. How
 an app in local mode shares the DB with a server-mode app, without breaking in whatever mix of the two a user
-ends up running, needs designing rather than assuming.
+ends up running, needs designing rather than assuming. **Dropping server-optional mode is a valid answer**
+(Juha, 2026-09-28), if autostart makes it obsolete — then there is only one way to reach the DB, and the
+question goes away.
 
 ## What the design session has to settle
 
