@@ -31,7 +31,7 @@ parser.add_argument('--log-level', default='INFO',
                     choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                     help='root logger level (default: INFO)')
 parser.add_argument('--qr', action='store_true',
-                    help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
+                    help='show a "Raven on GitHub" QR code in a corner of the window, for demoing at an exhibit')
 replserver.add_argument(parser)
 args = parser.parse_args()
 

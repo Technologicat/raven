@@ -22,7 +22,7 @@ parser.add_argument('--server-url', metavar='URL', default=None,
                     help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
                          'The other endpoint this app depends on, and the other one worth pointing elsewhere.')
 parser.add_argument('--qr', action='store_true',
-                    help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
+                    help='show a "Raven on GitHub" QR code in a corner of the window, for demoing at an exhibit')
 replserver.add_argument(parser)
 opts = parser.parse_args()
 

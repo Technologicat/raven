@@ -36,7 +36,7 @@ parser.add_argument('--backend-url', metavar='URL', default=None,
                          '(cluster keywords, or summaries), so pointing this at nothing is how to exercise '
                          'the fallback to frequency keywords.')
 parser.add_argument('--qr', action='store_true',
-                    help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
+                    help='show a "Raven on GitHub" QR code in a corner of the window, for demoing at an exhibit')
 replserver.add_argument(parser)
 opts = parser.parse_args()
 

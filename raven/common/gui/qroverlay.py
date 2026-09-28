@@ -1,4 +1,4 @@
-"""A "Get Raven" QR code in the corner of the window, for showing the app at an exhibit.
+"""A "Raven on GitHub" QR code in the corner of the window, for showing the app at an exhibit.
 
 A visitor watches a demo for a minute and then walks away; nobody writes down a URL. A QR code in the
 corner lets them point a phone at it and read about the project later, which is the whole point.
@@ -111,7 +111,7 @@ def matrix_to_pixels(matrix: List[List[bool]],
 class QRCodeOverlay(gui_animation.Animation):
     def __init__(self,
                  url: str,
-                 label: str = "Get Raven",
+                 label: str = "Raven on GitHub",
                  corner: Corner = Corner.BOTTOM_RIGHT,
                  module_size: int = 3,
                  margin: int = 16,
@@ -197,7 +197,7 @@ class QRCodeOverlay(gui_animation.Animation):
 
 
 def install(url: Optional[str] = None,
-            label: str = "Get Raven",
+            label: str = "Raven on GitHub",
             corner: Corner = Corner.BOTTOM_RIGHT,
             **kwargs) -> Optional[QRCodeOverlay]:
     """Put a QR code in a corner of the viewport, and keep it there.
