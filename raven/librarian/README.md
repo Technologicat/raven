@@ -1392,8 +1392,8 @@ In practice, with flash-attention and a 4-bit quant:
 - A **24GB** GPU can fit:
   - A **30B** model with **128k context** (131072 tokens), or a slightly smaller context to leave some VRAM for the avatar.
 - A **8GB** GPU can fit:
-  - A **4B** model with **64k context** (65536 tokens). Enough VRAM is left over for the avatar too.
-  - A **7B** or **8B** model with maybe up to 64k context, but the GPU won't have VRAM left over for the avatar; so as of Raven v0.2.4, *Librarian* won't run.
+  - A **4B** model with **64k context** (65536 tokens), with *Raven-server* started in its low-VRAM mode, `raven-server --config raven.server.config_lowvram`, which runs most of its models on the CPU. Enough VRAM is then left over for the avatar too.
+  - A **7B** or **8B** model with maybe up to 64k context, but then the GPU has no VRAM left over for the avatar.
 
 How much 64k tokens is in pages, depends on the type of text. Some people on the internet claim that it can fit a 300-page novel, but in my own tests, one scientific paper with about 40 A4 pages already takes over 50k tokens.
 
