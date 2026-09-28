@@ -61,15 +61,15 @@ live on the Night.
 - **Server autostart** and **the DB behind the server** are written up for later —
   `briefs/server-autostart-brief.md`, and brief 13's *Where the database lives*. Neither is for this demo.
 
-## Queue, in order
-
-1. **Message editing v1** (added 2026-09-28). Floated for the Night and set aside for the docs pass, which
-   was the right call — people scanned the QR code there, and an up-to-date manual is what they meet. The
-   material is in `briefs/researchers-night/README.md`, "Message editing joins the slack" and "Message editing
-   v1 moves behind all of it": the backend is complete and tested, every message row already carries a
-   disabled pencil button with `Ctrl+E` reserved, and the open question is what the UI does about replies
-   below an edited message. The manual's own promise bounds it — small edits that do not change the flow of
-   the chat — which may settle most of that question; the building session decides.
+- **Message editing v1** (2026-09-28). Ctrl+E or the pencil edits a user message or an AI reply in place, as
+  a new revision; a message with more than one revision draws its `R` number as a link and says how many it
+  has, and the link or Ctrl+Shift+E opens `DPGRevisionPanel` to show or delete each. The background was in
+  `briefs/researchers-night/README.md`, "Message editing joins the slack".
+  - Found on the way, and fixed: a keyboard mark moved onto a widget another thread had just deleted took
+    the render loop down (`keyboardmark.Mark._set_target`), which is how Librarian died once at startup.
+  - New in the shared layer: `gui_animation.give_focus`, `give_caret`'s sibling for widgets that hold focus
+    rather than a caret — a single `focus_item` from a mouse click did not land.
+  - The eight `TODO: later (chat editing)` markers are retired: every reader wants the active revision.
    - **Settled 2026-09-28** (design session with the maintainer):
      - **Inline editing, GitHub-style**: the message's Markdown is replaced in place by a multiline field
        with Save/Cancel, via `rebuild_in_place`. Ctrl+Enter saves (gated on `is_item_focused` — it is the
@@ -97,9 +97,27 @@ live on the Night.
        date, first line) with *show* (make active) and *delete*. The `R` must look clickable. It is also
        the first way to reach the revisions Continue has always been making. First to cut if time runs out.
      - **Refused while a reply is being written**, as delete is. **Ctrl+E**, into the help card and README.
+       Beside the data-integrity reason in the code, there is a UX one: editing while the AI is still
+       writing has no known use case, so not supporting it costs nothing until one turns up (maintainer).
+     - **Settled in live testing**: the field's size is fine for v1; one message open at a time; the save
+       chord is the composer's send key; an empty message with nothing else in it is refused; unchanged
+       text saves nothing.
+     - **The history view is non-modal** (maintainer, 2026-09-28): a DPG modal dims the whole window,
+       which would look bad for this. So it takes the non-modal pane pattern — `has_keyboard()` before
+       `handle_key()` in the app's key chain, like the audio input panel. The `R` number is drawn in a
+       link colour with a tooltip. **Ctrl+Shift+E** opens it for the message with the keyboard mark.
      - Order: editing first, then the history view.
      - Already in hand: `rebuild_in_place` repaints one message, which settles the "switchable without
        regenerating the whole view" marker.
+     - **Settled in live testing of the history view**: Enter or a click on the revision already shown
+       closes the panel, so a double-click shows and closes (maintainer's idea); Ctrl+Shift+E does nothing
+       on a message with one revision, as its `R` is then no link.
+
+## Queue, in order
+
+1. **The wording of "(3 revisions available)"** at the end of a message's grey line — long for what it says
+   (maintainer, 2026-09-28, to be settled 2026-09-29). Mind the horizontal space: the line also carries the
+   model name on AI replies.
 2. **The two items filed on the Night, 2026-09-25** (added 2026-09-28, after message editing): in
    `TODO_DEFERRED.md`, rerolling a tool-calling reply can leave the vertical spacing wrong, and making
    `websearch` cancellable (`investigations/abort-inflight-request/`). **The second is wider than its

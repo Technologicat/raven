@@ -1300,6 +1300,12 @@ and resizes offscreen when it next appears.
 - **The remedy for a pending request is to keep asking**: `raven.common.gui.animation.give_caret` re-issues
   the request each frame until the field is active. Against a shown window it landed within three frames. A
   modal has no such remedy, which is why the cause had to go.
+- **A mouse click loses a single request too, where the same request from a key handler lands.** Observed
+  2026-09-28 on Raven-librarian's revision panel: opened by Ctrl+Shift+E its row got the focus, and opened
+  by a click on a message's revision number — an item-clicked handler on a text in the chat log's child
+  window — it opened unfocused, the first time as well. Presumably the click's own focus handling in the
+  window under the pointer runs after the request; not measured. `raven.common.gui.animation.give_focus`,
+  `give_caret`'s sibling for widgets that hold focus rather than a caret, fixed it.
 
 `investigations/dpg-focus/focus_request_vs_tooltip_probe.py` runs the arms of the 2026-09-15 measurement.
 The regression tests are in `raven/common/gui/tests/test_focus_semantics.py` — the tooltip rewrite against a
@@ -2135,3 +2141,15 @@ listing shared between a table view and something else, say) can end up with the
 an order the data no longer has. Making the columns `no_sort=True` and supplying one's own sort control
 removes the second source of truth entirely, which is a guarantee rather than a hope — and it has a second
 payoff, since ImGui's header sorting has no keyboard operation at all, exactly like its combos.
+
+## A selectable spanning its row takes the clicks meant for a button beside it
+
+Observed 2026-09-28 on DearPyGui 2.3.1, Raven-librarian's revision panel: each table row held a
+`add_selectable(span_columns=True)` and, in a later column, a delete button. Clicks on the button almost
+never reached it — one landed in a dozen — while the selectable's callback ran instead. Dropping
+`span_columns` fixed it at once. That ImGui gives an overlapped click to the earlier item unless it allows
+overlap is the likely mechanism, and was not checked against ImGui's source.
+
+So a row that is both clickable as a whole and carries its own controls wants something other than a
+spanning selectable. The panel settled for a selectable in one cell, which leaves the rest of the row inert
+to a click.
