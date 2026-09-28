@@ -240,9 +240,9 @@ with timer() as tim:
                                                                theme_color_widget=pulsating_red_color)
         gui_animation.animator.add(pulsating_red_text_glow)
 
-    # animation for the DOCS indicator while RAG is *indexing* (cyclic, runs in the background).
+    # animation for the INDEXING indicator, while RAG is updating its database (cyclic, runs in the background).
     # Same color as the mic-recording theme — semantically both are "recording" — but a separate theme
-    # and pulsator, so resetting the mic phase on recording start doesn't yank the DOCS-indexing pulsation.
+    # and pulsator, so resetting the mic phase on recording start doesn't yank the INDEXING pulsation.
     with dpg.theme(tag="my_pulsating_red_docs_theme"):
         with dpg.theme_component(dpg.mvAll):
             pulsating_red_docs_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
@@ -250,9 +250,9 @@ with timer() as tim:
                                                                theme_color_widget=pulsating_red_docs_color)
         gui_animation.animator.add(pulsating_red_docs_glow)
 
-    # Steady (non-pulsating) themes for the long DOCS progress label. The icon and the "DOCS" label carry
-    # the recording/reading pulsation cue; the progress label is too long for the eye to read inside one
-    # pulsation cycle, so it gets a calm full-alpha variant matching the active state's color.
+    # Steady (non-pulsating) themes for the long progress labels of the INDEXING row (red) and the DOCUMENTS row
+    # (gray). The icon and the name beside it carry the pulsation cue; a progress label is too long for the eye
+    # to read inside one pulsation cycle, so it gets a calm full-alpha variant matching its row's color.
     with dpg.theme(tag="my_steady_red_docs_theme"):
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
@@ -262,17 +262,17 @@ with timer() as tim:
 
     # An attachment whose text could not be extracted. Steady, not pulsating: the pulsation means "working
     # on it", so a failed chip must stop moving or the two states read the same at a glance. Its own theme
-    # rather than the DOCS red above, whose name says who owns it — and an owner's name on a shared theme is
+    # rather than the DOCUMENTS red above, whose name says who owns it — and an owner's name on a shared theme is
     # how a later edit for one owner silently restyles the other.
     with dpg.theme(tag="my_attachment_error_theme"):
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
 
     # Themes for the LLM backend status pill above the composer (`_refresh_backend_status_pill`). Its own
-    # pulsator rather than the DOCS one, for the reason the DOCS indicator has its own: a pulsation whose
+    # pulsator rather than the DOCUMENTS one, for the reason the DOCUMENTS indicator has its own: a pulsation whose
     # phase another owner may reset is a pulsation that jumps.
     #
-    # Split steady/pulsating the same way the DOCS row is, and for the same reason — the icon pulsates to
+    # Split steady/pulsating the same way the DOCUMENTS row is, and for the same reason — the icon pulsates to
     # say "act on me", the sentence beside it stays at full alpha because a sentence is too long to read
     # inside one cycle. The same caution orange for both bad states: which of the two it is, and what to do
     # about it, is what the words are for.
@@ -297,8 +297,8 @@ with timer() as tim:
     # It pulsates only on the reply being generated, and only while the model is actually reasoning; every
     # stored message's cloud is steady. That is the whole point of it: with the trace collapsed, an app that
     # showed nothing would look frozen for exactly as long as the model thinks, which on a thinking model is
-    # most of the turn. Pulsating means "still going", in the same vocabulary as the INDEXING / DOCS /
-    # READING / SYSTEM / WEB indicators, so it needs no explaining to anyone who has seen those.
+    # most of the turn. Pulsating means "still going", in the same vocabulary as the INDEXING / DOCUMENTS /
+    # READING / SYSTEM / INTERNET indicators, so it needs no explaining to anyone who has seen those.
     #
     # One shared pair of themes rather than one per message, which the pulsating half makes possible: at most
     # one reply is being generated at a time, so at most one cloud is ever pulsating.
@@ -334,8 +334,8 @@ print()
 # win is the avatar-paused window: while the user is reading, the avatar pauses after
 # `idle_timeout`, and from there onward we coast at the throttled rate.
 #
-# The indicator pulsations (gray for the LLM / DOCS / WEB indicators, red for the mic button,
-# red for the DOCS indicator while indexing, red for the backend status pill) run for the
+# The indicator pulsations (gray for the SYSTEM / DOCUMENTS / INTERNET indicators, red for the mic button,
+# red for the INDEXING indicator, red for the backend status pill) run for the
 # lifetime of the app, so they are *ambient* and `transient_count` leaves them out. Only a
 # button flash or a smooth scroll counts as being busy.
 #
@@ -1724,7 +1724,7 @@ with timer() as tim:
                     dpg_avatar_renderer.configure_live_texture(_initial_image_size, _initial_image_size)
 
                     # Status indicators stack top-down via a vertical parent group anchored at (16, 16).
-                    # Order — INDEXING, DOCS, READING, SYSTEM, WEB — mirrors the typical processing order
+                    # Order — INDEXING, DOCUMENTS, READING, SYSTEM, INTERNET — mirrors the typical processing order
                     # of a query and places the longest-lived indicator (INDEXING) at the top so it stays
                     # in place when shorter-lived siblings appear below it. READING sits where it does
                     # because extracting an attachment's text is what happens between finding documents
@@ -1749,7 +1749,7 @@ with timer() as tim:
                             dpg.add_text(fa.ICON_DATABASE, tag="docs_search_symbol")
                             dpg.bind_item_font("docs_search_symbol", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("docs_search_symbol", "my_pulsating_gray_text_theme")  # tag
-                            dpg.add_text("DOCS", tag="docs_search_text")
+                            dpg.add_text("DOCUMENTS", tag="docs_search_text")
                             dpg.bind_item_theme("docs_search_text", "my_pulsating_gray_text_theme")  # tag
                             dpg.add_text("", tag="docs_search_progress_text")
                             dpg.bind_item_theme("docs_search_progress_text", "my_steady_gray_docs_theme")  # tag
@@ -1771,7 +1771,7 @@ with timer() as tim:
                             dpg.add_text(fa.ICON_GLOBE, tag="web_access_symbol")
                             dpg.bind_item_font("web_access_symbol", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("web_access_symbol", "my_pulsating_gray_text_theme")  # tag
-                            dpg.add_text("WEB", tag="web_access_text")
+                            dpg.add_text("INTERNET", tag="web_access_text")
 
                     dpg.add_text("",
                                  pos=(gui_config.subtitle_x0,

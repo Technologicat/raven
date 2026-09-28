@@ -168,7 +168,7 @@ _SCROLL_SETTLE_FRAMES = 3
 # headroom over that, and it costs nothing when the content settles sooner, which is the ordinary case.
 _BUILD_SCROLL_WAIT_FRAMES = 60
 
-# The same gray the LLM / DOCS / WEB indicators use, rather than a pure white. White would be the brightest
+# The same gray the SYSTEM / DOCUMENTS / INTERNET indicators use, rather than a pure white. White would be the brightest
 # thing on the panel and would read as an alert; this is one more quiet status light, and it belongs to that
 # family both in what it means and in how it looks.
 _JUMP_TO_LATEST_COLOR = (180, 180, 180)
@@ -181,7 +181,7 @@ role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back":
                   "user": {"front": gui_config.chat_color_user_front, "back": gui_config.chat_color_user_back},
                   }
 
-# Built-in tools that reach out over the network -> light up the WEB (globe) indicator while they run.
+# Built-in tools that reach out over the network -> light up the INTERNET (globe) indicator while they run.
 web_access_tool_names = frozenset(("websearch", "webfetch"))
 
 
@@ -2834,7 +2834,7 @@ class DPGStreamingChatMessage(DPGChatMessage):
         With the trace collapsed, this is the only thing on screen saying the model is working — so it is
         not decoration: an app that showed nothing would look frozen for exactly as long as the reasoning
         takes, which on a thinking model is most of the turn. Pulsating carries that meaning already,
-        from the INDEXING / DOCS / READING / SYSTEM / WEB indicators.
+        from the INDEXING / DOCUMENTS / READING / SYSTEM / INTERNET indicators.
         """
         if self.gui_thought_button is None:  # nothing has been thought yet, so there is no cloud to mark
             return
@@ -2956,7 +2956,7 @@ class DPGLinearizedChatView:
 
         # Two themes, swapped by state, rather than one theme whose animation is started and stopped: a
         # `PulsatingColor` runs continuously once registered, and the steady variant is how the rest of the
-        # app expresses "this is on, but not asking for attention" (cf. the DOCS indicator's steady/pulsating
+        # app expresses "this is on, but not asking for attention" (cf. the DOCUMENTS indicator's steady/pulsating
         # pair). Pulsating while the AI writes, steady once it has finished, so the pill reports the state by
         # how it behaves as well as by what it says.
         with dpg.theme(tag=f"chat_jump_to_latest_pulsating_theme_{self.gui_uuid}") as self._jump_to_latest_pulsating_theme:  # tag
@@ -4223,7 +4223,7 @@ class DPGChatController:
         self.web_indicator_widget = web_indicator_widget
 
         # Indicator wiring. Show/hide events are pushed via callbacks (symmetric across all four
-        # indicators: on_docs_start/done from the chat scaffold drive DOCS / SYSTEM / WEB; the new
+        # indicators: on_docs_start/done from the chat scaffold drive DOCUMENTS / SYSTEM / INTERNET; the new
         # on_indexing_start/done on the retriever drive INDEXING). Progress text remains polled —
         # it's a continuously-updated state, not a discrete event, and polling models that shape
         # naturally with no per-update callback overhead.
@@ -4719,7 +4719,7 @@ class DPGChatController:
         is changing (two string comparisons), only does GUI work on change.
 
         Indicator visibility is push-driven via callbacks — `on_docs_start`/`on_docs_done` from the chat
-        scaffold for DOCS, `on_indexing_start`/`on_indexing_done` from the retriever for INDEXING. Only
+        scaffold for DOCUMENTS, `on_indexing_start`/`on_indexing_done` from the retriever for INDEXING. Only
         the progress texts (continuously-updated state, not discrete events) remain polled.
         """
         if self.retriever is None:

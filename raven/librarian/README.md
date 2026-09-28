@@ -606,7 +606,7 @@ The avatar has an optional, configurable timeout, after which the avatar video w
 
 <p align="center">
 <img src="../../img/avatar-wake.gif" alt="The chat graph standing in for a sleeping avatar, then the avatar waking and taking the panel back" width="600"/> <br/>
-<i>While the avatar sleeps, the chat graph stands in for it. Sending a question wakes the avatar, which takes the panel back; the <b>WEB</b> label at the top left says the AI is searching the web.</i>
+<i>While the avatar sleeps, the chat graph stands in for it. Sending a question wakes the avatar, which takes the panel back; the <b>INTERNET</b> label at the top left says the AI is searching the web.</i>
 </p>
 
 Currently, the avatar cannot be completely disabled. *Librarian* expects the `avatar` module of *Raven-server* to be running, and will always load the avatar. We recognize this option would be useful for low-VRAM environments, and intend to add it later. The right-side panel now has something else to show while the avatar is hidden — the [chat graph](#chat-graph) — which was the missing piece; what remains is not loading the avatar at all.
@@ -889,16 +889,16 @@ Five small labels can light in the upper left corner of the avatar panel, saying
 | | Lit while |
 |---|---|
 | **INDEXING** | your document database is being indexed: new or changed files are being read and added to the search index. It carries a progress figure beside it |
-| **DOCS** | the document database is being searched — the automatic search before a reply, or the AI's own `search_documents` tool. Also carries progress |
+| **DOCUMENTS** | the document database is being searched — the automatic search before a reply, or the AI's own `search_documents` tool. Also carries progress |
 | **READING** | an attached document's text is being extracted. Arriving at a branch whose PDFs have not been read yet spends a second or two here before anything else can start |
 | **SYSTEM** | the LLM backend has your conversation and has not started writing yet. This is prompt processing |
-| **WEB** | the AI is reaching the network, through `websearch` or `webfetch` |
+| **INTERNET** | the AI is reaching the network, through `websearch` or `webfetch` |
 
 **Pulsating means still working**, which is the same vocabulary the thinking cloud uses beside a reply. Nothing pulsating and nothing lit means nothing is being waited for.
 
 Two of them are worth knowing about before they surprise you:
 
-- **INDEXING and DOCS are separate rows because they can run at once.** Indexing is not a mode the app is in — you can search, and chat, while it continues in the background.
+- **INDEXING and DOCUMENTS are separate rows because they can run at once.** Indexing is not a mode the app is in — you can search, and chat, while it continues in the background.
 - **SYSTEM can take a while and shows no progress.** Prompt processing is the phase where a long conversation, or a batch of injected search results, is read by the backend before a single word comes back, and an OpenAI-compatible API offers no way to ask how far along it is. So the indicator is a light rather than a bar. The terminal window running your LLM backend usually does report the progress and the speed, if you want the number.
   - How much of a wait this is depends on what the backend's cache already holds, which is why the same chat can answer instantly once and slowly after you change something near the top of it. The per-message timing tooltip breaks a completed reply down into prompt processing, thinking and answer.
 

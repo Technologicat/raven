@@ -18,6 +18,10 @@
 
 ### Changed
 
+#### Raven-librarian
+
+- **The avatar panel's DOCS and WEB indicators now read DOCUMENTS and INTERNET**, as the toggles below them are called.
+
 #### Raven-xdot-viewer
 
 - **The search field's keys now work as in Raven-visualizer.**

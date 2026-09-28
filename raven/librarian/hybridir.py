@@ -519,7 +519,7 @@ class HybridIR:
         self._pending_edits = []
 
         # Per-instance "currently indexing" reference counter, polled by GUI clients (e.g. Librarian's idle
-        # throttle and DOCS indicator). A counter rather than a bool because `commit()` may run concurrently
+        # throttle and DOCUMENTS indicator). A counter rather than a bool because `commit()` may run concurrently
         # from multiple threads — the outermost invocation's `finally` is the one that must zero the state.
         # Same-thread re-entry is also possible in principle, since `datastore_lock` is an RLock.
         self._indexing_lock = threading.Lock()
