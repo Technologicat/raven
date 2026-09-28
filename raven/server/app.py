@@ -522,9 +522,9 @@ def api_avatar_set_emotion():
 
     instance_id = data["instance_id"]
     emotion_name = data["emotion_name"]
-    # The emotion name comes from the classifier's fixed label set, so it is a control value rather than
-    # anything the user wrote.
-    logger.debug(f"api_avatar_set_emotion: instance '{instance_id}', emotion '{emotion_name}'")
+    # No per-call DEBUG line here, unlike the other avatar routes: the client re-asserts the emotion on a
+    # timer while the avatar sits idle, so a trace per call is a line every few seconds saying nothing
+    # happened. `avatar.set_emotion` logs an actual change, at INFO.
     avatar.set_emotion(instance_id, emotion_name)
     return "OK"
 
