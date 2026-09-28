@@ -677,11 +677,6 @@ class DPGChatGraphPanel(gui_animation.Animation):
             with self._lock:
                 self._view_state.cursor_is_live = self._has_keyboard
                 ring_on_screen = self._cursor_name is not None
-                # Coming back to the graph is not a second act on the box the ring was left on. The click
-                # that brings the keyboard back may land on that very box, and must not switch branch.
-                # (`Enter` is not affected; see `_click_chat_node`.)
-                if self._has_keyboard:
-                    self._cursor_placed_by_panel = True
                 chat_graph = self._chat_graph
             if self._has_keyboard and not ring_on_screen and chat_graph is not None:
                 # Arriving with the cursor nowhere, which is a pane that has the keys and shows no sign of
@@ -1514,6 +1509,13 @@ class DPGChatGraphPanel(gui_animation.Animation):
         if self._input_blocked is not None and self._input_blocked():
             return
         if dpg.is_item_hovered(self._canvas):
+            # A click that brings the keyboard to the graph is coming back, not a second act on the box the
+            # ring was left on, so it must not switch branch if it lands there. Decided here, before asking,
+            # because only here is "did the graph already have the keys?" still answerable: the app answers a
+            # focus request by releasing every claim and claiming again, so the flag flips on every click.
+            if not self._has_keyboard:
+                with self._lock:
+                    self._cursor_placed_by_panel = True
             if self._on_focus_requested is not None:
                 self._on_focus_requested()
         elif not dpg.is_item_hovered(self._container):

@@ -358,28 +358,52 @@ class TestCommit:
         assert calls.committed == []
         assert calls.previewed == [ids["taken"], ids["system"]]
 
-    def test_the_click_that_brings_the_keyboard_to_head_does_not_commit(self, panel):
+    @staticmethod
+    def click_as_the_app_does(built, name, monkeypatch):
+        """A click on box `name`, delivered as in the app: the panel's global click handler first, then the box.
+
+        The global handler asks for the keyboard, and the app answers as `app._give_keyboard_to_graph` does:
+        release every claim, then claim. So the panel's keyboard flag goes down and up again on *every*
+        click, whether or not the graph had the keys already -- which a test that merely set it once would
+        never show, and which is how a version of this panel lost the ability to commit by clicking.
+        """
+        def give_keyboard_to_graph():
+            built.has_keyboard = False
+            built.has_keyboard = True
+        built._on_focus_requested = give_keyboard_to_graph
+        monkeypatch.setattr(dpg, "is_item_hovered", lambda widget: True)
+        built._on_click_anywhere(None, None)
+        monkeypatch.undo()
+        click(built, name)
+
+    def test_two_clicks_commit_with_the_keyboard_handed_over_on_each(self, panel, monkeypatch):
+        built, forest, app_state, ids, calls = panel
+        self.click_as_the_app_does(built, ids["not_taken"], monkeypatch)
+        assert calls.committed == []
+        self.click_as_the_app_does(built, ids["not_taken"], monkeypatch)
+        assert calls.committed == [ids["not_taken"]], "the second click did not commit"
+
+    def test_the_click_that_brings_the_keyboard_to_head_does_not_commit(self, panel, monkeypatch):
         # Taking the keyboard puts the cursor on HEAD, and clicking the graph is one way to give it the
         # keyboard -- so the click lands on a box the cursor is already on. It is still a first click.
         built, forest, app_state, ids, calls = panel
         head = app_state["HEAD"]
-        built.has_keyboard = True  # what the app does with the click's focus request, before the click lands
-        assert built._cursor_name == head, "the cursor did not appear on HEAD, so this cannot tell anything"
-        click(built, head)
+        self.click_as_the_app_does(built, head, monkeypatch)
+        assert built._cursor_name == head
         assert calls.committed == [] and calls.focus_releases == 0, "the click that brought the keys committed and gave them back"
-        click(built, head)
+        self.click_as_the_app_does(built, head, monkeypatch)
         assert calls.committed == [head], "a second, deliberate click on HEAD did not commit"
 
-    def test_the_click_that_brings_the_keyboard_back_does_not_commit(self, panel):
+    def test_the_click_that_brings_the_keyboard_back_does_not_commit(self, panel, monkeypatch):
         # The ring stays where it was left while the keys are elsewhere. Clicking that box to come back to
         # the graph is coming back, not the second of two clicks.
         built, forest, app_state, ids, calls = panel
-        click(built, ids["not_taken"])
+        self.click_as_the_app_does(built, ids["not_taken"], monkeypatch)
+        built.has_keyboard = False  # the reader went elsewhere; the ring stays
         assert built._cursor_name == ids["not_taken"]
-        built.has_keyboard = True  # the click's focus request, landing before the click itself
-        click(built, ids["not_taken"])
+        self.click_as_the_app_does(built, ids["not_taken"], monkeypatch)
         assert calls.committed == [], "the click that brought the keys back switched branch"
-        click(built, ids["not_taken"])
+        self.click_as_the_app_does(built, ids["not_taken"], monkeypatch)
         assert calls.committed == [ids["not_taken"]], "a deliberate second click did not switch"
 
     def test_enter_on_the_box_the_cursor_is_on_commits_whoever_put_it_there(self, panel):
