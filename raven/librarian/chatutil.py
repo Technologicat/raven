@@ -36,7 +36,7 @@ __all__ = [  # The parts a message is made of, and reading them back
 
            # Walking and mending a chat
            "linearize_chat", "descend_to_latest",
-           "get_all_system_prompt_node_ids", "get_all_greeting_node_ids", "is_deletable",
+           "get_all_system_prompt_node_ids", "get_all_greeting_node_ids", "is_deletable", "delete_subtree",
            "compute_auto_allowed_hosts",
            "upgrade_datastore", "factory_reset_datastore",
            "remove_persona_from_start_of_line",
@@ -1343,6 +1343,53 @@ def is_deletable(datastore: chattree.Forest,
         if sum(sibling in greeting_node_ids for sibling in siblings) == 1:
             return False
     return True
+
+def delete_subtree(datastore: chattree.Forest, node_id: str, head_node_id: str) -> Tuple[str, bool]:
+    """Delete `node_id` and everything below it, and say where HEAD should go and whether the branch changed.
+
+    Ask `is_deletable` first; this deletes what it is given.
+
+    `head_node_id`: where HEAD is now.
+
+    Returns `(new_head_node_id, branch_changed)`:
+
+      - `new_head_node_id` is `head_node_id` unchanged when the subtree did not contain it. When it did, HEAD
+        moves to the previous sibling of `node_id`, or the next one if it was the first, or its parent if it
+        had none. A system prompt node is not left as HEAD: from one, the step is down to its newest greeting.
+      - `branch_changed` is whether the branch from the root to HEAD, as a chat log shows it, is affected —
+        either its messages, or the sibling counts shown beside them. `False` for a subtree hanging off some
+        other branch entirely, which needs no redraw of that view.
+    """
+    with datastore.lock:
+        branch = datastore.linearize_up(head_node_id)
+        parent_node_id = datastore.get_parent(node_id)
+        # A root's siblings are the other roots, and the chat log counts them beside the system prompt.
+        branch_changed = parent_node_id is None or parent_node_id in branch
+
+        if node_id not in branch:
+            new_head_node_id = head_node_id
+        else:
+            siblings, index = datastore.get_siblings(node_id)
+            if len(siblings) == 1:
+                new_head_node_id = parent_node_id
+            elif index == 0:
+                new_head_node_id = siblings[1]
+            else:
+                new_head_node_id = siblings[index - 1]
+
+        datastore.delete_subtree(node_id)
+
+        # Deleting a system prompt lands on another one, and a system prompt node alone is not a place to be
+        # left: the chat log builds upward from HEAD, so the chat under that card — its greeting included —
+        # would be out of sight, and a message sent from there would attach beside the greetings rather than
+        # after one. So take one step down, to where a new chat under that card begins — its newest greeting,
+        # with nothing said after it yet. One step and not the whole way, which would instead drop the user
+        # into the middle of some conversation already held under that card, which is not what deleting a
+        # different one asked for.
+        if new_head_node_id != head_node_id and datastore.get_parent(new_head_node_id) is None:
+            new_head_node_id = descend_to_latest(datastore, new_head_node_id, recursive=False)
+
+    return new_head_node_id, branch_changed
 
 def compute_auto_allowed_hosts(datastore: chattree.Forest,
                                node_id: str,

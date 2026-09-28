@@ -1613,6 +1613,71 @@ class TestIsDeletable:
         assert not self.deletable(f, greeting2, card1, greeting1)
 
 
+class TestDeleteSubtree:
+    """Where HEAD goes when a subtree is deleted, and whether the chat log's branch noticed."""
+
+    @pytest.fixture
+    def tree(self, chat_payload):
+        """The tree below, under a root of its own, with HEAD's branch `a, b, e` the one a chat log shows.
+
+             a
+           /   \\
+          b     c
+         / \\   / \\
+        d   e f   g
+        """
+        f = chattree.Forest()
+        ids = {}
+        ids["a"] = f.create_node(chat_payload("system", "a"), parent_id=None)
+        for name, parent, t in (("b", "a", 1), ("c", "a", 2),
+                                ("d", "b", 3), ("e", "b", 4),
+                                ("f", "c", 5), ("g", "c", 6)):
+            ids[name] = f.create_node(chat_payload("user", name, t), parent_id=ids[parent])
+        return f, ids
+
+    def test_a_subtree_off_the_branch_leaves_head_and_the_branch_alone(self, tree):
+        # Nothing on `a, b, e` changes, sibling counts included, so a chat log showing it needs no redraw.
+        f, ids = tree
+        for victim in ("f", "g"):
+            assert chatutil.delete_subtree(f, ids[victim], ids["e"]) == (ids["e"], False)
+        assert ids["f"] not in f.nodes and ids["g"] not in f.nodes
+
+    def test_a_sibling_of_the_branch_changes_its_counts_but_not_head(self, tree):
+        f, ids = tree
+        assert chatutil.delete_subtree(f, ids["d"], ids["e"]) == (ids["e"], True)
+        assert chatutil.delete_subtree(f, ids["c"], ids["e"]) == (ids["e"], True)
+
+    def test_head_itself_goes_to_the_previous_sibling(self, tree):
+        f, ids = tree
+        assert chatutil.delete_subtree(f, ids["e"], ids["e"]) == (ids["d"], True)
+
+    def test_the_first_sibling_hands_head_to_the_next_one(self, tree):
+        f, ids = tree
+        assert chatutil.delete_subtree(f, ids["d"], ids["d"]) == (ids["e"], True)
+
+    def test_an_ancestor_of_head_is_what_moves(self, tree):
+        # HEAD is inside the subtree, so it goes where the deleted ancestor's place is taken: b's sibling c.
+        f, ids = tree
+        assert chatutil.delete_subtree(f, ids["b"], ids["e"]) == (ids["c"], True)
+        assert ids["e"] not in f.nodes
+
+    def test_an_only_child_hands_head_to_its_parent(self, tree):
+        f, ids = tree
+        chatutil.delete_subtree(f, ids["d"], ids["e"])
+        assert chatutil.delete_subtree(f, ids["e"], ids["e"]) == (ids["b"], True)
+
+    def test_a_deleted_card_lands_on_a_greeting_of_the_next_one(self, two_card_forest):
+        # A system prompt node is not left as HEAD; from one, the step is down to its newest greeting.
+        f, card1, card2, _greeting1, greeting2, _message = two_card_forest
+        assert chatutil.delete_subtree(f, card1, card1) == (greeting2, True)
+        assert card2 in f.nodes
+
+    def test_deleting_another_card_is_a_change_to_the_branch(self, two_card_forest):
+        # A root's siblings are the other roots, and the chat log counts them beside its system prompt.
+        f, _card1, card2, _greeting1, _greeting2, message = two_card_forest
+        assert chatutil.delete_subtree(f, card2, message) == (message, True)
+
+
 class TestLatestUserMessageText:
     """The RAG query a turn falls back on when the user did not just type something.
 

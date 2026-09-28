@@ -56,6 +56,8 @@
 - **The first Ctrl+Shift+O after starting the app no longer closes the attach dialog as it opens.**
   - In v0.2.9 that first press appeared to do nothing, and a second press opened the dialog normally. Clicking the attach button was not affected.
 - **Tab to the composer or the graph no longer flashes a caret in the search field for a moment.**
+- **Deleting a message is refused while a reply is being written.**
+  - In v0.2.9 the delete went through, and deleting a message above the reply in progress destroyed the reply along with it, while it was still being written. The button now flashes red and says why.
 
 #### Constellation-wide
 

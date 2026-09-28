@@ -653,6 +653,43 @@ class TestChatExchange:
             "an empty send did nothing with the setting on, so the refusal above proves nothing"
 
 
+class TestDeletingASubtree:
+    """The one route to a delete, which both the chat log and the chat graph take."""
+
+    @staticmethod
+    def _controller(forest, head, generating=False):
+        """A controller with just what `delete_subtree` touches, counting the chat log's rebuilds."""
+        controller = chat_controller.DPGChatController.__new__(chat_controller.DPGChatController)
+        controller.datastore = forest
+        controller.app_state = {"HEAD": head}
+        controller.is_generating = lambda: generating
+        controller.builds = 0
+        def build():
+            controller.builds += 1
+        controller.view = types.SimpleNamespace(build=build)
+        return controller
+
+    def test_refused_while_a_turn_is_in_flight(self, two_card_forest, chat_payload):
+        # The turn is writing into the tree, so nothing is deleted from under it.
+        f, _card1, _card2, greeting1, _greeting2, message = two_card_forest
+        controller = self._controller(f, message, generating=True)
+        maybe_refusal = controller.delete_subtree(message)
+        assert isinstance(maybe_refusal, str) and maybe_refusal
+        assert message in f.nodes and controller.app_state["HEAD"] == message and controller.builds == 0
+        # The control: the same delete, with no turn, goes through.
+        controller = self._controller(f, message)
+        assert controller.delete_subtree(message) is None
+        assert message not in f.nodes and controller.app_state["HEAD"] == greeting1 and controller.builds == 1
+
+    def test_the_chat_log_is_rebuilt_only_when_its_branch_changed(self, two_card_forest, chat_payload):
+        f, _card1, _card2, _greeting1, greeting2, message = two_card_forest
+        elsewhere = f.create_node(chat_payload("user", "under the other card", 5), parent_id=greeting2)
+        controller = self._controller(f, message)
+        assert controller.delete_subtree(elsewhere) is None
+        assert elsewhere not in f.nodes and controller.app_state["HEAD"] == message
+        assert controller.builds == 0, "a delete nowhere near the branch on screen rebuilt the chat log"
+
+
 class TestSteppingTheSearch:
     """What `step_search` reports back, which is what lets a caller follow a jump that happened.
 

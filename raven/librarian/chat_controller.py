@@ -1904,39 +1904,14 @@ class DPGChatMessage:
                 double_okd = False
             self.last_delete_click_time = current_time
 
-            if double_okd:  # perform delete
-                # Find which node to switch HEAD to after delete.
-                #   - Switch to previous sibling, or if this was the first one, then the next one.
-                #   - Switch to parent if no siblings remaining after delete.
-                siblings, this_node_index = self.parent_view.chat_controller.datastore.get_siblings(node_id)
-                assert len(siblings) >= 1  # should always have at least the node itself
-                if len(siblings) == 1:  # no remaining siblings after delete --> set parent as HEAD
-                    new_HEAD = self.parent_view.chat_controller.datastore.get_parent(node_id)
-                # now `len(siblings) > 1`
-                elif this_node_index == 0:
-                    new_HEAD = siblings[1]
-                # now `this_node_index > 0`
-                else:
-                    new_HEAD = siblings[this_node_index - 1]
-
-                # Perform the delete
-                self.parent_view.chat_controller.datastore.delete_subtree(node_id)
-
-                # Deleting a system prompt lands on another one, and a system prompt node alone is not a
-                # place to be left: the view builds upward from HEAD, so the chat under that card — its
-                # greeting included — would be out of sight, and a message sent from there would attach
-                # beside the greetings rather than after one. So take one step down, to where a new chat
-                # under that card begins — its newest greeting, with nothing said after it yet. One step and
-                # not the whole way, which would instead drop the user into the middle of some conversation
-                # already held under that card, which is not what deleting a different one asked for.
-                if self.parent_view.chat_controller.datastore.get_parent(new_HEAD) is None:
-                    new_HEAD = chatutil.descend_to_latest(self.parent_view.chat_controller.datastore,
-                                                          new_HEAD,
-                                                          recursive=False)
-
-                # Refresh view
-                self.parent_view.chat_controller.app_state["HEAD"] = new_HEAD
-                self.parent_view.build()
+            if double_okd:
+                # On success the view is rebuilt and this button goes with it, so only a refusal has a
+                # button left to flash.
+                maybe_refusal = self.parent_view.chat_controller.delete_subtree(node_id)
+                if maybe_refusal is not None:
+                    gui_animation.flash_button(button=delete_subtree_button, tooltip=delete_subtree_tooltip,
+                                               ok=False, message=maybe_refusal,
+                                               duration=gui_config.acknowledgment_duration)
             else:
                 gui_animation.animator.add(gui_animation.WidgetFlash(target=delete_subtree_button,
                                                                      duration=self.confirm_duration,
@@ -4657,6 +4632,30 @@ class DPGChatController:
         refusing a send while one is already under way.
         """
         return self.chat_exchange_task_manager.has_tasks() or self.ai_turn_task_manager.has_tasks()
+
+    def delete_subtree(self, node_id: str) -> str | None:
+        """Delete the message at `node_id` with everything below it, moving HEAD off it if it was there.
+
+        The one route to a delete, for every view that offers one. Ask `chatutil.is_deletable` first; this
+        checks only what can change between building a button and pressing it.
+
+        Rebuilds the chat log when the deletion touched the branch it shows, and leaves it alone otherwise.
+
+        Returns `None` when done, or, when refused, a short reason for the caller to show on its button.
+        """
+        # Refused while a turn is in flight, and for data integrity rather than compute: the turn is writing
+        # into the tree, and a subtree holding the node it writes into would be deleted from under it. A turn
+        # records that node only as it starts each round, so answering exactly for this one delete would
+        # have to reason about the windows where it has not yet — a queued turn, a user message not yet
+        # written. A reply is a moment away, so refusing outright is the cheap and safe answer.
+        if self.is_generating():
+            logger.info(f"DPGChatController.delete_subtree: a turn is in flight; refusing to delete '{node_id}'.")
+            return "Not while a reply is being written."
+        new_head_node_id, branch_changed = chatutil.delete_subtree(self.datastore, node_id, self.app_state["HEAD"])
+        self.app_state["HEAD"] = new_head_node_id
+        if branch_changed:
+            self.view.build()
+        return None
 
     def get_current_message(self) -> DPGChatMessage | None:
         """Return the `DPGChatMessage` the per-message hotkeys act on, or `None` if the view is empty.
