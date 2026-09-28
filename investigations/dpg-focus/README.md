@@ -171,6 +171,12 @@ because both land in `raven/common/gui/animation.py` and are better done togethe
   keyboard for a few seconds. The write-up is `dpg-notes.md` → "A hidden window being shown takes the focus
   — from a pending `focus_item`, and from an opening modal".
 
+- `press_hover_probe.py` — what a mouse press does to hover and active state, for the item pressed and the
+  window it sits in. The pressed drawlist is active from press to release, its child window never is, and
+  the window's hover drops from the frame after the press until one after the release. Self-driving, with
+  synthetic clicks, so it takes the keyboard for about ten seconds. Added 2026-09-28, DPG 2.3.1, when the
+  thumbnail grid was found dropping clicks; the write-up is `dpg-notes.md` → "Is this mouse event mine?".
+
 - `catch_visual_flash.sh` — not a probe but the instrument that worked when three probes did not. Records a
   running app's window with `ffmpeg -f x11grab` at 60 fps and ranks the frames by how much the region of
   interest stands out, so a 25–100 ms artifact can be found and looked at. Screenshots cannot: `import`
