@@ -226,7 +226,7 @@ def _open_file(filepath: str) -> None:
         widget.zoom_to_fit(animate=False)
 
     filename = os.path.basename(filepath)
-    dpg.set_viewport_title(f"Raven XDot Viewer {__version__} - {filename}")
+    dpg.set_viewport_title(f"Raven-xdot-viewer {__version__} - {filename}")
 
     _set_status(_format_load_status(filepath))
 
@@ -685,7 +685,7 @@ def main() -> int:
     icon_ext = "ico" if platform.system().upper() == "WINDOWS" else "png"
     icons_dir = pathlib.Path(os.path.dirname(__file__), "..", "icons")
     dpg.create_viewport(
-        title=f"Raven XDot Viewer {__version__}",
+        title=f"Raven-xdot-viewer {__version__}",
         small_icon=str((icons_dir / f"app_128_notext.{icon_ext}").resolve()),
         large_icon=str((icons_dir / f"app_256.{icon_ext}").resolve()),
         width=args.width,

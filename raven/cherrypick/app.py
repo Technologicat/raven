@@ -220,7 +220,7 @@ def _update_title() -> None:
     fullscreen the window manager hides the title bar, so `_update_status` adds
     the filename to the status bar for that mode only.
     """
-    base = f"raven-cherrypick {__version__}"
+    base = f"Raven-cherrypick {__version__}"
     triage = _app_state["triage"]
     grid = _app_state["grid"]
     iv = _app_state["image_view"]
@@ -1407,7 +1407,7 @@ def main() -> int:
     else:
         icon_ext = "png"
     icons_dir = pathlib.Path(os.path.dirname(__file__), "..", "icons")
-    dpg.create_viewport(title=f"raven-cherrypick {__version__}",
+    dpg.create_viewport(title=f"Raven-cherrypick {__version__}",
                         small_icon=str((icons_dir / f"app_128_notext.{icon_ext}").resolve()),
                         large_icon=str((icons_dir / f"app_256.{icon_ext}").resolve()),
                         width=args.width, height=args.height)

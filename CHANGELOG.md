@@ -29,6 +29,10 @@
   - **Tab** moves the keyboard between the search field and the graph, keeping what is typed.
   - **Ctrl+Shift+F** clears the search.
 
+#### Constellation-wide
+
+- **Every app's window title now names the app as its command does**: `Raven-cherrypick`, `Raven-xdot-viewer`, `Raven-conference-timer`, `Raven-avatar-pose-editor` and `Raven-avatar-settings-editor`, as `Raven-librarian` and `Raven-visualizer` already were. Worth knowing if a window manager rule matches on the old titles.
+
 ### Fixed
 
 #### Raven-librarian

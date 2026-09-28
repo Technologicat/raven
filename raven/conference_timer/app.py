@@ -168,7 +168,7 @@ def main() -> int:
     icon_ext = "ico" if platform.system().upper() == "WINDOWS" else "png"
     icons_dir = pathlib.Path(os.path.dirname(__file__), "..", "icons")
     dpg.create_viewport(
-        title=f"Raven Conference Timer {__version__}",
+        title=f"Raven-conference-timer {__version__}",
         small_icon=str((icons_dir / f"app_128_notext.{icon_ext}").resolve()),
         large_icon=str((icons_dir / f"app_256.{icon_ext}").resolve()),
         width=config.INITIAL_WIDTH,
