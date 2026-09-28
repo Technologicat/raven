@@ -17,15 +17,24 @@ live on the Night.
 - **Tab flashed a caret in Librarian's search field for a frame.** ImGui's own Tab step, confined with
   `flattened_navigation=False` on the composer's child window. The Visualizer was checked live and needs
   nothing; Raven-cherrypick gives nothing focus programmatically and so sees no step.
+- **`FileDialog` and the thumbnail grid, found by following the Tab thread** (all 2026-09-28):
+  - The path field went active for a frame on every Tab: ImGui's own Tab step lands on another text field
+    in the same navigation scope. Each field now has a scope of its own. This closed the open question in
+    `investigations/dpg-focus/`.
+  - Clicking the find field, a row or a tile now moves the keyboard mark there, and a row click moves the
+    table's cursor. A click on the blank space below a short listing does not claim the keys:
+    `is_item_hovered` on a child window answers only for that exact window, so there is nothing to ask.
+  - A tile click was sometimes dropped mid-tile: a press makes ImGui report the panel unhovered from the
+    next frame, and the click handler read the hover live. It now reads a sample taken while the button
+    was up.
+  - A tile's tooltip wore the listing's blue border when the listing had the keys. Fixed with
+    `keyboardmark.shield_tooltip`.
 - **Server autostart** and **the DB behind the server** are written up for later —
   `briefs/server-autostart-brief.md`, and brief 13's *Where the database lives*. Neither is for this demo.
 
 ## Queue, in order
 
-1. **`FileDialog`'s path field going active on Tab** — the open question in `investigations/dpg-focus/`,
-   probed now while the Tab mechanism is fresh. The lead is the same `flattened_navigation` confinement;
-   the find and path fields share a child, so the find field would need a scope of its own.
-2. **The small items**, all decided, in this order:
+1. **The small items**, all decided, in this order:
    1. **XDot viewer search keys follow the Visualizer's.** Enter accepts and parks focus on a button (never
       `focus_item` on a child window); no Escape branch of its own; Tab moves between the field and the
       view; Ctrl+Shift+F clears. See the Visualizer's hotkey handler, whose comments carry the reasons.
@@ -45,11 +54,11 @@ live on the Night.
       render/encode/output ones already there. The server's `render` figure covers all three today. The
       animator very likely has the timings already (the upscaler's is `tim_upscale`); this is sending them
       in `X-Server-Stats` and showing them.
-3. **Delete a subtree from the chat graph** — medium. A toolbar button with the usual double-press and red
+2. **Delete a subtree from the chat graph** — medium. A toolbar button with the usual double-press and red
    warning flash, deleting the subtree at the cursor. Disabled on the active system prompt node and the
    active AI greeting, which are the only nodes whose deletion would break the running instance. A hotkey
    *different* from the chat log's Ctrl+Shift+Delete, so a reader cannot delete the wrong data by habit,
    and as hard to hit by accident — to be proposed.
-4. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
+3. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.
