@@ -54,6 +54,13 @@ live on the Night.
    active AI greeting, which are the only nodes whose deletion would break the running instance. A hotkey
    *different* from the chat log's Ctrl+Shift+Delete, so a reader cannot delete the wrong data by habit,
    and as hard to hit by accident — to be proposed.
-2. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
+2. **Message editing v1** (added 2026-09-28). Floated for the Night and set aside for the docs pass, which
+   was the right call — people scanned the QR code there, and an up-to-date manual is what they meet. The
+   material is in `briefs/researchers-night/README.md`, "Message editing joins the slack" and "Message editing
+   v1 moves behind all of it": the backend is complete and tested, every message row already carries a
+   disabled pencil button with `Ctrl+E` reserved, and the open question is what the UI does about replies
+   below an edited message. The manual's own promise bounds it — small edits that do not change the flow of
+   the chat — which may settle most of that question; the building session decides.
+3. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.
