@@ -846,7 +846,7 @@ def main() -> int:
         env(key_indent=0, key="Numpad +", action_indent=0, action="Zoom in", notes=""),
         env(key_indent=0, key="Numpad -", action_indent=0, action="Zoom out", notes=""),
         env(key_indent=1, key="Mouse wheel", action_indent=1, action="...the same, at the cursor", notes=""),
-        env(key_indent=0, key="1  / Numpad 1", action_indent=0, action="Zoom to actual size (1:1)", notes=""),
+        env(key_indent=0, key="1 / Numpad 1", action_indent=0, action="Zoom to actual size (1:1)", notes=""),
         env(key_indent=0, key="F", action_indent=0, action="Zoom to fit", notes=""),
         env(key_indent=0, key="Arrow keys", action_indent=0, action="Pan the view", notes=""),
         env(key_indent=1, key="Mouse drag", action_indent=1, action="...the same, with the mouse", notes=""),
