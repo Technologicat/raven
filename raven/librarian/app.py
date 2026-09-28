@@ -102,6 +102,7 @@ with timer() as tim:
     from .chat_controller import DPGChatController
     from .cleanup_dialog import DPGCleanupDialog
     from . import config as librarian_config
+    from .revision_panel import DPGRevisionPanel
     # from . import chattree
     from . import hybridir
     from . import imagestore
@@ -2283,6 +2284,8 @@ def update_animations():
     chat_controller.update_current_message_mark()
     # The search counter follows the scroll position too, for the same reason.
     chat_controller.update_search_position()
+    # The revision list follows the datastore, which an edit or a Continue can change behind its back.
+    revision_panel.poll()
     # And the graph's counter follows its cursor, which the arrow keys and a click both move without
     # telling anyone. Cheap: it redraws nothing on a frame where the answer has not changed.
     _update_graph_search_row()
@@ -2339,6 +2342,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key="Ctrl+End / Ctrl+Home", action_indent=1, action="Same, but to the last / first", notes=""),
                env(key_indent=0, key="Ctrl+Down", action_indent=0, action="Show the chat continuation", notes="If any exists in chat datastore"),
                env(key_indent=0, key="Ctrl+E", action_indent=0, action="Edit the marked message", notes="New revision. Esc cancels"),
+               env(key_indent=1, key="Ctrl+Shift+E", action_indent=1, action="Show its revisions", notes="Can also delete each"),
                env(key_indent=0, key="Ctrl+B", action_indent=0, action="Branch the chat here", notes="Rolls back. Not while typing"),
                env(key_indent=0, key="Ctrl+Shift+Delete", action_indent=0, action="Delete it and all below it", notes="Twice to confirm. No undo"),
                helpcard.hotkey_blank_entry,
@@ -3027,6 +3031,10 @@ def librarian_hotkeys_callback(sender, app_data):
     elif audio_input_panel.has_keyboard() and audio_input_panel.handle_key(key, ctrl=ctrl_pressed, alt=alt_pressed):
         pass
 
+    # The revision history, on the same terms: the keys are its only while the focus is on one of its rows.
+    elif revision_panel.has_keyboard() and revision_panel.handle_key(key, ctrl=ctrl_pressed, shift=shift_pressed, alt=alt_pressed):
+        pass
+
     # The chat graph, on the same terms as the audio panel above: it takes the keys only while it is the
     # keyboard home, and passes on anything it does not claim, so F1 and the rest still work from inside
     # it. Above the composer's own branches, because a reader who has Tabbed to the graph means Enter to
@@ -3088,6 +3096,15 @@ def librarian_hotkeys_callback(sender, app_data):
             fire_event_if_exists("delete")
         elif key == dpg.mvKey_F:  # Ctrl+F puts the caret in the search field; this, with Shift, empties it
             clear_search_callback()
+        # Ctrl+E edits the marked message; with Shift, its revisions. Pressed again, it closes them. A message
+        # with only one revision has no history to show, as its revision number is not a link.
+        elif key == dpg.mvKey_E:
+            maybe_message = chat_controller.get_current_message()
+            if maybe_message is not None and maybe_message.node_id is not None:
+                if revision_panel.is_open and revision_panel.node_id == maybe_message.node_id:
+                    revision_panel.close()
+                elif len(datastore.get_revisions(maybe_message.node_id)) > 1:
+                    revision_panel.open(maybe_message.node_id)
         # The graph's own key, as Ctrl+Space is the composer's and Ctrl+F the search field's. Shows the graph first
         # if it is switched off, since keys sent to a hidden graph would go nowhere.
         #
@@ -3400,6 +3417,8 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     # keyboard-home flags honest.
                                     give_caret=_give_caret_to,
                                     give_keyboard_to_log=_give_keyboard_to_log,
+                                    # Late-bound: the panel is built below, taking this controller's methods.
+                                    open_revision_history=lambda node_id: revision_panel.open(node_id),
                                     executor=bg)
 
 def _get_cleanup_roots() -> tuple[str, ...]:
@@ -3428,6 +3447,13 @@ audio_input_panel = audio_input.DPGAudioInputPanel(app_state=app_state,
                                                    # The toolbar's mini meter draws the same threshold, and is not the panel's to know about.
                                                    on_threshold_changed=lambda value: setattr(mic_vu_meter, "threshold", value),
                                                    centering_reference_window="librarian_main_window")  # tag
+
+revision_panel = DPGRevisionPanel(datastore=datastore,
+                                  themes_and_fonts=themes_and_fonts,
+                                  show_revision=chat_controller.show_revision,
+                                  delete_revision=chat_controller.delete_revision,
+                                  on_close=_give_keyboard_to_log,
+                                  centering_reference_window="librarian_main_window")  # tag
 
 cleanup_dialog = DPGCleanupDialog(datastore=datastore,
                                   get_roots=_get_cleanup_roots,

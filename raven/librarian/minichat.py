@@ -421,7 +421,7 @@ def minimal_chat_client(backend_url) -> None:
         def chat_print_history(node_id_history: List[Dict], show_numbers: bool = True) -> None:
             if show_numbers:
                 for k, node_id in enumerate(node_id_history):
-                    node_payload = datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+                    node_payload = datastore.get_payload(node_id)  # auto-selects active revision
                     message = node_payload["message"]
                     role = message["role"]
                     persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
@@ -434,7 +434,7 @@ def minimal_chat_client(backend_url) -> None:
                     print()
             else:
                 for node_id in node_id_history:
-                    node_payload = datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+                    node_payload = datastore.get_payload(node_id)  # auto-selects active revision
                     message = node_payload["message"]
                     role = message["role"]
                     persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message

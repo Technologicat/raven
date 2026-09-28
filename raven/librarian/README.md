@@ -790,6 +790,8 @@ Hover the dot and it says so.
   - The text opens in place, in an editable field. **Save** (the send key, Ctrl+Enter or Enter as configured) stores it as a new revision of the message; **Cancel** (Esc) leaves the message as it was. While the field has the caret, the chat's hotkeys stay out of the way.
   - Only the text is edited. Attachments stay attached, and an AI reply keeps its thinking trace and the record of which model wrote it.
   - The revision number in the grey line above the message goes up by one.
+  - A message with more than one revision says so at the end of its grey line, and its revision number is drawn as a link. **Click it** (or press Ctrl+Shift+E) to see all the revisions of the message: when each was written, and how it opens. **Enter** or a click shows one in the chat, and on the one already shown closes the list, so a double-click shows a revision and closes; **Delete**, pressed twice, deletes one permanently; **Esc** closes the list. The only revision of a message cannot be deleted — delete the message instead.
+  - Revisions come from Continue too (Ctrl+U), which adds one holding the continued reply. The list is where the reply as it was before continuing can be found again.
   - Refused while a reply is being written. Not available on the system prompt, the greeting, or a tool result.
 - Branch (Ctrl+B)
   - Set this message as the current **HEAD**.
@@ -1006,6 +1008,7 @@ The blue dot says which message these act on: the bottommost one whose whole but
 | `Ctrl+C` | Copy it to the clipboard — while the message field does not hold the caret |
 | `Ctrl+Shift+C` | ...with its node ID and metadata included |
 | `Ctrl+E` | Edit it (your messages and AI replies), as a new revision. The send key saves, `Esc` cancels |
+| `Ctrl+Shift+E` | List its revisions, to show or delete each, when it has more than one. Again to close |
 | `Ctrl+B` | Branch the chat here — roll the conversation back to it |
 | `Ctrl+Shift+Delete` | Delete it and everything below it. Twice to confirm; there is no undo |
 | `Ctrl+Left` / `Ctrl+Right` | Previous / next sibling |

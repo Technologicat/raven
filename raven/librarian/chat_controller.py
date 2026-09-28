@@ -8,7 +8,7 @@ that controls chatting with the AI.
 
 __all__ = ["format_chat_message_for_clipboard",
            "format_excerpt_notice",
-           "format_message_metadata_line",
+           "format_message_metadata_line", "format_message_metadata_parts",
            "format_generation_stats",
            "DPGChatMessage",
            "DPGCompleteChatMessage",
@@ -180,6 +180,11 @@ _EDITOR_MIN_LINES = 3
 _EDITOR_MAX_LINES = 20
 _EDITOR_EXTRA_H = 24  # pixels
 
+# The grey line above a message is drawn as separate widgets, so the revision number can be a link. The
+# spacing between them stands in for the single space the line had as one string.
+_METADATA_SPACING = 5  # pixels
+_LINK_COLOR = (85, 135, 205)  # the Markdown renderer's link colour, in `DearPyGui_Markdown`'s `text_attributes`
+
 # --------------------------------------------------------------------------------
 
 role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gui_config.chat_color_ai_back},
@@ -315,7 +320,14 @@ def format_message_metadata_line(node_payload: dict, role: str, revision: int) -
 
     Returns the formatted line.
     """
-    line = f"{node_payload['general_metadata']['datetime']} R{revision}"
+    return " ".join(part for part in format_message_metadata_parts(node_payload, role, revision) if part)
+
+def format_message_metadata_parts(node_payload: dict, role: str, revision: int) -> tuple[str, str, str]:
+    """The three parts of `format_message_metadata_line`, for a view that draws them separately.
+
+    Returns `(when, revision_label, producer_label)`, where `producer_label` is `""` when there is nothing
+    to say. The chat log draws the revision label as a link, which is why it is a part of its own.
+    """
     # What produced this message, for the two roles that have an answer: the tool for a result, the model
     # for a reply. One bracket serves both, because a reader asking where a message came from is asking
     # one question and does not care which kind of answer comes back.
@@ -325,9 +337,9 @@ def format_message_metadata_line(node_payload: dict, role: str, revision: int) -
         maybe_producer = chatutil.model_of(node_payload)
     else:
         maybe_producer = None
-    if maybe_producer:
-        line = f"{line} [{maybe_producer}]"
-    return line
+    return (node_payload['general_metadata']['datetime'],
+            f"R{revision}",
+            f"[{maybe_producer}]" if maybe_producer else "")
 
 def format_generation_stats(*, n_tokens: int, dt: float, exact: bool = True, label: str | None = None) -> str:
     """Format a token count, a wall time and the speed between them, as the chat log shows them.
@@ -695,9 +707,9 @@ class DPGChatMessage:
         dpg.add_spacer(height=gui_config.margin,
                        parent=text_vertical_layout_group)
 
-        # Render timestamp the revision number of the payload currently shown  TODO: later (chat editing): this needs to be switchable without regenerating the whole view
+        # The grey line: when the revision on screen was written, and which revision it is
         if node_id is not None:
-            node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+            node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision
             node_active_revision = self.parent_view.chat_controller.datastore.get_revision(node_id)
             # The cogs icon on a tool result says one ran and not which, so a turn that called three tools
             # is a column of identical badges; naming them is the whole of what tells them apart. Composed
@@ -705,10 +717,28 @@ class DPGChatMessage:
             #
             # Tagged so a navigation jump can flash it: it is the one widget every stored message has, at a
             # fixed place at its top, which makes it the natural "here is the message you asked for" marker.
-            dpg.add_text(format_message_metadata_line(node_payload, role, node_active_revision),
+            when, revision_label, producer_label = format_message_metadata_parts(node_payload, role, node_active_revision)
+            metadata_row = dpg.add_group(horizontal=True, horizontal_spacing=_METADATA_SPACING,
+                                         parent=text_vertical_layout_group)
+            dpg.add_text(when,
                          color=(120, 120, 120),
                          tag=f"chat_message_timestamp_{self.gui_uuid}",  # tag
-                         parent=text_vertical_layout_group)
+                         parent=metadata_row)
+            # The revision number is the way into this message's revision history, so where there is a history
+            # to see, it is drawn as a link and the line says how many revisions there are.
+            n_revisions = len(self.parent_view.chat_controller.datastore.get_revisions(node_id))
+            if n_revisions > 1:
+                revision_link = dpg.add_text(revision_label, color=_LINK_COLOR, parent=metadata_row)
+                self._make_clickable([revision_link],
+                                     action=lambda: self.parent_view.chat_controller.open_revision_history(node_id))
+                dpg.add_text(f"Revision {node_active_revision} of this message. Click to see all its revisions [Ctrl+Shift+E]",
+                             parent=dpg.add_tooltip(revision_link))
+            else:
+                dpg.add_text(revision_label, color=(120, 120, 120), parent=metadata_row)
+            if producer_label:
+                dpg.add_text(producer_label, color=(120, 120, 120), parent=metadata_row)
+            if n_revisions > 1:
+                dpg.add_text(f"({n_revisions} revisions available)", color=(120, 120, 120), parent=metadata_row)
 
         # render the actual text
         self.gui_text_group = dpg.add_group(tag=f"chat_message_text_container_group_{self.gui_uuid}",
@@ -1629,7 +1659,7 @@ class DPGChatMessage:
         # The keyboard is read by the caller and arrives here as an argument, which is what lets the
         # result be checked without one. Same split as the Visualizer's report copy, and for the same
         # reason: a function that reads the modifier itself can only be exercised by faking `is_key_down`.
-        node_payload = self.parent_view.chat_controller.datastore.get_payload(self.node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+        node_payload = self.parent_view.chat_controller.datastore.get_payload(self.node_id)  # auto-selects active revision
 
         # The speaker's name rides along with the node ID and not otherwise: omitting it makes a copied
         # question convenient to paste back into the chat field and edit before re-submitting.
@@ -2196,7 +2226,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
         if self.parent_view.edit_node_id == self.node_id:
             self.parent_view.capture_edit_draft()  # before this rebuild replaces the field holding it
 
-        node_payload = self.parent_view.chat_controller.datastore.get_payload(self.node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+        node_payload = self.parent_view.chat_controller.datastore.get_payload(self.node_id)  # auto-selects active revision
         message = node_payload["message"]
         role = message["role"]
         persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
@@ -3764,7 +3794,7 @@ class DPGLinearizedChatView:
             # Read the payloads up front: the disclosure manifest describes the whole export, so it has to be
             # built before any message text is written, and it must land first in the output for a front-matter
             # parser to see it at all.
-            node_payloads = [self.chat_controller.datastore.get_payload(dpg_chat_message.node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+            node_payloads = [self.chat_controller.datastore.get_payload(dpg_chat_message.node_id)  # auto-selects active revision
                              for dpg_chat_message in self.chat_controller.current_chat_history]
 
             output_text = io.StringIO()
@@ -4150,6 +4180,7 @@ class DPGChatController:
                  on_navigate: Callable[[], None] | None = None,
                  give_caret: Callable[[str | int], None] | None = None,
                  give_keyboard_to_log: Callable[[], None] | None = None,
+                 open_revision_history: Callable[[str], None] | None = None,
                  executor: concurrent.futures.Executor | None = None):
         """Controller for LLM scaffold to GUI integration.
 
@@ -4254,6 +4285,9 @@ class DPGChatController:
         `give_keyboard_to_log`: Called with no arguments to hand the keyboard back to the chat log, as when an
                                 edit is saved or cancelled. `None` means nothing is done.
 
+        `open_revision_history`: Called with a chat node ID when the reader clicks a message's revision
+                                 number, to show that message's revisions. `None` means nothing is done.
+
         `web_indicator_widget`: DPG tag or ID of the widget to show while a "websearch" tool call is in progress.
 
         `executor`: A `ThreadPoolExecutor` or something duck-compatible with it. Used for background tasks.
@@ -4332,6 +4366,7 @@ class DPGChatController:
         self.on_navigate = on_navigate
         self.give_caret = give_caret if give_caret is not None else gui_animation.give_caret
         self.give_keyboard_to_log = give_keyboard_to_log if give_keyboard_to_log is not None else (lambda: None)
+        self.open_revision_history = open_revision_history if open_revision_history is not None else (lambda node_id: None)
 
         # The keyboard mark on the current message's button row, built on first use by
         # `update_current_message_mark`. One mark that moves, rather than one per message: a chat has as
@@ -4898,6 +4933,54 @@ class DPGChatController:
         logger.info(f"DPGChatController.revise_message: node '{node_id}' is now at revision {revision_id}.")
         self.update_context_fill_indicator()  # the branch's text changed
         return None
+
+    def _revision_refusal(self, node_id: str) -> str | None:
+        """Why a revision of `node_id` may not be shown or deleted right now, or `None`. See `edit_refusal`."""
+        maybe_refusal = self.edit_refusal()
+        if maybe_refusal is not None:
+            return maybe_refusal
+        if self.view.edit_node_id == node_id:  # the field would go on holding text from the old revision
+            return "Close the editor first."
+        return None
+
+    def show_revision(self, node_id: str, revision_id: int) -> str | None:
+        """Make `revision_id` the revision of `node_id` the chat shows, and redraw that message.
+
+        Refused as an edit is, and while that message is open for editing. Returns `None` when done, or,
+        when refused, a short reason for the caller to show.
+        """
+        maybe_refusal = self._revision_refusal(node_id)
+        if maybe_refusal is not None:
+            logger.info(f"DPGChatController.show_revision: refusing to show revision {revision_id} of '{node_id}': {maybe_refusal}")
+            return maybe_refusal
+        self.datastore.set_revision(node_id, revision_id)
+        self._revision_changed(node_id)
+        return None
+
+    def delete_revision(self, node_id: str, revision_id: int) -> str | None:
+        """Delete revision `revision_id` of `node_id`, permanently, and redraw that message.
+
+        Deleting the revision on screen shows the next newer one, or the newest if it was the newest. The
+        only revision of a message cannot be deleted; delete the message instead.
+
+        Refused as `show_revision` is. Returns `None` when done, or, when refused, a short reason.
+        """
+        maybe_refusal = self._revision_refusal(node_id)
+        if maybe_refusal is None and len(self.datastore.get_revisions(node_id)) == 1:
+            maybe_refusal = "The only revision. To remove the message, delete it."
+        if maybe_refusal is not None:
+            logger.info(f"DPGChatController.delete_revision: refusing to delete revision {revision_id} of '{node_id}': {maybe_refusal}")
+            return maybe_refusal
+        self.datastore.delete_revision(node_id, revision_id)
+        self._revision_changed(node_id)
+        return None
+
+    def _revision_changed(self, node_id: str) -> None:
+        """Redraw the message showing `node_id`, if it is on screen, after its active revision may have changed."""
+        maybe_message = self.view.find_message(node_id)
+        if maybe_message is not None:
+            maybe_message.rebuild_in_place()
+        self.update_context_fill_indicator()
 
     def get_current_message(self) -> DPGChatMessage | None:
         """Return the `DPGChatMessage` the per-message hotkeys act on, or `None` if the view is empty.

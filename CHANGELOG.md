@@ -25,6 +25,7 @@
   - An edit is a new revision: the old text is kept, and the revision number in the grey line above the message goes up. The messages below the edited one are left as they are, so this is for small edits — fixing a typo, trimming a long reply before sharing a chat log.
   - Only the text changes. Attachments, an AI reply's thinking trace and the record of which model wrote it carry over.
   - Not available on the system prompt, the greeting or a tool result, and refused while a reply is being written.
+  - **Clicking the revision number**, or **Ctrl+Shift+E**, lists every revision of the message, to show any of them in the chat or delete it. Deleting a revision **destroys** that version of the message, with no undo. Continue has always made revisions too, and this is the first way to reach them.
 - **The chat graph can delete a message and everything below it.**
   - The toolbar's trash can **destroys** the message under the cursor and every branch below it, with no undo; **Shift+Delete** does the same from the keyboard. Two presses on the same message, as in the chat log.
   - A branch other than the one you are on can be deleted without leaving where you are. If you were inside what you deleted, you land on a neighbouring message.

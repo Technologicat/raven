@@ -37,7 +37,7 @@ __all__ = [  # The parts a message is made of, and reading them back
            # Walking and mending a chat
            "linearize_chat", "descend_to_latest",
            "get_all_system_prompt_node_ids", "get_all_greeting_node_ids", "is_deletable", "delete_subtree",
-           "is_editable", "revise_message_text",
+           "is_editable", "revise_message_text", "describe_revisions",
            "compute_auto_allowed_hosts",
            "upgrade_datastore", "factory_reset_datastore",
            "remove_persona_from_start_of_line",
@@ -1451,6 +1451,32 @@ def revise_message_text(payload: Dict[str, Any], text: str) -> Dict[str, Any]:
     new_payload["general_metadata"]["datetime"] = f"{isodate} {isotime}"
     return new_payload
 
+def describe_revisions(datastore: chattree.Forest, node_id: str, opening_chars: int = 60) -> List[Dict[str, Any]]:
+    """List the stored revisions of the message at `node_id`, for a reader choosing between them.
+
+    Returns one dict per revision, oldest first, with:
+
+      - `"revision"`: the revision ID.
+      - `"datetime"`: when that revision was written, as the chat log prints it.
+      - `"opening"`: its first non-blank line of text, without the persona prefix, cut to about
+                     `opening_chars` characters with `…` marking a cut. Empty when it has no text.
+      - `"active"`: whether it is the revision the chat currently shows.
+    """
+    active_revision = datastore.get_revision(node_id)
+    descriptions = []
+    for revision_id in datastore.get_revisions(node_id):
+        payload = datastore.get_payload(node_id, revision_id)
+        text = remove_persona_from_start_of_line(persona=payload["general_metadata"]["persona"],
+                                                 text=content_to_text(payload["message"].get("content")))
+        maybe_first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+        if len(maybe_first_line) > opening_chars:
+            maybe_first_line = maybe_first_line[:opening_chars].rstrip() + "…"
+        descriptions.append({"revision": revision_id,
+                             "datetime": payload["general_metadata"].get("datetime", ""),
+                             "opening": maybe_first_line,
+                             "active": revision_id == active_revision})
+    return descriptions
+
 def compute_auto_allowed_hosts(datastore: chattree.Forest,
                                node_id: str,
                                *,
@@ -1866,7 +1892,7 @@ def get_node_message_text_without_persona(datastore: chattree.Forest,
         `text`: The text content of the chat message with the persona name stripped,
                 at the node's current payload revision.
     """
-    node_payload = datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+    node_payload = datastore.get_payload(node_id)  # auto-selects active revision
     message = node_payload["message"]
     role = message["role"]
     persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
