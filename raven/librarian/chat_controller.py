@@ -1696,10 +1696,11 @@ class DPGChatMessage:
         # Rerolling for AI messages
         if role == "assistant":
             def reroll_message_callback():
-                # A reroll rewinds the branch and starts a new turn on it, so running one *during* a turn
-                # would leave two turns writing the same branch. Refusing is the whole handling: the reply
-                # in flight is a moment away, and the alternative — cancelling it for a reroll the user may
-                # not want once they have read it — decides that for them.
+                # A reroll starts a new turn, and a local backend serves one at a time: the KV cache holds
+                # one conversation, and there is no throughput to spare for a second request. Refusing is
+                # the whole handling: the reply in flight is a moment away, and the alternative —
+                # cancelling it for a reroll the user may not want once they have read it — decides that
+                # for them.
                 if self.parent_view.chat_controller.is_generating():
                     logger.info("DPGCompleteChatMessage.reroll_message_callback: a turn is already in flight; refusing.")
                     return
