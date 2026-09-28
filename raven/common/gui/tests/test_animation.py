@@ -1153,21 +1153,62 @@ class TestAnAnimationWhoseWidgetsAreGoneIsDropped:
         finally:
             animation.animator.clear()
 
-    def test_an_ordinary_bug_still_propagates(self, dpg_context):
-        """The negative control, and the point of using `nonexistent_ok` rather than a bare `except`.
+    def test_an_ordinary_bug_is_logged_with_its_traceback_and_dropped(self, dpg_context, caplog):
+        """One faulty animation must not end the render loop, and must not vanish silently either.
 
-        Only a deleted item is an expected way for an animation to die. Swallowing anything else would
-        turn every exception inside a `render_frame` into a silently vanishing animation — which is the
-        same three-places problem again, with nothing logged at all.
+        Escaping, the error ends the app. Swallowed without a word, the animation would simply stop, with
+        nothing to say why. So it is dropped at ERROR, naming the animation, with the traceback that says
+        where the bug is — and the others go on.
         """
         class Buggy(animation.Animation):
             def render_frame(self, t: int):
                 raise ZeroDivisionError("an ordinary mistake in animation code")
 
+        healthy = self.Healthy()
         animation.animator.add(Buggy())
+        animation.animator.add(healthy)
         try:
-            with pytest.raises(ZeroDivisionError):
+            with caplog.at_level("INFO"):
                 animation.animator.render_frame()
+            records = [record for record in caplog.records if "Buggy" in record.getMessage()]
+            assert records, "the dropped animation is not named"
+            assert records[0].levelname == "ERROR"
+            assert records[0].exc_info is not None, "no traceback, so the log does not say where the bug is"
+            animation.animator.render_frame()
+            assert animation.animator.active_count == 1
+            assert healthy.frames == 2, "the survivor stopped getting frames"
+        finally:
+            animation.animator.clear()
+
+    def test_an_error_while_finishing_is_logged_and_the_animation_still_goes(self, dpg_context, caplog):
+        class BadFinish(animation.Animation):
+            def render_frame(self, t: int):
+                return animation.action_finish
+
+            def finish(self):
+                raise RuntimeError("cleanup went wrong")
+
+        animation.animator.add(BadFinish())
+        try:
+            with caplog.at_level("INFO"):
+                animation.animator.render_frame()
+            assert any("BadFinish" in record.getMessage() and record.levelname == "ERROR" for record in caplog.records)
+            assert animation.animator.active_count == 0
+        finally:
+            animation.animator.clear()
+
+    def test_an_unknown_action_is_logged_and_dropped(self, dpg_context, caplog):
+        class Confused(animation.Animation):
+            def render_frame(self, t: int):
+                return "continue"  # a string, not the `action_continue` symbol
+
+        animation.animator.add(Confused())
+        try:
+            with caplog.at_level("INFO"):
+                animation.animator.render_frame()
+            assert any("Confused" in record.getMessage() and "unknown action" in record.getMessage()
+                       for record in caplog.records)
+            assert animation.animator.active_count == 0
         finally:
             animation.animator.clear()
 

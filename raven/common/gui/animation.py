@@ -140,7 +140,7 @@ class Animator:
             snapshot = list(self._animations)
             for animation in snapshot:
                 # An animation whose widgets have been deleted draws into nothing, every frame, for as
-                # long as it stays registered. Today that is fatal — the error leaves this loop, the app's
+                # long as it stays registered. Unguarded, that is fatal — the error leaves this loop, the app's
                 # render loop catches it, and the app exits — and it names the animation that happened to
                 # be next in the list rather than the one at fault, since the list outlives any one of the
                 # widgets in it.
@@ -158,8 +158,16 @@ class Animator:
                 # that merely accumulates is invisible here, and stays invisible until the day something
                 # it draws into goes away. The test suite carries the other half, in the root
                 # `conftest.py`: no test module may finish with animations still registered.
-                with guiutils.nonexistent_ok() as nok:
-                    action = animation.render_frame(t=time_now)
+                # Any other error in an animation is dropped the same way, logged with its traceback: one
+                # faulty animation must not end the render loop and take the app down with it, which is
+                # what an escaping exception here does.
+                try:
+                    with guiutils.nonexistent_ok() as nok:
+                        action = animation.render_frame(t=time_now)
+                except Exception as exc:
+                    logger.error(f"Animator.render_frame: {type(animation).__name__}@0x{id(animation):x} "
+                                 f"raised {type(exc)}: {exc}; dropping it.", exc_info=True)
+                    continue
                 if nok.errored:
                     # `nok.detail` names the widget and the line that asked for it. Carried here rather
                     # than left to the DEBUG line `nonexistent_ok` also writes, because debug logging is
@@ -171,11 +179,15 @@ class Animator:
                 if action is action_continue:
                     running_animations.append(animation)
                 elif action is action_finish:
-                    animation.finish()
+                    try:
+                        animation.finish()
+                    except Exception as exc:
+                        logger.error(f"Animator.render_frame: {type(animation).__name__}@0x{id(animation):x} "
+                                     f"raised {type(exc)}: {exc} while finishing; it is dropped either way.", exc_info=True)
                 elif action is action_cancel:
                     pass  # when cancelled, do nothing, just remove the animation
-                else:
-                    raise ValueError(f"Animator.render_frame: animation {animation} returned unknown action {action}, expected one of the `raven.common.gui.animation.action_X` constants (where X is 'continue', 'finish', or 'cancel').")
+                else:  # a programming error, but not one worth the app: drop it, as for any other fault
+                    logger.error(f"Animator.render_frame: {type(animation).__name__}@0x{id(animation):x} returned unknown action {action}, expected one of the `raven.common.gui.animation.action_X` constants (where X is 'continue', 'finish', or 'cancel'); dropping it.")
             # The rebuild has to honour whatever the loop itself did to the registry, which is why it is
             # not simply `running_animations`. A snapshot alone would resurrect an animation cancelled
             # mid-loop — it is still in the snapshot, so it renders after its cancellation and comes back

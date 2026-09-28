@@ -43,6 +43,7 @@
 
 #### Constellation-wide
 
+- **A fault in one GUI animation no longer closes the app.** The animation is dropped and the error logged with its traceback; everything else carries on.
 - **Every app's window title now names the app as its command does**: `Raven-cherrypick`, `Raven-xdot-viewer`, `Raven-conference-timer`, `Raven-avatar-pose-editor` and `Raven-avatar-settings-editor`, as `Raven-librarian` and `Raven-visualizer` already were. Worth knowing if a window manager rule matches on the old titles.
 
 ### Fixed
