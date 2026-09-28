@@ -97,7 +97,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 
 <img src="img/screenshot-librarian.png" alt="Screenshot of Raven-librarian, with the AI avatar" height="200"/> <img src="img/screenshot-librarian-graph.png" alt="Screenshot of Raven-librarian, with the chat graph" height="200"/>
 
-- **Documentation**: [Librarian user manual](raven/librarian/README.md)
+- **Documentation**: [Librarian user manual](raven/librarian/README.md), which opens with a [quickstart](raven/librarian/README.md#quickstart) — what to start, and in which order.
 - **Goal**: Pick up where *Visualizer*'s screening leaves off — a few hundred papers, still far more than anyone can read. Talk with a local LLM for synthesis, clarifications, speculation, ...
   - **Status**: :white_check_mark: Fully operational, and under active development — the GUI app `raven-librarian` is what we use day to day. A command-line client `raven-minichat` shares the same backend (note that the GUI app has more features).
     - For the GUI app `raven-librarian`, `raven-server` must be running.
@@ -918,7 +918,7 @@ To the best of our knowledge, any other packages we use do not collect any telem
 
 For Librarian, we **strongly recommend** self-hosting a local LLM, so that your conversations never leave your machine. Two backends we can speak for, both of which run quantized GGUF models on your GPU with partial offloading for low-VRAM environments:
 
-- [**LM Studio**](https://lmstudio.ai/) is what we run day to day, and the one to assume if you are following along. It installs as an ordinary desktop application, finds and downloads models for you, and needs no setup beyond starting its local server.
+- [**LM Studio**](https://lmstudio.ai/) is what we run day to day, and the one to assume if you are following along. It installs as an ordinary desktop application and finds and downloads models for you. It needs a little setup to serve a model to *Librarian*: the [Librarian quickstart](raven/librarian/README.md#quickstart) walks through it.
 - [**oobabooga/text-generation-webui**](https://github.com/oobabooga/text-generation-webui) is the open-source alternative, and comes with several inference backends out of the box, including llama.cpp. Installing it asks about as much of you as installing Raven does, which is the fair way to put it — the trade is that LM Studio is closed source and the quicker of the two to get answering, while ooba is open source. Either way there are two things to set up, Raven and a backend.
 
 Either way the model runs on your own hardware, which is the part that matters here.

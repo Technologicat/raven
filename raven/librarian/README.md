@@ -13,6 +13,7 @@
 **Table of Contents**
 
 - [Introduction](#introduction)
+- [Quickstart](#quickstart)
 - [Features](#features)
     - [Multiversal history](#multiversal-history)
         - [Why?](#why)
@@ -88,6 +89,25 @@
 The basic functionality is complete, the codebase should be in a semi-maintainable state, and most bugs have been squashed. If you find a bug that is not listed in [TODO.md](../../TODO.md), please [open an issue](https://github.com/Technologicat/raven/issues).
 
 Features will still be added and expanded upon, schedule and funding permitting.
+
+# Quickstart
+
+*Librarian* needs two things running besides itself: an **LLM backend**, which is where the AI model runs, and ***Raven-server***, which provides the avatar, speech, document search and the AI's internet access. With [LM Studio](https://lmstudio.ai/) as the backend, which is what we use:
+
+1. **Install Raven** as described in the [main README](../../README.md#install--run), and **install LM Studio**.
+2. **Set up LM Studio once**: in its settings, enable the **Developer** tab. Then go to the Developer tab and switch the **API server** on. *Librarian* expects it at LM Studio's default address, `http://localhost:1234`, so nothing needs configuring on the Raven side.
+3. **Start *Raven-server***:
+
+   ```bash
+   $(pdm venv activate)  # activate Raven venv
+   source env.sh  # set up paths for CUDA libraries
+   raven-server
+   ```
+
+4. **Load a model in LM Studio, on its Developer tab**, so that it is served through the API. The main README has [model recommendations](../../README.md#raven-librarian-multiversal-llm-frontend) by how much VRAM you have.
+5. **Start *Librarian***: `raven-librarian`.
+
+Steps 3 and 4 are in that order for a reason, if the LLM and *Raven-server* share a GPU: see [Start Raven-server *before* the LLM backend](#start-raven-server-before-the-llm-backend). With a separate GPU for each, the order does not matter.
 
 # Features
 
@@ -1381,10 +1401,12 @@ Be aware that LLM accuracy tends to suffer (the model becomes inattentive) for l
 
 Recommendations:
 
-- LLM backend: [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui).
-  - *Librarian* is tested with this backend.
+- LLM backend: [LM Studio](https://lmstudio.ai/), which is what we run. The [Quickstart](#quickstart) covers setting it up.
+- The open-source alternative is [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui).
   - It is easy to install; see the instructions on its frontpage.
-  - You'll want to start it with the `--api --listen` command-line options, so that it will listen for incoming connections, and serve the OpenAI-compatible API (which *Librarian* uses).
+  - Start it with the `--api --listen` command-line options, so that it listens for incoming connections and serves the OpenAI-compatible API (which *Librarian* uses).
+  - Its API is at `http://localhost:5000` by default, so set `llm_backend_url`, in `raven.librarian.config`, to that — see [Configuration](#configuration).
+  - *Librarian* supports it, but has not been re-tested against a recent release of it.
 - Model: the recommendations live in the [main README](../../README.md#raven-librarian-multiversal-llm-frontend), by how much VRAM you have. They move with each model generation, so they are kept in one place rather than repeated per app.
 
 **Multiple-device** considerations:
