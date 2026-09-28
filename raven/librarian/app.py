@@ -243,36 +243,36 @@ with timer() as tim:
     # animation for the INDEXING indicator, while RAG is updating its database (cyclic, runs in the background).
     # Same color as the mic-recording theme — semantically both are "recording" — but a separate theme
     # and pulsator, so resetting the mic phase on recording start doesn't yank the INDEXING pulsation.
-    with dpg.theme(tag="my_pulsating_red_docs_theme"):
+    with dpg.theme(tag="my_pulsating_red_indexing_theme"):
         with dpg.theme_component(dpg.mvAll):
-            pulsating_red_docs_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
-        pulsating_red_docs_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
-                                                               theme_color_widget=pulsating_red_docs_color)
-        gui_animation.animator.add(pulsating_red_docs_glow)
+            pulsating_red_indexing_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
+        pulsating_red_indexing_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
+                                                                   theme_color_widget=pulsating_red_indexing_color)
+        gui_animation.animator.add(pulsating_red_indexing_glow)
 
-    # Steady (non-pulsating) themes for the long progress labels of the INDEXING row (red) and the DOCUMENTS row
-    # (gray). The icon and the name beside it carry the pulsation cue; a progress label is too long for the eye
-    # to read inside one pulsation cycle, so it gets a calm full-alpha variant matching its row's color.
-    with dpg.theme(tag="my_steady_red_docs_theme"):
+    # Steady (non-pulsating) themes for the indicator rows' text: red for INDEXING, gray for the rest. On every
+    # row the icon carries the pulsation cue and the words stay still, the name and the progress label alike,
+    # at full alpha in the row's color — words are there to be read, and a pulsating word is hard to read.
+    with dpg.theme(tag="my_steady_red_indexing_theme"):
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
-    with dpg.theme(tag="my_steady_gray_docs_theme"):
+    with dpg.theme(tag="my_steady_gray_indicator_theme"):
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (180, 180, 180))
 
     # An attachment whose text could not be extracted. Steady, not pulsating: the pulsation means "working
     # on it", so a failed chip must stop moving or the two states read the same at a glance. Its own theme
-    # rather than the DOCUMENTS red above, whose name says who owns it — and an owner's name on a shared theme is
-    # how a later edit for one owner silently restyles the other.
+    # rather than `my_steady_red_indexing_theme` above, whose name says who owns it — and an owner's name on a
+    # shared theme is how a later edit for one owner silently restyles the other.
     with dpg.theme(tag="my_attachment_error_theme"):
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
 
     # Themes for the LLM backend status pill above the composer (`_refresh_backend_status_pill`). Its own
-    # pulsator rather than the DOCUMENTS one, for the reason the DOCUMENTS indicator has its own: a pulsation whose
+    # pulsator rather than the INDEXING one, for the reason that one is separate from the mic's: a pulsation whose
     # phase another owner may reset is a pulsation that jumps.
     #
-    # Split steady/pulsating the same way the DOCUMENTS row is, and for the same reason — the icon pulsates to
+    # Split steady/pulsating the same way the indicator rows are, and for the same reason — the icon pulsates to
     # say "act on me", the sentence beside it stays at full alpha because a sentence is too long to read
     # inside one cycle. The same caution orange for both bad states: which of the two it is, and what to do
     # about it, is what the words are for.
@@ -1737,41 +1737,41 @@ with timer() as tim:
                         with dpg.group(show=False, horizontal=True) as docs_indexing_indicator_group:
                             dpg.add_text(fa.ICON_DATABASE, tag="docs_indexing_symbol")
                             dpg.bind_item_font("docs_indexing_symbol", themes_and_fonts.icon_font_solid)  # tag
-                            dpg.bind_item_theme("docs_indexing_symbol", "my_pulsating_red_docs_theme")  # tag
+                            dpg.bind_item_theme("docs_indexing_symbol", "my_pulsating_red_indexing_theme")  # tag
                             dpg.add_text("INDEXING", tag="docs_indexing_text")
-                            dpg.bind_item_theme("docs_indexing_text", "my_pulsating_red_docs_theme")  # tag
-                            # Steady-red (non-pulsating) theme on the long progress label — pulsation
-                            # kills readability for a label this long.
+                            dpg.bind_item_theme("docs_indexing_text", "my_steady_red_indexing_theme")  # tag
                             dpg.add_text("", tag="docs_indexing_progress_text")
-                            dpg.bind_item_theme("docs_indexing_progress_text", "my_steady_red_docs_theme")  # tag
+                            dpg.bind_item_theme("docs_indexing_progress_text", "my_steady_red_indexing_theme")  # tag
 
                         with dpg.group(show=False, horizontal=True) as docs_search_indicator_group:
                             dpg.add_text(fa.ICON_DATABASE, tag="docs_search_symbol")
                             dpg.bind_item_font("docs_search_symbol", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("docs_search_symbol", "my_pulsating_gray_text_theme")  # tag
                             dpg.add_text("DOCUMENTS", tag="docs_search_text")
-                            dpg.bind_item_theme("docs_search_text", "my_pulsating_gray_text_theme")  # tag
+                            dpg.bind_item_theme("docs_search_text", "my_steady_gray_indicator_theme")  # tag
                             dpg.add_text("", tag="docs_search_progress_text")
-                            dpg.bind_item_theme("docs_search_progress_text", "my_steady_gray_docs_theme")  # tag
+                            dpg.bind_item_theme("docs_search_progress_text", "my_steady_gray_indicator_theme")  # tag
 
                         with dpg.group(show=False, horizontal=True) as attachment_read_indicator_group:
                             dpg.add_text(fa.ICON_BOOK_OPEN_READER, tag="attachment_read_symbol")
                             dpg.bind_item_font("attachment_read_symbol", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("attachment_read_symbol", "my_pulsating_gray_text_theme")  # tag
                             dpg.add_text("READING", tag="attachment_read_text")
-                            dpg.bind_item_theme("attachment_read_text", "my_pulsating_gray_text_theme")  # tag
+                            dpg.bind_item_theme("attachment_read_text", "my_steady_gray_indicator_theme")  # tag
 
                         with dpg.group(show=False, horizontal=True) as llm_indicator_group:
                             dpg.add_text(fa.ICON_MICROCHIP, tag="llm_prompt_process_symbol")
                             dpg.bind_item_font("llm_prompt_process_symbol", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("llm_prompt_process_symbol", "my_pulsating_gray_text_theme")  # tag
                             dpg.add_text("SYSTEM", tag="llm_prompt_process_text")
+                            dpg.bind_item_theme("llm_prompt_process_text", "my_steady_gray_indicator_theme")  # tag
 
                         with dpg.group(show=False, horizontal=True) as web_indicator_group:
                             dpg.add_text(fa.ICON_GLOBE, tag="web_access_symbol")
                             dpg.bind_item_font("web_access_symbol", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("web_access_symbol", "my_pulsating_gray_text_theme")  # tag
                             dpg.add_text("INTERNET", tag="web_access_text")
+                            dpg.bind_item_theme("web_access_text", "my_steady_gray_indicator_theme")  # tag
 
                     dpg.add_text("",
                                  pos=(gui_config.subtitle_x0,
@@ -3358,7 +3358,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     chat_stop_generation_button_widget=stop_generation_button,
                                     indicator_glow_animation=pulsating_gray_text_glow,
                                     think_glow_animation=pulsating_think_glow,
-                                    docs_indexing_glow_animation=pulsating_red_docs_glow,
+                                    docs_indexing_glow_animation=pulsating_red_indexing_glow,
                                     attachment_read_indicator_widget=attachment_read_indicator_group,
                                     llm_indicator_widget=llm_indicator_group,
                                     docs_indexing_indicator_widget=docs_indexing_indicator_group,

@@ -21,6 +21,7 @@
 #### Raven-librarian
 
 - **The avatar panel's DOCS and WEB indicators now read DOCUMENTS and INTERNET**, as the toggles below them are called.
+- **In those indicators, only the icon pulsates now.** The names hold still, in their row's colour. In v0.2.9 some rows pulsated their name as well and some did not.
 
 #### Raven-xdot-viewer
 
