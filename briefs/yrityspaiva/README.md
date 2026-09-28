@@ -70,6 +70,41 @@ live on the Night.
    disabled pencil button with `Ctrl+E` reserved, and the open question is what the UI does about replies
    below an edited message. The manual's own promise bounds it — small edits that do not change the flow of
    the chat — which may settle most of that question; the building session decides.
-2. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
+   - **Settled 2026-09-28** (design session with the maintainer):
+     - **Inline editing, GitHub-style**: the message's Markdown is replaced in place by a multiline field
+       with Save/Cancel, via `rebuild_in_place`. Ctrl+Enter saves (gated on `is_item_focused` — it is the
+       committing chord), Esc cancels, global hotkeys yield while the field has the caret. Rejected: a
+       modal (cheapest, but edits away from what is being read), and loading into the composer (a mode in
+       the send path, the attachment pile and the user's draft — a leak waiting to happen). The modal is
+       the fallback if sizing the field proves fiddly. **The field does not word-wrap** — DPG 2.3.1's
+       `InputText` has no such option, and the composer lives with the same limit. Accepted for v1; a
+       custom multiline text box is the eventual fix for both (maintainer, 2026-09-28).
+     - **User and AI message text only.** System prompt, greeting and tool messages are not editable.
+       Thinking traces and attachments carry over unchanged: the new revision is the old payload with its
+       text parts replaced and a fresh timestamp. **An edited AI message keeps its
+       `generation_metadata`** — the edits are typo fixes on user messages and, on AI messages, trimming
+       excess length before sharing a chat log; neither changes which model wrote it.
+       **Editing the thinking trace is a later version's**, and it has a use: a model stuck in a loop can
+       sometimes be unwedged by cutting the loop out of its trace and continuing (maintainer, 2026-09-28).
+       That depends on Continue resuming an *incomplete thinking trace*, which is probably not supported
+       yet (maintainer's recollection). Checked only this far: on a prefill backend `llmclient.invoke`
+       seeds the old `reasoning_content` into the stored result, but whether the trace reaches the model
+       on the wire is unchecked.
+     - **The replies below an edit get nothing** — no stale mark, no reroll prompt. The manual's own
+       promise (small edits that don't change the flow) is the scope, and the `R` number is the "edited"
+       marker.
+     - **The revision history is in v1**: clicking the `R` number opens a list of revisions (number,
+       date, first line) with *show* (make active) and *delete*. The `R` must look clickable. It is also
+       the first way to reach the revisions Continue has always been making. First to cut if time runs out.
+     - **Refused while a reply is being written**, as delete is. **Ctrl+E**, into the help card and README.
+     - Order: editing first, then the history view.
+     - Already in hand: `rebuild_in_place` repaints one message, which settles the "switchable without
+       regenerating the whole view" marker.
+2. **The two items filed on the Night, 2026-09-25** (added 2026-09-28, after message editing): in
+   `TODO_DEFERRED.md`, rerolling a tool-calling reply can leave the vertical spacing wrong, and making
+   `websearch` cancellable (`investigations/abort-inflight-request/`). **The second is wider than its
+   title**: `webfetch` at least, and possibly other tools — survey them all when it is picked up
+   (maintainer, 2026-09-28).
+3. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.
