@@ -178,6 +178,16 @@ class TestFollowingTheDatastore:
         panel.poll()
         assert _listed(panel) == [1, 2, 3, 4]
 
+    def test_a_change_elsewhere_in_the_tree_does_not_rebuild_the_list(self, panel, forest_and_node):
+        # A streaming reply moves the counter chunk by chunk, and a rebuild on each took the focus every frame.
+        f, node_id = forest_and_node
+        builds, generation = panel._build_count, f.generation
+        f.create_node(_payload("a reply being written", "2026-09-28 14:00:00"), parent_id=node_id)
+        assert f.generation != generation, "the counter did not move, so this cannot tell a skip from a miss"
+        panel.poll()
+        assert panel._build_count == builds, "a change to another node rebuilt the list"
+        assert _listed(panel) == [1, 2, 3]
+
     def test_the_poll_neither_waits_for_nor_joins_a_rebuild_in_progress(self, panel, forest_and_node):
         # A click rebuilds the rows on the callback thread while the render thread polls. Two rebuilds at once
         # delete each other's new rows mid-build, which took the render loop down; waiting instead would put

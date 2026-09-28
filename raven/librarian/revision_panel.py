@@ -72,6 +72,8 @@ class DPGRevisionPanel:
         self._seen_generation = None  # the datastore's `generation` when the list was last built
         self._rows_lock = threading.RLock()  # see `_rebuild_rows`
         self._focus_request = None  # the `give_focus` from the last open, while it may still be asking
+        self._rows_take_focus = True  # see `_rebuild_rows`
+        self._descriptions = None  # the revisions the rows were last built from, for `poll` to compare
         self._cursor_theme = None  # populated by `_build_window`, with the colour it pulses
         self._cursor_color = None
 
@@ -169,15 +171,23 @@ class DPGRevisionPanel:
         if not self._rows_lock.acquire(blocking=False):
             return
         try:
-            if self.is_open and self.datastore.generation != self._seen_generation:
-                self.refresh()
+            if not self.is_open or self.datastore.generation == self._seen_generation:
+                return
+            # The counter moves on any change to the tree — a streaming reply moves it chunk by chunk — and
+            # nearly all of them leave this message's revisions as they were. Rebuilding on each was a rebuild
+            # per frame while the AI wrote, each one taking the focus.
+            self._seen_generation = self.datastore.generation
+            if (self.node_id in self.datastore.nodes and
+                    chatutil.describe_revisions(self.datastore, self.node_id) == self._descriptions):
+                return
+            self.refresh()
         finally:
             self._rows_lock.release()
 
     def refresh(self) -> None:
         """Re-read the listed message's revisions, as after something else changed them. No-op when closed.
 
-        Closes the panel if the message itself is gone.
+        Closes the panel if the message itself is gone. Takes the focus only if the panel already had it.
         """
         if not self.is_open:
             return
@@ -185,7 +195,7 @@ class DPGRevisionPanel:
             self.close()
             return
         keep = self._rows[self._cursor.current][0] if 0 <= self._cursor.current < len(self._rows) else None
-        self._rebuild_rows(keep_revision=keep)
+        self._rebuild_rows(keep_revision=keep, take_focus=self.has_keyboard())
 
     # ------------------------------------------------------------------------------
     # Keyboard
@@ -314,12 +324,20 @@ class DPGRevisionPanel:
                                                          category=dpg.mvThemeCat_Core)
         keyboardmark.join_pulse(self._cursor_color)
 
-    def _rebuild_rows(self, keep_revision: Optional[int]) -> None:
-        """Rebuild the table from the datastore, with the cursor on `keep_revision` if it is still there."""
+    def _rebuild_rows(self, keep_revision: Optional[int], take_focus: bool = True) -> None:
+        """Rebuild the table from the datastore, with the cursor on `keep_revision` if it is still there.
+
+        `take_focus`: whether to put the focus on the cursor row afterwards. `False` for a rebuild nobody in
+                      the panel asked for, which must not take the keyboard from wherever it is.
+        """
         # Two threads rebuild this — the render thread through `poll`, the callback thread after a click or
         # a key — and two rebuilds interleaved delete each other's new rows mid-build.
         with self._rows_lock:
-            self._rebuild_rows_locked(keep_revision)
+            self._rows_take_focus = take_focus  # read by `_focus_row`, which the cursor calls as it lands
+            try:
+                self._rebuild_rows_locked(keep_revision)
+            finally:
+                self._rows_take_focus = True
 
     def _rebuild_rows_locked(self, keep_revision: Optional[int]) -> None:
         for _revision_id, _selectable, _delete_button, tooltip in self._rows:
@@ -331,6 +349,7 @@ class DPGRevisionPanel:
         self._seen_generation = self.datastore.generation
 
         descriptions = chatutil.describe_revisions(self.datastore, self.node_id)
+        self._descriptions = descriptions  # what `poll` compares against
         for description in descriptions:
             revision_id = description["revision"]
             row = dpg.add_table_row(parent=self._table)
@@ -368,7 +387,7 @@ class DPGRevisionPanel:
 
     def _focus_row(self, maybe_idx: Optional[int]) -> None:
         """Put DPG's focus on row `maybe_idx`, so the panel keeps the keyboard as the cursor moves."""
-        if not self.is_open or maybe_idx is None or not (0 <= maybe_idx < len(self._rows)):
+        if not self.is_open or not self._rows_take_focus or maybe_idx is None or not (0 <= maybe_idx < len(self._rows)):
             return
         self._cancel_focus_request()  # one still asking for the row the cursor left would pull the focus back
         with guiutils.nonexistent_ok():
