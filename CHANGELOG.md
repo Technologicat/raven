@@ -63,8 +63,8 @@
 - **The first Ctrl+Shift+O after starting the app no longer closes the attach dialog as it opens.**
   - In v0.2.9 that first press appeared to do nothing, and a second press opened the dialog normally. Clicking the attach button was not affected.
 - **Tab to the composer or the graph no longer flashes a caret in the search field for a moment.**
-- **Clicking HEAD's box in the chat graph to give the graph the keyboard no longer takes the keyboard straight back.**
-  - In v0.2.9 that click counted as the second of the two that switch branch, so it switched to where you already were and returned the keyboard to the chat log. Tabbing to the graph and then clicking HEAD did the same.
+- **Clicking the chat graph to give it the keyboard no longer switches branch.**
+  - In v0.2.9 a click on the box the cursor was on counted as the second of the two clicks that switch branch — HEAD's box, where the cursor appears when the graph takes the keyboard, or the box it was left on before you went elsewhere. So the click switched branch and handed the keyboard straight back to the chat log. Tabbing to the graph and then clicking that box did the same.
 - **Deleting a message is refused while a reply is being written.**
   - In v0.2.9 the delete went through, and deleting a message above the reply in progress destroyed the reply along with it, while it was still being written. The button now flashes red and says why.
 

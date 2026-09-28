@@ -677,6 +677,10 @@ class DPGChatGraphPanel(gui_animation.Animation):
             with self._lock:
                 self._view_state.cursor_is_live = self._has_keyboard
                 ring_on_screen = self._cursor_name is not None
+                # Coming back to the graph is not a second act on the box the ring was left on. The click
+                # that brings the keyboard back may land on that very box, and must not switch branch.
+                if self._has_keyboard:
+                    self._cursor_placed_by_panel = True
                 chat_graph = self._chat_graph
             if self._has_keyboard and not ring_on_screen and chat_graph is not None:
                 # Arriving with the cursor nowhere, which is a pane that has the keys and shows no sign of

@@ -370,6 +370,18 @@ class TestCommit:
         click(built, head)
         assert calls.committed == [head], "a second, deliberate click on HEAD did not commit"
 
+    def test_the_click_that_brings_the_keyboard_back_does_not_commit(self, panel):
+        # The ring stays where it was left while the keys are elsewhere. Clicking that box to come back to
+        # the graph is coming back, not the second of two clicks.
+        built, forest, app_state, ids, calls = panel
+        click(built, ids["not_taken"])
+        assert built._cursor_name == ids["not_taken"]
+        built.has_keyboard = True  # the click's focus request, landing before the click itself
+        click(built, ids["not_taken"])
+        assert calls.committed == [], "the click that brought the keys back switched branch"
+        click(built, ids["not_taken"])
+        assert calls.committed == [ids["not_taken"]], "a deliberate second click did not switch"
+
     def test_an_arrow_planting_the_cursor_is_not_a_preview_either(self, panel):
         built, forest, app_state, ids, calls = panel
         built._set_cursor(None)
