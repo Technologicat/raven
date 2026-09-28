@@ -154,6 +154,7 @@ class ThumbnailGrid:
         self._on_selection_changed = on_selection_changed
         self._on_double_click = on_double_click
         self._on_click = on_click
+        self._hovered_at_rest = False  # whether the pointer was on the panel as of the last frame with the button up
         self._debug = debug
 
         self._label_height = label_height
@@ -603,6 +604,9 @@ class ThumbnailGrid:
         """
         pending_current = None
         pending_dblclick = None
+        with guiutils.nonexistent_ok():  # see `_hit_test`
+            if not dpg.is_mouse_button_down(dpg.mvMouseButton_Left):
+                self._hovered_at_rest = guiutils.is_mouse_on_widget(self._child_window_tag)
         with self._lock:
             # Collect the content group a previous rebuild swapped out. A tick has passed since it was
             # hidden, so the replacement is on screen and destroying this cannot leave a gap.
@@ -1011,8 +1015,13 @@ class ThumbnailGrid:
     # ------------------------------------------------------------------
 
     def _hit_test(self) -> Optional[int]:
-        """O(1) hit test: return the entry index under the mouse, or None."""
-        if not guiutils.is_mouse_on_widget(self._child_window_tag):
+        """O(1) hit test: return the entry index under the mouse, or None. For a click, which is a press."""
+        # Not a live hover read. Pressing on the panel makes ImGui report it unhovered from the next frame
+        # until a frame after the release (measured 2026-09-28, DPG 2.3.1), and nothing orders the click
+        # handler, on DPG's callback thread, before that frame — a live read that lost the race dropped the
+        # click, wherever on the tile it was. `update` samples the hover while the button is up, which is
+        # the answer as of when the press began.
+        if not self._hovered_at_rest:
             return None
 
         local_x, local_y = guiutils.get_mouse_relative_pos(self._child_window_tag)

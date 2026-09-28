@@ -14,6 +14,7 @@ import pytest
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
 from raven.common.gui import animation  # noqa: E402 -- after importorskip by design
+from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
 from raven.common.gui.thumbnailgrid import ThumbnailGrid  # noqa: E402 -- after importorskip by design
 
 TILE = 100
@@ -76,6 +77,27 @@ def test_column_count_fits_the_panel_minus_the_scrollbar(make_grid):
 def test_a_panel_narrower_than_one_tile_still_has_a_column(make_grid):
     """Zero columns would divide by zero in hit testing and show nothing; one is the floor."""
     assert make_grid(width=10).n_cols == 1
+
+
+def test_a_press_is_hit_tested_against_the_hover_from_before_it(make_grid, monkeypatch):
+    """ImGui reports the panel unhovered from the frame after a press, and the click handler can read late.
+
+    A live read then dropped the click. The hover as of the last frame with the button up is what says
+    where the press began.
+    """
+    grid = make_grid()
+    hovered, down = [True], [False]
+    monkeypatch.setattr(guiutils, "is_mouse_on_widget", lambda widget: hovered[0])
+    monkeypatch.setattr(dpg, "is_mouse_button_down", lambda button: down[0])
+    monkeypatch.setattr(guiutils, "get_mouse_relative_pos", lambda widget: (10.0, 10.0))  # on the first tile
+
+    grid.update()  # the button is up: this frame's hover is the one a press would begin from
+    hovered[0], down[0] = False, True  # the frame after the press, as ImGui reports it
+    grid.update()
+
+    assert guiutils.is_mouse_on_widget(grid._child_window_tag) is False, \
+        "a live read would say the panel is hovered, so this cannot tell the two apart"
+    assert grid._hit_test() == 0
 
 
 def test_a_click_on_a_tile_is_reported_after_it_has_moved_the_cursor(make_grid, monkeypatch):

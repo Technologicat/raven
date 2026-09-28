@@ -1902,6 +1902,19 @@ panel lost focus mid-press and its X did nothing, with `on_close` never firing.
 `raven.common.gui.utils.is_mouse_on_widget` is the wrapper, and it is named for the question rather than
 for the geometry. It was `is_mouse_inside_widget` and rect-based through v0.2.8.
 
+Two limits on the answer, both measured 2026-09-28 on DPG 2.3.1 over `--repl`:
+
+- **On a window or a child window it means *that exact window*.** Over the window's own background it is
+  True; over anything inside it that is a window in its own right — a table, a nested child — it is False.
+  The file dialog's listing reported hovered only on its border, and False over its rows and the blank
+  space below them. A drawlist is not a window, so a panel of drawn tiles answers True across the tiles,
+  which is why the thumbnail grid can ask it of its panel.
+- **A press on a window makes it unhovered from the next frame** until one frame after the release: the
+  pressed window's own item is active, and that blocks the hover. A global click handler runs on DPG's
+  callback thread with nothing ordering it before that frame, so one that asks *now* sometimes gets False
+  and drops the click — intermittently, since it depends on when the callback runs. Sample the hover per
+  frame while the button is up and ask the sample (`ThumbnailGrid._hit_test`).
+
 ## A drawlist cannot carry a tooltip — wrap it in a group
 
 Measured 2026-09-09. `dpg.add_tooltip(<a drawlist>)` fails: a drawlist accepts **only draw items** as

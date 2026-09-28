@@ -33,6 +33,7 @@
   - Clicking the find field puts the mark there.
   - Clicking a row or a tile puts it on the listing, so the arrow keys move through the listing. In the table, the cursor also moves to the row clicked, as it already did in the grid.
   - A click on the empty space below a short listing does not.
+- **A click on a thumbnail tile sometimes did nothing**, wherever on the tile it landed — in the file dialog's thumbnail view and in Raven-cherrypick's grid. Intermittent, which is why it seemed to come and go.
 
 ## 0.2.9 (24 September 2026) — *["Pleiades"](https://en.wikipedia.org/wiki/Pleiades)* edition
 
