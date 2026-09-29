@@ -204,6 +204,16 @@ class TestSearchDocumentsResult:
         assert metadata["grounding"] is False
 
 
+class TestFetchDocumentRefusal:
+    def test_an_unknown_id_is_named_back(self):
+        # Said back so the reader — and the model — can see which ID went wrong, a mistyped one especially.
+        retriever = env(datastore_lock=threading.RLock(), documents={"real.bib": {"text": "x", "path": "/r"}})
+        with dyn.let(tool_context=env(retriever=retriever)):
+            output, metadata = llmtools.fetch_document("ECCOMAS2024-deadbeef")
+        assert "'ECCOMAS2024-deadbeef'" in output
+        assert metadata == {"grounding": False}
+
+
 class TestWebfetchResultHeader:
     """Every webfetch result says which URL it is for — a failure as much as a fetched page.
 

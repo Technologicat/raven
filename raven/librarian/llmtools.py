@@ -516,8 +516,8 @@ def list_consulted_documents() -> tuple[str, dict]:
     logger.info(f"list_consulted_documents: {len(entries)} document{common_text.plural_s(len(entries))}.")
     return (_formatters().consulted_documents(entries), {"grounding": False})
 
-CANONICAL_NO_SUCH_DOCUMENT = ("There is no document with that ID in the database. Document IDs come from "
-                              "search results; search first, then fetch by the ID a result reports.")
+CANONICAL_NO_SUCH_DOCUMENT = ("There is no document with the ID '{document_id}' in the database. Document IDs "
+                              "come from search results; search first, then fetch by the ID a result reports.")
 
 # Canonical refusal for a fetch that cannot fit, in the manner of `CANONICAL_NOT_ON_ALLOWLIST`. Phrased as a
 # statement of the situation with the remedy attached, never as a prohibition: a tool result that tells the
@@ -558,7 +558,7 @@ def fetch_document(document_id: str,
     text = document_text(retriever, document_id)
     if text is None:
         logger.info(f"fetch_document: no document with ID '{document_id}'.")
-        return (CANONICAL_NO_SUCH_DOCUMENT, {"grounding": False})
+        return (CANONICAL_NO_SUCH_DOCUMENT.format(document_id=document_id), {"grounding": False})
 
     start = min(max(offset or 0, 0), len(text))
     end = min(start + length, len(text)) if length is not None and length > 0 else len(text)
