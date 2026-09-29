@@ -135,8 +135,9 @@ live on the Night.
   search step sometimes glided past its match (a rebuild mid-morph shifted the pan's destination by the morph
   still to run — `XDotWidget.set_graph`); committing a graph box with a thinking-trace hit did not open the
   trace (a stored message's paragraphs spent the request while it was still being built).
-  - Noticed, not acted on: a graph search step rebuilds three times (cursor, then `_set_has_keyboard` twice via
-    `_give_keyboard_to_graph`), and each mid-morph rebuild restarts the morph. Offered, undecided.
+  - And a graph search step rebuilt three times — cursor, then the graph's keyboard flag switched off and on by
+    release-then-claim — each mid-morph rebuild restarting the morph. The claimant now names the pane it is
+    claiming, which the release leaves alone: one rebuild per step.
 
 ## Queue, in order
 
