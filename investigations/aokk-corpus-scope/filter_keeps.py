@@ -12,9 +12,9 @@ because two of them are not about reliability at all:
       corpus carried a quoted phrase from the record's own text, which is the check on it.
   B1  `level` is `not_applicable` and `human_learning` is false — not set in education, corroborated by
       a second field. Machine-learning methods papers, mostly.
-  B2  `level` is `not_applicable` with no such corroboration. **Not removed.** These are where the
-      extraction's errors concentrate: a study whose level is merely unstated gets called
-      `not_applicable`, and the removal would be wrong rather than merely unlucky.
+  B2  `level` is `not_applicable` with no such corroboration. **Not removed.** This is where the
+      extraction's errors land when it makes them: a study whose level is merely unstated can be called
+      `not_applicable`, and removing it would be wrong rather than merely unlucky.
   C   `level` is `professional_training` or `informal` — learning that is really happening, somewhere
       this review may or may not ask about. **Not removed**, and for a different reason than B2: these
       are correctly labelled, and the open question is the review's scope rather than the extraction's
@@ -107,10 +107,10 @@ def main() -> int:
                         help="the extraction JSONL (default: the newest extracted-*.jsonl beside this "
                              "script, since the filename names the instrument that wrote it)")
     parser.add_argument("--out-dir", default=None, help="where the outputs go (default: beside this)")
-    parser.add_argument("--keep-uncorroborated", action="store_true",
+    parser.add_argument("--remove-uncorroborated", action="store_true",
                         help="also remove tier B2, which this refuses to do by default. Read "
                              "`held-for-review.tsv` before reaching for it: that tier is where the "
-                             "extraction's errors are, and its mistakes are false drops")
+                             "extraction's errors land, and its mistakes are false drops")
     parser.add_argument("--remove-outside-institutions", action="store_true",
                         help="also remove workplace training and informal learning. A scope decision "
                              "rather than a correctness one: those records are correctly labelled, and "
@@ -140,7 +140,7 @@ def main() -> int:
         if tier is not None:
             tiers[key] = tier
 
-    removing = {TIER_A, TIER_B1} | ({TIER_B2} if opts.keep_uncorroborated else set())
+    removing = {TIER_A, TIER_B1} | ({TIER_B2} if opts.remove_uncorroborated else set())
     removing |= {TIER_C} if opts.remove_outside_institutions else set()
     doomed = {key for key, tier in tiers.items() if tier in removing}
     held = {key for key, tier in tiers.items() if tier not in removing}

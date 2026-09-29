@@ -697,7 +697,7 @@ run against the unsifted corpus.
 | `score_review.py` | Scores a review against the judge's own cells — which drops are contested, and whether the control was easier than what it was compared against. The table in *Reviewing the drops* above is its output. `--contested` also writes the hand-check list |
 | `check_escalation.py` | Whether escalating the title-only drops rescued the records the review had independently flagged. Its negative control is that a small gap would mean one of the two instruments is not working, without saying which. `--rescues` lists where they disagree |
 | `extract_fields.py` | Asks what a record *says* — population, level, whether a person is learning, what the AI does — rather than whether it belongs, so the keeps can be filtered on stored fields instead of re-judged. `--pilot N` reads a sample first; `--all-keeps` widens the selection beyond the ones kept on a hedge |
-| `filter_keeps.py` | Applies a rule to those fields, in three tiers, removing two of them and holding the third for a person. Needs no model, so a cutoff can be changed and re-run for free. `-n` reports what would go; `--keep-uncorroborated` removes the held tier too, which is a decision rather than a flag |
+| `filter_keeps.py` | Applies a rule to those fields, in four tiers, removing two of them and holding the other two for a person. Needs no model, so a cutoff can be changed and re-run for free. `-n` reports what would go; `--remove-uncorroborated` and `--remove-outside-institutions` remove the held tiers too, each of which is a decision rather than a flag |
 
 Generated at runtime and **not committed** — they list the contents of a corpus that lives under
 `00_stuff/`, which is gitignored research data, and this repository is public:
