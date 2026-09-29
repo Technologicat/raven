@@ -910,6 +910,8 @@ AI components live on your local installation of *Raven-server*. In general, any
 
 It is preferable to run both the client and the server on the same machine, so that your data is never sent over the network. Alternatively, if you can trust the devices on your local network (LAN), you can run *Raven-server* on another machine on that LAN. **Never** connect to *Raven-server* over the internet. Doing so is **not** secure; the server is simply not designed to support that use case.
 
+When the client and the server are on different machines, install the same version of Raven on both. The two are released together, and the API between them may change in any release. What Raven carries forward from one version to the next is your data: an older chat history and app state are upgraded when a newer *Raven-librarian* loads them.
+
 When Raven is installed, like any Python software, it pulls the Python packages it depends on from [PyPI](https://pypi.org/), using standard Python software installation methods. See the [PyPI privacy notice](https://policies.python.org/pypi.org/Privacy-Notice/).
 
 AI models are downloaded from HuggingFace and self-hosted locally. HuggingFace may collect data (e.g. download statistics) when a model is installed; this is beyond our control. See the [HuggingFace privacy policy](https://huggingface.co/privacy).
