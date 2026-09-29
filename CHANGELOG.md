@@ -96,6 +96,7 @@
   - In v0.2.9 a search engine that did not answer, one that found nothing, and a Raven-server that could not be reached all gave the AI an empty result. Each now has its own sentence, saying whether trying again is worth it. A web page fetch reports a page that did not finish loading, and an unreachable server, the same way.
   - A search engine that has stopped answering is noticed within seconds, where each search used to wait a long time before failing. Librarian gives up on a web tool after a minute, set by `web_tool_timeout`, where it used to wait five.
   - A failed search is no longer remembered for the rest of the session, so asking again once the engine is back works.
+  - A search that finds nothing, or fewer results than asked for, no longer waits a long time for more to load.
 
 #### Constellation-wide
 

@@ -341,12 +341,16 @@ def _search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
 
     links = _get_attr_by_selector(selector='[data-testid="result-title-a"]', attr="href")
 
-    # Scroll down to load more results if needed
+    # Scroll down to load more results if needed. Not when there are none at all, and not again once a scroll
+    # loaded nothing: each wait for more is up to 5 s, and a page that has run out would spend them all.
     page_height = _get_page_height()
-    if len(links) < max_links:
+    if 0 < len(links) < max_links:
         for k in range(5):
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
-            page_height = _wait_for_page_height_increase(page_height)
+            new_page_height = _wait_for_page_height_increase(page_height)
+            if new_page_height == page_height:
+                break
+            page_height = new_page_height
             links = _get_attr_by_selector(selector='[data-testid="result-title-a"]', attr="href")
             if len(links) >= max_links:
                 break
