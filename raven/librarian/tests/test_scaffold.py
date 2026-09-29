@@ -414,6 +414,36 @@ class TestAITurnSimple:
         assert first_reply in children, "the abandoned turn took the reply it was rerolling"
         assert children == [first_reply], f"an empty node outlived the turn that abandoned it: {children}"
 
+    def test_a_round_stopped_during_its_tool_calls_is_stored_and_ends_the_turn(self, monkeypatch, llm_settings,
+                                                                                populated_forest):
+        """What finished is kept, each unfinished call has its cancelled result, and no further round runs.
+
+        Stored before the turn ends, so that the branch holds a complete round — an asking message with a
+        result for every call — which is what an empty send resumes from.
+        """
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="Find X")
+        invocations = []
+        def fake_invoke(**kw):
+            invocations.append(kw)
+            return make_invoke_result(content="", tool_calls=[tool_call("websearch", "call_0"),
+                                                              tool_call("webfetch", "call_1", index="1")])
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
+                            lambda *a, **kw: [make_tool_response(content="a result", tool_call_id="call_0"),
+                                              make_tool_response(content="cancelled", tool_call_id="call_1",
+                                                                 function_name="webfetch", status="cancelled")])
+        heads = []
+
+        with pytest.raises(netutil.Aborted):
+            run_ai_turn(forest, llm_settings, user_head, on_tool_done=heads.append)
+
+        assert len(invocations) == 1, "the turn went on to another round after the stop"
+        assert roles_up(forest, heads[-1])[:4] == ["tool", "tool", "assistant", "user"]
+        statuses = [payload["generation_metadata"]["status"] for payload in payloads_up(forest, heads[-1])[:2]]
+        assert statuses == ["cancelled", "success"]
+
     def test_phase_report_is_stored_when_there_is_one(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest
         user_head = scaffold.user_turn(llm_settings=llm_settings,

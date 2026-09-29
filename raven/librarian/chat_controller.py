@@ -5156,6 +5156,7 @@ class DPGChatController:
                     return bool(names & llmclient.EXTERNAL_SOURCE_TOOL_NAMES)
 
                 def on_tools_start(tool_calls: list[dict]) -> None:
+                    task_env.in_tool_round = True  # a Stop now abandons the calls; see `abort_if_nothing_to_lose`
                     if self.gui_updates_safe:
                         # Only for tools that actually reach outside the conversation. A clock read or an
                         # arithmetic evaluation answers from nothing, and lighting the avatar for those
@@ -5198,6 +5199,7 @@ class DPGChatController:
                         self.update_context_fill_indicator()  # tool result added -> context grew
 
                 def on_tools_done(tool_calls: list[dict]) -> None:
+                    task_env.in_tool_round = False
                     if self.gui_updates_safe and _reaches_outside(tool_calls):
                         # dpg.hide_item(self.web_indicator_widget)
                         stop_turn_data_eyes()
@@ -5257,9 +5259,11 @@ class DPGChatController:
                 if turn_owns_the_view():
                     advance_head(new_head_node_id)
             except netutil.Aborted:
-                # The user cancelled before the backend had sent anything, so there is no reply to keep and
-                # nothing to finalize.
-                logger.info("ai_turn.ai_turn_task: turn abandoned before the backend answered.")
+                # The user cancelled before the backend had sent anything, or during tool calls. Either way
+                # there is no reply to keep and nothing to finalize. After tool calls, HEAD is already on the
+                # last result — `on_tool_done` moved it there, the unfinished calls included, each answered
+                # as cancelled — so the fix-up below finds nothing to do, and an empty send resumes from it.
+                logger.info("ai_turn.ai_turn_task: turn abandoned before the backend answered, or during tool calls.")
                 # `on_llm_start` has already put an empty streaming message in the view, and the callback
                 # that would normally take it away is `on_done`, which is not going to run.
                 if self.gui_updates_safe:
@@ -5331,9 +5335,16 @@ class DPGChatController:
             Before the first chunk there is no such handler to run and nothing to keep: the backend is
             processing the prompt, which on a heavy branch is tens of seconds of a Stop button that appears
             to do nothing. That is the case this exists for.
+
+            Also during a round of tool calls, which nothing co-operative can reach either: a web tool can
+            wait on a slow site for a minute. The results that had arrived are kept, and the unfinished
+            calls are answered as cancelled (`scaffold.ai_turn`, which see).
             """
             if not task_env.round_has_streamed:
                 logger.info("ai_turn.abort_if_nothing_to_lose: cancelled with nothing streamed yet; abandoning the backend request.")
+                task_env.maybe_abort.abort()
+            elif task_env.in_tool_round:
+                logger.info("ai_turn.abort_if_nothing_to_lose: cancelled during tool calls; abandoning the unfinished ones.")
                 task_env.maybe_abort.abort()
 
         self.ai_turn_task_manager.submit(ai_turn_task,
@@ -5342,6 +5353,7 @@ class DPGChatController:
                                              # cancellation landing before the backend is even called takes
                                              # the co-operative path — which the queued-task check handles.
                                              round_has_streamed=True,
+                                             in_tool_round=False,
                                              on_cancel=abort_if_nothing_to_lose))
 
     def stop_ai_turn(self) -> None:

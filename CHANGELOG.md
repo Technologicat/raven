@@ -30,6 +30,9 @@
   - The toolbar's trash can **destroys** the message under the cursor and every branch below it, with no undo; **Shift+Delete** does the same from the keyboard. Two presses on the same message, as in the chat log.
   - A branch other than the one you are on can be deleted without leaving where you are. If you were inside what you deleted, you land on a neighbouring message.
   - Disabled on the system prompt and greeting the app is running with, and on the last greeting under any card.
+- **Stop works while the AI is using its tools.**
+  - The reply ends at once, where in v0.2.9 Stop waited for the tool calls to finish — for a web search or page fetch, as long as the site took.
+  - The results that had arrived are kept, and each unfinished call is recorded as cancelled. An empty send lets the AI go on from what it has.
 
 #### Raven-avatar
 

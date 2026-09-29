@@ -740,6 +740,7 @@ Basic **conversation flow** in *Librarian* works like in many LLM chatbot applic
     - How the AI behaves in this situation depends on your particular LLM. Qwen 3.6 on LM Studio, for one, mostly answers with an empty message, which is why the setting is off.
 - You can interrupt the AI generation, and resume (continue) it later.
     - Continuing can be useful also if the output token limit ran out before the AI was done replying.
+    - Stopping while the AI is using its tools ends the reply at once, without waiting for a slow web search or page fetch. The results that had already arrived are kept, and each unfinished tool call is recorded as cancelled. To let the AI go on from what it has, send an empty message.
 
 ## Global actions
 

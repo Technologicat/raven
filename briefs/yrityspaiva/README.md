@@ -205,8 +205,10 @@ live on the Night.
      - a web-tool timeout of its own in Librarian's config, passed through as an optional `timeout=` on the
        two api calls, since `network_timeout` covers every server call. 30–45 s, to leave room for
        `webfetch`'s headless tier.
-   - Order: the empty send on tool nodes, the web tools' errors and timeout, (b), then (c) — which may be
-     tomorrow's.
+   - Order: the empty send on tool nodes, the web tools' errors and timeout, (b), then (c). **All but (c)
+     done 2026-09-29**, (b) confirmed live by the maintainer — Stop during a slowed websearch, then an empty
+     send to go on. Left for (c): the web endpoints stream, so `Abort.arm(response)` can shut the socket and
+     the server can stop scraping for a client that has gone.
 2. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.

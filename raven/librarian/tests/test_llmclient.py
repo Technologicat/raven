@@ -406,6 +406,89 @@ class TestMalformedToolCallRequests:
         assert expected in chatutil.content_to_text(records[0].data["content"])
 
 
+class TestPerformToolCallsAbort:
+    """An abort handle answers the unfinished calls as cancelled, without waiting for the one in progress."""
+
+    @staticmethod
+    def _message(*names):
+        return {"role": "assistant", "content": "",
+                "tool_calls": [{"type": "function", "function": {"name": name, "arguments": "{}"},
+                                "id": f"call_{i}", "index": str(i)}
+                               for i, name in enumerate(names)]}
+
+    @staticmethod
+    def _settings(**entrypoints):
+        return env(personas={"tool": None, "assistant": "AI", "user": "U", "system": None},
+                   tool_entrypoints=entrypoints)
+
+    def test_a_stop_during_a_call_keeps_what_finished_and_cancels_the_rest(self):
+        release = threading.Event()  # never set: the blocked tool is what a slow site looks like
+        called = []
+        def fast():
+            called.append("fast")
+            return "fast result"
+        def blocked():
+            called.append("blocked")
+            release.wait(timeout=10.0)
+            return "too late"
+        def never():
+            called.append("never")
+            return "unreachable"
+        abort = netutil.Abort()
+        threading.Timer(0.3, abort.abort).start()
+
+        t0 = time.monotonic()
+        records = llmclient.perform_tool_calls(self._settings(fast=fast, blocked=blocked, never=never),
+                                               self._message("fast", "blocked", "never"),
+                                               on_call_start=None, on_call_done=None, maybe_abort=abort)
+        elapsed = time.monotonic() - t0
+        release.set()  # let the abandoned thread finish
+
+        assert elapsed < 2.0, f"the dispatch waited for the blocked tool: {elapsed:.2f} s"
+        assert [r.status for r in records] == ["success", "cancelled", "cancelled"]
+        assert [r.tool_call_id for r in records] == ["call_0", "call_1", "call_2"], "every call needs its own result"
+        assert chatutil.content_to_text(records[1].data["content"]) == llmtools.CANONICAL_TOOL_CALL_CANCELLED
+        assert called == ["fast", "blocked"], "a call after the stop was started anyway"
+
+    def test_an_abort_before_the_round_calls_nothing(self):
+        called = []
+        abort = netutil.Abort()
+        abort.abort()
+        records = llmclient.perform_tool_calls(self._settings(tool=lambda: called.append(1)),
+                                               self._message("tool", "tool"),
+                                               on_call_start=None, on_call_done=None, maybe_abort=abort)
+        assert [r.status for r in records] == ["cancelled", "cancelled"]
+        assert called == []
+
+    def test_a_tool_on_its_own_thread_still_sees_the_turns_context(self):
+        # The turn dispatches from a background thread, and a thread started from one sees the *main*
+        # thread's dynamic bindings rather than its creator's. Run from a background thread here for that
+        # reason; from the main thread this would pass whether or not the context is handed across.
+        seen = {}
+        def tool():
+            return dyn.tool_context.marker
+        def dispatch():
+            with dyn.let(tool_context=env(marker="this turn's context")):
+                seen["records"] = llmclient.perform_tool_calls(self._settings(tool=tool), self._message("tool"),
+                                                               on_call_start=None, on_call_done=None,
+                                                               maybe_abort=netutil.Abort())
+        worker = threading.Thread(target=dispatch)
+        worker.start()
+        worker.join()
+        record = seen["records"][0]
+        assert record.status == "success", chatutil.content_to_text(record.data["content"])
+        assert chatutil.content_to_text(record.data["content"]) == "this turn's context"
+
+    def test_a_failing_tool_is_still_an_error(self):
+        def broken():
+            raise ValueError("broken")
+        records = llmclient.perform_tool_calls(self._settings(broken=broken), self._message("broken"),
+                                               on_call_start=None, on_call_done=None,
+                                               maybe_abort=netutil.Abort())
+        assert records[0].status == "error"
+        assert "broken" in chatutil.content_to_text(records[0].data["content"])
+
+
 class TestWebsearchWrapper:
     """brief 03 §4: websearch returns one text content-part per result, with each field normalized."""
 

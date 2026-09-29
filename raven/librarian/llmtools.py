@@ -46,7 +46,8 @@ __all__ = ["TOOLS",
            "CANONICAL_BAD_EXPRESSION", "calculate",
 
            # How the agent loop reaches all of the above.
-           "TOOL_ENTRYPOINTS", "maybe_tool_names_for_turn", "perform_tool_calls"]
+           "TOOL_ENTRYPOINTS", "maybe_tool_names_for_turn",
+           "CANONICAL_TOOL_CALL_CANCELLED", "perform_tool_calls"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ logger = logging.getLogger(__name__)
 import ast
 import json
 import math
+import threading
 from typing import Any, Callable, TYPE_CHECKING
 
 import requests
@@ -842,11 +844,56 @@ def maybe_tool_names_for_turn(settings: env,
         withheld |= set(settings.network_tool_names)
     return tuple(sorted(set(settings.tool_entrypoints) - withheld))
 
+# The result a tool call gets when the user stopped the turn before it finished, and the one each call after
+# it gets, never having started. Every call the model asked for needs a result of its own, or the next
+# request would carry a `tool_calls` message with an answer missing.
+CANONICAL_TOOL_CALL_CANCELLED = "The user cancelled this tool call before it finished, so it has no result."
+
+def _call_abandonably(function_name: str,
+                      function: Callable,
+                      kwargs: dict[str, Any],
+                      maybe_abort: netutil.Abort | None) -> Any:
+    """Call a tool entrypoint, returning early with `netutil.Aborted` if `maybe_abort` fires first.
+
+    Without an abort handle, a plain call. With one, the call runs on a thread of its own, and on an abort
+    it is left to finish or time out by itself, its result unread: a tool blocked in a request cannot
+    be interrupted, only stopped waiting for.
+    """
+    if maybe_abort is None:
+        return function(**kwargs)
+
+    # A new thread starts from the *main* thread's dynamic bindings, not from those of the thread creating
+    # it (measured 2026-09-29, unpythonic `dyn`). This runs on a background task, so the turn's
+    # `tool_context` has to be handed across by hand.
+    tool_context = dyn.tool_context
+    outcome = {}
+    done = threading.Event()
+    def run() -> None:
+        try:
+            with dyn.let(tool_context=tool_context):
+                outcome["value"] = function(**kwargs)
+        except BaseException as exc:  # noqa: BLE001 -- handed back to the caller, which reports it as the tool's failure
+            outcome["exc"] = exc
+        finally:
+            done.set()
+    threading.Thread(target=run, name=f"tool_{function_name}", daemon=True).start()
+
+    # Polled, since there is no single wait covering both the call finishing and the handle firing; a
+    # tenth of a second is the most a Stop has to wait on top of that.
+    while not done.wait(timeout=0.1):
+        if maybe_abort.aborted:
+            logger.info(f"_call_abandonably: '{function_name}': abandoned; it goes on running until it finishes or times out")
+            raise netutil.Aborted
+    if "exc" in outcome:
+        raise outcome["exc"]
+    return outcome["value"]
+
 def perform_tool_calls(settings: env,
                        message: dict,
                        on_call_start: Callable | None,
                        on_call_done: Callable | None,
-                       maybe_refusal_text: str | None = None) -> list[env]:
+                       maybe_refusal_text: str | None = None,
+                       maybe_abort: netutil.Abort | None = None) -> list[env]:
     """Perform tool calls as requested in `message["tool_calls"]`.
 
     Returns a list of chat payloads (where each message's `role="tool"`) containing the tool outputs,
@@ -860,6 +907,11 @@ def perform_tool_calls(settings: env,
                           the tools themselves on offer - see `raven.librarian.scaffold.ai_turn`, which
                           uses it when the turn's tool-call budget is spent.
 
+    `maybe_abort`: A `raven.common.netutil.Abort` handle, if the calls should be abandonable from another
+                   thread. Once it fires, the call in progress and every call after it are answered with
+                   `CANONICAL_TOOL_CALL_CANCELLED` as a `status="cancelled"` result, and nothing further is
+                   called; the results that had already arrived are kept.
+
     `on_call_start`: 3-argument callable: `(tool_call_id: str, function_name: str, arguments: dict[str, Any])`.
 
                      The return value of the event is ignored.
@@ -871,7 +923,7 @@ def perform_tool_calls(settings: env,
 
     `on_call_done`: 4-argument callable: `(tool_call_id: str, function_name: str, status: str, text: str)`.
 
-                    `status` is "success" or "error".
+                    `status` is "success", "error", or "cancelled" (see `maybe_abort`).
 
                     `text` is the tool output (upon success), or the error message (upon error).
 
@@ -886,7 +938,7 @@ def perform_tool_calls(settings: env,
 
         `data`: dict, The new message containing the tool response (for the format, see `raven.librarian.chatutil.create_chat_message`).
 
-        `status`: str, one of "success" or "error".
+        `status`: str, one of "success", "error", or "cancelled".
 
             When an error occurs, the text of the output message will describe the error instead,
             and the full error message is posted to the server's log at warning level.
@@ -938,7 +990,7 @@ def perform_tool_calls(settings: env,
 
             `data`: dict: chat message object, with `role="tool"` and `content` the content-parts list.
 
-            `status`: str: Values "success" or "error" are recommended.
+            `status`: str: "success", "error", or "cancelled".
 
             `tool_call_id`: str | None: ID of this tool call (can be matched against the `id` in the
                            `tool_calls` list of the AI chat message that spawned this call).
@@ -988,7 +1040,20 @@ def perform_tool_calls(settings: env,
                                      function_name=request_record.get("function", {}).get("name", None))
         return tool_response_records
 
-    for request_record in tool_calls:
+    def cancel_from(first_idx: int) -> None:
+        """Answer the call at `first_idx` and every call after it as cancelled."""
+        plural_s = "s" if len(tool_calls) - first_idx != 1 else ""
+        logger.info(f"perform_tool_calls: cancelled; answering the remaining {len(tool_calls) - first_idx} call{plural_s} as such.")
+        for record in tool_calls[first_idx:]:
+            add_tool_response_record(CANONICAL_TOOL_CALL_CANCELLED,
+                                     status="cancelled",
+                                     tool_call_id=record.get("id", None),
+                                     function_name=record.get("function", {}).get("name", None))
+
+    for idx, request_record in enumerate(tool_calls):
+        if maybe_abort is not None and maybe_abort.aborted:
+            cancel_from(idx)
+            break
         tool_call_id = request_record.get("id", None)
 
         if "type" not in request_record:
@@ -1040,7 +1105,10 @@ def perform_tool_calls(settings: env,
             logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': ignoring exception from event handler `on_call_start`", exc_info=True)
         try:
             with timer() as tim:
-                tool_output = function(**kwargs)
+                tool_output = _call_abandonably(function_name, function, kwargs, maybe_abort)
+        except netutil.Aborted:
+            cancel_from(idx)
+            break
         except Exception as exc:
             logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': exited with exception", exc_info=True)
             add_tool_response_record(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", tool_call_id=tool_call_id, function_name=function_name, dt=tim.dt)

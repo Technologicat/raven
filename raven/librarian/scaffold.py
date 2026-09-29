@@ -776,6 +776,7 @@ def _perform_and_store_tool_calls(llm_settings: env,
                                   parent_node_id: str,
                                   tool_context: env,
                                   maybe_refusal_text: str | None = None,
+                                  maybe_abort: netutil.Abort | None = None,
                                   on_tools_start: Callable | None = None,
                                   on_call_lowlevel_start: Callable | None = None,
                                   on_call_lowlevel_done: Callable | None = None,
@@ -805,6 +806,11 @@ def _perform_and_store_tool_calls(llm_settings: env,
                          an error result. The results are stored as ordinary `role="tool"` nodes, because
                          from the model's side that is exactly what they are — see `ai_turn` for when the
                          turn declines a round.
+
+    `maybe_abort`: A `raven.common.netutil.Abort` handle, if the calls should be abandonable from another
+                   thread. Firing it answers the unfinished calls as cancelled (see
+                   `llmclient.perform_tool_calls`); those results are stored like any others, so that HEAD
+                   ends on a complete round, and then `netutil.Aborted` is raised to end the turn.
     """
     head_node_id = parent_node_id
     _notify("on_tools_start", on_tools_start, assistant_message["tool_calls"])
@@ -825,7 +831,8 @@ def _perform_and_store_tool_calls(llm_settings: env,
                                                              message=assistant_message,
                                                              on_call_start=on_call_lowlevel_start,
                                                              on_call_done=on_call_lowlevel_done,
-                                                             maybe_refusal_text=maybe_refusal_text)
+                                                             maybe_refusal_text=maybe_refusal_text,
+                                                             maybe_abort=maybe_abort)
 
     for tool_response_record in tool_response_records:
         _record_grounding(tool_context, tool_response_record)
@@ -865,6 +872,9 @@ def _perform_and_store_tool_calls(llm_settings: env,
         _notify("on_tool_done", on_tool_done, head_node_id)
 
     _notify("on_tools_done", on_tools_done, assistant_message["tool_calls"])
+    if any(record.status == "cancelled" for record in tool_response_records):
+        logger.info("_perform_and_store_tool_calls: the round was cancelled; ending the turn.")
+        raise netutil.Aborted
     return head_node_id
 
 
@@ -1109,10 +1119,12 @@ def ai_turn(llm_settings: env,
 
     `maybe_abort`: A `raven.common.netutil.Abort` handle, if this turn should be abandonable from another
                    thread. Firing it raises `netutil.Aborted` out of this call, from wherever the turn had
-                   got to — including a backend read, which a cancellation flag cannot reach.
+                   got to — including a backend read, which a cancellation flag cannot reach, and a tool
+                   call, which is left running with its result unread.
 
                    The nodes already written stay written: an abandoned turn leaves the branch holding
-                   whatever it had finished, which is what lets the caller keep a partial reply.
+                   whatever it had finished, which is what lets the caller keep a partial reply. A tool
+                   round stopped partway is completed with a cancelled result for each unfinished call.
 
                    `None` (default) means the turn runs to completion once started.
 
@@ -1397,6 +1409,7 @@ def ai_turn(llm_settings: env,
                                                          parent_node_id=head_node_id,
                                                          tool_context=tool_context,
                                                          maybe_refusal_text=(llm_settings.formatters.error_that_tools_are_spent() if budget_spent else None),
+                                                         maybe_abort=maybe_abort,
                                                          on_tools_start=on_tools_start,
                                                          on_call_lowlevel_start=on_call_lowlevel_start,
                                                          on_call_lowlevel_done=on_call_lowlevel_done,
@@ -1525,6 +1538,7 @@ def retry_tool_calls(llm_settings: env,
                                                  assistant_message=synthetic_message,
                                                  parent_node_id=parent_node_id,
                                                  tool_context=tool_context,
+                                                 maybe_abort=maybe_abort,
                                                  on_tools_start=on_tools_start,
                                                  on_call_lowlevel_start=on_call_lowlevel_start,
                                                  on_call_lowlevel_done=on_call_lowlevel_done,
