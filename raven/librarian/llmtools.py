@@ -448,12 +448,12 @@ def search_documents(query: str) -> tuple[str, dict]:
     reachable only if the harness handed it a retriever, so a model that calls the tool anyway (it is not
     advertised when unavailable) gets a plain refusal rather than access.
 
-    Results are formatted by `chatutil.format_docs_matches`, the same formatter the automatic search uses,
-    so a match reads identically whoever asked for it.
+    Results are formatted by `chatutil.format_docs_search_result`, as the automatic search's are, so a
+    result reads identically whoever asked for it.
 
-    Returns `(output, metadata)`. The output is text for the model to read: either the matches as
-    `chatutil.format_docs_matches` renders them, or one of the two canonical sentences saying why there are
-    none. The metadata declares whether the result is grounding material, which
+    Returns `(output, metadata)`. The output is for the model to read: either the result as
+    `chatutil.format_docs_search_result` renders it, one text part for the heading and one per match, or one
+    of the two canonical sentences saying why there are none. The metadata declares whether the result is grounding material, which
     `scaffold._record_grounding` folds into the turn's state. Declaring it matters here because "no
     matches" is a perfectly non-empty string that grounds nothing at all. It also names which documents
     were reached and by what query, which is what lets a later turn list them once their text has scrolled
@@ -472,10 +472,22 @@ def search_documents(query: str) -> tuple[str, dict]:
     logger.info(f"search_documents: {len(matches)} match{plural_s} for '{query}'.")
     if not matches:
         return (CANONICAL_NO_DOCUMENT_MATCHES, {"grounding": False, "docs_query": query})
-    return (_formatters().docs_matches(matches),
+    # One text part for the heading and one per match, as `websearch` returns one per result, so the chat
+    # log can show each on its own and collapse fifty of them to a line apiece. The wire joins a message's
+    # text parts with nothing between them, so each part but the last carries the blank line the automatic
+    # search joins with: the model reads the same text whichever of the two asked.
+    formatted = chatutil.format_docs_search_result(matches, query, _formatters())
+    parts = [chatutil.text_content_part(text if index == len(formatted) - 1 else f"{text}\n\n")
+             for index, text in enumerate(formatted)]
+    # Which document each match came from, in the order of the parts after the heading, so the chat log can
+    # give each match a handle on its document without reading it back out of text written for the model.
+    spans = [{"document_id": match["document_id"], "offset": match["offset"], "length": len(match["text"])}
+             for match in matches]
+    return (parts,
             {"grounding": True,
              "docs_query": query,
-             "document_ids": list(uniqify(match["document_id"] for match in matches))})
+             "document_ids": list(uniqify(match["document_id"] for match in matches)),
+             "docs_match_spans": spans})
 
 CANONICAL_NOTHING_CONSULTED = ("This conversation has not looked at any documents from the knowledge base yet. "
                                "Search for some with `search_documents`.")

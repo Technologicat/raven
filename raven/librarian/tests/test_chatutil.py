@@ -755,6 +755,13 @@ class TestExcerpt:
     def test_surrounding_whitespace_is_stripped(self):
         assert chatutil.excerpt("  \n padded \n ", 100) == "padded"
 
+    def test_the_marker_can_end_the_last_line(self):
+        text = "word " * 50
+        assert chatutil.excerpt(text, 40).endswith("\n\n…"), "the default is a line of its own"
+        inline = chatutil.excerpt(text, 40, inline_marker=True)
+        assert inline.endswith("word …")
+        assert "\n" not in inline
+
     def test_cuts_at_a_paragraph_boundary(self):
         text = "first para\n\nsecond para\n\nthird para that pushes us over the budget"
         result = chatutil.excerpt(text, 30)

@@ -22,10 +22,10 @@ __all__ = [  # The parts a message is made of, and reading them back
            "format_reminder_to_use_information_from_context_only",
            "format_notice_that_tools_are_spent",
            "format_error_that_tools_are_spent",
-           "format_docs_match", "format_docs_matches",
+           "format_docs_match", "format_docs_matches_heading", "format_docs_search_result",
            "document_label", "excerpt", "format_consulted_documents",
 
-           "default_formatters",  # the ten above that the model reads, as a namespace for `settings`
+           "default_formatters",  # the eleven above that the model reads, as a namespace for `settings`
 
            # Building messages and nodes
            "make_timestamp",
@@ -718,9 +718,34 @@ def format_docs_match(match: Dict[str, Any]) -> str:
             f"at offset {match['offset']}, length {len(match['text'])} characters.]\n\n"
             f"{match['text'].strip()}\n-----")
 
-def format_docs_matches(matches: List[Dict[str, Any]]) -> str:
-    """Format a list of document-database matches for the LLM, as one text blob. See `format_docs_match`."""
-    return "\n\n".join(format_docs_match(match) for match in matches)
+def format_docs_matches_heading(n_matches: int, query: str | None) -> str:
+    """Format the line above a document search's matches, saying how many there are and what was searched for.
+
+    Stated rather than left to be counted: fifty matches is a lot of text to count, for the model and for a
+    person glancing at the collapsed result alike.
+    """
+    matches = "match" if n_matches == 1 else "matches"  # plural
+    if query:
+        return f'{n_matches} {matches} in the knowledge base for "{query}":'
+    return f"{n_matches} {matches} in the knowledge base:"
+
+def format_docs_search_result(matches: List[Dict[str, Any]],
+                              query: str | None,
+                              formatters: Optional[env] = None) -> List[str]:
+    """Format a document search's result for the LLM: the heading, then each match, as separate texts in order.
+
+    `formatters`: The run's model-facing formatters (`settings.formatters`), or `None` for the defaults. Its
+                  `docs_matches_heading` and `docs_match` are what produce the texts.
+
+    Separate texts, for the two ways a result reaches the model: `search_documents` makes one message part
+    of each, so the chat log can show each match on its own, and the automatic search joins them into one
+    inject. Both join with a blank line between texts — the tool by carrying it in each part but the last —
+    so a result reads the same to the model whichever asked for it.
+    """
+    if formatters is None:
+        formatters = default_formatters()
+    return ([formatters.docs_matches_heading(len(matches), query)] +
+            [formatters.docs_match(match) for match in matches])
 
 # How much of a document's beginning `document_label` may look at. A title lives near the front, and
 # scanning a multi-megabyte reference database end to end - once per listed document, once per turn - would
@@ -849,7 +874,7 @@ _EXCERPT_CONTINUES_MARKER = "…"
 # whole budget on boilerplate and stops exactly where the document starts saying something.
 _EXCERPT_PARAGRAPH_SNAP_FRACTION = 0.5
 
-def excerpt(text: str, max_characters: int) -> str:
+def excerpt(text: str, max_characters: int, inline_marker: bool = False) -> str:
     """Return the opening of `text`, at most about `max_characters` long, cut on a sensible boundary.
 
     Unlike `document_label`, which distils a document down to one line to choose *between* documents, this
@@ -867,6 +892,9 @@ def excerpt(text: str, max_characters: int) -> str:
 
     `max_characters` is a budget rather than a hard limit: the marker is added on top of it. Callers wanting
     an exact bound should cut the result themselves.
+
+    `inline_marker`: put the marker at the end of the last line rather than on a line of its own. For a
+    snippet a few lines long, where a line spent on the marker is a large share of the whole.
     """
     text = text.strip()
     if len(text) <= max_characters:
@@ -880,7 +908,8 @@ def excerpt(text: str, max_characters: int) -> str:
         cut_at = head.rfind(" ")
         if cut_at <= 0:  # a single unbroken token; a hard cut beats showing nothing
             cut_at = max_characters
-    return f"{head[:cut_at].rstrip()}\n\n{_EXCERPT_CONTINUES_MARKER}"
+    separator = " " if inline_marker else "\n\n"
+    return f"{head[:cut_at].rstrip()}{separator}{_EXCERPT_CONTINUES_MARKER}"
 
 # The user's whole message is the auto-search query, so this can be an essay. It is shown to say *why* a
 # document is on the list, which the first line of it does.
@@ -933,8 +962,9 @@ def format_consulted_documents(entries: List[Dict[str, Any]]) -> str:
 def default_formatters() -> env:
     """The model-facing formatters, as a namespace, for `settings.formatters`.
 
-    These ten are the ones whose output reaches the LLM: the per-turn injects, the two tool notices, and
-    the two tool results that are text rather than data. Everything else named `format_*` here writes for
+    These eleven are the ones whose output reaches the LLM: the per-turn injects, the two tool notices, and
+    the two tool results that are text rather than data — a document search's in two pieces, its heading
+    and one match, which `format_docs_search_result` puts together. Everything else named `format_*` here writes for
     the chat log or an export, where the reader is a person and a run has no reason to vary it.
 
     They live on `settings` for the sake of experiments that A/B a wording, which is the only thing that
@@ -952,7 +982,8 @@ def default_formatters() -> env:
                reminder_to_use_information_from_context_only=format_reminder_to_use_information_from_context_only,
                notice_that_tools_are_spent=format_notice_that_tools_are_spent,
                error_that_tools_are_spent=format_error_that_tools_are_spent,
-               docs_matches=format_docs_matches,
+               docs_match=format_docs_match,
+               docs_matches_heading=format_docs_matches_heading,
                consulted_documents=format_consulted_documents)
 
 

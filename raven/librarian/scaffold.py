@@ -606,7 +606,7 @@ def build_turn_prompt(llm_settings: env,
                                                      call_id="raven_docs",
                                                      function_name="search_documents",
                                                      arguments={"query": docs_query if docs_query is not None else ""},
-                                                     result_text=formatters.docs_matches(docs_matches)))
+                                                     result_text="\n\n".join(chatutil.format_docs_search_result(docs_matches, docs_query, formatters))))
 
     for position in range(len(history) - 1, -1, -1):
         if history[position]["role"] == "user":

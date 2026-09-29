@@ -15,6 +15,7 @@ __all__ = ["format_chat_message_for_clipboard",
            "phase_breakdown_rows",
            "node_is_unfinished",
            "incompleteness_note",
+           "docs_match_snippet", "collapse_docs_match",
            "document_body",
            "clipboard_text",
            "export_text",
@@ -280,6 +281,35 @@ def incompleteness_note(generation_metadata: dict) -> str | None:
         # when the datastore is read back was cut off by the app going away rather than by the user.
         return "[Incomplete — Raven exited while this reply was being written]"
     return None
+
+def docs_match_snippet(text: str, max_characters: int = 200) -> str:
+    """A few lines from one match of a document search, for the collapsed chat log. `""` for a part with no text.
+
+    `text`: A match as `chatutil.format_docs_match` writes it — a line naming the document and the offset,
+            then the matched text, then a rule. The first line is not part of the snippet.
+    `max_characters`: About how long the snippet may be; see `chatutil.excerpt`, which cuts it.
+
+    The whitespace is folded to single spaces, and a cut is marked at the end of the last line rather than on
+    a line of its own, so the snippet runs as prose however the document broke its lines — as a websearch
+    result's snippet does.
+    """
+    _first_line, _, rest = text.strip().partition("\n")
+    rest = rest.strip().removesuffix("-----")
+    snippet = " ".join(rest.split())
+    return chatutil.excerpt(snippet, max_characters, inline_marker=True) if snippet else ""
+
+def collapse_docs_match(text: str, max_characters: int = 200) -> str:
+    """Shorten one part of a document search's result to its first line and a snippet of the rest.
+
+    `text`: A match as `chatutil.format_docs_match` writes it, or the result's one-line heading, which is
+            returned as is. See `docs_match_snippet`.
+
+    For a result whose parts cannot be matched to their documents, which is one stored before the tool
+    recorded that; the first line is then the only place the document is named.
+    """
+    first_line = text.strip().partition("\n")[0]
+    snippet = docs_match_snippet(text, max_characters)
+    return f"{first_line}\n\n{snippet}" if snippet else first_line
 
 # --------------------------------------------------------------------------------
 # A message leaving the chat log: copied on its own, or as part of an exported log

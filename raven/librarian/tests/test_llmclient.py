@@ -153,6 +153,57 @@ class TestWebfetchWrapperGating:
         assert metadata["webfetch_denied_host"] == "blocked.example"
 
 
+class TestSearchDocumentsResult:
+    """A document search's result is a heading and one text part per match, reading to the model as one text.
+
+    The parts are for the chat log, which shows each match on its own and can collapse fifty of them to a
+    line apiece. The model reads them joined, and must read exactly what the automatic search gives it, the
+    two being one search as far as it can tell.
+    """
+
+    MATCHES = [{"document_id": f"doc{k}.txt", "text": f"  The matched span number {k}.  ", "score": 0.9, "offset": 100 * k}
+               for k in range(3)]
+
+    def _search(self, matches):
+        class _Retriever:
+            def query(self, query, k, max_span_length, return_extra_info):
+                return matches
+        with dyn.let(tool_context=env(retriever=_Retriever())):
+            return llmtools.search_documents("photocatalysis")
+
+    def test_a_heading_and_one_part_per_match(self):
+        parts, metadata = self._search(self.MATCHES)
+        assert len(parts) == 1 + len(self.MATCHES)
+        assert all(part["type"] == "text" for part in parts)
+        assert parts[0]["text"].startswith('3 matches in the knowledge base for "photocatalysis":')
+        assert metadata["grounding"] is True
+        assert metadata["document_ids"] == ["doc0.txt", "doc1.txt", "doc2.txt"]
+
+    def test_the_model_reads_what_the_automatic_search_gives_it(self):
+        # `scaffold.build_turn_prompt` joins the same texts into its synthetic `search_documents` result.
+        parts, _ = self._search(self.MATCHES)
+        automatic = "\n\n".join(chatutil.format_docs_search_result(self.MATCHES, "photocatalysis"))
+        assert chatutil.content_to_text(parts) == automatic, \
+            "the parts join to something other than the automatic search's text"
+
+    def test_it_records_which_document_each_part_is_from(self):
+        # In part order after the heading, so the chat log can put a handle on each match.
+        parts, metadata = self._search(self.MATCHES)
+        spans = metadata["docs_match_spans"]
+        assert len(spans) == len(parts) - 1
+        assert [span["document_id"] for span in spans] == ["doc0.txt", "doc1.txt", "doc2.txt"]
+        assert [span["offset"] for span in spans] == [0, 100, 200]
+
+    def test_one_match_is_one_match(self):
+        parts, _ = self._search(self.MATCHES[:1])
+        assert parts[0]["text"].startswith("1 match in the knowledge base")
+
+    def test_no_matches_is_still_one_sentence(self):
+        output, metadata = self._search([])
+        assert output == llmtools.CANONICAL_NO_DOCUMENT_MATCHES
+        assert metadata["grounding"] is False
+
+
 class TestWebfetchResultHeader:
     """Every webfetch result says which URL it is for — a failure as much as a fetched page.
 

@@ -1866,9 +1866,35 @@ class DPGCompleteChatMessage(DPGChatMessage):
         # an opening excerpt with a toggle, so that one fetch cannot bury the conversation it was meant to
         # inform. `websearch` is excluded by construction rather than by a name check: its result is a list
         # of links, which `messagetext.document_body` does not recognize as a document. See there.
+        #
+        # A *document search* collapses too, by the same threshold, and for the same reason: it returns up to
+        # fifty matches of up to two thousand characters, which buries the conversation as surely as a fetched
+        # page. It is not a document — copying it copies what is stored — so it is decided here, for display,
+        # and not by `messagetext.document_body`. Collapsed, each match shows a handle on its document — which
+        # opens it, as a fetched document's does — and a snippet of what it found, as a websearch result does.
+        # A result stored before the tool recorded which document each match is from shows the model's line
+        # naming it instead; one stored before matches came one part apiece collapses to an excerpt.
         document_body = messagetext.document_body(self.parent_view.chat_controller.datastore, node_payload)
-        collapsible = (document_body is not None and
-                       len(document_body) > librarian_config.tool_result_attachment_threshold)
+        maybe_function_name = (node_payload.get("generation_metadata") or {}).get("function_name")
+        stored_texts = [part["text"] for part in (message.get("content") or []) if part.get("type") == "text"]
+        threshold = librarian_config.tool_result_attachment_threshold
+        maybe_spans = None
+        if document_body is not None and len(document_body) > threshold:
+            maybe_collapse, maybe_body = "document", document_body
+        elif role == "tool" and maybe_function_name == "search_documents" and sum(len(text) for text in stored_texts) > threshold:
+            if len(stored_texts) > 1:
+                maybe_collapse, maybe_body = "per_part", None
+                # Which document each match is from, recorded by the tool. Used only when it lines up with
+                # the parts — a heading, then one per match — which a result stored before it was recorded,
+                # or one whose parts were cut some other way, would not.
+                spans = (node_payload.get("generation_metadata") or {}).get("docs_match_spans") or []
+                if len(stored_texts) == len(spans) + 1:
+                    maybe_spans = spans
+            else:
+                maybe_collapse, maybe_body = "excerpt", "".join(stored_texts)
+        else:
+            maybe_collapse, maybe_body = None, None
+        collapsible = maybe_collapse is not None
         # The left gutter of a tool result: the buttons that act on the *whole* message, stacked beside its
         # first line. Expand/collapse goes on top, because aligning a disclosure control with the top line of
         # the content it discloses is a convention older than this app; the jump-back link sits under it.
@@ -1899,7 +1925,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
                     # Rendered at the position of the *first* text part, so the body still precedes any chip
                     # below it. The remaining text parts were folded in above, so later ones are skipped.
                     self._render_gutter_and_body(texts=gutter_texts,
-                                                 document_body=document_body if collapsible else None,
+                                                 maybe_collapse=maybe_collapse,
+                                                 maybe_body=maybe_body,
+                                                 maybe_spans=maybe_spans,
                                                  answered_call_id=answered_call_id)
                     body_rendered = True
             elif part_type == "image_url":
@@ -1911,7 +1939,8 @@ class DPGCompleteChatMessage(DPGChatMessage):
         if gutter_wanted and not body_rendered:
             # No text part to hang the gutter beside — an empty tool result, which the backend can produce.
             # The jump-back link still has to exist, or the navigation pair is one-way from this message.
-            self._render_gutter_and_body(texts=[], document_body=None, answered_call_id=answered_call_id)
+            self._render_gutter_and_body(texts=[], maybe_collapse=None, maybe_body=None, maybe_spans=None,
+                                         answered_call_id=answered_call_id)
 
         if role == "system":
             self._render_system_postamble()
@@ -1922,9 +1951,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
         # So the affordance matches while the backing store does not: the reader gets a named handle on the
         # document and a way to open it, pointing at the original rather than at a copy.
         #
-        # Scoped to `fetch_document` rather than to anything naming documents: a *search* result names up to
-        # ten of them, and a row of ten handles is a different design problem — see the deferred item on
-        # exposing the source files behind a reply's RAG citations.
+        # Scoped to `fetch_document` rather than to anything naming documents: a *search* result puts a handle
+        # on each of its matches instead, beside the match (see `_render_gutter_and_body`). A reply's own
+        # citations have none yet — see the deferred item on exposing the source files behind them.
         generation_metadata = node_payload.get("generation_metadata") or {}
         if generation_metadata.get("function_name") == "fetch_document":
             for document_id in generation_metadata.get("document_ids") or []:
@@ -1976,15 +2005,24 @@ class DPGCompleteChatMessage(DPGChatMessage):
 
     def _render_gutter_and_body(self, *,
                                 texts: list[str],
-                                document_body: str | None,
+                                maybe_collapse: str | None,
+                                maybe_body: str | None,
+                                maybe_spans: list[dict] | None,
                                 answered_call_id: str | None) -> None:
         """Render a tool result's text with its whole-message buttons stacked in a gutter to the left.
 
-        `texts`: the message's own text parts, in order, used when there is no document body to show
-                 instead. Several is normal — `websearch` emits one per result, and each renders as its own
-                 paragraph, which is what visually separates the results.
-        `document_body`: the full document this result reports, when it is long enough to be shown collapsed
-                         (`None` otherwise, in which case `text` renders in full and there is no toggle).
+        `texts`: the message's own text parts, in order. Several is normal — `websearch` emits one per
+                 result and `search_documents` one per match, and each renders as its own paragraph, which
+                 is what visually separates them.
+        `maybe_collapse`: how the result is shown until the reader expands it, with a toggle to do so:
+                          `"document"` — an excerpt of `maybe_body`, the document the result reports;
+                          `"excerpt"` — an excerpt of `maybe_body`, a long result that is not a document;
+                          `"per_part"` — each of `texts` shortened to a snippet;
+                          `None` — `texts` in full, and no toggle.
+        `maybe_body`: the text to excerpt, for the two excerpt modes; `None` otherwise.
+        `maybe_spans`: for `"per_part"`, which document each part after the first is from, as the tool
+                       recorded it (`docs_match_spans`). Each such part then gets a handle on its document, and
+                       its snippet leaves out the line naming it. `None` names them in the text instead.
         `answered_call_id`: the tool call this result answers, if any — adds the jump-back link.
 
         The expand/collapse toggle names the size it would expand to, because that is what decides between
@@ -1995,7 +2033,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
         is made.
         """
         expanded = self.show_full_text
-        body = document_body if document_body is not None else "\n".join(texts)
+        body = maybe_body if maybe_body is not None else "".join(texts)
 
         def toggle() -> None:
             # Sample *before* the rebuild: expanding grows the container and leaves the offset alone, but
@@ -2020,7 +2058,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
             row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
             gutter = dpg.add_group(parent=row)
 
-            if document_body is not None:
+            if maybe_collapse is not None:
                 # Deliberately *not* an `_add_action_button`: that one flashes the button green or red once
                 # the action returns, and this action deletes the button it is flashing. It is also not the
                 # kind of action that wants an acknowledgment — the message visibly changing is the feedback.
@@ -2029,12 +2067,19 @@ class DPGCompleteChatMessage(DPGChatMessage):
                 dpg.bind_item_font(button_id, self.parent_view.themes_and_fonts.icon_font_solid)
                 expand_tooltip = dpg.add_tooltip(button_id)
                 if expanded:
-                    dpg.add_text("Show less\n(collapse back to the opening)", parent=expand_tooltip)
-                else:
+                    back_to = "a snippet per match" if maybe_collapse == "per_part" else "the opening"
+                    dpg.add_text(f"Show less\n(collapse back to {back_to})", parent=expand_tooltip)
+                elif maybe_collapse == "document":
                     dpg.add_text(f"Show all {len(body):,} characters here\n"
                                  "(a large document will fill the view — the button below opens it\n"
                                  "in a separate window instead, so you keep the conversation in sight)",
                                  parent=expand_tooltip)
+                elif maybe_collapse == "per_part":
+                    # No count: the result's heading says how many, and a caption promising all of them
+                    # has no need to.
+                    dpg.add_text(f"Show all matches in full, {len(body):,} characters", parent=expand_tooltip)
+                else:
+                    dpg.add_text(f"Show all {len(body):,} characters here", parent=expand_tooltip)
 
             if answered_call_id is not None:
                 self._add_action_button(parent=gutter,
@@ -2046,19 +2091,38 @@ class DPGCompleteChatMessage(DPGChatMessage):
 
             # Render the body into a column beside the gutter. `add_paragraph` parents to `gui_text_group`,
             # so retarget it for the duration rather than bypassing it — going straight to the renderer
-            # would leave the text out of `self.paragraphs`, and that is what "copy this message" reads.
+            # would leave the text out of `self.paragraphs`, and that is what the message's `text` reads.
             body_column = dpg.add_group(parent=row)
             outer_group, self.gui_text_group = self.gui_text_group, body_column
             outer_indent, self.text_indent_w = self.text_indent_w, self.text_indent_w + gui_config.toolbutton_w
             try:
-                if document_body is None:
-                    for one_text in texts:  # one paragraph run per part, preserving the per-result separation
-                        self._render_text_paragraphs(one_text)
+                if maybe_collapse in ("document", "excerpt") and not expanded:
+                    self._render_text_paragraphs(chatutil.excerpt(body, librarian_config.tool_result_preview_characters))
+                elif maybe_collapse == "document":
+                    self._render_text_paragraphs(body)
                 else:
-                    self._render_text_paragraphs(body if expanded else chatutil.excerpt(body, librarian_config.tool_result_preview_characters))
+                    labels = {}  # one render's memo: a search often names one document several times
+                    for index, one_text in enumerate(texts):  # one paragraph run per part, preserving the per-result separation
+                        in_full = self._part_shown_in_full(index, maybe_collapse)
+                        maybe_span = maybe_spans[index - 1] if (maybe_spans and index >= 1) else None
+                        if maybe_span is None:
+                            self._render_text_paragraphs(one_text if in_full else messagetext.collapse_docs_match(one_text))
+                            continue
+                        self._render_document_reference(maybe_span["document_id"], labels)
+                        shown = one_text if in_full else messagetext.docs_match_snippet(one_text)
+                        if shown:
+                            self._render_text_paragraphs(shown)
             finally:
                 self.gui_text_group = outer_group
                 self.text_indent_w = outer_indent
+
+    def _part_shown_in_full(self, index: int, maybe_collapse: str | None) -> bool:
+        """Whether text part `index` of this tool result is shown whole, rather than shortened to a snippet.
+
+        One toggle for the whole message for now, so every part answers alike. Asked per part, so that each
+        match can have a toggle of its own, which is where a long document search is expected to go.
+        """
+        return maybe_collapse != "per_part" or self.show_full_text
 
     def _render_injected_texts(self, texts: list[str]) -> None:
         """Render one block of per-turn texts, under the label saying they are added rather than stored.
@@ -2263,8 +2327,12 @@ class DPGCompleteChatMessage(DPGChatMessage):
                 dpg.add_text(f"saved {meta['fetched_at']}", color=(180, 180, 180), parent=document_tooltip)
             self._make_clickable([name_id], action=open_saved_copy)
 
-    def _render_document_reference(self, document_id: str) -> None:
-        """Render a handle on one knowledge-base document the AI fetched: a chip plus its two actions.
+    def _render_document_reference(self, document_id: str, labels: dict[str, str] | None = None) -> None:
+        """Render a handle on one knowledge-base document the AI fetched or found: a chip plus its two actions.
+
+        `labels`: A memo of document ID to name, for a caller rendering many handles at once, which a document
+                  search's result does — often naming one document several times. Made and dropped by that
+                  caller within one render, so an edited document shows its new name on the next.
 
         The docs-DB counterpart of `_render_text_file_part`, and deliberately the same shape — a document
         glyph, a name, and a small action row — because to the reader these are the same kind of thing. What
@@ -2280,8 +2348,13 @@ class DPGCompleteChatMessage(DPGChatMessage):
         """
         retriever = self.parent_view.chat_controller.retriever
         path = llmclient.document_path(retriever, document_id)
-        text = llmclient.document_text(retriever, document_id)
-        name = (chatutil.document_label(text) if text else "") or document_id
+        if labels is not None and document_id in labels:
+            name = labels[document_id]
+        else:
+            text = llmclient.document_text(retriever, document_id)
+            name = (chatutil.document_label(text) if text else "") or document_id
+            if labels is not None:
+                labels[document_id] = name
         with self.paragraphs_lock:
             # One row — actions, then the name they act on — matching `_render_text_file_part`. A
             # knowledge-base document gets the book glyph rather than the attachment's document glyph, since

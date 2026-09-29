@@ -321,3 +321,44 @@ class TestIncompletenessNote:
         """Belt and braces: a payload carrying both is describing a stopped reply, which is the specific one."""
         note = messagetext.incompleteness_note({"interrupted": True, "status": "incomplete"})
         assert "Interrupted" in note
+
+
+class TestCollapseDocsMatch:
+    """A document search's match, shortened for the collapsed chat log: where it is, and a taste of what it says."""
+
+    @staticmethod
+    def _match(text):
+        from raven.librarian import chatutil
+        return chatutil.format_docs_match({"document_id": "paper.bib", "text": text, "offset": 750})
+
+    def test_the_heading_line_and_a_cut_snippet(self):
+        long_text = "word " * 200
+        collapsed = messagetext.collapse_docs_match(self._match(long_text), max_characters=100)
+        first_line, _, snippet = collapsed.partition("\n\n")
+        assert first_line.startswith("[System information: Knowledge-base match from 'paper.bib', at offset 750")
+        assert len(snippet) < 120, "the snippet was not cut"
+        assert snippet.startswith("word word")
+        assert "-----" not in collapsed, "the rule that ends a match came along"
+
+    def test_a_short_match_keeps_its_whole_text(self):
+        collapsed = messagetext.collapse_docs_match(self._match("A short span."), max_characters=100)
+        assert collapsed.endswith("A short span.")
+
+    def test_the_snippet_runs_as_prose(self):
+        collapsed = messagetext.collapse_docs_match(self._match("@article{key,\n  title = {On Wings},\n}"))
+        assert collapsed.endswith("@article{key, title = {On Wings}, }")
+
+    def test_a_cut_is_marked_on_the_snippets_last_line(self):
+        # A line spent on the marker is a large share of a two-line snippet; a websearch result's ends inline too.
+        snippet = messagetext.docs_match_snippet(self._match("word " * 200), max_characters=100)
+        assert "\n" not in snippet
+        assert snippet.endswith("…")
+
+    def test_the_snippet_leaves_out_the_line_naming_the_document(self):
+        # That line is what a handle on the document replaces, when the result says which document it is.
+        snippet = messagetext.docs_match_snippet(self._match("A short span."))
+        assert snippet == "A short span."
+
+    def test_the_result_heading_passes_through(self):
+        heading = '12 matches in the knowledge base for "wings":\n\n'
+        assert messagetext.collapse_docs_match(heading) == '12 matches in the knowledge base for "wings":'

@@ -41,6 +41,10 @@
 
 - **The avatar panel's DOCS and WEB indicators now read DOCUMENTS and INTERNET**, as the toggles below them are called.
 - **In those indicators, only the icon pulsates now.** The names hold still, in their row's colour. In v0.2.9 some rows pulsated their name as well and some did not.
+- **A long document search result opens collapsed, to a snippet per match**, each under a handle on the document it came from: its title, and buttons to open it and its folder, as a fetched document has. The chevron beside it shows every match in full.
+  - The result now opens with how many matches it found, and for what.
+  - In v0.2.9 every match was shown in full, which for a search returning dozens buried the rest of the conversation.
+  - A search stored by v0.2.9 collapses to its opening lines instead.
 - **A webfetch result says which address it is for, when the fetch failed too.**
   - In v0.2.9 only a fetched page opened with its address, and a failure was a bare sentence, such as *"This site doesn't render its content as static HTML"*, that did not say which site. Every result now opens with *"Webfetch result for"* and the address.
 
