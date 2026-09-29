@@ -871,7 +871,7 @@ def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10
     """Perform a websearch, using Raven-server to handle the interaction with the search engine and the parsing of the results page.
 
     Uses the "/api/websearch2" endpoint on the server, which see. Returns its output dict: `"results"`,
-    `"data"`, and `"engineUnavailable"`, which is true when the search engine did not answer.
+    `"data"`, and `"engineAnswered"`, which is false when the search engine did not answer.
 
     `timeout`: a `raven.client.config.Timeout`, or `None` for the configured `network_timeout`.
     """

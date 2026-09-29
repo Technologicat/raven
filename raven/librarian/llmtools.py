@@ -315,14 +315,14 @@ def websearch(query: str,
         websearch_results = api.websearch_search(query,
                                                  engine,
                                                  librarian_config.web_num_results,
-                                                 timeout=librarian_config.web_tool_timeout)  # -> {"results": preformatted_text, "data": structured_results, "engineUnavailable": bool}
+                                                 timeout=librarian_config.web_tool_timeout)  # -> {"results": preformatted_text, "data": structured_results, "engineAnswered": bool}
     except requests.Timeout:
         logger.warning(f"websearch: no answer within {librarian_config.web_tool_timeout.read} s")
         return CANONICAL_SEARCH_ENGINE_UNAVAILABLE
     except (requests.ConnectionError, RuntimeError) as exc:  # `RuntimeError`: the server answered with an error status
         logger.warning(f"websearch: {type(exc)}: {exc}")
         return CANONICAL_WEBSEARCH_UNAVAILABLE.format(reason=f"{type(exc).__name__}: {exc}")
-    if websearch_results.get("engineUnavailable"):
+    if not websearch_results["engineAnswered"]:
         logger.warning(f"websearch: the search engine '{engine}' did not answer")
         return CANONICAL_SEARCH_ENGINE_UNAVAILABLE
     structured_results = websearch_results["data"]

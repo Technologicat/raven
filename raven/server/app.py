@@ -1622,12 +1622,12 @@ def api_websearch2():
                    "link": ...,
                    "text": ...}],
                   ...,
-         "engineUnavailable": false}
+         "engineAnswered": true}
 
     In the output, the title field may be missing; not all search engines return it.
 
-    "engineUnavailable" is true when the search engine did not answer — its results page timed out, or
-    loaded without results on it — and "results" and "data" are then empty. With it false, empty
+    "engineAnswered" is false when the search engine did not answer — its results page timed out, or
+    loaded without results on it — and "results" and "data" are then empty. With it true, empty
     "results" and "data" mean the engine answered and found nothing.
 
     This format preserves the connection between the text of the result
@@ -1638,10 +1638,10 @@ def api_websearch2():
     try:
         preformatted_text, structured_results = _websearch_impl()
     except websearch.EngineUnavailable:
-        return jsonify({"results": "", "data": [], "engineUnavailable": True})
+        return jsonify({"results": "", "data": [], "engineAnswered": False})
     output = {"results": preformatted_text,
               "data": structured_results,
-              "engineUnavailable": False}
+              "engineAnswered": True}
     return jsonify(output)
 
 # ----------------------------------------

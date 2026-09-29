@@ -495,7 +495,7 @@ class TestWebsearchWrapper:
     @staticmethod
     def _patch_search(monkeypatch, data):
         monkeypatch.setattr(llmtools, "_client_api",
-                            lambda: _StubClientAPI(websearch_search=lambda *a, **k: {"data": data}))
+                            lambda: _StubClientAPI(websearch_search=lambda *a, **k: {"data": data, "engineAnswered": True}))
 
     def test_one_text_part_per_result_with_markdown_links(self, monkeypatch):
         self._patch_search(monkeypatch, [
@@ -530,7 +530,7 @@ class TestWebsearchWrapper:
         captured = {}
         def fake_search(query, engine, num, timeout=None):
             captured["engine"] = engine
-            return {"data": []}
+            return {"data": [], "engineAnswered": True}
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(websearch_search=fake_search))
         return captured
 
@@ -560,12 +560,12 @@ class TestWebsearchFailures:
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(websearch_search=fake_search))
 
     def test_no_results_says_so(self, monkeypatch):
-        self._patch(monkeypatch, lambda *a, **k: {"results": "", "data": [], "engineUnavailable": False})
+        self._patch(monkeypatch, lambda *a, **k: {"results": "", "data": [], "engineAnswered": True})
         assert llmtools.websearch("q") == llmtools.CANONICAL_NO_WEB_RESULTS
 
     def test_an_engine_that_did_not_answer_says_so(self, monkeypatch):
         # Also empty, as the case above is: only the server's flag tells the two apart.
-        self._patch(monkeypatch, lambda *a, **k: {"results": "", "data": [], "engineUnavailable": True})
+        self._patch(monkeypatch, lambda *a, **k: {"results": "", "data": [], "engineAnswered": False})
         assert llmtools.websearch("q") == llmtools.CANONICAL_SEARCH_ENGINE_UNAVAILABLE
 
     def test_a_timeout_is_an_engine_that_did_not_answer(self, monkeypatch):
@@ -587,7 +587,7 @@ class TestWebsearchFailures:
         captured = {}
         def fake_search(query, engine, num, timeout=None):
             captured["timeout"] = timeout
-            return {"data": []}
+            return {"data": [], "engineAnswered": True}
         self._patch(monkeypatch, fake_search)
         llmtools.websearch("q")
         assert captured["timeout"] == llmtools.librarian_config.web_tool_timeout
