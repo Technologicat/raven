@@ -4017,6 +4017,11 @@ class DPGLinearizedChatView:
             self.edit_node_id = None
             self.edit_draft = None
         with self.chat_controller.current_chat_history_lock:
+            # Demolished one by one rather than only dropped, although the wholesale delete below would take
+            # their widgets anyway: a caller may still hold one of these instances (`get_current_message`
+            # says so), and a demolished message answers `None` for its widgets instead of stale ids.
+            for message in self.chat_controller.current_chat_history:
+                message.demolish()
             self.chat_controller.current_chat_history.clear()
             self.chat_controller.clear_search_matches()  # refilled message by message, as the branch is added below
             dpg.delete_item(self.chat_messages_container_group_widget,
