@@ -600,6 +600,34 @@ one. Repaired in the parser rather than the prompt, deliberately: the prompt is 
 changing it mid-run would have discarded forty-five batches to buy what a five-line repair already buys.
 The proper fix — three quoted strings, or a nullable boolean — waits for a change worth a new instrument.
 
+## Open: is the off-topic rate too low to believe?
+
+Raised 2026-09-29: the corpus's researchers find the off-topic drop rate suspiciously low. The search may
+simply be that good — but nothing here yet measures how many off-topic records the judge *keeps*, so the
+low rate is equally consistent with a judge that is too lenient. To do when the dataset is next opened.
+
+The counts per stage, from the files in this directory: 5167 after deduplication, 853 set aside as
+unscreenable, 4314 judged, **1084 dropped by the judge** (25%), 264 more removed by the field filter
+(`filtered-out.tsv`), 2966 left. Which of these figures the researchers were looking at is not recorded,
+and is worth asking, since the answer decides which stage is under suspicion.
+
+Everything measured so far audits the *drops* — the reviewer, the escalation check — because a drop
+carries a reason and a keep does not. The question now is about the keeps, and two checks would give
+evidence either way:
+
+- **A hand-checked random sample of the keeps**, by the researchers, who can judge scope better than
+  anyone here. The number of off-topic records found among `n` gives a posterior on the leak rate
+  directly — with a uniform prior, Beta(`k`+1, `n`−`k`+1) — and even finding none bounds it: zero in
+  `n` puts the 95% upper bound at about 3/`n` (the rule of three), so a hundred records rules out a leak
+  much above 3%.
+- **Planted records, as a positive control on the judge itself.** Mix records known to be off topic
+  into the input, unlabelled, and see whether the judge drops them. The known-off-topic set can be taken
+  from another corpus, or can be real off-topic records from this one, found by the sample above. If the
+  judge keeps the planted ones, its low drop rate says nothing about the search; if it drops them, the
+  low rate is evidence that the search is good. Planted records should resemble the corpus's own
+  failure shapes (a term used in another sense, a study set outside higher education) — a planted
+  record that is obviously unrelated tests only the easy case.
+
 ## Where this is headed: a `raven.papers` corpus filter
 
 Decided 2026-09-02, and deliberately **not** acted on yet — the AOKK framing is what the calibration is
