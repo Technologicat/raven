@@ -77,7 +77,8 @@ import json
 import pathlib
 import re
 import requests
-from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Tuple, Union
+from collections.abc import Generator
+from typing import TYPE_CHECKING, Any
 
 # import PIL.Image
 import qoi
@@ -168,7 +169,7 @@ def tts_server_available() -> bool:
     util.require()
     return raven_server_available() and ("tts" in modules())
 
-def modules() -> List[str]:
+def modules() -> list[str]:
     """Return the list of modules loaded on the running Raven-server."""
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
@@ -185,7 +186,7 @@ def _load_file(filename):
     with open(filename, "rb") as file:
         return file.read()
 
-def avatar_load(filename: Union[pathlib.Path, str]) -> str:
+def avatar_load(filename: pathlib.Path | str) -> str:
     """Create a new avatar instance, loading a character image (512x512 RGBA PNG) from `filename`.
 
     Then, to start the animator, call `avatar_start`.
@@ -212,7 +213,7 @@ def avatar_load(filename: Union[pathlib.Path, str]) -> str:
     output = response.json()
     return output["instance_id"]
 
-def avatar_reload(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
+def avatar_reload(instance_id: str, filename: pathlib.Path | str) -> None:
     """Send a new character image to an existing avatar instance."""
     util.require()
 
@@ -244,7 +245,7 @@ def avatar_unload(instance_id: str) -> None:
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/unload", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
-def avatar_load_emotion_templates(instance_id: str, emotions: Dict) -> None:
+def avatar_load_emotion_templates(instance_id: str, emotions: dict) -> None:
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
@@ -253,13 +254,13 @@ def avatar_load_emotion_templates(instance_id: str, emotions: Dict) -> None:
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load_emotion_templates", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
-def avatar_load_emotion_templates_from_file(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
+def avatar_load_emotion_templates_from_file(instance_id: str, filename: pathlib.Path | str) -> None:
     util.require()
     with open(filename, "r", encoding="utf-8") as json_file:
         emotions = json.load(json_file)
     avatar_load_emotion_templates(instance_id, emotions)
 
-def avatar_load_animator_settings(instance_id: str, animator_settings: Dict) -> None:
+def avatar_load_animator_settings(instance_id: str, animator_settings: dict) -> None:
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
@@ -268,7 +269,7 @@ def avatar_load_animator_settings(instance_id: str, animator_settings: Dict) -> 
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load_animator_settings", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
-def avatar_load_animator_settings_from_file(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
+def avatar_load_animator_settings_from_file(instance_id: str, filename: pathlib.Path | str) -> None:
     util.require()
     with open(filename, "r", encoding="utf-8") as json_file:
         animator_settings = json.load(json_file)
@@ -336,7 +337,7 @@ def avatar_set_emotion(instance_id: str, emotion_name: str) -> None:
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/set_emotion", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
-def avatar_set_overrides(instance_id: str, overrides: Dict[str, float]) -> None:
+def avatar_set_overrides(instance_id: str, overrides: dict[str, float]) -> None:
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
@@ -345,7 +346,7 @@ def avatar_set_overrides(instance_id: str, overrides: Dict[str, float]) -> None:
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/set_overrides", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
-def avatar_modify_overrides(instance_id: str, action: str, overrides: Dict[str, float]) -> None:
+def avatar_modify_overrides(instance_id: str, action: str, overrides: dict[str, float]) -> None:
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
@@ -383,7 +384,7 @@ def avatar_trigger_animefx(instance_id: str, fx_name: str) -> None:
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/trigger_animefx", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
-def avatar_result_feed(instance_id: str, chunk_size: int = 4096, expected_mimetype: Optional[str] = None) -> Generator[Tuple[Optional[str], Dict[str, str], bytes], None, None]:
+def avatar_result_feed(instance_id: str, chunk_size: int = 4096, expected_mimetype: str | None = None) -> Generator[tuple[str | None, dict[str, str], bytes], None, None]:
     """Return a generator that yields video frames, in the image file format received from the server.
 
     The yielded value is the tuple `(received_mimetype, extra_headers, payload)`, where `received_mimetype` is whatever
@@ -415,7 +416,7 @@ def avatar_result_feed(instance_id: str, chunk_size: int = 4096, expected_mimety
                                                               expected_mimetype=expected_mimetype)
     return gen
 
-def avatar_get_available_filters() -> List[Tuple[str, Dict]]:
+def avatar_get_available_filters() -> list[tuple[str, dict]]:
     """Get available postprocessor filters.
 
     Available whenever at least one of "avatar" or "imagefx" is.
@@ -430,7 +431,7 @@ def avatar_get_available_filters() -> List[Tuple[str, Dict]]:
 # --------------------------------------------------------------------------------
 # Classify
 
-def classify_labels() -> List[str]:
+def classify_labels() -> list[str]:
     """Get list of emotion names from server.
 
     Return format is::
@@ -444,7 +445,7 @@ def classify_labels() -> List[str]:
     output_data = response.json()  # -> {"labels": [emotion0, ...]}
     return list(sorted(output_data["labels"]))
 
-def classify(text: str) -> Dict[str, float]:
+def classify(text: str) -> dict[str, float]:
     """Classify the emotion of `text`.
 
     Return format is::
@@ -466,7 +467,7 @@ def classify(text: str) -> Dict[str, float]:
 # --------------------------------------------------------------------------------
 # Embeddings
 
-def embeddings_info() -> Dict[str, Any]:
+def embeddings_info() -> dict[str, Any]:
     """Get metadata about the loaded embedding models (per-role HF repo name and vector dimension).
 
     Embeddings differ from STT/TTS in that the server can host several models
@@ -486,7 +487,7 @@ def embeddings_info() -> Dict[str, Any]:
     util.yell_on_error(response)
     return response.json()
 
-def embeddings_compute(text: Union[str, List[str]],
+def embeddings_compute(text: str | list[str],
                        model: str = "default") -> np.array:
     """Compute vector embeddings (semantic embeddings).
 
@@ -516,7 +517,7 @@ def embeddings_compute(text: Union[str, List[str]],
 
 def imagefx_process(stream,
                     output_format: str = "png",
-                    filters: List[Dict[str, Any]] = []) -> bytes:
+                    filters: list[dict[str, Any]] = []) -> bytes:
     """Process a static image through the postprocessor.
 
     `stream`: The image to send, as a filelike or a `bytes` object. Filelikes are e.g.:
@@ -548,9 +549,9 @@ def imagefx_process(stream,
 
     return response.content  # image file encoded in requested format
 
-def imagefx_process_file(filename: Union[pathlib.Path, str],
+def imagefx_process_file(filename: pathlib.Path | str,
                          output_format: str = "png",
-                         filters: List[Dict[str, Any]] = []) -> bytes:
+                         filters: list[dict[str, Any]] = []) -> bytes:
     """Exactly like `imagefx_process`, but open `filename` for reading, and set the `stream` argument to the file handle."""
     util.require()
 
@@ -558,7 +559,7 @@ def imagefx_process_file(filename: Union[pathlib.Path, str],
         return imagefx_process(image_file, output_format, filters)
 
 def imagefx_process_array(image_data: np.array,
-                          filters: List[Dict[str, Any]] = []) -> np.array:
+                          filters: list[dict[str, Any]] = []) -> np.array:
     """Exactly like `imagefx_process`, but take image data from in-memory array, and return a new array.
 
     Array format is float32 [0, 1], layout [h, w, c], either RGB (3 channels) or RGBA (4 channels).
@@ -640,7 +641,7 @@ def imagefx_upscale(stream,
 
     return response.content  # image file encoded in requested format
 
-def imagefx_upscale_file(filename: Union[pathlib.Path, str],
+def imagefx_upscale_file(filename: pathlib.Path | str,
                          output_format: str = "png",
                          upscaled_width: int = 1920,
                          upscaled_height: int = 1080,
@@ -687,9 +688,9 @@ def imagefx_upscale_array(image_data: np.array,
 # --------------------------------------------------------------------------------
 # Natlang
 
-def natlang_analyze(text: Union[str, List[str]],
-                    pipes: Optional[List[str]] = None,
-                    with_vectors: bool = False) -> List[spacy.tokens.Doc]:
+def natlang_analyze(text: str | list[str],
+                    pipes: list[str] | None = None,
+                    with_vectors: bool = False) -> list[spacy.tokens.Doc]:
     """Perform NLP analysis on input text.
 
     `pipes`: If provided, enable only the listed pipes. Which ones exist depend on the server's loaded spaCy model.
@@ -718,7 +719,7 @@ def natlang_analyze(text: Union[str, List[str]],
 # --------------------------------------------------------------------------------
 # Sanitize
 
-def sanitize_dehyphenate(text: Union[str, List[str]]) -> Union[str, List[str]]:
+def sanitize_dehyphenate(text: str | list[str]) -> str | list[str]:
     """Dehyphenate input text.
 
     Returns `str` (one input) or `list` of `str` (more inputs).
@@ -737,7 +738,7 @@ def sanitize_dehyphenate(text: Union[str, List[str]]) -> Union[str, List[str]]:
 # --------------------------------------------------------------------------------
 # STT
 
-def stt_info() -> Dict[str, Any]:
+def stt_info() -> dict[str, Any]:
     """Get metadata about the speech recognition model (native sample rate, HF repo name).
 
     Returns a dict with `sample_rate` (Hz, int) and `model` (HuggingFace repo id, str).
@@ -751,8 +752,8 @@ def stt_info() -> Dict[str, Any]:
     return response.json()
 
 def stt_transcribe(stream,
-                   prompt: Optional[str] = None,
-                   language: Optional[str] = None) -> List[str]:
+                   prompt: str | None = None,
+                   language: str | None = None) -> list[str]:
     """Transcribe speech to text.
 
     `stream`: The audio to send, as a filelike or a `bytes` object. Filelikes are e.g.:
@@ -788,9 +789,9 @@ def stt_transcribe(stream,
     output_text = output_data["text"]
     return output_text
 
-def stt_transcribe_file(filename: Union[pathlib.Path, str],
-                        prompt: Optional[str] = None,
-                        language: Optional[str] = None) -> List[str]:
+def stt_transcribe_file(filename: pathlib.Path | str,
+                        prompt: str | None = None,
+                        language: str | None = None) -> list[str]:
     """Exactly like `stt_transcribe`, but open `filename` for reading, and set the `stream` argument to the file handle."""
     util.require()
 
@@ -799,8 +800,8 @@ def stt_transcribe_file(filename: Union[pathlib.Path, str],
 
 def stt_transcribe_array(audio_data: np.array,
                          sample_rate: int,
-                         prompt: Optional[str] = None,
-                         language: Optional[str] = None) -> List[str]:
+                         prompt: str | None = None,
+                         language: str | None = None) -> list[str]:
     """Exactly like `stt_transcribe`, but take audio data from in-memory array.
 
     `audio_data`: mono, rank-1 `np.ndarray`, sampled at `sample_rate`. Accepted dtypes:
@@ -836,7 +837,7 @@ def stt_transcribe_array(audio_data: np.array,
 # --------------------------------------------------------------------------------
 # Translate
 
-def translate_translate(text: Union[str, List[str]], source_lang: str, target_lang: str) -> Union[str, List[str]]:
+def translate_translate(text: str | list[str], source_lang: str, target_lang: str) -> str | list[str]:
     """Translate input text to another language.
 
     `source_lang`: language code for input text, e.g. "en". See server config.
@@ -866,7 +867,7 @@ def translate_translate(text: Union[str, List[str]], source_lang: str, target_la
 # Websearch
 
 def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10,
-                     timeout: "Timeout | None" = None) -> Dict:
+                     timeout: "Timeout | None" = None) -> dict:
     """Perform a websearch, using Raven-server to handle the interaction with the search engine and the parsing of the results page.
 
     Uses the "/api/websearch2" endpoint on the server, which see. Returns its output dict: `"results"`,
@@ -891,7 +892,7 @@ def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10
 # Webfetch
 
 def webfetch_fetch(url: str, output_format: str = "markdown",
-                   timeout: "Timeout | None" = None) -> Dict:
+                   timeout: "Timeout | None" = None) -> dict:
     """Retrieve a web page's main content as clean text/markdown, via Raven-server.
 
     Uses the "/api/webfetch" endpoint on the server, which see. The server handles the
