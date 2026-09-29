@@ -73,12 +73,20 @@ def main() -> int:
         if last_abstract:
             escalated[key] = (before_rows[key], last_abstract)
 
-    contested = set()
+    # No flags would put every escalated record in "not flagged" and still print a comparison, which reads
+    # as a result. So both ways of getting none — no file, or a file whose rows do not match — stop here.
     path = HERE / "contested.tsv"
-    if path.exists():
-        for row in csv.DictReader(path.read_text(encoding="utf-8").splitlines(), delimiter="\t"):
-            if row.get("cell") == "drop/high/title":
-                contested.add(row["key"])
+    if not path.exists():
+        print(f"{path} not found; write it first with `score_review.py --contested`", file=sys.stderr)
+        return 1
+    contested = set()
+    for row in csv.DictReader(path.read_text(encoding="utf-8").splitlines(), delimiter="\t"):
+        if row.get("cell") == "drop/high/title":
+            contested.add(row["key"])
+    if not contested:
+        print(f"{path} has no rows in cell drop/high/title, so there are no flags to compare against",
+              file=sys.stderr)
+        return 1
 
     print(f"{len(escalated)} of {len(todays)} title-only drops re-judged from the abstract so far\n")
 
