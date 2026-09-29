@@ -65,7 +65,7 @@ from ..common.gui import tooltip as gui_tooltip
 from ..common.gui import utils as guiutils
 from ..common.gui import widgetfinder
 
-from . import chatsearch
+from . import chatlog_search
 from . import chattextures
 from . import chattree
 from . import chatutil
@@ -797,7 +797,7 @@ class DPGChatMessage:
                 dpg.show_item(self.gui_thought_group)
 
     def _recheck_awaited_thinking_trace(self) -> None:
-        """Tell the controller this message's text has moved, in case its trace is one somebody asked to see.
+        """Tell the chat log's search this message's text has moved, in case its trace is one somebody asked to see.
 
         Called as words arrive rather than once, because for a reply being generated the answer to "does the
         trace match" changes: the request was made against a count saying it did, and the words that made it
@@ -808,7 +808,7 @@ class DPGChatMessage:
         this message — one node at a time, ending at the first match.
         """
         if self.node_id is not None:
-            self.parent_view.chat_controller.recheck_awaited_thinking_trace(self.node_id)
+            self.parent_view.chat_controller.search.recheck_awaited_thinking_trace(self.node_id)
 
     def _thought_bubble(self) -> str | int:
         """The container the thinking trace renders into, built on first use. Returns its DPG ID.
@@ -970,7 +970,7 @@ class DPGChatMessage:
 
     def _paragraph_highlight(self, paragraph: dict) -> tuple | None:
         """The search highlighting `paragraph` should be drawn with now: the query's regex pair, or `None`."""
-        maybe_query = self.parent_view.chat_controller.search_query
+        maybe_query = self.parent_view.chat_controller.search.query
         if maybe_query is None:
             return None
         if paragraph["is_thought"] and not maybe_query.include_thinking:
@@ -3528,7 +3528,7 @@ class DPGLinearizedChatView:
                     dpg.disable_item(f"message_continue_button_{dpg_old_message.gui_uuid}")
                 dpg.disable_item(f"message_show_chat_continuation_button_{dpg_old_message.gui_uuid}")
 
-        self.chat_controller.add_search_matches_for(node_id)
+        self.chat_controller.search.add_matches_for(node_id)
         if scroll_view:
             self.scroll_view()
         return dpg_chat_message
@@ -3573,7 +3573,7 @@ class DPGLinearizedChatView:
             for message in self.chat_controller.current_chat_history:
                 message.demolish()
             self.chat_controller.current_chat_history.clear()
-            self.chat_controller.clear_search_matches()  # refilled message by message, as the branch is added below
+            self.chat_controller.search.clear_matches()  # refilled message by message, as the branch is added below
             dpg.delete_item(self.chat_messages_container_group_widget,
                             children_only=True)  # clear old content from GUI
             for node_id in node_id_history:
@@ -3782,24 +3782,6 @@ class DPGChatController:
         self.current_chat_history = []
         self.current_chat_history_lock = threading.RLock()
 
-        # Search. `search_query` is what paragraphs are highlighted with as they render, so it is rebound whole and
-        # read without a lock: a render sees either the old query or the new one, and the re-highlight that follows
-        # a change catches up whatever rendered in between. `search_matches` is `chatsearch.find_matches`' answer
-        # for the branch on screen. The rest is where the view is among them, kept by `update_search_position`:
-        # the current match's index, if one is on screen, and whether previous and next have anywhere to go.
-        self.search_query = None
-        self.search_matches = []
-        self.search_match_index = None
-        self.search_can_go_back = False
-        self.search_can_go_forward = False
-        self._search_position_y_scroll = None
-        self._search_position_stale = True
-        self._search_jump = None  # `(index, target_y_scroll)`; see `_search_jump_holds`
-        # The one node whose thinking trace is owed to the reader once its message exists; see
-        # `open_thinking_trace_when_it_matches`. `None` whenever nothing is awaited, which is nearly always.
-        self._node_awaiting_trace_open = None
-        # Called with no arguments whenever any of the four above changes, so the app can redraw its search row.
-        self.on_search_results_changed = on_search_results_changed
         self.on_navigate = on_navigate
         self.give_caret = give_caret if give_caret is not None else gui_animation.give_caret
         self.give_keyboard_to_log = give_keyboard_to_log if give_keyboard_to_log is not None else (lambda: None)
@@ -3856,6 +3838,14 @@ class DPGChatController:
         self.search_task_manager = bgtask.TaskManager(name="librarian_chat_controller_search",
                                                       mode="sequential",  # a new search's re-highlight cancels the previous one's
                                                       executor=executor)  # same thread pool
+        # The chat log's search. Asked by the app's search row, and told by the view as messages come and go.
+        self.search = chatlog_search.DPGChatLogSearch(datastore=datastore,
+                                                      view=self.view,
+                                                      history=self.current_chat_history,
+                                                      history_lock=self.current_chat_history_lock,
+                                                      task_manager=self.search_task_manager,
+                                                      gui_updates_safe=lambda: self.gui_updates_safe,
+                                                      on_search_results_changed=on_search_results_changed)
         # The debounced idle context-prefill. `ManagedTask` supplies the pending-wait debounce (cancellable in
         # `running_poll_interval` chunks) and the single-in-flight guarantee; we just submit one per HEAD change.
         # Created only when the feature is enabled (`config.context_prefill_idle_delay is not None`).
@@ -3923,274 +3913,10 @@ class DPGChatController:
                     return dpg_chat_message
         return None
 
-    def set_search(self, search_string: str, *, include_thinking: bool, include_tools: bool) -> None:
-        """Search the branch on screen for `search_string`, and re-highlight the chat log to match. Callable from any thread.
-
-        An empty `search_string` ends the search. `include_thinking` and `include_tools`: whether thinking traces,
-        and tool messages, are searched.
-
-        Returns at once. Finding the matches and re-highlighting run in the background, messages nearest the view
-        first, and a newer search cancels both — so a caller on DPG's callback thread, a keystroke's, is not held up
-        by a long branch.
-        """
-        self.search_query = chatsearch.make_query(search_string, include_thinking=include_thinking, include_tools=include_tools)
-        if self.gui_updates_safe:
-            self.search_task_manager.submit(self._search_task, env())
-
-    def clear_search_matches(self) -> None:
-        """Forget the matches, for a view about to be rebuilt; `add_search_matches_for` refills them as it is."""
-        self.search_matches = []
-        self._search_matches_changed()
-
-    def add_search_matches_for(self, node_id: str) -> None:
-        """Test one message just built into the view against the search, and count it if it matches.
-
-        Called once per message by whatever built it, which is a whole branch's worth during a rebuild and a
-        single message when a turn writes one. Per message rather than per build, so that a view assembled
-        message by message tests each exactly once.
-
-        A reply still streaming is not tested, its text being still in motion; it is counted when it
-        finalizes and is rebuilt as a stored message.
-
-        Also where a jump that had to wait for this message gets to open its thinking trace; see
-        `open_thinking_trace_when_it_matches`.
-        """
-        # `find_matches` answers `[]` for no search, so the no-search case needs no branch of its own here —
-        # and must not take an early return, because an awaited trace is still awaited when the reader has
-        # cleared the search in the frames since they jumped.
-        new_matches = chatsearch.find_matches(self.datastore, [node_id], self.search_query)
-        if new_matches:
-            self.search_matches = self.search_matches + new_matches  # rebound whole, never mutated: readers take no lock
-            self._search_matches_changed()
-        self._open_awaited_thinking_trace(node_id, new_matches[0][1] if new_matches else None)
-
-    def open_thinking_trace_when_it_matches(self, node_id: str) -> None:
-        """Ask that `node_id`'s thinking trace be opened as soon as that trace actually matches the search.
-
-        For a caller that cannot open it itself, because the message is not there to open. Moving HEAD
-        rebuilds the view on another thread, so at the moment of the request `view.find_message` answers
-        `None`; and a reply still being generated may not yet have written the words that make its trace
-        match. Both are answered by asking later rather than now — `add_search_matches_for` when the message
-        arrives, `recheck_awaited_thinking_trace` while it is still being written.
-
-        The chat graph's commit gesture is the caller today, having a box whose count says the trace matched
-        and no trace of its own to open. Nothing here is particular to it.
-
-        Only one node is remembered. A second request arriving before the first is answered is the reader
-        changing their mind, and the trace they no longer want opened is the one they left.
-        """
-        self._node_awaiting_trace_open = node_id
-
-    def recheck_awaited_thinking_trace(self, node_id: str) -> None:
-        """A message still being written has new words; open its trace if that is what was asked for.
-
-        The rule is the one `add_search_matches_for` applies to a message that has arrived — open the trace
-        when the trace is what matched — asked repeatedly rather than once, because here the text is still
-        moving and the answer can change from no to yes.
-
-        **It does not end the wait when the answer is still no**, and that is the whole difference from the
-        arrival case: a stored message's answer is final, so the request is spent on it either way, while a
-        reply in progress may yet write the words being waited for. The wait ends when the reply finalizes
-        and is rebuilt as a stored message, which goes through `add_search_matches_for`.
-        """
-        if node_id != self._node_awaiting_trace_open:
-            return
-        matches = chatsearch.find_matches(self.datastore, [node_id], self.search_query)
-        if matches and matches[0][1].thinking:
-            self._open_awaited_thinking_trace(node_id, matches[0][1])
-
-    def _open_awaited_thinking_trace(self, node_id: str, maybe_counts: "chatsearch.MatchCounts | None") -> None:
-        """Open the trace of `node_id`, if it is the message a jump was waiting for and its trace is what matched."""
-        if node_id != self._node_awaiting_trace_open:
-            return
-        # Arrived, so the wait is over whether or not it ends in an open one: leaving it set would spend the
-        # request on whichever later rebuild happened to pass this node next.
-        self._node_awaiting_trace_open = None
-        # The rule the chat log's own `step_search` follows: a trace that matched is opened whether or not
-        # the message text matched too, so that every match the search counted is on screen.
-        if maybe_counts is None or not maybe_counts.thinking:
-            return
-        if (message := self.view.find_message(node_id)) is not None:
-            message.show_thinking_trace()
-
-    def refresh_search_matches(self) -> None:
-        """Recompute which messages of the branch on screen match the current search, all of them."""
-        maybe_query = self.search_query
-        with self.current_chat_history_lock:
-            node_ids = [message.node_id for message in self.current_chat_history if message.node_id is not None]
-        self.search_matches = chatsearch.find_matches(self.datastore, node_ids, maybe_query)
-        self._search_matches_changed()
-
-    # Where the reader is, in the matches, is read off the view rather than remembered: the current match is the
-    # topmost one at or below the top of the view, and next and previous are the nearest matches more than a line
-    # below and above it. So scrolling by hand moves the counter, and a jump goes from what is on screen rather
-    # than from wherever the last jump went. The Visualizer's info panel works the same way, and the two should
-    # stay alike.
-
-    def step_search(self, direction: int) -> bool:
-        """Jump to the next (`direction=+1`) or previous (`-1`) matching message, relative to the top of the view.
-
-        Stops at either end rather than wrapping around. A message whose thinking trace matched has its trace
-        opened, whether or not its text matched too, so that every match the search counted is on screen.
-
-        Returns whether it went anywhere, so a caller can follow the jump with something — sending the
-        keyboard after it — and do nothing at all where there was nothing to jump to.
-        """
-        maybe_jump = self._search_jump  # one read: the render thread may clear it meanwhile
-        if self._search_jump_holds(maybe_jump):
-            maybe_index = maybe_jump[0] + (1 if direction > 0 else -1)
-            if not 0 <= maybe_index < len(self.search_matches):
-                return False
-        else:
-            maybe_index = self._find_search_match(forward=(direction > 0), beyond_a_line=True)
-            if maybe_index is None:
-                return False
-        node_id, counts = self.search_matches[maybe_index]
-        if counts.thinking and (message := self.view.find_message(node_id)) is not None:
-            message.show_thinking_trace()
-        maybe_y_scroll = self.view.jump_to_node(node_id)
-        # Recorded once the scroll has started, so that `_search_jump_holds` finds it gliding rather than finding the
-        # view not yet where it is going.
-        self._search_jump = (maybe_index, maybe_y_scroll) if maybe_y_scroll is not None else None
-        self._search_position_stale = True
-        return True
-
-    # Position alone cannot say where the reader is after a jump near the end of the chat: the last few messages
-    # cannot be scrolled up to the top of the view, there being nothing below them to scroll into, so the topmost
-    # match on screen is still an earlier one. So the match a jump went to is current for as long as the view is
-    # where the jump sent it — gliding there, or resting there — and the position rules take over again the moment
-    # the reader scrolls anywhere else, by wheel or by key.
-
-    def _search_jump_holds(self, maybe_jump: tuple[int, int] | None) -> bool:
-        """Whether `maybe_jump`, a value of `_search_jump`, still says where the reader is. Lock-free, for the render thread."""
-        if maybe_jump is None:
-            return False
-        index, target_y_scroll = maybe_jump
-        if index >= len(self.search_matches):
-            return False
-        maybe_animation = gui_animation.SmoothScrolling.instances.get(self.view.gui_parent)
-        if maybe_animation is not None and maybe_animation.target_y_scroll == target_y_scroll:
-            return True
-        with guiutils.nonexistent_ok() as nok:
-            y_scroll = dpg.get_y_scroll(self.view.gui_parent)
-        return not nok.errored and abs(y_scroll - target_y_scroll) <= 1
-
-    def update_search_position(self) -> None:
-        """Recompute which match is current and whether next and previous have anywhere to go. Call once per frame.
-
-        Does nothing unless the view has scrolled or the matches have changed since the last call, and tells
-        `on_search_results_changed` only when the answer differs.
-        """
-        with guiutils.nonexistent_ok() as nok:
-            y_scroll = dpg.get_y_scroll(self.view.gui_parent)
-        if nok.errored or (y_scroll == self._search_position_y_scroll and not self._search_position_stale):
-            return
-        self._search_position_y_scroll = y_scroll
-        self._search_position_stale = False
-        maybe_jump = self._search_jump  # one read: a navigation handler may replace it meanwhile
-        if self._search_jump_holds(maybe_jump):
-            jumped = maybe_jump[0]
-            self._set_search_position(jumped, jumped > 0, jumped < len(self.search_matches) - 1)
-            return
-        self._search_jump = None
-        maybe_index = self._find_search_match(forward=True, beyond_a_line=False)
-        if maybe_index is not None:
-            with guiutils.nonexistent_ok() as nok:
-                view_bottom = guiutils.get_widget_pos(self.view.gui_parent)[1] + guiutils.get_widget_size(self.view.gui_parent)[1]
-                indices, containers = self._search_match_containers()  # not `view.find_message`, which takes the lock
-                if maybe_index not in indices or guiutils.get_widget_pos(containers[indices.index(maybe_index)])[1] >= view_bottom:
-                    maybe_index = None  # the topmost match below the top is not on screen, so none is current
-            if nok.errored:
-                self._search_position_stale = True  # the view changed under the read; try again next frame
-                return
-        self._set_search_position(maybe_index,
-                                  self._find_search_match(forward=False, beyond_a_line=True) is not None,
-                                  self._find_search_match(forward=True, beyond_a_line=True) is not None)
-
-    def _set_search_position(self, maybe_index: int | None, can_go_back: bool, can_go_forward: bool) -> None:
-        position = (maybe_index, can_go_back, can_go_forward)
-        if position != (self.search_match_index, self.search_can_go_back, self.search_can_go_forward):
-            self.search_match_index, self.search_can_go_back, self.search_can_go_forward = position
-            if self.on_search_results_changed is not None:
-                self.on_search_results_changed()
-
     def navigated(self) -> None:
         """Report that HEAD was moved by a navigation rather than by the conversation growing. See `on_navigate`."""
         if self.on_navigate is not None:
             self.on_navigate()
-
-    def _search_matches_changed(self) -> None:
-        self._search_jump = None  # an index into the old matches
-        self._search_position_stale = True
-        if self.on_search_results_changed is not None:  # the count, at once; the position follows on the next frame
-            self.on_search_results_changed()
-
-    def _search_match_containers(self) -> tuple[list[int], list]:
-        """`(indices, containers)`: each matching message on screen, as its index into `search_matches` and its container widget.
-
-        In branch order. A match with no widget — the view mid-rebuild — is left out of both lists together.
-
-        Read without `current_chat_history_lock`, since this runs on the render thread every frame the view scrolls,
-        and `build` holds that lock from another thread across frames. `tuple` copies the list in one step; a
-        widget that has gone by the time it is read raises, and callers treat that as "try again next frame".
-        """
-        containers_by_node_id = {message.node_id: message.gui_container_group
-                                 for message in tuple(self.current_chat_history)}
-        indices, containers = [], []
-        for index, (node_id, _counts) in enumerate(self.search_matches):
-            if node_id in containers_by_node_id:
-                indices.append(index)
-                containers.append(containers_by_node_id[node_id])
-        return indices, containers
-
-    def _find_search_match(self, *, forward: bool, beyond_a_line: bool) -> int | None:
-        """Index into `search_matches` of the nearest match below (`forward`) or above the top of the view, or `None`.
-
-        `beyond_a_line`: whether the match must be more than a line of text past the top — true for next and
-                         previous, so that the match already at the top is neither. Without it, forward finds the
-                         topmost match at or below the top, which is the current one.
-        """
-        indices, containers = self._search_match_containers()
-        if not containers:
-            return None
-        with guiutils.nonexistent_ok():
-            view_top = guiutils.get_widget_pos(self.view.gui_parent)[1]
-            line = gui_config.font_size if beyond_a_line else 0
-            target_y = view_top + (line if forward else -line)
-
-            def is_completely_below(widget):
-                return widgetfinder.is_completely_below_target_y(widget, target_y=target_y)
-            maybe_widget = widgetfinder.binary_search_widget(widgets=containers, accept=is_completely_below,
-                                                             consider=None, direction=("right" if forward else "left"))
-            return indices[containers.index(maybe_widget)] if maybe_widget is not None else None
-        return None
-
-    def _search_task(self, task_env: env) -> None:
-        self.refresh_search_matches()
-        if task_env.cancelled:
-            return
-        with self.current_chat_history_lock:
-            messages = list(self.current_chat_history)
-        for message in self._nearest_the_view_first(messages):
-            if task_env.cancelled or not self.gui_updates_safe:
-                return
-            message.rehighlight(task_env)
-
-    def _nearest_the_view_first(self, messages: list[DPGChatMessage]) -> list[DPGChatMessage]:
-        """`messages`, ordered by how far each is from the view: those on screen first, then outwards.
-
-        Left in their order if the view cannot be measured, which only costs the order.
-        """
-        with guiutils.nonexistent_ok():
-            view_top = guiutils.get_widget_pos(self.view.gui_parent)[1]
-            view_bottom = view_top + guiutils.get_widget_size(self.view.gui_parent)[1]
-
-            def distance(message: DPGChatMessage) -> int:
-                top = guiutils.get_widget_pos(message.gui_container_group)[1]
-                bottom = top + guiutils.get_widget_size(message.gui_container_group)[1]
-                return max(0, view_top - bottom, top - view_bottom)
-            return sorted(messages, key=distance)
-        return messages
 
     def disable_gui_updates(self) -> None:
         """Stop the controller from firing GUI events.

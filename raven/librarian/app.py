@@ -1309,17 +1309,14 @@ with timer() as tim:
                     def search_changed_callback() -> None:
                         app_state["search_thinking"] = dpg.get_value("search_thinking_checkbox")  # tag
                         app_state["search_tools"] = dpg.get_value("search_tools_checkbox")  # tag
-                        search_string = dpg.get_value("search_field")  # tag
-                        chat_controller.set_search(search_string,
-                                                   include_thinking=app_state["search_thinking"],
-                                                   include_tools=app_state["search_tools"])
+                        maybe_query = chatsearch.make_query(dpg.get_value("search_field"),  # tag
+                                                            include_thinking=app_state["search_thinking"],
+                                                            include_tools=app_state["search_tools"])
                         # One field, two views. The chat log searches the branch on screen and the graph
                         # the whole forest, so the same query gives two different answers — which is the
                         # point of asking it in both places rather than sharing one result.
-                        chat_graph_panel.set_search(
-                            chatsearch.make_query(search_string,
-                                                  include_thinking=app_state["search_thinking"],
-                                                  include_tools=app_state["search_tools"]))
+                        chat_controller.search.set_search(maybe_query)
+                        chat_graph_panel.set_search(maybe_query)
 
                     def clear_search_callback() -> None:
                         """Empty the search field and end the search. The button and Ctrl+Shift+F, caret or no caret."""
@@ -1809,7 +1806,7 @@ with timer() as tim:
                     # Before the rebuild, which is what consumes it. A box whose count was a thinking-trace
                     # hit owes the reader that text once they act on it, and the graph has no trace to open:
                     # the log is where the match the count was counting can actually be read.
-                    chat_controller.open_thinking_trace_when_it_matches(node_id)
+                    chat_controller.search.open_thinking_trace_when_it_matches(node_id)
                     app_state["HEAD"] = node_id
                     # The same discontinuity a sibling switch is, and usually a larger one: a jump taken
                     # from the graph can cross to a conversation the avatar was never in.
@@ -2283,7 +2280,7 @@ def update_animations():
     # reason the pill is: nothing raises an event when the reader wheels the panel.
     chat_controller.update_current_message_mark()
     # The search counter follows the scroll position too, for the same reason.
-    chat_controller.update_search_position()
+    chat_controller.search.update_position()
     # The revision list follows the datastore, which an edit or a Continue can change behind its back.
     revision_panel.poll()
     # And the graph's counter follows its cursor, which the arrow keys and a click both move without
@@ -2604,7 +2601,7 @@ def _step_chat_search(direction: int) -> None:
     the log rather than leaving them in the search field costs nothing the field wanted — `Enter` commits a
     single-line field and gives up the caret anyway, so stepping from it already worked this way.
     """
-    if not chat_controller.step_search(direction):
+    if not chat_controller.search.step_search(direction):
         return  # nowhere to go, so nothing moved and nothing should
     _give_keyboard_to_log()
 
@@ -2662,16 +2659,17 @@ _graph_search_row_shown = None
 
 
 def _update_search_row() -> None:
-    """Redraw the chat search's counter and previous/next buttons from the controller. Callable from any thread."""
-    matches, maybe_index = chat_controller.search_matches, chat_controller.search_match_index
-    if chat_controller.search_query is None:
+    """Redraw the chat search's counter and previous/next buttons. Callable from any thread."""
+    search = chat_controller.search
+    maybe_index, total = search.search_position()
+    if search.query is None:
         counter = ""
     else:
-        counter = f"[{maybe_index + 1 if maybe_index is not None else '–'}/{len(matches)}]"
+        counter = f"[{maybe_index + 1 if maybe_index is not None else '–'}/{total}]"
     with guiutils.nonexistent_ok():
         dpg.set_value("search_counter_text", counter)  # tag
-        for button, has_somewhere_to_go in (("search_prev_button", chat_controller.search_can_go_back),  # tag
-                                            ("search_next_button", chat_controller.search_can_go_forward)):  # tag
+        for button, has_somewhere_to_go in (("search_prev_button", search.search_can_go_back),  # tag
+                                            ("search_next_button", search.search_can_go_forward)):  # tag
             (dpg.enable_item if has_somewhere_to_go else dpg.disable_item)(button)
 
 def _resize_panels() -> None:
