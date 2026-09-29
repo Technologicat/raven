@@ -608,12 +608,17 @@ low rate is equally consistent with a judge that is too lenient. To do when the 
 
 The counts per stage, from the files in this directory: 5167 after deduplication, 853 set aside as
 unscreenable, 4314 judged, **1084 dropped by the judge** (25%), 264 more removed by the field filter
-(`filtered-out.tsv`), 2966 left. Which of these figures the researchers were looking at is not recorded,
-and is worth asking, since the answer decides which stage is under suspicion.
+(`filtered-out.tsv`), 2966 left. **The stage under suspicion is the field filter** (Juha, 2026-09-29):
+the judge's 25% is plausible, and the filter's 264 of the judge's 3230 keeps is 8%.
+
+So both checks below point at the filter. The sample is drawn from the final 2966, which is what the
+filter kept. Planted records go into the extractor's input rather than the judge's, so that what gets
+measured is the filter's sensitivity and not the judge's.
 
 Everything measured so far audits the *drops* — the reviewer, the escalation check — because a drop
 carries a reason and a keep does not. The question now is about the keeps, and two checks would give
-evidence either way:
+evidence either way. **Both are agreed as the design** (Juha, 2026-09-29), to run when the dataset is
+next opened:
 
 - **A hand-checked random sample of the keeps**, by the researchers, who can judge scope better than
   anyone here. The number of off-topic records found among `n` gives a posterior on the leak rate
