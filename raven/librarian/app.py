@@ -2814,12 +2814,16 @@ def _give_keyboard_to_graph() -> None:
     # letting go from one just entered: claiming at once, as Tab from the composer did, was revoked on arrival.
     for field in ("chat_field", "search_field"):  # tag
         guiutils.release_caret(field, park_focus_on="chat_send_button")  # tag
-    _release_manual_keyboard_claims()
+    _release_manual_keyboard_claims(keeping=chat_graph_panel)
     chat_graph_panel.has_keyboard = True
 
 
-def _release_manual_keyboard_claims() -> None:
+def _release_manual_keyboard_claims(keeping: "chatgraph_panel.DPGChatGraphPanel | None" = None) -> None:
     """Clear every "this pane has the keyboard" flag Raven maintains by hand. Grep for callers.
+
+    `keeping`: The pane the caller is about to claim, whose flag is left as it is. Clearing it only to set it
+               again a moment later redraws the pane twice for nothing — and a redraw of the chat graph
+               restarts any rearrangement it has in flight.
 
     **The list of such flags is here and nowhere else, which is the whole point of the function.** Most of
     the keyboard home is derived — `_cycle_keyboard_home` reads ImGui's caret and works the rest out — and
@@ -2841,7 +2845,9 @@ def _release_manual_keyboard_claims() -> None:
     TODO: greppable rather than removing it; a single owner would be better and is not obviously reachable
     TODO: given what DPG reports. Read that item before replacing this with stored state.
     """
-    chat_graph_panel.has_keyboard = False
+    for pane in (chat_graph_panel,):
+        if pane is not keeping:
+            pane.has_keyboard = False
 
 
 def _toggle_audio_input_panel() -> None:
