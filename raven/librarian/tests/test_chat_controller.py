@@ -26,6 +26,32 @@ from raven.common import bgtask  # noqa: E402
 from raven.librarian import chat_controller, chatutil  # noqa: E402
 
 
+class TestOnlyALiveReplyRechecksAnAwaitedTrace:
+    """A stored message being built must not spend a jump's request to open its thinking trace.
+
+    It adds its paragraphs while it is being built, before the view holds it, so the request would be spent
+    on a message not yet there to open — which is how committing a chat graph box whose count was a
+    thinking-trace hit came to open nothing. A reply still being written is what the recheck is for.
+    """
+
+    @staticmethod
+    def _rechecks(message_class):
+        asked = []
+        message = message_class.__new__(message_class)
+        message.node_id = "n1"
+        message.parent_view = types.SimpleNamespace(chat_controller=types.SimpleNamespace(
+            search=types.SimpleNamespace(recheck_awaited_thinking_trace=asked.append)))
+        message._recheck_awaited_thinking_trace()
+        return asked
+
+    def test_a_stored_message_does_not_recheck(self):
+        assert self._rechecks(chat_controller.DPGCompleteChatMessage) == []
+
+    def test_a_live_reply_does(self):
+        # The control: without it, a recheck that had stopped working altogether would pass the test above.
+        assert self._rechecks(chat_controller.DPGStreamingChatMessage) == ["n1"]
+
+
 class TestDemolishIsATeardown:
     """`demolish` deletes every widget the message owns, its container included, and forgets them all.
 

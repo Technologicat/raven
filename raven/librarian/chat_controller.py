@@ -806,8 +806,12 @@ class DPGChatMessage:
 
         Costs a search of this one message per update, and only while a request is in fact outstanding on
         this message — one node at a time, ending at the first match.
+
+        A live reply only. A stored message adds its paragraphs too, while it is being built — before the
+        view has it — and a recheck then would spend the request on a message not yet there to open. Its
+        answer is final, and arrives through `DPGChatLogSearch.add_matches_for` once it is in the view.
         """
-        if self.node_id is not None:
+        if self.renders_live_reply and self.node_id is not None:
             self.parent_view.chat_controller.search.recheck_awaited_thinking_trace(self.node_id)
 
     def _thought_bubble(self) -> str | int:
