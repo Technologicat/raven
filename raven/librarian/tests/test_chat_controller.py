@@ -333,16 +333,20 @@ class TestFormatExcerptNotice:
         assert "None" not in notice, "the missing name was formatted into the notice"
 
 
-class TestDemolishLeavesNoWidgetReference:
-    """`demolish` must clear every widget reference `build` made, because the instance may be rebuilt.
+class TestDemolishIsATeardown:
+    """`demolish` deletes every widget the message owns, its container included, and forgets them all.
 
-    Only reachable through demolish-then-rebuild of the same instance. A reference that survives is not
-    inert: `_thought_bubble` reads a non-`None` `gui_thought_group` as "already built" and hands the
-    deleted id back to the renderer as the parent to draw into, which cannot work.
+    The references matter because another thread may still hold the instance: a render on its way in must
+    find nothing to draw into. A reference that survives is not inert — `_thought_bubble` reads a non-`None`
+    `gui_thought_group` as "already built" and hands the deleted id back to the renderer as a parent.
+
+    The container matters because an empty group still takes a line's item spacing in the view, so one left
+    standing is a gap in the chat log — which is what rerolling a tool-calling reply used to leave, one per
+    message it rewound.
 
     Deliberately structural rather than a rendered-widget test: it needs no DPG context, and it keeps
-    holding when a future `build` adds a sixth widget attribute, which is the case a screenshot test
-    would silently stop covering.
+    holding when a future `build` adds a widget attribute, which is the case a screenshot test would
+    silently stop covering.
     """
 
     # What `build` populates, per the declarations in `DPGChatMessage.__init__`.
@@ -350,9 +354,15 @@ class TestDemolishLeavesNoWidgetReference:
                       "gui_keyboard_mark_widget", "gui_buttons_group")
 
     @staticmethod
-    def _demolished_message(monkeypatch):
-        """A bare `DPGChatMessage` with every widget reference set, put through `demolish`."""
-        monkeypatch.setattr(chat_controller.dpg, "delete_item", lambda *args, **kwargs: None)
+    def _demolished_message(monkeypatch, deleted=None):
+        """A bare `DPGChatMessage` with every widget reference set, put through `demolish`.
+
+        `deleted`: optional list, receiving each `dpg.delete_item` call as `(args, kwargs)`.
+        """
+        def fake_delete_item(*args, **kwargs):
+            if deleted is not None:
+                deleted.append((args, kwargs))
+        monkeypatch.setattr(chat_controller.dpg, "delete_item", fake_delete_item)
 
         message = object.__new__(chat_controller.DPGChatMessage)
         message.paragraphs_lock = threading.RLock()
@@ -364,7 +374,7 @@ class TestDemolishLeavesNoWidgetReference:
         message.role = "assistant"
         message.persona = "Aria"
         message.gui_button_callbacks = {"reroll": lambda: None}
-        for n, name in enumerate(TestDemolishLeavesNoWidgetReference.BUILT_BY_BUILD):
+        for n, name in enumerate(TestDemolishIsATeardown.BUILT_BY_BUILD):
             setattr(message, name, 2000 + n)
 
         message.demolish()
@@ -375,15 +385,20 @@ class TestDemolishLeavesNoWidgetReference:
         left_behind = [name for name in self.BUILT_BY_BUILD if getattr(message, name) is not None]
         assert not left_behind, f"demolish left dangling widget references: {left_behind}"
 
-    def test_the_container_it_renders_into_survives(self, monkeypatch):
-        """The negative control: `demolish` empties the container, it does not forget where to render.
+    def test_the_container_itself_is_deleted(self, monkeypatch):
+        deleted = []
+        message = self._demolished_message(monkeypatch, deleted)
+        container_deletes = [kwargs for args, kwargs in deleted if args == (1000,)]
+        assert container_deletes, "demolish never deleted the container group"
+        assert not any(kwargs.get("children_only") for kwargs in container_deletes), \
+            "demolish emptied the container and left it standing, which is a gap in the chat log"
+        assert message.gui_container_group is None
 
-        Without this, "clear everything named `gui_*`" would pass the test above while breaking every
-        rebuild — so the assertion that some references survive is what gives the one above its meaning.
-        """
+    def test_a_demolished_message_refuses_to_build(self, monkeypatch):
+        """A rebuild would need a new container, which could only go at the end of the view — the wrong place."""
         message = self._demolished_message(monkeypatch)
-        assert message.gui_container_group is not None
-        assert message.gui_parent is not None
+        with pytest.raises(RuntimeError, match="rebuild_in_place"):
+            message.build(role="assistant", persona=None, node_id=None)
 
 
 class TestIncompletenessNote:

@@ -605,6 +605,9 @@ class DPGChatMessage:
               node_id: str | None) -> None:
         """Build the GUI widgets for this chat message instance, thus rendering the chat message (and its buttons and such) in the GUI.
 
+        Runs into a fresh container: the constructor calls this, and `rebuild_in_place` is how to redraw an
+        existing message. Raises `RuntimeError` on a demolished instance.
+
         `role`: One of the roles supported by `raven.librarian.llmclient`.
                 Typically, one of "assistant", "system", "tool", or "user".
 
@@ -641,14 +644,18 @@ class DPGChatMessage:
         """
         global role_to_colors  # intent only - we only read the color settings from this.
 
+        # Loud rather than a quiet re-creation: a new container could only go at the end of the view, which
+        # for a message already on screen is the wrong place.
+        if self.gui_container_group is None:
+            raise RuntimeError(f"{type(self).__name__}.build: this message was demolished and cannot be built again; use `rebuild_in_place` to redraw a message.")
+
         self.role = role
         self.persona = persona
         self.node_id = node_id
 
-        # clear old GUI content (needed if rebuilding)
-        dpg.delete_item(self.gui_container_group, children_only=True)
-        # ...which takes the thought bubble with it, so forget the widgets or the next thinking paragraph
-        # would be rendered into a container that no longer exists.
+        # Always a fresh container here (the constructor's, or the one `rebuild_in_place` just made), so there
+        # is nothing to clear; forget the thought bubble's widgets all the same, since the next thinking
+        # paragraph would otherwise be rendered into a container that is not this one.
         self.gui_thought_button = None
         self.gui_thought_group = None
         self.gui_thought_stats = None
@@ -1475,16 +1482,14 @@ class DPGChatMessage:
                 dpg.delete_item(old_container)
 
     def demolish(self) -> None:
-        """The opposite of `build`: delete all GUI widgets belonging to this instance.
+        """Tear this message down: delete every GUI widget belonging to this instance, its container included.
 
-        If you use `DPGLinearizedChatView.build`, it takes care of clearing all old chat message GUI widgets automatically,
-        and you do not need to call this.
+        The instance cannot be built again afterwards. To redraw a message, use `rebuild_in_place`.
 
-        If you are editing the GUI contents of the linearized chat view directly, this should be called before deleting
-        the `DPGChatMessage` (or a derived class) instance.
-
-        The main use case is switching a streaming message to a completed one when the streaming is done,
-        without regenerating the whole linearized chat view (which may contain a lot of messages).
+        Call this before dropping a message from the linearized chat view without rebuilding the whole view —
+        taking a message off screen, or retiring a finished streaming message, whose stored rendering is a
+        new `DPGCompleteChatMessage` appended in its place (it was the last message). A full
+        `DPGLinearizedChatView.build` clears the view wholesale, and needs no call to this.
         """
         with self.paragraphs_lock:
             self.role = None
@@ -1492,14 +1497,10 @@ class DPGChatMessage:
             self.paragraphs = []
             self.gui_text_group = None
             # Every other widget reference this instance holds is dangling once the delete below runs, so
-            # none of them may survive it. `gui_thought_group` is the one that bites: `_thought_bubble`
-            # reads a non-`None` value as "already built" and hands the stale id straight back to the
-            # renderer, which parents new paragraphs onto a deleted item — and a `with dpg.tooltip(<deleted
-            # item>)` fails to push while still popping on exit, so DPG reports "[1009] No container to pop"
-            # from wherever the rebuild happened rather than from the message that caused it.
-            #
-            # Only reachable when the same instance is demolished and then built again; a demolish before
-            # the instance is dropped never asks these questions.
+            # none of them may survive it: another thread may still hold this instance, and must find
+            # nothing to draw into. The renderer checks `gui_text_group`; `_thought_bubble` reads a
+            # non-`None` `gui_thought_group` as "already built" and would hand the stale id straight back
+            # as the parent for new paragraphs.
             self.gui_thought_button = None
             self.gui_thought_group = None
             self.gui_thought_stats = None
@@ -1513,8 +1514,12 @@ class DPGChatMessage:
             for tooltip in self.owned_tooltips:  # nor are these; see `_add_tooltip`
                 tooltip.destroy()
             self.owned_tooltips = []
+            # The container too, not only its children: an empty group still takes a line's item spacing in
+            # the view's vertical layout, so a container left standing is a 4 px gap for every message ever
+            # taken off screen this way.
             with guiutils.nonexistent_ok():
-                dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content (needed if rebuilding)
+                dpg.delete_item(self.gui_container_group)
+            self.gui_container_group = None
 
     def build_buttons(self,
                       gui_parent: str | int) -> None:
