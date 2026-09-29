@@ -1820,6 +1820,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
         # rendering of the node, not to the node, so it resets whenever the view is rebuilt. That is the
         # right lifetime — an expansion is a thing you did to look at something, not a preference.
         self.show_full_text = False
+        # Which parts of a document search's result are open, by part index: the same kind of view state as
+        # `show_full_text`, which serves the results that have no parts to open one by one.
+        self.expanded_parts = set()
         self.build()
 
     def build(self) -> None:
@@ -2032,22 +2035,37 @@ class DPGCompleteChatMessage(DPGChatMessage):
         thousand want different answers, and only the reader can pick — so the number goes where the choice
         is made.
         """
-        expanded = self.show_full_text
+        # Per match, the message's own toggle commands the matches' toggles rather than keeping a state of its
+        # own: it opens them all while any is closed, and closes them all once every one is open.
+        all_parts = set(range(len(texts)))
+        if maybe_collapse == "per_part":
+            expanded = all_parts <= self.expanded_parts
+        else:
+            expanded = self.show_full_text
         body = maybe_body if maybe_body is not None else "".join(texts)
 
         def toggle() -> None:
-            # Sample *before* the rebuild: expanding grows the container and leaves the offset alone, but
-            # collapsing shrinks it, and DPG clamps the scroll to the smaller maximum at the next layout.
-            # Without putting it back, a collapse scrolls the conversation under the reader — the message
-            # they just collapsed jumps down the screen, which reads as a glitch rather than as an action.
-            y_scroll = dpg.get_y_scroll(self.parent_view.gui_parent)
-            self.show_full_text = not self.show_full_text
-            # Rebuild just this message rather than the whole view, and build the replacement before tearing
-            # the original down — see `rebuild_in_place` for why the obvious order flickers. The button
-            # running this callback is one of the widgets that goes away; that is the same thing the branch
-            # and delete buttons already do through `parent_view.build()`, one level wider.
-            self.rebuild_in_place()
-            self.parent_view.hold_scroll_across_rebuild(y_scroll)
+            def open_or_close_all() -> None:
+                if maybe_collapse == "per_part":
+                    self.expanded_parts = set() if expanded else set(all_parts)
+                else:
+                    self.show_full_text = not self.show_full_text
+            self._change_and_rebuild(open_or_close_all)
+
+        def make_part_toggle(index: int) -> Callable[[], None]:
+            def toggle_part() -> None:
+                self._change_and_rebuild(lambda: self.expanded_parts.symmetric_difference_update({index}))
+            return toggle_part
+
+        def add_part_toggle(index: int, row: int | str) -> None:
+            """Put this match's own chevron first on its handle row: the disclosure control at the start of the
+            line it discloses, as the whole message's sits at the start of the message."""
+            in_full = self._part_shown_in_full(index, maybe_collapse)
+            button_id = dpg.add_button(label=fa.ICON_CHEVRON_UP if in_full else fa.ICON_CHEVRON_DOWN,
+                                       width=gui_config.toolbutton_w, parent=row, callback=make_part_toggle(index))
+            dpg.bind_item_font(button_id, self.parent_view.themes_and_fonts.icon_font_solid)
+            dpg.add_text("Show less of this match" if in_full else "Show this match in full",
+                         parent=dpg.add_tooltip(button_id))
 
         with self.paragraphs_lock:
             # Gutter to the *left* of the text, the same shape the thinking-trace toggle uses. The toggle
@@ -2108,7 +2126,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
                         if maybe_span is None:
                             self._render_text_paragraphs(one_text if in_full else messagetext.collapse_docs_match(one_text))
                             continue
-                        self._render_document_reference(maybe_span["document_id"], labels)
+                        leading = ((lambda row, index=index: add_part_toggle(index, row))
+                                   if maybe_collapse == "per_part" else None)
+                        self._render_document_reference(maybe_span["document_id"], labels, leading=leading)
                         shown = one_text if in_full else messagetext.docs_match_snippet(one_text)
                         if shown:
                             self._render_text_paragraphs(shown)
@@ -2119,10 +2139,26 @@ class DPGCompleteChatMessage(DPGChatMessage):
     def _part_shown_in_full(self, index: int, maybe_collapse: str | None) -> bool:
         """Whether text part `index` of this tool result is shown whole, rather than shortened to a snippet.
 
-        One toggle for the whole message for now, so every part answers alike. Asked per part, so that each
-        match can have a toggle of its own, which is where a long document search is expected to go.
+        Whole when the reader opened it, by its own toggle or by the message's, which opens them all.
         """
-        return maybe_collapse != "per_part" or self.show_full_text
+        return maybe_collapse != "per_part" or index in self.expanded_parts
+
+    def _change_and_rebuild(self, change: Callable[[], None]) -> None:
+        """Apply `change` to this message's view state, and redraw the message without moving the conversation.
+
+        Sampled *before* the rebuild: expanding grows the container and leaves the offset alone, but
+        collapsing shrinks it, and DPG clamps the scroll to the smaller maximum at the next layout. Without
+        putting it back, a collapse scrolls the conversation under the reader — the message they just
+        collapsed jumps down the screen, which reads as a glitch rather than as an action.
+        """
+        y_scroll = dpg.get_y_scroll(self.parent_view.gui_parent)
+        change()
+        # Rebuild just this message rather than the whole view, and build the replacement before tearing
+        # the original down — see `rebuild_in_place` for why the obvious order flickers. The button
+        # running this callback is one of the widgets that goes away; that is the same thing the branch
+        # and delete buttons already do through `parent_view.build()`, one level wider.
+        self.rebuild_in_place()
+        self.parent_view.hold_scroll_across_rebuild(y_scroll)
 
     def _render_injected_texts(self, texts: list[str]) -> None:
         """Render one block of per-turn texts, under the label saying they are added rather than stored.
@@ -2327,12 +2363,15 @@ class DPGCompleteChatMessage(DPGChatMessage):
                 dpg.add_text(f"saved {meta['fetched_at']}", color=(180, 180, 180), parent=document_tooltip)
             self._make_clickable([name_id], action=open_saved_copy)
 
-    def _render_document_reference(self, document_id: str, labels: dict[str, str] | None = None) -> None:
+    def _render_document_reference(self, document_id: str, labels: dict[str, str] | None = None,
+                                   leading: Callable[[int | str], None] | None = None) -> None:
         """Render a handle on one knowledge-base document the AI fetched or found: a chip plus its two actions.
 
         `labels`: A memo of document ID to name, for a caller rendering many handles at once, which a document
                   search's result does — often naming one document several times. Made and dropped by that
                   caller within one render, so an edited document shows its new name on the next.
+        `leading`: Called with the handle's row before anything is added to it, for a caller that puts a
+                   control of its own at the start of the row — a search match's own expand toggle.
 
         The docs-DB counterpart of `_render_text_file_part`, and deliberately the same shape — a document
         glyph, a name, and a small action row — because to the reader these are the same kind of thing. What
@@ -2360,6 +2399,8 @@ class DPGCompleteChatMessage(DPGChatMessage):
             # knowledge-base document gets the book glyph rather than the attachment's document glyph, since
             # the two point at different places (the user's documents folder, not the sidecar store).
             row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
+            if leading is not None:
+                leading(row)
             if path is not None:
                 open_document = lambda: common_utils.open_file(path)  # noqa: E731 -- shared by the click shortcut and the button below
                 self._add_action_button(parent=row,

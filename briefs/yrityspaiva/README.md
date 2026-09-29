@@ -150,8 +150,10 @@ live on the Night.
     anyway, much of a corpus is not prose (BibTeX), and spaCy per match per render is a model call ×50
     (maintainer agreed). If a snippet reads badly, snapping to a sentence end late in the budget is a regex,
     as `excerpt` already snaps to a paragraph break.
-  - **C is expected next**: each match with its own toggle. Whether a part is shown whole is already asked
-    per part (`_part_shown_in_full`), so C replaces that and adds the buttons.
+  - **C followed the same afternoon**: each match has its own chevron, on its handle row. The result's own
+    chevron commands them, as expand-all / collapse-all toggles usually do: it opens all while any is
+    closed, and closes all once every one is open (maintainer's refinement). So the per-match set
+    (`expanded_parts`) is the only state a match has; `show_full_text` serves the results with no parts.
   - The per-match handle is also a start on the deferred item on RAG citations' source files; a reply's own
     citations are still open there.
 - **Also from the same live test, done**: empty send always answers the user's own last message (so a

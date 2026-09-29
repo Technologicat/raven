@@ -26,6 +26,33 @@ from raven.common import bgtask  # noqa: E402
 from raven.librarian import chat_controller, chatutil  # noqa: E402
 
 
+class TestWhichSearchMatchesShowInFull:
+    """A collapsed document search shows a match whole when the reader opened it, or opened them all."""
+
+    @staticmethod
+    def _message(show_full_text=False, expanded_parts=()):
+        message = chat_controller.DPGCompleteChatMessage.__new__(chat_controller.DPGCompleteChatMessage)
+        message.show_full_text = show_full_text
+        message.expanded_parts = set(expanded_parts)
+        return message
+
+    def test_one_opened_match_and_not_its_neighbours(self):
+        message = self._message(expanded_parts={2})
+        assert message._part_shown_in_full(2, "per_part")
+        assert not message._part_shown_in_full(1, "per_part"), "opening one match opened another"
+
+    def test_the_state_is_the_matches_own(self):
+        # The message's toggle opens them all by filling the set, so it keeps no flag that could disagree.
+        message = self._message(show_full_text=True)
+        assert not message._part_shown_in_full(1, "per_part"), "a per-match result read the whole-message flag"
+        message.expanded_parts = set(range(5))
+        assert all(message._part_shown_in_full(index, "per_part") for index in range(5))
+
+    def test_other_results_are_not_per_match_at_all(self):
+        # The control: a result that is not collapsed per match shows its parts whole whatever the state says.
+        assert self._message()._part_shown_in_full(3, None)
+
+
 class TestOnlyALiveReplyRechecksAnAwaitedTrace:
     """A stored message being built must not spend a jump's request to open its thinking trace.
 
