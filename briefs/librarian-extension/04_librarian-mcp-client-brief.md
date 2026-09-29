@@ -29,6 +29,25 @@ needs **one capability: tools, as a client.** Ignore the rest until there's a co
 Consume the official `mcp` Python SDK (PyPI: `mcp`) — you are a *client* of the protocol, not an
 implementer of it. The real work is a thin adapter, not a protocol.
 
+### Which version (checked against PyPI 2026-09-29)
+
+- **Pin `mcp>=2.2,<3`.** 2.0 shipped 2026-07-28, and 1.x is still maintained alongside it (1.30.0
+  and 2.2.0 came out the same day), so a bare floor is ambiguous and 1.x-era examples online are
+  misleading.
+- **2.x splits the wire types into `mcp-types`** (pydantic only) and uses **`httpx2`** as its HTTP
+  client, a separate package from the `httpx` 0.28 already in our tree.
+- **There is no client-only install.** `mcp` also pulls in its server-side dependencies (`starlette`,
+  `sse-starlette`, `uvicorn`, `python-multipart`, `pyjwt[crypto]`, `opentelemetry-api`). Several are
+  already here transitively; what's new is moderate.
+- **FastMCP was considered and rejected.** Its client extra (`fastmcp-slim[client]`) depends on `mcp`
+  itself, so it would be a strict superset with more dependencies, and its strengths are server-side.
+- **A hand-rolled sync client on `requests` + `sseclient-py` was also considered.** It would remove
+  the async bridge (§1) entirely, since the tools-only slice of the protocol is small. Rejected
+  because that trades a one-time bridge for tracking every spec revision ourselves, answering
+  server-initiated requests correctly, and giving up OAuth for remote servers.
+- **CI:** if the adapter's tests import `mcp`, add it to `requirements-ci.txt` or guard the import
+  with `importorskip` (`scripts/check_ci_imports.py` says which).
+
 ---
 
 ## 0. Prerequisite — `@tool` decorator and parameter-metadata pattern
@@ -206,6 +225,11 @@ Concretely:
   `shutdown(timeout)` the lifecycle section relies on for force-terminating hung sessions).
 - The MCP client wraps this: `list_tools()` and `call_tool()` are sync methods that internally
   `bridge.submit(session.list_tools())` etc.
+- **Probe before writing the shutdown path (unverified against `mcp` 2.x):** the SDK is anyio-based,
+  and anyio cancel scopes must be exited in the task that entered them. If that holds here, the
+  `async with stdio_client(...)` / `ClientSession` contexts can't be opened by one `submit` and
+  closed by another. Each server would then need one long-lived holder coroutine that keeps its
+  session open until a shutdown event, with `call_tool` submissions from other tasks being fine.
 
 **Why a bare daemon thread rather than `bgtask`** (the obvious question, so answered here):
 `bgtask.TaskManager` groups *completable, cooperatively-cancellable* callables for cancellation —
