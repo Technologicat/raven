@@ -193,7 +193,7 @@ The ordering is what changes: distinctive first.
 subtract / intersect algebra in `selection.py` composes into boolean queries over keywords, and no query
 language has to be invented. Select the clusters carrying `AI`, add `chatbot`, add `generative`, then
 invert, and what remains is the candidate out-of-scope material. That is how the four AI-less clusters
-recorded in `briefs/researchers-night/aokk-corpus-scope-classification-brief.md` were found, and it
+recorded in `briefs/researchers-night/done/aokk-corpus-scope-classification-brief.md` were found, and it
 wants to be a feature rather than a script somebody ran once.
 
 ### Raise the extraction count to 12, then split

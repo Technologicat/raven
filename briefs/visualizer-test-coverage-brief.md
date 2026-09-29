@@ -9,7 +9,7 @@ in the root `CLAUDE.md`'s coverage section.
 
 **Intended as one of three parallel threads** starting the day after 2026-08-31 (Juha's call): this,
 `briefs/researchers-night/done/16_chat-graph-view-brief.md`, and
-`briefs/researchers-night/aokk-corpus-scope-classification-brief.md`. The split is deliberate rather than
+`briefs/researchers-night/done/aokk-corpus-scope-classification-brief.md`. The split is deliberate rather than
 opportunistic — the three touch different subsystems, so none waits on another's tree, and they are
 different enough to review side by side, which is the actual constraint. Of the three, only the graph
 view is bound by the Researchers' Night deadline. `briefs/researchers-night/README.md` under *Ordering*

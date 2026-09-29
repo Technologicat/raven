@@ -5,7 +5,7 @@ The AOKK corpus was assembled by a boolean query — an AI-agent term AND a coll
 something else entirely can clear all four. This is the LLM pass that flags the ones that did, so they can
 be reviewed and taken out.
 
-The brief is `briefs/researchers-night/aokk-corpus-scope-classification-brief.md`; it carries the two
+The brief is `briefs/researchers-night/done/aokk-corpus-scope-classification-brief.md`; it carries the two
 confirmed false-positive shapes and the argument for a two-pass design. This directory holds the
 apparatus, and the measurements the brief left open.
 
