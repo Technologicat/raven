@@ -75,7 +75,8 @@
   - Before, only the name and the card changed, and the avatar stayed Aria's, speaking in her voice.
 - **The first Ctrl+Shift+O after starting the app no longer closes the attach dialog as it opens.**
   - In v0.2.9 that first press appeared to do nothing, and a second press opened the dialog normally. Clicking the attach button was not affected.
-- **Tab to the composer or the graph no longer flashes a caret in the search field for a moment.**
+- **Tab between the panes no longer flashes a caret in another text field for a moment.**
+  - Tab to the composer or the graph flashed one in the search field, and Tab or Shift+Tab to the search field flashed one in the composer.
 - **Clicking the chat graph to give it the keyboard no longer switches branch.**
   - In v0.2.9 a click on the box the cursor was on counted as the second of the two clicks that switch branch — HEAD's box, where the cursor appears when the graph takes the keyboard, or the box it was left on before you went elsewhere. So the click switched branch and handed the keyboard straight back to the chat log. Tabbing to the graph and then clicking that box did the same.
 - **Librarian could occasionally close by itself while redrawing a message**, with *"Unhandled exception in render loop"* in the log. Nothing was lost beyond what the once-a-minute autosave had not yet written.

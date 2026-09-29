@@ -1455,6 +1455,14 @@ of its own** — a borderless child window with `flattened_navigation=False` aro
 (`FileDialog._field_scope`), or, where a child already holds just the one field, that child unflattened, as
 Librarian's is. A step back onto the field it started from showed nothing visible in either app.
 
+**The step starts from wherever focus is parked, so the park's scope counts too.** Librarian parks focus on
+its send button whenever the chat log or the graph has the keys, and once the composer's child was
+unflattened, that button shared a scope with the composer alone. Every Tab or Shift+Tab from the log or the
+graph to the search field then flashed the composer's caret: the step wrapped from the button onto the only
+text field it could reach. Found 2026-09-29; fixed by giving the toolbar row a scope of its own, with no text
+field in it, which the maintainer confirmed live in both directions. So a button used as a focus park wants
+a scope holding no text field, or only the one the park is meant to lead to.
+
 ## `is_key_down` is sampled when the callback runs, not when the key was pressed
 
 Modifier state is read *inside* the handler, and handlers are dispatched per frame — so the answer

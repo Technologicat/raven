@@ -17,6 +17,10 @@ live on the Night.
 - **Tab flashed a caret in Librarian's search field for a frame.** ImGui's own Tab step, confined with
   `flattened_navigation=False` on the composer's child window. The Visualizer was checked live and needs
   nothing; Raven-cherrypick gives nothing focus programmatically and so sees no step.
+  - **That fix's sequel, 2026-09-29:** Tab or Shift+Tab from the log or the graph to the search field then
+    flashed the *composer*. The step starts from the send button, where those two panes park focus, and
+    the button now shared a scope with the composer alone. The toolbar row got a scope of its own.
+    Confirmed live in both directions.
 - **`FileDialog` and the thumbnail grid, found by following the Tab thread** (all 2026-09-28):
   - The path field went active for a frame on every Tab: ImGui's own Tab step lands on another text field
     in the same navigation scope. Each field now has a scope of its own. This closed the open question in
@@ -169,15 +173,9 @@ live on the Night.
 
 ## Queue, in order
 
-1. **Tab through the panes flashes the composer** (found live, 2026-09-29; not yet investigated). Tabbing the
-   full cycle — search, chat log, composer, graph, and back to search — gives the composer the caret and its
-   blue glow for a frame or two on arrival at search. Shift+Tab does it too on reaching the search field, and
-   there the blue border appears only sometimes. A new form of what the 2026-09-28 Tab fixes addressed (see
-   *Done*, and `investigations/dpg-focus/`); the `dpg` skill routes to the notes on Tab reaching a global
-   handler and moving ImGui's nav after a programmatic focus.
-2. **Make `websearch` cancellable** — filed on the Night, 2026-09-25, in `TODO_DEFERRED.md`
+1. **Make `websearch` cancellable** — filed on the Night, 2026-09-25, in `TODO_DEFERRED.md`
    (`investigations/abort-inflight-request/`). **Wider than its title**: `webfetch` at least, and possibly
    other tools — survey them all when it is picked up (maintainer, 2026-09-28).
-3. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
+2. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.

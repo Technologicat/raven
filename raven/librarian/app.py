@@ -1620,7 +1620,15 @@ with timer() as tim:
                         with dpg.group(tag="chat_attachments_strip", horizontal=True, show=False):  # tag
                             pass
 
-                        with dpg.group(horizontal=True):  # composer toolbar
+                        # The composer toolbar, in a navigation scope of its own. The log and the graph park
+                        # focus on the send button in here, so ImGui's own Tab step starts from it; sharing a
+                        # scope with the composer, the step wrapped onto the composer and flashed its caret for a
+                        # frame whenever Tab left the log or the graph for the search field. With no text field
+                        # in this scope, the step has nowhere to land.
+                        with dpg.child_window(width=-1, auto_resize_y=True, border=False,
+                                              no_scrollbar=True, no_scroll_with_mouse=True,
+                                              flattened_navigation=False), \
+                             dpg.group(horizontal=True):
                             # Attach button — documents and images. Always enabled: a document works
                             # on any model (its text is folded into the prompt), so only images depend on vision
                             # capability, and that is enforced at routing time (`_attach_callback`) rather than by
