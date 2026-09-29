@@ -5057,6 +5057,11 @@ reuses the `common_utils.open_file` / `open_in_file_manager` provenance-button m
 attachments). Design questions when we get to it: where the affordance lives (per-message expander? a side
 panel?), and how much of the snippet vs. the whole document to show.
 
+**A piece exists as of 2026-09-29**: a `search_documents` tool result shows each match under a handle on its
+document (title, open, folder), from `docs_match_spans` in the tool node's metadata — `_render_document_reference`
+in `chat_controller`. What is still missing is the reply side: the automatic search's matches, recorded in the
+reply's `retrieval` field, have no handles. Brief 13 §4a would make that moot by retiring the automatic search.
+
 Discovered during the plain-text/PDF interlude (2026-07-18, requested by Juha).
 
 ## VLM reranking of mixed-modality search results (post-Nomic)

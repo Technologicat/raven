@@ -138,18 +138,41 @@ live on the Night.
   - And a graph search step rebuilt three times — cursor, then the graph's keyboard flag switched off and on by
     release-then-claim — each mid-morph rebuild restarting the morph. The claimant now names the pane it is
     claiming, which the release leaves alone: one rebuild per step.
+- **Document search results no longer flood the chat log** (2026-09-29). `search_documents` returned up to 50
+  matches of up to 2000 characters as one string, rendered in full — `k` = 50 is deliberate, being the one
+  retrieval knob that measurably mattered. Now a heading with the count and query, then one text part per
+  match; a long result opens collapsed to a handle on each match's document (title, open, folder — as
+  `fetch_document`'s) and a two-line snippet, cut inline as a websearch snippet is. Both search paths give
+  the model the same text (`chatutil.format_docs_search_result`).
+  - **Decided along the way**: B over A (an excerpt of the whole, which showed one match and a half) and over
+    C for now; the count in the heading rather than the tooltip, for model and reader alike; the snippet cut
+    by **character budget, not by sentence** — matches are sliding-window chunks that start mid-sentence
+    anyway, much of a corpus is not prose (BibTeX), and spaCy per match per render is a model call ×50
+    (maintainer agreed). If a snippet reads badly, snapping to a sentence end late in the budget is a regex,
+    as `excerpt` already snaps to a paragraph break.
+  - **C is expected next**: each match with its own toggle. Whether a part is shown whole is already asked
+    per part (`_part_shown_in_full`), so C replaces that and adds the buttons.
+  - The per-match handle is also a start on the deferred item on RAG citations' source files; a reply's own
+    citations are still open there.
+- **Also from the same live test, done**: empty send always answers the user's own last message (so a
+  question can be asked again after deleting its replies), whatever `llm_allow_empty_send` says; Ctrl+T now
+  closes a trace scrolled out of view (`is_item_shown`, not `is_item_visible` — swept for the pattern, which
+  found one more in the pose editor); `fetch_document`'s refusal names the unknown ID; a rescan repoints
+  documents whose recorded path is gone, which repaired the indexes v0.2.9's `llmclient/` → `librarian/`
+  move had stranded (2520 documents in one, no reindex).
+  - **Rejected**: a Raven-side per-extension override for the document open button, when `.bib` opened in
+    Zotero. Desktop file associations are the uniform way users know (maintainer).
+- **Brief 13 gained §4a** (2026-09-29): with a scope TOC published to the model, the automatic search goes
+  away. Not for this sprint.
 
 ## Queue, in order
 
-1. **Document search results flood the chat log** (found live, 2026-09-29). `search_documents` returns up to
-   50 matches of up to 2000 characters — k=50 is deliberate, being the one retrieval knob that measurably
-   mattered — as one text blob, rendered in full, since the collapse toggle applies only to documents
-   (`_document_body`). **Decided: B** — return one text part per match, as `websearch` does, and render the
-   collapsed state as one header line per match, with the existing chevron expanding to the full text; an
-   old single-blob result falls back to collapsing to an excerpt. Keep collapsibility a render-only notion,
-   apart from `_document_body`, which also drives copy and export. **Design for C later**: each match
-   expanding on its own, which the maintainer expects to want — so per-match state should be addressable by
-   part index rather than one flag per message.
+1. **Tab through the panes flashes the composer** (found live, 2026-09-29; not yet investigated). Tabbing the
+   full cycle — search, chat log, composer, graph, and back to search — gives the composer the caret and its
+   blue glow for a frame or two on arrival at search. Shift+Tab does it too on reaching the search field, and
+   there the blue border appears only sometimes. A new form of what the 2026-09-28 Tab fixes addressed (see
+   *Done*, and `investigations/dpg-focus/`); the `dpg` skill routes to the notes on Tab reaching a global
+   handler and moving ImGui's nav after a programmatic focus.
 2. **Make `websearch` cancellable** — filed on the Night, 2026-09-25, in `TODO_DEFERRED.md`
    (`investigations/abort-inflight-request/`). **Wider than its title**: `webfetch` at least, and possibly
    other tools — survey them all when it is picked up (maintainer, 2026-09-28).
