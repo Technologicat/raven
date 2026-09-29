@@ -121,27 +121,26 @@ live on the Night.
   `demolish` is now a teardown, container included, and `build` refuses a demolished instance, pointing at
   `rebuild_in_place` — the flicker-free redraw, which made a demolish-then-build cycle useless anyway
   (maintainer's call, over keeping the container for a rebuild). Confirmed live.
+- **`chat_controller.py` extractions** (2026-09-29): 6238 → 5237 lines. An analysis found about half of it in
+  blocks with narrow interfaces, and the rest Kolmogorov-hard (`ai_turn`'s closures, the message rendering
+  core, the view's scrolling) — worth doing even so, since the prose around parenthetical material is its own
+  cognitive load (maintainer). Rejected as low value for the untangling: context fill, the per-message button row.
+  - `messagetext` (formatters, copy/export text; DPG-free, tests now in CI); `layout_math.decide_tail_follow`
+    (fuzz-checked equivalent); `chattextures` (`SpeakerGlyphs`, `AttachmentTextures`; tags now unique per
+    instance; glyphs looked up by name for the AI as for the user — maintainer's review); `chatlog_search`
+    (`DPGChatLogSearch`, given the chat graph panel's search interface, so the app builds one query for both).
+  - Also: a view rebuild now demolishes the messages it drops, so `get_current_message`'s promise holds.
+- **Found in live testing the same day, and fixed**: a failed webfetch named no URL (every webfetch result now
+  opens "Webfetch result for" + URL — "for", since the result may be an error; maintainer); a chat graph
+  search step sometimes glided past its match (a rebuild mid-morph shifted the pan's destination by the morph
+  still to run — `XDotWidget.set_graph`); committing a graph box with a thinking-trace hit did not open the
+  trace (a stored message's paragraphs spent the request while it was still being built).
+  - Noticed, not acted on: a graph search step rebuilds three times (cursor, then `_set_has_keyboard` twice via
+    `_give_keyboard_to_graph`), and each mid-morph rebuild restarts the morph. Offered, undecided.
 
 ## Queue, in order
 
-1. **`chat_controller.py` extractions** (2026-09-29, ~6.2k lines, 2929 SLOC). An analysis found about half of
-   it in blocks with narrow interfaces, and the rest Kolmogorov-hard: `ai_turn`'s closures, the message
-   rendering core, the view's scrolling. Worth doing even so, since the prose around parenthetical material
-   is its own cognitive load (maintainer). In order:
-   1. **The formatters** (`format_*`, `_incompleteness_note`, `_node_is_unfinished`, …, 102 SLOC, no DPG)
-      **and the copy/export text shaping** (`_document_body`, `_clipboard_text`, `_export_text`,
-      `_format_for_clipboard`, as functions over the datastore and node), into a DPG-free module — so their
-      tests can run in CI, where `test_chat_controller.py` skips today.
-   2. **The tail-follow decision** in `should_follow_tail`, as a pure function beside `layout_math`-style
-      helpers: the bug-prone core, untestable today without rendered frames.
-   3. **The texture and thumbnail cache**, as its own class held by the controller (~180 SLOC).
-   4. Possibly **the search GUI side**, as a companion to `chatsearch` (175 SLOC; `app.py` reads ~8 search
-      attributes directly, which need re-routing).
-
-   Rejected as low value for the untangling: context fill, and the per-message button row. Also found: the
-   view's `build` drops its messages without demolishing them, so they keep stale widget ids while
-   `get_current_message`'s docstring promises `None`. Fix agreed: `build` demolishes what it drops.
-2. **Document search results flood the chat log** (found live, 2026-09-29). `search_documents` returns up to
+1. **Document search results flood the chat log** (found live, 2026-09-29). `search_documents` returns up to
    50 matches of up to 2000 characters — k=50 is deliberate, being the one retrieval knob that measurably
    mattered — as one text blob, rendered in full, since the collapse toggle applies only to documents
    (`_document_body`). **Decided: B** — return one text part per match, as `websearch` does, and render the
@@ -150,9 +149,9 @@ live on the Night.
    apart from `_document_body`, which also drives copy and export. **Design for C later**: each match
    expanding on its own, which the maintainer expects to want — so per-match state should be addressable by
    part index rather than one flag per message.
-3. **Make `websearch` cancellable** — filed on the Night, 2026-09-25, in `TODO_DEFERRED.md`
+2. **Make `websearch` cancellable** — filed on the Night, 2026-09-25, in `TODO_DEFERRED.md`
    (`investigations/abort-inflight-request/`). **Wider than its title**: `webfetch` at least, and possibly
    other tools — survey them all when it is picked up (maintainer, 2026-09-28).
-4. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
+3. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.
