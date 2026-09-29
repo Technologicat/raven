@@ -608,30 +608,35 @@ low rate is equally consistent with a judge that is too lenient. To do when the 
 
 The counts per stage, from the files in this directory: 5167 after deduplication, 853 set aside as
 unscreenable, 4314 judged, **1084 dropped by the judge** (25%), 264 more removed by the field filter
-(`filtered-out.tsv`), 2966 left. **The stage under suspicion is the field filter** (Juha, 2026-09-29):
-the judge's 25% is plausible, and the filter's 264 of the judge's 3230 keeps is 8%.
+(`filtered-out.tsv`), 2966 left. The judge's 25% is plausible; the field filter's 264 of the judge's
+3230 keeps, 8%, is the figure that looks low (Juha, 2026-09-29).
 
-So both checks below point at the filter. The sample is drawn from the final 2966, which is what the
-filter kept. Planted records go into the extractor's input rather than the judge's, so that what gets
-measured is the filter's sensitivity and not the judge's.
+**But every stage gets checked, not only the filter** (Juha, 2026-09-29). How reliable an AI-based
+research pipeline is is itself one of the methodology questions the project is asking, so a measured
+error rate per stage is a result in its own right, not only a diagnosis of the suspect one.
 
-Everything measured so far audits the *drops* — the reviewer, the escalation check — because a drop
-carries a reason and a keep does not. The question now is about the keeps, and two checks would give
-evidence either way. **Both are agreed as the design** (Juha, 2026-09-29), to run when the dataset is
-next opened:
+Everything measured so far audits the judge's *drops* — the reviewer, the escalation check — because a
+drop carries a reason and a keep does not. Nothing yet audits any stage's keeps, nor the filter's
+removals. Two checks, **agreed as the design** (Juha, 2026-09-29), to run when the dataset is next opened,
+each applied per stage:
 
-- **A hand-checked random sample of the keeps**, by the researchers, who can judge scope better than
-  anyone here. The number of off-topic records found among `n` gives a posterior on the leak rate
-  directly — with a uniform prior, Beta(`k`+1, `n`−`k`+1) — and even finding none bounds it: zero in
-  `n` puts the 95% upper bound at about 3/`n` (the rule of three), so a hundred records rules out a leak
-  much above 3%.
-- **Planted records, as a positive control on the judge itself.** Mix records known to be off topic
-  into the input, unlabelled, and see whether the judge drops them. The known-off-topic set can be taken
-  from another corpus, or can be real off-topic records from this one, found by the sample above. If the
-  judge keeps the planted ones, its low drop rate says nothing about the search; if it drops them, the
-  low rate is evidence that the search is good. Planted records should resemble the corpus's own
-  failure shapes (a term used in another sense, a study set outside higher education) — a planted
-  record that is obviously unrelated tests only the easy case.
+- **A hand-checked random sample of what each stage passed on**, by the researchers, who can judge scope
+  better than anyone here. The number of off-topic records found among `n` gives a posterior on that
+  stage's leak rate directly — with a uniform prior, Beta(`k`+1, `n`−`k`+1) — and even finding none
+  bounds it: zero in `n` puts the 95% upper bound at about 3/`n` (the rule of three), so a hundred
+  records rules out a leak much above 3%. The same arithmetic applies to a sample of each stage's
+  *removals*, for the opposite error.
+- **Planted records, as a positive control on each model-driven stage.** Mix records known to be off
+  topic into that stage's input, unlabelled, and see whether it removes them: the judge's input for the
+  judge, the extractor's for the field filter, so that each measurement is of one stage and not of the
+  ones before it. If a stage keeps the planted records, its low removal rate says nothing about the
+  search; if it removes them, the low rate is evidence that the search is good. The known-off-topic set
+  can be taken from another corpus, or be real off-topic records from this one, found by the samples
+  above. They should resemble the corpus's own failure shapes (a term used in another sense, a study
+  set outside higher education) — a planted record that is obviously unrelated tests only the easy case.
+
+The sift is deterministic, so planting tests nothing there that its code does not already say; a sample
+of what it set aside checks whether its criteria remove records a reviewer could in fact have screened.
 
 ## Where this is headed: a `raven.papers` corpus filter
 
