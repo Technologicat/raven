@@ -22,7 +22,7 @@ It sits one level above `raven.librarian.agent` (brief 15). That surface answers
 what happened"; this answers "run one turn per document over two thousand documents, and survive the
 afternoon."
 
-## Why now: six users, none of which knew about the others
+## Why now: seven users, none of which knew about the others
 
 Each surfaced from a different direction. That is the pattern that says a shared primitive is missing,
 rather than six features being wanted.
@@ -46,6 +46,12 @@ rather than six features being wanted.
    memory and nothing on disk.
 6. **Two shapes found while implementing brief 15** — a VLM pass over page images, and "here is a fulltext
    PDF, what does it say about X?" over a set. Brief 15 names the batch mechanics of both as this work.
+7. **A title for every document, upon import** (Juha, 2026-09-29). `chatutil.document_label` names a document
+   from its own content — exact for a BibTeX record, and for anything else the first substantial line, which
+   is weak on fulltext and on fiction. Since 2026-09-29 that label is on every document search match's handle
+   in the chat log, so where it is weak the reader sees it. An LLM asked for the title once per document at
+   import, stored with the document, would make the label good in the general case. Waits for the unified DB
+   (brief 13), where the import is.
 
 Corpus sizes make several of these concrete rather than prospective: ~12k hydrogen abstracts already
 ingested, ~2500 one-page ECCOMAS 2024 conference abstracts, an arXiv AI fulltext set of 1200+ full papers.
@@ -66,7 +72,7 @@ belongs to that sketch.
 
 ### Resume is the load-bearing feature
 
-Everything else here is convenience; resume is what makes an hour-long run survivable. Two of the six users
+Everything else here is convenience; resume is what makes an hour-long run survivable. Two of the seven users
 exist *only* because it is missing.
 
 The shape follows from what already works: `rag_live_corpus` keeps a JSONL ledger beside a
