@@ -115,14 +115,44 @@ live on the Night.
      - **The count reads "(3 revisions)", right after the `R` link** (2026-09-29), where it had been
        "(3 revisions available)" after the model name. Rejected: `R2/3`, since revision numbers stay unique
        after a deletion — a message holding R1 and R3 would read `R3/2` (maintainer).
+- **Rerolling a tool-calling reply no longer leaves a gap** (2026-09-29). `DPGChatMessage.demolish` emptied a
+  message's container and left it standing, and an empty DPG group still takes 4 px of item spacing
+  (measured), so each message a reroll rewound left 4 px behind, as did every finished streaming message.
+  `demolish` is now a teardown, container included, and `build` refuses a demolished instance, pointing at
+  `rebuild_in_place` — the flicker-free redraw, which made a demolish-then-build cycle useless anyway
+  (maintainer's call, over keeping the container for a rebuild). Confirmed live.
 
 ## Queue, in order
 
-1. **The two items filed on the Night, 2026-09-25** (added 2026-09-28, after message editing): in
-   `TODO_DEFERRED.md`, rerolling a tool-calling reply can leave the vertical spacing wrong, and making
-   `websearch` cancellable (`investigations/abort-inflight-request/`). **The second is wider than its
-   title**: `webfetch` at least, and possibly other tools — survey them all when it is picked up
-   (maintainer, 2026-09-28).
-2. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
+1. **`chat_controller.py` extractions** (2026-09-29, ~6.2k lines, 2929 SLOC). An analysis found about half of
+   it in blocks with narrow interfaces, and the rest Kolmogorov-hard: `ai_turn`'s closures, the message
+   rendering core, the view's scrolling. Worth doing even so, since the prose around parenthetical material
+   is its own cognitive load (maintainer). In order:
+   1. **The formatters** (`format_*`, `_incompleteness_note`, `_node_is_unfinished`, …, 102 SLOC, no DPG)
+      **and the copy/export text shaping** (`_document_body`, `_clipboard_text`, `_export_text`,
+      `_format_for_clipboard`, as functions over the datastore and node), into a DPG-free module — so their
+      tests can run in CI, where `test_chat_controller.py` skips today.
+   2. **The tail-follow decision** in `should_follow_tail`, as a pure function beside `layout_math`-style
+      helpers: the bug-prone core, untestable today without rendered frames.
+   3. **The texture and thumbnail cache**, as its own class held by the controller (~180 SLOC).
+   4. Possibly **the search GUI side**, as a companion to `chatsearch` (175 SLOC; `app.py` reads ~8 search
+      attributes directly, which need re-routing).
+
+   Rejected as low value for the untangling: context fill, and the per-message button row. Also found: the
+   view's `build` drops its messages without demolishing them, so they keep stale widget ids while
+   `get_current_message`'s docstring promises `None`. Fix agreed: `build` demolishes what it drops.
+2. **Document search results flood the chat log** (found live, 2026-09-29). `search_documents` returns up to
+   50 matches of up to 2000 characters — k=50 is deliberate, being the one retrieval knob that measurably
+   mattered — as one text blob, rendered in full, since the collapse toggle applies only to documents
+   (`_document_body`). **Decided: B** — return one text part per match, as `websearch` does, and render the
+   collapsed state as one header line per match, with the existing chevron expanding to the full text; an
+   old single-blob result falls back to collapsing to an excerpt. Keep collapsibility a render-only notion,
+   apart from `_document_body`, which also drives copy and export. **Design for C later**: each match
+   expanding on its own, which the maintainer expects to want — so per-match state should be addressable by
+   part index rather than one flag per message.
+3. **Make `websearch` cancellable** — filed on the Night, 2026-09-25, in `TODO_DEFERRED.md`
+   (`investigations/abort-inflight-request/`). **Wider than its title**: `webfetch` at least, and possibly
+   other tools — survey them all when it is picked up (maintainer, 2026-09-28).
+4. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.
