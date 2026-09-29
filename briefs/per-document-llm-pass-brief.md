@@ -108,6 +108,40 @@ Not all failures are the same and the item's three deferred questions are really
 Conflating the first two is the current failure mode: a batch run against a dead backend produces a
 thousand "failed" documents that were never tried properly.
 
+## Decided 2026-09-29
+
+Six of the seven questions below, settled in discussion with Juha. Question 5 is the one still open.
+
+- **Where it lives (1): a sibling module of `raven.librarian.agent`**, built on `agent.ask`. The name is
+  still open, to come from what the module turns out to do. The AOKK scripts already import `agent` from
+  outside the librarian package, so that dependency direction is in use.
+- **The ledger (2): one JSONL for results and progress together**, appended one line per item as each
+  answer arrives, a later line for an item superseding an earlier one. Reasoning traces go to a sidecar
+  file beside it. This is the AOKK scripts' format, run there over about 4300 records.
+- **The cache key (3): a caller-supplied item id plus an instrument fingerprint.** The id is whatever the
+  caller has — citekey, path, content hash. The fingerprint hashes the prompt and anything else that
+  decides what an answer means, and goes into the filename as well as into each line
+  (`extract_fields.py`, `instrument_fingerprint`).
+- **The backend policy (4): on any failure, probe the backend once, and stop if it is the backend.**
+  `llmclient.reconnect(settings)` re-probes and returns a `backend_status`. Anything other than
+  `backend_ready` stops the run, with `describe_backend_status`'s message, which is the wording batch
+  tools already use. `backend_ready` means the fault was the document's: record it and go on.
+  - **Stopping, not waiting, is the policy** (Juha). Against a local backend a failure usually means it
+    stays down until the operator looks at it, and a batch run is typically one they have walked away
+    from, so a retry loop would be waiting on nobody.
+  - **Resume or restart stops being a question.** Resuming is re-running the same command: the ledger
+    skips what is done, and a document recorded as failed is retried.
+  - No thresholds are needed — no count of consecutive failures, no timeout to tune.
+- **The first user (6): a port of `investigations/aokk-corpus-scope/extract_fields.py`**, not
+  `raven-pdf2bib`. It is 363 lines against 1058, and its outputs are on disk, so re-running it on the
+  primitive has a reference to compare against. `raven-pdf2bib` follows, as the heavier test.
+- **Batching (7): the unit of work is a function from a list of items to `{id: answer}`**, with the batch
+  size a parameter and the ordinary per-document case a batch of one. The ledger stays per item, and a
+  failed batch is recorded as that many failed items, all retried on the next run.
+
+**Still open (5): progress reporting.** A callback in the shape of `agent.stream_log` and `on_progress` is
+the starting point; read how `summarize` does it in the importer before designing.
+
 ## What this brief must settle before implementation
 
 1. **Where it lives, and its name.** Beside `agent` as a sibling module, or as a layer in the same file.
