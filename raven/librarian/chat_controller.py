@@ -16,27 +16,10 @@ __all__ = ["DPGChatMessage",
 import logging
 logger = logging.getLogger(__name__)
 
-# Marks a chat-graph thumbnail cache key as "a file-type icon" rather than "this image's own
-# pixels". Every document of one type then shares a texture, where images are content-addressed
-# and are their own identity. See `DPGChatController.graph_thumbnail_identity`.
-_DOCUMENT_ICON_PREFIX = "icon:"
-
-# Short edge, in pixels, at which a chat-graph thumbnail's mip chain stops halving. Far below the
-# resampler's default of sixty-four, because the coarsest level has to cover the *smallest* a card is
-# drawn at: zoom-to-fit on a real conversation lands around 0.2, which puts a 55-unit card at some 11
-# pixels, and a graph wider than that goes lower still.
-#
-# **Gated on the short edge, which is why this is 4 rather than 8.** A 4:1 screenshot's chain stops when
-# its short edge would go under the bound, so the long edge -- the one a card is drawn to -- is still
-# four times it. The levels this buys are together well under a percent of the finest one's pixels; what
-# they cost is a DPG texture apiece.
-_GRAPH_THUMBNAIL_MIN_MIP = 4
-
 import concurrent.futures
 import dataclasses
 import io
 import pathlib
-import os
 import threading
 import time
 from typing import Any, Callable, TYPE_CHECKING
@@ -51,7 +34,6 @@ from unpythonic.env import env
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
 from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
-from ..vendor.file_dialog import fdialog  # for the file-type icons a document attachment is drawn as
 
 # `raven.client.api` imports torch and spaCy at module scope, and `avatar_controller` reaches it, so a
 # module-level import of either drags the whole ML stack in — and with it, the reason this module's tests
@@ -85,13 +67,13 @@ from ..common.gui import utils as guiutils
 from ..common.gui import widgetfinder
 
 from . import chatsearch
+from . import chattextures
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
 from . import hybridir
 from . import llmclient
 from . import messagetext
-from . import userprofile
 from . import scaffold
 from . import sidecarstore
 from . import textfilestore
@@ -429,7 +411,7 @@ class DPGChatMessage:
                                          height=(2 * gui_config.margin + gui_config.chat_icon_size),
                                          tag=f"chat_icon_drawlist_{self.gui_uuid}",
                                          parent=icon_group)  # empty drawlist acts as placeholder if no icon
-        icon_texture = self.parent_view.chat_controller.icon_texture_for(role, persona)
+        icon_texture = self.parent_view.chat_controller.speaker_glyphs.icon_texture_for(role, persona)
         if icon_texture is not None:
             dpg.draw_image(icon_texture,
                            (gui_config.margin, gui_config.margin),
@@ -2159,7 +2141,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
             return  # only local sidecar refs are resolvable here; skip anything else (forward-compat)
         filename = url[len(sidecarstore.SIDECAR_SCHEME):]
         meta = sidecars_meta.get(filename) or {}
-        texture = self.parent_view.chat_controller.get_inline_image_texture(filename)
+        texture = self.parent_view.chat_controller.attachment_textures.inline_image(filename)
         datastore = self.parent_view.chat_controller.datastore
         with self.paragraphs_lock:
             if texture is None:
@@ -3631,108 +3613,6 @@ class DPGLinearizedChatView:
 # Scaffold to GUI integration
 
 class DPGChatController:
-    class_lock = threading.RLock()
-    _class_initialized = False
-    @classmethod
-    def _load_class_textures(cls):
-        """Load textures common to all instances of this class."""
-        with cls.class_lock:
-            if cls._class_initialized:
-                return
-            # Initialize textures.
-            with dpg.texture_registry(tag="librarian_chat_controller_textures"):
-                w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "system.png")).expanduser().resolve()))
-                cls.icon_system_texture = dpg.add_static_texture(w, h, data, tag="icon_system_texture")
-
-                w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "tool.png")).expanduser().resolve()))
-                cls.icon_tool_texture = dpg.add_static_texture(w, h, data, tag="icon_tool_texture")
-
-                w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "user.png")).expanduser().resolve()))
-                cls.icon_user_texture = dpg.add_static_texture(w, h, data, tag="icon_user_texture")
-
-                w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "ai.png")).expanduser().resolve()))   # generic AI icon
-                cls.icon_ai_texture = dpg.add_static_texture(w, h, data, tag="icon_ai_texture_generic")
-            cls._class_initialized = True
-
-    def _load_instance_textures(self,
-                                avatar_image_path: str | pathlib.Path | None,
-                                user_name: str | None):
-        """Load instance-specific textures: the chat glyphs the configured pair speak under.
-
-        `avatar_image_path`: Path to the main character image of the AI's avatar.
-                             Used for detecting the presence of a per-character icon.
-
-                             If no per-character icon exists for this character,
-                             a generic AI icon is used.
-
-        `user_name`: The configured user's name, i.e. `llm_user_name`. Used for finding their profile's
-                     icon, if they declared one. Without a profile, or without an icon in it, the generic
-                     user glyph is used.
-
-        **Both sides, symmetrically.** The AI's face and the user's are found the same way — an `_icon.png`
-        beside the thing that declares them — because a conversation has two participants and decorating
-        only one of them is a distinction the chat log has no reason to draw.
-        """
-        # Prefer per-character icon, if available. This intentionally shadows `type(self).icon_ai_texture`.
-        character_dir = avatar_image_path.parent
-        basename = os.path.basename(str(avatar_image_path))  # e.g. "/foo/bar/example.png" -> "example.png"
-        stem, ext = os.path.splitext(basename)  # -> "example", ".png"
-        character_icon_path = character_dir / f"{stem}_icon{ext}"
-        if character_icon_path.exists():
-            w, h, c, data = dpg.load_image(str(character_icon_path))
-            self.icon_ai_texture = dpg.add_static_texture(w, h, data, tag=f"icon_ai_texture_0x{id(self):x}", parent="librarian_chat_controller_textures")  # tag
-
-        # Prefer the configured user's own icon, if their profile declares one. Shadows the class
-        # attribute exactly as the character's icon does above.
-        profile = userprofile.find(user_name)
-        if profile is not None and profile.icon_path is not None:
-            w, h, c, data = dpg.load_image(str(profile.icon_path))
-            self.icon_user_texture = dpg.add_static_texture(w, h, data, tag=f"icon_user_texture_0x{id(self):x}", parent="librarian_chat_controller_textures")  # tag
-
-        # The glyphs for the roles whose speaker cannot vary. Private, and deliberately holding neither an
-        # "assistant" nor a "user" entry: a table keyed by role has exactly one slot per role, so every
-        # stored message drawn from it wears whoever is configured now. Ask `icon_texture_for`, which
-        # takes the message's own persona as well.
-        self._role_icon_textures = {"system": self.icon_system_texture,
-                                    "tool": self.icon_tool_texture,
-                                    }
-
-    def icon_texture_for(self,
-                         role: str,
-                         persona: str | None) -> int | str | None:
-        """Return the speaker glyph for a message written by `persona` in `role`. `None` draws no glyph.
-
-        `role`: One of "assistant", "system", "tool", "user".
-        `persona`: The name *stored with that message*, or `None` where the role has none. Not the
-                   configured one: a chat may hold turns by several characters, and by a user under
-                   another name, and whoever is configured now is not who wrote the older messages.
-
-        Satisfies `chatgraph.IconFor`, and is what both views ask — the chat log draws one message's glyph,
-        the graph draws a branch of them at once, and a rule applied in only one of them would be visible
-        as a disagreement between the two.
-
-        **Two of the four roles have a speaker and two do not.** A system prompt and a tool result are
-        nobody's, so one glyph each is the whole answer; an assistant message and a user message are
-        somebody's, and are resolved the same way below.
-        """
-        if role not in ("assistant", "user"):
-            return self._role_icon_textures.get(role)
-
-        # Whoever is *configured* gets their own icon where they have declared one; everybody else gets
-        # the generic glyph for their role. Only the configured pair can be placed, because their icons
-        # are loaded once at construction — and drawing a stored message as somebody it was not written
-        # by is the one outcome that must not happen, which is what the fallback is for.
-        if role == "assistant":
-            configured, own, generic = (self.llm_settings.personas.get("assistant"),
-                                        self.icon_ai_texture, type(self).icon_ai_texture)
-        else:
-            configured, own, generic = (self.llm_settings.personas.get("user"),
-                                        self.icon_user_texture, type(self).icon_user_texture)
-        # `own` is the instance attribute, which `_load_instance_textures` shadows over the class one when
-        # a per-character or per-user icon was found; where it did not, the two are the same object and
-        # this comes out as the generic glyph either way.
-        return own if (persona is not None and persona == configured) else generic
-
     def __init__(self,
                  llm_settings: env,
                  datastore: chattree.Forest,
@@ -3740,7 +3620,7 @@ class DPGChatController:
                  app_state: env,
                  avatar_controller: "DPGAvatarController",
                  avatar_record: env,
-                 avatar_image_path: str | pathlib.Path | None,
+                 avatar_image_path: str | pathlib.Path,
                  themes_and_fonts: env,
                  chat_panel_widget: str | int,
                  chat_stop_generation_button_widget: str | int,
@@ -3872,26 +3752,9 @@ class DPGChatController:
 
         `executor`: A `ThreadPoolExecutor` or something duck-compatible with it. Used for background tasks.
         """
-        type(self)._load_class_textures()
-        self._load_instance_textures(avatar_image_path, llm_settings.personas.get("user"))
-
-        # Inline chat-image thumbnails get their own texture registry, separate from the role-icon textures
-        # (`librarian_chat_controller_textures`). Cached by sidecar filename so an image referenced by several
-        # messages — or re-encountered on a view rebuild — decodes and uploads once. The textures live for the
-        # controller's lifetime and are never deleted (which also sidesteps the Nvidia/Linux texture-delete
-        # segfault). The lock serializes get-or-create so two concurrent message builds can't both try to
-        # create the same-tagged texture (a duplicate DPG tag crashes the process, not raises).
-        self._inline_image_texture_registry = dpg.add_texture_registry(tag="librarian_chat_inline_image_textures")  # tag
-        self._inline_image_textures = {}  # {sidecar_filename: env(texture_tag, w, h)}
-        self._inline_image_lock = threading.RLock()
-        # The chat graph's thumbnails, which are the same sidecars at a different size -- so a cache of
-        # their own, keyed by both. A lock of its own too: the chat log's cache is read from a message
-        # build and this one from the render thread, and there is no reason for either to wait on the
-        # other.
-        self._graph_thumbnail_textures = {}  # {(sidecar_filename, size): texture_tag}
-        self._graph_thumbnail_pending = set()  # keys a background task is currently preparing
-        self._graph_thumbnail_failed = set()  # keys that could not be prepared, so nothing retries forever
-        self._graph_thumbnail_lock = threading.Lock()
+        # Whose glyph each message wears. Asked by both views — the chat log here, the chat graph through the
+        # app — so that they cannot disagree about who wrote a message.
+        self.speaker_glyphs = chattextures.SpeakerGlyphs(llm_settings, avatar_image_path, llm_settings.personas.get("user"))
 
         self.llm_settings = llm_settings
         self.datastore = datastore
@@ -3982,6 +3845,8 @@ class DPGChatController:
         self.task_manager = bgtask.TaskManager(name="librarian_chat_controller",  # for most tasks
                                                mode="concurrent",
                                                executor=executor)
+        # The pictures attachments show as, in the chat log and in the chat graph.
+        self.attachment_textures = chattextures.AttachmentTextures(datastore, self.task_manager)
         # Its own manager so that a send counts as in flight from the moment it is accepted: the exchange runs the
         # user's turn before it submits the AI's, and a second send arriving in between would otherwise pass the
         # gate and start a second AI turn on top of the first.
@@ -4706,166 +4571,6 @@ class DPGChatController:
         target = message.gui_keyboard_mark_widget if message is not None else None
         self._current_message_mark.target = target
         self._current_message_mark.lit = (target is not None)
-
-    def get_inline_image_texture(self, filename: str) -> env | None:
-        """Return a cached DPG texture for the chat sidecar `filename`, creating it on first use.
-
-        Reads the sidecar bytes, downsamples to a thumbnail that fits the inline display box
-        (`gui_config.chat_inline_image_h` × `chat_inline_image_w`, aspect preserved, never upscaled), uploads a
-        static texture into the controller's inline-image registry, and caches it by filename — so the same
-        image referenced by several messages, or re-encountered on a view rebuild, decodes once. Returns an
-        `env(texture_tag, w, h)`, or `None` if the sidecar is missing or can't be decoded.
-
-        Safe to call from a message-build background thread: texture creation is serialized (a duplicate DPG tag
-        would crash the process), and two `split_frame`s after a fresh upload let DPG process the new texture
-        before it is first drawn. (DPG defers the OpenGL upload to a render frame; a single wait empirically
-        isn't enough — see dpg-notes.md "Texture upload ordering". A `static_texture` is correct here because
-        these thumbnails are permanent — cached for the controller's lifetime, never deleted.)
-        """
-        with self._inline_image_lock:
-            cached = self._inline_image_textures.get(filename)
-            if cached is not None:
-                return cached
-            try:
-                from ..common.image import codec  # deferred: pulls torch / Pillow only when an image is shown
-                from ..common.image import utils as image_utils
-                raw = self.datastore.read_sidecar(filename)
-                arr = image_utils.ensure_rgba(codec.decode(raw))  # (H, W, 4) uint8
-                tensor = image_utils.np_to_tensor(arr, device="cpu")  # (1, 4, H, W) float32
-                tensor = image_utils.fit_contain(tensor,  # no upscale: a small image shows at native size
-                                                 gui_config.chat_inline_image_h,
-                                                 gui_config.chat_inline_image_w)
-                disp_h, disp_w = int(tensor.shape[2]), int(tensor.shape[3])
-                flat = image_utils.tensor_to_dpg_flat(tensor)  # flat float32 RGBA in [0, 1]
-                texture_tag = f"chat_inline_image_{filename}"  # tag  # filename is a content-addressed sha256.ext, so unique
-                dpg.add_static_texture(disp_w, disp_h, flat,
-                                       tag=texture_tag,  # tag
-                                       parent=self._inline_image_texture_registry)
-                dpg.split_frame()  # trigger the deferred OpenGL upload...
-                dpg.split_frame()  # ...and ensure it completed before the image widget draws it (single wait isn't enough; dpg-notes.md)
-                result = env(texture_tag=texture_tag, w=disp_w, h=disp_h)
-                self._inline_image_textures[filename] = result
-                return result
-            except Exception as exc:  # noqa: BLE001 -- a broken sidecar must not break rendering the rest of the chat
-                logger.error(f"DPGChatController.get_inline_image_texture: failed to load sidecar '{filename}': {type(exc)}: {exc}")
-                return None
-
-    @staticmethod
-    def graph_thumbnail_identity(filename: str) -> str:
-        """What two attachments must share for one prepared thumbnail to serve both.
-
-        A picture is its own subject, and sidecar names are content-addressed, so an image is its own
-        identity and the same bytes attached twice decode once. A *document* has no picture: it is drawn
-        as its file type's icon, so every PDF in the datastore is one texture rather than one each.
-
-        The type icons and the mapping onto them are the file dialog's — the same picture for the same
-        kind of file, wherever in Raven it appears. `.pdf` maps to nothing there on purpose (there is no
-        presentation icon either, and the generic document is the right picture for all of them), which is
-        what the fallback is for.
-        """
-        from ..common.image import codec  # deferred, as the decode below is
-        if os.path.splitext(filename)[1].lower() in codec.IMAGE_EXTENSIONS:
-            return filename
-        return f"{_DOCUMENT_ICON_PREFIX}{fdialog.icon_name_for_extension(filename) or 'document'}"
-
-    def get_graph_thumbnail_texture(self, filename: str, size: float) -> env | None:
-        """Return the chat graph's thumbnail of sidecar `filename`, or `None` if it is not ready.
-
-        `size`: The longest edge to prepare the *finest* level at, in pixels. Part of the cache key, so
-                the same image can be held at the chat log's inline size and at the graph's at once.
-
-        Returns an `env(levels)`: the mip chain as `(width, height, texture_tag)` triples, finest first.
-        A chain rather than one texture because the graph zooms continuously, and dimensions per level
-        because the graph draws the picture at its own proportions and cannot ask a texture how big it
-        is — see `_prepare_graph_thumbnail`.
-
-        **Never blocks, and `None` is an ordinary answer rather than a failure.** The graph rebuilds from
-        its animator hook, which runs on the render thread, and preparing a texture needs `split_frame` --
-        which deadlocks there. So a miss queues the work and answers `None`; the graph draws an empty frame
-        meanwhile, and the panel notices when the answer changes.
-
-        An attachment that cannot be prepared is remembered as such, so a broken sidecar costs one attempt
-        rather than one per rebuild for the life of the session.
-        """
-        key = (self.graph_thumbnail_identity(filename), size)
-        with self._graph_thumbnail_lock:
-            cached = self._graph_thumbnail_textures.get(key)
-            if cached is not None or key in self._graph_thumbnail_failed:
-                return cached
-            if key in self._graph_thumbnail_pending:
-                return None
-            self._graph_thumbnail_pending.add(key)
-        self.task_manager.submit(lambda task_env: self._prepare_graph_thumbnail(key, filename, size, task_env),
-                                 env())
-        return None
-
-    def _prepare_graph_thumbnail(self, key: tuple, filename: str, size: float, task_env: env) -> None:
-        """Turn one attachment into a mip chain of graph textures. Runs on a background thread.
-
-        A chain rather than one texture because the graph zooms continuously and DPG samples
-        nearest-neighbour, so the size a card is drawn at is not known here: the finest level is prepared
-        at `size` and the renderer draws whichever level suits the card on screen.
-
-        Uploading the whole chain before publishing any of it is what keeps the graph from drawing a
-        half-arrived picture — the shape reads its levels without a lock, one rebuild at a time.
-        """
-        try:
-            if task_env.cancelled:  # shutdown, most likely; the pending mark is cleared in `finally`
-                return
-            from ..common.image import codec  # deferred: pulls torch / Pillow only when an image is shown
-            from ..common.image import lanczos
-            from ..common.image import utils as image_utils
-            identity = key[0]
-            if identity.startswith(_DOCUMENT_ICON_PREFIX):
-                # A document has no picture, so it gets its type's icon. Read from the file dialog's own
-                # assets rather than copied, so the two views cannot come to disagree about what a `.bib`
-                # file looks like.
-                icon_path = os.path.join(fdialog.IMAGES_DIR,
-                                         f"{identity[len(_DOCUMENT_ICON_PREFIX):]}.png")
-                with open(icon_path, "rb") as icon_file:
-                    raw = icon_file.read()
-            else:
-                raw = self.datastore.read_sidecar(filename)
-            arr = image_utils.ensure_rgba(codec.decode(raw))  # (H, W, 4) uint8
-            tensor = image_utils.np_to_tensor(arr, device="cpu")  # (1, 4, H, W) float32
-            # Aspect preserved, and never upscaled: `fit_contain` scales the whole image to fit the box
-            # and hands back its own dimensions, which the graph then draws it at. Squaring it here would
-            # stretch a wide photograph into a square one, which is a lie about the picture and looks like
-            # one -- the *card* is square, and the picture is letterboxed inside it.
-            tensor = image_utils.fit_contain(tensor, int(size), int(size))
-            # Down to a level small enough for the card at the zooms a whole conversation is read at: a
-            # card is some 55 graph units across, so an overview at 0.25 draws it at 14 pixels.
-            levels = lanczos.mipchain(tensor, min_size=_GRAPH_THUMBNAIL_MIN_MIP)
-            del tensor
-            # Uploaded as a set, with no cancellation check in between, so that the tags this run claims
-            # are either all registered or none: a duplicate DPG tag crashes the process rather than
-            # raising, which makes a half-registered chain the expensive kind of leftover. The loop is a
-            # few array conversions -- the decode and the resize, which are what a shutdown wants to cut
-            # short, are already done above.
-            uploaded = []
-            for index, level in enumerate(levels):
-                level_h, level_w = int(level.shape[2]), int(level.shape[3])
-                flat = image_utils.tensor_to_dpg_flat(level)  # flat float32 RGBA in [0, 1]
-                # One tag per (cache key, level). The suffix is the level index rather than its size:
-                # two levels of a very wide picture can share a short edge, and a size-named tag would
-                # then collide -- which crashes the process rather than raising.
-                texture_tag = f"chat_graph_thumbnail_{int(size)}_{identity}_mip{index}"  # tag
-                dpg.add_static_texture(level_w, level_h, flat,
-                                       tag=texture_tag,  # tag
-                                       parent=self._inline_image_texture_registry)
-                uploaded.append((level_w, level_h, texture_tag))
-            del levels
-            dpg.split_frame()  # trigger the deferred OpenGL upload...
-            dpg.split_frame()  # ...and ensure it completed before the graph draws it (dpg-notes.md, "Texture upload ordering")
-            with self._graph_thumbnail_lock:
-                self._graph_thumbnail_textures[key] = env(levels=tuple(uploaded))
-        except Exception as exc:  # noqa: BLE001 -- a broken sidecar must not break the graph
-            logger.error(f"DPGChatController._prepare_graph_thumbnail: failed to prepare '{filename}' at {size}: {type(exc)}: {exc}")
-            with self._graph_thumbnail_lock:
-                self._graph_thumbnail_failed.add(key)
-        finally:
-            with self._graph_thumbnail_lock:
-                self._graph_thumbnail_pending.discard(key)
 
     def _render_context_fill(self, count: int, is_exact: bool) -> None:
         """Set the bottom-toolbar context-fill readout text from a token `count`. Low-level; does no scheduling.

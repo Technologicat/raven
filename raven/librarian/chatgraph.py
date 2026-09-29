@@ -2371,7 +2371,7 @@ def build(datastore: chattree.Forest,
                 with one to hand supplies it, and a test without one gets the same layout minus the
                 picture.
 
-                Hand over `DPGChatController.icon_texture_for` rather than loading the icon files: it is
+                Hand over `chattextures.SpeakerGlyphs.icon_texture_for` rather than loading the icon files: it is
                 where the per-character resolution and its fallback live, so an AI with an icon of its
                 own gets that one, and a caller reading `raven/icons/ai.png` would silently lose it.
     `thumbnail_for`: Attachment sidecar filename -> `Thumbnail`, for the cards fanned off a box's right

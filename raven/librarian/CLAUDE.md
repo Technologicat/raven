@@ -5,7 +5,7 @@
 **The layering is the part worth copying, and it is the only part.** Each layer imports downward and no
 further, and that has held while the package grew — which is the property that made this the reference for
 the rest of Raven. The module *sizes* are no longer exemplary and should not be read as endorsed: against
-the project's ~700-line guideline, `chat_controller.py` is ~5.9k and `app.py` ~3.6k (and `llmclient.py` was ~2.8k until the tools moved out of it).
+the project's ~700-line guideline, `chat_controller.py` is ~5.6k and `app.py` ~3.6k (and `llmclient.py` was ~2.8k until the tools moved out of it).
 The growth is recent rather than gradual — `chat_controller.py` gained 44% in the three weeks to
 2026-08-24, and the layer map below had been recording sizes 30–45% low for that whole period.
 
@@ -38,8 +38,8 @@ time anyone noticed. Re-measure before quoting one.
 Layer 5 - Applications:     app.py (~3.8k), minichat.py (~750, minimal reference client),
                             indexer.py (~150, the `raven-indexer` CLI; also where the frontends get their
                             shared `open_document_store`)
-Layer 4 - Controller/GUI:   chat_controller.py (~5.9k), cleanup_dialog.py (~420), audio_input_panel.py (~750),
-                            chatgraph_panel.py (~2.1k), revision_panel.py (~380)
+Layer 4 - Controller/GUI:   chat_controller.py (~5.6k), cleanup_dialog.py (~420), audio_input_panel.py (~750),
+                            chatgraph_panel.py (~2.1k), revision_panel.py (~380), chattextures.py (~350)
 Layer 4 - Scripting:        agent.py (~710), the headless sibling of the controller
 Layer 3 - Orchestration:    scaffold.py (~1.6k)
 Layer 2 - Backends:         llmclient.py (~2.6k), llmtools.py (~990), hybridir.py (~1.9k)
@@ -81,6 +81,8 @@ Each layer only imports from layers below it. No circular dependencies.
 - **`audio_input_panel.py`** — `DPGAudioInputPanel`, the "Audio input" panel (F9, or the sliders button beside the microphone). Meters the input while it is open — `Recorder.start(monitor=True)`, which keeps no audio and never autostops — so the room's noise floor is visible without capturing a question. Offers the microphone itself, the silence threshold, the autostop timeout and the meter's peak hold as live controls; each writes the recorder, the app state, and (for the threshold) both meters — the toolbar's is announced through `on_threshold_changed`, since it is not the panel's to know about. The device list is re-asked on every open, because a microphone plugged in mid-session is exactly what a chooser is for. *Measure the room* sets the threshold from the loudest of the last `FLOOR_WINDOW` seconds plus `silencegate.DEFAULT_SILENCE_MARGIN`, which is the same number the panel displays, so the readout previews what the button will do. Non-modal, because the calibration that matters is watching the meter while somebody speaks. The microphone is one device handle, so `start_monitoring`/`stop_monitoring` are public: the app hands the device over around a recording. The decision the threshold feeds is `common.audio.silencegate`, tested on its own.
 
 - **`revision_panel.py`** — `DPGRevisionPanel`, the revision history of one chat message: every stored revision (`chatutil.describe_revisions`), with show and delete per row. Non-modal, on the audio input panel's terms — it takes the keys only while the focus is on one of its rows, answering `has_keyboard()` before `handle_key()`. The row cursor is `common.gui.tablecursor.TableCursor`, drawn in the keyboard mark's colour. The operations arrive as callables (`DPGChatController.show_revision` / `delete_revision` in the app), so it builds and tests without a controller; it follows the datastore by polling `Forest.generation`, as the chat graph does. Opened by clicking a message's `R` number, or Ctrl+Shift+E.
+
+- **`chattextures.py`** — The textures the chat views draw, held by `DPGChatController` and handed to whatever draws. `SpeakerGlyphs.icon_texture_for` is the glyph a message wears, resolved from the persona *stored with the message*, so that the chat log and the chat graph cannot disagree about who wrote it. `AttachmentTextures` decodes attachment sidecars once each: the chat log's inline thumbnails (`inline_image`, blocking, with the two `split_frame`s an upload needs), and the chat graph's mip chains (`graph_thumbnail`, which never blocks, since the graph asks from the render thread — a miss queues the work and answers `None`). A document is drawn as its file type's icon, one texture per type. Every texture tag carries the instance's serial, so two instances in one process cannot collide.
 
 - **`cleanup_dialog.py`** — `DPGCleanupDialog`, the GUI half of the above: dry-run preview (image grid + document list, both collapsed by default), per-item and bulk rescue-to-staging, commit. Thumbnails are letterboxed into uniform tiles and decoded on a background task, into a per-dialog texture registry whose tags carry a build counter (DPG frees deleted items lazily). A downsampled image and its preserved original are shown as one entry — `cleanup.preview_cleanup` does the folding, and `SidecarEntry.archival_filename` is what the open and rescue actions act on, matching the chat log.
 

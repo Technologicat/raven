@@ -1,8 +1,8 @@
-"""Attachment sidecar bytes to a drawn card, across `chat_controller` and `chatgraph_panel`.
+"""Attachment sidecar bytes to a drawn card, across `chattextures` and `chatgraph_panel`.
 
 Every other test of the chat graph's thumbnails hands the panel a provider that answers instantly with a
 made-up texture. That covers the drawing and the bookkeeping and nothing else: the decode, the
-letterboxing, the upload and the two `split_frame`s all live in `DPGChatController`, and a provider that
+letterboxing, the upload and the two `split_frame`s all live in `AttachmentTextures`, and a provider that
 never says "not ready" also never exercises the waiting. This is the one that runs the real thing.
 
 **It needs a mapped window, which is why it carries the `gui` marker.** `split_frame` waits for the render
@@ -15,25 +15,18 @@ each half is covered on its own and the seam between them is not.
 
 import concurrent.futures
 import io
-import threading
 import time
 
 import pytest
 
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 Image = pytest.importorskip("PIL.Image", reason="Pillow not installed")
-# The methods under test are the controller's, and importing it reaches the ML stack -- `hybridir` alone
-# wants bm25s, chromadb and watchdog. Skipping on the module itself is what `test_chat_controller.py` does
-# and for the same reason; naming a dependency instead would only name whichever one moved last. Nothing
-# is lost in CI, which skips this module anyway for want of a display.
-pytest.importorskip("raven.librarian.chat_controller")  # noqa: E402 -- see above
-
 from raven.common import bgtask  # noqa: E402 -- after importorskip by design
 from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
 from raven.common.gui.xdotwidget import graph as xdotgraph  # noqa: E402 -- after importorskip by design
 
 from raven.librarian import chatgraph_panel  # noqa: E402 -- after importorskip by design
-from raven.librarian.chat_controller import DPGChatController  # noqa: E402 -- after importorskip by design
+from raven.librarian.chattextures import AttachmentTextures  # noqa: E402 -- after importorskip by design
 from raven.librarian.chattree import Forest  # noqa: E402 -- after importorskip by design
 
 pytestmark = pytest.mark.gui
@@ -56,32 +49,6 @@ def png_bytes(width, height, rgb):
     buffer = io.BytesIO()
     Image.new("RGB", (width, height), rgb).save(buffer, format="PNG")
     return buffer.getvalue()
-
-
-class ThumbnailHost:
-    """Just the attributes `get_graph_thumbnail_texture` touches, so the real method can be run.
-
-    Constructing a `DPGChatController` needs an LLM backend and most of an app, and none of that is in the
-    picture here. The two methods under test are bound to this instead, so what runs is the shipped code
-    rather than a copy of it — and if either grows a dependency this class does not have, this test says so
-    by failing rather than by drifting out of date.
-    """
-
-    # Re-wrapped: attribute access unwraps the descriptor, so a bare assignment would make the static
-    # method an instance method and pass `self` as the filename.
-    graph_thumbnail_identity = staticmethod(DPGChatController.graph_thumbnail_identity)
-    get_graph_thumbnail_texture = DPGChatController.get_graph_thumbnail_texture
-    _prepare_graph_thumbnail = DPGChatController._prepare_graph_thumbnail
-
-    def __init__(self, datastore, registry, executor):
-        self.datastore = datastore
-        self._inline_image_texture_registry = registry
-        self._graph_thumbnail_textures = {}
-        self._graph_thumbnail_pending = set()
-        self._graph_thumbnail_failed = set()
-        self._graph_thumbnail_lock = threading.Lock()
-        self.task_manager = bgtask.TaskManager(name="thumbnail_pipeline_test", mode="concurrent",
-                                               executor=executor)
 
 
 @pytest.fixture(scope="module")
@@ -111,13 +78,13 @@ def pipeline(mapped_gui_context, themes_and_fonts):
     app_state = {"HEAD": carrier}
 
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
-    registry = dpg.add_texture_registry()
-    host = ThumbnailHost(forest, registry, executor)
+    textures = AttachmentTextures(forest, bgtask.TaskManager(name="thumbnail_pipeline_test", mode="concurrent",
+                                                             executor=executor))
     with dpg.window() as holder:
         panel = chatgraph_panel.DPGChatGraphPanel(
             gui_parent=holder, datastore=forest, app_state=app_state,
             themes_and_fonts=themes_and_fonts, width=600, height=400, show=True,
-            thumbnail_for=host.get_graph_thumbnail_texture)
+            thumbnail_for=textures.graph_thumbnail)
 
     def pump(predicate, timeout=20.0):
         """Render frames until `predicate()` or `timeout`, rebuilding as thumbnails land.
@@ -141,7 +108,7 @@ def pipeline(mapped_gui_context, themes_and_fonts):
 
     panel.destroy()
     dpg.delete_item(holder)
-    dpg.delete_item(registry)
+    textures.destroy()
     executor.shutdown(wait=False)
 
 
@@ -203,7 +170,7 @@ def test_one_texture_serves_every_document_of_a_type(pipeline):
     addressed already — the same picture attached twice decodes once for that reason instead."""
     panel, forest, names, carrier, pump = pipeline
     assert pump(lambda: all(c.levels for c in cards(panel, carrier)))
-    identity = DPGChatController.graph_thumbnail_identity
+    identity = AttachmentTextures.graph_thumbnail_identity
     assert identity("one.pdf") == identity("another.pdf")
     assert identity(names["wide"]) != identity(names["tall"]), \
         "two different images share an identity, so they would share a texture"

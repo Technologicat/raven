@@ -176,7 +176,7 @@ class DPGChatGraphPanel(gui_animation.Animation):
                     `None`, or a `None` answer, draws no glyphs.
         `thumbnail_for`: `(attachment sidecar filename, size in pixels) -> env(levels)`, or `None` if it
                          is not ready. What draws the cards fanned off a box's right edge; see
-                         `chatgraph.build`. `DPGChatController.get_graph_thumbnail_texture` is it.
+                         `chatgraph.build`. `chattextures.AttachmentTextures.graph_thumbnail` is it.
                          `levels` is the mip chain as `(width, height, texture_tag)` triples, finest
                          first, which is what keeps a card sharp across the zoom range; an asset with one
                          size for every zoom is a chain of one.

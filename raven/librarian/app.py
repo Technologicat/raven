@@ -1835,9 +1835,9 @@ with timer() as tim:
                     # `None` when the setting is off, which is what gives the label back the room the
                     # glyph's gutter reserves -- the panel asks per rebuild, so the switch takes
                     # effect on the next one rather than needing the app restarted.
-                    icon_for=(lambda: chat_controller.icon_texture_for
+                    icon_for=(lambda: chat_controller.speaker_glyphs.icon_texture_for
                               if gui_config.chat_graph_role_icons else None),
-                    thumbnail_for=lambda name, size: chat_controller.get_graph_thumbnail_texture(name, size),
+                    thumbnail_for=lambda name, size: chat_controller.attachment_textures.graph_thumbnail(name, size),
                     show=False)
 
                 with dpg.child_window(tag="mode_toggle_controls",
