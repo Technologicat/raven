@@ -136,22 +136,6 @@ class TestNetworkSafetyGate:
         assert "Could not resolve the host name" in refusal
 
 
-class TestFormatFetchedResult:
-    def test_includes_header_title_and_separator(self):
-        out = webfetch._format_fetched_result("https://x.com/p", "Cool Page", "the body")
-        assert out.startswith("**Webfetch result from** [https://x.com/p](https://x.com/p):")
-        assert "**Cool Page**" in out
-        assert "-----" in out
-        assert out.rstrip().endswith("the body")
-
-    def test_omits_title_block_when_none(self):
-        out = webfetch._format_fetched_result("https://x.com/p", None, "the body")
-        assert "[https://x.com/p](https://x.com/p)" in out
-        assert "-----" in out
-        assert out.rstrip().endswith("the body")
-        assert out.count("**") == 2  # only the "**Webfetch result from**" emphasis, no title block
-
-
 class TestExtractTitle:
     def test_extracts_and_normalizes_title(self):
         # `_extract_title` lazily imports trafilatura (a heavy dep present in the full install but not in

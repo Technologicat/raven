@@ -1858,7 +1858,7 @@ class TestToolResultAttachments:
     """A long fetched document goes to a sidecar; the chat log keeps an excerpt and a chip."""
 
     # Long enough to cross the default threshold, and shaped like a fetched page: a source header, then prose.
-    LONG_DOCUMENT = ("**Webfetch result from** [https://example.com/paper](https://example.com/paper):\n\n"
+    LONG_DOCUMENT = ("**Webfetch result for** [https://example.com/paper](https://example.com/paper):\n\n"
                      "**A Paper**\n\n-----\n\n" + "The body of the paper. " * 500)
 
     def _forest(self, tmp_path, llm_settings):
@@ -1888,7 +1888,7 @@ class TestToolResultAttachments:
         assert [part["type"] for part in content] == ["text", "text_file"]
 
         shown = chatutil.content_to_text(content)  # what the chat log renders as the message's own text
-        assert shown.startswith("**Webfetch result from**")  # the excerpt opens where the document does
+        assert shown.startswith("**Webfetch result for**")  # the excerpt opens where the document does
         assert len(shown) < len(self.LONG_DOCUMENT) / 10  # ...and is a small fraction of it
 
     def test_the_full_document_is_stored_verbatim_as_a_sidecar(self, monkeypatch, tmp_path, llm_settings):

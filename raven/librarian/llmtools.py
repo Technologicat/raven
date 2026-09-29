@@ -350,6 +350,18 @@ def approve_host_for_session(host: str) -> None:
 # `raven.server.modules.websearch`) precisely because the two never touch: the memoized function
 # (websearch) does not read the allowlist, and the allowlist-reading function (this one) is not
 # memoized. Keep it that way.
+def _format_webfetch_result(url: str, title: str | None, content: str) -> str:
+    """Prepend a source header (URL, plus the page title if any) and a separator to a webfetch's `content`.
+
+    Every outcome gets the same header, a refusal as much as a fetched page: a bare extraction gives the
+    model the text with no provenance and no title, which can lead it astray, and a bare refusal tells the
+    reader something failed without saying what.
+    """
+    header = f"**Webfetch result for** [{url}]({url}):"
+    if title:
+        header = f"{header}\n\n**{title}**"
+    return f"{header}\n\n-----\n\n{content}"
+
 def webfetch(url: str) -> tuple[str, dict]:
     """Fetch a web page's main content, gated by the client-side domain allowlist.
 
@@ -381,7 +393,7 @@ def webfetch(url: str) -> tuple[str, dict]:
             logger.info(f"webfetch: refusing '{url}': host '{host}' not on allowlist, not user-allowed this turn, not session-approved.")
             # Structured return: the canonical refusal for the model, plus metadata the GUI override reads
             # (on the resulting tool node) to offer "approve this host" and re-run with the fetch allowed.
-            return (CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)")),
+            return (_format_webfetch_result(url, None, CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)"))),
                     {"webfetch_denied_host": host})
 
     api = _client_api()
@@ -397,7 +409,7 @@ def webfetch(url: str) -> tuple[str, dict]:
     # canonical one-sentence strings and so never reach the size threshold that decides whether to store
     # anything, which makes a special case for them machinery with no effect to have.
     effective_url = result.get("url") or url
-    return (result["content"],
+    return (_format_webfetch_result(effective_url, result.get("title"), result["content"]),
             {"fetched_document": {"url": effective_url,
                                   "name": result.get("title") or effective_url}})
 

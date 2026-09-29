@@ -1642,7 +1642,8 @@ def api_webfetch():
 
         {"content": "...",        # extracted text/markdown, or a canonical user-facing message for a refusal/limit
          "url": "...",            # the effective URL after rewriting (e.g. arXiv abstract -> HTML form)
-         "spaSuspected": false}   # true if neither fetch tier could extract usable content
+         "spaSuspected": false,   # true if neither fetch tier could extract usable content
+         "title": "..."}          # the page title on a successful fetch; null for a refusal or a titleless page
 
     Network-level safety (refusing private-network addresses and non-HTTP(S) schemes) is
     enforced here, server-side. The domain allowlist is enforced client-side, before the call.

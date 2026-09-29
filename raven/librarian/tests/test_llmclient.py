@@ -153,6 +153,39 @@ class TestWebfetchWrapperGating:
         assert metadata["webfetch_denied_host"] == "blocked.example"
 
 
+class TestWebfetchResultHeader:
+    """Every webfetch result says which URL it is for — a failure as much as a fetched page.
+
+    A refusal arrives as one canonical sentence, and on its own it says that something failed and not what.
+    """
+
+    def test_a_fetched_page_names_its_url_and_title(self, monkeypatch, fake_fetch):
+        _set_allowlist(monkeypatch, None)
+        text, _ = llmclient.webfetch("https://x.example/p")
+        assert text.startswith("**Webfetch result for** [https://x.example/p](https://x.example/p):")
+        assert "**TITLE of https://x.example/p**" in text
+        assert text.rstrip().endswith("CONTENT of https://x.example/p")
+
+    def test_a_server_refusal_names_the_url(self, monkeypatch):
+        # The URL is the one the server ended up at, which a rewrite can change.
+        def _refuse(url, output_format="markdown"):
+            return {"content": "This site doesn't render its content as static HTML and can't be fetched as text.",
+                    "url": "https://old.x.example/p", "spaSuspected": True, "title": None}
+        monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=_refuse))
+        _set_allowlist(monkeypatch, None)
+        text, _ = llmclient.webfetch("https://x.example/p")
+        assert text.startswith("**Webfetch result for** [https://old.x.example/p](https://old.x.example/p):")
+        assert text.rstrip().endswith("can't be fetched as text.")
+        assert text.count("**") == 2, "a refusal has no title, so the header should carry none"
+
+    def test_an_allowlist_refusal_names_the_url(self, monkeypatch, fake_fetch):
+        _set_allowlist(monkeypatch, ["doi.org"])
+        with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
+            text, _ = llmclient.webfetch("https://blocked.example/path")
+        assert text.startswith("**Webfetch result for** [https://blocked.example/path](https://blocked.example/path):")
+        assert fake_fetch == []
+
+
 @pytest.fixture
 def clean_session_approvals():
     """Isolate the module-level session-approved-hosts set across tests."""

@@ -312,32 +312,19 @@ def _fetch_tier2(url: str, *, output_format: str) -> str:
 def _make_result(content: str, *, url: str, spa_suspected: bool = False, title: Optional[str] = None) -> Dict:
     """Build the structured result dict returned by `fetch`.
 
-    `content` is the LLM-facing text (extracted content with a source header, or a canonical message
-    for refusals / limits). `spaSuspected` flags a page neither tier could extract. `title` is the
-    page title for a successful fetch (a structured field; also surfaced in `content`'s header),
-    `None` for refusals / titleless pages.
+    `content` is the extracted content, or a canonical message for refusals / limits. `spaSuspected`
+    flags a page neither tier could extract. `title` is the page title for a successful fetch, `None`
+    for refusals / titleless pages.
     """
     return {"content": content, "url": url, "spaSuspected": spa_suspected, "title": title}
-
-def _format_fetched_result(url: str, title: Optional[str], body: str) -> str:
-    """Prepend a source header (URL, plus the page title if any) and a separator to fetched `body`.
-
-    A bare readability extraction gives the model the text with no provenance and no title, which can
-    lead it astray. This restores both — for the model, and for the user if the tool result is shown.
-    Applied only to successful fetches; refusals / limit messages are returned bare.
-    """
-    header = f"**Webfetch result from** [{url}]({url}):"
-    if title:
-        header = f"{header}\n\n**{title}**"
-    return f"{header}\n\n-----\n\n{body}"
 
 def fetch(url: str, output_format: str = "markdown") -> Dict:
     """Retrieve a web page's main content as clean text/markdown.
 
     Returns a dict `{"content": str, "url": str, "spaSuspected": bool, "title": str | None}`.
-    `content` is the text the model reads: on success, the extracted content prefixed with a source
-    header (URL + page title) and a separator; for any refusal or limit case, the canonical
-    user-facing string (no header). `url` is the effective URL after rewriting. `spaSuspected` is True
+    `content` is the extracted content on success, and the canonical user-facing string for any refusal
+    or limit case. Bare either way: the client prefixes the source header, the same one on every
+    outcome, since it also has refusals of its own. `url` is the effective URL after rewriting. `spaSuspected` is True
     when neither fetch tier could extract usable content (heavy SPA, login wall, captcha). `title` is
     the page title on success, else `None`.
 
@@ -360,7 +347,7 @@ def fetch(url: str, output_format: str = "markdown") -> Dict:
         content, title = special_extractor(effective_url)
         if len(content) >= server_config.webfetch_min_content_chars:
             body = common_text.normalize(content)
-            return _make_result(_format_fetched_result(effective_url, title, body), url=effective_url, title=title)
+            return _make_result(body, url=effective_url, title=title)
         # A special extractor that came up short (e.g. no YouTube transcript) falls through
         # to the standard two-tier fetch on the same URL, which may still find something.
 
@@ -380,4 +367,4 @@ def fetch(url: str, output_format: str = "markdown") -> Dict:
         return _make_result(CANONICAL_SPA_SUSPECTED, url=effective_url, spa_suspected=True)
 
     body = common_text.normalize(content)
-    return _make_result(_format_fetched_result(effective_url, title, body), url=effective_url, title=title)
+    return _make_result(body, url=effective_url, title=title)
