@@ -112,17 +112,17 @@ live on the Night.
      - **Settled in live testing of the history view**: Enter or a click on the revision already shown
        closes the panel, so a double-click shows and closes (maintainer's idea); Ctrl+Shift+E does nothing
        on a message with one revision, as its `R` is then no link.
+     - **The count reads "(3 revisions)", right after the `R` link** (2026-09-29), where it had been
+       "(3 revisions available)" after the model name. Rejected: `R2/3`, since revision numbers stay unique
+       after a deletion — a message holding R1 and R3 would read `R3/2` (maintainer).
 
 ## Queue, in order
 
-1. **The wording of "(3 revisions available)"** at the end of a message's grey line — long for what it says
-   (maintainer, 2026-09-28, to be settled 2026-09-29). Mind the horizontal space: the line also carries the
-   model name on AI replies.
-2. **The two items filed on the Night, 2026-09-25** (added 2026-09-28, after message editing): in
+1. **The two items filed on the Night, 2026-09-25** (added 2026-09-28, after message editing): in
    `TODO_DEFERRED.md`, rerolling a tool-calling reply can leave the vertical spacing wrong, and making
    `websearch` cancellable (`investigations/abort-inflight-request/`). **The second is wider than its
    title**: `webfetch` at least, and possibly other tools — survey them all when it is picked up
    (maintainer, 2026-09-28).
-3. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
+2. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.

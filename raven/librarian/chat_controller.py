@@ -733,12 +733,13 @@ class DPGChatMessage:
                                      action=lambda: self.parent_view.chat_controller.open_revision_history(node_id))
                 dpg.add_text(f"Revision {node_active_revision} of this message. Click to see all its revisions [Ctrl+Shift+E]",
                              parent=dpg.add_tooltip(revision_link))
+                # A count rather than "R2/3": revision numbers stay unique after a deletion, so a message can
+                # hold R1 and R3 only, and the number shown can exceed the count.
+                dpg.add_text(f"({n_revisions} revisions)", color=(120, 120, 120), parent=metadata_row)
             else:
                 dpg.add_text(revision_label, color=(120, 120, 120), parent=metadata_row)
             if producer_label:
                 dpg.add_text(producer_label, color=(120, 120, 120), parent=metadata_row)
-            if n_revisions > 1:
-                dpg.add_text(f"({n_revisions} revisions available)", color=(120, 120, 120), parent=metadata_row)
 
         # render the actual text
         self.gui_text_group = dpg.add_group(tag=f"chat_message_text_container_group_{self.gui_uuid}",
