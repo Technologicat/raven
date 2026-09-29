@@ -1774,11 +1774,12 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
             # now, so opening it works — metadata only, nothing to reindex. Only when the stored path is
             # *gone*, never merely spelled differently: reached through a symlinked slot, the stored real path
             # is the more durable of the two, the slot being free to point at another collection later.
-            relocated = {document_id: path for document_id, path in found_document_ids.items()
+            relocated = {document_id: (self.retriever.documents[document_id]["path"], path)
+                         for document_id, path in found_document_ids.items()
                          if document_id in indexed_document_ids and path not in updated_paths
                          and not os.path.exists(self.retriever.documents[document_id]["path"])}
-            for document_id, path in relocated.items():
-                self.retriever.documents[document_id]["path"] = path
+            for document_id, (_old_path, new_path) in relocated.items():
+                self.retriever.documents[document_id]["path"] = new_path
 
         new_plural_s = "s" if len(new_found_paths) != 1 else ""
         updated_plural_s = "s" if len(updated_paths) != 1 else ""
@@ -1786,7 +1787,9 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         logger.info(f"HybridIRFileSystemEventHandler.rescan: Scan complete. Found {len(new_found_paths)} new file{new_plural_s}, {len(updated_paths)} updated file{updated_plural_s}, and {len(deleted_document_ids)} deleted file{deleted_plural_s}.")
         if relocated:
             logger.info(f"HybridIRFileSystemEventHandler.rescan: {len(relocated)} indexed {'document' if len(relocated) == 1 else 'documents'} "  # plural
-                        "no longer at the recorded path, and found by ID under the documents directory: updated the recorded paths.")
+                        "no longer at the recorded path, and found by ID under the documents directory: updating the recorded paths.")
+            for document_id, (old_path, new_path) in relocated.items():
+                logger.info(f"HybridIRFileSystemEventHandler.rescan: Document '{document_id}' moved: recorded path '{old_path}' is gone; now '{new_path}'.")
             self.retriever._save_datastore()
 
         for path in new_found_paths:
