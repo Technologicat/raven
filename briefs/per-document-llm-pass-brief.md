@@ -22,7 +22,7 @@ It sits one level above `raven.librarian.agent` (brief 15). That surface answers
 what happened"; this answers "run one turn per document over two thousand documents, and survive the
 afternoon."
 
-## Why now: seven users, none of which knew about the others
+## Why now: eight users, none of which knew about the others
 
 Each surfaced from a different direction. That is the pattern that says a shared primitive is missing,
 rather than six features being wanted.
@@ -52,6 +52,12 @@ rather than six features being wanted.
    in the chat log, so where it is weak the reader sees it. An LLM asked for the title once per document at
    import, stored with the document, would make the label good in the general case. Waits for the unified DB
    (brief 13), where the import is.
+8. **The corpus filter** — `briefs/corpus-filter-brief.md`, generalizing `investigations/aokk-corpus-scope/`.
+   Two of its three model-calling scripts carry their own copy of this loop — a JSONL appended per
+   answer, keyed on citekey, with a re-run skipping what is already there — and the third is driven slice
+   by slice with `--skip`. **This brief goes first** (Juha, 2026-09-29), so that the filter is built on
+   the primitive rather than lifting a third copy. It brings two requirements the other
+   seven do not state, both measured there rather than predicted — see *Cache key* and *Batching* below.
 
 Corpus sizes make several of these concrete rather than prospective: ~12k hydrogen abstracts already
 ingested, ~2500 one-page ECCOMAS 2024 conference abstracts, an arXiv AI fulltext set of 1200+ full papers.
@@ -72,7 +78,7 @@ belongs to that sketch.
 
 ### Resume is the load-bearing feature
 
-Everything else here is convenience; resume is what makes an hour-long run survivable. Two of the seven users
+Everything else here is convenience; resume is what makes an hour-long run survivable. Two of the eight users
 exist *only* because it is missing.
 
 The shape follows from what already works: `rag_live_corpus` keeps a JSONL ledger beside a
@@ -112,6 +118,13 @@ thousand "failed" documents that were never tried properly.
 3. **Cache key.** What makes two runs "the same item" — content hash, path, or a caller-supplied id. The
    sidecar store is already content-addressed, which argues for the first, but a caller re-asking a
    *different question* about the same document must not hit the cache.
+   - **The corpus filter has a working answer for the question half.** `extract_fields.py`'s
+     `instrument_fingerprint` hashes the prompt together with the vocabularies it offers, stamps each answer
+     with it, and names the output file after it. The prompt is in the hash because an edit to the
+     instructions alone moved records from one value to another there, so answers from before and after it
+     are different measurements and must not be pooled. The filename half is what saves every consumer
+     from having to filter on the stamp — one of them did not. The item half is a caller-supplied id
+     there (the citekey).
 4. **The mid-run backend policy**: how long to wait, resume or restart, and what happens to documents
    already written. CC deferred these deliberately; they are the reason this brief exists rather than a
    detail of it.
@@ -120,3 +133,13 @@ thousand "failed" documents that were never tried properly.
 6. **Whether `raven-pdf2bib` is converted as part of this or after.** It is the loudest user (eight
    hand-rolled retry loops) and the best test that the API is right; it is also a 1058-line file that
    nothing else depends on this brief to fix.
+7. **Batching: whether the unit of work can be several items per model call.** Every LLM pass the corpus
+   filter makes is batched — forty titles per call in the judge's first pass, ten records in the others.
+   For the judge's second pass the reason is measured: one call per record put it at several hours,
+   against the first pass's one (`judge_scope.py`, `judge_abstracts`). That sits awkwardly with *a fresh
+   `Forest` per item* above. The ledger
+   stays per item. What changes is a failure: one malformed field in the reply loses the whole batch, so a
+   failed batch has to be recorded as that many failed items, all retryable. The reasoning trace covers
+   the whole call, so `extract_fields.py` writes one trace entry per call, naming the keys that shared
+   it. Whether batching belongs in the primitive or in the caller is the question; the requirement is
+   that the primitive does not rule it out.
