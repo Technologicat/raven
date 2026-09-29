@@ -99,8 +99,7 @@ class SpeakerGlyphs:
                      user glyph is used.
 
         **Both sides, symmetrically.** The AI's face and the user's are found the same way — an `_icon.png`
-        beside the thing that declares them — because a conversation has two participants and decorating
-        only one of them is a distinction the chat log has no reason to draw.
+        beside the thing that declares them.
         """
         type(self)._load_class_textures()
         self.llm_settings = llm_settings
