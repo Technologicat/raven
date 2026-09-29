@@ -41,7 +41,7 @@ __all__ = [  # The parts a message is made of, and reading them back
            "compute_auto_allowed_hosts",
            "upgrade_datastore", "factory_reset_datastore",
            "remove_persona_from_start_of_line",
-           "latest_user_message_text", "get_node_message_text_without_persona",
+           "latest_user_message_text", "empty_send_allowed", "get_node_message_text_without_persona",
            "scrub"]
 
 import logging
@@ -1904,6 +1904,20 @@ def latest_user_message_text(datastore: chattree.Forest, node_id: str) -> str | 
         if role == "user":
             return text
     return None
+
+def empty_send_allowed(datastore: chattree.Forest, head_node_id: str, allow_setting: bool) -> bool:
+    """Whether sending an empty message, with nothing attached, may start the AI's turn.
+
+    `allow_setting`: the frontend's `llm_allow_empty_send`, which opens it everywhere.
+
+    Always, when the branch ends on a user message: the AI then answers that message, exactly as it would
+    have had the user just sent it — which is how a question is asked again after deleting its replies.
+    The setting governs the other case, a request ending on the AI's own reply, which some models answer
+    with nothing (see `llm_allow_empty_send`).
+    """
+    if allow_setting:
+        return True
+    return get_node_message_text_without_persona(datastore, head_node_id)[0] == "user"
 
 def get_node_message_text_without_persona(datastore: chattree.Forest,
                                           node_id: str) -> str:

@@ -41,6 +41,7 @@
 
 - **The avatar panel's DOCS and WEB indicators now read DOCUMENTS and INTERNET**, as the toggles below them are called.
 - **In those indicators, only the icon pulsates now.** The names hold still, in their row's colour. In v0.2.9 some rows pulsated their name as well and some did not.
+- **Sending an empty message answers your own last message**, when the chat ends on one — whatever `llm_allow_empty_send` says. It is how to ask a question again after deleting its replies, which v0.2.9 had no way to do with the setting off. With the chat ending on an AI reply, the setting still decides. In `raven-minichat` too.
 - **A long document search result opens collapsed, to a snippet per match**, each under a handle on the document it came from: its title, and buttons to open it and its folder, as a fetched document has. The chevron beside it shows every match in full.
   - The result now opens with how many matches it found, and for what.
   - In v0.2.9 every match was shown in full, which for a search returning dozens buried the rest of the conversation.

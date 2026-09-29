@@ -4617,8 +4617,9 @@ class DPGChatController:
         This spawns a background task to avoid hanging GUI event handlers,
         since the typical use case is to call `chat_exchange` from a GUI event handler.
         """
-        if not (user_message_text or staged_images or staged_files) and not librarian_config.llm_allow_empty_send:
-            logger.info("chat_exchange: empty message and nothing attached, and `llm_allow_empty_send` is off; ignoring.")
+        if not (user_message_text or staged_images or staged_files) and not chatutil.empty_send_allowed(
+                self.datastore, self.app_state["HEAD"], librarian_config.llm_allow_empty_send):
+            logger.info("chat_exchange: empty message and nothing attached, HEAD is not a user message, and `llm_allow_empty_send` is off; ignoring.")
             return
 
         def chat_exchange_task(task_env: env) -> None:

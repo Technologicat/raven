@@ -237,9 +237,14 @@ class TestChatExchange:
         assert controller.ai_turns == [], "a stopped send still started its AI turn"
 
     def test_an_empty_send_does_nothing_unless_allowed(self, monkeypatch):
+        # On an AI reply, which is the case the setting governs; on a user message it is always allowed
+        # (`chatutil.empty_send_allowed`, tested there).
         monkeypatch.setattr(chat_controller.chatutil, "latest_user_message_text", lambda datastore, head: "earlier question")
         controller = self._controller()
-        controller.datastore = None
+        controller.datastore = chat_controller.chattree.Forest()
+        controller.app_state["HEAD"] = controller.datastore.create_node(
+            {"message": {"role": "assistant", "content": [chatutil.text_content_part("an answer")]},
+             "general_metadata": {"persona": None}}, parent_id=None)
         controller.user_turn_may_finish.set()
 
         monkeypatch.setattr(chat_controller.librarian_config, "llm_allow_empty_send", False)

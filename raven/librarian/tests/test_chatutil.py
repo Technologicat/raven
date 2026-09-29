@@ -1777,6 +1777,31 @@ class TestReviseMessageText:
         assert old == snapshot
 
 
+class TestEmptySendAllowed:
+    """An empty send starts the AI's turn on a branch ending with the user's message, whatever the setting says.
+
+    That is how a question is asked again once its replies are deleted: there is nothing to type, the
+    question being there already. The setting governs only the other case.
+    """
+
+    def _branch(self, chat_payload):
+        f = chattree.Forest()
+        system = f.create_node(chat_payload("system", "prompt"), parent_id=None)
+        question = f.create_node(chat_payload("user", "a question"), parent_id=system)
+        answer = f.create_node(chat_payload("assistant", "an answer"), parent_id=question)
+        return f, question, answer
+
+    def test_on_a_user_message_it_is_always_allowed(self, chat_payload):
+        f, question, _answer = self._branch(chat_payload)
+        assert chatutil.empty_send_allowed(f, question, allow_setting=False)
+
+    def test_on_an_ai_reply_the_setting_decides(self, chat_payload):
+        # The control for the one above: the same datastore and the same setting, and HEAD alone differs.
+        f, _question, answer = self._branch(chat_payload)
+        assert not chatutil.empty_send_allowed(f, answer, allow_setting=False)
+        assert chatutil.empty_send_allowed(f, answer, allow_setting=True)
+
+
 class TestLatestUserMessageText:
     """The RAG query a turn falls back on when the user did not just type something.
 
