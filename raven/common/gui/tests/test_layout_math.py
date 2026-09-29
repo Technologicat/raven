@@ -5,7 +5,8 @@ These functions are pure math — no DPG dependency.
 
 from raven.common.tests import approx
 from raven.common.gui.layout_math import (screen_to_content, content_to_screen,
-                                          zoom_keep_point, compute_zoom_to_fit)
+                                          zoom_keep_point, compute_zoom_to_fit,
+                                          decide_tail_follow)
 
 
 # ---------------------------------------------------------------------------
@@ -176,3 +177,67 @@ class TestComputeZoomToFit:
         assert zoom == 1.0
         assert pan_cx == 0.0
         assert pan_cy == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Tests: decide_tail_follow
+# ---------------------------------------------------------------------------
+
+class TestDecideTailFollow:
+    """Whether a growing log keeps following its end, told apart from the reader having scrolled away.
+
+    Each case that turns on one input is paired with a control changing only that input, so that a passing
+    assertion cannot be explained by the branch under test never having engaged.
+    """
+
+    TOLERANCE = 40
+
+    def decide(self, **kwargs):
+        args = dict(maybe_target_y_scroll=None, last_step=0.0, maybe_commanded_y_scroll=None,
+                    commanded_to_end=False, tolerance=self.TOLERANCE)
+        args.update(kwargs)
+        return decide_tail_follow(**args)
+
+    def test_content_arriving_below_a_followed_view_keeps_it_following(self):
+        # The case the function exists for: the maximum grew by 300 px, the position is where we put it.
+        grown = dict(y_scroll=1000, max_y_scroll=1300, maybe_commanded_y_scroll=1000)
+        assert not self.decide(**grown).at_end, "the gap should exceed the tolerance, or this tests nothing"
+        assert self.decide(**grown, commanded_to_end=True).follow
+        assert not self.decide(**grown, commanded_to_end=False).follow, \
+            "a view we were not following should not start following because content arrived"
+
+    def test_a_reader_scrolling_up_stops_the_following(self):
+        moved = self.decide(y_scroll=600, max_y_scroll=1300, maybe_commanded_y_scroll=1000, commanded_to_end=True)
+        assert moved.maybe_drift == 400
+        assert not moved.undisturbed
+        assert not moved.follow
+
+    def test_a_reader_scrolling_back_to_the_end_resumes_it(self):
+        # How the following recovers: at the end by position, however it got there.
+        assert self.decide(y_scroll=1290, max_y_scroll=1300, maybe_commanded_y_scroll=600).follow
+
+    def test_a_scroll_in_flight_is_judged_by_where_it_is_heading(self):
+        # The reader pressed Up: the view has barely moved, but the animation is heading 400 px up.
+        in_flight = dict(y_scroll=1290, max_y_scroll=1300, maybe_commanded_y_scroll=1250, last_step=40)
+        assert not self.decide(**in_flight, maybe_target_y_scroll=900).follow
+        assert self.decide(**in_flight, maybe_target_y_scroll=None).follow, \
+            "without a target the position is at the end, so the target is what decided"
+
+    def test_one_frame_of_our_own_animation_is_not_taken_for_the_reader(self):
+        # The view reports one frame behind the value last written; early in the decay a frame is large.
+        lagging = dict(y_scroll=900, max_y_scroll=1600, maybe_commanded_y_scroll=970, commanded_to_end=True,
+                       maybe_target_y_scroll=1600)
+        assert self.decide(**lagging, last_step=80).undisturbed
+        assert not self.decide(**lagging, last_step=0.0).undisturbed, \
+            "70 px is past the plain tolerance, so the slack is what accepted it"
+
+    def test_content_shrinking_under_a_command_is_not_taken_for_the_reader(self):
+        # The view clamps the position to the new maximum by itself, so the command is compared clamped.
+        assert self.decide(y_scroll=800, max_y_scroll=800, maybe_commanded_y_scroll=1000,
+                           commanded_to_end=True).undisturbed
+
+    def test_with_nothing_commanded_only_the_position_decides(self):
+        assert not self.decide(y_scroll=0, max_y_scroll=1300, commanded_to_end=True).follow
+
+    def test_a_view_with_no_scrollbar_follows(self):
+        assert self.decide(y_scroll=0, max_y_scroll=0).follow

@@ -1,6 +1,6 @@
 """Pure-math layout utilities — no DPG dependency.
 
-Pan/zoom coordinate transforms, zoom-to-fit, and tooltip positioning.
+Pan/zoom coordinate transforms, zoom-to-fit, tooltip positioning, and following the end of a growing log.
 Shared by the xdot widget, image viewer, and other viewport-based UIs.
 
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
@@ -10,8 +10,10 @@ __all__ = [
     "screen_to_content", "content_to_screen",
     "zoom_keep_point", "compute_zoom_to_fit",
     "compute_tooltip_position_scalar",
+    "TailFollowDecision", "decide_tail_follow",
 ]
 
+import dataclasses
 from typing import Tuple
 
 from .. import numutils
@@ -185,3 +187,114 @@ def compute_tooltip_position_scalar(*,
         pos = (1.0 - s) * pos1 + s * pos2
 
         return pos
+
+
+# ---------------------------------------------------------------------------
+# Following the tail of a growing scroll view
+# ---------------------------------------------------------------------------
+
+@dataclasses.dataclass(frozen=True)
+class TailFollowDecision:
+    """The answer of `decide_tail_follow`, with the intermediate figures that produced it, for logging.
+
+    `follow`: whether new content should pull the view along with it.
+    `at_end`: whether the view is, or our own scrolling is heading, within `tolerance` of the end.
+    `undisturbed`: whether the position is still where we last put it, within `drift_tolerance`.
+    `gap`: how far above the end the view reports being, in pixels.
+    `settled_y_scroll`, `settled_gap`: where our own scrolling is heading, and how far that is above the end.
+    `drift_tolerance`: the bound `undisturbed` was judged against.
+    `maybe_expected_y_scroll`, `maybe_drift`: the commanded position clamped to the current maximum, and how
+                                             far the view is from it; `None` when nothing was commanded.
+    """
+    follow: bool
+    at_end: bool
+    undisturbed: bool
+    gap: float
+    settled_y_scroll: float
+    settled_gap: float
+    drift_tolerance: float
+    maybe_expected_y_scroll: float | None
+    maybe_drift: float | None
+
+
+def decide_tail_follow(*,
+                       y_scroll: float,
+                       max_y_scroll: float,
+                       maybe_target_y_scroll: float | None,
+                       last_step: float,
+                       maybe_commanded_y_scroll: float | None,
+                       commanded_to_end: bool,
+                       tolerance: float) -> TailFollowDecision:
+    """Decide whether a scroll view showing a growing log should keep following its end.
+
+    Two things move in such a view: the reader moves the scroll *position*, and arriving content moves the
+    *maximum*. Asking only "is the view at the bottom" cannot tell those apart, so it reads new content as
+    the reader having scrolled away. This asks two questions instead, and follows if either says yes:
+
+      - is the view at the end — judged by where our own scrolling is *heading*, not by where it has got to;
+      - were we following, and is the position still where we last put it — which content arriving cannot
+        change, and the reader scrolling does.
+
+    `y_scroll`, `max_y_scroll`: the view's scroll position and maximum, as it reports them now.
+    `maybe_target_y_scroll`: where a scroll animation of ours is heading, or `None` if none is running.
+    `last_step`: how far that animation moved the position on its last frame; `0` if none is running.
+    `maybe_commanded_y_scroll`: the position we last wrote, or `None` if we never have.
+    `commanded_to_end`: whether that write was a scroll to the end, i.e. whether we were following.
+    `tolerance`: how close to the end counts as at the end, and how far the position may sit from where we
+                 put it before the reader is taken to have moved it. In pixels.
+
+    Stores nothing: each call decides on the evidence it is given.
+    """
+    gap = max_y_scroll - y_scroll
+
+    # "At the end" is asked of where our own scrolling is *going*, not of where the view has got to so far.
+    # While a scroll of ours is in flight the reported position is somewhere along the way, so a scroll the
+    # reader just asked for still reads as at-the-end until the animation has carried it clear of the
+    # tolerance — and whether that has happened when the next sample is taken is a matter of timing. That
+    # makes the arrow keys behave as if they had a threshold: during a reply a single Up is usually undone,
+    # while holding Up eventually sticks, because repeats move the target faster than the content arrives.
+    # Consulting the animation's target decides on the reader's request rather than on how far it has been
+    # carried out, so one press is enough and the answer does not depend on when it was asked.
+    settled_y_scroll = maybe_target_y_scroll if maybe_target_y_scroll is not None else y_scroll
+    settled_gap = max_y_scroll - settled_y_scroll
+    at_end = (settled_gap <= tolerance)
+
+    # Has the position moved since we last set it? Content arriving cannot do that — it moves the maximum and
+    # leaves the position alone — so a mismatch means the reader moved it. Compared against the *clamped*
+    # command, since a view pulls the position down by itself when content shrinks, and that is our doing
+    # rather than the reader's.
+    #
+    # With an animation running, the command is its *last written position*, not its target — those come
+    # apart precisely while a scroll is in flight. The position tracks the last written value one frame
+    # behind, and only the reader breaks that. Intent ("are we heading for the end?") is carried separately,
+    # by `commanded_to_end`.
+    #
+    # The tolerance grows to cover one frame of our own animation while one is running. The report lags the
+    # last written value by exactly one step, so that much of a gap is ours — and early in an exponential
+    # decay a step is hundreds of pixels, far past a tolerance sized for a human nudging the wheel. Measured
+    # in Raven-librarian on a live reply before this: 43 samples in 857 read as user scrolls at drift
+    # 51–78 px against a 40 px tolerance. With nothing running `last_step` is `0`, so the sitting-still case —
+    # where a real reader's scroll must be caught — keeps the tight bound.
+    drift_tolerance = max(tolerance, last_step)
+    if maybe_commanded_y_scroll is not None:
+        maybe_expected_y_scroll = min(maybe_commanded_y_scroll, max_y_scroll)
+        maybe_drift = abs(y_scroll - maybe_expected_y_scroll)
+        undisturbed = (maybe_drift <= drift_tolerance)
+    else:
+        maybe_expected_y_scroll = None
+        maybe_drift = None
+        undisturbed = False
+
+    # Following continues if we are at the end by position (however we got there — including the reader
+    # scrolling back down, which is how this recovers), or if we were following the tail and the position
+    # is still where we left it.
+    follow = at_end or (commanded_to_end and undisturbed)
+    return TailFollowDecision(follow=follow,
+                              at_end=at_end,
+                              undisturbed=undisturbed,
+                              gap=gap,
+                              settled_y_scroll=settled_y_scroll,
+                              settled_gap=settled_gap,
+                              drift_tolerance=drift_tolerance,
+                              maybe_expected_y_scroll=maybe_expected_y_scroll,
+                              maybe_drift=maybe_drift)
