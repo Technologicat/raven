@@ -112,7 +112,7 @@ thousand "failed" documents that were never tried properly.
 
 Six of the seven questions below, settled in discussion with Juha. Question 5 is the one still open.
 
-- **Where it lives (1): a sibling module of `raven.librarian.agent`**, built on `agent.ask`. The name is
+- **Where it lives (1): a sibling module of `raven.librarian.agent`**, built on `agent.ask_record`, as the AOKK scripts are. The name is
   still open, to come from what the module turns out to do. The AOKK scripts already import `agent` from
   outside the librarian package, so that dependency direction is in use.
 - **The ledger (2): one JSONL for results and progress together**, appended one line per item as each
