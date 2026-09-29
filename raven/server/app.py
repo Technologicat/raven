@@ -1526,6 +1526,11 @@ def api_v1_audio_speech():
 # module: websearch
 
 def _websearch_impl():
+    """Run the search the request asks for. Return `(preformatted_text, structured_results)`.
+
+    Raises `websearch.EngineUnavailable` when the search engine did not answer; each endpoint reports that
+    in its own way.
+    """
     data = request.get_json()
 
     if "query" not in data or not isinstance(data["query"], str):
@@ -1545,6 +1550,9 @@ def _websearch_impl():
         logger.debug(f"_websearch_impl: {len(query)} character query, engine '{engine}', "
                      f"max_links {max_links}")
         return websearch.search(query, engine=engine, max_links=max_links)
+    except websearch.EngineUnavailable as exc:
+        logger.warning(f"_websearch_impl: engine '{engine}' did not answer: {exc}")
+        raise
     except Exception as exc:
         traceback.print_exc()
         abort(400, f"_websearch_impl: failed, reason: {type(exc)}: {exc}")
@@ -1575,10 +1583,15 @@ def api_websearch():
          "links": [link0, ...]}
 
     where the "links" field contains a list of all links to the search results.
+
+    Status 503 when the search engine did not answer.
     """
     if not websearch.is_available():
         abort(403, "Module 'websearch' not running")
-    preformatted_text, structured_results = _websearch_impl()
+    try:
+        preformatted_text, structured_results = _websearch_impl()
+    except websearch.EngineUnavailable as exc:
+        abort(503, f"The search engine did not answer: {exc}")
     output = {"results": preformatted_text,
               "links": [item["link"] for item in structured_results]}
     return jsonify(output)
@@ -1608,18 +1621,27 @@ def api_websearch2():
          "data": [{"title": ...,
                    "link": ...,
                    "text": ...}],
-                  ...}
+                  ...,
+         "engineUnavailable": false}
 
     In the output, the title field may be missing; not all search engines return it.
+
+    "engineUnavailable" is true when the search engine did not answer — its results page timed out, or
+    loaded without results on it — and "results" and "data" are then empty. With it false, empty
+    "results" and "data" mean the engine answered and found nothing.
 
     This format preserves the connection between the text of the result
     and its corresponding link.
     """
     if not websearch.is_available():
         abort(403, "Module 'websearch' not running")
-    preformatted_text, structured_results = _websearch_impl()
+    try:
+        preformatted_text, structured_results = _websearch_impl()
+    except websearch.EngineUnavailable:
+        return jsonify({"results": "", "data": [], "engineUnavailable": True})
     output = {"results": preformatted_text,
-              "data": structured_results}
+              "data": structured_results,
+              "engineUnavailable": False}
     return jsonify(output)
 
 # ----------------------------------------

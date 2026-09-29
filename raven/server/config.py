@@ -75,6 +75,12 @@ webfetch_min_content_chars = 300
 #
 webfetch_request_timeout = 10.0
 
+# How long (seconds) the headless browser may take to load a page: a search engine's results page for
+# `websearch`, or a page `webfetch` renders in its Tier 2. A page that takes longer is reported as the site not
+# answering. Raven-librarian waits `web_tool_timeout` for the whole tool call, which must exceed this.
+#
+web_page_load_timeout = 15.0
+
 # --------------------------------------------------------------------------------
 # Miscellaneous AI model config
 

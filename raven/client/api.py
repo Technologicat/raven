@@ -77,7 +77,7 @@ import json
 import pathlib
 import re
 import requests
-from typing import Any, Dict, Generator, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Tuple, Union
 
 # import PIL.Image
 import qoi
@@ -99,6 +99,9 @@ from . import util  # for `util.require()` and `util.api_config`
 
 from .util import api_config, require, yell_on_error  # noqa: F401 -- re-export
 from .util import initialize_api as initialize  # noqa: F401 -- re-export
+
+if TYPE_CHECKING:
+    from .config import Timeout
 
 from ..vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
 
@@ -862,10 +865,14 @@ def translate_translate(text: Union[str, List[str]], source_lang: str, target_la
 # --------------------------------------------------------------------------------
 # Websearch
 
-def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10) -> Tuple[str, Dict]:
+def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10,
+                     timeout: "Timeout | None" = None) -> Dict:
     """Perform a websearch, using Raven-server to handle the interaction with the search engine and the parsing of the results page.
 
-    Uses the "/api/websearch2" endpoint on the server, which see.
+    Uses the "/api/websearch2" endpoint on the server, which see. Returns its output dict: `"results"`,
+    `"data"`, and `"engineUnavailable"`, which is true when the search engine did not answer.
+
+    `timeout`: a `raven.client.config.Timeout`, or `None` for the configured `network_timeout`.
     """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
@@ -873,7 +880,8 @@ def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10
     input_data = {"query": query,
                   "engine": engine,
                   "max_links": max_links}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/websearch2", headers=headers, json=input_data, timeout=util.api_config.network_timeout)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/websearch2", headers=headers, json=input_data,
+                             timeout=(timeout if timeout is not None else util.api_config.network_timeout))
     util.yell_on_error(response)
 
     output_data = response.json()
@@ -882,7 +890,8 @@ def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10
 # --------------------------------------------------------------------------------
 # Webfetch
 
-def webfetch_fetch(url: str, output_format: str = "markdown") -> Dict:
+def webfetch_fetch(url: str, output_format: str = "markdown",
+                   timeout: "Timeout | None" = None) -> Dict:
     """Retrieve a web page's main content as clean text/markdown, via Raven-server.
 
     Uses the "/api/webfetch" endpoint on the server, which see. The server handles the
@@ -892,13 +901,16 @@ def webfetch_fetch(url: str, output_format: str = "markdown") -> Dict:
     Returns the server's result dict `{"content": str, "url": str, "spaSuspected": bool, "title": str | None}`.
     `content` is the extracted text (or a canonical user-facing message for a refusal / limit).
     `title` is the page title on a successful fetch, `None` for a refusal or a titleless page.
+
+    `timeout`: a `raven.client.config.Timeout`, or `None` for the configured `network_timeout`.
     """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     input_data = {"url": url,
                   "format": output_format}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/webfetch", headers=headers, json=input_data, timeout=util.api_config.network_timeout)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/webfetch", headers=headers, json=input_data,
+                             timeout=(timeout if timeout is not None else util.api_config.network_timeout))
     util.yell_on_error(response)
 
     output_data = response.json()

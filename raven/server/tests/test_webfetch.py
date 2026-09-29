@@ -148,3 +148,28 @@ class TestExtractTitle:
     def test_none_without_html(self):
         assert webfetch._extract_title(None) is None
         assert webfetch._extract_title("") is None
+
+
+class TestFetchOutcome:
+    """Which canonical answer `fetch` gives when both tiers come up short, with the tiers themselves faked."""
+
+    @pytest.fixture
+    def short_tier1(self, monkeypatch):
+        """Tier 1 got nothing and no status, as a failed GET leaves it; the gate lets every URL through."""
+        monkeypatch.setattr(webfetch, "_classify_url_network_safety", lambda url, allow_private: None)
+        monkeypatch.setattr(webfetch, "_http_get", lambda url: (None, None))
+        monkeypatch.setattr(webfetch, "_extract_clean_text", lambda html, url, output_format="markdown": "")
+        monkeypatch.setattr(webfetch, "_extract_title", lambda html: None)
+
+    def test_a_page_that_did_not_finish_loading_says_so(self, monkeypatch, short_tier1):
+        monkeypatch.setattr(webfetch, "_fetch_tier2", lambda url, output_format: None)
+        result = webfetch.fetch("https://slow.example/p")
+        assert result["content"] == webfetch.CANONICAL_PAGE_TIMEOUT.format(url="https://slow.example/p")
+        assert not result["spaSuspected"]
+
+    def test_a_page_that_loaded_empty_is_still_a_js_only_page(self, monkeypatch, short_tier1):
+        # The control for the one above: the same fixture, and only the Tier 2 outcome differs.
+        monkeypatch.setattr(webfetch, "_fetch_tier2", lambda url, output_format: "")
+        result = webfetch.fetch("https://spa.example/p")
+        assert result["content"] == webfetch.CANONICAL_SPA_SUSPECTED
+        assert result["spaSuspected"]

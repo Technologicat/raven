@@ -92,6 +92,10 @@
   - The view glided the right way and then kept going, when the graph was redrawn again before its rearranging had finished.
 - **Rerolling a reply no longer leaves extra space above the new one.**
   - Each message the reroll took off screen left a few pixels of blank space behind, so a reply that had called tools, being several messages, left a visible gap. The chat log also carried a little extra space wherever a reply had finished streaming. Both went away at the next full redraw, such as a branch switch, which is why the gap seemed to come and go.
+- **A web search that fails now says why, instead of coming back empty.**
+  - In v0.2.9 a search engine that did not answer, one that found nothing, and a Raven-server that could not be reached all gave the AI an empty result. Each now has its own sentence, saying whether trying again is worth it. A web page fetch reports a page that did not finish loading, and an unreachable server, the same way.
+  - A search engine that has stopped answering is noticed within seconds, where it used to take about half a minute per search. Librarian gives up on a web tool after a minute, set by `web_tool_timeout`, where it used to wait five.
+  - A failed search is no longer remembered for the rest of the session, so asking again once the engine is back works.
 
 #### Constellation-wide
 

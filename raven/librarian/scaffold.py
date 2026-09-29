@@ -1462,7 +1462,7 @@ def retry_tool_calls(llm_settings: env,
       2. Re-run ONLY that call, as a new sibling of the old denied node (branching at its parent). Every
          other tool result of the same turn is preserved verbatim, NOT re-run: the nodes *before* the denied
          one are shared ancestors of the new branch, and any *after* it are copied across (step 3). This is
-         deliberate — re-running a websearch would re-query the engine (the server-side `@memoize` is in-RAM
+         deliberate — re-running a websearch would re-query the engine (the server-side cache is in-RAM
          and empty after a restart / on a chat reloaded from disk), yielding a SERP the model never reasoned
          about. "Approve this fetch" must change only this fetch.
       3. Copy the suffix tool results (those after the denied one in the same turn — rare; present only if

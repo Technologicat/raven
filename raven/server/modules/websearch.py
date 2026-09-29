@@ -9,7 +9,9 @@ and its old Python implementation:
     https://github.com/SillyTavern/SillyTavern-Extras/blob/_main/modules/websearch/script.py
 """
 
-__all__ = ["get_driver", "init_module", "is_available", "search"]
+__all__ = ["EngineUnavailable",
+           "get_driver", "init_module", "is_available",
+           "search"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 import atexit
 import importlib
 import pathlib
+import threading
 import time
 from typing import Dict, List, Optional, Tuple, Union
 import urllib.parse
@@ -34,9 +37,10 @@ from selenium.webdriver.remote.webdriver import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from unpythonic import memoize
-
 from ...common import text as common_text
+
+class EngineUnavailable(Exception):
+    """The search engine did not answer: its page timed out, or loaded without any results on it."""
 
 # --------------------------------------------------------------------------------
 # Bootup
@@ -57,7 +61,18 @@ def _is_colab():
     """False. We never run inside colab. Provided for compatibility only."""
     return False
 
-def get_driver():
+def get_driver(page_load_timeout: float | None = None):
+    """Create a headless browser driver, Chrome if installed, else Firefox. `None` if neither is.
+
+    `page_load_timeout`: seconds a navigation may take before it raises
+                         `selenium.common.exceptions.TimeoutException`. `None` leaves Selenium's own default.
+    """
+    maybe_driver = _make_driver()
+    if maybe_driver is not None and page_load_timeout is not None:
+        maybe_driver.set_page_load_timeout(page_load_timeout)
+    return maybe_driver
+
+def _make_driver():
     try:
         logger.info("get_driver: Initializing Chrome driver...")
         options = ChromeOptions()
@@ -97,13 +112,13 @@ def init_module(config_module_name: str):
     global dump_filename
 
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}websearch{Style.RESET_ALL}...")
-    driver = get_driver()
+    server_config = importlib.import_module(config_module_name)  # `server_userdata_dir` for debug dumps, and the page-load timeout
+    driver = get_driver(page_load_timeout=server_config.web_page_load_timeout)
     if driver is not None:
         def quit_driver():
             driver.quit()
         atexit.register(quit_driver)
 
-        server_config = importlib.import_module(config_module_name)  # contains `server_userdata_dir`, for saving debug dumps
         dump_dir = pathlib.Path(server_config.server_userdata_dir).expanduser().resolve() / "websearch"
         dump_filename = dump_dir / "debug.html"
         _create_directory(dump_dir)
@@ -128,25 +143,47 @@ def _encodeURIComponent(text: str) -> str:
     """
     return urllib.parse.quote(text, safe="!~*'()")
 
-def _wait_for_id(element_id: str, delay: float = 5.0) -> None:
+def _wait_for_id(element_id: str, delay: float = 5.0) -> bool:
     """Wait until an element with id `element_id` appears in the page being loaded by the web driver.
 
-    Give up after `delay` seconds, and return anyway.
+    Give up after `delay` seconds. Return whether the element appeared.
     """
     try:
         WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.ID, element_id)))
     except Exception:
-        logger.info(f"_wait_for_id: Element with id '{element_id}' not found, proceeding without.")
+        logger.info(f"_wait_for_id: Element with id '{element_id}' not found.")
+        return False
+    return True
 
-def _wait_for_selector(selector: str, delay: float = 5.0) -> None:
+def _wait_for_selector(selector: str, delay: float = 5.0) -> bool:
     """Wait until an element matching the CSS selector `selector` appears in the page being loaded by the web driver.
 
-    Give up after `delay` seconds, and return anyway.
+    Give up after `delay` seconds. Return whether the element appeared.
     """
     try:
         WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
     except Exception:
-        logger.info(f"_wait_for_selector: Element matching selector '{selector}' not found, proceeding without.")
+        logger.info(f"_wait_for_selector: Element matching selector '{selector}' not found.")
+        return False
+    return True
+
+def _open_results_page(url: str, results_container_id: str) -> None:
+    """Load a search engine's results page, raising `EngineUnavailable` if the results never appear.
+
+    The results container is what separates an engine that answered from one that did not: a page that
+    loads without it is a block page, an error page or a half-loaded one, never an answer.
+    """
+    # Zero hits still draw the container, so that case reaches the caller as an empty result. Checked on
+    # DuckDuckGo (2026-09-29, an exact-phrase query nothing matches: "No results found for" inside
+    # `web_content_wrapper`); not checked on Google.
+    try:
+        driver.get(url)
+    except exceptions.TimeoutException as exc:
+        raise EngineUnavailable("the results page did not finish loading in time") from exc
+    found = _wait_for_id(results_container_id)
+    _debug_dump()  # either way: a page without results is the one worth looking at
+    if not found:
+        raise EngineUnavailable(f"the results page loaded without its results (no element with id '{results_container_id}')")
 
 def _get_page_height() -> int:
     """Get the current height of the page in the web driver, in pixels."""
@@ -218,7 +255,7 @@ def _debug_dump() -> None:
 # --------------------------------------------------------------------------------
 # API
 #
-# We use memoization to cache results for each unique query during the same session.
+# `search` caches each answered query for the rest of the session.
 
 def _format_results(texts: List[str],
                     titles: Optional[List[str]] = None,
@@ -269,16 +306,14 @@ def _format_results(texts: List[str],
     preformatted_text = "-----\n".join(format_result(result) for result in results)
     return preformatted_text, results
 
-@memoize
 def _search_google(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     # The query is the user's question in their own words, so it is counted rather than quoted; likewise
     # the results, which say what was asked about as plainly as the query does. Diagnosing a scraper that
     # a site's markup change has broken needs the *counts* - zero results parsed is the symptom - and
     # anything beyond that is better asked for as a reproduction than harvested from everyone's searches.
     logger.info(f"_search_google: searching Google, {len(query)} character query, max_links {max_links}.")
-    driver.get(f"https://google.com/search?hl=en&q={_encodeURIComponent(query)}&num={max_links}")
-    _wait_for_id("res")
-    _debug_dump()
+    _open_results_page(f"https://google.com/search?hl=en&q={_encodeURIComponent(query)}&num={max_links}",
+                       results_container_id="res")
 
     # Accept cookies
     if element := _find_first_element_by_id("L2AGLb"):
@@ -299,12 +334,10 @@ def _search_google(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     logger.info(f"_search_google: {len(results)} result{common_text.plural_s(len(results))}, {len(preformatted_text)} characters.")
     return preformatted_text, results
 
-@memoize
 def _search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     logger.info(f"_search_duckduckgo: searching DuckDuckGo, {len(query)} character query, max_links {max_links}.")
-    driver.get(f"https://duckduckgo.com/?kl=wt-wt&kp=-2&kav=1&kf=-1&kac=-1&kbh=-1&ko=-1&k1=-1&kv=n&kz=-1&kat=-1&kbg=-1&kbe=0&kpsb=-1&q={query}")
-    _wait_for_id("web_content_wrapper")
-    _debug_dump()
+    _open_results_page(f"https://duckduckgo.com/?kl=wt-wt&kp=-2&kav=1&kf=-1&kac=-1&kbh=-1&ko=-1&k1=-1&kv=n&kz=-1&kat=-1&kbg=-1&kbe=0&kpsb=-1&q={query}",
+                       results_container_id="web_content_wrapper")
 
     links = _get_attr_by_selector(selector='[data-testid="result-title-a"]', attr="href")
 
@@ -363,14 +396,27 @@ def _search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
 #     logger.debug(f"search_startpage: Found: {preformatted_text}")
 #     return preformatted_text, results
 
+_engines = {"duckduckgo": _search_duckduckgo,
+            "google": _search_google}
+_results_cache: dict[tuple[str, str, int], Tuple[str, Dict]] = {}
+_search_lock = threading.Lock()  # serializes navigations: a single Selenium driver is not concurrency-safe
+
 def search(query: str, engine: str = "duckduckgo", max_links: int = 10) -> Tuple[str, Dict]:
-    if engine == "duckduckgo":
-        return _search_duckduckgo(query, max_links)
-    elif engine == "google":
-        return _search_google(query, max_links)
-    # elif engine == "startpage":
-    #     return search_startpage(query, max_links)
-    assert False
+    """Search the web. Return `(preformatted_text, results)`; see `_format_results`.
+
+    Raises `EngineUnavailable` when the search engine did not answer. An empty `results` means it did,
+    and found nothing.
+    """
+    key = (engine, query, max_links)
+    with _search_lock:
+        if key in _results_cache:
+            return _results_cache[key]
+        # Only an answer is cached. A failure is the engine's state at that moment, and caching it would
+        # refuse the same query for the rest of the session — which is why this is not `unpythonic.memoize`,
+        # which caches exceptions as well as results.
+        result = _engines[engine](query, max_links)
+        _results_cache[key] = result
+        return result
 
 # --------------------------------------------------------------------------------
 # Example

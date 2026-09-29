@@ -116,6 +116,14 @@ websearch_engine = "duckduckgo"
 # How many web search results to return, when the LLM uses the websearch tool.
 web_num_results = 10
 
+# How long to wait for a web tool — `websearch` or `webfetch` — to answer. A call that takes longer is reported
+# to the AI as the site not answering, and the turn goes on.
+#
+# A backstop for a server that is stuck, rather than the usual way a web tool fails: a slow site is reported by
+# Raven-server itself, which knows what went wrong, after its own `web_page_load_timeout` and the waits that
+# follow it. Those add up to about 45 s for a search at worst, so the read timeout here must stay above that.
+web_tool_timeout = Timeout(connect=10.0, read=60.0)
+
 # How many rounds of tool calls the LLM may make within a single AI turn, before it has to answer.
 #
 # One "round" is one assistant message requesting tools, plus their results. The turn ends when the model
@@ -126,7 +134,7 @@ web_num_results = 10
 # that finds nothing invites rephrasing, a fetch that is refused invites another URL, and both can be done
 # forever. What differs between tools is how often the empty-handed case comes up: a local corpus returns
 # nothing at all for most queries outside its subject, while a web search almost always returns something
-# plausible-looking. (The server-side memoization of websearch does not help here — it collapses identical
+# plausible-looking. (The server-side cache of websearch results does not help here — it collapses identical
 # queries, and a rephrasing loop issues different ones.)
 #
 # When the cap is reached, the requested calls still run; only the invocation *after* them is told that the

@@ -53,7 +53,7 @@ def fake_fetch(monkeypatch):
     """Replace the HTTP fetch with a recorder; returns the list of URLs that reached the server."""
     fetched_urls = []
 
-    def _fake(url, output_format="markdown"):
+    def _fake(url, output_format="markdown", timeout=None):
         fetched_urls.append(url)
         return {"content": f"CONTENT of {url}", "url": url, "spaSuspected": False, "title": f"TITLE of {url}"}
 
@@ -229,7 +229,7 @@ class TestWebfetchResultHeader:
 
     def test_a_server_refusal_names_the_url(self, monkeypatch):
         # The URL is the one the server ended up at, which a rewrite can change.
-        def _refuse(url, output_format="markdown"):
+        def _refuse(url, output_format="markdown", timeout=None):
             return {"content": "This site doesn't render its content as static HTML and can't be fetched as text.",
                     "url": "https://old.x.example/p", "spaSuspected": True, "title": None}
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=_refuse))
@@ -445,7 +445,7 @@ class TestWebsearchWrapper:
     def _patch_capture_engine(monkeypatch):
         """Patch `api.websearch_search` to record the engine it was called with; return the capture dict."""
         captured = {}
-        def fake_search(query, engine, num):
+        def fake_search(query, engine, num, timeout=None):
             captured["engine"] = engine
             return {"data": []}
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(websearch_search=fake_search))
@@ -463,6 +463,77 @@ class TestWebsearchWrapper:
         monkeypatch.setattr(llmclient.librarian_config, "websearch_engine", "google")
         llmclient.websearch("q", engine="duckduckgo")
         assert captured["engine"] == "duckduckgo"
+
+
+class TestWebsearchFailures:
+    """Every way a web search comes back without results answers the model in a sentence saying which way.
+
+    The empty result was the failure these replace: a search engine that did not answer and one that found
+    nothing both arrived as a tool message with nothing in it.
+    """
+
+    @staticmethod
+    def _patch(monkeypatch, fake_search):
+        monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(websearch_search=fake_search))
+
+    def test_no_results_says_so(self, monkeypatch):
+        self._patch(monkeypatch, lambda *a, **k: {"results": "", "data": [], "engineUnavailable": False})
+        assert llmtools.websearch("q") == llmtools.CANONICAL_NO_WEB_RESULTS
+
+    def test_an_engine_that_did_not_answer_says_so(self, monkeypatch):
+        # Also empty, as the case above is: only the server's flag tells the two apart.
+        self._patch(monkeypatch, lambda *a, **k: {"results": "", "data": [], "engineUnavailable": True})
+        assert llmtools.websearch("q") == llmtools.CANONICAL_SEARCH_ENGINE_UNAVAILABLE
+
+    def test_a_timeout_is_an_engine_that_did_not_answer(self, monkeypatch):
+        def fake_search(*args, **kwargs):
+            raise requests.ReadTimeout("slow")
+        self._patch(monkeypatch, fake_search)
+        assert llmtools.websearch("q") == llmtools.CANONICAL_SEARCH_ENGINE_UNAVAILABLE
+
+    @pytest.mark.parametrize("exc", [requests.ConnectionError("refused"),
+                                     RuntimeError("While calling Raven-server: HTTP 403 FORBIDDEN")])
+    def test_an_unreachable_or_refusing_server_is_web_search_unavailable(self, monkeypatch, exc):
+        def fake_search(*args, **kwargs):
+            raise exc
+        self._patch(monkeypatch, fake_search)
+        assert llmtools.websearch("q") == llmtools.CANONICAL_WEBSEARCH_UNAVAILABLE.format(
+            reason=f"{type(exc).__name__}: {exc}")
+
+    def test_the_call_waits_for_the_web_tool_timeout(self, monkeypatch):
+        captured = {}
+        def fake_search(query, engine, num, timeout=None):
+            captured["timeout"] = timeout
+            return {"data": []}
+        self._patch(monkeypatch, fake_search)
+        llmtools.websearch("q")
+        assert captured["timeout"] == llmtools.librarian_config.web_tool_timeout
+
+
+class TestWebfetchFailures:
+    """A fetch the server did not answer, or could not be asked for, answers in a sentence under the usual header."""
+
+    @staticmethod
+    def _patch(monkeypatch, exc):
+        def fake_fetch(url, output_format="markdown", timeout=None):
+            raise exc
+        monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=fake_fetch))
+        _set_allowlist(monkeypatch, None)
+
+    def test_a_timeout_says_the_page_did_not_load(self, monkeypatch):
+        self._patch(monkeypatch, requests.ReadTimeout("slow"))
+        text, metadata = llmtools.webfetch("https://x.example/p")
+        assert text.startswith("**Webfetch result for** [https://x.example/p](https://x.example/p):")
+        assert text.rstrip().endswith(llmtools.CANONICAL_WEBFETCH_TIMEOUT.format(url="https://x.example/p"))
+        assert metadata["fetched_document"]["url"] == "https://x.example/p"
+
+    @pytest.mark.parametrize("exc", [requests.ConnectionError("refused"),
+                                     RuntimeError("While calling Raven-server: HTTP 403 FORBIDDEN")])
+    def test_an_unreachable_or_refusing_server_is_webfetch_unavailable(self, monkeypatch, exc):
+        self._patch(monkeypatch, exc)
+        text, _ = llmtools.webfetch("https://x.example/p")
+        assert text.rstrip().endswith(llmtools.CANONICAL_WEBFETCH_UNAVAILABLE.format(
+            reason=f"{type(exc).__name__}: {exc}"))
 
 
 # ---------------------------------------------------------------------------

@@ -31,8 +31,10 @@ __all__ = ["TOOLS",
            #
            # The entrypoints are named here as well as reachable through `TOOL_ENTRYPOINTS`: the tests
            # call them directly, and so does anything driving one tool on purpose.
+           "CANONICAL_NO_WEB_RESULTS", "CANONICAL_SEARCH_ENGINE_UNAVAILABLE", "CANONICAL_WEBSEARCH_UNAVAILABLE",
            "websearch",
-           "CANONICAL_NOT_ON_ALLOWLIST", "approve_host_for_session", "webfetch",
+           "CANONICAL_NOT_ON_ALLOWLIST", "CANONICAL_WEBFETCH_TIMEOUT", "CANONICAL_WEBFETCH_UNAVAILABLE",
+           "approve_host_for_session", "webfetch",
            "CANONICAL_NO_DOCUMENT_DATABASE", "CANONICAL_NO_DOCUMENT_MATCHES", "search_documents",
            "CANONICAL_NOTHING_CONSULTED", "list_consulted_documents",
            "CANONICAL_NO_SUCH_DOCUMENT", "CANONICAL_NO_ROOM_TO_FETCH", "fetch_document",
@@ -54,6 +56,7 @@ import json
 import math
 from typing import Any, Callable, TYPE_CHECKING
 
+import requests
 import simpleeval
 
 from unpythonic import dyn, make_dynvar, timer, uniqify
@@ -272,8 +275,17 @@ def _formatters() -> env:
 # ------------------------------------------------------------------------------------------------
 
 
+# Canonical strings for the ways a web search can come back without results. Statements of fact, for the same
+# reason as the document tools' below; each says whether trying again is worth it, which is the decision the
+# model has to make next.
+CANONICAL_NO_WEB_RESULTS = ("The web search found no results for that query. A differently worded query "
+                            "may find something.")
+CANONICAL_SEARCH_ENGINE_UNAVAILABLE = ("The search engine did not respond. It may be temporarily unavailable; "
+                                       "trying again later may work.")
+CANONICAL_WEBSEARCH_UNAVAILABLE = "Web search is not available right now, because of an internal error: {reason}"
+
 def websearch(query: str,
-              engine: str | None = None) -> list[dict[str, str]]:
+              engine: str | None = None) -> list[dict[str, str]] | str:
     """Perform a websearch via Raven-server; return the results as content parts, one text part per result.
 
     `engine`: search backend, "duckduckgo" or "google". `None` (the default) uses the configured
@@ -288,14 +300,32 @@ def websearch(query: str,
     snippets are scraped HTML from the search engine — external untrusted content, the same hostile-input class
     that motivated the normalizer (it strips invisible-injection glyphs and control characters). Normalizing
     the link too is deliberate: a URL carrying zero-width characters is exactly what we want cleaned.
+
+    When there are no results to show, returns one of the canonical strings instead, saying why:
+    `CANONICAL_NO_WEB_RESULTS`, `CANONICAL_SEARCH_ENGINE_UNAVAILABLE` (the engine did not answer, or the
+    whole call outlasted `librarian_config.web_tool_timeout`), or `CANONICAL_WEBSEARCH_UNAVAILABLE`
+    (Raven-server could not be reached, or refused the request), which names the error.
     """
     if engine is None:
         engine = librarian_config.websearch_engine
     api = _client_api()
-    websearch_results = api.websearch_search(query,
-                                             engine,
-                                             librarian_config.web_num_results)  # -> {"results": preformatted_text, "data": structured_results}
+    try:
+        websearch_results = api.websearch_search(query,
+                                                 engine,
+                                                 librarian_config.web_num_results,
+                                                 timeout=librarian_config.web_tool_timeout)  # -> {"results": preformatted_text, "data": structured_results, "engineUnavailable": bool}
+    except requests.Timeout:
+        logger.warning(f"websearch: no answer within {librarian_config.web_tool_timeout.read} s")
+        return CANONICAL_SEARCH_ENGINE_UNAVAILABLE
+    except (requests.ConnectionError, RuntimeError) as exc:  # `RuntimeError`: the server answered with an error status
+        logger.warning(f"websearch: {type(exc)}: {exc}")
+        return CANONICAL_WEBSEARCH_UNAVAILABLE.format(reason=f"{type(exc).__name__}: {exc}")
+    if websearch_results.get("engineUnavailable"):
+        logger.warning(f"websearch: the search engine '{engine}' did not answer")
+        return CANONICAL_SEARCH_ENGINE_UNAVAILABLE
     structured_results = websearch_results["data"]
+    if not structured_results:
+        return CANONICAL_NO_WEB_RESULTS
 
     def format_result_part(result: dict[str, str]) -> dict[str, str]:
         text = common_text.normalize(result.get("text", ""))
@@ -319,6 +349,14 @@ def websearch(query: str,
 # model copies it verbatim instead of improvising an explanation.
 CANONICAL_NOT_ON_ALLOWLIST = ("The host {host} is not on the configured allowlist. The user can add it to the "
                               "webfetch_allowlist setting if you should be able to access this site.")
+
+# The client-side counterparts of the server's own failure strings, for when the server did not answer in
+# time or could not be reached at all. The first is worded as the server's `CANONICAL_PAGE_TIMEOUT` is, since
+# from the model's side the two are the same event.
+CANONICAL_WEBFETCH_TIMEOUT = ("The page at {url} did not finish loading in time. The site may be slow or down; "
+                              "trying again later may work.")
+CANONICAL_WEBFETCH_UNAVAILABLE = ("Fetching web pages is not available right now, because of an internal error: "
+                                  "{reason}")
 
 # Hosts the user has explicitly approved during this session (in-memory; NOT persisted). Populated by
 # the GUI "allow this fetch" override when the user approves a host that `webfetch` denied. Consulted
@@ -346,10 +384,10 @@ def approve_host_for_session(host: str) -> None:
 #   - cache a per-turn auto-allow, leaking a one-turn permission into later turns.
 # The gate is a security boundary; memoizing it turns a transient decision into a permanent one.
 #
-# This composes safely with the @memoize that DOES exist (server-side `websearch`,
-# `raven.server.modules.websearch`) precisely because the two never touch: the memoized function
+# This composes safely with the cache that DOES exist (server-side `websearch`,
+# `raven.server.modules.websearch`) precisely because the two never touch: the cached function
 # (websearch) does not read the allowlist, and the allowlist-reading function (this one) is not
-# memoized. Keep it that way.
+# cached. Keep it that way.
 def _format_webfetch_result(url: str, title: str | None, content: str) -> str:
     """Prepend a source header (URL, plus the page title if any) and a separator to a webfetch's `content`.
 
@@ -397,7 +435,15 @@ def webfetch(url: str) -> tuple[str, dict]:
                     {"webfetch_denied_host": host})
 
     api = _client_api()
-    result = api.webfetch_fetch(url)  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected", "title"}
+    try:
+        result = api.webfetch_fetch(url, timeout=librarian_config.web_tool_timeout)  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected", "title"}
+    except requests.Timeout:
+        logger.warning(f"webfetch: no answer within {librarian_config.web_tool_timeout.read} s for '{url}'")
+        result = {"content": CANONICAL_WEBFETCH_TIMEOUT.format(url=url), "url": url, "title": None}
+    except (requests.ConnectionError, RuntimeError) as exc:  # `RuntimeError`: the server answered with an error status
+        logger.warning(f"webfetch: {type(exc)}: {exc}")
+        result = {"content": CANONICAL_WEBFETCH_UNAVAILABLE.format(reason=f"{type(exc).__name__}: {exc}"),
+                  "url": url, "title": None}
     if result.get("spaSuspected"):
         logger.info(f"webfetch: '{result.get('url', url)}' flagged spaSuspected (neither fetch tier extracted usable content).")
     # Declare the result a fetched document, so `scaffold` can store a long one as an attachment sidecar

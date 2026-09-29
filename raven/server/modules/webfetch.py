@@ -77,6 +77,8 @@ CANONICAL_DNS_FAILURE = ("Could not resolve the host name {host}. The site may b
 CANONICAL_SPA_SUSPECTED = "This site doesn't render its content as static HTML and can't be fetched as text."
 CANONICAL_HTTP_ERROR = ("The server returned HTTP {status} for {url}. The page may be unavailable or require "
                         "authentication.")
+CANONICAL_PAGE_TIMEOUT = ("The page at {url} did not finish loading in time. The site may be slow or down; "
+                          "trying again later may work.")
 
 # --------------------------------------------------------------------------------
 # Bootup
@@ -284,18 +286,23 @@ def _extract_title(html: Optional[str]) -> Optional[str]:
     title = getattr(metadata, "title", None) if metadata is not None else None
     return common_text.normalize(title).strip() if title else None
 
-def _fetch_tier2(url: str, *, output_format: str) -> str:
-    """Tier 2: render `url` in a real headless browser, then extract. Returns "" if unavailable.
+def _fetch_tier2(url: str, *, output_format: str) -> str | None:
+    """Tier 2: render `url` in a real headless browser, then extract.
+
+    Returns "" if unavailable, and `None` if the page did not finish loading within
+    `server_config.web_page_load_timeout`.
 
     Lazily creates a Selenium driver (reusing `websearch`'s factory) on first use; serialized
     by a lock since a single driver can't navigate concurrently. If no browser is installed,
     returns "" and the caller treats the page as unfetchable.
     """
     global _driver
+    from .. import config as server_config
     from . import websearch  # noqa: PLC0415 -- deferred: reuse its Selenium driver factory only when Tier 2 runs
+    from selenium.common import exceptions as selenium_exceptions  # noqa: PLC0415 -- deferred, as the factory is
     with _driver_lock:
         if _driver is None:
-            _driver = websearch.get_driver()
+            _driver = websearch.get_driver(page_load_timeout=server_config.web_page_load_timeout)
             if _driver is not None:
                 atexit.register(lambda: _driver.quit())
         if _driver is None:
@@ -304,6 +311,9 @@ def _fetch_tier2(url: str, *, output_format: str) -> str:
         try:
             _driver.get(url)
             html = _driver.page_source
+        except selenium_exceptions.TimeoutException:
+            logger.info(f"_fetch_tier2: '{url}' did not finish loading in time")
+            return None
         except Exception as exc:
             logger.warning(f"_fetch_tier2: browser navigation failed for '{url}', reason {type(exc)}: {exc}")
             return ""
@@ -355,15 +365,21 @@ def fetch(url: str, output_format: str = "markdown") -> Dict:
     content = _extract_clean_text(html, url=effective_url, output_format=trafilatura_format)
     title = _extract_title(html)  # from the (Tier 1) static HTML; usually present even on SPAs, whose shell carries a <title>
 
+    tier2_timed_out = False
     if len(content) < server_config.webfetch_min_content_chars:
-        tier2_content = _fetch_tier2(effective_url, output_format=trafilatura_format)
-        if len(tier2_content) >= len(content):
-            content = tier2_content
+        maybe_tier2_content = _fetch_tier2(effective_url, output_format=trafilatura_format)
+        if maybe_tier2_content is None:
+            tier2_timed_out = True
+        elif len(maybe_tier2_content) >= len(content):
+            content = maybe_tier2_content
 
     if len(content) < server_config.webfetch_min_content_chars:
-        # Both tiers came up short. Distinguish a definitive HTTP error from a JS-only page.
+        # Both tiers came up short. Distinguish a definitive HTTP error, and a page that never finished
+        # loading, from a JS-only page.
         if status is not None and status >= 400 and not content:
             return _make_result(CANONICAL_HTTP_ERROR.format(status=status, url=effective_url), url=effective_url)
+        if tier2_timed_out and not content:
+            return _make_result(CANONICAL_PAGE_TIMEOUT.format(url=effective_url), url=effective_url)
         return _make_result(CANONICAL_SPA_SUSPECTED, url=effective_url, spa_suspected=True)
 
     body = common_text.normalize(content)
