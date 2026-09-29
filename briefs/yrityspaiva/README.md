@@ -173,9 +173,40 @@ live on the Night.
 
 ## Queue, in order
 
-1. **Make `websearch` cancellable** — filed on the Night, 2026-09-25, in `TODO_DEFERRED.md`
-   (`investigations/abort-inflight-request/`). **Wider than its title**: `webfetch` at least, and possibly
-   other tools — survey them all when it is picked up (maintainer, 2026-09-28).
+1. **Make the tools cancellable, and the web tools fail in prose** — filed on the Night, 2026-09-25, in
+   `TODO_DEFERRED.md` (`investigations/abort-inflight-request/`). Designed 2026-09-29 with the maintainer.
+   - **Survey.** Only `websearch` and `webfetch` can wait long (Raven-server; `webfetch`'s headless tier the
+     slowest). `search_documents` may make server round-trips through its `MaybeRemote` embedder and
+     tokenizer: seconds. The rest are local and instant.
+   - **Mechanism: (b) now, then (c).**
+     - (b) Each tool call runs on a worker thread; the turn waits on the call *or* the abort, and on abort
+       stops waiting. One place, the `perform_tool_calls` dispatch, covering every tool. The orphaned thread
+       runs until the server answers or the timeout expires, and its result is discarded.
+     - (c) The web endpoints send headers at once and the result as a streamed body, so `Abort.arm(response)`
+       works unchanged, and the server can notice the client has gone and stop scraping. Changing the API
+       is fine: Raven-server always ships version-matched with the client, so both ends change together.
+     - Rejected: (a), reaching the socket at connect time through a custom transport adapter. More private
+       urllib3 internals and a Windows variant, for less coverage than (b), since `MaybeRemote` calls
+       bypass it.
+   - **What a Stop mid-round leaves.** Finished calls keep their results; each unfinished call gets a tool
+     result saying the user cancelled it; the turn ends, with no further LLM round. A `tool_calls` message
+     without a result per call would make the next request malformed under the OpenAI schema.
+   - **Stop ends the turn.** The other verb — go on without that tool — is the empty send, which becomes
+     always allowed on a tool node, as it is on a user message.
+   - **The GUI's cancel hook** aborts during a tool round as well as before anything has streamed: one more
+     flag on `task_env`. `retry_tool_calls` goes through the same dispatch and gets all of this for free.
+   - **The web tools' errors, from the Night.** DuckDuckGo flaked, and each search waited about 30 s and
+     returned an empty result: the server's wait for the results element gives up after 5 s and carries on,
+     the scroll loop then waits up to 25 s more, and zero links go back as a success. So:
+     - the server tells "no results" from "the results never appeared", and sets a page-load timeout on the
+       driver;
+     - `llmtools` answers in canonical prose, as the document tools do — no results; the engine did not
+       respond; web search unavailable — in place of both the empty list and the exception text;
+     - a web-tool timeout of its own in Librarian's config, passed through as an optional `timeout=` on the
+       two api calls, since `network_timeout` covers every server call. 30–45 s, to leave room for
+       `webfetch`'s headless tier.
+   - Order: the empty send on tool nodes, the web tools' errors and timeout, (b), then (c) — which may be
+     tomorrow's.
 2. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.

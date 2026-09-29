@@ -569,7 +569,7 @@ def minimal_chat_client(backend_url) -> None:
             # Add the user's message to the chat, if non-empty.
             #
             # By sending empty `user_message_text`, it is possible to have the AI generate another message
-            # without the user writing in between — always when the chat ends on a user message, otherwise
+            # without the user writing in between — always when the chat ends on a user message or a tool result, otherwise
             # if `llm_allow_empty_send` is on. See `chatutil.empty_send_allowed`.
             if not user_message_text and not chatutil.empty_send_allowed(datastore, app_state["HEAD"],
                                                                          librarian_config.llm_allow_empty_send):

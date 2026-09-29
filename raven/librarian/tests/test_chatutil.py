@@ -1801,6 +1801,13 @@ class TestEmptySendAllowed:
         assert not chatutil.empty_send_allowed(f, answer, allow_setting=False)
         assert chatutil.empty_send_allowed(f, answer, allow_setting=True)
 
+    def test_on_a_tool_result_it_is_always_allowed(self, chat_payload):
+        # How a turn stopped during its tool calls is resumed: the AI goes on from the results it has.
+        f, question, _answer = self._branch(chat_payload)
+        asking = f.create_node(chat_payload("assistant", ""), parent_id=question)
+        result = f.create_node(chat_payload("tool", "a result"), parent_id=asking)
+        assert chatutil.empty_send_allowed(f, result, allow_setting=False)
+
 
 class TestLatestUserMessageText:
     """The RAG query a turn falls back on when the user did not just type something.

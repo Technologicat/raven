@@ -1912,12 +1912,16 @@ def empty_send_allowed(datastore: chattree.Forest, head_node_id: str, allow_sett
 
     Always, when the branch ends on a user message: the AI then answers that message, exactly as it would
     have had the user just sent it — which is how a question is asked again after deleting its replies.
-    The setting governs the other case, a request ending on the AI's own reply, which some models answer
-    with nothing (see `llm_allow_empty_send`).
+
+    Always, too, when it ends on a tool result: the AI then goes on from the results it has, which is how
+    a turn stopped during its tool calls is resumed without the calls that were cancelled.
+
+    The setting governs the remaining case, a request ending on the AI's own reply, which some models
+    answer with nothing (see `llm_allow_empty_send`).
     """
     if allow_setting:
         return True
-    return get_node_message_text_without_persona(datastore, head_node_id)[0] == "user"
+    return get_node_message_text_without_persona(datastore, head_node_id)[0] in ("user", "tool")
 
 def get_node_message_text_without_persona(datastore: chattree.Forest,
                                           node_id: str) -> str:

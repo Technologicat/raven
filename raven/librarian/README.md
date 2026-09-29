@@ -735,6 +735,7 @@ Basic **conversation flow** in *Librarian* works like in many LLM chatbot applic
   - **LLM agent loop**: the AI may call tools to gather information needed for composing its reply. For details, see [Tools](#tools) above.
 - You can send an empty message: leave the message entry field blank and click the **send button**. This omits your turn, asking the AI to take the next turn instead.
   - **When the chat ends on your own message**, this always works: the AI answers that message. This is how to ask a question again after deleting its replies.
+  - **When the chat ends on a tool result**, this always works too: the AI goes on from the results it has. This is how to resume a reply that was stopped while the AI was using its tools.
   - **When the chat ends on an AI reply**, it works only if `llm_allow_empty_send` is switched on in `raven.librarian.config`. It is off by default.
     - How the AI behaves in this situation depends on your particular LLM. Qwen 3.6 on LM Studio, for one, mostly answers with an empty message, which is why the setting is off.
 - You can interrupt the AI generation, and resume (continue) it later.

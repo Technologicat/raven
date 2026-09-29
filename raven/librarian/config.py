@@ -214,12 +214,13 @@ send_message_key = "ctrl+enter"
 # while the composer is the field that sends data away. `"composer"` starts with the caret in it.
 startup_keyboard_home = "chat_log"
 
-# Whether sending an empty message, with nothing attached, lets the AI take another turn without the user
-# writing in between. In Raven-librarian and in `raven-minichat` alike.
+# Whether sending an empty message, with nothing attached, lets the AI take another turn after its own reply,
+# without the user writing in between. In Raven-librarian and in `raven-minichat` alike. On a chat ending with
+# the user's message or a tool result, an empty send is always allowed, whatever this says.
 #
 # Off, because the request then ends on the AI's own reply, and the model tried (Qwen 3.6 on LM Studio) mostly
 # answers that with an empty message — see `investigations/stray-role-header/`. With this off, an empty send
-# does nothing.
+# after an AI reply does nothing.
 llm_allow_empty_send = False
 
 # How long a fetched document has to be, in characters, before the chat log shows it as an attachment
