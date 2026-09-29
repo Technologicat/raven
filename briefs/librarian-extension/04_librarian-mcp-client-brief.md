@@ -330,6 +330,10 @@ Multiple servers can expose the same tool name. Namespace registered tools by se
 (e.g. `label__toolname`) and reverse-map at call time, so `tool_entrypoints` keys stay unique
 and the model is told unambiguous names.
 
+**Check `mcp.client.session_group.SessionGroup` first**: per its docstring it manages several
+sessions concurrently, aggregates their tools, and takes a user-provided hook for name collisions,
+which may cover this section and part of §1's per-server bookkeeping. Only the docstring has been read.
+
 ### MCP tools want their own GUI toggle, separate from "Internet"
 
 Re-homed here 2026-08-12 from the deferred item that shipped the Internet toggle, because it is the only
@@ -381,6 +385,33 @@ introduces a GUI import into scaffold-layer code, `minichat` breaks at import ti
 run, immediate fail signal if the layering regresses. The constraint applies equally to
 the §0 tool registry, §1 adapter code, this section's lifecycle hooks, and anywhere else
 phase 4 touches scaffold internals.
+
+---
+
+## 6. Later: Librarian as an MCP *server* (scoping notes, 2026-09-29)
+
+Not part of this brief's acceptance, and recorded here so the client work doesn't paint it into a corner.
+
+**Use case:** other local AI agents in the lab query Librarian for what it can extract from the
+document DB. Two shapes, and both are wanted:
+
+- **Retrieval**: a tool over the HybridIR index that returns chunks. Thin.
+- **An agent turn**: a RAG-backed LLM turn that returns an answer, built on `raven.librarian.agent`.
+  Capacity is fine for a few parallel sessions, and the number of clients is under our control.
+
+**Library:** the same SDK. `mcp.server.mcpserver.MCPServer` (2.x's name for what 1.x called
+`FastMCP`) has a `@tool` decorator and serves stdio, SSE and streamable HTTP, and
+`mcp.server.lowlevel.Server` is there if we need to supply schemas ourselves. §0's registry may be
+able to feed both directions; not checked yet.
+
+**Where it runs depends on brief 13** (*Where the database lives*). If the DB moves behind
+Raven-server, the MCP server reaches it the same way every other app does. Until then, a second
+process reading the index needs an answer on concurrent access. Note the SDK's server app is ASGI
+(Starlette) while Raven-server is Flask (WSGI), so it doesn't simply mount into the existing server.
+
+**Trust:** it exposes a possibly private corpus, so it binds to localhost by default, with the SDK's
+auth support available when that changes. This is also the concrete case for question 5 of
+`briefs/design/constellation-architecture-sketch.md`.
 
 ---
 
