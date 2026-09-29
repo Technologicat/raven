@@ -24,13 +24,13 @@ level; it is not set anywhere. Folded into the level test it slips through — t
 set somewhere other than higher education", finds no setting at all, and keeps a link-prediction survey.
 
 Two passes. Pass 1 asks about titles in batches, which is enough for the clear cases and is what makes
-5167 records affordable. Pass 2 re-asks about title *and* abstract, one record at a time, for everything
-pass 1 was unsure about. 83% of this corpus has an abstract — though a tenth of those are publisher
+5167 records affordable. Pass 2 re-asks about title *and* abstract, in smaller batches, for everything
+escalated from pass 1. 83% of this corpus has an abstract — though a tenth of those are publisher
 teasers that break off mid-sentence, which pass 2 is told about, since a blurb read as a whole abstract
 invites exactly the concluding-from-absence the rubric otherwise forbids.
 
 Escalation fires on a low-confidence answer, on a title too thin to have been answerable, or on any drop
-the model was not certain of. The last two are decided here rather than asked of the model, and that is
+at all, however sure the model says it is. The last two are decided here rather than asked of the model, and that is
 the point: a sibling run over a paper pile found the model at its most confident exactly where the input
 carried least — confidently naming the subject of a file called `2006.05563.pdf` — so a rule driven by
 the model's own confidence is blind in precisely the place it most needs to look. And the two verdicts do
