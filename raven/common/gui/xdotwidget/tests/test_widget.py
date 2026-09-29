@@ -362,6 +362,28 @@ class TestSetGraphCanMorph:
         # the anchor, which would have slid 300 px had the view not moved with the layout.
         assert screen_position(widget, "a") == pytest.approx(others_before)
 
+    def test_a_rebuild_mid_morph_leaves_a_pan_in_flight_aimed_where_it_was(self, widget):
+        """A pan set during a morph is aimed in the layout the morph is heading for. A rebuild partway through
+        that draws the same layout moves the anchor on screen, the morph not having got there yet, but not in
+        the layout the pan was aimed in — so the pan's destination must not move. Seen as a chat graph search
+        step gliding past its match, when the step's own rebuild was followed by another mid-morph."""
+        widget.set_zoom(1.0, animate=False)
+        widget.update()
+        target_layout = moved(chat_shaped_graph(), 300.0, only="b2")
+        widget.set_graph(target_layout, animate=True)
+        widget._last_update_time -= 0.05
+        widget.update()
+        widget.pan_to_node("b2", animate=True)
+        aimed_at = (widget._viewport.pan_x.target, widget._viewport.pan_y.target)
+
+        final_x = target_layout.get_node_by_name("b2").x
+        assert widget._picture_now().positions["b2"][0] != pytest.approx(final_x), \
+            "b2 is drawn where it is going, so this fixture cannot tell the two shifts apart"
+
+        widget.set_graph(moved(chat_shaped_graph(), 300.0, only="b2"), animate=True, anchor_node="b2")
+        assert (widget._viewport.pan_x.target, widget._viewport.pan_y.target) == pytest.approx(aimed_at), \
+            "the rebuild moved the pan's destination by the morph still to run"
+
     def test_without_an_anchor_a_moved_layout_moves_on_screen(self, widget):
         widget.set_zoom(1.0, animate=False)
         widget.update()

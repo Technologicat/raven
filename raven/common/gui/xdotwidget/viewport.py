@@ -205,14 +205,20 @@ class Viewport:
             self.pan_x.set_immediate(self.pan_x.target)
             self.pan_y.set_immediate(self.pan_y.target)
 
-    def shift(self, dx: float, dy: float) -> None:
+    def shift(self, dx: float, dy: float,
+              target_dx: float | None = None, target_dy: float | None = None) -> None:
         """Move the view by `(dx, dy)` graph units at once, keeping any pan in flight.
 
         For a change of coordinates rather than a move: when the graph under the view has moved by that
         much, the same things stay on screen.
+
+        `target_dx`, `target_dy`: Move a pan in flight's destination by these instead. `None` means `dx`, `dy`.
+                                  They differ while a morph is running: where the view is now is measured
+                                  against the picture on screen, partway between two layouts, while where
+                                  it is going was set in the coordinates of the layout the morph is heading for.
         """
-        self.pan_x.shift(dx)
-        self.pan_y.shift(dy)
+        self.pan_x.shift(dx, target_dx)
+        self.pan_y.shift(dy, target_dy)
 
     def zoom_to(self, new_zoom: float, center_sx: float | None = None,
                 center_sy: float | None = None, animate: bool = True) -> None:

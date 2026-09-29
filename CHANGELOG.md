@@ -76,6 +76,8 @@
 - **Librarian could occasionally close by itself while redrawing a message**, with *"Unhandled exception in render loop"* in the log. Nothing was lost beyond what the once-a-minute autosave had not yet written.
 - **Deleting a message is refused while a reply is being written.**
   - In v0.2.9 the delete went through, and deleting a message above the reply in progress destroyed the reply along with it, while it was still being written. The button now flashes red and says why.
+- **Going to a match in the chat graph no longer sometimes lands beside it, with the match off screen.**
+  - The view glided the right way and then kept going, when the graph was redrawn again before its rearranging had finished.
 - **Rerolling a reply no longer leaves extra space above the new one.**
   - Each message the reroll took off screen left a few pixels of blank space behind, so a reply that had called tools, being several messages, left a visible gap. The chat log also carried a little extra space wherever a reply had finished streaming. Both went away at the next full redraw, such as a branch switch, which is why the gap seemed to come and go.
 

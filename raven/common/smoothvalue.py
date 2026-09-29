@@ -266,14 +266,22 @@ class SmoothValue:
         self._current = value
         self._target = value
 
-    def shift(self, delta: float) -> None:
+    def shift(self, delta: float, target_delta: float | None = None) -> None:
         """Move both current and target value by `delta`, keeping any animation in flight.
 
         For a change of coordinates under a value that may be moving: the motion carries on, from and to the
         same places as before, expressed in the new coordinates.
+
+        `target_delta`: Move the target by this instead, for when the current value and the target are
+                        expressed in coordinates that changed by different amounts. `None` means `delta`.
+
+                        For example, a camera gliding over a picture that is morphing between two layouts: where
+                        the camera is now is measured against the picture as drawn this frame, partway between
+                        the layouts, while where it is going was set in the layout the morph is heading for. A
+                        new layout moves a node by different amounts relative to those two.
         """
         self._current += delta
-        self._target += delta
+        self._target += delta if target_delta is None else target_delta
 
     def is_animating(self) -> bool:
         """Return True if the value is still animating toward target."""
@@ -360,10 +368,10 @@ class SmoothInt:
         self._current_float = float(value)
         self._target = value
 
-    def shift(self, delta: int) -> None:
+    def shift(self, delta: int, target_delta: int | None = None) -> None:
         """Move both current and target value by `delta`, keeping any animation in flight. As for `SmoothValue`."""
         self._current_float += delta
-        self._target += delta
+        self._target += delta if target_delta is None else target_delta
 
     def is_animating(self) -> bool:
         """Return True if the value is still animating toward target."""

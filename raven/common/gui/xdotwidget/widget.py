@@ -308,7 +308,16 @@ class XDotWidget(gui_animation.Animation):
                 if was_at is not None and now is not None:
                     dx, dy = now.x - was_at[0], now.y - was_at[1]
                     source = morph.shifted(source, dx, dy)
-                    self._viewport.shift(dx, dy)
+                    # A pan in flight is heading somewhere in the previous graph's own layout, which during a
+                    # morph is not the picture on screen. So its destination moves by how far the anchor moved
+                    # between the two layouts, and only the view's current position by how far it moved from
+                    # where it is drawn this frame. Shifting both by the second double-counts the morph still
+                    # to run: a rebuild partway through one sent a search step's glide past the match.
+                    maybe_was_final = self._graph.get_node_by_name(anchor_node)
+                    if maybe_was_final is not None:
+                        self._viewport.shift(dx, dy, now.x - maybe_was_final.x, now.y - maybe_was_final.y)
+                    else:
+                        self._viewport.shift(dx, dy)
 
             if animate and source is not None:
                 self._morph_source = source
