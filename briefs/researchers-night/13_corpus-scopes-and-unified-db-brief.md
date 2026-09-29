@@ -247,6 +247,35 @@ when it runs. Everything in this section is [P] and wants arguing with.
   about X" and "find me the paper about X" can produce near-identical distributions and want different k, and
   autodetect cannot see that difference because it is not in the data. Hint optional and usually absent, not a
   required parameter the model reasons about on every call.
+- **[N] The TOC is the Visualizer link, once the DBs are unified** (Juha, 2026-09-29, on the first bullet
+  above: "perfect after we unify the DBs"). So the cluster-keyword TOC is the agreed direction, gated on
+  unification rather than a proposal still to be argued.
+
+### 4a. With a TOC, the automatic search goes away
+
+Worked out 2026-09-29, from the display side (Yrityspäivä sprint). The preamble's "autosearch off, tools
+still on" middle setting is the weak form of this; the conclusion reached is the strong form.
+
+- **[N] Why the automatic search exists at all** (Juha): classical RAG searched automatically because models
+  could not call tools. Raven searches automatically for a different reason — without it, the model does not
+  know what the database covers, so it cannot decide to look. **Once the scope is published to the model,
+  Qwen is likely smart enough to reach for the document tools when appropriate, and the automatic search
+  can go.**
+- **[N] The display argument, found the same day.** A `search_documents` *tool* result is stored, so the chat
+  log can show it — and as of 2026-09-29 it shows each match under a handle that opens the document. The
+  automatic search's results are injected for one turn and not stored, so none of them can be opened. With
+  every search a tool call, every search result is openable.
+- **[X] Storing the automatic search as a real call-and-result pair**, which would make its results openable
+  without depending on the model to search. Rejected (Juha): at `k` = 50 the chunk is huge against a 128k
+  window, and attention dilution; the per-turn inject was built to avoid exactly that.
+- **[P] Step zero is a measurement**: with the TOC injected and the automatic search off, how often does the
+  model search when the answer is in the documents, and how often when it is not? `raven.librarian.agent`
+  and the `investigations/context-injects/` apparatus are the instruments. The answer decides whether the
+  automatic search can be removed outright or wants the middle setting for a while.
+- **[P] What else rests on the automatic search**, to revisit when it goes: the *Grounded* badge and
+  speculation-off mode read its result (`generation_metadata["grounded"]`); `list_consulted_documents` and
+  the consulted-documents inject exist to make up for its results not being stored; and one tool round per
+  document question is added latency the automatic search does not have.
 
 ## 5. Test corpora
 
@@ -294,6 +323,7 @@ Collected so the session has an agenda rather than a pile:
 3. **Where the scope↔document relation lives**, given that brief 12 owns derived artifacts and hybridir owns
    the index. Three stores currently believe different things about who is authoritative.
 4. **Whether the TOC (§4) is one mechanism or two** — the always-on names-and-counts, and `describe_scope`.
+   And, with it, **retiring the automatic search** (§4a): the measurement first, then what rests on it.
 5. **Migration.** Existing hybridir datastores and existing Visualizer datasets both predate all of this.
 6. **Whether the DB moves behind the server**, and what local mode does then. See *Where the database
    lives*.
