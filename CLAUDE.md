@@ -64,6 +64,12 @@ index.
     traces are what gets lost — more than once, the one time they would have explained the result (2026-09-15:
     a turn ran past 50k tokens, and the probe was keeping only the visible reply). The stream is for the
     turn that never returns: it has no record until the token cap stops it.
+  - **The scripts are co-authored, like the rest of the tree** (Juha, 2026-09-29): written by the maintainer
+    and Claude together, so not the maintainer's own work to be left alone. A stale docstring or comment in
+    one is handled as it would be in `raven/` — which includes raising a docstring that disagrees with its
+    code rather than resolving it in passing. (Live case, the same day: `aokk-corpus-scope/judge_scope.py`'s
+    module docstring had fallen two changes behind its functions, and was reported as left alone *because*
+    the script was taken to be Juha's.)
 - **`TODO.md`** for planned work, **`TODO_DEFERRED.md`** for things noticed mid-task and set aside.
 - **`scripts/`** — repository-maintenance tooling: scripts that check *this repo*, run by a maintainer and
   not shipped in the wheel. Distinct from `raven/tools/`, which holds user-facing console scripts. Each is
