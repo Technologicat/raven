@@ -619,9 +619,11 @@ class MorphCategoryControlPanel:
                 dpg.set_value(slider, min_value)
         else:
             new_arity = param_group.get_arity()
-            if dpg.is_item_visible(self.right_slider):
+            # Shown, not visible: the question is which sliders the old morph displayed, and DPG's "visible"
+            # means drawn last frame, which a slider scrolled or clipped out of the panel is not.
+            if dpg.is_item_shown(self.right_slider):
                 old_arity = 2
-            elif dpg.is_item_visible(self.left_slider):
+            elif dpg.is_item_shown(self.left_slider):
                 old_arity = 1
             else:
                 old_arity = 0  # discrete
