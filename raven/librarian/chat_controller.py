@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 import concurrent.futures
 import dataclasses
 import io
-import pathlib
 import threading
 import time
 from typing import Any, Callable, TYPE_CHECKING
@@ -3620,7 +3619,6 @@ class DPGChatController:
                  app_state: env,
                  avatar_controller: "DPGAvatarController",
                  avatar_record: env,
-                 avatar_image_path: str | pathlib.Path,
                  themes_and_fonts: env,
                  chat_panel_widget: str | int,
                  chat_stop_generation_button_widget: str | int,
@@ -3663,10 +3661,6 @@ class DPGChatController:
         `avatar_record`: Control data for the avatar instance of the AI in this chat view.
 
                          See the `register_avatar_instance` method of `raven.client.avatar_controller.DPGAvatarController`.
-
-        `avatar_image_path`: The file path to the main character image of the avatar of the AI speaking in this chat view.
-                             This is used for detecting and loading the per-character icon. If the current character
-                             has no per-character icon, a generic AI icon is used automatically.
 
         `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
 
@@ -3754,7 +3748,7 @@ class DPGChatController:
         """
         # Whose glyph each message wears. Asked by both views — the chat log here, the chat graph through the
         # app — so that they cannot disagree about who wrote a message.
-        self.speaker_glyphs = chattextures.SpeakerGlyphs(llm_settings, avatar_image_path, llm_settings.personas.get("user"))
+        self.speaker_glyphs = chattextures.SpeakerGlyphs(llm_settings)
 
         self.llm_settings = llm_settings
         self.datastore = datastore

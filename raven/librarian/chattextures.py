@@ -22,6 +22,7 @@ import dearpygui.dearpygui as dpg
 
 from unpythonic.env import env
 
+from ..avatar import characters as avatar_characters  # who the shipped characters are, by name
 from ..common import bgtask
 from ..vendor.file_dialog import fdialog  # for the file-type icons a document attachment is drawn as
 
@@ -79,42 +80,28 @@ class SpeakerGlyphs:
                 cls.icon_ai_texture = dpg.add_static_texture(w, h, data, tag="icon_ai_texture_generic")
             cls._class_initialized = True
 
-    def __init__(self,
-                 llm_settings: env,
-                 avatar_image_path: str | pathlib.Path,
-                 user_name: str | None):
+    def __init__(self, llm_settings: env):
         """Load the glyphs.
 
         `llm_settings`: The LLM settings, as from `raven.librarian.llmclient.setup`. Its `personas` say who is
-                        configured *now*, and are read on every call rather than once.
+                        configured: the character (`raven.avatar.characters`) and the user
+                        (`raven.librarian.userprofile`), whose declared icons are loaded here. Either one
+                        without an icon of its own gets the generic glyph for its role. The personas are read
+                        again on every `icon_texture_for`, so a stored message is drawn with the configured
+                        icon only when it was written under the configured name.
 
-        `avatar_image_path`: Path to the main character image of the AI's avatar.
-                             Used for detecting the presence of a per-character icon.
-
-                             If no per-character icon exists for this character,
-                             a generic AI icon is used.
-
-        `user_name`: The configured user's name, i.e. `llm_user_name`. Used for finding their profile's
-                     icon, if they declared one. Without a profile, or without an icon in it, the generic
-                     user glyph is used.
-
-        **Both sides, symmetrically.** The AI's face and the user's are found the same way — an `_icon.png`
-        beside the thing that declares them.
+        **Both sides, symmetrically.** The AI's face and the user's are found the same way — looked up by
+        name, as an `_icon.png` beside the thing that declares them.
         """
         type(self)._load_class_textures()
         self.llm_settings = llm_settings
 
-        # Prefer per-character icon, if available. This intentionally shadows `type(self).icon_ai_texture`.
-        avatar_image_path = pathlib.Path(avatar_image_path)
-        stem, ext = os.path.splitext(avatar_image_path.name)  # "example.png" -> "example", ".png"
-        character_icon_path = avatar_image_path.parent / f"{stem}_icon{ext}"
-        if character_icon_path.exists():
-            w, h, c, data = dpg.load_image(str(character_icon_path))
+        # Where the configured speaker declares an icon of their own, it shadows the class's generic one.
+        character = avatar_characters.find(llm_settings.personas.get("assistant"))
+        if character is not None and character.icon_path is not None:
+            w, h, c, data = dpg.load_image(str(character.icon_path))
             self.icon_ai_texture = dpg.add_static_texture(w, h, data, tag=f"icon_ai_texture_0x{id(self):x}", parent="librarian_chat_controller_textures")  # tag
-
-        # Prefer the configured user's own icon, if their profile declares one. Shadows the class
-        # attribute exactly as the character's icon does above.
-        profile = userprofile.find(user_name)
+        profile = userprofile.find(llm_settings.personas.get("user"))
         if profile is not None and profile.icon_path is not None:
             w, h, c, data = dpg.load_image(str(profile.icon_path))
             self.icon_user_texture = dpg.add_static_texture(w, h, data, tag=f"icon_user_texture_0x{id(self):x}", parent="librarian_chat_controller_textures")  # tag
