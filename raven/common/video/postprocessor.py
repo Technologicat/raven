@@ -1164,7 +1164,7 @@ class Postprocessor:
             g = grid.squeeze(0)
             top_left_xy = g[0, 0]
             bottom_right_xy = g[-1, -1]
-            x0 = int((top_left_xy[0] + 1.0) / 2 * w)
+            x0 = int((top_left_xy[0] + 1.0) / 2 * w)  # range: [-1, 1] -> [0, 2] -> [0, w]
             y0 = int((top_left_xy[1] + 1.0) / 2 * h)
             x1 = int((bottom_right_xy[0] + 1.0) / 2 * w)
             y1 = int((bottom_right_xy[1] + 1.0) / 2 * h)
