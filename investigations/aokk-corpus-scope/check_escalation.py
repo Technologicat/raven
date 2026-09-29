@@ -11,8 +11,14 @@ ones at the same rate as the rest, the review's flags said nothing about what a 
 which would mean one of the two is not working, and the pair cannot say which. A large gap is the two
 agreeing from opposite directions, which neither could establish alone.
 
-Reads the state file directly, because the answers this compares are the *superseded* lines: a key's
-title-sourced answer and its later abstract-sourced one both live there, in order.
+Three inputs, all beside this script:
+
+- `judged.jsonl`, the judge's state file, read directly because the answers this compares are the
+  *superseded* lines: a key's title-sourced answer and its later abstract-sourced one both live there, in
+  order.
+- `dropped-before-escalating-titles.tsv`, the drop list as it stood before this escalation, which is what
+  says which records it escalated: every row there whose source was the title.
+- `contested.tsv`, the reviewer's flags, as written by `score_review.py --contested`.
 """
 
 import argparse
