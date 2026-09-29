@@ -778,7 +778,8 @@ Client apps call Server via `raven/client/api.py`. Server can run on a different
 **Server and client are version-matched, so the HTTP API between them is internal** (maintainer, 2026-09-29). A change to an endpoint changes both ends in the same commit — the server handler, `raven.client.api`, and the callers — with no compatibility shim for an older peer, and a client may read a new field strictly rather than defaulting it. The README tells users running the two on separate machines to install the same version on both.
 
 - **What does need migrating between versions is user data.** Librarian's chat datastore has a migrator at two levels (`chattree.PersistentForest._upgrade` for the file format, `chatutil.upgrade_datastore` for payloads), and its app state renames and retires flags through `appstate._RENAMED_FLAGS` / `_RETIRED_FLAGS`. A change to what is stored needs a step there; a change to what is sent needs none.
-- **The exception is the SillyTavern-compatible endpoints** (`raven/server/README.md` → *SillyTavern compatibility*), whose shape is SillyTavern's rather than ours, so those follow its contract rather than this one.
+  - **Visualizer's datasets have no migrator.** They are pickles, which are not portable across Python or app versions — the prototype's first choice, never revisited — and the format is due a redesign (`TODO.md`, "Data file format").
+- **The exception is the SillyTavern-compatible endpoints** (`raven/server/README.md` → *SillyTavern compatibility*), whose shape is SillyTavern's rather than ours. They are effectively frozen: SillyTavern-Extras, which they stand in for, has been retired.
 
 ### The Raven Way: three-layer module organization for ML-bearing subsystems
 
