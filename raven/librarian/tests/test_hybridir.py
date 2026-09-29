@@ -720,6 +720,43 @@ class TestRescanKeysOnDocumentId:
         handler.rescan(slot)
         assert deleted == ["vanished.bib"]
 
+    def _rescan_with_saves_counted(self, handler, slot, monkeypatch):
+        """Rescan `slot`; return `(scheduled tasks, datastore saves)`."""
+        scheduled, saves = [], []
+        monkeypatch.setattr(handler, "_sanity_check", lambda path: True)
+        monkeypatch.setattr(handler.retriever, "_save_datastore", lambda: saves.append(1), raising=False)
+        monkeypatch.setitem(hybridir.task_managers, "ingest",
+                            types.SimpleNamespace(submit=lambda *a, **kw: scheduled.append(a)))
+        handler.rescan(slot)
+        return scheduled, saves
+
+    def test_a_renamed_documents_directory_repoints_the_recorded_paths(self, tmp_path, monkeypatch):
+        # The collection was indexed under a directory that has since been renamed: the file is found by its
+        # id, unchanged, and the recorded path — which no longer exists — is what would fail to open.
+        slot = tmp_path / "librarian" / "documents"
+        slot.mkdir(parents=True)
+        (slot / "paper.bib").write_text("@article{a, title={H2}}", encoding="utf-8")
+        handler = self._handler(slot, {"paper.bib": str(tmp_path / "llmclient" / "documents" / "paper.bib")})
+
+        scheduled, saves = self._rescan_with_saves_counted(handler, slot, monkeypatch)
+        assert handler.retriever.documents["paper.bib"]["path"] == str(slot / "paper.bib")
+        assert saves == [1], "the repointed paths were not persisted"
+        assert scheduled == [], "a moved but unchanged document was reindexed"
+
+    def test_a_symlinked_slot_keeps_the_recorded_real_path(self, tmp_path, monkeypatch):
+        # The control: the recorded path differs from the one found, but still exists, so it is kept — the
+        # slot may point at another collection tomorrow, and the real path is the one that stays right.
+        real = tmp_path / "documents_hydrogen"
+        real.mkdir()
+        (real / "paper.bib").write_text("@article{a, title={H2}}", encoding="utf-8")
+        slot = tmp_path / "documents"
+        slot.symlink_to(real)
+        handler = self._handler(slot, {"paper.bib": str(real / "paper.bib")})
+
+        _scheduled, saves = self._rescan_with_saves_counted(handler, slot, monkeypatch)
+        assert handler.retriever.documents["paper.bib"]["path"] == str(real / "paper.bib")
+        assert saves == []
+
 
 # ---------------------------------------------------------------------------
 # Splitting a chat message into subqueries (lever 3 of brief 09)

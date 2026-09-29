@@ -1769,10 +1769,25 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
             deleted_document_ids = [document_id for document_id in indexed_document_ids
                                     if document_id not in found_document_ids]
 
+            # A document found where it was, content unchanged, but whose stored absolute path no longer
+            # exists: the documents directory was renamed or moved. Repoint the record at where the file is
+            # now, so opening it works — metadata only, nothing to reindex. Only when the stored path is
+            # *gone*, never merely spelled differently: reached through a symlinked slot, the stored real path
+            # is the more durable of the two, the slot being free to point at another collection later.
+            relocated = {document_id: path for document_id, path in found_document_ids.items()
+                         if document_id in indexed_document_ids and path not in updated_paths
+                         and not os.path.exists(self.retriever.documents[document_id]["path"])}
+            for document_id, path in relocated.items():
+                self.retriever.documents[document_id]["path"] = path
+
         new_plural_s = "s" if len(new_found_paths) != 1 else ""
         updated_plural_s = "s" if len(updated_paths) != 1 else ""
         deleted_plural_s = "s" if len(deleted_document_ids) != 1 else ""
         logger.info(f"HybridIRFileSystemEventHandler.rescan: Scan complete. Found {len(new_found_paths)} new file{new_plural_s}, {len(updated_paths)} updated file{updated_plural_s}, and {len(deleted_document_ids)} deleted file{deleted_plural_s}.")
+        if relocated:
+            logger.info(f"HybridIRFileSystemEventHandler.rescan: {len(relocated)} indexed {'document' if len(relocated) == 1 else 'documents'} "  # plural
+                        "no longer at the recorded path, and found by ID under the documents directory: updated the recorded paths.")
+            self.retriever._save_datastore()
 
         for path in new_found_paths:
             logger.info(f"HybridIRFileSystemEventHandler.rescan: File '{path}' is new: scheduling ingest.")

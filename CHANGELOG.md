@@ -80,6 +80,8 @@
 - **Librarian could occasionally close by itself while redrawing a message**, with *"Unhandled exception in render loop"* in the log. Nothing was lost beyond what the once-a-minute autosave had not yet written.
 - **Deleting a message is refused while a reply is being written.**
   - In v0.2.9 the delete went through, and deleting a message above the reply in progress destroyed the reply along with it, while it was still being written. The button now flashes red and says why.
+- **A knowledge-base document opens again after its documents folder has moved** — as it did when v0.2.9 moved Librarian's data from `~/.config/raven/llmclient/` to `~/.config/raven/librarian/`.
+  - The document's open button pointed at where the file used to be. The next start repoints it, without reindexing.
 - **Ctrl+T closes an open thinking trace when the trace is scrolled out of view.**
   - In v0.2.9 it only ever opened it, when the message's buttons were on screen and its trace was above the view. Clicking the cloud was not affected.
 - **Going to a box in the chat graph whose search count came from a thinking trace now opens that trace in the chat.**
