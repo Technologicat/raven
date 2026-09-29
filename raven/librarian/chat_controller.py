@@ -840,7 +840,9 @@ class DPGChatMessage:
         row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
         def toggle_message_think_callback():
             with guiutils.nonexistent_ok() as nok:
-                if dpg.is_item_visible(self.gui_thought_group):
+                # Shown, not visible: DPG's "visible" means drawn last frame, which a long trace scrolled out of
+                # the view is not — so Ctrl+T from the button row below it would show it again, not hide it.
+                if dpg.is_item_shown(self.gui_thought_group):
                     logger.info(f"DPGChatMessage._thought_bubble.toggle_message_think_callback: hiding thinking trace for chat node '{self.node_id}'")
                     dpg.hide_item(self.gui_thought_group)
                 else:

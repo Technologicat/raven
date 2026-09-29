@@ -1019,6 +1019,12 @@ Reference patterns for building DearPyGui apps in Raven (Librarian as primary re
     cannot measure it. For Markdown, `DearPyGui_Markdown.predict_height_change` computes it from the old
     render instead: every laid-out row is 6 px taller than the font's line height. Raven-librarian's search
     highlighting swaps paragraphs this way. Measured in `investigations/chat-search-highlight/`.
+- **`is_item_shown` is "not hidden"; `is_item_visible` is "drawn last frame".** An item scrolled out of its
+  view is shown and not visible, so a show/hide toggle must ask `is_item_shown`. Asking `is_item_visible`
+  works exactly when the toggle's own button is on screen beside the item, which is why the bug hides: in
+  Raven-librarian, clicking the thinking-trace cloud toggled fine while `Ctrl+T` from the message's button
+  row, below a long trace scrolled out of view, only ever showed it again (measured 2026-09-29, by REPL on
+  the running app: shown `True`, visible `False`).
 
 ## Textures
 

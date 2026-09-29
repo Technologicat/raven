@@ -76,6 +76,8 @@
 - **Librarian could occasionally close by itself while redrawing a message**, with *"Unhandled exception in render loop"* in the log. Nothing was lost beyond what the once-a-minute autosave had not yet written.
 - **Deleting a message is refused while a reply is being written.**
   - In v0.2.9 the delete went through, and deleting a message above the reply in progress destroyed the reply along with it, while it was still being written. The button now flashes red and says why.
+- **Ctrl+T closes an open thinking trace when the trace is scrolled out of view.**
+  - In v0.2.9 it only ever opened it, when the message's buttons were on screen and its trace was above the view. Clicking the cloud was not affected.
 - **Going to a box in the chat graph whose search count came from a thinking trace now opens that trace in the chat.**
   - In v0.2.9 the trace stayed closed when the box was on another branch, so the match the count promised could not be seen.
 - **Going to a match in the chat graph no longer sometimes lands beside it, with the match off screen.**
