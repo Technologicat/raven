@@ -1,6 +1,8 @@
 # Brief: one mechanism for derived artifacts, two stores
 
-**Status, 2026-09-30:** scheduled for v0.2.10. Does not depend on brief 13.
+**Status, 2026-09-30:** scheduled for v0.2.10. Does not depend on brief 13. Its open questions O1–O6 are to be
+discussed with the maintainer in the near future, before building: in the maintainer's words, an architecture
+cleanup that keeps Raven maintainable and makes it easier to extend.
 
 **What:** unify how Raven stores things it *computed from* a source artifact — extracted text, OCR text,
 rescaled images, burst `.bib` records, and eventually embeddings — behind one keying and regeneration

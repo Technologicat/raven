@@ -49,8 +49,8 @@ schedulable steps. Statuses are the briefs' own.
   near-term" · ~L overall
   - Item 5: cluster once, in high-D (spec in `investigations/highdim-clustering/`) · 1–2 days · **specified and
     measured, ready**. The importer's remaining tests are to be written with it.
-  - Item 1: the Nomic migration · ~M · **blocked on the v1.5-vs-v2-moe decision**, and must re-measure
-    Librarian's off-corpus threshold before the swap
+  - Item 1: the Nomic migration · ~M · fork decided 2026-09-30 (v1.5 unless something now offers both), and
+    must re-measure Librarian's off-corpus threshold before the swap
   - Item 4: Procrustes alignment for adding papers to a map · ~M · less urgent once scopes exist (brief 13).
     Absorbs `T:473`.
 - **Derived artifact store, brief 12** (`briefs/12_derived-artifact-store-brief.md`) — one key shape and one
@@ -90,7 +90,7 @@ schedulable steps. Statuses are the briefs' own.
     context assembler; LM Studio plugin port as a second frontend · ~M native + ~M plugin · no upstream gate;
     defines the assembler interface 06 ranks on
   - **06, Hindsight** — stand it up in Docker, try it, go/no-go, then integrate two ways · ~L. Steps 1–3 touch
-    no Raven code. Step 4 bundles the Nomic migration, assuming v1.5 where brief 11 now leans v2-moe. Absorbs
+    no Raven code. Step 4 bundles the Nomic migration, assuming v1.5 — which the 2026-09-30 decision agrees with. Absorbs
     `T:765`, `T:767`, `T:769` (memory stores).
 - **Block-level Markdown in the chat view** (`briefs/markdown-block-rendering-brief.md`) — fenced code,
   multi-line lists, paragraph gaps, later tables, by removing the per-line splitter · "next to be looked at after
@@ -160,9 +160,13 @@ Stated in the briefs unless marked *(inferred)*.
   tool calls, re-testing ooba's continue (`T:191`), whether `chatutil.scrub`'s `<think>` repair is dead code
   (`T:687`). `T:158` wants this written up as a brief; it has not been.
 
-Three decisions each unblock several of the above: **the Nomic fork**, **brief 13's design session**, and
-**brief 12's O1–O6**. A fourth is taken: **the ooba upgrade is not worth doing at the moment**, and it and
-the four items behind it can safely wait (maintainer, 2026-09-30).
+Four decisions each unblock several of the above. Where they stand (maintainer, 2026-09-30):
+
+- **The Nomic fork: multimodality wins for this year** if it must be one, so v1.5 — after checking whether
+  anything now offers both (brief 11 item 1).
+- **Brief 13's design session: wanted**, corpus scopes being a feature needed this year. Not yet held.
+- **Brief 12's O1–O6: to be discussed in the near future.**
+- **The ooba upgrade: not worth doing at the moment**; it and the four items behind it can safely wait.
 
 
 ## 2. Open items by theme
@@ -671,7 +675,7 @@ note is fixed); `TD "Only the configured character wears…"` (the code moved to
 
 *Briefs out of date* — brief 12 says v0.2.9 in its body and v0.2.10 in its status, and does not record that its
 chat-store renames shipped; `librarian-extension/README.md` still says "09 is the one in progress" and lists
-residents that have moved; brief 06 assumes Nomic v1.5; the per-document pass's closing "must settle" list
+residents that have moved; the per-document pass's closing "must settle" list
 repeats questions its *Decided* sections answer.
 
 ### Duplicates to merge

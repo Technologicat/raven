@@ -3,8 +3,9 @@
 **Status, 2026-09-30:** after Yrityspäivä, and near-term (maintainer). **Item 5, clustering in high-D, goes
 first**: the Visualizer is waiting on it for nearly every dataset, it exists only as the manual prototype in
 `investigations/highdim-clustering/`, which is its specification, and it is sized at 1–2 days (2026-09-08).
-Items 2 and 3 are measured harmful and must not be built as written. Item 1 carries a fork that needs
-deciding, and the decision reaches brief 12.
+Items 2 and 3 are measured harmful and must not be built as written. Item 1's fork is decided (2026-09-30:
+multimodality over multilinguality if it must be one), pending a check of the current model lineup, and the
+decision reaches brief 12.
 
 Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
 
@@ -59,6 +60,10 @@ Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
        independently of the Finnish case.
      Images lose the direct route and reach text queries through the description pivot instead — which exists
      anyway, since images carry OCR and description channels regardless (see brief 12).
+
+   **Decided 2026-09-30 (maintainer): both are wanted, and if it stays either-or, multimodality wins for this
+   year — v1.5.** So the first step is the re-verification asked for above: whether a model or a pairing now
+   offers both. Only if none does is the fork settled on v1.5, and the multilingual case waits.
 
    **Related, and it interacts with item 2:** v2-moe's Matryoshka training truncates vectors 768→256 with
    claimed minimal degradation, i.e. 3× less embedding storage. It does **not** subsume item 2's PCA step,
