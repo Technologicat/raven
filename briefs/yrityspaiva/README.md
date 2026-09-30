@@ -237,6 +237,8 @@ live on the Night.
        its first occupant; `raven/server/modules/webcommon.py` holds what the two web modules share (driver
        factory, user agent, the `WebToolException` family, `lock_unless_cancelled`). Nothing else in `app.py`
        or the modules was found to belong in either.
-2. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
-   Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
-   that folder into `done/`.
+2. **Sprint cleanup**: `researchers-night/` still holds four open briefs (11, 12, 13 and
+   `markdown-block-rendering`), none of which shipped for the Night. Rehome them — here if anything is for the
+   8th, otherwise to `design/` or the top level — and close that folder into `done/`. The fifth, the AOKK
+   investigation's, was closed by a separate session, its remaining generalization written up as two new
+   briefs (maintainer, 2026-09-30).
