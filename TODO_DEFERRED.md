@@ -24,6 +24,115 @@ enough (maintainer, 2026-09-30).
 **Before a triage pass, read `briefs/reference/backlog-triage-notes.md`**: how to read an old priority label,
 and why hygiene items rank higher than they used to.
 
+## Brief: the per-document LLM pass
+
+*Cluster: corpus-pipeline · Cost: ~M–L; step 0 "moderate" · Gate: none — `next` · Filed: 2026-09-30 · See also: `briefs/per-document-llm-pass-brief.md`*
+
+A shared primitive that asks one question per item over thousands of documents: resumable JSONL ledger,
+instrument fingerprint, stop on backend failure, batching, progress, cancellation. Design decided
+2026-09-29/30; step 0 (one model record in `llmclient`) and the pass itself are ready to build. **Eight
+users wait on it**, the corpus filter first — and through that, the AOKK methodology numbers.
+
+## Brief: the corpus filter
+
+*Cluster: corpus-pipeline · Cost: ~L, plus a day or two of unattended GPU time · Gate: the per-document LLM pass · Filed: 2026-09-30 · See also: `briefs/corpus-filter-brief.md`*
+
+Generalize the AOKK scope-classification prototype into a `raven.papers` tool that flags a `.bib`'s
+off-topic records, with reasons, for human review. Seven questions to settle, some decided 2026-09-30.
+**The AOKK methodology numbers wait on this.**
+
+## Brief 11: the Visualizer importer rework
+
+*Cluster: corpus-pipeline · Cost: item 5 is 1–2 days; the whole ~L · Gate: none for item 5; item 1 waits on checking the Nomic lineup · Filed: 2026-09-30 · See also: `briefs/11_visualizer-importer-rework-brief.md`*
+
+After Yrityspäivä, and near-term. **Item 5 first**: cluster once, in high-D, specified and measured in
+`investigations/highdim-clustering/`, with the clustering stage's tests. Then item 1, the Nomic migration
+(v1.5, decided 2026-09-30, unless something now offers both), and item 4, Procrustes alignment.
+
+## Brief 12: the derived artifact store
+
+*Cluster: corpus-pipeline · Cost: ~L · Gate: its open questions O1–O6, to be discussed with the maintainer · Filed: 2026-09-30 · See also: `briefs/12_derived-artifact-store-brief.md`*
+
+One key shape and one regeneration mechanism for everything computed from a source — extracted text, OCR,
+thumbnails, embeddings — in a chat store and a document-DB store. Scheduled for v0.2.10; an architecture
+cleanup that keeps Raven maintainable and extensible. Several items here are waiting on it, the synchronous
+HEAD-change extraction among them.
+
+## Brief 13: corpus scopes and the unified document DB
+
+*Cluster: corpus-pipeline · Cost: ~L, and it expands to fill its schedule · Gate: a design session to scope v1 · Filed: 2026-09-30 · See also: `briefs/13_corpus-scopes-and-unified-db-brief.md`*
+
+Scopes as tags, one document DB behind both apps, a corpus table of contents for the model, retiring the
+automatic search. A rough draft; needed this year. Gates the keyword pools' dataset dialog and the
+Visualizer importer reading the document DB.
+
+## Brief: surviving Raven-server going away, or not being there yet
+
+*Cluster: server-availability · Cost: ~M–L · Gate: none · Filed: 2026-09-30 · See also: `briefs/raven-server-availability-brief.md`*
+
+Error handling at the 37 unguarded server call sites; Librarian booting before the server is up; the
+Visualizer surviving the server going mid-session. Groundwork landed 2026-09-07. Item 2 gates server
+autostart.
+
+## Brief: server autostart
+
+*Cluster: server-availability · Cost: ~M · Gate: server availability's item 2 · Filed: 2026-09-30 · See also: `briefs/server-autostart-brief.md`*
+
+An app starts Raven-server when none answers, and a server so started exits when idle. Direction and
+policies decided 2026-09-28; not before Yrityspäivä. Reads together with brief 13's *Where the database
+lives*.
+
+## Brief: the librarian-extension sprint — MCP client, lorebook, Hindsight
+
+*Cluster: librarian-extension · Cost: ~L as a set · Gate: 06's steps 1–3 before 04; 05 before 06's ranking · Filed: 2026-09-30 · See also: `briefs/librarian-extension/README.md`*
+
+Briefs 04 (external MCP tools beside the built-ins), 05 (a lorebook, on a new context assembler) and 06
+(stand up Hindsight, then integrate it). To be scheduled this autumn. 06's first three steps touch no Raven
+code, which is what breaks the gate between 04 and 06.
+
+## Brief: FileDialog navigation history
+
+*Cluster: filedialog · Cost: ~M · Gate: a one-minute probe of whether mouse X1/X2 reach DPG · Filed: 2026-09-30 · See also: `briefs/filedialog-navigation-history-brief.md`*
+
+Back and Forward through where the dialog has been, remembered per dialog, and a toolbar for up, back,
+forward and the default path. Designed, not started; `raven.common.navhistory` already exists.
+
+## Brief: keyword pools and a dataset keyword dialog
+
+*Cluster: visualizer · Cost: ~S per piece for the first three; the dialog ~M · Gate: brief 13, for the dialog only · Filed: 2026-09-30 · See also: `briefs/visualizer-keyword-pools-brief.md`*
+
+Rank each cluster's keywords by how distinctive they are, guard the keyword parser against prose replies,
+extract 15, and add a dialog for the corpus-common keywords. The first three need nothing from brief 13 — a
+reading of the brief, whose own gate names only the dialog.
+
+## Brief: image shapes in the xdot widget
+
+*Cluster: xdot · Cost: ~M; the image store about half a day, the parser branch S · Gate: none · Filed: 2026-09-30 · See also: `briefs/xdot-image-shapes-brief.md`*
+
+GraphViz `image=` nodes drawn by `XDotWidget`. Mip selection landed 2026-09-07; the widget's image store
+and the parser's `I` branch remain.
+
+## Sketch: interrogating a selection
+
+*Cluster: corpus-pipeline · Cost: ~L · Gate: a design session; builds on brief 13 and the per-document pass · Filed: 2026-09-30 · See also: `briefs/design/corpus-interrogation-sketch.md`*
+
+What Raven is for: map a large corpus, select, run a first-pass reviewer over the selection, and get
+keywords back onto the map. A discussion sketch; its map stage now lives in the per-document pass brief.
+
+## Sketch: how Raven's parts talk to each other
+
+*Cluster: constellation · Cost: ? · Gate: a design session · Filed: 2026-09-30 · See also: `briefs/design/constellation-architecture-sketch.md`*
+
+The server as a switchboard for uploads and messages between apps, with clients pulling. Five open
+questions; brief 13's *Where the database lives* and brief 04's §6 bear on two of them. Gates phone upload.
+
+## Sketch: the avatar as the interface
+
+*Cluster: constellation · Cost: ~L · Gate: a design session; the constellation sketch, for upload · Filed: 2026-09-30 · See also: `briefs/design/lab-assistant-hci-sketch.md`*
+
+An avatar-only mode for someone across the room: ambient notifications, QR codes for upload, speakable
+errors. A discussion sketch with five open questions.
+
 ## Report `bibtexparser`'s writer dropping split names, with a patch
 
 *Cluster: papers · Cost: S to report, ? to land · Gate: none · Filed: 2026-08-28, moved here 2026-09-30 · See also: `briefs/done/bibliography-dedup-brief.md`*

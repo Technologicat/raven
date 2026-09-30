@@ -34,6 +34,27 @@ What that section settles, in one line each:
 - **Sift after calibrating, not before** (*"The run plan"*): the title-only records are the inputs most
   likely to break a new rubric, so calibration runs on the unsifted corpus.
 
+## A lead from the dedup judge: show a judge what the rules already computed
+
+Untested, carried over from `done/bibliography-dedup-brief.md`, where it was written up and never tried
+(moved here 2026-09-30, the maintainer's call).
+
+The standing rule from that work is Juha's, 2026-08-28: **do algorithmically what we can, and invoke the
+judge only as needed.** Its corollary for priming splits in two:
+
+- **Priming with a domain convention does not generalize.** Telling a model about one convention fixes
+  that case and buys nothing for the next one nobody anticipated.
+- **Priming with what the deterministic layer already computed does**, since it is in hand and costs
+  nothing to include. `raven-deduplicate`'s judge is shown the raw fields but not the title similarity, the
+  author disagreement or the year gap its own rules computed, nor which question raised the pair — those
+  are used only to veto its answer afterwards.
+
+For the filter that means: whatever the sift and the derived constants have measured about a record — how
+informative its title is, whether its abstract is a teaser — goes into the judge's prompt, not only into a
+check on its verdict. The dedup corpus offered 14 pairs, too few to tell whether it helps; the filter's
+corpus is large enough to measure it. A related precedent that did work is priming with a *stance*:
+`investigations/agent-batch-classification/`.
+
 ## v1 takes a scope question, not research questions
 
 Juha, 2026-09-29: *"scope questions are good enough for v1. RQs are for later."*
