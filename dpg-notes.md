@@ -1030,6 +1030,7 @@ Reference patterns for building DearPyGui apps in Raven (Librarian as primary re
 
 - **DPG texture buffer sizes**: When a pipeline produces textures asynchronously and the expected size changes (e.g. tile size switch), stale pipeline output can arrive with wrong dimensions. `dpg.add_dynamic_texture(w, h, data)` with undersized data causes a buffer overread → heap corruption → segfault or "double free" later. Guard with a size check before creating/updating textures. This bug is insidious because the crash often manifests far from the overflow (during an unrelated texture delete or render call).
 - **DPG texture operations — defensive patterns**: Delete textures from DPG callbacks (inside `render_dearpygui_frame`) where the OpenGL context is active. Avoid synchronous CUDA work during callbacks; defer it to outside `render_dearpygui_frame` via a pending flag, or to a background thread. Use `dynamic_texture` for anything that may be deleted at runtime; `static_texture` is for truly permanent assets.
+- **A texture drawn at another size is sampled bilinearly, without mipmaps.** Measured 2026-09-30 on DPG 2.3.1, for a raw texture under `add_image` and a static one under `draw_image` alike (`investigations/dpg-texture-filtering/`). So enlarging is smooth at any factor, integer or not, while shrinking by much more than 2× point-samples and aliases into a moiré — nothing averages the texels a screen pixel covers. Draw a large image small by prescaling it first, as the chat log's role icons do; enlarge freely.
 
 ## Startup sequence
 
