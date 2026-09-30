@@ -315,7 +315,8 @@ def websearch(query: str,
         websearch_results = api.websearch_search(query,
                                                  engine,
                                                  librarian_config.web_num_results,
-                                                 timeout=librarian_config.web_tool_timeout)  # -> {"results": preformatted_text, "data": structured_results, "engineAnswered": bool}
+                                                 timeout=librarian_config.web_tool_timeout,
+                                                 maybe_abort=getattr(dyn.tool_context, "maybe_abort", None))  # -> {"results": preformatted_text, "data": structured_results, "engineAnswered": bool}
     except requests.Timeout:
         logger.warning(f"websearch: no answer within {librarian_config.web_tool_timeout.read} s")
         return CANONICAL_SEARCH_ENGINE_UNAVAILABLE
@@ -438,7 +439,8 @@ def webfetch(url: str) -> tuple[str, dict]:
 
     api = _client_api()
     try:
-        result = api.webfetch_fetch(url, timeout=librarian_config.web_tool_timeout)  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected", "title"}
+        result = api.webfetch_fetch(url, timeout=librarian_config.web_tool_timeout,  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected", "title"}
+                                    maybe_abort=getattr(dyn.tool_context, "maybe_abort", None))
     except requests.Timeout:
         logger.warning(f"webfetch: no answer within {librarian_config.web_tool_timeout.read} s for '{url}'")
         result = {"content": CANONICAL_WEBFETCH_TIMEOUT.format(url=url), "url": url, "title": None}
@@ -856,8 +858,8 @@ def _call_abandonably(function_name: str,
     """Call a tool entrypoint, returning early with `netutil.Aborted` if `maybe_abort` fires first.
 
     Without an abort handle, a plain call. With one, the call runs on a thread of its own, and on an abort
-    it is left to finish or time out by itself, its result unread: a tool blocked in a request cannot
-    be interrupted, only stopped waiting for.
+    it is left to finish by itself, its result unread. The web tools, which wait on sites that can be slow,
+    also take the handle from `dyn.tool_context` and end promptly, closing their request to Raven-server.
     """
     if maybe_abort is None:
         return function(**kwargs)

@@ -650,11 +650,15 @@ def make_tool_context(llm_settings: env | None,
     `retriever`: The document-database retriever the document tools search, or `None` if this app has no
                  document database. The tools are duck-typed against `.query(...)`; see the module header
                  for why `hybridir` is not imported at runtime.
+
+    The turn's abort handle, if it has one, is set per round as `maybe_abort`, so that a web tool can close
+    its request to Raven-server when the turn is stopped; see `_perform_and_store_tool_calls`.
     """
     return env(llm_settings=llm_settings,
                retriever=retriever,
                webfetch_allowed_hosts=frozenset(),  # volatile: recomputed per round
                used_tokens=0,  # volatile: recomputed per round
+               maybe_abort=None,  # volatile: the dispatch's abort handle, set per round
                grounded=False,  # accumulating: did anything this turn provide grounding material?
                consulted_documents=[])  # fixed for the turn: what the branch had already read when it began
 
@@ -814,6 +818,10 @@ def _perform_and_store_tool_calls(llm_settings: env,
     """
     head_node_id = parent_node_id
     _notify("on_tools_start", on_tools_start, assistant_message["tool_calls"])
+
+    # The web tools pass this to Raven-server's calls, so that a stopped turn closes their requests, and the
+    # server stops working on them, rather than only no longer waiting for them.
+    tool_context.maybe_abort = maybe_abort
 
     if maybe_refusal_text is None:
         tool_context.webfetch_allowed_hosts = chatutil.compute_auto_allowed_hosts(

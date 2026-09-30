@@ -53,7 +53,7 @@ def fake_fetch(monkeypatch):
     """Replace the HTTP fetch with a recorder; returns the list of URLs that reached the server."""
     fetched_urls = []
 
-    def _fake(url, output_format="markdown", timeout=None):
+    def _fake(url, output_format="markdown", timeout=None, maybe_abort=None):
         fetched_urls.append(url)
         return {"content": f"CONTENT of {url}", "url": url, "spaSuspected": False, "title": f"TITLE of {url}"}
 
@@ -229,7 +229,7 @@ class TestWebfetchResultHeader:
 
     def test_a_server_refusal_names_the_url(self, monkeypatch):
         # The URL is the one the server ended up at, which a rewrite can change.
-        def _refuse(url, output_format="markdown", timeout=None):
+        def _refuse(url, output_format="markdown", timeout=None, maybe_abort=None):
             return {"content": "This site doesn't render its content as static HTML and can't be fetched as text.",
                     "url": "https://old.x.example/p", "spaSuspected": True, "title": None}
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=_refuse))
@@ -528,7 +528,7 @@ class TestWebsearchWrapper:
     def _patch_capture_engine(monkeypatch):
         """Patch `api.websearch_search` to record the engine it was called with; return the capture dict."""
         captured = {}
-        def fake_search(query, engine, num, timeout=None):
+        def fake_search(query, engine, num, timeout=None, maybe_abort=None):
             captured["engine"] = engine
             return {"data": [], "engineAnswered": True}
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(websearch_search=fake_search))
@@ -585,12 +585,24 @@ class TestWebsearchFailures:
 
     def test_the_call_waits_for_the_web_tool_timeout(self, monkeypatch):
         captured = {}
-        def fake_search(query, engine, num, timeout=None):
+        def fake_search(query, engine, num, timeout=None, maybe_abort=None):
             captured["timeout"] = timeout
             return {"data": [], "engineAnswered": True}
         self._patch(monkeypatch, fake_search)
         llmtools.websearch("q")
         assert captured["timeout"] == llmtools.librarian_config.web_tool_timeout
+
+    def test_the_turns_abort_handle_reaches_the_server_call(self, monkeypatch):
+        # So that a stopped turn closes the request, and the server stops searching.
+        captured = {}
+        def fake_search(query, engine, num, timeout=None, maybe_abort=None):
+            captured["maybe_abort"] = maybe_abort
+            return {"data": [], "engineAnswered": True}
+        self._patch(monkeypatch, fake_search)
+        handle = netutil.Abort()
+        with dyn.let(tool_context=env(maybe_abort=handle)):
+            llmtools.websearch("q")
+        assert captured["maybe_abort"] is handle
 
 
 class TestWebfetchFailures:
@@ -598,7 +610,7 @@ class TestWebfetchFailures:
 
     @staticmethod
     def _patch(monkeypatch, exc):
-        def fake_fetch(url, output_format="markdown", timeout=None):
+        def fake_fetch(url, output_format="markdown", timeout=None, maybe_abort=None):
             raise exc
         monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=fake_fetch))
         _set_allowlist(monkeypatch, None)

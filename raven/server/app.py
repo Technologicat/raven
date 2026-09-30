@@ -51,6 +51,7 @@ with timer() as tim:
     import secrets
     import time
     import traceback
+    from collections.abc import Callable
     from typing import List, Union
 
     from colorama import Fore, Style, init as colorama_init
@@ -81,6 +82,7 @@ with timer() as tim:
     from .modules import tts
     from .modules import websearch
     from .modules import webfetch
+    from . import util as serverutil
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
@@ -90,7 +92,12 @@ colorama_init()
 
 app = Flask(__name__)
 CORS(app)  # allow cross-domain requests
-Compress(app)  # compress responses
+# Compress responses, but not streamed ones. A response is streamed so that it arrives as it is produced, and
+# the compressor holds the first bytes back to compress them, which delays even the headers until the stream
+# ends — measured in `investigations/abort-inflight-request/`. That undoes `serverutil.stream_job`, which
+# exists so the client holds the response from the start.
+app.config["COMPRESS_STREAMS"] = False
+Compress(app)
 
 api_key = None  # secure mode
 ignore_auth = []  # endpoints (Python functions) whose web API we want not to require an API key
@@ -1525,12 +1532,8 @@ def api_v1_audio_speech():
 # ----------------------------------------
 # module: websearch
 
-def _websearch_impl():
-    """Run the search the request asks for. Return `(preformatted_text, structured_results)`.
-
-    Raises `websearch.EngineUnavailable` when the search engine did not answer; each endpoint reports that
-    in its own way.
-    """
+def _parse_websearch_request() -> tuple[str, str, int]:
+    """Validate the websearch request. Return `(query, engine, max_links)`."""
     data = request.get_json()
 
     if "query" not in data or not isinstance(data["query"], str):
@@ -1543,19 +1546,12 @@ def _websearch_impl():
     if engine not in ("duckduckgo", "google"):
         abort(400, '"engine", if provided, must be one of "duckduckgo", "google"')
 
-    try:
-        # The query is the user's question in their own words, so its length is logged and it is not.
-        # Contrast `api_webfetch`, which does log its URL -- that is the request's identity rather than
-        # its content, and a fetch failure cannot be diagnosed without it.
-        logger.debug(f"_websearch_impl: {len(query)} character query, engine '{engine}', "
-                     f"max_links {max_links}")
-        return websearch.search(query, engine=engine, max_links=max_links)
-    except websearch.EngineUnavailable as exc:
-        logger.warning(f"_websearch_impl: engine '{engine}' did not answer: {exc}")
-        raise
-    except Exception as exc:
-        traceback.print_exc()
-        abort(400, f"_websearch_impl: failed, reason: {type(exc)}: {exc}")
+    # The query is the user's question in their own words, so its length is logged and it is not.
+    # Contrast `api_webfetch`, which does log its URL -- that is the request's identity rather than
+    # its content, and a fetch failure cannot be diagnosed without it.
+    logger.debug(f"_parse_websearch_request: {len(query)} character query, engine '{engine}', "
+                 f"max_links {max_links}")
+    return query, engine, max_links
 
 # legacy ST-compatible websearch endpoint
 @app.route("/api/websearch", methods=["POST"])
@@ -1588,10 +1584,15 @@ def api_websearch():
     """
     if not websearch.is_available():
         abort(403, "Module 'websearch' not running")
+    query, engine, max_links = _parse_websearch_request()
     try:
-        preformatted_text, structured_results = _websearch_impl()
+        preformatted_text, structured_results = websearch.search(query, engine=engine, max_links=max_links)
     except websearch.EngineUnavailable as exc:
+        logger.warning(f"api_websearch: engine '{engine}' did not answer: {exc}")
         abort(503, f"The search engine did not answer: {exc}")
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_websearch: failed, reason: {type(exc)}: {exc}")
     output = {"results": preformatted_text,
               "links": [item["link"] for item in structured_results]}
     return jsonify(output)
@@ -1632,17 +1633,25 @@ def api_websearch2():
 
     This format preserves the connection between the text of the result
     and its corresponding link.
+
+    The response is streamed: it opens with a space, and the result follows when the search is done. A
+    failure of the search itself arrives in the body, as `{"error": "..."}`. See `serverutil.stream_job`.
     """
     if not websearch.is_available():
         abort(403, "Module 'websearch' not running")
-    try:
-        preformatted_text, structured_results = _websearch_impl()
-    except websearch.EngineUnavailable:
-        return jsonify({"results": "", "data": [], "engineAnswered": False})
-    output = {"results": preformatted_text,
-              "data": structured_results,
-              "engineAnswered": True}
-    return jsonify(output)
+    query, engine, max_links = _parse_websearch_request()
+
+    def job(is_cancelled: Callable[[], bool]) -> dict:
+        try:
+            preformatted_text, structured_results = websearch.search(query, engine=engine, max_links=max_links,
+                                                                     is_cancelled=is_cancelled)
+        except websearch.EngineUnavailable as exc:
+            logger.warning(f"api_websearch2: engine '{engine}' did not answer: {exc}")
+            return {"results": "", "data": [], "engineAnswered": False}
+        return {"results": preformatted_text,
+                "data": structured_results,
+                "engineAnswered": True}
+    return serverutil.stream_job(job)
 
 # ----------------------------------------
 # module: webfetch
@@ -1669,6 +1678,9 @@ def api_webfetch():
 
     Network-level safety (refusing private-network addresses and non-HTTP(S) schemes) is
     enforced here, server-side. The domain allowlist is enforced client-side, before the call.
+
+    The response is streamed: it opens with a space, and the result follows when the fetch is done. A
+    failure of the fetch itself arrives in the body, as `{"error": "..."}`. See `serverutil.stream_job`.
     """
     if not webfetch.is_available():
         abort(403, "Module 'webfetch' not running")
@@ -1684,12 +1696,8 @@ def api_webfetch():
     # fetched, and a failure here cannot be diagnosed without knowing what was asked for. The page that
     # comes back is content and is not logged.
     logger.debug(f"api_webfetch: '{url}' as {output_format}")
-    try:
-        result = webfetch.fetch(url, output_format=output_format)
-    except Exception as exc:
-        traceback.print_exc()
-        abort(400, f"api_webfetch: failed, reason: {type(exc)}: {exc}")
-    return jsonify(result)
+    return serverutil.stream_job(lambda is_cancelled: webfetch.fetch(url, output_format=output_format,
+                                                                    is_cancelled=is_cancelled))
 
 
 # --------------------------------------------------------------------------------
@@ -1848,7 +1856,10 @@ print(f"{Fore.GREEN}{Style.BRIGHT}Starting server{Style.RESET_ALL}")
 where = "all IPv4 addresses" if args.listen else "localhost"
 print(f"{Fore.GREEN}{Style.BRIGHT}Listening for connections from {where}{Style.RESET_ALL}")
 
-serve(app, host=host, port=port)
+# With a request lookahead, a connection stays readable while its request is being served, which is what
+# lets `waitress.client_disconnected` see a client that has gone (`serverutil.stream_job` asks it). At
+# waitress's default of 0 it never does, measured in `investigations/abort-inflight-request/`.
+serve(app, host=host, port=port, channel_request_lookahead=1)
 
 def main():  # TODO: we don't really need this; it's just for console_scripts so that we can provide a command-line entrypoint.
     pass

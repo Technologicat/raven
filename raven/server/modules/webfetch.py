@@ -56,12 +56,11 @@ from colorama import Fore, Style
 
 from ...common import text as common_text
 
-# `trafilatura`, `youtube_transcript_api`, and `selenium` (via `websearch`) are imported lazily
+from . import webcommon
+
+# `trafilatura`, `youtube_transcript_api`, and `selenium` (via `webcommon`) are imported lazily
 # at their use sites, so the pure helpers (URL rewriting, SSRF/scheme checks) — and their tests —
 # import without dragging in the heavy fetch/extraction stack.
-
-# See `navigator.userAgent` in a browser's JS console. Some sites serve thin content to unknown agents.
-_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 # --------------------------------------------------------------------------------
 # Canonical user-facing strings.
@@ -79,6 +78,8 @@ CANONICAL_HTTP_ERROR = ("The server returned HTTP {status} for {url}. The page m
                         "authentication.")
 CANONICAL_PAGE_TIMEOUT = ("The page at {url} did not finish loading in time. The site may be slow or down; "
                           "trying again later may work.")
+CANONICAL_NO_BROWSER = ("Too little text could be read from {url} without a web browser, and the server has "
+                        "none installed to render it with.")
 
 # --------------------------------------------------------------------------------
 # Bootup
@@ -250,7 +251,7 @@ def _http_get(url: str) -> Tuple[Optional[str], Optional[int]]:
     from .. import config as server_config
     try:
         response = requests.get(url,
-                                headers={"User-Agent": _USER_AGENT},
+                                headers={"User-Agent": webcommon.USER_AGENT},
                                 timeout=server_config.webfetch_request_timeout,
                                 allow_redirects=True)
     except requests.RequestException as exc:
@@ -286,28 +287,30 @@ def _extract_title(html: Optional[str]) -> Optional[str]:
     title = getattr(metadata, "title", None) if metadata is not None else None
     return common_text.normalize(title).strip() if title else None
 
-def _fetch_tier2(url: str, *, output_format: str) -> str | None:
+class _NoBrowser(webcommon.WebToolException):
+    """Tier 2 cannot run: the server has no headless browser installed."""
+
+def _fetch_tier2(url: str, *, output_format: str, is_cancelled: Callable[[], bool]) -> str | None:
     """Tier 2: render `url` in a real headless browser, then extract.
 
-    Returns "" if unavailable, and `None` if the page did not finish loading within
-    `server_config.web_page_load_timeout`.
+    Returns "" if the browser could not navigate, and `None` if the page did not finish loading within
+    `server_config.web_page_load_timeout`. Raises `webcommon.Cancelled` if `is_cancelled()` says to stop
+    while this waits for the browser, and `_NoBrowser` if no browser is installed.
 
-    Lazily creates a Selenium driver (reusing `websearch`'s factory) on first use; serialized
-    by a lock since a single driver can't navigate concurrently. If no browser is installed,
-    returns "" and the caller treats the page as unfetchable.
+    Lazily creates a Selenium driver (`webcommon.get_driver`) on first use; serialized
+    by a lock since a single driver can't navigate concurrently.
     """
     global _driver
     from .. import config as server_config
-    from . import websearch  # noqa: PLC0415 -- deferred: reuse its Selenium driver factory only when Tier 2 runs
-    from selenium.common import exceptions as selenium_exceptions  # noqa: PLC0415 -- deferred, as the factory is
-    with _driver_lock:
+    from selenium.common import exceptions as selenium_exceptions  # noqa: PLC0415 -- deferred, as the factory's are
+    with webcommon.lock_unless_cancelled(_driver_lock, is_cancelled):  # one navigation at a time
         if _driver is None:
-            _driver = websearch.get_driver(page_load_timeout=server_config.web_page_load_timeout)
+            _driver = webcommon.get_driver(page_load_timeout=server_config.web_page_load_timeout)
             if _driver is not None:
                 atexit.register(lambda: _driver.quit())
         if _driver is None:
             logger.info("_fetch_tier2: no browser available; cannot render JS-heavy page.")
-            return ""
+            raise _NoBrowser
         try:
             _driver.get(url)
             html = _driver.page_source
@@ -328,7 +331,8 @@ def _make_result(content: str, *, url: str, spa_suspected: bool = False, title: 
     """
     return {"content": content, "url": url, "spaSuspected": spa_suspected, "title": title}
 
-def fetch(url: str, output_format: str = "markdown") -> Dict:
+def fetch(url: str, output_format: str = "markdown",
+          is_cancelled: Callable[[], bool] | None = None) -> Dict:
     """Retrieve a web page's main content as clean text/markdown.
 
     Returns a dict `{"content": str, "url": str, "spaSuspected": bool, "title": str | None}`.
@@ -340,10 +344,15 @@ def fetch(url: str, output_format: str = "markdown") -> Dict:
 
     `output_format` is "markdown" (default, preserves headings/lists/links) or "text".
 
+    `is_cancelled`: If given, asked before the headless browser is started, and while waiting for it; once
+                    it answers `True`, the fetch stops and raises `webcommon.Cancelled`.
+
     Order of operations: scheme + SSRF gate (on the effective URL) → URL rewriting →
     special extractor or two-tier fetch → content normalization.
     """
     from .. import config as server_config
+    if is_cancelled is None:
+        is_cancelled = lambda: False  # noqa: E731 -- a constant predicate; a `def` would add a name for nothing
     trafilatura_format = "markdown" if output_format == "markdown" else "txt"
 
     effective_url, special_extractor = _rewrite_url(url)
@@ -366,18 +375,28 @@ def fetch(url: str, output_format: str = "markdown") -> Dict:
     title = _extract_title(html)  # from the (Tier 1) static HTML; usually present even on SPAs, whose shell carries a <title>
 
     tier2_timed_out = False
+    no_browser = False
     if len(content) < server_config.webfetch_min_content_chars:
-        maybe_tier2_content = _fetch_tier2(effective_url, output_format=trafilatura_format)
-        if maybe_tier2_content is None:
-            tier2_timed_out = True
-        elif len(maybe_tier2_content) >= len(content):
-            content = maybe_tier2_content
+        if is_cancelled():  # the browser is the slow half, so stop here rather than start it
+            logger.info(f"fetch: '{effective_url}': cancelled before Tier 2.")
+            raise webcommon.Cancelled
+        try:
+            maybe_tier2_content = _fetch_tier2(effective_url, output_format=trafilatura_format, is_cancelled=is_cancelled)
+        except _NoBrowser:
+            no_browser = True
+        else:
+            if maybe_tier2_content is None:
+                tier2_timed_out = True
+            elif len(maybe_tier2_content) >= len(content):
+                content = maybe_tier2_content
 
     if len(content) < server_config.webfetch_min_content_chars:
-        # Both tiers came up short. Distinguish a definitive HTTP error, and a page that never finished
-        # loading, from a JS-only page.
+        # Both tiers came up short. Distinguish a definitive HTTP error, a server with no browser to try,
+        # and a page that never finished loading, from a JS-only page.
         if status is not None and status >= 400 and not content:
             return _make_result(CANONICAL_HTTP_ERROR.format(status=status, url=effective_url), url=effective_url)
+        if no_browser:
+            return _make_result(CANONICAL_NO_BROWSER.format(url=effective_url), url=effective_url)
         if tier2_timed_out and not content:
             return _make_result(CANONICAL_PAGE_TIMEOUT.format(url=effective_url), url=effective_url)
         return _make_result(CANONICAL_SPA_SUSPECTED, url=effective_url, spa_suspected=True)

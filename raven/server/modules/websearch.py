@@ -10,7 +10,7 @@ and its old Python implementation:
 """
 
 __all__ = ["EngineUnavailable",
-           "get_driver", "init_module", "is_available",
+           "init_module", "is_available",
            "search"]
 
 import logging
@@ -21,25 +21,24 @@ import importlib
 import pathlib
 import threading
 import time
-from typing import Dict, List, Optional, Tuple, Union
+from collections.abc import Callable
+from typing import Dict, List, Optional, Tuple
 import urllib.parse
 
 from colorama import Fore, Style
 
-from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.firefox.options import Options as FirefoxOptions
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.remote.webdriver import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from ...common import text as common_text
+from ...common import utils as common_utils
 
-class EngineUnavailable(Exception):
+from . import webcommon
+
+class EngineUnavailable(webcommon.WebToolException):
     """The search engine did not answer: its page timed out, or loaded without any results on it."""
 
 # --------------------------------------------------------------------------------
@@ -50,61 +49,6 @@ app = None
 dump_dir = None
 dump_filename = None
 
-# See `navigator.userAgent` in a web browser's JavaScript console (to access it, try pressing F12 or Ctrl+Shift+C)
-user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-
-def _create_directory(path: Union[str, pathlib.Path]) -> None:
-    p = pathlib.Path(path).expanduser().resolve()
-    pathlib.Path.mkdir(p, parents=True, exist_ok=True)
-
-def _is_colab():
-    """False. We never run inside colab. Provided for compatibility only."""
-    return False
-
-def get_driver(page_load_timeout: float | None = None):
-    """Create a headless browser driver, Chrome if installed, else Firefox. `None` if neither is.
-
-    `page_load_timeout`: seconds a navigation may take before it raises
-                         `selenium.common.exceptions.TimeoutException`. `None` leaves Selenium's own default.
-    """
-    maybe_driver = _make_driver()
-    if maybe_driver is not None and page_load_timeout is not None:
-        maybe_driver.set_page_load_timeout(page_load_timeout)
-    return maybe_driver
-
-def _make_driver():
-    try:
-        logger.info("get_driver: Initializing Chrome driver...")
-        options = ChromeOptions()
-        options.add_argument('--disable-infobars')
-        options.add_argument("--headless")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--no-sandbox")
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument("--lang=en-GB")
-        options.add_argument(f"--user-agent={user_agent}")
-
-        if _is_colab():
-            return webdriver.Chrome('chromedriver', options=options)
-        else:
-            chromeService = ChromeService()
-            return webdriver.Chrome(service=chromeService, options=options)
-    except Exception:
-        try:
-            logger.info("get_driver: Chrome not found, using Firefox instead.")
-            logger.info("get_driver: Initializing Firefox driver...")
-            firefoxService = FirefoxService()
-            options = FirefoxOptions()
-            options.add_argument("--headless")
-            options.set_preference("intl.accept_languages", "en,en_US")
-            options.set_preference("general.useragent.override", user_agent)  # https://stackoverflow.com/a/72465725
-            return webdriver.Firefox(service=firefoxService, options=options)
-        except Exception:
-            print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL} (details below)")
-            logger.error("get_driver: Firefox not found either. Disabling websearch.")
-            return None
-
-driver = None
 def init_module(config_module_name: str):
     """Initialize the websearch module."""
     global driver
@@ -113,7 +57,7 @@ def init_module(config_module_name: str):
 
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}websearch{Style.RESET_ALL}...")
     server_config = importlib.import_module(config_module_name)  # `server_userdata_dir` for debug dumps, and the page-load timeout
-    driver = get_driver(page_load_timeout=server_config.web_page_load_timeout)
+    driver = webcommon.get_driver(page_load_timeout=server_config.web_page_load_timeout)
     if driver is not None:
         def quit_driver():
             driver.quit()
@@ -121,7 +65,7 @@ def init_module(config_module_name: str):
 
         dump_dir = pathlib.Path(server_config.server_userdata_dir).expanduser().resolve() / "websearch"
         dump_filename = dump_dir / "debug.html"
-        _create_directory(dump_dir)
+        common_utils.create_directory(dump_dir)
     else:
         driver = None
         dump_dir = None
@@ -306,7 +250,7 @@ def _format_results(texts: List[str],
     preformatted_text = "-----\n".join(format_result(result) for result in results)
     return preformatted_text, results
 
-def _search_google(query: str, max_links: int = 10) -> Tuple[str, Dict]:
+def _search_google(query: str, max_links: int, is_cancelled: Callable[[], bool]) -> Tuple[str, Dict]:
     # The query is the user's question in their own words, so it is counted rather than quoted; likewise
     # the results, which say what was asked about as plainly as the query does. Diagnosing a scraper that
     # a site's markup change has broken needs the *counts* - zero results parsed is the symptom - and
@@ -334,7 +278,7 @@ def _search_google(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     logger.info(f"_search_google: {len(results)} result{common_text.plural_s(len(results))}, {len(preformatted_text)} characters.")
     return preformatted_text, results
 
-def _search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
+def _search_duckduckgo(query: str, max_links: int, is_cancelled: Callable[[], bool]) -> Tuple[str, Dict]:
     logger.info(f"_search_duckduckgo: searching DuckDuckGo, {len(query)} character query, max_links {max_links}.")
     _open_results_page(f"https://duckduckgo.com/?kl=wt-wt&kp=-2&kav=1&kf=-1&kac=-1&kbh=-1&ko=-1&k1=-1&kv=n&kz=-1&kat=-1&kbg=-1&kbe=0&kpsb=-1&q={query}",
                        results_container_id="web_content_wrapper")
@@ -346,6 +290,8 @@ def _search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     page_height = _get_page_height()
     if 0 < len(links) < max_links:
         for k in range(5):
+            if is_cancelled():  # each scroll can wait 5 s for more to load
+                raise webcommon.Cancelled
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
             new_page_height = _wait_for_page_height_increase(page_height)
             if new_page_height == page_height:
@@ -405,20 +351,30 @@ _engines = {"duckduckgo": _search_duckduckgo,
 _results_cache: dict[tuple[str, str, int], Tuple[str, Dict]] = {}
 _search_lock = threading.Lock()  # serializes navigations: a single Selenium driver is not concurrency-safe
 
-def search(query: str, engine: str = "duckduckgo", max_links: int = 10) -> Tuple[str, Dict]:
+def search(query: str, engine: str = "duckduckgo", max_links: int = 10,
+           is_cancelled: Callable[[], bool] | None = None) -> Tuple[str, Dict]:
     """Search the web. Return `(preformatted_text, results)`; see `_format_results`.
 
     Raises `EngineUnavailable` when the search engine did not answer. An empty `results` means it did,
     and found nothing.
+
+    `is_cancelled`: If given, asked between the search's steps, and while it waits for another search to
+                    finish; once it answers `True`, the search stops and raises `webcommon.Cancelled`. A
+                    page load already in progress runs to its end.
     """
+    if is_cancelled is None:
+        is_cancelled = lambda: False  # noqa: E731 -- a constant predicate; a `def` would add a name for nothing
     key = (engine, query, max_links)
-    with _search_lock:
+
+    with webcommon.lock_unless_cancelled(_search_lock, is_cancelled):  # one navigation at a time
         if key in _results_cache:
             return _results_cache[key]
+        if is_cancelled():
+            raise webcommon.Cancelled
         # Only an answer is cached. A failure is the engine's state at that moment, and caching it would
         # refuse the same query for the rest of the session — which is why this is not `unpythonic.memoize`,
         # which caches exceptions as well as results.
-        result = _engines[engine](query, max_links)
+        result = _engines[engine](query, max_links, is_cancelled)
         _results_cache[key] = result
         return result
 
@@ -426,7 +382,7 @@ def search(query: str, engine: str = "duckduckgo", max_links: int = 10) -> Tuple
 # Example
 
 def _main():
-    preformatted_text, results = _search_duckduckgo("sharon apple")
+    preformatted_text, results = search("sharon apple")
     print(preformatted_text)
     for result in results:
         print(result)

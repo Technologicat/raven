@@ -207,8 +207,18 @@ live on the Night.
        `webfetch`'s headless tier.
    - Order: the empty send on tool nodes, the web tools' errors and timeout, (b), then (c). **All but (c)
      done 2026-09-29**, (b) confirmed live by the maintainer — Stop during a slowed websearch, then an empty
-     send to go on. Left for (c): the web endpoints stream, so `Abort.arm(response)` can shut the socket and
-     the server can stop scraping for a client that has gone.
+     send to go on. **(c) done 2026-09-30**, confirmed live — Stop during a slow fetch, and the server logged
+     the client gone:
+     - `raven.server.util.stream_job` streams a slow job's JSON; `raven.client.util.post_streamed_job` is its
+       client side. It took two server settings, both measured in `investigations/abort-inflight-request/`:
+       `COMPRESS_STREAMS = False` (Flask-Compress held the headers back) and waitress's
+       `channel_request_lookahead=1` (without it the server never sees a client go).
+     - The server stops between steps only. A page load already in progress runs to its end, which in the
+       live test was six seconds after the Stop.
+     - From the maintainer's review: `raven.server.util` is the shared server-side helper module, `stream_job`
+       its first occupant; `raven/server/modules/webcommon.py` holds what the two web modules share (driver
+       factory, user agent, the `WebToolException` family, `lock_unless_cancelled`). Nothing else in `app.py`
+       or the modules was found to belong in either.
 2. **Sprint cleanup**: `researchers-night/` still holds five open briefs, none of which shipped for the
    Night. Rehome them — here if anything is for the 8th, otherwise to `design/` or the top level — and close
    that folder into `done/`.
