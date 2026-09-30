@@ -1317,7 +1317,9 @@ renaming a getter — `key=lambda entry: entry.sort_key` where `attrgetter("sort
 and there are likely more of the same shape across the tree.
 
 Worth a grep for `lambda` in `key=`, `sort`, `sorted`, `min`, `max` and callback arguments, then judging
-each: an anonymous lambda is not wrong, it is just usually not the clearest thing available.
+each: an anonymous lambda is not wrong, it is just usually not the clearest thing available. The other
+cost is a `<lambda>` in a stack trace, where a name would have said which one; an earlier filing (2026-03-30,
+from Cherrypick's compare-mode review) suggested starting with Cherrypick and the XDot viewer.
 
 Discovered during the getter/property sweep (2026-08-18).
 
@@ -1519,6 +1521,12 @@ applies to the whole widget, cannot mix a glyph with prose.
 Licensing has to allow redistribution, since Raven ships its fonts. Worth checking whether a *pair* is the
 answer instead: a text font that renders correctly, plus a symbol font bound to the widgets that need one,
 which is what the FontAwesome path already is in miniature.
+
+**This is a font-coverage problem, not a renderer one** (from an earlier filing, 2026-06-03, merged here):
+`raven.common.gui.fontsetup` serves both plain DPG text and the vendored Markdown renderer, so a glyph is in
+the atlas for everything or for nothing — and the Visualizer wants these in labels and tooltips, which never
+go through the renderer. Nor is the Unicode range the gap: DPG builds atlas ranges automatically, so a
+loaded font offers whatever its TTF carries.
 
 ## A file-type icon set of our own, covering the formats Raven actually opens
 
@@ -3450,14 +3458,6 @@ headlessly enough to test is no longer news and is recorded in `dpg-notes.md`.
 
 Discovered during raven-cherrypick compare mode review (2026-03-30).
 
-## Audit unnamed lambdas
-
-*Cluster: hygiene-sweep · Cost: ? · Gate: ? · Filed: 2026-03-30*
-
-Unnamed lambdas produce unhelpful `<lambda>` in stack traces. Audit all Raven apps for unnamed lambdas and name them using either `unpythonic.namelambda` or by hoisting to a `def`. Start with raven-cherrypick and raven-xdot-viewer.
-
-Discovered during raven-cherrypick compare mode review (2026-03-30).
-
 ## AMD GPU (ROCm) support audit
 
 *Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-17*
@@ -4010,7 +4010,8 @@ which DPG does not expose. That leaves two realistic routes, and they sit at dif
 
 - **(a) A monochrome outline emoji font** with a permissive license (e.g. an OpenMoji-Black or Twemoji-mono
   build), added to the atlas. Cheap, but flat glyphs — decide whether that's acceptable before building it.
-  This is an atlas-level fix, so it shares machinery with "Super/subscript font coverage in the GUI" above.
+  This is an atlas-level fix, so it shares machinery with "Find a UI font that renders subscripts *and* has
+  symbol coverage".
 - **(b) Inline images**, i.e. the sketch below — richer, renderer-level, and the only route that gets actual
   color.
 
@@ -4024,29 +4025,6 @@ Emit the cached texture inline where the emoji appears. Enables emoji in chat me
 `dpg_markdown` renders.
 
 Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juha).
-
-## Super/subscript font coverage in the GUI
-
-*Cluster: markdown-renderer · Cost: ? · Gate: ? · Filed: 2026-06-03*
-
-Math superscripts and chemistry subscripts, for the letters and numbers Unicode provides
-(U+2070–U+209F etc.), need a font that actually carries those glyphs. Raven currently has no single
-font covering both well; the gap shows up first in Visualizer.
-
-This is a **font-coverage** problem, not a renderer one: `raven.common.gui.fontsetup` serves both
-plain DPG text and the vendored markdown renderer (`markdown_add_font_callback` supplies
-`dpg_markdown`'s fonts), so the glyphs either exist in the atlas for everything or for nothing.
-Visualizer wants them in labels and tooltips, which never go through `dpg_markdown`.
-
-**The Unicode range is not the gap.** DPG builds font atlas ranges automatically, so a loaded font
-already offers whatever its TTF carries — the subscript/superscript blocks included, if the TTF has
-them. What's missing is a font that actually *carries* the glyphs. So the work is a survey of
-permissively-licensed fonts for coverage of U+2070–U+209F and friends, and picking one — not range
-configuration, and not the renderer.
-
-Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated discussion. Split out
-from a combined emoji + super/subscript item on 2026-07-27 — the emoji half is a separate problem with
-its own fix, and lives in "Emoji support in the Markdown renderer" below.
 
 ## The Markdown renderer drops text — one character, or most of a section
 
@@ -4353,7 +4331,7 @@ Discovered while wrapping up brief 01 webfetch (2026-06-03).
 
 ## Context-window budgeting and conversation compaction (Librarian)
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-06-04*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-06-04 · See also: `TODO.md`, Librarian → "Context compaction", which holds the compaction design; this item is the budgeting half*
 
 Librarian does not yet budget the prompt against the model's context window, nor compact long
 conversations. After brief 02 (LM Studio compat), the loaded context-window figure captured per

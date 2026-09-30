@@ -58,6 +58,10 @@ regeneration and GC.
 
 ## 1. What a scope is
 
+What scopes are for, from `TODO.md`'s original item (moved here 2026-09-30): keeping one context's documents
+out of another's — work and hobby corpora, say — where today a demo means switching the documents directory
+by hand; and long-term memory needs the same separation.
+
 - **[D] Scopes want to be tags, not directories.** Agreed 2026-08-01, from the same pet peeve as photo and
   music collections: there are multiple valid categorizations, a directory tree can represent only one, and
   multi-category membership otherwise needs symlinks. Directory-drop stays the low-friction **constructor** —

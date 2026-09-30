@@ -57,7 +57,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ### Search and data access
 
-- **[High]** Author search: show full author list. GUI must be search-aware — when search is active, highlight where the match appears in a long author list (e.g. a 200-name list starting with "Aaltonen" and ending with "Virtanen"; user searching for "Smith" needs to see where it is, not just that it matched).
+- **[High]** Author search: show full author list, in the info panel too, where it is already loaded but not displayed. GUI must be search-aware — when search is active, highlight where the match appears in a long author list (e.g. a 200-name list starting with "Aaltonen" and ending with "Virtanen"; user searching for "Smith" needs to see where it is, not just that it matched).
 
 - **[High]** DOI: record DOI in BibTeX importer; show DOI per item in info panel; per-item button to open official webpage (`https://dx.doi.org/...`); export list of DOIs/URLs for fulltext automation.
 
@@ -76,13 +76,11 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ### Import and data pipeline
 
+- **[Medium]** Procrustes alignment for adding papers to an existing map, with novelty detection: `briefs/11_visualizer-importer-rework-brief.md`, item 4.
+
 - **[High]** Publish a ready-made dataset for quick-start demo (e.g. AI papers from arXiv, fully public).
 
 - **[High]** HybridIR integration (1): spawn an in-memory `Forest` + HybridIR instance over the BibTeX data for full-text search. Once full BibTeX records are saved in the dataset, this is mostly scripting.
-
-- **[Medium]** Procrustes alignment for incremental dataset updates: when adding new papers to an existing map, use SVD-based rotation from correspondence points to align the new embedding space with the existing one, preserving spatial memory. Document assumptions and limitations (works well when new data is from the same semantic region as the existing dataset; consider a fallback for the unrelated-dataset case). Also bundles Nomic-embed integration and PCA preprocessing.
-  - Novelty detection falls out naturally as a byproduct: items with large Procrustes residuals, or items with no close neighbors in the existing dataset, are flagged as novel.
-  - UX: add a field to the BibTeX import dialog to specify a base dataset to add to; add a corresponding option to the `raven-importer` CLI tool.
 
 - **[Medium]** BibTeX export: keep full original BibTeX entries in the dataset; export selected items as BibTeX. Check whether the importer already preserves full entries or discards them.
 
@@ -118,8 +116,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** Show most common keywords: currently printed to console only. Add GUI display, clipboard copy, save with dataset, button to recall at any time.
 
-- **[Medium]** Show full authors in info panel (full author list is already loaded, just not displayed). Same search-aware display challenge as in author search: a 200-name list starting "Aaltonen ... Virtanen" needs to show where "Smith" matched, not just that it did.
-
 - **[Medium]** BibTeX entry type support: show type per entry (article, inproceedings, book, patent, ...); show count by type in current selection; allow filtering by type.
 
 - **[Medium]** Word cloud window: make resizable; add 1:1 button; use Pillow Lanczos for scaling (DPG's built-in scaling is bilinear with no mipmaps, so it aliases when shrinking); selectable color scheme (white background for paper export); move toolbar to top so it stays on-screen if the image is too large; expose size and color settings in GUI (currently only in `config.py`).
@@ -132,7 +128,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** Show item slug (BibTeX identifier).
 
-- **[Medium]** Per-item buttons in info panel: open DOI webpage; search for other items by same author(s) (rank by number of shared authors, descending).
+- **[Medium]** Per-item button in info panel: search for other items by same author(s) (rank by number of shared authors, descending). The DOI button is part of the DOI item above.
 
 - **[Medium]** Make the "Search" heading brighter to make it stand out visually.
 
@@ -174,9 +170,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** LLM keyword detection (Alternative 1, current implementation): refinements needed — dataset-level topic analysis from titles, letter-case normalization, cacheable keyword sets (including partial cache of cluster results), progress display in GUI, logging cleanup. Update docs: LLM backend required when keyword extraction mode is "llm"; add low-VRAM mode fallback.
 
-- **[Medium]** HybridIR integration (2): cross-app data integration between Visualizer and Librarian — both apps access the same data. Major design work, deferred. See also conversation logs for design draft.
-  - **Document scopes are a prerequisite**, not a parallel feature. Unifying the databases means one Librarian corpus holding items from several Visualizer datasets at once, and those have to stay separable — so every item imported from a dataset gets tagged with a scope identifying it, keyed by the dataset's file path. Without that the unified database is a bag with no way back to "the papers in *this* map". See the document-scopes item under Librarian.
-  - Related shape problem in the meantime: a `.bib` dropped into `docs_dir` is *one* document however many records it holds, so a whole reference database imports as a single blob — retrievable chunk-wise, useless to fetch. `raven-burstbib` is the current answer (burst it into one file per record first), and unification is the eventual one.
+- **[Medium]** HybridIR integration (2), a unified Visualizer/Librarian document DB with scopes: see `briefs/13_corpus-scopes-and-unified-db-brief.md`.
 
 
 ### macOS support
@@ -298,15 +292,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     - Prefill *is* the escape hatch, contrary to what this item said before the 2026-07-27 probe: injecting the tag as a pre-written assistant turn works fine on LM Studio. Forcing thinking *on* is the mirror image of forcing it off — prefill an open `<think>\n` instead of a closed empty block.
     - **Don't delete the autofixer yet.** It's moot on LM Studio, which delivers reasoning on its own channel, so the repair path never fires there. Ooba is the backend that would exercise it, and the local install is far behind — upgrade it and re-test (see "Upgrade oobabooga and re-check Raven's ooba support" in `TODO_DEFERRED.md`) before concluding the machinery is dead code.
 
-- **[High]** Anthropic-compatible backend support. Started as a breadth-of-options item; the 2026-07-27 probe promoted it, because **LM Studio's Anthropic endpoint exposes a working per-request thinking toggle that its OpenAI endpoint does not.** Verified against `qwen3.6-35b-a3b`:
-  - `thinking: {"type": "disabled"}` → content blocks `['text']`; `thinking: {"type": "enabled", "budget_tokens": N}` → `['thinking', 'text']`. A genuine toggle, in Anthropic's own spelling, with no prefill needed.
-  - The endpoint **defaults to thinking off**, the opposite of the OpenAI endpoint's default-on. Worth knowing before comparing behaviour across the two.
-  - It **streams** — proper SSE, `event: message_start` and Anthropic-shaped events — so `llmclient`'s stream parser has something to attach to.
-  - Assistant prefill works there too.
-  - Response carries `stop_reason` and `usage.cache_read_input_tokens`, i.e. the real Anthropic shape rather than a thin alias.
-
-  So this is now two features in one: the clean thinking toggle, *and* letting Raven talk to Anthropic's own API as a backend. The latter still matters on its own — Raven targets scientific research, and a meaningful slice of that community already works through the Anthropic API. Same reasoning as supporting both NVIDIA and AMD: breadth, not preference.
-
 - **[Low]** Note for sampler config: **LM Studio honours `min_p` even though its documented parameter list omits it.** Verified behaviourally 2026-07-27 — at temperature 2.0 the unclamped output varies between seeds, while `min_p=0.9` is seed-invariant, as is the documented `top_k=1` control. Recorded because the docs list (model, messages, temperature, top_p, top_k, max_tokens, stream, stop, presence_penalty, frequency_penalty, logit_bias, repeat_penalty, seed) reads as exhaustive and isn't; don't drop a sampler setting on the strength of it. Corollary: LM Studio returns HTTP 200 for unknown parameters, so any future "is this supported?" question needs a behavioural test, not a status code.
 
 - **[Med]** RAG PDF ingestion — polish. The core is done: born-digital PDF text is extracted via `raven.common.docextract` (pypdf) and indexed like any other document. Remaining: run the extracted text through `sanitize` before indexing (PDF text often has hyphenation artifacts and paragraph-break ambiguity); link a search result back to its original document (see `TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations"); generalize to scanned PDFs (OCR) and to images (caption generation — ties into the Nomic multimodal-search plan).
@@ -316,7 +301,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 - **[Medium]** Attach a document that is *already in the docs DB*. Full-document attach itself works (images and text/PDF, brief 03 Half 2) — but only from the filesystem. There is no way to reach into the RAG store and attach one of its documents whole, which is what you want when retrieved chunks aren't enough and the file is already ingested.
   - **Open question: whose affordance is this — the user's, the AI's, or both?** The AI side already has an entry under Tools ("RAG access via tool-call: … fetch a full document by ID"), so if that lands, the model can pull a whole document itself. The user side (pick from the DB in the attach dialog) is the genuinely missing half. Deciding this shapes both: a shared "resolve doc ID → `text_file` content part" path serves both callers, and the GUI picker needs the docs DB to be browsable, which the tool version doesn't.
 
-- **[High]** Citation tracker GUI: validate that LLM-inlined citations (in whatever format we specify) actually point to documents in the RAG result set; flag any that don't. The other half — surfacing *which* documents fed a reply, and opening the originals — is specced in `TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations"; the provenance data is already tracked per turn (the payload's `retrieval` field), just not shown.
+- **[High]** Inline citations, validated: encourage the LLM to inline citations in a specified format, then check that each cited ID is in the RAG result set, and flag any that are not. Design goal: preserve synthesis — don't force one paragraph per source. The other half — surfacing *which* documents fed a reply, and opening the originals — is specced in `TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations"; the provenance data is already tracked per turn (the payload's `retrieval` field), just not shown.
 
 
 ### Core features
@@ -333,7 +318,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** Proactive context engineering: move beyond reactive BM25+semantic retrieval toward intelligent context curation. The system should maintain a graph of topical connections and proactively include relevant documents the user didn't explicitly ask for. E.g. "You asked about hydrogen embrittlement — here are the materials science papers you looked at last month." Shallow version (agentic chain-of-thought retrieval over a topic graph) is achievable now; deeper version requires a world model.
 
-- **[Medium]** Document scopes: subdirectory-based filtering; scope selection GUI (checkbox per scope, select/unselect all); tags as the primary scoping mechanism (auto-tag by subdirectory name on ingestion); avoid cross-contamination between work/hobby contexts. Needed for long-term memory too. Currently must manually switch directories for each demo.
+- **[Medium]** Document scopes: see `briefs/13_corpus-scopes-and-unified-db-brief.md`.
 
 - **[Medium]** HybridIR: give documents a **title** field. Today a document has only `document_id` (the path relative to `docs_dir`) and its text, so there is nothing to show a user, nothing to hand a model deciding whether a document is worth fetching, and nothing to weight in retrieval. Titles are usually already present in the data and merely unparsed, and the reading of them is now written: `chatutil.document_label` extracts a BibTeX record's `title`/`author`/`year`, or falls back to the first substantial line. What is missing is *storing* the result as a field, which is what search can weight. Two wins, and the second is the larger: a legible label wherever a document is named (the `list_consulted_documents` inject in `briefs/librarian-extension/done/10_rag-tool-surface-brief.md`, a future citation UI), and a field that can be **weighted** in search — a title match is a much stronger relevance signal than a body match, which is index-side work adjacent to brief 09's query-side levers.
   - **Cost is a reindex**, ~1.5 h for the hydrogen dataset. Open question whether to migrate the existing index instead of rebuilding it: cheaper for the user, more code to maintain, and unlike the chat datastore a search index holds no irreplaceable hand-entered content — it is derived data, so nuke-and-rebuild is defensible in a way it would not be for `chattree`.
@@ -347,18 +332,16 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     - Two mitigations already have machinery in the tree. The context-fill indicator predicts *when* compaction will be needed before it is urgent; and `config.context_prefill_idle_delay` already runs a background LLM call while the user is reading, which is exactly the window in which a reprocess is free. Speculative compaction during idle is the natural pairing.
   - **Summaries belong in the chattree, and branching makes that pay.** A summary covering a span of nodes is derived data that must be cached and invalidated with the branch. Storing it against the span rather than the branch means every branch sharing that ancestry reuses it — the shared prefix is exactly where the oldest, most compactable material lives, so the reuse rate should be high. Consequence: building the sent context stops being a linear walk of `linearize_up` and becomes a policy evaluation over the branch (what is pinned, what is summarized, what is dropped), which wants its own module and its own tests rather than growing inside `serialize_history_for_wire`.
 
-- **[Medium]** Long-term memory: second RAG store indexing chat messages. Tool-call access (search with query, retrieve local neighborhood of a node). Automatic associative memory via autosearch on user's most recent message(s). Return user messages only (not AI replies) to keep the model grounded. **Design TBD — flag for second review round.** Hindsight may be a better backend here.
+- **[Medium]** Memory, as three RAG stores: (1) documents — explicit, user-managed (exists); (2) long-term memory — implicit, system-managed; (3) a memory bank — explicit, AI-managed. **Design TBD for both new ones — flag for a second review round.** Hindsight may be a better backend for either; `briefs/librarian-extension/06_hindsight-standup-brief.md` is where that gets decided.
+  - **Long-term memory** indexes chat messages. Tool-call access (search with a query, retrieve the local neighbourhood of a node); automatic associative memory by autosearch on the user's most recent message(s). Return user messages only, not AI replies, to keep the model grounded.
+  - **The memory bank** is AI-managed: tool-call access (store / list / search / retrieve; title + content), and a customizable system-message section for things to remember across every chat. Chunk length may need adjusting — one chunk per memory.
 
-- **[Medium]** Explicit memory bank: third RAG store, AI-managed. Tool-call access (store/list/search/retrieve; title + content). Customizable system message section for things to remember across every chat. Chunk length may need adjustment (one chunk per memory). **Design TBD — flag for second review round.**
-
-- **[Medium]** Three RAG stores architecture: (1) documents — explicit, user-managed (exists); (2) long-term memory — implicit, system-managed, indexes chat messages (new); (3) explicit memory bank — explicit, AI-managed (new). See memory items above.
-
-- **[Medium]** Chat HEAD jump undo/redo.
+- **[Medium]** Chat HEAD jump undo/redo: `TODO_DEFERRED.md`, "Nothing remembers which sibling the reader was on", which has the design.
 
 
 ### Chat UI
 
-- **[High]** Show the raw prompt. A window displaying exactly what went on the wire for the current turn, with a copy button (Raven's usual green flash and tooltip acknowledgment). Slated for 2026-08-25; recorded because the decisions below were taken on 2026-08-24 and produced no diff.
+- **[High]** Show the raw prompt (the prompt viewer). A window displaying exactly what went on the wire for the current turn, with a copy button (Raven's usual green flash and tooltip acknowledgment). Slated for 2026-08-25; recorded because the decisions below were taken on 2026-08-24 and produced no diff.
   - **Raw text is the default, with a toggle to render it.** The chatlog is already the rendered view, so the point of this window is to be the unrendered one — and Markdown rendering hides the whitespace and delimiters a prompt is opened to inspect. Rendering is still worth offering, since messages typically contain formatting.
   - **With a breakdown, as SillyTavern's has**: system prompt, character card, user profile, RAG results, per-turn injects. This is the part with real work in it — the segments exist only as concatenated text by the time anyone can see them, so `scaffold.build_turn_prompt` has to hand back labelled pieces rather than a string. Sized as one focused session, which is why it is here and not a brief.
     - **Half of that is already labelled, checked 2026-08-25**, which is what keeps the sizing honest. `build_turn_prompt` returns a `List[Dict]`, so the *data* injects are separate messages by construction (`_synthetic_tool_exchange`). Only the *instruction* injects are joined into one string — and `build_system_injects` hands `_add_to_system_message` a **list of texts** to join, so the work is carrying a label alongside pieces that are already separate rather than decomposing a blob. One production caller, `scaffold.py:1116`.
@@ -367,7 +350,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
     - The colour and pulse for "this is the one" already exist as `raven.common.gui.keyboardmark`; check whether this is the same signal (the keyboard is here) or a different one that merely wants to look related, before reusing it.
   - `llmclient.serialize_history_for_wire(settings, history, continue_=False, datastore=...)` is the existing tee point, and returns the wire-ready messages. It is what the prompt-size measurements used.
 
-- **[Medium]** Image shapes in the xdot widget, and mip selection for both consumers — `briefs/xdot-image-shapes-brief.md`. Two things that are one mechanism: honouring xdot's `I` operation so `raven-xdot-viewer` draws `image=` nodes, and choosing a mip level by the drawn size so a picture stops going soft when the reader zooms in. The second is a live defect in the chat graph's attachment thumbnails and is separable — done alone it fixes them with no `I` support at all. Sized M, about a day, and it wants a session of its own: it changes `ImageShape`'s contract and reaches the widget, its tests, and both consumers. Read the brief's opening before starting; the defect turned out not to be the one it was written for.
+- **[Medium]** Image shapes in the xdot widget, so `raven-xdot-viewer` draws GraphViz `image=` nodes: pieces 1 and 2 of `briefs/xdot-image-shapes-brief.md`. Piece 3, mip selection, landed 2026-09-07.
 
 - **[Medium]** User-level settings: move the configs a *user* legitimately changes out of `config.py` into JSON, and give them settings dialogs. Today every one of them — LLM backend URL, model, docs directory, avatar knobs — is a Python source edit, which is why the tracked `config.py` files carry local overrides on every dev machine and have to be kept out of every commit by hand. Same gap the Visualizer has (the "Settings window: expose `gui_config` in the GUI" item above), so the two want a shared answer rather than two dialogs.
   - ~~**The JSON half**~~ — **done 2026-09-11.** `raven.configoverrides` reads `~/.config/raven/overrides.json`, keyed by config module, applied as the last statement of all eleven config modules; a dotted name reaches into an `env`, so both shapes a config module has are covered by one rule. Shipped defaults stay in `config.py` and the override file wins. See the README's *Configuration* section for the user-facing format.
@@ -516,6 +499,13 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
   **Testable locally, which is what makes this tractable now**: LM Studio serves an Anthropic-compatible endpoint, so the whole thing can be developed and tested against a local model with no API account. (This project has no Anthropic API account to test against — its Claude access is through Claude Code.)
 
+  **What that endpoint does, probed 2026-07-27 against `qwen3.6-35b-a3b`** — and it adds a third reason: **a working per-request thinking toggle, which LM Studio's OpenAI endpoint does not have.**
+  - `thinking: {"type": "disabled"}` → content blocks `['text']`; `thinking: {"type": "enabled", "budget_tokens": N}` → `['thinking', 'text']`. A genuine toggle, in Anthropic's own spelling, with no prefill needed.
+  - The endpoint **defaults to thinking off**, the opposite of the OpenAI endpoint's default-on. Worth knowing before comparing behaviour across the two.
+  - It **streams** — proper SSE, `event: message_start` and Anthropic-shaped events — so `llmclient`'s stream parser has something to attach to.
+  - Assistant prefill works there too.
+  - Response carries `stop_reason` and `usage.cache_read_input_tokens`, i.e. the real Anthropic shape rather than a thin alias.
+
   Where it lands in the code: `llmclient.detect_backend_flavor` already probes by *payload shape* and returns `"lmstudio"` / `"oobabooga"` / `"generic"`, and `backend_flavor` already gates request details at a handful of sites (`_resolve_model_info`, the continue flag, the sampler block). So the seam exists. What is genuinely different about the Anthropic shape, and needs designing rather than switching on:
 
   - **`system` is a top-level request field, not a message with `role="system"`.** Raven's history is a list of role-tagged messages and the system prompt is a node in the chat tree, so the wire builder has to lift it out.
@@ -554,8 +544,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** Source attribution for RAG: clickable snippets in GUI based on `document_id`, `offset`, length; clickable link to open full document (spawn external viewer based on file type). Same feature as `TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations" — that entry carries the current design questions (where the affordance lives, snippet vs. whole document) and notes the `open_file` / `open_in_file_manager` machinery it can reuse.
 
-- **[Medium]** Inline citations: encourage LLM to inline citations in a specified format; validate programmatically that cited IDs exist in the RAG result set; flag invalid citations. Design goal: preserve synthesis (don't force one-paragraph-per-source).
-
 - **[High]** MCP support: specced in `briefs/librarian-extension/04_librarian-mcp-client-brief.md` — client-side MCP tools registered *alongside* the built-ins, all feeding the existing `perform_tool_calls` loop. Gated on the Hindsight playground (brief 06). Main line for the "digital colleague" track: this is how Librarian reaches the lab's systems. Agent skills (CLI-based, "anime maid form factor" — plugging into interfaces designed for human use) remain a superior alternative capability-wise but more dangerous for the user's computing environment; still under consideration as a separate path.
 
 - **[Low]** IBM Granite OCR / vision OCR: low priority. Since writing this item, DeepSeek-OCR and Qwen3.5 native vision have appeared. Evaluate accuracy/speed/model size tradeoff when relevant.
@@ -574,7 +562,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ### Avatar (Librarian-side)
 
-- **[Medium]** Avatar on/off toggle: auto-off is implemented; add explicit disable so Librarian won't try to load or run the avatar at all (for low-VRAM setups). What to show in the right panel when avatar is off? (Recent chats list, once that exists?)
+- **[Medium]** Avatar on/off toggle, so Librarian never loads the avatar on a low-VRAM setup (auto-off already exists): `TODO_DEFERRED.md`, "A no-avatar mode, with the chat tree in the panel the avatar vacates", which also answers what the right panel shows instead.
 
 - **[Low]** Tune the branch-switch glitch's look by eye. The effect shipped 2026-08-25; its parameters, and why its ceiling wants re-checking, are in `briefs/done/researchers-night/README.md`.
 

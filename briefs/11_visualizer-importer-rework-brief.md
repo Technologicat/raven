@@ -87,6 +87,10 @@ Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
      to keep a small cluster when its *cohesion* clears the corpus's own, which needs no threshold at
      all. Findings 9 and 10.
 4. **Procrustes alignment**: When adding new papers to an existing dataset, re-embed the full combined corpus, then use SVD on correspondence points (papers present in both old and new embeddings) to find the optimal rotation matrix R. Apply R to align the new embedding with the old one. Preserves spatial memory while allowing new clusters to appear. Side benefit: novelty detection (new papers far from existing clusters may indicate field-expanding work).
+   - Document the assumption and its limit: this works well when the new data is from the same semantic
+     region as the existing dataset, and wants a fallback for the unrelated-dataset case.
+   - UX: a field in the BibTeX import dialog naming a base dataset to add to, and the matching option on
+     the `raven-importer` CLI.
 
 5. **Cluster once, in high-D — the clusters the user sees are currently computed in 2D, and that is a defect.**
    Added 2026-08-05.
