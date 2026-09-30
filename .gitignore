@@ -27,6 +27,9 @@ raven/avatar/assets/characters/00_workfiles/parody/
 # Session logs written by the apps' --log CLI option.
 *.log
 
+# Recordings from raven-avatar-settings-editor, which writes them to `rec/` under the directory it was started from.
+/rec/
+
 # Caches the Visualizer's importer writes beside whatever it imported. Derived from that data, so wherever the
 # data is private — a corpus under `investigations/`, for one — the cache is too.
 *_embeddings_cache.npz
