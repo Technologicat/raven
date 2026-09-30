@@ -823,7 +823,9 @@ Same shape applies to `nlp` (`nlptools` ↔ `natlang`), `stt`, `embeddings`, `sa
 - Engine-agnostic data shapes live in their own module, separate from the engine wrapper. For TTS, `WordTiming`, `TTSSegment`, `TTSResult`, `EncodedTTSResult` are in `raven.common.audio.speech.datatypes`; only `TTSPipeline` (which holds a `kokoro.KPipeline`) stays in `raven.common.audio.speech.tts`. This lets consumers that only need the shapes (e.g. `lipsync`) import them without dragging in Kokoro/PyAV/huggingface_hub.
 
 ### Common Subsystems
-- `raven/common/video/` - Postprocessor, upscaler (PyTorch Anime4K), colorspace conversions, cel compositor
+- `raven/common/video/` - Postprocessor, upscaler (PyTorch Anime4K), cel compositor
+- `raven/common/image/` - Codec, Lanczos resampling, thumbnails, and `colorspace` (RGB/YUV, luminance, sRGB↔linear on tensors)
+- `raven/common/color.py` - Operations on a single colour value, stdlib only: parsing, mixing, luminance and contrast, HLS adjustments. `image.colorspace` takes its constants from here; keep it free of Torch, so a config can build its colours without importing it
 - `raven/common/audio/` - Player, recorder, codec (PyAV streaming)
 - `raven/common/gui/` - Custom DearPyGui widgets and the shared GUI vocabulary. Widgets: VU meter, messagebox, self-sizing tooltip (`tooltip.Tooltip` — for a caption whose text *changes* after it is built; one written once and never touched wants `dpg.add_tooltip`, and inside a modal that is the only option that works), thumbnail grid and table cursor (one keyboard cursor, two views), help card, xdot canvas. Frameworks and vocabulary: the GUI animation framework, `filedrop` (OS file drag-and-drop, installed with one call per app), `keyboardmark` (the colour and pulse that say where the keyboard is, so every widget drawing that mark agrees), `layout_math`, `fontsetup`. `api-inventory raven/common/gui/` is the current list; this one is a sample.
 
@@ -932,10 +934,9 @@ to print a usage message — and a mistyped command line is the commonest reason
 - **The CLI tools are where nothing enforces it**: measured 2026-09-23, three of them took 8.5–9.3 s to
   answer `--help`, against a median of 0.40 s across all 26 console scripts and 0.05–0.08 s for the GUI
   apps, because they imported `..client.api` and friends at module scope and parsed inside `main()`.
-  - **All three now import those after parsing** (2026-09-30). The configs name their dtypes rather than
-    importing torch for them, so `raven-dehyphenate` answers in 0.25 s; `raven-indexer` and `raven-pdf2bib`
-    take about 1.3 s, because `raven.librarian.config` builds its chat colours with
-    `raven.common.video.colorspace.hex_to_rgb`, and `colorspace` builds tensors at import.
+  - **All three now import those after parsing** (2026-09-30), and the config modules they read their help
+    defaults from no longer import torch: the dtypes are named, and the colours come from the stdlib-only
+    `raven.common.color`.
   - `raven-pdf2bib`'s library uses its heavy modules throughout, so its parser moved out instead, to
     `raven.papers.pdf2bib_cli`, the shape `raven.visualizer.importer_cli` already had.
 - Where a tool genuinely needs a heavy import to *build* its parser — a default read from config — import
@@ -1018,7 +1019,7 @@ inside the guideline, and splitting it would move prose around rather than simpl
 covered, and the GUI layer is no longer the hole it was; what remains thin is the Visualizer, and untested
 are the large DPG frontends.
 
-- **`common/`** — bgtask, datastorelock, deviceinfo, docextract, filelisting, logsetup, netutil, nlptools, numutils, readcsv, running_average, smoothvalue, stringmaps, utils; `text/` (normalize, speakable); `audio/` (codec, resample, utils) and `audio/speech/` (tts, stt, lipsync, and a TTS→STT round trip); `image/` (codec, lanczos, utils); `video/` (colorspace, compositor, postprocessor, upscaler); `gui/` (animation, filedrop, filegrid, fontsetup, gridnav, helpcard, layout_math, messagebox, tablecursor, thumbnailgrid, tileicons, tooltip, utils, a characterization of DPG's own focus semantics, and all of `xdotwidget/`).
+- **`common/`** — bgtask, color, datastorelock, deviceinfo, docextract, filelisting, logsetup, netutil, nlptools, numutils, readcsv, running_average, smoothvalue, stringmaps, utils; `text/` (normalize, speakable); `audio/` (codec, resample, utils) and `audio/speech/` (tts, stt, lipsync, and a TTS→STT round trip); `image/` (codec, colorspace, lanczos, utils); `video/` (compositor, postprocessor, upscaler); `gui/` (animation, filedrop, filegrid, fontsetup, gridnav, helpcard, layout_math, messagebox, tablecursor, thumbnailgrid, tileicons, tooltip, utils, a characterization of DPG's own focus semantics, and all of `xdotwidget/`).
 - **`librarian/`** — agent, appstate, chat_controller, chattree, chatutil, cleanup, hybridir, imagestore, indexer, llmclient, scaffold, sidecarstore, textfilestore.
 - **`visualizer/`** — annotation, entry_renderer, importer, info_panel, plotter, selection, word_cloud. What is left out is a category rather than a list of modules; see below.
 - **Elsewhere** — `vendor/file_dialog` (the largest single module's worth, at ~175 tests), `client/` (api, mayberemote), `papers/*`, `cherrypick/*`, `server/webfetch`, `xdot_viewer/dot_utils`.

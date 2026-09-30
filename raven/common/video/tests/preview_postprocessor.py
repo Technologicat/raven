@@ -29,7 +29,7 @@ from PIL import Image, ImageDraw
 
 import torch
 
-from ..colorspace import linear_to_srgb, srgb_to_linear
+from ...image.colorspace import linear_to_srgb, srgb_to_linear
 from ..postprocessor import Postprocessor
 
 # A character with a wide tonal range and a strongly coloured area (the hair), which is what makes a

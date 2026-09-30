@@ -1,17 +1,17 @@
-"""Simple RGB/YUV colorspace conversion for video postprocessing.
+"""Colorspace conversions on images: RGB/YUV, luminance, and the sRGB transfer function.
 
-Input/output is Torch tensor in [c, h, w] format.
+Input/output is Torch tensor in [c, h, w] format. The same operations on a single colour value, with no
+Torch, are in `raven.common.color`, which holds the constants both use.
 
 This module is licensed under the 2-clause BSD license.
 """
 
 __all__ = ["rgb_to_yuv", "yuv_to_rgb", "luminance",
-           "linear_to_srgb", "srgb_to_linear",
-           "hex_to_rgb"]
-
-from typing import Tuple
+           "linear_to_srgb", "srgb_to_linear"]
 
 import torch
+
+from .. import color
 
 # --------------------------------------------------------------------------------
 # Colorspace conversion
@@ -83,9 +83,11 @@ import torch
 # Cb = (- a * R - b * G + (1 - c) * B) / d
 # Cr = ((1 - a) * R - b * G - c * B) / e
 #
-# so YCbCr = M * RGB, where the matrix M is:
+# so YCbCr = M * RGB, where the matrix M is the one below. The table's d and e are not independent of the
+# weights: d = 2 * (1 - c) and e = 2 * (1 - a), in every column.
 #
-a, b, c, d, e = [0.2126, 0.7152, 0.0722, 1.8556, 1.5748]  # ITU-R Rec. 709 (HDTV)
+a, b, c = color.BT709_WEIGHTS  # ITU-R Rec. 709 (HDTV)
+d, e = 2.0 * (1.0 - c), 2.0 * (1.0 - a)
 _RGB_TO_YCBCR = torch.tensor([[a, b, c],
                               [-a / d, -b / d, (1.0 - c) / d],
                               [(1.0 - a) / e, -b / e, -c / e]])
@@ -121,18 +123,14 @@ def luminance(image: torch.tensor) -> torch.tensor:
 # read from an ordinary image file needs `srgb_to_linear` before it is computed with. Skipping either is not
 # a subtle error: mid-gray comes out at the wrong brightness and gradients bunch up at one end.
 #
-# The curve is linear near black and a power law above it, the joint chosen so both value and slope match.
-#   https://en.wikipedia.org/wiki/SRGB
-#   https://www.color.org/chardata/rgb/srgb.xalter (IEC 61966-2-1)
+# The curve is linear near black and a power law above it; its constants, and where they come from, are in
+# `raven.common.color`.
 
-_SRGB_LINEAR_SLOPE = 12.92
-_SRGB_ENCODED_CUTOFF = 0.04045  # where the encoded side switches from the linear segment to the power law
-# The linear-light cutoff is derived rather than quoted. The standard rounds it to 0.0031308, which puts a
-# discontinuity of about 1e-8 in the curve; dividing keeps the two segments meeting exactly, and matches the
-# constant every other implementation of this ends up with.
-_SRGB_LINEAR_CUTOFF = _SRGB_ENCODED_CUTOFF / _SRGB_LINEAR_SLOPE
-_SRGB_ALPHA = 0.055
-_SRGB_GAMMA = 2.4
+_SRGB_LINEAR_SLOPE = color.SRGB_LINEAR_SLOPE
+_SRGB_ENCODED_CUTOFF = color.SRGB_ENCODED_CUTOFF
+_SRGB_LINEAR_CUTOFF = color.SRGB_LINEAR_CUTOFF
+_SRGB_ALPHA = color.SRGB_ALPHA
+_SRGB_GAMMA = color.SRGB_GAMMA
 
 def linear_to_srgb(image: torch.tensor) -> torch.tensor:
     """Linear RGB in [0, 1] -> sRGB-encoded in [0, 1]. Apply before displaying computed-in-linear pixels.
@@ -152,9 +150,3 @@ def srgb_to_linear(image: torch.tensor) -> torch.tensor:
     image = torch.clamp(image, 0.0, 1.0)
     high = ((image + _SRGB_ALPHA) / (1.0 + _SRGB_ALPHA)) ** _SRGB_GAMMA
     return torch.where(image <= _SRGB_ENCODED_CUTOFF, image / _SRGB_LINEAR_SLOPE, high)
-
-def hex_to_rgb(hex: str) -> Tuple[int]:
-    """HTML hex color '#rrggbb' or '#rrggbbaa' to tuple of integers in [0, 255]."""
-    hex = hex.removeprefix('#')
-    rgb = tuple(int(hex[i:i + 2], 16) for i in [*range(0, len(hex), 2)])
-    return rgb

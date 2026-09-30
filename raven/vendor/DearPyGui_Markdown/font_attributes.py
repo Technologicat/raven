@@ -2,6 +2,8 @@ import ast
 import os.path
 import traceback
 
+from ...common import color as common_color  # aliased: `color` is a parameter name here
+
 from .attribute_types import Attribute, FontAttribute
 
 __all__ = ["parse_color",
@@ -16,15 +18,13 @@ __all__ = ["parse_color",
 def parse_color(color: str | list | tuple) -> list[int, int, int, int]:
     '''Normalize a colour into RGBA, accepting every spelling a `<font color=...>` attribute may carry.
 
-    A `'#rrggbb'` hex string, a `'(r, g, b)'` literal, or a list/tuple. Short forms are padded to
-    opaque RGBA, and anything beyond four components is dropped.
+    A string in any spelling `raven.common.color.parse` accepts — `'#rrggbb'`, `'#rrggbbaa'`, the short
+    `'#rgb'` forms, a `'(r, g, b)'` literal — or a list/tuple. Short forms are padded to opaque RGBA, and
+    anything beyond four components of a list/tuple is dropped. Raises `ValueError` for a string that is
+    not a colour.
     '''
-    if not isinstance(color, list) and not isinstance(color, tuple):
-        try:
-            color = ast.literal_eval(color)
-        except Exception:
-            color = color.removeprefix('#')
-            color = tuple(int(color[i:i + 2], 16) for i in [*range(0, len(color), 2)])  # HEX to RGB
+    if isinstance(color, str):
+        color = common_color.parse(color)
     color = list(color)[:4:]
     for i in range(4 - len(color)):
         color.append(255)

@@ -6,7 +6,7 @@ DearPyGUI's drawlist primitives.
 
 __all__ = ["FontLadder", "TextFonts", "nearest_font",  # which font a size and a face resolve to
 
-           "set_dark_mode", "get_dark_mode", "color_to_dpg",
+           "set_dark_mode", "get_dark_mode", "DARK_MODE_L_MAX", "DARK_MODE_L_MIN", "color_to_dpg",
            "background_under",  # what a shape stands on...
            "text_color",  # ...and what a pen's text actually lands as, contrast rule included
 
@@ -17,6 +17,8 @@ import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 
 import dearpygui.dearpygui as dpg
+
+from ... import color as common_color  # aliased: `color` is this module's usual parameter name
 
 from .graph import (
     Graph, Element, Node, Edge, Shape, Pen,
@@ -78,8 +80,8 @@ def get_dark_mode() -> bool:
 # Original L=0 (black) maps to L_MAX; original L=1 (white) maps to L_MIN.
 # Tuned so black text becomes light gray (not blinding white) and white
 # backgrounds become DPG's dark gray (not pitch black).
-_DARK_MODE_L_MAX = 220 / 255  # brightest output — light gray, not white
-_DARK_MODE_L_MIN = 45 / 255   # darkest output — DPG dark gray, not black
+DARK_MODE_L_MAX = 220 / 255  # brightest output — light gray, not white
+DARK_MODE_L_MIN = 45 / 255   # darkest output — DPG dark gray, not black
 
 
 def _invert_lightness(color: Color) -> Color:
@@ -90,17 +92,12 @@ def _invert_lightness(color: Color) -> Color:
     """
     r, g, b, a = color
     h, l, s = colorsys.rgb_to_hls(r, g, b)  # noqa: E741 -- `l` is the standard name for lightness in HLS
-    new_l = _DARK_MODE_L_MAX - l * (_DARK_MODE_L_MAX - _DARK_MODE_L_MIN)
+    new_l = common_color.invert_lightness(l, DARK_MODE_L_MAX, DARK_MODE_L_MIN)
     r2, g2, b2 = colorsys.hls_to_rgb(h, new_l, s)
     return (r2, g2, b2, a)
 
 
-def _perceived_luminance(r: float, g: float, b: float) -> float:
-    """Perceived luminance (ITU-R BT.709). Input channels in [0,1]."""
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-
-def color_to_dpg(color: Color) -> DPGColor:  # TODO: move to a utility module, maybe `raven.common.video.colorspace`? OTOH, not video, but GUI, and we don't have a colorspace module in that namespace.
+def color_to_dpg(color: Color) -> DPGColor:
     """Convert RGBA color from [0,1] to DPG format [0,255].
 
     If dark mode is enabled, applies lightness inversion first.
@@ -139,56 +136,16 @@ def _ink(color: Color, opacity: float) -> DPGColor:
 _MIN_TEXT_CONTRAST = 3.0
 
 
-def _relative_luminance(color: Color) -> float:
-    """WCAG relative luminance of `color`, whose components are in [0, 1]."""
-    def channel(value: float) -> float:
-        return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
-    red, green, blue = (channel(c) for c in color[:3])
-    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
-
-
-def _contrast_ratio(one: Color, other: Color) -> float:
-    """WCAG contrast ratio between two colours, from 1 (identical) to 21 (black against white)."""
-    first, second = _relative_luminance(one), _relative_luminance(other)
-    lighter, darker = max(first, second), min(first, second)
-    return (lighter + 0.05) / (darker + 0.05)
-
-
 def _legible_against(color: Color, background: Color) -> Color:
-    """Return `color` with its lightness moved as little as is needed to read against `background`.
+    """`raven.common.color.legible_against`, at this renderer's contrast bar and within its dark-mode range.
 
-    **Hue and saturation are left alone**, so a colour chosen to *say* something goes on saying it — a red
-    match stays red — while the one dimension that decides whether it can be read at all is spent on being
-    readable. Which is the split the plain contrast rule does not make: that one keeps the legibility and
-    throws the meaning away.
-
-    Moved the least distance that suffices, and only towards a lightness dark mode would use anyway. Where
-    even the end of that range is not enough — a saturated fill can be bright at every lightness — the best
-    available is returned rather than nothing: a thin mark still beats an invisible one, and the run is
-    bold besides.
+    Moved only towards a lightness dark mode would use anyway. Where even the end of that range is not
+    enough — a saturated fill can be bright at every lightness — the best available is returned rather than
+    nothing: a thin mark still beats an invisible one, and the run is bold besides.
     """
-    if _contrast_ratio(color, background) >= _MIN_TEXT_CONTRAST:
-        return color
-
-    hue, lightness, saturation = colorsys.rgb_to_hls(*color[:3])
-
-    def at(value: float) -> Color:
-        return (*colorsys.hls_to_rgb(hue, value, saturation), color[3])
-
-    # For a fixed hue and saturation, luminance rises with lightness, so one end of the range helps and the
-    # other does not; the binary search then finds the least move that clears the bar.
-    ends = (_DARK_MODE_L_MIN, _DARK_MODE_L_MAX)
-    best_end = max(ends, key=lambda value: _contrast_ratio(at(value), background))
-    if _contrast_ratio(at(best_end), background) < _MIN_TEXT_CONTRAST:
-        return at(best_end)
-    near, far = lightness, best_end
-    for _ in range(16):
-        middle = 0.5 * (near + far)
-        if _contrast_ratio(at(middle), background) >= _MIN_TEXT_CONTRAST:
-            far = middle
-        else:
-            near = middle
-    return at(far)
+    return common_color.legible_against(color, background,
+                                        min_ratio=_MIN_TEXT_CONTRAST,
+                                        lightness_range=(DARK_MODE_L_MIN, DARK_MODE_L_MAX))
 
 
 def background_under(shape: Shape, element_fillcolor: Color | None) -> Color | None:
@@ -233,8 +190,8 @@ def text_color(pen: Pen, element_fillcolor: Color | None, opacity: float = 1.0) 
             legible = _legible_against(_invert_lightness(pen.color), shown_fill)
             red, green, blue = (int(c * 255) for c in legible[:3])
             return (red, green, blue, int(pen.color[3] * opacity * 255))
-        lum = _perceived_luminance(shown_fill[0], shown_fill[1], shown_fill[2])
-        value = int((_DARK_MODE_L_MIN if lum > 0.5 else _DARK_MODE_L_MAX) * 255)
+        lum = common_color.luma(shown_fill)
+        value = int((DARK_MODE_L_MIN if lum > 0.5 else DARK_MODE_L_MAX) * 255)
         return (value, value, value, int(pen.color[3] * opacity * 255))
     return _ink(pen.color, opacity)
 

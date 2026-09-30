@@ -55,7 +55,7 @@ import dearpygui.dearpygui as dpg
 from ...vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
 from ...vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
 
-from ..video import colorspace
+from .. import color
 
 from . import fontsetup
 from .layout_math import (screen_to_content, content_to_screen,  # noqa: F401 -- re-export
@@ -448,7 +448,7 @@ def setup_themes() -> env:
             dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
         with dpg.theme_component(dpg.mvAll):
-            dpg.add_theme_color(dpg.mvThemeCol_Text, colorspace.hex_to_rgb("#9ea2eeff"))
+            dpg.add_theme_color(dpg.mvThemeCol_Text, color.hex_to_rgb("#9ea2eeff"))
 
     return env(global_theme=global_theme,
                my_no_spacing_theme=my_no_spacing_theme,

@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 
 import strip_markdown
 
+from ..common import color as common_color
 from ..common import text as common_text
 from ..common.gui.xdotwidget import constants as xdotconstants
 from ..common.gui.xdotwidget import graph as xdotgraph
@@ -81,8 +82,7 @@ def _authored_for_dark(hue_deg: float, saturation: float, lightness: float) -> x
     """Return the light-mode fill that the renderer's dark mode turns into (hue, saturation, lightness)."""
     # The inverse of the renderer's lightness remap. Its endpoints live in `xdotwidget.renderer`; repeating
     # them here would be two numbers that have to agree, so they are read from it.
-    span = xdotrenderer._DARK_MODE_L_MAX - xdotrenderer._DARK_MODE_L_MIN
-    authored_l = (xdotrenderer._DARK_MODE_L_MAX - lightness) / span
+    authored_l = common_color.uninvert_lightness(lightness, xdotrenderer.DARK_MODE_L_MAX, xdotrenderer.DARK_MODE_L_MIN)
     return (*colorsys.hls_to_rgb(hue_deg / 360.0, authored_l, saturation), 1.0)
 
 
@@ -183,13 +183,7 @@ PREVIEW_COLOR: xdotconstants.Color = (0.10, 0.35, 0.80, 1.0)
 _BOOKMARK_SATURATION = 0.3  # of the live ring's
 
 
-def _desaturated(color: xdotconstants.Color, factor: float) -> xdotconstants.Color:
-    """Return `color` with its saturation scaled by `factor`, its hue and lightness untouched."""
-    hue, lightness, saturation = colorsys.rgb_to_hls(*color[:3])
-    return (*colorsys.hls_to_rgb(hue, lightness, saturation * factor), color[3])
-
-
-PREVIEW_COLOR_BOOKMARK: xdotconstants.Color = _desaturated(PREVIEW_COLOR, _BOOKMARK_SATURATION)
+PREVIEW_COLOR_BOOKMARK: xdotconstants.Color = common_color.scale_saturation(PREVIEW_COLOR, _BOOKMARK_SATURATION)
 
 # Dash pattern for the outline of a gap, in graph units: on, off. A gap stands for content that is not
 # here, and a broken outline says that before any label is read.

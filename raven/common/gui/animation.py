@@ -47,6 +47,7 @@ from ..smoothvalue import SmoothInt, CALIBRATION_FPS
 
 import dearpygui.dearpygui as dpg
 
+from .. import color as common_color  # aliased: `color` is a parameter name here
 from .. import numutils
 
 from ...vendor.DearPyGui_Markdown import font_attributes as markdown_fonts
@@ -591,27 +592,23 @@ class WidgetFlash(Animation):
         if not dpg.does_item_exist(self.target):
             return action_finish
 
-        def faded(start: Tuple, end: Tuple) -> Tuple:
-            """`start` where the flash begins, `end` where it lands, `r` of the way between them."""
-            return tuple(s * (1.0 - r) + e * r for s, e in zip(start, end))
-
         # Each text item fades its own color toward the color it rests in, keeping the alpha it had.
         for record in self.painted:
             if not record.is_text:
                 continue
             with guiutils.nonexistent_ok():
-                dpg.configure_item(record.widget,
-                                   color=faded(self.text_color, record.resting_color) + (record.resting_color[3],))
+                faded = common_color.mix(self.text_color[:3], record.resting_color[:3], r)
+                dpg.configure_item(record.widget, color=faded + (record.resting_color[3],))
 
         # ...and one animated theme fades the background of everything else, all of them at once, with
         # their labels running the same curve toward the resting *text* color. The two destinations are
         # what keeps the label legible: it brightens as the background behind it darkens.
         if self.theme is not None:
-            background = faded(self.flash_color, guiutils.DEFAULT_BUTTON_BG_COLOR)
+            background = common_color.mix(self.flash_color, guiutils.DEFAULT_BUTTON_BG_COLOR, r)
             for color_item in self.animated_theme_colors:
                 dpg.set_value(color_item, background)
             dpg.set_value(self.animated_theme_text_color,
-                          faded(self.text_color, guiutils.DEFAULT_TEXT_COLOR))
+                          common_color.mix(self.text_color, guiutils.DEFAULT_TEXT_COLOR, r))
 
         return action_continue
 

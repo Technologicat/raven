@@ -42,7 +42,7 @@ import torch
 import torchvision
 
 from ..smoothvalue import CALIBRATION_FPS
-from .colorspace import rgb_to_yuv, yuv_to_rgb, luminance
+from ..image.colorspace import rgb_to_yuv, yuv_to_rgb, luminance
 from .upscaler import Upscaler
 
 logger = logging.getLogger(__name__)

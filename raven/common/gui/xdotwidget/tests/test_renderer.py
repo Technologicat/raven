@@ -16,6 +16,7 @@ import colorsys
 
 import pytest
 
+from .... import color as common_color
 from ..graph import Pen, TextShape
 from .. import renderer
 
@@ -60,7 +61,7 @@ class TestTextColor:
     def test_a_kept_colour_is_legible_on_every_fill(self, dark_mode, fill_name):
         fill = FILLS[fill_name]
         drawn = renderer.text_color(pen_for(RED, keep_color=True), fill)
-        ratio = renderer._contrast_ratio(as_fraction(drawn), renderer._invert_lightness(fill))
+        ratio = common_color.contrast_ratio(as_fraction(drawn), renderer._invert_lightness(fill))
         assert ratio >= renderer._MIN_TEXT_CONTRAST - 0.01, f"{fill_name}: {ratio:.2f}:1"
 
     @pytest.mark.parametrize("fill_name", list(FILLS))
@@ -81,7 +82,7 @@ class TestTextColor:
         fill = FILLS["near white"]  # inverts to this mode's darkest, where plain red already has contrast
         shown_fill = renderer._invert_lightness(fill)
         untouched = renderer._invert_lightness(RED)
-        assert renderer._contrast_ratio(untouched, shown_fill) >= renderer._MIN_TEXT_CONTRAST, \
+        assert common_color.contrast_ratio(untouched, shown_fill) >= renderer._MIN_TEXT_CONTRAST, \
             "this fixture needs a fill red already reads on, or it cannot tell 'left alone' from 'adjusted'"
         assert as_fraction(renderer.text_color(pen_for(RED, keep_color=True), fill)) == \
             pytest.approx(untouched[:3], abs=1 / 255)
@@ -158,7 +159,7 @@ class TestLegibleAgainst:
         """Not always lighter: a fill brighter than the text wants darker text, which one direction would miss."""
         def lightness(color):
             return colorsys.rgb_to_hls(*color[:3])[1]
-        assert renderer._contrast_ratio(RED, fill) < renderer._MIN_TEXT_CONTRAST, \
+        assert common_color.contrast_ratio(RED, fill) < renderer._MIN_TEXT_CONTRAST, \
             "red already reads on this fill, so nothing would move and the direction is untested"
         moved = lightness(renderer._legible_against(RED, fill))
         assert (moved > lightness(RED)) if expected == "lighter" else (moved < lightness(RED))

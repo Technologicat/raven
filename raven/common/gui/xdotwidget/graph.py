@@ -14,8 +14,7 @@ Adapted from xdottir (https://github.com/Technologicat/xdottir),
 which in turn was adapted from XDot by José Fonseca.
 """
 
-__all__ = ["mix_colors",
-           "tessellate_bezier",
+__all__ = ["tessellate_bezier",
            "set_highlight_colors",
            "get_highlight_colors",
            "Pen",
@@ -41,29 +40,10 @@ from typing import NamedTuple
 
 from unpythonic import sym
 
+from ... import color as common_color  # aliased: `color` is a pen's attribute name here
 from ... import utils as common_utils
 
 from .constants import Color, Point
-
-
-def mix_colors(rgb1: Color, rgb2: Color, t: float) -> Color:
-    """Mix two RGBA colors.
-
-    The formula is::
-
-        out = (1 - t) * rgb1  +  t * rgb2
-
-    where `t` is in [0, 1].
-
-    This is Porter-Duff 'over' with opaque background.
-    """
-    R1, G1, B1, A1 = rgb1
-    R2, G2, B2, A2 = rgb2
-    R = (1.0 - t) * R1 + t * R2
-    G = (1.0 - t) * G1 + t * G2
-    B = (1.0 - t) * B1 + t * B2
-    A = (1.0 - t) * A1 + t * A2
-    return (R, G, B, A)
 
 
 def tessellate_bezier(points: list["Point"], n: int = 10) -> list["Point"]:
@@ -188,8 +168,8 @@ class Pen:
         so the original color is still recognizable.
         """
         pen = self.copy()
-        pen.color = mix_colors(_highlight_base, self.color, 0.3)
-        pen.fillcolor = mix_colors(_highlight_light, self.fillcolor, 0.3)
+        pen.color = common_color.mix(_highlight_base, self.color, 0.3)
+        pen.fillcolor = common_color.mix(_highlight_light, self.fillcolor, 0.3)
         return pen
 
     @staticmethod
@@ -199,8 +179,8 @@ class Pen:
         t in [0, 1]: mix result is (1 - t) * pen1 + t * pen2, for the colors, the line width and the font
         size. The dash pattern has no in-between, and is left as `tgt` has it.
         """
-        tgt.color = mix_colors(pen1.color, pen2.color, t)
-        tgt.fillcolor = mix_colors(pen1.fillcolor, pen2.fillcolor, t)
+        tgt.color = common_color.mix(pen1.color, pen2.color, t)
+        tgt.fillcolor = common_color.mix(pen1.fillcolor, pen2.fillcolor, t)
         tgt.linewidth = pen1.linewidth + (pen2.linewidth - pen1.linewidth) * t
         tgt.fontsize = pen1.fontsize + (pen2.fontsize - pen1.fontsize) * t
 

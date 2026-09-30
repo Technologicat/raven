@@ -4,7 +4,7 @@ import pytest
 
 import torch
 
-from raven.common.video.colorspace import rgb_to_yuv
+from raven.common.image.colorspace import rgb_to_yuv
 from raven.common.video.postprocessor import _MAX_SPLAT_KERNEL, _ZOOM_UPSCALER_QUALITY, vhs_noise, isotropic_noise, Postprocessor
 
 

@@ -1,8 +1,9 @@
-"""Tests for raven.common.video.colorspace — RGB/YUV conversion and utilities."""
+"""Tests for raven.common.image.colorspace — RGB/YUV conversion, luminance and the sRGB transfer function."""
 
 import torch
 
-from raven.common.video.colorspace import (rgb_to_yuv, yuv_to_rgb, luminance, hex_to_rgb,
+from raven.common import color
+from raven.common.image.colorspace import (rgb_to_yuv, yuv_to_rgb, luminance,
                                            linear_to_srgb, srgb_to_linear)
 
 
@@ -122,28 +123,23 @@ class TestLuminance:
 
 
 # ---------------------------------------------------------------------------
-# Tests: hex_to_rgb
+# Tests: agreement with the scalar module
 # ---------------------------------------------------------------------------
 
-class TestHexToRgb:
-    def test_black(self):
-        assert hex_to_rgb("#000000") == (0, 0, 0)
+class TestAgreesWithScalarModule:
+    """`raven.common.color` holds the constants both modules use, so one colour through either must agree."""
 
-    def test_white(self):
-        assert hex_to_rgb("#ffffff") == (255, 255, 255)
+    def test_srgb_to_linear_matches_per_channel(self):
+        values = [0.0, 0.01, 0.04045, 0.05, 0.2, 0.5, 0.8, 1.0]  # both sides of the linear segment's end
+        tensor = srgb_to_linear(torch.tensor(values))
+        for value, got in zip(values, tensor.tolist()):
+            assert abs(got - color.srgb_to_linear(value)) < 1e-6, value
 
-    def test_red(self):
-        assert hex_to_rgb("#ff0000") == (255, 0, 0)
-
-    def test_with_alpha(self):
-        assert hex_to_rgb("#ff000080") == (255, 0, 0, 128)
-
-    def test_uppercase(self):
-        assert hex_to_rgb("#FF8800") == (255, 136, 0)
-
-    def test_without_hash(self):
-        """Tolerates missing '#' prefix."""
-        assert hex_to_rgb("ff0000") == (255, 0, 0)
+    def test_luminance_of_a_linear_colour_matches_luma_of_the_same_numbers(self):
+        """On linear input the tensor function is relative luminance; the weights are the shared fact."""
+        rgb = (0.3, 0.6, 0.1)
+        image = torch.tensor(rgb).reshape(3, 1, 1)
+        assert abs(luminance(image).item() - color.luma(rgb)) < 1e-6
 
 
 # ---------------------------------------------------------------------------

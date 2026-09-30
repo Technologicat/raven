@@ -28,7 +28,7 @@ import torch
 from unpythonic.env import env
 
 from .. import bgtask
-from ..video import colorspace
+from . import colorspace
 from ..video import postprocessor
 from . import codec as imagecodec
 from . import lanczos

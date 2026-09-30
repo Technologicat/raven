@@ -17,7 +17,7 @@ from .. import configoverrides
 
 from ..client.config import Timeout  # `(connect, read)` timeout tuple with named fields; see `raven.client.config`
 
-from ..common.video import colorspace
+from ..common import color
 
 # Named for the app, not for the module that happened to write here first: a user browsing
 # `~/.config/raven/` should recognize the folder as Raven-librarian's.
@@ -590,14 +590,14 @@ gui_config = env(  # ----------------------------------------
                  chat_inline_image_h=220,  # max height of an inline image thumbnail in the chat log
                  chat_inline_image_w=480,  # max width of an inline image thumbnail in the chat log
                  margin=8,  # around chat GUI elements (such as icon); the DPG default theme uses 8 elsewhere
-                 chat_color_think_front=colorspace.hex_to_rgb("#9ea2eeff"),
-                 chat_color_ai_front=colorspace.hex_to_rgb("#c6c6c6ff"),
+                 chat_color_think_front=color.hex_to_rgb("#9ea2eeff"),
+                 chat_color_ai_front=color.hex_to_rgb("#c6c6c6ff"),
                  chat_color_ai_back=(45, 45, 48),
-                 chat_color_user_front=colorspace.hex_to_rgb("#8e8e8eff"),
+                 chat_color_user_front=color.hex_to_rgb("#8e8e8eff"),
                  chat_color_user_back=(45, 45, 48),
-                 chat_color_system_front=colorspace.hex_to_rgb("#45ab49ff"),
+                 chat_color_system_front=color.hex_to_rgb("#45ab49ff"),
                  chat_color_system_back=(45, 45, 48),
-                 chat_color_tool_front=colorspace.hex_to_rgb("#d59231ff"),
+                 chat_color_tool_front=color.hex_to_rgb("#d59231ff"),
                  chat_color_tool_back=(45, 45, 48),
                  # ----------------------------------------
                  # Chat graph view
