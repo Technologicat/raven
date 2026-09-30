@@ -1174,6 +1174,31 @@ You can't reorder DPG's same-frame dispatch, so make correctness independent of 
 
 Cost is one frame (~16 ms) of latency on the deferred action — imperceptible, and held-key repeat just gains a constant one-frame offset (no cumulative lag). Apply the deferral in the main loop, **not** via `set_frame_callback`: only one callback can be registered per frame number, so rapid input would silently overwrite it.
 
+## A chord the desktop claims never reaches the app
+
+Not a DPG property, but it presents as one: a hotkey that fires sometimes, or never, while the handler's code
+is plainly right. **The input method takes some Ctrl+Shift chords before GLFW sees them.** IBus, running
+under most Linux desktops, claims two by default: **Ctrl+Shift+Space**, its input-method toggle, and
+**Ctrl+Shift+U**, its Unicode entry. Found 2026-09-30, when the settings editor's record key was first bound
+to Ctrl+Shift+Space: a key-logging handler added through `--repl` saw Space arrive twice in several presses,
+and `ibus-daemon --xim` was running with `<Control><Shift>space` among its triggers.
+
+**Before binding a Ctrl+Shift chord, ask the desktop what it already holds:**
+
+```bash
+gsettings get org.freedesktop.ibus.general.hotkey triggers
+gsettings list-recursively | grep -i '<Control><Shift>'
+```
+
+A binding on a machine without IBus proves nothing about the ones with it, and those are most of them.
+
+**Who answers first depends on the app, not only the desktop.** `kitty` gets Ctrl+Shift+U before IBus does,
+for a Unicode entry of its own that searches by name (the maintainer's observation), so the input method
+does not hold these chords globally: it is offered them
+through each app's input path, and an app that handles its own shortcuts first keeps them. That reading of
+the mechanism is inferred rather than read in IBus or GLFW. What was measured is only DPG's side: there the
+input method wins.
+
 ## Focus is not the same as the caret: gate hotkeys on `is_item_active`
 
 When a global key handler needs to know "should this key go to the text field instead of the app", **ask `dpg.is_item_active`, not `dpg.is_item_focused`.**
@@ -1448,8 +1473,13 @@ nothing else about Tab changed that anyone could see. It was confirmed live thro
 by logging each field's `is_item_active` per frame: its find and path fields shared one scope, and every
 Tab left the path field active for exactly one frame, in both directions — from the find field, and from
 the button focus was parked on. Moving the park to a checkbox *after* the find field changed nothing, so the
-step does not stop at buttons: it went on, wrapped, and landed on the only other text field. That it skips
-everything but text fields is inferred from that, not read in ImGui's source.
+step does not stop at buttons: it went on, wrapped, and landed on the only other text field.
+
+**Sliders take the step too**, which narrows that down (the maintainer, 2026-09-30, in
+`raven-avatar-settings-editor`, whose sliders Tab walks through). So the step skips everything but what
+accepts typed input — a slider does, being Ctrl+clickable into a number field — rather than everything but
+text fields. The rule is inferred from those two observations, not read in ImGui's source. None of this
+matters in an app that defines no Tab of its own, where the step is simply ImGui's keyboard navigation.
 
 So the remedy is to leave the step no other text field to reach: **each text field in a navigation scope
 of its own** — a borderless child window with `flattened_navigation=False` around it

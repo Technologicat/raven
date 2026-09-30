@@ -638,7 +638,7 @@ class PostprocessorSettingsEditorGUI:
                         recommendations = {"low": " [recommended]",
                                            "bicubic": " [recommended, low-cost option]"}
                         quality_help = "\n".join(
-                            ["Choose upscale quality/speed tradeoff. Of the three that skip Anime4K, cheapest first."]
+                            ["Choose upscale quality/speed tradeoff."]
                             + [f"    {name} = {description}{recommendations.get(name, '')}"
                                for name, description in upscaler.UPSCALE_QUALITIES.items()])
                         dpg.add_combo(items=self.upscale_qualities,
@@ -722,12 +722,12 @@ class PostprocessorSettingsEditorGUI:
                     if tts_alive:
                         print(f"{Fore.GREEN}{Style.BRIGHT}Connected to TTS at {client_config.raven_server_url}.{Style.RESET_ALL}")
                         print(f"{Fore.GREEN}{Style.BRIGHT}Speech synthesis is available.{Style.RESET_ALL}")
-                        heading_label = f"Voice [Ctrl+V] [{client_config.raven_server_url}]"
+                        heading_label = f"Voice [Ctrl+Shift+V] [{client_config.raven_server_url}]"
                         self.voice_names = api.tts_list_voices()
                     else:
                         print(f"{Fore.YELLOW}{Style.BRIGHT}WARNING: Cannot connect to TTS at {client_config.raven_server_url}.{Style.RESET_ALL} Is the 'tts' module loaded?")
                         print(f"{Fore.YELLOW}{Style.BRIGHT}Speech synthesis is NOT available.{Style.RESET_ALL}")
-                        heading_label = "Voice [Ctrl+V] [not connected]"
+                        heading_label = "Voice [Ctrl+Shift+V] [not connected]"
                         self.voice_names = ["[TTS not available]"]
                     dpg.add_text(heading_label)
                     self.voice_choice = dpg.add_combo(items=self.voice_names,
@@ -735,7 +735,7 @@ class PostprocessorSettingsEditorGUI:
                                                       width=self.button_width,
                                                       tag="voice_choice")
                     dpg.add_tooltip("voice_choice", tag="voice_tooltip")  # tag
-                    dpg.add_text("Choose the TTS voice\n(Ctrl+V; then Up, Down, Home, End to jump)", parent="voice_tooltip")  # tag
+                    dpg.add_text("Choose the TTS voice\n(Ctrl+Shift+V; then Up, Down, Home, End to jump)", parent="voice_tooltip")  # tag
                     with dpg.group(horizontal=True):
                         dpg.add_text("Speed")
                         dpg.add_button(label="X", tag="speak_speed_reset_button", callback=lambda: dpg.set_value("speak_speed_slider", 1.0))
@@ -770,7 +770,7 @@ class PostprocessorSettingsEditorGUI:
                         dpg.bind_item_font("speak_and_record_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("speak_and_record_button", "disablable_red_widget_theme")  # tag
                         dpg.add_tooltip("speak_and_record_button", tag="speak_and_record_tooltip")  # tag
-                        self.speak_and_record_tooltip_text = dpg.add_text(f"Speak and record the entered text (.mp3 + .{self.comm_format.lower()} sequence)",  # TODO: DRY the GUI labels
+                        self.speak_and_record_tooltip_text = dpg.add_text(self._record_caption(),
                                                                           parent="speak_and_record_tooltip")  # tag
 
                 # Postprocessor settings editor
@@ -1439,6 +1439,13 @@ class PostprocessorSettingsEditorGUI:
             self.dpg_avatar_renderer.pause(action="resume")
             dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")  # tag
 
+    def _record_caption(self) -> str:
+        """The record button's tooltip, which names what a recording leaves in `rec/`."""
+        return ("Speak and record the entered text, into rec/ [Ctrl+Shift+Enter]:\n"
+                "    one .mp3 per sentence,\n"
+                f"    the video as a numbered .{self.comm_format.lower()} image sequence,\n"
+                "    and audio_timing.txt, giving each sentence's start and end video frames.")
+
     def on_stop_speaking(self, sender, app_data, user_data) -> None:
         """DPG GUI event handler: stop speaking (and recording, if active).
 
@@ -1455,7 +1462,7 @@ class PostprocessorSettingsEditorGUI:
         dpg.set_item_callback("speak_button", self.on_start_speaking)  # tag
 
         dpg.set_item_label("speak_and_record_button", fa.ICON_CIRCLE)  # tag
-        dpg.set_value(self.speak_and_record_tooltip_text, f"Speak and record the entered text (.mp3 + .{self.comm_format.lower()} sequence)")  # TODO: DRY the GUI labels
+        dpg.set_value(self.speak_and_record_tooltip_text, self._record_caption())
         dpg.set_item_callback("speak_and_record_button", self.on_start_speaking)  # tag  # TODO: DRY the GUI labels
         dpg.enable_item("speak_and_record_button")  # tag
 
@@ -1476,7 +1483,7 @@ class PostprocessorSettingsEditorGUI:
         dpg.set_item_callback("speak_button", self.on_stop_speaking)  # tag
 
         dpg.set_item_label("speak_and_record_button", fa.ICON_SQUARE)  # tag
-        dpg.set_value(self.speak_and_record_tooltip_text, "Stop recording")  # TODO: DRY the GUI labels
+        dpg.set_value(self.speak_and_record_tooltip_text, "Stop recording [Ctrl+Shift+Enter]")  # TODO: DRY the GUI labels
         dpg.set_item_callback("speak_and_record_button", self.on_stop_speaking)  # tag  # TODO: DRY the GUI labels
         if mode == "speak":  # When just speaking, disable the stop-recording button for UX clarity (does not make sense to stop recording, since we're not recording)
             dpg.disable_item("speak_and_record_button")  # tag
@@ -1618,6 +1625,15 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
             show_open_animator_settings_dialog()
         elif key == dpg.mvKey_S:  # save animator settings
             show_save_animator_settings_dialog()
+        elif key == dpg.mvKey_V:  # Shift, so that it cannot collide with pasting into the speech field
+            dpg.focus_item(gui_instance.voice_choice)
+        # The record button. Not Ctrl+Shift+Space, which would pair with Ctrl+Space's speech field: IBus claims
+        # that chord by default, as its input-method toggle, and the app never sees it.
+        elif key == dpg.mvKey_Return:
+            if not gui_instance.speaking:
+                gui_instance.on_start_speaking(sender, app_data, "speak_and_record")
+            else:
+                gui_instance.on_stop_speaking(sender, app_data, "speak_and_record")
 
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         if key == dpg.mvKey_M:
@@ -1648,8 +1664,6 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
             guiutils.toggle_checkbox("stats_checkbox")  # tag
         elif key == dpg.mvKey_E:
             dpg.focus_item(gui_instance.emotion_choice)
-        elif key == dpg.mvKey_V:
-            dpg.focus_item(gui_instance.voice_choice)
         elif key == dpg.mvKey_Spacebar:  # as Raven-librarian focuses its composer
             dpg.focus_item("speak_input_text")  # tag
         elif key == dpg.mvKey_S:
@@ -1690,10 +1704,16 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
                     dpg.set_value(choice_widget, choices[new_index])
                     if callback is not None:
                         callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
+            # Matched against every name DPG may answer with (`guiutils.item_identifiers`), as the pose editor
+            # does: `get_focused_item` answers with an alias for a tagged widget and an ID for an untagged one.
             focused_item = dpg.get_focused_item()
-            focused_item = dpg.get_item_alias(focused_item)
-            if focused_item in combobox_choice_map.keys():
-                browse(focused_item, combobox_choice_map[focused_item])
+            for choice_widget, choice_data in combobox_choice_map.items():
+                if focused_item in guiutils.item_identifiers(choice_widget):
+                    if key == dpg.mvKey_Escape:  # give the keyboard back, as every Raven app's Esc does
+                        dpg.focus_item("fullscreen_button")  # tag  # a button is the safe place to park focus
+                    else:
+                        browse(choice_widget, choice_data)
+                    break
 with dpg.handler_registry(tag="avatar_settings_editor_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="avatar_settings_editor_hotkeys_handler", callback=avatar_settings_editor_hotkeys_callback)
     # Input tracking for idle throttle. Mouse-move covers slider drags, scrolling, and general activity.
@@ -1721,11 +1741,13 @@ hotkey_info = (
     env(key_indent=0, key="Ctrl+P", action_indent=0, action="Pause or resume the animator", notes=""),
     env(key_indent=0, key="Ctrl+M", action_indent=0, action="Show or hide the avatar's stats", notes=""),
     env(key_indent=0, key="Ctrl+S", action_indent=0, action="Speak / stop speaking", notes=""),
+    env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak and record / stop", notes="Into rec/"),
     env(key_indent=0, key="Ctrl+E", action_indent=0, action="Focus the emotion chooser", notes=""),
-    env(key_indent=0, key="Ctrl+V", action_indent=0, action="Focus the voice chooser", notes=""),
+    env(key_indent=0, key="Ctrl+Shift+V", action_indent=0, action="Focus the voice chooser", notes=""),
     env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus the text to speak", notes=""),
     env(key_indent=1, key="Up / Down", action_indent=0, action="Previous / next choice", notes="While focused"),
     env(key_indent=1, key="Home / End", action_indent=0, action="First / last choice", notes="While focused"),
+    env(key_indent=1, key="Esc", action_indent=0, action="Leave the chooser", notes="While focused"),
     helpcard.hotkey_blank_entry,
     env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
     env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen", notes=""),
@@ -1751,9 +1773,11 @@ def _render_help_extras(self: helpcard.HelpWindow, gui_parent) -> None:
             f"field and records the audio and the avatar video together.",
             "Recordings land in `rec/`, under the directory the app was started from. It is created if "
             "missing and never cleared, so rename or delete it before recording again.",
-            "The audio is MP3, the video a numbered QOI image sequence at the avatar's output "
-            "resolution - upscaled, postprocessed, alpha channel included, backdrop left out. "
-            "`raven-qoi2png` converts the frames for a video editor.")])
+            "The audio is MP3, one file per sentence, the video a numbered QOI image sequence at the "
+            "avatar's output resolution - upscaled, postprocessed, alpha channel included, backdrop "
+            "left out. `raven-qoi2png` converts the frames for a video editor.",
+            "`audio_timing.txt` says where each sentence starts and ends, in video frames and in "
+            "seconds, for lining the audio files up with the video.")])
 
 # Two pages, split by scope: page one is the keyboard and nothing else, so it is a reference a reader can
 # screenshot and keep beside the app. Paging also turns on `HelpWindow`'s height fitting, which a

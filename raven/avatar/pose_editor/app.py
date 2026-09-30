@@ -817,10 +817,10 @@ class PoseEditorGUI:
                                 PoseParameterCategory.EYE,
                                 PoseParameterCategory.MOUTH,
                                 PoseParameterCategory.IRIS_MORPH]
-            morph_category_titles = {PoseParameterCategory.EYEBROW: "Eyebrow",
-                                     PoseParameterCategory.EYE: "Eye",
-                                     PoseParameterCategory.MOUTH: "Mouth",
-                                     PoseParameterCategory.IRIS_MORPH: "Iris"}
+            morph_category_titles = {PoseParameterCategory.EYEBROW: "Eyebrow [Ctrl+B]",
+                                     PoseParameterCategory.EYE: "Eye [Ctrl+E]",
+                                     PoseParameterCategory.MOUTH: "Mouth [Ctrl+M]",
+                                     PoseParameterCategory.IRIS_MORPH: "Iris [Ctrl+R]"}
             self.morph_control_panels = {}
             for category in morph_categories:
                 param_groups = self.poser.get_pose_parameter_groups()
@@ -921,12 +921,11 @@ class PoseEditorGUI:
     def focus_presets(self) -> None:
         dpg.focus_item(self.emotion_choice)
 
-    # TODO: Add hotkeys for each morph control group, and for the non-morph control groups.
-    def focus_editor(self) -> None:
-        if not self.morph_control_panels:
-            return
-        first_morph_control_panel = list(self.morph_control_panels.values())[0]
-        dpg.focus_item(first_morph_control_panel.choice)
+    # TODO: Add hotkeys for the non-morph control groups.
+    def focus_morph_category(self, category: PoseParameterCategory) -> None:
+        """Give the keyboard to one morph panel's chooser, for the arrow keys to browse. No-op if this character has no such panel."""
+        if category in self.morph_control_panels:
+            dpg.focus_item(self.morph_control_panels[category].choice)
 
     def focus_output_index(self) -> None:
         dpg.focus_item(self.output_index_choice)
@@ -1363,6 +1362,14 @@ def pose_editor_hotkeys_callback(sender, app_data):
             gui_instance.focus_presets()
         elif key == dpg.mvKey_I:
             gui_instance.focus_output_index()
+        elif key == dpg.mvKey_B:
+            gui_instance.focus_morph_category(PoseParameterCategory.EYEBROW)
+        elif key == dpg.mvKey_E:
+            gui_instance.focus_morph_category(PoseParameterCategory.EYE)
+        elif key == dpg.mvKey_M:
+            gui_instance.focus_morph_category(PoseParameterCategory.MOUTH)
+        elif key == dpg.mvKey_R:
+            gui_instance.focus_morph_category(PoseParameterCategory.IRIS_MORPH)
 
     # Bare key
     #
@@ -1404,7 +1411,10 @@ def pose_editor_hotkeys_callback(sender, app_data):
         focused_item = dpg.get_focused_item()
         for choice_widget, choice_data in combobox_choice_map.items():
             if focused_item in guiutils.item_identifiers(choice_widget):
-                browse(choice_widget, choice_data)
+                if key == dpg.mvKey_Escape:  # give the keyboard back, as every Raven app's Esc does
+                    dpg.focus_item(gui_instance.help_button)  # a button is the safe place to park focus
+                else:
+                    browse(choice_widget, choice_data)
                 break
 
 with dpg.handler_registry(tag="pose_editor_handler_registry"):  # global (whole viewport)
@@ -1430,8 +1440,13 @@ hotkey_info = (
     # Column 2: focus + combobox browsing + app
     env(key_indent=0, key="Ctrl+P", action_indent=0, action="Focus the emotion preset chooser", notes=""),
     env(key_indent=0, key="Ctrl+I", action_indent=0, action="Focus the output index chooser", notes=""),
+    env(key_indent=0, key="Ctrl+B", action_indent=0, action="Focus the eyebrow chooser", notes=""),
+    env(key_indent=0, key="Ctrl+E", action_indent=0, action="Focus the eye chooser", notes=""),
+    env(key_indent=0, key="Ctrl+M", action_indent=0, action="Focus the mouth chooser", notes=""),
+    env(key_indent=0, key="Ctrl+R", action_indent=0, action="Focus the iris chooser", notes=""),
     env(key_indent=1, key="Up / Down", action_indent=0, action="Previous / next choice", notes="While focused"),
     env(key_indent=1, key="Home / End", action_indent=0, action="First / last choice", notes="While focused"),
+    env(key_indent=1, key="Esc", action_indent=0, action="Leave the chooser", notes="While focused"),
     helpcard.hotkey_blank_entry,
     env(key_indent=0, key="F1", action_indent=0, action="Open this help card", notes=""),
 )

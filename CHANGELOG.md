@@ -41,6 +41,9 @@
 - **The debug overlay breaks the avatar's render time down**, into posing, upscaling and postprocessing, the cel machinery, and the rest. Timed on the GPU itself, so the numbers are true without slowing the renderer. Toggle the overlay with **Ctrl+Shift+M**.
 - **The settings editor previews the avatar drawn larger than its frames**, as *Raven-librarian* draws it in a large window. The **x drawn** slider under the upscaler sets how much; it is a preview only, and is not saved with the settings.
 - **In the settings editor, the stats overlay is off until asked for**: the **Stats** checkbox beside **Pause**, or **Ctrl+M**. **Ctrl+Shift+M** also still opens DPG's own Metrics window.
+- **The settings editor's record button has a key: Ctrl+Shift+Enter**, to start and to stop. Its tooltip, and the help card, now also say what a recording leaves: one MP3 per sentence, the frame sequence, and `audio_timing.txt` with each sentence's start and end frames.
+- **The pose editor's four morph choosers have keys**: **Ctrl+B** for the eyebrow, **Ctrl+E** the eye, **Ctrl+M** the mouth and **Ctrl+R** the iris, each named on its label.
+- **In both avatar editors, Esc leaves a chooser** the keyboard was browsing, as it does elsewhere in Raven.
 
 ### Changed
 
@@ -63,6 +66,7 @@
 
 - **The `metrics_enabled` animator setting is gone.** The timing it logged is now on the debug overlay, and in the server's log every 5 seconds at `--log-level DEBUG`, without slowing the renderer. An animator settings file that still names it loads with a warning that it is ignored.
 - **The server's DEBUG log no longer fills with per-frame lines** while the avatar animates.
+- **The settings editor's voice chooser is on Ctrl+Shift+V**, where it was Ctrl+V: pressed while typing the text to speak, Ctrl+V pasted as well.
 
 #### Raven-xdot-viewer
 
