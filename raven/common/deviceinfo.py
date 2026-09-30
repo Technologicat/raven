@@ -1,4 +1,10 @@
-"""PyTorch device configuration validator with `gpu` autodetect alias and CPU fallback."""
+"""PyTorch device configuration validator with `gpu` autodetect alias and CPU fallback.
+
+**Read a device record only after `validate` has run on it.** The shipped configs name each dtype as Torch
+names it (`"dtype": "float16"`) and write `"gpu"` for the device, so an unvalidated record holds a string
+where a consumer expects a `torch.dtype`, and an alias where it expects a device. `validate` rewrites the
+records in place, and each app runs it at startup; see its docstring.
+"""
 
 __all__ = ["get_device_and_dtype",
            "validate",
@@ -87,13 +93,25 @@ def _device_label(device_string: str) -> str:
         return torch.cuda.get_device_name(device_string)
     return label
 
+def _as_dtype(maybe_dtype: torch.dtype | str | None) -> torch.dtype | None:
+    """Return the Torch dtype `maybe_dtype` names, as Torch names it (`"float16"`). A dtype or `None` passes through.
+
+    Raises `ValueError` for a name that is not a Torch dtype, `"cuda"` included.
+    """
+    if not isinstance(maybe_dtype, str):
+        return maybe_dtype
+    dtype = getattr(torch, maybe_dtype, None)
+    if not isinstance(dtype, torch.dtype):
+        raise ValueError(f"_as_dtype: '{maybe_dtype}' is not the name of a Torch dtype (for example 'float16', 'bfloat16', 'float32').")
+    return dtype
+
 def get_device_and_dtype(record: Dict[str, Any]) -> Tuple[str, torch.dtype]:
     """Validate and resolve a single device-configuration record.
 
     Input format::
 
         {"device_string": "gpu",
-         "dtype": torch.float16}
+         "dtype": "float16"}
 
     `device_string` is one of:
 
@@ -106,14 +124,16 @@ def get_device_and_dtype(record: Dict[str, Any]) -> Tuple[str, torch.dtype]:
         CPU, not CUDA, because the user picked MPS deliberately).
       - `"cpu"`: unchanged.
 
-    `dtype` is a Torch dtype, or `None` for components without a configurable dtype.
+    `dtype` is a Torch dtype, or its name in Torch (`"float16"`), or `None` for components without a
+    configurable dtype. The configs name it, so that reading one does not import Torch. The returned
+    dtype is always a Torch dtype; a name that is not one raises `ValueError`.
     If the resolved device is CPU but `torch.float16` was requested, falls back to
     `torch.float32` (CPU does not support half precision).
 
     Returns `(resolved_device_string, possibly_coerced_dtype)`.
     """
     device_string = record["device_string"]
-    dtype = record.get("dtype", None)  # not all components have a specifiable dtype
+    dtype = _as_dtype(record.get("dtype", None))  # not all components have a specifiable dtype
 
     if device_string == "gpu":
         device_string = _autodetect_gpu()
@@ -136,10 +156,14 @@ def get_device_and_dtype(record: Dict[str, Any]) -> Tuple[str, torch.dtype]:
 def validate(device_config: Dict[str, Dict[str, Any]]) -> None:
     """Validate every device-configuration record in `device_config`. Modifies in-place.
 
+    Run it before anything reads the records: until then a record's dtype may be a name rather than a
+    `torch.dtype`. Where it runs now: `raven.client.api.initialize` for `raven.client.config.devices`, the
+    Visualizer's importer at import, Raven-server at startup, and Raven-cherrypick at startup.
+
     Input format::
 
         {"my_component_name": {"device_string": "gpu",
-                               "dtype": torch.float16},
+                               "dtype": "float16"},
          ...}
 
     where `"my_component_name"` is arbitrary.

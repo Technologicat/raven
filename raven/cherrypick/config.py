@@ -1,7 +1,5 @@
 """raven-cherrypick configuration."""
 
-import torch
-
 from .. import config as global_config
 from .. import configoverrides
 
@@ -9,7 +7,8 @@ from .. import configoverrides
 # GPU
 # ---------------------------------------------------------------------------
 
-# Uses raven.common.deviceinfo pattern: {"component": {"device_string": ..., "dtype": ...}}.
+# Uses raven.common.deviceinfo pattern: {"component": {"device_string": ..., "dtype": ...}}, the dtype named
+# as Torch names it. Validation turns the name into a `torch.dtype`, so read the record only after it.
 # Validated at startup by deviceinfo.validate() — auto-falls back to CPU if CUDA unavailable,
 # auto-promotes float16 → float32 on CPU.
 gpu_config = {
@@ -18,7 +17,7 @@ gpu_config = {
     # but it says NVIDIA when what is meant is "whatever this machine has", and on a Mac or an Intel Arc box
     # that reads as a request that quietly failed rather than a preference that was never expressed.
     "thumbnails": {"device_string": "gpu",
-                   "dtype": torch.float32},
+                   "dtype": "float32"},
 }
 
 # ---------------------------------------------------------------------------

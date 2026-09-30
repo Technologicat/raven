@@ -2,8 +2,6 @@
 
 from typing import NamedTuple
 
-import torch
-
 from .. import configoverrides
 from ..server import config as server_config  # NOTE: default config location (can be overridden on the command line when starting the server)
 
@@ -119,13 +117,16 @@ stt_vu_peak_hold = 1.0  # seconds
 # which stays separate because Librarian's RAG backend may legitimately want a different model
 # and device from an importer's. Validated by `raven.common.deviceinfo.validate` during
 # `raven.client.api.initialize` (CUDA → CPU fallback, `device_name` injection).
+#
+# **Read these only after that validation.** A dtype is written here by its name in Torch, which keeps this
+# module from importing Torch; `validate` is what turns it into a `torch.dtype`.
 # See also `run-on-internal-gpu.sh` for another way to select the GPU when starting an app, without
 # modifying any files.
 devices = {
     "tts": {"device_string": "cpu"},  # Local TTS on CPU is workable for chat-paced speech, slower than server-mode GPU.
     "sanitize": {"device_string": "gpu"},  # dehyphenation; no configurable dtype
     "embeddings": {"device_string": "gpu",
-                   "dtype": torch.float16},
+                   "dtype": "float16"},
     "nlp": {"device_string": "gpu"},  # no configurable dtype
 }
 

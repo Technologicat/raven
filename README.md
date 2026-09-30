@@ -817,7 +817,7 @@ Anything set here wins over the `config.py` that ships with Raven, and the setti
 
 **The two files are for different things, which is why this is a split rather than a replacement.** `config.py` stays the place the *documentation* lives — what each setting means, what the other values are, why one was chosen — and it is also a Python file, so it can compute things: a directory built from another directory, a toolbar height from a font size, a setting whose value is a function and has no JSON spelling at all. None of that can move. Your overrides are the other half: short, specific to this machine, and needing no explanation beyond the occasional note. So read `config.py` to find out what you can set, and write `overrides.json` to set it.
 
-Some values JSON has no type for can still be written, because the shipped setting says what kind of value it wants: a path as a string (`~` works), a color or a size as a list, and a Torch data type by its name in Torch — `"devices.embeddings.dtype": "float16"`.
+Some values JSON has no type for can still be written, because the shipped setting says what kind of value it wants: a path as a string (`~` works), and a color or a size as a list. A Torch data type is written by its name in Torch, as the shipped configs write it — `"devices.embeddings.dtype": "float16"`.
 
 Settings that have no JSON form at all, such as a function, are simply not overridable this way — Raven says so in the log and keeps the shipped value — and neither is a setting Raven *derives* from another, which has to be overridden in its own right. Those stay `config.py` edits.
 

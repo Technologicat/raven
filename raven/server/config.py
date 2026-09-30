@@ -3,8 +3,6 @@
 This module is licensed under the 2-clause BSD license.
 """
 
-import torch
-
 from .. import config as global_config
 from .. import configoverrides
 
@@ -28,21 +26,25 @@ server_api_key_file = server_userdata_dir / "api_key.txt"
 # corresponding device string: `"cuda:0"` for an explicit NVIDIA / ROCm GPU, `"mps"` for
 # Apple Silicon, `"xpu"` for Intel Arc, etc.
 #
+# A dtype is written by its name in Torch (`"float16"`), which keeps this module from importing Torch.
+# `raven.common.deviceinfo.validate`, run at server startup, turns it into a `torch.dtype`, so **read these
+# records only after that.**
+#
 enabled_modules = {
     "avatar": {"device_string": "gpu",
-               "dtype": torch.float16},
+               "dtype": "float16"},
     "classify": {"device_string": "gpu",
-                 "dtype": torch.float16},
+                 "dtype": "float16"},
     "embeddings": {"device_string": "gpu",
-                   "dtype": torch.float16},
+                   "dtype": "float16"},
     "imagefx": {"device_string": "gpu",
-                "dtype": torch.float16},
+                "dtype": "float16"},
     "natlang": {"device_string": "gpu"},  # this module has no dtype setting
     "sanitize": {"device_string": "gpu"},  # this module has no dtype setting
     "stt": {"device_string": "gpu",
-            "dtype": torch.float16},
+            "dtype": "float16"},
     "translate": {"device_string": "gpu",
-                  "dtype": torch.float16},
+                  "dtype": "float16"},
     "tts": {"device_string": "gpu"},
     "websearch": {},  # websearch doesn't use any heavy compute; this is here only to provide the option to turn the module off.
     "webfetch": {},  # webfetch retrieves a single page's content; no heavy compute. Listed here to provide the option to turn it off.

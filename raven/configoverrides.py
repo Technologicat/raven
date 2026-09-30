@@ -88,11 +88,11 @@ kept. Give each a distinct name, JSON having nothing to say about two keys spell
 #   - **Code.** Half these files are computed: `librarian_userdata_dir` from the global one, `TOOLBAR_H`
 #     from a font size and two paddings, a `User-Agent` from `__version__`. JSON cannot derive anything,
 #     which is also why an override applies to the *derived* name rather than to what it came from.
-#   - **Python values.** A `torch.float16`, a `Timeout`, a `pathlib.Path`, a function — much of what
-#     these files hold has no JSON spelling of its own. `_coerce` rebuilds what the shipped value's type
-#     makes unambiguous: a `pathlib.Path` from a string, a `NamedTuple` from a mapping or a list, a mapping's
-#     non-string keys from the type its shipped keys have, and a `torch.dtype` from its name in Torch.
-#     Anything else is refused, the shipped value standing.
+#   - **Python values.** A `Timeout`, a `pathlib.Path`, a function — much of what these files hold has no
+#     JSON spelling of its own. `_coerce` rebuilds what the shipped value's type makes unambiguous: a
+#     `pathlib.Path` from a string, a `NamedTuple` from a mapping or a list, and a mapping's non-string keys
+#     from the type its shipped keys have. Anything else is refused, the shipped value standing. (A Torch
+#     dtype is shipped as its name, `"float16"`, and resolved by `raven.common.deviceinfo`.)
 #
 # So the split runs along the line where each format is good at its half: `config.py` documents what can be
 # set, and this file records what was.
@@ -103,7 +103,6 @@ from collections.abc import Mapping, Sequence
 import json
 import logging
 import pathlib
-import sys
 
 from unpythonic import mogrify_in_to, sym
 
@@ -163,11 +162,6 @@ def _read(path: pathlib.Path) -> dict:
     return data
 
 
-def _is_torch_dtype(value) -> bool:
-    """Return whether `value` is a `torch.dtype`, without importing Torch to find out."""
-    return type(value).__module__ == "torch" and type(value).__qualname__ == "dtype"
-
-
 def _coerce(default, value, where: str):
     """Fit `value`, as JSON produced it, to the shape of the shipped `default`. Return it, or `_refused`.
 
@@ -225,13 +219,6 @@ def _coerce(default, value, where: str):
         return _coerce_mapping(default, value, where)
     elif isinstance(default, tuple) and isinstance(value, list):
         return tuple(value)
-    elif _is_torch_dtype(default) and isinstance(value, str):
-        # Named as Torch names it — "float16", "bfloat16" — and looked up in Torch, which is unambiguous
-        # because the shipped default says the setting is a dtype. No import: a dtype default means Torch
-        # is already loaded. The type check refuses a name that exists but is something else ("cuda").
-        maybe_dtype = getattr(sys.modules["torch"], value, None)
-        if isinstance(maybe_dtype, type(default)):
-            return maybe_dtype
     elif isinstance(value, type(default)):
         return value
     logger.warning(f"_coerce: {where} ships as {type(default)} and the override is {type(value)}; ignored, so the shipped default applies.")

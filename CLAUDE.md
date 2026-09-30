@@ -932,8 +932,10 @@ to print a usage message — and a mistyped command line is the commonest reason
 - **The CLI tools are where nothing enforces it**: measured 2026-09-23, three of them took 8.5–9.3 s to
   answer `--help`, against a median of 0.40 s across all 26 console scripts and 0.05–0.08 s for the GUI
   apps, because they imported `..client.api` and friends at module scope and parsed inside `main()`.
-  - **All three now import those after parsing** (2026-09-30), and answer in about 1.4 s. The rest is the
-    config modules their help text reads defaults from, which import torch for a dtype.
+  - **All three now import those after parsing** (2026-09-30). The configs name their dtypes rather than
+    importing torch for them, so `raven-dehyphenate` answers in 0.25 s; `raven-indexer` and `raven-pdf2bib`
+    take about 1.3 s, because `raven.librarian.config` builds its chat colours with
+    `raven.common.video.colorspace.hex_to_rgb`, and `colorspace` builds tensors at import.
   - `raven-pdf2bib`'s library uses its heavy modules throughout, so its parser moved out instead, to
     `raven.papers.pdf2bib_cli`, the shape `raven.visualizer.importer_cli` already had.
 - Where a tool genuinely needs a heavy import to *build* its parser — a default read from config — import

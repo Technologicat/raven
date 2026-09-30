@@ -6,6 +6,8 @@ NVRTC sanity check) are out of scope for unit tests; they live with the apps
 that call them.
 """
 
+import subprocess
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -167,6 +169,41 @@ class TestValidate:
             config = {"avatar": {"device_string": "cuda:0", "dtype": torch.float16}}
             deviceinfo.validate(config)
             assert config["avatar"]["dtype"] is torch.float32
+
+
+class TestDtypeByName:
+    """The configs name a dtype as Torch names it, so that reading one does not import Torch."""
+
+    def test_a_name_resolves_to_the_dtype(self):
+        with _mock_backends(cuda=True):
+            config = {"embeddings": {"device_string": "gpu", "dtype": "bfloat16"}}
+            deviceinfo.validate(config)
+            assert config["embeddings"]["dtype"] is torch.bfloat16
+
+    def test_a_named_float16_is_coerced_on_cpu_as_the_dtype_is(self):
+        """The CPU fallback compares against `torch.float16`, so it must see the resolved dtype, not the name."""
+        with _mock_backends():
+            config = {"avatar": {"device_string": "cuda:0", "dtype": "float16"}}
+            deviceinfo.validate(config)
+            assert config["avatar"]["dtype"] is torch.float32
+
+    @pytest.mark.parametrize("bad_name", ["float17",  # no such name
+                                          "cuda"])    # a name Torch has, which is not a dtype
+    def test_a_name_that_is_not_a_dtype_is_refused(self, bad_name):
+        with _mock_backends(cuda=True):
+            with pytest.raises(ValueError, match=bad_name):
+                deviceinfo.get_device_and_dtype({"device_string": "gpu", "dtype": bad_name})
+
+    def test_the_configs_import_without_torch(self):
+        """The point of naming dtypes: a CLI tool's `--help` reads config defaults, and should not wait for Torch.
+
+        In a fresh interpreter, since `validate` rewrites the records in place and this process has Torch.
+        """
+        code = ("import sys\n"
+                "import raven.client.config, raven.server.config, raven.cherrypick.config\n"
+                "print('torch' in sys.modules)\n")
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+        assert result.stdout.strip() == "False", "importing a config module imported Torch"
 
 
 class TestVRAMLedger:

@@ -252,29 +252,13 @@ def test_a_value_json_cannot_express_at_all_is_refused(write_overrides, caplog):
     assert namespace["a_code_value"] is _not_json_expressible
 
 
-def test_a_torch_dtype_is_named_as_torch_names_it(write_overrides):
-    """The shipped default says the setting is a dtype, so a name is unambiguous — including inside a dict."""
-    torch = pytest.importorskip("torch")
-    path = write_overrides({"raven.demo.config": {"a_dtype": "bfloat16",
-                                                  "devices.embeddings.dtype": "float32"}})
-    namespace = {"a_dtype": torch.float16,
-                 "devices": {"embeddings": {"device_string": "gpu", "dtype": torch.float16}}}
-    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["a_dtype", "devices.embeddings.dtype"]
-    assert namespace["a_dtype"] is torch.bfloat16
-    assert namespace["devices"]["embeddings"]["dtype"] is torch.float32
-
-
-@pytest.mark.parametrize("bad_name", ["float17",  # no such name
-                                      "cuda"])    # a name Torch has, which is not a dtype
-def test_a_name_that_is_not_a_torch_dtype_is_refused(write_overrides, caplog, bad_name):
-    torch = pytest.importorskip("torch")
-    path = write_overrides({"raven.demo.config": {"a_dtype": bad_name, "a_number": 7}})
-    namespace = {"a_dtype": torch.float16, "a_number": 5}
-    with caplog.at_level("WARNING", logger="raven.configoverrides"):
-        applied = configoverrides.apply("raven.demo.config", namespace, path=path)
-    assert applied == ["a_number"], "the good sibling did not apply either, so this fixture proves nothing"
-    assert namespace["a_dtype"] is torch.float16
-    assert "a_dtype" in caplog.text
+def test_a_dtype_is_overridden_by_its_name_like_any_string(write_overrides):
+    """The configs ship a dtype as its name, so an override is an ordinary string — inside a dict included.
+    `raven.common.deviceinfo` resolves it, with the shipped value, and its tests cover the names."""
+    path = write_overrides({"raven.demo.config": {"devices.embeddings.dtype": "bfloat16"}})
+    namespace = {"devices": {"embeddings": {"device_string": "gpu", "dtype": "float16"}}}
+    assert configoverrides.apply("raven.demo.config", namespace, path=path) == ["devices.embeddings.dtype"]
+    assert namespace["devices"]["embeddings"]["dtype"] == "bfloat16"
 
 
 def test_a_float_default_accepts_a_whole_number(write_overrides):
