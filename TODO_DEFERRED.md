@@ -1085,7 +1085,7 @@ one process, one moment, one branch — quietly generalized into a claim about t
 
 ## Scrolling up with the wheel does not always release the chat view's end-latch
 
-*Cluster: librarian-keyboard · Cost: ? · Gate: RN2026 · Filed: 2026-08-27*
+*Cluster: librarian-keyboard · Cost: ? · Gate: none · Filed: 2026-08-27*
 
 Once the chat view is pinned to the end, wheeling up does not reliably unpin it — the view snaps back to
 the bottom. The Up arrow key releases it every time, so the latch itself can be let go of; it is the wheel
@@ -1102,7 +1102,12 @@ Reported by Juha while live-testing the in-progress-reply-as-a-node work (2026-0
 
 ## Ctrl+Left / Ctrl+Right cannot flick between siblings, because each switch re-picks its own target
 
-*Cluster: librarian-keyboard · Cost: S to build, the design is the work · Gate: RN2026 if time allows, else 0.2.10 (Juha, 2026-08-27) · Filed: 2026-08-21 · Updated: 2026-08-27*
+*Cluster: librarian-keyboard · Cost: S to build, the design is the work · Gate: a UX design, to discuss; not for 0.2.10 (maintainer, 2026-09-30) · Filed: 2026-08-21 · Updated: 2026-09-30*
+
+**Less urgent since the chat graph, where flicking to preview a sibling is easier — but still partly
+important** (maintainer, 2026-09-30). It is about where the chat log positions the view and which message the
+blue mark attaches to, and the visible case is **Ctrl+T pressed twice often hitting two different messages**
+rather than opening and then closing *the same* thinking trace. No good design yet; one to discuss.
 
 **When this lands, re-check the branch-switch glitch's ceiling** (Juha, 2026-08-25). The glitch extends on
 each switch and is capped from the first one — 1.5 s at present — so what the cap is *for* is a sustained
@@ -1530,7 +1535,14 @@ loaded font offers whatever its TTF carries.
 
 ## A file-type icon set of our own, covering the formats Raven actually opens
 
-*Cluster: filedialog · Cost: M · Gate: RN2026 · Filed: 2026-08-14 · See also: `briefs/done/researchers-night/done/filedialog-thumbnails-brief.md`*
+*Cluster: filedialog · Cost: M · Gate: **soon** — a possible licence violation in what the wheel redistributes (maintainer, 2026-09-30) · Filed: 2026-08-14 · See also: `briefs/done/researchers-night/done/filedialog-thumbnails-brief.md`*
+
+**Updated 2026-09-30 (maintainer).** Resolve this soon, for the licence reason below. The set should also
+gain separate icons for the document formats Raven supports — PDF, DOCX, PPTX and the OpenDocument ones —
+which now share generic icons. Two routes: **generate** the set (Qwen-Image 2.1 7B can produce RGBA), or
+find a **permissively licensed set** that may be redistributed. Either way it needs a fairly high source
+resolution, since the thumbnail grid zooms icons to 128 px, with GPU Lanczos doing the best a resampler can.
+Generating from scratch is the "new set" route below, not an upscale of the icons8 art.
 
 `raven/vendor/file_dialog/images/` is the upstream set, and it has no icon for a **presentation**
 (`.pptx`, `.odp`) or a **spreadsheet** (`.xlsx`, `.ods` — support planned, see "Spreadsheets in the docs DB
@@ -4028,7 +4040,7 @@ Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juh
 
 ## The Markdown renderer drops text — one character, or most of a section
 
-*Cluster: markdown-renderer · Cost: ? · Gate: none — deprioritized past RN2026 unless time appears · Filed: 2026-07-19 · Updated: 2026-09-24*
+*Cluster: markdown-renderer · Cost: ? · Gate: none — mitigated by the startup atlas refresh · Filed: 2026-07-19 · Updated: 2026-09-30*
 
 **Not scheduled before the exhibit, though not ruled out either** (Juha, 2026-09-09): two and a half weeks
 left and a queue ahead of it, so it goes if there is time and not otherwise. The atlas hypothesis below predicts the outcome
@@ -4617,7 +4629,7 @@ plugin surface today, so this tool is the only concrete case in sight.
 
 ## Reconsider the webfetch allowlist default: ship deny-by-default?
 
-*Cluster: ? · Cost: ? · Gate: RN2026 for the demo config, 0.2.10 for the shipped default · Filed: 2026-06-05*
+*Cluster: ? · Cost: ? · Gate: none — **allow-all ships for now**, demo included (maintainer, 2026-09-30); revisit if the exposure changes · Filed: 2026-06-05*
 
 `librarian_config.webfetch_allowlist` defaults to `None`, which means **allow-all**: the allowlist gate in
 `webfetch_wrapper` (`raven/librarian/llmclient.py`) is skipped entirely (`if allowlist is not None:`), so the
@@ -5353,9 +5365,9 @@ always meant to be text. This is about content that is *not* text and never was.
 
 Raised while scoping office-format support (2026-07-29, Juha).
 
-## Librarian doesn't check that the LLM backend has a model loaded
+## Librarian's error-reporting sweep: failures should reach the user, not only the log
 
-*Cluster: ? · Cost: L · Gate: **not RN2026** — its RN2026 half shipped · Filed: 2026-07-29*
+*Cluster: ? · Cost: L · Gate: none · Filed: 2026-07-29 · Renamed 2026-09-30, from "Librarian doesn't check that the LLM backend has a model loaded", which shipped as the status pill*
 
 **Un-gated from RN2026 on 2026-08-13**, acting on the re-reading this item asked for below. What the
 gate was set against — Librarian starting silently against a model-less backend — shipped on 2026-08-12
@@ -5502,7 +5514,7 @@ reason to have a version number rather than just a migration marker.
 
 ## A no-avatar mode, with the chat tree in the panel the avatar vacates
 
-*Cluster: panel occupancy · Cost: L · Gate: the post-RN2026 triage · Filed: 2026-07-29 · See also: `briefs/done/researchers-night/done/16_chat-graph-view-brief.md`*
+*Cluster: panel occupancy · Cost: L · Gate: how the setup of Librarian as a virtual coworker in the lab proceeds — that is the actual use case (maintainer, 2026-09-30) · Filed: 2026-07-29 · See also: `briefs/done/researchers-night/done/16_chat-graph-view-brief.md`*
 
 **Timing, stated so this is not read as near-term work** (Juha, 2026-09-04): everything here is post-
 Researchers' Night, and the realistic slot is autumn 2026 or spring 2027 — an academic year has no
@@ -6261,7 +6273,7 @@ Raised by Juha (2026-08-04), reviewing the webfetch attachment work.
 
 ## A clickable chip in the chat log gives no hover cue
 
-*Cluster: ? · Cost: ? · Gate: RN2026 · Filed: 2026-08-04*
+*Cluster: ? · Cost: S–M (maintainer's estimate) · Gate: 0.2.10 · Filed: 2026-08-04*
 
 0.2.8 made inline attachments and fetched documents click-to-open (`DPGChatMessage._make_clickable`, an item
 handler registry per cluster, owned by the message so `demolish` can delete it — a registry does not live
@@ -6427,27 +6439,9 @@ grounds that an honest "code is not supported" beats a feature that half-works w
 
 Raised by Juha (2026-08-07), reviewing the supported-format list.
 
-## OS file drag-and-drop is not advertised in the apps
+## Markdown decorations sometimes land beside their text: a timing race, still open (the hidden-page fault is fixed)
 
-*Cluster: discoverability · Cost: S · Gate: RN2026 · Filed: 2026-08-13 · See also: `briefs/done/os-drag-and-drop.md`*
-
-`raven.common.gui.filedrop` shipped 2026-08-10 and `filedrop.install` runs in all six GUI apps —
-Visualizer, Librarian, Cherrypick, both Avatar editors, and the XDot viewer. The documentation half is done:
-the root `README.md` has a *Dragging files in* section saying what each app accepts. **Nothing in the apps
-says so.** The nearest miss is Librarian's "drop files in this folder for the AI to search" tooltip, which
-is about the documents *directory* for RAG rather than about dropping onto the window — close enough in
-wording to be read as covering this, and it does not.
-
-The shape of the affordance is undecided — a line in each app's help window, a hint in or beside the file
-dialog, an overlay while a drag hovers, or some combination. Whatever is chosen has to be accurate per app:
-each `filedrop.install` call carries its own `DropRule` list, so what an app accepts differs, and a generic
-"drop files here" would be wrong about most of them.
-
-Raised by Juha (2026-08-13), for discussion before building.
-
-## Markdown decorations are placed by measuring the text, and the measurement can be premature
-
-*Cluster: markdown-renderer · Cost: ? · Gate: RN2026, with the rest of the renderer work · Filed: 2026-08-27 · See also: `raven/vendor/DearPyGui_Markdown/text_attributes.py`*
+*Cluster: markdown-renderer · Cost: ? · Gate: with the Markdown renderer work · Filed: 2026-08-27 · See also: `raven/vendor/DearPyGui_Markdown/text_attributes.py`*
 
 **Bump to 0.2.10 if it does not fall quickly** (Juha, 2026-08-27). It rides with the renderer work because
 that is when this code is open anyway; it is not worth hunting a timing fault on its own account with the
@@ -6692,6 +6686,11 @@ has no live item to point at, it does not belong here yet.
   is that `arrow-down-to-bracket` does not exist in this version, which is why the tool-call navigation uses
   the symmetric `ARROW_UP_LONG` / `ARROW_DOWN_LONG` pair — a two-line change in `add_tool_call_invocation`
   and `build_buttons` if it is ever revisited. (Declined 2026-08-12.)
+
+- **An in-app cue advertising OS file drag-and-drop** — the manuals document it as of v0.2.9 (the root
+  `README.md`'s *Dragging files in* says what each app accepts), which is enough (maintainer). The candidates
+  had been a help-card line, a hint beside the file dialog, or an overlay while a drag hovers, each having
+  to be accurate per app since every app accepts different files. (Declined 2026-09-30.)
 
 ## Waiting on upstream
 

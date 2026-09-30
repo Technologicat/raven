@@ -283,11 +283,10 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      `TODO.md`'s dated session-plan blocks retired, their live parts moved out; duplicates merged; the
      thinking-toggle probe record moved to `investigations/thinking-toggle/`. Two small bugs the triage
      turned up were fixed on the way (the importer's duplicate-field-key recovery, the entity decoder).
-   - **Pass 5, re-gating and re-tiering, is next and needs the maintainer.** Proposed, not yet answered:
-     the ten `TODO_DEFERRED.md` gates naming RN2026 go to `none`, except sibling flick (`0.2.10`), the
-     drag-and-drop cue (the decision on its shape) and Markdown decorations (with the renderer work). Two
-     open questions: **whether the Yrityspäivä demo runs the curated webfetch allowlist** or allow-all as
-     shipped; and whether the [High] tiers in `TODO.md` get re-read in the prioritization session or as a
-     quick keep-or-demote list first. The sixty `0.2.10` gates are a release-scope question for that
-     session. Also due in pass 5, no decision needed: three stale headings or premises ("Librarian's help
-     card…", "Datastore scaling…", "Documented command lines…").
+   - **Pass 5, re-gating and re-tiering, half done.** The ten `TODO_DEFERRED.md` gates naming RN2026 were
+     re-gated with the maintainer the same evening (webfetch ships allow-all for now, demo included; the
+     in-app drag-and-drop cue declined; the icon set to be resolved soon, over its licence). **Left:**
+     whether the [High] tiers in `TODO.md` get re-read in the prioritization session or as a quick
+     keep-or-demote list first; the sixty `0.2.10` gates, a release-scope question for that session; and,
+     no decision needed, three stale headings or premises ("Librarian's help card…", "Datastore
+     scaling…", "Documented command lines…").
