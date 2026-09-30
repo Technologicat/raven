@@ -130,7 +130,8 @@ of this build, not a separate item, because the stamp is what needs it.
 
 ## Decided 2026-09-29
 
-Six of the seven questions below, settled in discussion with Juha. Question 5 is the one still open.
+Six of the seven questions below, settled in discussion with Juha. Question 5, progress reporting, was
+settled the next day; see its own section after this one.
 
 - **Where it lives (1): a sibling module of `raven.librarian.agent`**, built on `agent.ask_record`, as the AOKK scripts are. The name is
   still open, to come from what the module turns out to do. The AOKK scripts already import `agent` from
@@ -184,8 +185,39 @@ Six of the seven questions below, settled in discussion with Juha. Question 5 is
   size a parameter and the ordinary per-document case a batch of one. The ledger stays per item, and a
   failed batch is recorded as that many failed items, all retried on the next run.
 
-**Still open (5): progress reporting.** A callback in the shape of `agent.stream_log` and `on_progress` is
-the starting point; read how `summarize` does it in the importer before designing.
+## Decided 2026-09-30: progress reporting (5)
+
+Settled with Juha. The aim is UX: give the user up-to-date information whenever there is some, without
+spamming the log.
+
+- **Two levels, kept apart.** *Within an item*, the caller's `on_progress` passes straight through to
+  `agent.turn` (streamed chunks; `llmclient.make_console_progress_handler`, `agent.stream_log`). *Across
+  items*, the pass reports at the granularity its calls actually operate at — per batch, a batch of one
+  being the per-document case.
+- **Push: an `on_item(event)` callback after each batch**, carrying done, total and failed counts, the
+  ids just finished, the elapsed time, and the `unpythonic.ETAEstimator` instance itself rather than a
+  string from it — `.formatted_eta` is the usual want, but a programmatic caller may want the numbers.
+- **Resume counts only what is left.** At startup, read how many items the ledger already has, and give
+  the estimator the remaining count as its total, counting this session's items from zero. Counting the
+  resumed items as done would make the ETA wildly optimistic.
+- **Pull: the latest progress is queryable** from the run while it runs — a status line for a GUI label,
+  as the Visualizer importer's window shows, and the numbers for a progress bar. A GUI polls; the
+  callback is for pushing to a console or a log.
+  - The importer maps onto it directly: `progress.set_micro_count(total)` once, then `tick()` per item,
+    which makes `_summarize` the natural second user after `extract_fields.py`.
+- **The console default is a log line per batch**, not a progress bar: runs are long and often
+  unattended, and a line leaves a history where a bar keeps only its latest state. **Rate-limited**, so a
+  run of small batches does not spam the log.
+- **Every failed item is logged individually, and never rate-limited** — a failed document is what a
+  watcher of the run wants to see when it happens.
+- **Cancellation reaches into the running batch.** A batch typically takes ~30 s, too long to wait for.
+  So the run has a thread-safe `cancel()`, and the pass wraps the caller's `on_progress`: while the flag
+  is set, every streamed chunk answers `llmclient.action_stop`, which interrupts generation and lets the
+  turn finalize with what it had. The pass then drops that batch unwritten and stops; earlier batches are
+  already in the ledger, so a resume starts from the one that did not finish.
+  - Latency is one chunk, except while the backend is still reading the prompt and emitting nothing —
+    then the cancel waits for the first chunk. Not measured; probably seconds for batched abstracts.
+  - The same flag is checked between batches, which covers a cancel that lands between turns.
 
 ## What this brief must settle before implementation
 
