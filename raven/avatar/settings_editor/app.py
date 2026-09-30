@@ -526,7 +526,7 @@ class PostprocessorSettingsEditorGUI:
                                                                  executor=bg)
                     image_size = int(self.upscale * self.source_image_size)
                     self.dpg_avatar_renderer.configure_live_texture(image_size, image_size)
-                    self.dpg_avatar_renderer.configure_fps_counter(show=True)
+                    self.dpg_avatar_renderer.configure_fps_counter(show=False)  # the Stats checkbox, and Ctrl+M, show it
                     self.dpg_avatar_renderer.configure_crop_overlay(show=True)  # calibration aid; defaults to checked in the settings editor (see `crop_show_overlay_checkbox`)
 
                     with dpg.group(pos=(8, 32), show=False, horizontal=True) as self.recording_indicator_group:
@@ -594,9 +594,15 @@ class PostprocessorSettingsEditorGUI:
                                              callback=self.on_gui_settings_change, tag="pose_interpolator_step_slider")
                         dpg.add_tooltip("pose_interpolator_step_slider", tag="pose_interpolator_step_tooltip")  # tag
                         dpg.add_text("Set the animator's pose interpolator step (larger = faster)", parent="pose_interpolator_step_tooltip")  # tag
-                    dpg.add_button(label="Pause [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
-                    dpg.add_tooltip("pause_resume_button", tag="pause_resume_tooltip")  # tag
-                    dpg.add_text("Pause or resume the avatar\n(no render resources used while paused)", parent="pause_resume_tooltip")  # tag
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label="Pause [Ctrl+P]", width=self.button_width - 92, callback=self.toggle_animator_paused, tag="pause_resume_button")
+                        dpg.add_tooltip("pause_resume_button", tag="pause_resume_tooltip")  # tag
+                        dpg.add_text("Pause or resume the avatar\n(no render resources used while paused)", parent="pause_resume_tooltip")  # tag
+
+                        dpg.add_checkbox(label="Stats", default_value=False, tag="stats_checkbox",
+                                         callback=lambda sender, app_data: self.dpg_avatar_renderer.configure_fps_counter(show=app_data))
+                        dpg.add_tooltip("stats_checkbox", tag="stats_tooltip")  # tag
+                        dpg.add_text("Show the avatar's frame rate and render timings over it [Ctrl+M]", parent="stats_tooltip")  # tag
 
                     dpg.add_button(label="Load settings [Ctrl+Shift+A]", width=self.button_width, callback=show_open_animator_settings_dialog, tag="open_animator_settings_button")
                     dpg.add_tooltip("open_animator_settings_button", tag="open_animator_settings_tooltip")  # tag
@@ -632,7 +638,7 @@ class PostprocessorSettingsEditorGUI:
                         recommendations = {"low": " [recommended]",
                                            "bicubic": " [recommended, low-cost option]"}
                         quality_help = "\n".join(
-                            ["Choose upscale quality/speed tradeoff. Cheapest last of the three that skip Anime4K."]
+                            ["Choose upscale quality/speed tradeoff. Of the three that skip Anime4K, cheapest first."]
                             + [f"    {name} = {description}{recommendations.get(name, '')}"
                                for name, description in upscaler.UPSCALE_QUALITIES.items()])
                         dpg.add_combo(items=self.upscale_qualities,
@@ -643,7 +649,12 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_tooltip("upscale_quality_choice", tag="upscale_quality_tooltip")  # tag
                         dpg.add_text(quality_help, parent="upscale_quality_tooltip")  # tag
                         dpg.add_text("Quality")
-                    dpg.add_text("[Presets as in Anime4K.]", color=(140, 140, 140))
+                    dpg.add_slider_float(label="x drawn", default_value=1.0, min_value=1.0, max_value=3.0, format="%.2f", clamped=True, width=self.button_width - 64,
+                                         callback=self.on_display_scale_change, tag="display_scale_slider")
+                    dpg.add_tooltip("display_scale_slider", tag="display_scale_tooltip")  # tag
+                    dpg.add_text("Draw the avatar this many times larger than its frames, enlarged on this computer\n"
+                                 "(bilinear), as Raven-librarian does in a panel larger than its upscale allows.\n"
+                                 "Preview only: not saved with the settings.", parent="display_scale_tooltip")  # tag
 
                     # Separator for section with interactive demo controls
                     with dpg.drawlist(width=self.button_width, height=1):
@@ -1222,6 +1233,10 @@ class PostprocessorSettingsEditorGUI:
         self.upscale_quality = dpg.get_value("upscale_quality_choice")
         self.on_gui_settings_change(sender, app_data)
 
+    def on_display_scale_change(self, sender, app_data):
+        """Draw the avatar larger than its frames, on the client. A preview; nothing is sent to the server or saved."""
+        self.dpg_avatar_renderer.set_display_scale(guiutils.snap_slider("display_scale_slider", app_data, decimals=2))  # tag
+
     def _push_crop_to_server_task(self, task_env):
         """`ManagedTask` entrypoint for debounced crop settings pushes.
 
@@ -1606,7 +1621,10 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
 
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         if key == dpg.mvKey_M:
+            # "Show me the numbers", as in Raven-librarian: the avatar's own, and DPG's Metrics window for the
+            # app's. Through the checkbox, so that the two cannot disagree about whether the stats are on.
             dpg.show_metrics()
+            guiutils.toggle_checkbox("stats_checkbox")  # tag
         elif key == dpg.mvKey_R:
             dpg.show_item_registry()
         elif key == dpg.mvKey_T:
@@ -1626,6 +1644,8 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
             gui_instance.toggle_talking()
         elif key == dpg.mvKey_P:
             gui_instance.toggle_animator_paused()
+        elif key == dpg.mvKey_M:  # the avatar's stats alone; Ctrl+Shift+M also opens DPG's Metrics window, which only the mouse closes
+            guiutils.toggle_checkbox("stats_checkbox")  # tag
         elif key == dpg.mvKey_E:
             dpg.focus_item(gui_instance.emotion_choice)
         elif key == dpg.mvKey_V:
@@ -1699,6 +1719,7 @@ hotkey_info = (
     # Column 2: controls & app
     env(key_indent=0, key="Ctrl+T", action_indent=0, action="Toggle the talking animation", notes="Non-lipsynced"),
     env(key_indent=0, key="Ctrl+P", action_indent=0, action="Pause or resume the animator", notes=""),
+    env(key_indent=0, key="Ctrl+M", action_indent=0, action="Show or hide the avatar's stats", notes=""),
     env(key_indent=0, key="Ctrl+S", action_indent=0, action="Speak / stop speaking", notes=""),
     env(key_indent=0, key="Ctrl+E", action_indent=0, action="Focus the emotion chooser", notes=""),
     env(key_indent=0, key="Ctrl+V", action_indent=0, action="Focus the voice chooser", notes=""),

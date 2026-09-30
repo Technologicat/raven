@@ -39,6 +39,8 @@
 #### Raven-avatar
 
 - **The debug overlay breaks the avatar's render time down**, into posing, upscaling and postprocessing, the cel machinery, and the rest. Timed on the GPU itself, so the numbers are true without slowing the renderer. Toggle the overlay with **Ctrl+Shift+M**.
+- **The settings editor previews the avatar drawn larger than its frames**, as *Raven-librarian* draws it in a large window. The **x drawn** slider under the upscaler sets how much; it is a preview only, and is not saved with the settings.
+- **In the settings editor, the stats overlay is off until asked for**: the **Stats** checkbox beside **Pause**, or **Ctrl+M**. In v0.2.9 it was always on, covering part of the avatar. **Ctrl+Shift+M** also still opens DPG's own Metrics window.
 
 ### Changed
 
