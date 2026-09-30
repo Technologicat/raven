@@ -191,6 +191,10 @@ live on the Night.
 
 ## Queue, in order
 
+**What this sprint is for** (maintainer, 2026-09-30): fixing the issues the Night's demo found. As of
+2026-09-30 those are all done but item 3. Once item 3 is done, the time left before the 8th goes to pushing
+forward, with the items chosen from the roadmap overview (item 4) rather than decided here in advance.
+
 1. **Done 2026-09-30.** **Make the tools cancellable, and the web tools fail in prose** — filed on the Night, 2026-09-25, in
    `TODO_DEFERRED.md` (`investigations/abort-inflight-request/`). Designed 2026-09-29 with the maintainer.
    - **Survey.** Only `websearch` and `webfetch` can wait long (Raven-server; `webfetch`'s headless tier the
