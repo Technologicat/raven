@@ -652,6 +652,12 @@ That is also why the *closing* recipe is here while the rest went to the skill: 
 
 **The coordinate rule is here on a different test: how often it is forgotten.** It costs an afternoon rather than anyone's data, so by the rule above it belongs in the skill — where it has been documented the whole time, and where it keeps being read too late. The trigger fires when the arithmetic is written, which is *after* the decision to launch, and a task that presents as "take a screenshot to check this rendered" never reads as driving a GUI at all. Juha, 2026-09-07, after watching it happen again: *"the trigger for the skill isn't obvious enough — we keep running into that offset double-counting every time."* Frequency is its own argument for the always-loaded file.
 
+**Launch with something to look at, given on the command line, so no file dialog has to be driven first.**
+`raven-visualizer 00_stuff/datasets/out.pickle` is the standard test dataset, about 12k records (`00_stuff/`
+is gitignored, so it exists only on the maintainer's machines; it is to be replaced once the dataset format is
+upgraded). `raven-xdot-viewer raven/xdot_viewer/testdata/test_callgraph.dot` for the XDot viewer, whose
+`testdata/` holds the rest of its test graphs.
+
 **A per-message hotkey needs the blue dot on the right message first — press End.** In Librarian the
 per-message keys (Ctrl+T, Ctrl+R, Ctrl+U, Ctrl+S) act on *the message the keyboard mark is on*, which is
 the bottommost message whose whole button row is on screen. A driven test that scrolls to look at something
