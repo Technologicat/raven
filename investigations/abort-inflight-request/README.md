@@ -19,6 +19,7 @@ one 24 GB card, 131072-token context) for the behaviour that matters in producti
 | `probe_closers.py` | Which way of closing a streaming response actually aborts a blocked read — and whether the closer itself returns |
 | `probe_phases.py` | On a real backend, does the long prompt-processing wait happen before or after the response headers — i.e. do we hold anything to abort? And does aborting work there? |
 | `probe_backend_freed.py` | After an abort, is the backend actually free, or still chewing the abandoned prompt? |
+| `probe_server_side.py` | The same questions from the other end, for our own Raven-server: does a streamed response reach the client at once under waitress, and can the server tell that the client has abandoned it? See section 4 |
 
 ## 1. Only `shutdown()` aborts a blocked read
 
@@ -113,6 +114,31 @@ abandoned prompt — the next real request would still queue behind it. It does 
 Against ~13.5 s of prompt processing still outstanding, a small request came back in under a second. Closing
 the stream is how an OpenAI-compatible backend is told to stop, and that turns out to cover prompt
 processing and not only token generation.
+
+## 4. Our own server: stream, and turn on lookahead
+
+`probe_server_side.py`, 2026-09-30, waitress 3.0.2 with Flask, local. Asked for Raven-server's slow jobs — a
+web search, a page fetch — which used to answer with one JSON body at the end, so that for their whole
+duration the client held no `Response` and so nothing `netutil.Abort` could reach.
+
+The endpoint yields one byte, then works for 10 s; the client aborts 1.5 s in.
+
+| `channel_request_lookahead` | keepalive writes | client's read ends | server sees the client gone |
+|---|---|---|---|
+| 0 (waitress's default) | no | 1.50 s | **never** — does all 10 s of work |
+| 0 | every 1 s | 1.50 s | 3.1 s, at the first failed write |
+| 1 | no | 1.50 s | **1.5 s**, at its next 0.1 s check |
+| 1 | every 1 s | 1.50 s | 1.5 s |
+
+- **Yielding a first byte sends the headers at once** — 4 to 13 ms in every run — so the client can arm
+  `Abort` on the response within moments of asking.
+- **`waitress.client_disconnected` answers only with lookahead on.** Waitress puts the callable in the WSGI
+  environ either way, but with lookahead 0 the channel stops reading while a request is being served, so
+  nothing tells it the peer has closed until a write fails — waitress's own comment on the setting, in
+  `adjustments.py`, and `HTTPChannel.readable`, which stops reading once requests are queued past the
+  lookahead. The first row is the control: there it said "still there" for the whole 10 s.
+- **So keepalive writes are not needed for detection**, and leaving them out keeps the client's read timeout
+  meaningful: that timeout is between bytes, so a server writing every second would never trip it.
 
 ## Notes for whoever touches this next
 
