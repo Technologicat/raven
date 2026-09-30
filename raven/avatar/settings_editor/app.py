@@ -653,7 +653,7 @@ class PostprocessorSettingsEditorGUI:
                                          callback=self.on_display_scale_change, tag="display_scale_slider")
                     dpg.add_tooltip("display_scale_slider", tag="display_scale_tooltip")  # tag
                     dpg.add_text("Draw the avatar this many times larger than its frames, enlarged on this computer\n"
-                                 "(bilinear), as Raven-librarian does in a panel larger than its upscale allows.\n"
+                                 "(bilinear), as Raven-librarian does in a panel larger than its configured upscale allows.\n"
                                  "Preview only: not saved with the settings.", parent="display_scale_tooltip")  # tag
 
                     # Separator for section with interactive demo controls
