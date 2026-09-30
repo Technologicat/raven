@@ -140,6 +140,12 @@ The endpoint yields one byte, then works for 10 s; the client aborts 1.5 s in.
 - **So keepalive writes are not needed for detection**, and leaving them out keeps the client's read timeout
   meaningful: that timeout is between bytes, so a server writing every second would never trip it.
 
+**And Flask-Compress undoes all of it unless told not to** (`--compress`, Flask-Compress 1.25). Raven-server
+runs `Compress(app)`, whose `COMPRESS_STREAMS` defaults to on and whose list of types includes
+`application/json`. With it on, the compressor (zstd, as negotiated) held the first byte back: the headers
+arrived at **10.03 s**, when the job finished, so there was nothing to abort and nothing for the server to
+notice. With `COMPRESS_STREAMS = False`, headers at 5 ms, and the rest as in the table.
+
 ## Notes for whoever touches this next
 
 - **The socket lives at `response.raw._fp.fp.raw._sock`**, which is four layers of private attribute across

@@ -13,7 +13,8 @@ Each variant runs its own waitress server on a free port, in a thread. The endpo
 "works" for up to 10 s in 0.1 s steps, writing a keepalive byte every second if asked to, and records the
 moment it first sees the client gone. The client aborts 1.5 s in. Everything is local; nothing is contacted.
 
-Run: python probe_server_side.py
+Run: python probe_server_side.py              # the lookahead × keepalive table
+     python probe_server_side.py --compress   # behind Flask-Compress, with COMPRESS_STREAMS on and off
 """
 
 import socket
@@ -36,8 +37,12 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def run_variant(lookahead: int, keepalive: bool) -> dict:
+def run_variant(lookahead: int, keepalive: bool, compress: bool = False, compress_streams: bool = True) -> dict:
     app = Flask(__name__)
+    if compress:  # as Raven-server has it: Flask-Compress on everything, which compresses streams too
+        from flask_compress import Compress
+        app.config["COMPRESS_STREAMS"] = compress_streams
+        Compress(app)
     seen = {}
 
     @app.route("/work", methods=["POST"])
@@ -73,12 +78,15 @@ def run_variant(lookahead: int, keepalive: bool) -> dict:
     time.sleep(0.3)
 
     abort = netutil.Abort()
-    result = {"lookahead": lookahead, "keepalive": keepalive}
+    result = {"lookahead": lookahead, "keepalive": keepalive, "compress": compress}
+    if compress:
+        result["compress_streams"] = compress_streams
     t0 = time.monotonic()
     threading.Timer(ABORT_AT_S, abort.abort).start()
     try:
         response = requests.post(f"http://127.0.0.1:{port}/work", json={}, stream=True, timeout=(5, 30))
         result["headers_at"] = round(time.monotonic() - t0, 3)
+        result["content_encoding"] = response.headers.get("Content-Encoding")
         abort.arm(response)
         try:
             body = response.content
@@ -100,6 +108,11 @@ def run_variant(lookahead: int, keepalive: bool) -> dict:
 
 
 if __name__ == "__main__":
-    for lookahead in (0, 1):
-        for keepalive in (False, True):
-            print(run_variant(lookahead, keepalive), flush=True)
+    import sys
+    if "--compress" in sys.argv:
+        for compress_streams in (True, False):
+            print(run_variant(1, False, compress=True, compress_streams=compress_streams), flush=True)
+    else:
+        for lookahead in (0, 1):
+            for keepalive in (False, True):
+                print(run_variant(lookahead, keepalive), flush=True)
