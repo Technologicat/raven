@@ -1183,35 +1183,15 @@ each: an anonymous lambda is not wrong, it is just usually not the clearest thin
 
 Discovered during the getter/property sweep (2026-08-18).
 
-## FileDialog: the path field flashes blue on every Tab
+## FileDialog: a recursive search mode
 
-*Cluster: filedialog · Cost: ? · Gate: none; cosmetic, nothing acts on it · Filed: 2026-08-18 · See also: `investigations/dpg-focus/`*
+*Cluster: filedialog · Cost: ? · Gate: a UX design decision · Filed: 2026-09-30*
 
-Pressing Tab makes the path field go *active* for 25–100 ms before focus settles on its intended target.
-Active means the caret, which fires DPG's focus-selects-all, which paints the text blue — a flash in a
-field nobody touched. Cosmetic only; nothing acts on it.
-
-**Measured, so a later attempt need not re-derive it:** 18 frames of 360 carry it, found by recording the
-window with `investigations/dpg-focus/catch_visual_flash.sh` and by logging `is_item_focused` /
-`is_item_active` per frame from the grid's tick thread. Screenshots cannot catch it — `import` samples
-about one frame in five.
-
-**What it is not.** Three explanations were falsified: that image buttons are skipped in nav order leaving
-a text field first (they are not — `auto_focus_target_probe.py`); that startup auto-focus explains it (it
-focuses without *activating*, and the flash is active); and that the listing rebuild causes it (headless
-reproductions with and without the rebuild never showed it). A fourth guess written down as fact would be
-worth less than nothing.
-
-**The mechanism turned up on 2026-08-21**, found while chasing a different symptom of the same cause — a Tab
-that appeared to do nothing after arriving from the places panel. **ImGui spends Tab on keyboard navigation
-whenever the find field holds a caret it got from `focus_item` rather than from a click** — Ctrl+F, Ctrl+L,
-or any arrival via `chdir` — and the item it navigates *to* is the path field. That is the activation: it
-selects-all, paints the text blue, and is undone a frame later when `_park_focus` lands. It explains the
-duration, the "field nobody touched", and why the three falsified guesses above all missed — none of them
-involved Tab's *other* consumer.
-
-Full write-up in `dpg-notes.md` → "Keyboard input" → "Tab reaches a global handler and still moves ImGui's
-nav, after a programmatic focus".
+The find field searches the folder being browsed. A mode that also searches its subfolders would find a
+file whose folder the user does not remember — the case that prompted it being the XDot viewer's test graphs,
+opened from the repository root without recalling that they live in `raven/xdot_viewer/testdata/`. Raised by
+the maintainer during the Yrityspäivä sprint's live
+testing (2026-09-30); nothing about the design is settled yet.
 
 **The non-cosmetic half of this is already fixed**: the same activate/deactivate pair was overwriting the
 caret home, so a Tab out of the listing was silently undone. `_on_path_field_deactivated` now restores the
