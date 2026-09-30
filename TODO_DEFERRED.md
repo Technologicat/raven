@@ -17,6 +17,9 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+**Before a triage pass, read `briefs/reference/backlog-triage-notes.md`**: how to read an old priority label,
+and why hygiene items rank higher than they used to.
+
 ## A `discard()` hook, so a dropped animation cannot orphan its registry entry
 
 *Cluster: ? · Cost: S · Gate: none — belt-and-braces, revisit if the shape recurs · Filed: 2026-09-10 · See also: the root cause, fixed the same day, in `Animator.render_frame`*
@@ -1357,46 +1360,6 @@ that this is an oversight (2026-08-16); the fleet convention is a star-import re
 A middle option if the measurement bites: re-export only the dependency-light modules and leave the heavy
 ones to dotted imports. That is a defensible split, but it is an asymmetry a future reader will trip over,
 so it needs the reason written at the site.
-
-## Two things a triage pass should know
-
-Written down 2026-08-12, after a pass over the whole file, because both change how the remaining items read.
-
-**An old priority label that encoded *cost* is stale; one that encoded *value* still stands.** A single label
-collapses the two, and once collapsed they are indistinguishable — so a `[Low]` may mean *low value* or *not
-worth the effort*, with nothing in the notation saying which. The worked instance: the datastore lockfile was
-`[Low]` because the trigger is rare and a hand-rolled fix would have cost more than it was worth, while its
-actual severity was silent loss of an in-progress chat. Neither of those reasons is a statement about value,
-and the cost side has since moved by a large factor. For each remaining item, ask which axis its rating came
-from. **This bites hardest on the audits and sweeps**, deferred when a fleet-wide mechanical pass meant a day
-of tedium and now an afternoon.
-
-**Stylistic inconsistency propagates now, so hygiene work ranks higher than it used to.** Under solo human
-development a drifted convention sits where it is; under agentic development it is **distribution matching**
-— the existing code is taken as evidence of the intended style, so a drifted estimate becomes the next
-generation's evidence, and uncontrolled it drifts arbitrarily far. The same phenomenon at a different level
-of description: agentic coding is like a *scheme* for a hyperbolic PDE, where each timestep injects local
-truncation error and, without dissipation, those accumulate. (The analogy is to the scheme, not to the
-equation — an earlier draft compared a continuous transport equation against a discrete stochastic process,
-which is a category error.) That names the restoring force properly: **lint rules and hygiene sweeps are
-artificial viscosity** — not *true*, but a damping term that keeps the trajectory bounded, which is exactly
-the trade a style rule makes.
-
-Two consequences:
-
-- **Local review cannot detect it, by construction.** Each step is within tolerance of the state it was drawn
-  from — that is what makes it drift rather than a defect. Diff review compares against the immediately
-  preceding state, so it is structurally blind. Detection requires comparison against a *fixed reference*.
-- **Fixed references are the restoring force, and that reranks them.** `CLAUDE.md` conventions and lint rules
-  act continuously; a hygiene sweep acts episodically. Losing pycodestyle's E12x removed the only
-  *mechanical* restoring force on continuation-line style — which is why the ruff item and the
-  `hygiene-sweep` cluster are one concern rather than two.
-
-**Measured 2026-08-10, and it is the prediction confirmed**: 2.25× the E12x violation density in `tests/`
-against the rest of the tree (2.77 vs 1.23 per kloc) — the code the model writes most and the human reviews
-in Emacs least, with an unaffected baseline in the same repo to compare against. That inverts the usual
-ranking of hygiene work, which is normally deferred precisely because it is local and cosmetic. It is
-neither, now.
 
 ## Sweep `## Declined` for decisions whose follow-through was never filed
 
@@ -3162,39 +3125,6 @@ Raised during the vision-document discussion with claude.ai, 2026-08-03. Note th
 "the server and parts of the avatar are AGPL" — accurate, but checking the tree also turned up the MIT
 component, which nobody had mentioned, and cleared `raven/common/video/postprocessor.py`, which mentions AGPL
 only to record that its author relicensed it to BSD. A grep for "AGPL" therefore over-reports; read the file.
-
-Several items are siblings under one root cause and are cheaper to fix as a package than one at a time. The
-clusters, as of 2026-07-27:
-
-- **Temporary context injects** — how much goes on the wire each turn, in which role, at which position.
-  **Built 2026-07-28**, closing "RAG injects: sent in the user role as a workaround", "Fold the temporary
-  context injects…" (measured, and rejected in favour of the system block plus a tool result) and "Revisit
-  the 'answer from context only' reminder". Measurements in `investigations/context-injects/context-inject-shape-measurements.md`,
-  the plan they argued for in `briefs/librarian-extension/done/08_context-injects-brief.md`. Still
-  open in this cluster: "Modernize the Librarian system prompt / character card" ("RAG: rerank retrieved
-  chunks…" was measured and rejected on 2026-08-06 and is no longer open), plus the new "RAG access via
-  tool-call" motivation recorded under Q11 of the
-  measurements — the model asks for a second, better-aimed search and currently has no way to get one.
-- **FileDialog** — the cluster is down to "image thumbnail previews" and "keyboard accessibility". "Smart-case
-  the Find field", "multi-extension filter as one labelled item" and "reduce per-use-site boilerplate" landed
-  2026-08-13; "slow open and a teardown input-dead-window" was measured the same day and is closed
-  (`investigations/filedialog-performance/`); "OS drag-and-drop of files into DPG apps" shipped 2026-08-10 as
-  `raven.common.gui.filedrop`, which also retired the "the picker is the only entry path" argument that used
-  to motivate the rest.
-- **Markdown renderer** (the vendored `DearPyGui_Markdown`) — "Fenced code block support", "Reasoning traces
-  with indented bullets mis-render", "inline-code background boxes are stranded on dynamic reflow", "Emoji
-  support in the Markdown renderer". Adjacent: "Super/subscript font
-  coverage in the GUI" is an *atlas* problem rather than a renderer one (`fontsetup` serves both plain DPG
-  text and `dpg_markdown`), but it shares the font-survey work with the emoji item's monochrome-font route.
-  **These point at `briefs/markdown-block-rendering-brief.md`**, which found
-  the shared cause and turned out to be much smaller than the items assumed. Its step 1 landed 2026-08-25
-  and closed "Markdown ATX headings don't render", which is why that one is no longer in the list.
-- **Document ingestion** — "Same file formats in the docs DB and in chat attachments", "Spreadsheets",
-  "Text out of images (OCR, and SVG `<text>`)", "Vector figures (`.svg`)", "Read documents as page images".
-  **Brief this once rather than five times**: they are five faces of one question — what an ingestible
-  document *is* — and the answers constrain each other. Page images is the one that bites on this project's
-  own terms: figure- and equation-heavy literature extracts to prose that omits the argument, in exactly the
-  corpus Raven exists to read.
 
 ## Librarian's help card: the room exists now, and is not all spent
 
@@ -5191,6 +5121,12 @@ The docs database and chat attachments should accept the *same* set of formats. 
 to a message reasonably expects to be able to drop it in the documents folder, and vice versa; a split between
 the two is arbitrary from outside.
 
+**This item heads the `document-ingestion` cluster, which wants one brief rather than five**: it,
+"Spreadsheets", "Text out of images", "Vector figures (`.svg`)" and "Read documents as page images" are five
+faces of one question — what an ingestible document *is* — and the answers constrain each other. Page images
+is the one that bites on this project's own terms: figure- and equation-heavy literature extracts to prose
+that omits the argument, in exactly the corpus Raven exists to read.
+
 This is cheap to hold to, because `raven.common.docextract` is already the single chokepoint for both — the RAG
 ingester and the attachment path both call `extract_text`. Adding a format there serves both surfaces at once,
 so the symmetry costs nothing extra as long as new formats are added *there* rather than at one call site.
@@ -6868,9 +6804,11 @@ Not tasks. There is no action available on our side; what is recorded is the tri
   ImGui's multiline `InputText` has no word-wrap at all, which is upstream's long-standing position *as
   recalled* — that part has not been checked against a current ImGui.
 
-  The two directions available on our side were both rejected: inserting real newlines as the user types
-  changes the text being composed, breaks re-editing and sends hard line breaks to the model; replacing the
-  widget means reimplementing selection, the caret and the clipboard, everything ImGui gives for free.
+  The two directions available on our side were both rejected as the immediate fix: inserting real newlines as
+  the user types changes the text being composed, breaks re-editing and sends hard line breaks to the model;
+  replacing the widget means reimplementing selection, the caret and the clipboard, everything ImGui gives for
+  free. **The second is acceptable as the long-term fix**, DPG being unlikely ever to add wrapping (maintainer,
+  2026-09-30) — see "A multiline text control of our own".
 
   **The trigger to look again: has a current ImGui grown word-wrap, with DPG merely not exposing it yet?**
   Last checked the week of 2026-08-11 against **DPG 2.3.1** — still not there. So this is a re-check when DPG
