@@ -107,7 +107,8 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
    - **Test-retest reliability.** Run the final judge twice over the same sample — a few hundred records —
      and report how often the two runs agree. That is a reliability figure for an LLM judge, which is one
      of the methodology questions the project is asking. The two runs must draw the *same* records, so
-     the sample is seeded and the seed goes into the report header. The second run must also re-ask
+     the sample is seeded, and both the seed and the sample size go into the report header (Juha,
+     2026-09-30) — the same seed with a different size draws a different set. The second run must also re-ask
      rather than read the first run's ledger, so the replicate needs a ledger of its own, or a
      replicate number in the instrument stamp; which of the two is open.
    - **The agreed sanity checks** (`investigations/aokk-corpus-scope/README.md`, *"Open: is the off-topic

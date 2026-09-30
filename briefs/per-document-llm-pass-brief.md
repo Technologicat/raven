@@ -108,6 +108,26 @@ Not all failures are the same and the item's three deferred questions are really
 Conflating the first two is the current failure mode: a batch run against a dead backend produces a
 thousand "failed" documents that were never tried properly.
 
+## Step 0: one model record in `llmclient`, shared with Librarian
+
+Decided 2026-09-30 (Juha): the instrument stamp needs the model's identity, and Librarian already builds
+one for its character card, so both come from one function rather than two copies. It is the first step
+of this build, not a separate item, because the stamp is what needs it.
+
+- **One reader of the model record, returning structured data.** `llmclient` reads LM Studio's
+  `/api/v1/models` for the loaded model: id, quantization name and bits per weight, and the loaded
+  instance's whole `config` block. Librarian formats its label from that; the stamp hashes it and writes
+  the block into report headers (see *Decided 2026-09-29*, the cache key).
+- **What moves.** `llmclient` reads LM Studio's `v0` in two places: backend-flavor detection, which keys
+  on the `state` field, and `_resolve_model_info`. Loaded or not, vision, and context length all move to
+  `v1`'s shapes — `loaded_instances` for `state`, `capabilities.vision` for `type == "vlm"`, the instance
+  config's `context_length` for `loaded_context_length` (field names checked against a live instance,
+  2026-09-30). About ten fixtures in `test_llmclient.py` mock `v0` and change with it.
+- **Open: whether older LM Studio versions lack `v1`.** If they do, `v0` stays as a fallback, which means
+  two parsers to keep and test. Find out before choosing.
+- **Cost: moderate.** A foundation-layer change with a real test surface, so its own commit ahead of the
+  pass itself.
+
 ## Decided 2026-09-29
 
 Six of the seven questions below, settled in discussion with Juha. Question 5 is the one still open.
