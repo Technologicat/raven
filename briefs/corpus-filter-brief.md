@@ -102,8 +102,9 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
      today's `raven-deduplicate --judge`, reusing a copy of that file, reproduces the 2026-08-31 run group
      for group — 1296 clusters, 1767 records removed, and every row's recorded differences unchanged. (A run
      without `--judge` merges fewer, which is the difference to watch for, not drift.) The output `.bib`
-     differs only in how `month` is written, `{apr}` then and the bare macro `apr` now, cause not traced
-     — no code in `raven/papers` writes it, so the parser library is the likeliest suspect.
+     differs only in how `month` is written, `{apr}` then and the bare macro `apr` now: the `bibtexparser`
+     upgrade from 2.0.0b9 to 2.0.1 (confirmed 2026-09-30 by running today's code under 2.0.0b9, which
+     reproduces the old output byte for byte). So the library version belongs in the methods too.
 7. **A `sample` option on every model-driven tool** (Juha, 2026-09-30): run a stage over a seeded random
    sample of its input instead of all of it. Three uses, and the first is why it exists:
    - **Test-retest reliability.** Run the final judge twice over the same sample — a few hundred records —
