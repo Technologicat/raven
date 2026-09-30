@@ -79,6 +79,9 @@
 
 - **The `--qr` overlay's label reads "Raven on GitHub"**, where it said "Get Raven".
 - **A fault in one GUI animation no longer closes the app.** The animation is dropped and the error logged with its traceback; everything else carries on.
+- **A dtype in `overrides.json` that is not a Torch dtype stops the app at startup, with an error naming it.**
+  - In v0.2.9 it was ignored with a warning in the log, and the shipped value used instead, so a typo such as `"float61"` went unnoticed.
+  - Valid names are unchanged: `"devices.embeddings.dtype": "bfloat16"` works as before.
 - **Every app's window title now names the app as its command does**: `Raven-cherrypick`, `Raven-xdot-viewer`, `Raven-conference-timer`, `Raven-avatar-pose-editor` and `Raven-avatar-settings-editor`, as `Raven-librarian` and `Raven-visualizer` already were. Worth knowing if a window manager rule matches on the old titles.
 
 ### Fixed
