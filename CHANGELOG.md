@@ -20,6 +20,7 @@
 
 #### Raven-librarian
 
+- **Ctrl+Shift+click on a message's copy button copies its node ID alone**, for reporting a message that misbehaves.
 - **Messages can be edited.**
   - The pencil button, or **Ctrl+E**, opens the text of your message or an AI reply in place. The send key saves it, **Esc** cancels.
   - An edit is a new revision: the old text is kept, and the revision number in the grey line above the message goes up. The messages below the edited one are left as they are, so this is for small edits — fixing a typo, trimming a long reply before sharing a chat log.

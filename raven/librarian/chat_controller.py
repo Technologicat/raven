@@ -1300,29 +1300,39 @@ class DPGChatMessage:
         # dpg.add_spacer(tag=f"ai_message_buttons_spacer_{self.gui_uuid}",
         #                parent=g)
 
-        def copy_message_to_clipboard_callback() -> None:
+        def copy_message_to_clipboard_callback(clicked: bool = False) -> None:
+            """Copy this message, as-is or with its node ID; or, on a Ctrl+Shift+click, the node ID alone.
+
+            `clicked`: whether this is the button's own click. Ctrl is read only then: the Ctrl+C and
+                       Ctrl+Shift+C hotkeys call this too, with Ctrl down as part of their chord.
+            """
             shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
-            dpg.set_clipboard_text(messagetext.format_message_for_clipboard(self.parent_view.chat_controller.datastore,
-                                                                            self.node_id,
-                                                                            role=self.role,
-                                                                            persona=self.persona,
-                                                                            include_node_id=shift_pressed))
+            ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+            if clicked and ctrl_pressed and shift_pressed:  # for reporting a message: the ID and nothing else
+                dpg.set_clipboard_text(self.node_id)
+                mode = "node ID only"
+            else:
+                dpg.set_clipboard_text(messagetext.format_message_for_clipboard(self.parent_view.chat_controller.datastore,
+                                                                                self.node_id,
+                                                                                role=self.role,
+                                                                                persona=self.persona,
+                                                                                include_node_id=shift_pressed))
+                mode = "with node ID" if shift_pressed else "as-is"
             # Acknowledge the action in the GUI.
-            mode = "with node ID" if shift_pressed else "as-is"
             gui_animation.flash_button(button=copy_message_button,
                                        message=f"Copied to clipboard! ({mode})",
                                        duration=gui_config.acknowledgment_duration,
                                        tooltip=copy_message_tooltip)
         self.gui_button_callbacks["copy"] = copy_message_to_clipboard_callback
         copy_message_button = dpg.add_button(label=fa.ICON_COPY,
-                                             callback=copy_message_to_clipboard_callback,
+                                             callback=lambda: copy_message_to_clipboard_callback(clicked=True),
                                              width=gui_config.toolbutton_w,
                                              tag=f"message_copy_to_clipboard_button_{self.gui_uuid}",
                                              parent=g)
         dpg.bind_item_font(copy_message_button, self.parent_view.themes_and_fonts.icon_font_solid)
         dpg.bind_item_theme(copy_message_button, "disablable_widget_theme")  # tag
         copy_message_tooltip = self._add_tooltip(copy_message_button,
-                                                 "Copy message to clipboard [Ctrl+C]\n    without Shift: as-is\n    with Shift: include message node ID")
+                                                 "Copy message to clipboard [Ctrl+C]\n    without Shift: as-is\n    with Shift: include message node ID\n    with Ctrl+Shift: the node ID only")
 
     def _build_regeneration_buttons(self, g, greeting_node_ids) -> None:
         """Build the three buttons that act on the AI's own output: run it again, continue it, speak it.

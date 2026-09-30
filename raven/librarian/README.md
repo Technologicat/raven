@@ -777,6 +777,7 @@ Hover the dot and it says so.
 
 - Copy chat message to clipboard (Ctrl+C) — in full, the whole of any fetched page included; see [Message attachments](#message-attachments)
   - Holding Shift (Ctrl+Shift+C) includes the message's node ID and metadata, as Shift+F8 does for the whole log.
+  - Ctrl+Shift+click on the copy button copies the node ID alone. It is for reporting a message that misbehaves: the ID is what finds it in the chat datastore.
   - The hotkey is live whenever the message field does not hold the caret; while you are writing, Ctrl+C copies the selected text instead.
 - Reroll (AI messages only) (Ctrl+R)
 - Continue generating (Ctrl+U)
