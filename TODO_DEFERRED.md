@@ -11,6 +11,85 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+**When this file stops being readable, that is a trigger.** Bump *Visualizer's importer should read the
+document database* — a semantic map of this backlog is a convergence-detection tool, and it needs the
+importer first. Recorded here rather than in that item because a trigger nobody meets is not a trigger, and
+the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
+backlog. The recurring moment to ask is the triage step in the release procedure.
+
+## A `discard()` hook, so a dropped animation cannot orphan its registry entry
+
+*Cluster: ? · Cost: S · Gate: none — belt-and-braces, revisit if the shape recurs · Filed: 2026-09-10 · See also: the root cause, fixed the same day, in `Animator.render_frame`*
+
+`WidgetFlash` keeps a class-level registry of which flash owns which widget, written when a flash reifies
+and cleared **only** by `finish`. So any path that removes an animation from the animator without finishing
+it leaves an entry behind — and for a flash that is not a lost animation but a permanent, visible fault: the
+widget keeps the colour it was mid-fade on, and every later flash on it takes the de-duplication branch and
+declines to run, so the affordance never works again.
+
+The way that happened is fixed — `Animator.render_frame` walked its live list while `cancel` mutated it, so
+whichever animation sat after the removed one was skipped. What is not fixed is the *asymmetry* that made a
+skip so expensive: the registry outlives the registration, and nothing reconciles them.
+
+Proposal: a `discard()` on `Animation`, no-op by default, called wherever the animator drops an animation
+without finishing it. `WidgetFlash` overrides it to clear its `instances` entry and its `reified` flag and
+**touch no widgets** — which is what makes it safe on exactly the path that exists because `finish` is the
+method most likely to touch widgets that have just turned out to be gone. A future drop would then cost one
+missed flash rather than a dead widget.
+
+Low priority: the cause is gone, and the root `conftest.py` now fails any test module that finishes with a
+registry entry the animator is not rendering, so a reintroduction is caught in tests rather than in the GUI.
+
+Discovered while diagnosing four permanently-highlighted chat messages (2026-09-10).
+
+## A better emotion classifier for the avatar, judged at reading speed
+
+*Cluster: avatar · Cost: M · Gate: none · Filed: 2026-09-15 · See also: `raven.server.config.classification_model`*
+
+The avatar's expression comes from `joeddav/distilbert-base-uncased-go-emotions-student`, which is several
+years old, and it misreads things a reader would not: a reply discussing capability *lag* put the avatar in
+`disappointment`, with other odd picks in the same reply. Now that the expression follows speech sentence by
+sentence, each misreading is on screen for as long as its sentence takes to say, so they are more visible
+than when the face followed the streamed text.
+
+**The test case is that reply**: node `gensym#forest-node:805a7010-f9d4-4e53-8277-f3ffd95396ee`, in the
+maintainer's datastore (2026-09-15). Candidate models get run against it, and against whatever else looks
+jarring in the meantime.
+
+**Judge at reading speed, without TTS in the loop** (Juha): a person reads far faster than the voice speaks,
+so waiting for speech to show each sentence's expression is the slow way to compare models. Instead, split
+the reply into sentences the way the TTS preprocessor does, classify each with the candidate model through
+`text.EmotionWindow` as the spoken path uses it, and step through the results in
+`raven-avatar-settings-editor` by driving its emotion picker over `--repl` (`on_send_emotion`, with
+`emotion_choice` set) — the sentence and its expression side by side, at whatever pace the reader likes.
+
+**Showing the sentence needs two things the settings editor lacks**, though it already runs the same
+`DPGAvatarController` as Librarian — it constructs it with `subtitles_enabled=False` and no subtitle widget.
+
+- **A subtitle widget of its own**, created and passed in with its position as Librarian does. Wiring.
+- **A caption that can be shown without speaking.** The subtitle is set and shown only inside `speak_task`'s
+  start-of-sentence handler, so text appears on screen only while a sentence is being spoken. Pulling that
+  out as a public `show_subtitle` / `hide_subtitle` on the controller, used by the speech path as well,
+  lets the judging tool put each sentence up as a closed caption with no audio at all.
+
+Until then, an emotion that keeps looking wrong can be switched off in `emotion_blacklist`, in
+`raven.librarian.config`.
+
+## Edit an AI reply's thinking trace, to unwedge a model stuck in a loop
+
+*Cluster: message-editing · Cost: ? · Gate: Continue resuming an incomplete thinking trace · Filed: 2026-09-28 · See also: `briefs/yrityspaiva/README.md`, message editing v1*
+
+Message editing v1 (2026-09-28) edits a message's text only; an AI reply's thinking trace carries over
+untouched. The maintainer's use case for editing the trace too: a model stuck in a loop while thinking can
+sometimes be unwedged by cutting the loop out of its trace and continuing.
+
+The editing half is small — a second field, and `chatutil.revise_message_text` replacing `reasoning_content`
+as well. **The gate is the other half**: Continue has to resume the *thinking*, which is probably not
+supported yet (maintainer's recollection). Checked only this far: on a backend that continues by prefill,
+`llmclient.invoke` seeds the old `reasoning_content` into the stored result, but whether the trace reaches
+the model on the wire, so that the model picks up mid-thought, is unchecked. Find that out first; the editor
+is worth building only once Continue can use what it produces.
+
 ## Documented command lines are unchecked
 
 *Cluster: doc-checkers · Cost: M · Gate: none · Filed: 2026-09-21 · See also: `scripts/check_usage_paths.py`, `briefs/done/researchers-night/README.md` → "Documented command lines are unchecked"*
@@ -345,12 +424,6 @@ The first place to look is that `update` after `set_graph`, and whether the pane
 the frame the drawlist first draws into it.
 
 Noticed right after startup began handing the panel to the graph before the chat view build (2026-09-16).
-
-**When this file stops being readable, that is a trigger.** Bump *Visualizer's importer should read the
-document database* — a semantic map of this backlog is a convergence-detection tool, and it needs the
-importer first. Recorded here rather than in that item because a trigger nobody meets is not a trigger, and
-the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
-backlog. The recurring moment to ask is the triage step in the release procedure.
 
 ## Is Librarian's `target_fps = 20` still needed, now that it upscales with bicubic?
 
@@ -1190,19 +1263,8 @@ Discovered during the getter/property sweep (2026-08-18).
 The find field searches the folder being browsed. A mode that also searches its subfolders would find a
 file whose folder the user does not remember — the case that prompted it being the XDot viewer's test graphs,
 opened from the repository root without recalling that they live in `raven/xdot_viewer/testdata/`. Raised by
-the maintainer during the Yrityspäivä sprint's live
-testing (2026-09-30); nothing about the design is settled yet.
-
-**The non-cosmetic half of this is already fixed**: the same activate/deactivate pair was overwriting the
-caret home, so a Tab out of the listing was silently undone. `_on_path_field_deactivated` now restores the
-home the field displaced rather than naming one. **The flash itself remains** — ImGui still navigates there
-and the field still lights up for a frame or two.
-
-So this is no longer "left for whoever has a mechanism": it needs a way to keep ImGui's nav off that field,
-or a decision that a 25–100 ms flash is acceptable. Worth reconsidering the second option now that it is
-understood rather than mysterious.
-
-Discovered during the FileDialog keyboard work (2026-08-18).
+the maintainer during the Yrityspäivä sprint's live testing (2026-09-30); nothing about the design is settled
+yet.
 
 ## Docstrings that describe a previous version, or argue a design choice at the caller
 
@@ -3590,10 +3652,6 @@ Discovered during raven-cherrypick preload performance session.
 raven-cherrypick is effectively an image viewer with QOI support, which is rare. This makes it ideal for previewing avatar recordings frame-by-frame. Integrate `raven-qoi2png` CLI functionality so that raven-cherrypick can export avatar recordings for external consumption (e.g. as a PNG image sequence for OpenShot or other video editors).
 
 Discovered during raven-cherrypick preload performance session.
-
-
-
-The fix isn't missing — it's queued. Last commit on pygame's `main` was 2025-10-05 (the v2.6.1 merge); nothing in ~7 months, 754 open issues. Three open PRs already replace `pkg_resources` with `importlib.resources` — #4792 (2026-03-12), #4583 and #4511 (both 2025-09-23) — plus several user-side warning reports (#4557, #4769, …). Repo is not archived, just review/merge-throughput limited. Nothing for us to do but wait for a release that picks one of those PRs up.
 
 ## raven-cherrypick: further reduce idle CPU/GPU load
 
@@ -6797,7 +6855,9 @@ Not tasks. There is no action available on our side; what is recorded is the tri
 - **pygame `pkg_resources` deprecation warning** — pygame 2.6.1 imports `pkg_resources` in its `pkgdata.py`;
   silencing it our side would mean pinning `Setuptools<81`, which costs more than the warning. Last checked
   2026-05-06: still 2.6.1 on PyPI, and `pkgdata.py` unchanged on pygame's `main`, so a fix is not merely
-  unreleased. Re-check on the next pygame release. Catalogued with the other upstream warning noise in
+  unreleased — but it is queued: three open PRs replace `pkg_resources` with `importlib.resources` (#4792,
+  #4583, #4511), and the repository is not archived, only slow to merge (last commit on `main` 2025-10-05, the
+  v2.6.1 merge). Re-check on the next pygame release. Catalogued with the other upstream warning noise in
   `CLAUDE.md`, "Upstream warning noise in `pytest raven/`".
 
 - **The chat composer scrolls sideways instead of wrapping** — typing past the field's width pushes the line
@@ -6818,76 +6878,3 @@ Not tasks. There is no action available on our side; what is recorded is the tri
   either way: most messages are a sentence or two, and the ones that are not tend to be pasted rather than
   typed. Carried an `RN2026` gate until 2026-08-13, which it should never have had: a deadline on
   work outside our control can only be missed. Noticed by Juha (2026-08-04) while testing the send-key change.
-
-## A `discard()` hook, so a dropped animation cannot orphan its registry entry
-
-*Cluster: ? · Cost: S · Gate: none — belt-and-braces, revisit if the shape recurs · Filed: 2026-09-10 · See also: the root cause, fixed the same day, in `Animator.render_frame`*
-
-`WidgetFlash` keeps a class-level registry of which flash owns which widget, written when a flash reifies
-and cleared **only** by `finish`. So any path that removes an animation from the animator without finishing
-it leaves an entry behind — and for a flash that is not a lost animation but a permanent, visible fault: the
-widget keeps the colour it was mid-fade on, and every later flash on it takes the de-duplication branch and
-declines to run, so the affordance never works again.
-
-The way that happened is fixed — `Animator.render_frame` walked its live list while `cancel` mutated it, so
-whichever animation sat after the removed one was skipped. What is not fixed is the *asymmetry* that made a
-skip so expensive: the registry outlives the registration, and nothing reconciles them.
-
-Proposal: a `discard()` on `Animation`, no-op by default, called wherever the animator drops an animation
-without finishing it. `WidgetFlash` overrides it to clear its `instances` entry and its `reified` flag and
-**touch no widgets** — which is what makes it safe on exactly the path that exists because `finish` is the
-method most likely to touch widgets that have just turned out to be gone. A future drop would then cost one
-missed flash rather than a dead widget.
-
-Low priority: the cause is gone, and the root `conftest.py` now fails any test module that finishes with a
-registry entry the animator is not rendering, so a reintroduction is caught in tests rather than in the GUI.
-
-Discovered while diagnosing four permanently-highlighted chat messages (2026-09-10).
-
-## A better emotion classifier for the avatar, judged at reading speed
-
-*Cluster: avatar · Cost: M · Gate: none · Filed: 2026-09-15 · See also: `raven.server.config.classification_model`*
-
-The avatar's expression comes from `joeddav/distilbert-base-uncased-go-emotions-student`, which is several
-years old, and it misreads things a reader would not: a reply discussing capability *lag* put the avatar in
-`disappointment`, with other odd picks in the same reply. Now that the expression follows speech sentence by
-sentence, each misreading is on screen for as long as its sentence takes to say, so they are more visible
-than when the face followed the streamed text.
-
-**The test case is that reply**: node `gensym#forest-node:805a7010-f9d4-4e53-8277-f3ffd95396ee`, in the
-maintainer's datastore (2026-09-15). Candidate models get run against it, and against whatever else looks
-jarring in the meantime.
-
-**Judge at reading speed, without TTS in the loop** (Juha): a person reads far faster than the voice speaks,
-so waiting for speech to show each sentence's expression is the slow way to compare models. Instead, split
-the reply into sentences the way the TTS preprocessor does, classify each with the candidate model through
-`text.EmotionWindow` as the spoken path uses it, and step through the results in
-`raven-avatar-settings-editor` by driving its emotion picker over `--repl` (`on_send_emotion`, with
-`emotion_choice` set) — the sentence and its expression side by side, at whatever pace the reader likes.
-
-**Showing the sentence needs two things the settings editor lacks**, though it already runs the same
-`DPGAvatarController` as Librarian — it constructs it with `subtitles_enabled=False` and no subtitle widget.
-
-- **A subtitle widget of its own**, created and passed in with its position as Librarian does. Wiring.
-- **A caption that can be shown without speaking.** The subtitle is set and shown only inside `speak_task`'s
-  start-of-sentence handler, so text appears on screen only while a sentence is being spoken. Pulling that
-  out as a public `show_subtitle` / `hide_subtitle` on the controller, used by the speech path as well,
-  lets the judging tool put each sentence up as a closed caption with no audio at all.
-
-Until then, an emotion that keeps looking wrong can be switched off in `emotion_blacklist`, in
-`raven.librarian.config`.
-
-## Edit an AI reply's thinking trace, to unwedge a model stuck in a loop
-
-*Cluster: message-editing · Cost: ? · Gate: Continue resuming an incomplete thinking trace · Filed: 2026-09-28 · See also: `briefs/yrityspaiva/README.md`, message editing v1*
-
-Message editing v1 (2026-09-28) edits a message's text only; an AI reply's thinking trace carries over
-untouched. The maintainer's use case for editing the trace too: a model stuck in a loop while thinking can
-sometimes be unwedged by cutting the loop out of its trace and continuing.
-
-The editing half is small — a second field, and `chatutil.revise_message_text` replacing `reasoning_content`
-as well. **The gate is the other half**: Continue has to resume the *thinking*, which is probably not
-supported yet (maintainer's recollection). Checked only this far: on a backend that continues by prefill,
-`llmclient.invoke` seeds the old `reasoning_content` into the stored result, but whether the trace reaches
-the model on the wire, so that the model picks up mid-thought, is unchecked. Find that out first; the editor
-is worth building only once Continue can use what it produces.
