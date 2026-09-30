@@ -170,6 +170,24 @@ live on the Night.
     Zotero. Desktop file associations are the uniform way users know (maintainer).
 - **Brief 13 gained §4a** (2026-09-29): with a scope TOC published to the model, the automatic search goes
   away. Not for this sprint.
+- **Librarian at 4K, and the avatar editors' keyboard** (2026-09-30, prompted by Qwen 3.8's volume of tool
+  calls and a 4K display):
+  - A window wider than its default gives the extra width to the chat graph; the chat log stays at its
+    default width.
+  - The avatar fills 98% of its panel's height at any size. Past the configured `upscale` ceiling the
+    client enlarges the frames itself, bilinearly (`investigations/dpg-texture-filtering/`), with
+    `avatar_config.display_scaling` "fit" (default, chosen after trying both) / "integer" / "off". The
+    settings editor previews it with an "x drawn" slider, preview only. Resizing no longer triple-swaps the
+    avatar's texture.
+  - Ctrl+Shift+click on a message's copy button copies its node ID alone, for reporting a message.
+  - Avatar editors: keys for every chooser, Esc out of one, the record button on Ctrl+Shift+Enter, the
+    settings editor's voice key off Ctrl+V, its stats overlay behind a checkbox and Ctrl+M.
+  - `keyboardmark.focus` keeps a focus move's transit from lighting a mark on the way.
+  - **Rejected:** a settle time before a mark lights, which would have delayed the feedback a fast typist
+    steers by (maintainer); Ctrl+Shift+Space for record, which IBus claims.
+  - **Open, not filed:** the parks in Librarian, the Visualizer and the XDot viewer still use
+    `dpg.focus_item`. Moving them to `keyboardmark.focus` needs `gui_animation.give_caret` to set the
+    expectation too, or a park would hold back the next move's mark. No flash has been seen there.
 
 ## Queue, in order
 
