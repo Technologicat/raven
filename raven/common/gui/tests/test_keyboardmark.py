@@ -466,7 +466,7 @@ class TestFocusFollower:
 # A programmatic focus change in flight
 
 class TestExpectedFocus:
-    """While a change `keyboardmark.focus` made is in flight, only its target may light.
+    """While a change `guiutils.focus_item` made is in flight, only its target may light.
 
     Headless DPG cannot move the focus, so what it would report is stood in for: `get_focused_item` for a
     focus follower, `is_item_active` for a caret follower.
@@ -474,7 +474,7 @@ class TestExpectedFocus:
 
     @pytest.fixture(autouse=True)
     def no_expectation_left_over(self, monkeypatch):
-        monkeypatch.setattr(keyboardmark, "_expected_focus", None)
+        monkeypatch.setattr(guiutils, "_expected_focus", None)
 
     @staticmethod
     def _focused(monkeypatch, widget):
@@ -484,7 +484,7 @@ class TestExpectedFocus:
         target, passed_through = make_widget("button", "target"), make_widget("button", "transit")
         follower = keyboardmark.install_focus_follower([target, passed_through])
         try:
-            keyboardmark.focus(target)
+            guiutils.focus_item(target)
             self._focused(monkeypatch, passed_through)  # where the focus is while the change is in flight
             gui_animation.animator.render_frame()
             assert not lit(passed_through), "a control the focus only passed through was marked"
@@ -512,7 +512,7 @@ class TestExpectedFocus:
         target, other = make_widget("button", "target"), make_widget("button", "other")
         follower = keyboardmark.install_focus_follower([target, other])
         try:
-            keyboardmark.focus(target)
+            guiutils.focus_item(target)
             self._focused(monkeypatch, target)
             gui_animation.animator.render_frame()
             self._focused(monkeypatch, other)  # a click, say
@@ -525,9 +525,9 @@ class TestExpectedFocus:
         target, other = make_widget("button", "target"), make_widget("button", "other")
         follower = keyboardmark.install_focus_follower([target, other])
         try:
-            keyboardmark.focus(target)
-            identifiers, _deadline = keyboardmark._expected_focus
-            monkeypatch.setattr(keyboardmark, "_expected_focus", (identifiers, 0))  # already past its deadline
+            guiutils.focus_item(target)
+            identifiers, _deadline = guiutils._expected_focus
+            monkeypatch.setattr(guiutils, "_expected_focus", (identifiers, 0))  # already past its deadline
             self._focused(monkeypatch, other)
             gui_animation.animator.render_frame()
             assert lit(other), "a focus change that never landed held a mark dark past its window"
@@ -538,9 +538,33 @@ class TestExpectedFocus:
         target, passed_through = make_widget("input_text", "target"), make_widget("input_text", "transit")
         follower = keyboardmark.install_caret_follower([target, passed_through])
         try:
-            keyboardmark.focus(target)
+            guiutils.focus_item(target)
             monkeypatch.setattr(keyboardmark.dpg, "is_item_active", lambda item: item == passed_through)
             gui_animation.animator.render_frame()
             assert not lit(passed_through), "a field the caret only passed through was marked"
         finally:
+            gui_animation.animator.cancel(follower)
+
+    def test_give_caret_right_after_a_park_lights_the_field_at_once(self, make_widget, quiet_pulse, monkeypatch):
+        """A park, then Tab back into a field inside the park's window: the field's mark is not held dark.
+
+        Which is why `give_caret` records where it is going too. Had it not, the park's expectation would
+        hold every mark but the button's dark for up to 150 ms, delaying the feedback a fast typist steers by.
+        """
+        park, field = make_widget("button", "park"), make_widget("input_text", "field")
+        follower = keyboardmark.install_caret_follower([field])
+        request = None
+        try:
+            guiutils.focus_item(park)
+            monkeypatch.setattr(keyboardmark.dpg, "is_item_active", lambda item: item == field)
+            gui_animation.animator.render_frame()
+            assert not lit(field), ("the park's expectation did not hold the field dark, so this fixture cannot "
+                                    "tell a `give_caret` that records its target from one that does not")
+
+            request = gui_animation.give_caret(field)
+            gui_animation.animator.render_frame()
+            assert lit(field), "the field was held dark by the park that came before `give_caret`"
+        finally:
+            if request is not None:
+                gui_animation.animator.cancel(request)
             gui_animation.animator.cancel(follower)

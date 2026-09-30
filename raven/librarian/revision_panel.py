@@ -391,7 +391,7 @@ class DPGRevisionPanel:
             return
         self._cancel_focus_request()  # one still asking for the row the cursor left would pull the focus back
         with guiutils.nonexistent_ok():
-            dpg.focus_item(self._rows[maybe_idx][1])
+            guiutils.focus_item(self._rows[maybe_idx][1])
 
     def _cancel_focus_request(self) -> None:
         if self._focus_request is not None:

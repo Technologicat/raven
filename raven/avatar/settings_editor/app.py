@@ -1626,7 +1626,7 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_S:  # save animator settings
             show_save_animator_settings_dialog()
         elif key == dpg.mvKey_V:  # Shift, so that it cannot collide with pasting into the speech field
-            keyboardmark.focus(gui_instance.voice_choice)
+            guiutils.focus_item(gui_instance.voice_choice)
         # The record button. Not Ctrl+Shift+Space, which would pair with Ctrl+Space's speech field: IBus claims
         # that chord by default, as its input-method toggle, and the app never sees it.
         elif key == dpg.mvKey_Return:
@@ -1663,9 +1663,9 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_M:  # the avatar's stats alone; Ctrl+Shift+M also opens DPG's Metrics window, which only the mouse closes
             guiutils.toggle_checkbox("stats_checkbox")  # tag
         elif key == dpg.mvKey_E:
-            keyboardmark.focus(gui_instance.emotion_choice)
+            guiutils.focus_item(gui_instance.emotion_choice)
         elif key == dpg.mvKey_Spacebar:  # as Raven-librarian focuses its composer
-            keyboardmark.focus("speak_input_text")  # tag
+            guiutils.focus_item("speak_input_text")  # tag
         elif key == dpg.mvKey_S:
             if not gui_instance.speaking:
                 gui_instance.on_start_speaking(sender, app_data, "speak")  # emulate clicking the "Speak / Stop speaking" button (as opposed to the record/stop button)
@@ -1710,7 +1710,7 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
             for choice_widget, choice_data in combobox_choice_map.items():
                 if focused_item in guiutils.item_identifiers(choice_widget):
                     if key == dpg.mvKey_Escape:  # give the keyboard back, as every Raven app's Esc does
-                        keyboardmark.focus("fullscreen_button")  # tag  # a button is the safe place to park focus
+                        guiutils.focus_item("fullscreen_button")  # tag  # a button is the safe place to park focus
                     else:
                         browse(choice_widget, choice_data)
                     break

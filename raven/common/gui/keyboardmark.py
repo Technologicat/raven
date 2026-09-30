@@ -32,14 +32,13 @@ __all__ = ["COLOR", "PULSE_SECONDS",  # the vocabulary
            "join_pulse", "leave_pulse", "pulse_is_running",  # the one rhythm, for a widget that paints itself
            "DOT_GLYPH", "DOT_SLOT_W", "add_dot",  # the glyph a DOT mark lights
            "shield_tooltip",  # for a tooltip under a marked panel
-           "MarkKind", "Mark", "focus", "install_caret_follower", "install_focus_follower"]  # the mark as a component
+           "MarkKind", "Mark", "install_caret_follower", "install_focus_follower"]  # the mark as a component
 
 import logging
 logger = logging.getLogger(__name__)
 
 import enum
 import threading
-import time
 from collections.abc import Sequence
 
 from unpythonic import sym
@@ -473,60 +472,6 @@ class Mark:
         guiutils.maybe_delete_item(self._theme)
 
 
-# The programmatic focus change in flight, if any: `(identifiers of its target, deadline)`, the deadline as
-# `time.monotonic_ns()`. Set by `focus`, read by both followers through `_may_light`. One for the process,
-# there being one keyboard.
-_expected_focus: tuple[tuple, int] | None = None
-_expected_focus_lock = threading.Lock()
-_EXPECTED_FOCUS_WINDOW_NS = 150_000_000  # the transits measured in `dpg-notes.md` lasted 25-100 ms
-
-def focus(widget: str | int) -> None:
-    """`dpg.focus_item(widget)`, telling the followers where the focus is going. Callable from any thread.
-
-    Use it in place of `dpg.focus_item` for any move the followers could see: onto a widget a follower
-    marks, and just as much off one, parking the focus on a button. While the change is in flight, only
-    `widget` may light, and it lights the moment it has the focus; a widget the focus merely passes through
-    on the way stays dark. That lasts until `widget` has the focus, or for at most 150 ms — which is how a
-    park ends, a button wearing no mark to say it has arrived.
-    """
-    global _expected_focus
-    expectation = (guiutils.item_identifiers(widget), time.monotonic_ns() + _EXPECTED_FOCUS_WINDOW_NS)
-    with _expected_focus_lock:
-        _expected_focus = expectation
-    dpg.focus_item(widget)  # after the expectation is in place, so that no frame sees the move without it
-
-def _may_light(identifiers: tuple, holds: bool, t: int) -> bool:
-    """Whether a follower's mark on the widget known by `identifiers` is lit this frame, when `holds` says it has the keyboard.
-
-    `t`: the frame's time, as `time.monotonic_ns()`.
-    """
-    # A programmatic focus change is not instantaneous, and for a frame or two something else holds the
-    # focus — measured in `FileDialog`, mechanism not established (`dpg-notes.md`, "A focus change is not
-    # instantaneous"). A mark following the focus lights that something for as long, which reads as a
-    # flash on a control nobody touched. So while a change `focus` made is in flight, only its target may
-    # light; and the moment the target has the focus, the expectation ends, so that nothing the user does
-    # afterwards is held back by it.
-    #
-    # Locked, because `focus` writes this slot from whichever thread handles a key while the followers read
-    # and clear it here, on the render thread. Unlocked, a new expectation set between the read and the
-    # clear would be erased, and that move's transit would flash. A lock taken per frame in the render loop
-    # is safe here only because of what it guards: reading and replacing one tuple, with no DPG call and no
-    # waiting inside, so the render thread can be held up by nothing longer than that.
-    global _expected_focus
-    with _expected_focus_lock:
-        expected = _expected_focus
-        if expected is None:
-            return holds
-        expected_identifiers, deadline = expected
-        if t >= deadline:
-            _expected_focus = None
-            return holds
-        if set(identifiers).isdisjoint(expected_identifiers):
-            return False
-        if holds:
-            _expected_focus = None
-        return holds
-
 def install_caret_follower(widgets: Sequence[str | int],
                            kind: MarkKind = MarkKind.FRAME,
                            thickness: int = 2) -> gui_animation.Animation:
@@ -560,7 +505,7 @@ def install_caret_follower(widgets: Sequence[str | int],
         def render_frame(self, t: int) -> sym:
             for widget, identifiers, mark in marks:
                 with guiutils.nonexistent_ok():
-                    mark.lit = _may_light(identifiers, dpg.is_item_active(widget), t)
+                    mark.lit = guiutils.focus_arrived(identifiers, dpg.is_item_active(widget), t)
             return gui_animation.action_continue
 
         def finish(self) -> None:
@@ -580,8 +525,10 @@ def install_focus_follower(widgets: Sequence[str | int],
     marking rule is the routing rule, and neither needs restating at the call site. A text field wants
     `install_caret_follower` instead.
 
-    Move the focus onto one of `widgets` with `focus` rather than `dpg.focus_item`, so that a control the
-    focus passes through on the way is not marked for a frame or two.
+    Move the focus with `guiutils.focus_item` rather than `dpg.focus_item` — onto one of `widgets`, and just
+    as much off one, parking it on a button — so that a control the focus passes through on the way is not
+    marked for a frame or two. Both followers honour it; `gui_animation.give_caret` and `give_focus` go
+    through it already.
 
     `widgets`: DPG tags or IDs. A widget carrying a theme of its own wants a `Mark` on its enclosing group
                instead — see `Mark` — which this cannot express, since the widget that takes the focus and
@@ -603,7 +550,7 @@ def install_focus_follower(widgets: Sequence[str | int],
         def render_frame(self, t: int) -> sym:
             focused = dpg.get_focused_item()
             for identifiers, mark in marks:
-                mark.lit = _may_light(identifiers, focused in identifiers, t)
+                mark.lit = guiutils.focus_arrived(identifiers, focused in identifiers, t)
             return gui_animation.action_continue
 
         def finish(self) -> None:

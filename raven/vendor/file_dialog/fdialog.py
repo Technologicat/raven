@@ -3150,7 +3150,7 @@ class FileDialog:
         # `_focus_listing`: it has to be inside the listing's child window or the caret can never be
         # brought back. Which home has the keys is decided by `_caret_home`, not by what DPG considers
         # focused, so there is nothing for the focus itself to say.
-        dpg.focus_item(self.button_refresh)
+        guiutils.focus_item(self.button_refresh)
 
     def _focus_type_filter(self) -> None:
         """Hand the bare arrow keys to the file type combo, without handing it DPG's focus.

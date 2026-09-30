@@ -1535,7 +1535,7 @@ with timer() as tim:
                             # wants checking rather than assuming.) The chat panel is not an alternative —
                             # `dpg.focus_item` cannot focus a child window, and returns the caret to the
                             # composer when asked to; see `_build_initial_chat_view`.
-                            dpg.focus_item("chat_send_button")  # tag  # deactivate the input's ImGui edit buffer
+                            guiutils.focus_item("chat_send_button")  # tag  # deactivate the input's ImGui edit buffer
                             dpg.split_frame()
                             dpg.set_value("chat_field", "")  # tag  # field inactive now, so the clear sticks
 
@@ -2857,7 +2857,7 @@ def _give_keyboard_to_graph() -> None:
 
     Waits for frames while a text field lets go of the caret, so call it off the render thread.
     """
-    dpg.focus_item("chat_send_button")  # tag
+    guiutils.focus_item("chat_send_button")  # tag
     # Claimed only once neither field holds the caret. A field takes a couple of frames to let go, and the
     # per-frame check that hands the keys back when the composer is clicked into cannot tell a composer still
     # letting go from one just entered: claiming at once, as Tab from the composer did, was revoked on arrival.
@@ -3003,7 +3003,7 @@ def _give_keyboard_to_log() -> None:
     Enter rather than pressing itself.
     """
     _release_manual_keyboard_claims()
-    dpg.focus_item("chat_send_button")  # tag  # deactivate the composer's ImGui edit buffer
+    guiutils.focus_item("chat_send_button")  # tag  # deactivate the composer's ImGui edit buffer
 
 
 def librarian_hotkeys_callback(sender, app_data):
@@ -3704,7 +3704,7 @@ def _build_initial_chat_view() -> None:
         if librarian_config.startup_keyboard_home != "chat_log":
             logger.warning(f"_build_initial_chat_view: unknown `startup_keyboard_home` {librarian_config.startup_keyboard_home!r}; "
                            f"expected 'chat_log' or 'composer'. Starting in the chat log.")
-        dpg.focus_item("chat_send_button")  # tag
+        guiutils.focus_item("chat_send_button")  # tag
 
     # Report the LLM backend if it cannot answer yet, and keep watching until it can. Here rather than at
     # `connect` time because both the status row and the chat view the reconnect rebuilds are DPG widgets,

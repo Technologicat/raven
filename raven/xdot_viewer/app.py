@@ -347,7 +347,7 @@ def _give_keyboard_to_view() -> None:
     # ignores Space and Enter. Not on the view's own group: what `focus_item` does to a container is not
     # something to rely on — on a child window it activates the first navigable item inside, which can hand
     # the caret straight back (`dpg-notes.md`, "Keyboard input").
-    dpg.focus_item("next_match_button")  # tag
+    guiutils.focus_item("next_match_button")  # tag
 
 
 def _zoom_to_fit(*_args) -> None:
@@ -622,7 +622,7 @@ def _on_key(sender, app_data) -> None:
         elif key == dpg.mvKey_F:
             gui_animation.give_caret("search_input")  # tag
         elif key == dpg.mvKey_E:
-            keyboardmark.focus("filter_combo")  # tag
+            guiutils.focus_item("filter_combo")  # tag
     # *Active*, not *focused*: the caret really being in the search field is what must silence the bare
     # keys, or an `f` typed into a search would zoom the graph to fit instead of reaching the field.
     elif not dpg.is_item_active("search_input"):  # tag  # BARE KEYS - BE VERY CAREFUL HERE

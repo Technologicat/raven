@@ -776,7 +776,7 @@ class HelpWindow:
         # frame or two when this ran earlier.
         if self.on_show is not None:
             self.on_show()
-        dpg.focus_item(self._window)
+        guiutils.focus_item(self._window)
         logger.info("HelpWindow.show: Done.")
         return True
 

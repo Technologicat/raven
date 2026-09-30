@@ -180,7 +180,7 @@ class DPGAudioInputPanel:
         # and so is rarely the thing being changed. And a combo that holds the keyboard from the moment the
         # panel opens leaves Escape nowhere to step back to — so it closed the panel outright, where
         # everywhere else in the constellation the first Escape leaves the combo and the second closes.
-        dpg.focus_item("audio_input_measure_button")  # tag
+        guiutils.focus_item("audio_input_measure_button")  # tag
 
         # The readout is connected for as long as the panel is on screen, whatever the device is doing —
         # the panel is a view onto the recorder, so its meter follows the same stream the toolbar's does,
@@ -280,7 +280,7 @@ class DPGAudioInputPanel:
             # its type filter: leaving the combo and leaving the dialog are two different intentions, and
             # one key can serve both as long as it takes them in that order.
             if dpg.is_item_focused("audio_input_device_combo"):  # tag
-                dpg.focus_item("audio_input_measure_button")  # tag
+                guiutils.focus_item("audio_input_measure_button")  # tag
             else:
                 self.close()
         elif key == dpg.mvKey_M:
@@ -292,7 +292,7 @@ class DPGAudioInputPanel:
         elif key == dpg.mvKey_S:
             guiutils.toggle_checkbox("audio_input_autostop_checkbox")  # tag
         elif key == dpg.mvKey_D:
-            keyboardmark.focus("audio_input_device_combo")  # tag
+            guiutils.focus_item("audio_input_device_combo")  # tag
         elif key in (dpg.mvKey_Up, dpg.mvKey_Down, dpg.mvKey_Home, dpg.mvKey_End):
             return self._browse_devices(key)
         else:

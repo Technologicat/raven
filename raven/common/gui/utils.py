@@ -33,7 +33,9 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "wait_for_resize",
            "park_offscreen", "recenter_window",
 
-           "snap_slider", "toggle_checkbox", "release_caret", "set_input_text",
+           "snap_slider", "toggle_checkbox",
+           "focus_item", "focus_arrived",  # a focus change, and where the keyboard is while one is in flight
+           "release_caret", "set_input_text",
            "add_section_separator", "add_toolbar_separator",
 
            "get_pixels_per_plotter_data_unit"]
@@ -1101,6 +1103,67 @@ def toggle_checkbox(widget: str | int, callback: Callable | None = None) -> bool
         callback(*available[:n_parameters])
     return value
 
+# The programmatic focus change in flight, if any: `(identifiers of its target, deadline)`, the deadline as
+# `time.monotonic_ns()`. Set by `focus_item`, read and cleared by `focus_arrived`. One for the process, there
+# being one keyboard.
+_expected_focus: tuple[set, int] | None = None
+_expected_focus_lock = threading.Lock()
+_EXPECTED_FOCUS_WINDOW_NS = 150_000_000  # the transits measured in `dpg-notes.md` lasted 25-100 ms
+
+def focus_item(widget: str | int) -> None:
+    """`dpg.focus_item(widget)`, recording where the focus is going. Callable from any thread.
+
+    Use it in place of `dpg.focus_item`. While the change is in flight, `focus_arrived` answers `False` for every
+    widget but `widget`, so that a keyboard mark does not light on a control the focus merely passes through on
+    the way. That lasts until `widget` has the focus, or for at most 150 ms — which is how a park on a button
+    ends, nothing reporting its arrival there.
+
+    `raven.common.gui.animation.give_caret` and `give_focus` go through this, and so does `release_caret`.
+    """
+    global _expected_focus
+    expectation = (item_identifiers(widget), time.monotonic_ns() + _EXPECTED_FOCUS_WINDOW_NS)
+    with _expected_focus_lock:
+        _expected_focus = expectation
+    dpg.focus_item(widget)  # after the expectation is in place, so that no frame sees the move without it
+
+def focus_arrived(identifiers: set, holds: bool, t: int) -> bool:
+    """Whether the widget known by `identifiers` has the keyboard this frame, when DPG says `holds`.
+
+    `holds` unless a change `focus_item` made is in flight to some other widget. For whatever shows where the
+    keyboard is — `raven.common.gui.keyboardmark`'s followers — and meant to be asked once per frame, from the
+    render thread.
+
+    `identifiers`: from `item_identifiers`.
+    `holds`: whether DPG reports the widget as having the keyboard — focused, or for a text field, active.
+    `t`: the frame's time, as `time.monotonic_ns()`.
+    """
+    # A programmatic focus change is not instantaneous, and for a frame or two something else holds the
+    # focus — measured in `FileDialog`, mechanism not established (`dpg-notes.md`, "A focus change is not
+    # instantaneous"). A mark following the focus lights that something for as long, which reads as a
+    # flash on a control nobody touched. So while a change is in flight, only its target has arrived; and the
+    # moment the target has the focus, the expectation ends, so that nothing the user does afterwards is held
+    # back by it.
+    #
+    # Locked, because `focus_item` writes this slot from whichever thread handles a key while the followers
+    # read and clear it on the render thread. Unlocked, a new expectation set between the read and the clear
+    # would be erased, and that move's transit would flash. A lock taken per frame in the render loop is safe
+    # here only because of what it guards: reading and replacing one tuple, with no DPG call and no waiting
+    # inside, so the render thread can be held up by nothing longer than that.
+    global _expected_focus
+    with _expected_focus_lock:
+        expected = _expected_focus
+        if expected is None:
+            return holds
+        expected_identifiers, deadline = expected
+        if t >= deadline:
+            _expected_focus = None
+            return holds
+        if set(identifiers).isdisjoint(expected_identifiers):
+            return False
+        if holds:
+            _expected_focus = None
+        return holds
+
 #: How many frames `set_input_text` will wait for a text field to give up the caret before giving up on it.
 #: Two is what it takes (measured 2026-09-10); the rest is headroom, so that a change in DPG costs a log line
 #: rather than a hang.
@@ -1130,7 +1193,7 @@ def release_caret(field: str | int, *, park_focus_on: str | int) -> bool:
     #
     # See `dpg-notes.md`, "Keyboard input", and `investigations/dpg-focus/`.
     if dpg.is_item_active(field):
-        dpg.focus_item(park_focus_on)
+        focus_item(park_focus_on)
         # Wait for the deactivation rather than counting frames to it. Measured 2026-09-10 it takes two —
         # `focus_item` lands on the next frame, and the field gives up the caret on the one after — but a number
         # measured today is a number the next DPG release may falsify silently, where a wait cannot be wrong.

@@ -185,15 +185,13 @@ live on the Night.
   - `keyboardmark.focus` keeps a focus move's transit from lighting a mark on the way.
   - **Rejected:** a settle time before a mark lights, which would have delayed the feedback a fast typist
     steers by (maintainer); Ctrl+Shift+Space for record, which IBus claims.
-  - **Open:** the parks in Librarian, the Visualizer and the XDot viewer still use `dpg.focus_item`.
-    Filed in `TODO_DEFERRED.md` ("Focus parks and `give_caret` do not tell the keyboard marks where the focus
-    is going"), and queued below.
+  - The parks in Librarian, the Visualizer and the XDot viewer were left on `dpg.focus_item` that day; queue
+    item 3 below closed them.
 
 ## Queue, in order
 
-**What this sprint is for** (maintainer, 2026-09-30): fixing the issues the Night's demo found. As of
-2026-09-30 those are all done but item 3. Once item 3 is done, the time left before the 8th goes to pushing
-forward, with the items chosen from the roadmap overview (item 4) rather than decided here in advance.
+**What this sprint is for** (maintainer, 2026-09-30): fixing the issues the Night's demo found. All of
+them were done on 2026-09-30, item 3 last. The time left before the 8th goes to pushing forward, with the items chosen from the roadmap overview (item 4) rather than decided here in advance.
 
 1. **Done 2026-09-30.** **Make the tools cancellable, and the web tools fail in prose** — filed on the Night, 2026-09-25, in
    `TODO_DEFERRED.md` (`investigations/abort-inflight-request/`). Designed 2026-09-29 with the maintainer.
@@ -249,10 +247,18 @@ forward, with the items chosen from the roadmap overview (item 4) rather than de
    `librarian-extension/` stays open on purpose: 04–06 are a complete set, to be scheduled this autumn. The fifth, the AOKK
    investigation's, was closed by a separate session, its remaining generalization written up as two new
    briefs (maintainer, 2026-09-30).
-3. **Focus parks and `give_caret` tell the keyboard marks where the focus is going** — the deferred item of
-   that name. A restructure of the shared layer (the expectation state moves below `keyboardmark`) and seven
-   park sites. **Next, in a fresh session.** The last of the hammerspace this sprint has been working
-   through (maintainer, 2026-09-30).
+3. **Done 2026-09-30.** **Focus parks and `give_caret` tell the keyboard marks where the focus is going** —
+   the deferred item of that name. The last of the hammerspace this sprint has been working through
+   (maintainer, 2026-09-30).
+   - The expectation state moved into `guiutils`, as `focus_item` (records the target, then
+     `dpg.focus_item`) and `focus_arrived` (what the followers ask per frame). `guiutils` rather than
+     `gui_animation`, since `release_caret` lives there and parks too.
+   - `keyboardmark.focus` is gone rather than kept as a second spelling. `give_caret`, `give_focus`,
+     `FocusRequest`'s re-asks and `release_caret` go through `guiutils.focus_item`, and so does every other
+     programmatic focus move in the tree — the seven parks, the audio panel's and the revision panel's,
+     `FileDialog`'s park and the help card — so `dpg.focus_item` is now called in one place.
+   - Test: a park followed at once by `give_caret` lights the field on the next frame, with the park's hold
+     asserted first as the negative control; checked failing against a `give_caret` without the change.
 4. **A roadmap overview, as input for prioritizing the autumn** (decided 2026-09-30, after item 3). The
    backlog is several hundred items across `TODO.md`, `TODO_DEFERRED.md` and the briefs, and the maintainer
    knows roughly what the autumn holds but cannot see how to order it without an overview. So:

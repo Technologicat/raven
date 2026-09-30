@@ -1003,7 +1003,7 @@ class FocusRequest(Animation):
                 logger.debug(f"FocusRequest.render_frame: gave up giving '{self.widget}' {self.what}: it is no longer shown.")
                 return action_cancel
             self.frames_left -= 1
-            dpg.focus_item(self.widget)
+            guiutils.focus_item(self.widget)  # which also renews the expectation that keeps the marks dark in transit
             return action_continue
         return action_cancel  # reached only when the widget has gone away
 
@@ -1016,7 +1016,7 @@ def give_focus(widget: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) -
     Returns the `FocusRequest` the global `animator` runs, or `None` if the widget is not shown.
     """
     with guiutils.nonexistent_ok():
-        dpg.focus_item(widget)
+        guiutils.focus_item(widget)
         if guiutils.is_shown_all_the_way_up(widget):
             return animator.add(FocusRequest(widget, max_frames=max_frames, holds=lambda w: dpg.is_item_focused(w), what="the focus"))
     return None
@@ -1024,7 +1024,7 @@ def give_focus(widget: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) -
 def give_caret(field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) -> FocusRequest | None:
     """Put the caret in the text field `field` (DPG tag or ID), even if something else claims focus meanwhile.
 
-    Use in place of `dpg.focus_item` wherever the point is to let the user type. Asks at once, and then, while
+    Use in place of `dpg.focus_item` or `guiutils.focus_item` wherever the point is to let the user type. Asks at once, and then, while
     the field is shown, once per frame until it has stayed active for a few frames in a row, for at most
     `max_frames` frames of asking. A field that is not shown gets the single request and no more. Callable
     from any thread.
@@ -1037,7 +1037,7 @@ def give_caret(field: str | int, max_frames: int = _CARET_REQUEST_MAX_FRAMES) ->
     # looking at, so this is the defence against everything else that does. See
     # `investigations/dpg-focus/focus_request_vs_tooltip_probe.py`.
     with guiutils.nonexistent_ok():
-        dpg.focus_item(field)
+        guiutils.focus_item(field)
         if guiutils.is_shown_all_the_way_up(field):
             return animator.add(FocusRequest(field, max_frames=max_frames))
     return None

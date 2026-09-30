@@ -1242,8 +1242,11 @@ One observation bears on it (the maintainer, 2026-09-30, in the pose editor): pa
 has two followers, and which one a widget belongs to is not a matter of taste: **`install_focus_follower`
 for a combo or a listing, `install_caret_follower` for a text field**, whose focus says nothing about where
 the keys go. And a programmatic move the followers could see — onto a followed widget, or off one to park
-the focus on a button — goes through **`keyboardmark.focus(widget)`** rather than `dpg.focus_item`: while
-the move is in flight only its target may light, and it lights the frame it arrives. Without that, the control the focus passes through wears the mark for a frame or two —
+the focus on a button — goes through **`guiutils.focus_item(widget)`** rather than `dpg.focus_item`: while
+the move is in flight only its target may light, and it lights the frame it arrives. `give_caret`,
+`give_focus` and `release_caret` go through it too, so every programmatic move says where it is going — which
+matters, because a park followed at once by `give_caret` would otherwise hold the field's mark dark for the
+rest of the park's 150 ms window. Without that, the control the focus passes through wears the mark for a frame or two —
 seen 2026-09-30 in the pose editor, where Ctrl+B flashed the emotion preset combo on its way to the eyebrow
 one. The same day, a text field put on the focus follower lit on Esc instead of while typed into, and was
 fixed first by teaching the focus follower about text fields, duplicating the caret follower that already

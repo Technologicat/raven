@@ -1295,13 +1295,13 @@ def hotkeys_callback(sender, app_data):
         # *activates* it — so aiming at the panel was liable to hand the caret straight back to a text field.
         # A focused button is inert here (DPG leaves ImGui's keyboard-nav activation off, so it ignores Space
         # and Enter), which is what makes it a safe place to park.
-        dpg.focus_item("clear_search_button")  # tag
+        guiutils.focus_item("clear_search_button")  # tag
     # Tab moves the keyboard between the search field and the info panel, keeping what is typed, and Shift+Tab
     # does the same: with two places to be, both directions are the other one. Leaving parks focus where Enter
     # does, for the reason given there.
     elif key == dpg.mvKey_Tab and not ctrl_pressed:
         if dpg.is_item_active("search_field"):  # tag
-            dpg.focus_item("clear_search_button")  # tag
+            guiutils.focus_item("clear_search_button")  # tag
         else:
             gui_animation.give_caret("search_field")  # tag
     # Escape needs no branch of its own: ImGui's `InputText` cancels the edit *and* deactivates itself, and

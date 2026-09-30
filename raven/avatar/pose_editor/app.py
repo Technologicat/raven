@@ -919,16 +919,16 @@ class PoseEditorGUI:
             self.fps_text = dpg.add_text("FPS counter will appear here", color=(0, 255, 0))
 
     def focus_presets(self) -> None:
-        keyboardmark.focus(self.emotion_choice)
+        guiutils.focus_item(self.emotion_choice)
 
     # TODO: Add hotkeys for the non-morph control groups.
     def focus_morph_category(self, category: PoseParameterCategory) -> None:
         """Give the keyboard to one morph panel's chooser, for the arrow keys to browse. No-op if this character has no such panel."""
         if category in self.morph_control_panels:
-            keyboardmark.focus(self.morph_control_panels[category].choice)
+            guiutils.focus_item(self.morph_control_panels[category].choice)
 
     def focus_output_index(self) -> None:
-        keyboardmark.focus(self.output_index_choice)
+        guiutils.focus_item(self.output_index_choice)
 
     def on_pose_edited(self, sender, app_data) -> None:
         """Automatically choose the '[custom]' emotion preset (to indicate edited state) when the pose is manually edited."""
@@ -1412,7 +1412,7 @@ def pose_editor_hotkeys_callback(sender, app_data):
         for choice_widget, choice_data in combobox_choice_map.items():
             if focused_item in guiutils.item_identifiers(choice_widget):
                 if key == dpg.mvKey_Escape:  # give the keyboard back, as every Raven app's Esc does
-                    keyboardmark.focus(gui_instance.help_button)  # a button is the safe place to park focus
+                    guiutils.focus_item(gui_instance.help_button)  # a button is the safe place to park focus
                 else:
                     browse(choice_widget, choice_data)
                 break
