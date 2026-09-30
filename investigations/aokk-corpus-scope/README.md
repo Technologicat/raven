@@ -749,12 +749,12 @@ Generated at runtime and **not committed** — they list the contents of a corpu
 | `dropped.tsv` | every dropped record with a one-line reason — the reviewable half |
 | `drop-review-<from>-<to>.tsv` | one slice of that list re-read by `review_drops.py`, with the control mixed in and labelled only here |
 | `contested.tsv` | the hand-check list across every slice: each dropped record a case was made for, worst cell first, the judge's reason beside the reviewer's case, and an empty column to mark in |
-| `dropped-before-escalating-titles.tsv` | the drop list as it stood before every drop was escalated to pass 2. Kept because it is what defines which records that run touched, and the review above was measured against it |
+| `dropped-before-escalating-titles.tsv` | the drop list as it stood before every drop was escalated to pass 2. Kept because it is what defines which records that run touched, and the review above was measured against it. Superseded as a drop list by `dropped.tsv`, and read only by `check_escalation.py` |
 | `extracted-<instrument>.jsonl`, `-traces.jsonl` | the extracted fields per record, and the reasoning traces — one entry per model call, naming the keys that shared it, since a batched call yields one trace for the batch. The name is a hash of the vocabularies and the prompt together, so a run under a changed extractor writes its own file and reading one run's results is opening one file |
 | `extracted.jsonl` | the first extraction, from before that naming. Left as it is rather than renamed: it holds answers from two instruments, which is the state the naming exists to prevent, and `filter_keeps.py` says so if pointed at it |
 | `<corpus>_in_scope_filtered.bib` | the in-scope corpus with the ruled-out keeps taken out. Written beside the judge's output rather than over it, so the corpus of record does not move until somebody decides it should |
 | `filtered-out.tsv` | every record the filter removed, with the fields and the quoted evidence that removed it |
-| `held-for-review.tsv` | the tiers held back for a person, sorted by tier: `not_applicable` with nothing corroborating it, where the extraction's errors are, and the learning that happens outside an institution, where the scope question is |
+| `held-for-review.tsv` | the tiers held back for a person, sorted by tier: `not_applicable` with nothing corroborating it, where the extraction's errors land when it makes them, and the learning that happens outside an institution, where the scope question is |
 
 ## Reproducing
 
