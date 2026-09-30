@@ -129,6 +129,24 @@ Six of the seven questions below, settled in discussion with Juha. Question 5 is
     things: to build its outputs from a *named* instrument's answers without asking anything (the replay),
     and to have a run under a new instrument re-ask rather than reuse them, since they are different
     measurements.
+  - **The model is part of the instrument** (Juha, 2026-09-30), so the fingerprint hashes the model's id
+    and quantization along with the prompt. Without them, switching models would silently reuse the old
+    model's answers as current. LM Studio reports both per model; `llmclient._format_lmstudio_model_label`
+    already reads them for Librarian's model identity, and the loaded context length with them.
+    - **Record the whole load configuration LM Studio reports**, from `/api/v1/models` rather than the
+      `/api/v0/models` that `llmclient` reads. Checked against a live instance on 2026-09-30: `v1` gives
+      each loaded instance's `config` — context length, batch sizes, `parallel`, flash attention,
+      speculative decoding and its draft settings, KV cache offload — beside the quantization's name and
+      bits per weight. Which of these can change an answer is not established here, and taking the
+      whole block into the report header costs nothing and settles nothing prematurely. Whether the
+      fingerprint hashes all of it, or only id and quantization, wants deciding when this is built.
+    - **What the backend does not report has to be declared.** The KV cache quantization is the known
+      case: the same check found no field for it anywhere in the `v1` listing, and it is set by hand (the
+      maintainer runs `q4_0`, since the context that fits otherwise is too short to be useful). So a run
+      takes a free-text declaration of such settings, which goes into the fingerprint and into every
+      report's header. Unstated, the report says so, rather than implying there was nothing to state.
+    - A generic OpenAI-compatible backend reports neither id nor quantization reliably. There the stamp
+      records what it could learn and says what it could not, on the same principle.
 - **The backend policy (4): on any failure, probe the backend once, and stop if it is the backend.**
   `llmclient.reconnect(settings)` re-probes and returns a `backend_status`. Anything other than
   `backend_ready` stops the run, with `describe_backend_status`'s message, which is the wording batch

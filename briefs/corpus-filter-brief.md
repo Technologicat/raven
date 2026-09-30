@@ -102,3 +102,24 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
      since the prototype's run (1296 clusters and 1767 removed on 2026-08-31, 1295 and 1763 on
      2026-09-30, cause not yet traced) — so the methodology numbers come from one run of one named
      version, not from mixing the two.
+7. **A `sample` option on every model-driven tool** (Juha, 2026-09-30): run a stage over a seeded random
+   sample of its input instead of all of it. Three uses, and the first is why it exists:
+   - **Test-retest reliability.** Run the final judge twice over the same sample — a few hundred records —
+     and report how often the two runs agree. That is a reliability figure for an LLM judge, which is one
+     of the methodology questions the project is asking. The two runs must draw the *same* records, so
+     the sample is seeded and the seed goes into the report header. The second run must also re-ask
+     rather than read the first run's ledger, so the replicate needs a ledger of its own, or a
+     replicate number in the instrument stamp; which of the two is open.
+   - **The agreed sanity checks** (`investigations/aokk-corpus-scope/README.md`, *"Open: is the off-topic
+     rate too low to believe?"*) sample each stage's output for hand-checking.
+   - **Calibration**, which is the prototype's `--pilot N --seed S` under a general name.
+
+## The final study's numbers
+
+**Recommended, not yet decided: re-run the judge with the finished tools** for the published numbers,
+rather than replaying the prototype's answers. A day or two of GPU time, unattended. The prototype's
+instrument changed while it ran — the escalation rule widened, and pass 2's prompt was fixed partway
+(`judged-before-prompt-fix.jsonl` holds the answers from before) — so its answers describe a
+development history rather than one procedure a methods section can state and a reviewer can repeat.
+The replay (question 6) stays useful for building and checking the reports cheaply. The sanity checks
+then run on the final pipeline's output, not on the prototype's.
