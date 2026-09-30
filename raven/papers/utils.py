@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-__all__ = ["deduplicate_arxiv_ids", "bibtex_escape", "bibtex_unescape"]
+__all__ = ["deduplicate_arxiv_ids", "bibtex_escape", "bibtex_unescape",
+           "tsv_cell", "write_tsv"]
 
+import csv
+import pathlib
+import re
+from collections.abc import Iterable
 
 from . import identifiers
 
@@ -67,3 +72,29 @@ def bibtex_unescape(s: str) -> str:
     s = s.replace(r"\{", "{")
     s = s.replace("\\\\", "\\")
     return s
+
+
+def tsv_cell(value: object) -> str:
+    """`value` as one TSV cell: every run of whitespace, tabs and newlines included, collapsed to a space.
+
+    A tab would end the cell and a newline the row, so a cell carrying either would misalign the file.
+    """
+    return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def write_tsv(path: pathlib.Path,
+              comments: Iterable[str],
+              columns: Iterable[str],
+              rows: Iterable[Iterable[object]]) -> None:
+    """Write a TSV report: a `# ` line per comment, then the column header, then one line per row.
+
+    Every cell goes through `tsv_cell`, so each row is one line. A cell containing a `"` is quoted, with
+    the `"` doubled — the CSV convention a spreadsheet's import follows, which reads a bare `"` as the start
+    of a quoted cell and runs it on into the rows below.
+    """
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        for comment in comments:
+            f.write(f"# {tsv_cell(comment)}\n")
+        writer = csv.writer(f, delimiter="\t", quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
+        writer.writerow([tsv_cell(column) for column in columns])
+        writer.writerows([tsv_cell(cell) for cell in row] for row in rows)

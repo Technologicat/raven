@@ -104,6 +104,7 @@ from ..common import text as textutil
 from . import bibtex
 from . import config as papers_config
 from . import fixbib
+from . import utils as papers_utils
 
 logger = logging.getLogger(__name__)
 
@@ -663,7 +664,7 @@ def _describe_for_judge(record: Record) -> str:
                         ("booktitle", "booktitle"), ("publisher", "publisher"), ("doi", "doi")):
         value = record.field(name)
         if value:
-            parts.append(f"{label}: {_tsv_cell(value)[:200]}")
+            parts.append(f"{label}: {papers_utils.tsv_cell(value)[:200]}")
     return "\n".join(f"    {part}" for part in parts)
 
 
@@ -917,7 +918,7 @@ def _venue_of(record: Record) -> str | None:
     for name in ("journal", "booktitle", "publisher"):
         value = record.field(name)
         if value:
-            return _tsv_cell(value)[:200]
+            return papers_utils.tsv_cell(value)[:200]
     return None
 
 
@@ -954,7 +955,7 @@ def _describe_work_for_judge(record: Record) -> str:
     for label, name in (("authors", "author"), ("year", "year")):
         value = record.field(name)
         if value:
-            parts.append(f"{label}: {_tsv_cell(value)[:200]}")
+            parts.append(f"{label}: {papers_utils.tsv_cell(value)[:200]}")
     return "\n".join(f"      {part}" for part in parts)
 
 
@@ -1200,24 +1201,19 @@ class AuditRow:
     differences: tuple[str, ...]
 
     def to_row(self) -> tuple[str, ...]:
-        """The cells of this row, in `AUDIT_COLUMNS` order, safe to join with tabs."""
-        return tuple(_tsv_cell(cell) for cell in (self.kept,
-                                                  "; ".join(self.removed),
-                                                  "+".join(self.matched_by),
-                                                  str(self.size),
-                                                  self.title,
-                                                  "; ".join(self.dois),
-                                                  " | ".join(self.differences)))
-
-
-def _tsv_cell(value: str) -> str:
-    """One TSV cell: no tabs, no newlines, no carriage returns, since those end a cell or a row."""
-    return re.sub(r"\s+", " ", str(value)).strip()
+        """The cells of this row, in `AUDIT_COLUMNS` order."""
+        return (self.kept,
+                "; ".join(self.removed),
+                "+".join(self.matched_by),
+                str(self.size),
+                self.title,
+                "; ".join(self.dois),
+                " | ".join(self.differences))
 
 
 def _clip(value: str) -> str:
     """`value` shortened to something an audit row can carry."""
-    value = _tsv_cell(value)
+    value = papers_utils.tsv_cell(value)
     return value if len(value) <= papers_config.audit_value_chars else value[:papers_config.audit_value_chars - 1] + "…"
 
 
@@ -1342,7 +1338,7 @@ def merge_cluster(cluster: Cluster, rejected: frozenset[str] = frozenset()) -> t
                    removed=tuple(record.key for record in cluster.records[1:]),
                    matched_by=cluster.rules,
                    size=len(cluster.records),
-                   title=_tsv_cell(base.display_title),
+                   title=papers_utils.tsv_cell(base.display_title),
                    dois=tuple(dois),
                    differences=tuple(differences))
     return merged, row
@@ -1373,13 +1369,13 @@ def write_audit(path: pathlib.Path, rows: list[AuditRow], sources: list[str]) ->
     The version stamp is what makes the file citable: a method section says which tool produced these
     numbers, and "the script said so" is not a method section.
     """
-    lines = [f"# raven-deduplicate {__version__}",
-             f"# input: {'; '.join(sources)}",
-             f"# clusters merged: {len(rows)}",
-             f"# records removed: {sum(len(row.removed) for row in rows)}",
-             "\t".join(AUDIT_COLUMNS)]
-    lines += ["\t".join(row.to_row()) for row in rows]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    papers_utils.write_tsv(path,
+                           [f"raven-deduplicate {__version__}",
+                            f"input: {'; '.join(sources)}",
+                            f"clusters merged: {len(rows)}",
+                            f"records removed: {sum(len(row.removed) for row in rows)}"],
+                           AUDIT_COLUMNS,
+                           [row.to_row() for row in rows])
 
 
 def _report(records: list[Record],

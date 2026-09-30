@@ -119,6 +119,10 @@
 - **In the settings editor, the speech field's blue mark shows while you type in it.** In v0.2.9 it was dark while the field had the cursor and came on after Esc.
 - **In both avatar editors, a key that moves to a chooser no longer flashes the mark on another one for a moment** on the way.
 
+#### Raven-deduplicate
+
+- **The audit opens in a spreadsheet with every row intact**, and so does `raven-siftbib`'s. A title containing a `"` could merge rows on import in LibreOffice; such cells are now quoted.
+
 #### Constellation-wide
 
 - **Tab in the file dialog no longer lights up the path field for a moment.**

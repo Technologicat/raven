@@ -52,6 +52,7 @@ from ..common import utils as common_utils
 from .. import __version__
 
 from . import bibtex
+from . import utils as papers_utils
 
 logger = logging.getLogger(__name__)
 
@@ -192,13 +193,13 @@ def write_audit(path: pathlib.Path, dropped: list[DroppedRecord],
     The header is what makes the file citable: a method section says which tool removed these records and
     on what test, and "the script said so" is not a method section.
     """
-    lines = [f"# raven-siftbib {__version__}",
-             f"# input: {'; '.join(sources)}",
-             f"# kept records satisfying: {'; '.join(criterion.describe for criterion in criteria)}",
-             f"# records removed: {len(dropped)}",
-             "\t".join(AUDIT_COLUMNS)]
-    lines += ["\t".join((record.key, record.reason, record.title, record.venue)) for record in dropped]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    papers_utils.write_tsv(path,
+                           [f"raven-siftbib {__version__}",
+                            f"input: {'; '.join(sources)}",
+                            f"kept records satisfying: {'; '.join(criterion.describe for criterion in criteria)}",
+                            f"records removed: {len(dropped)}"],
+                           AUDIT_COLUMNS,
+                           [(record.key, record.reason, record.title, record.venue) for record in dropped])
 
 
 def _report(kept: int, dropped: list[DroppedRecord], criteria: list[Criterion]) -> None:
