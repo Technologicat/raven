@@ -168,6 +168,7 @@ class DPGAvatarRenderer:
         self.image_h = None  # height of current texture/frame, in pixels; set by `configure_live_texture`
         self.full_w = None  # width of the full (uncropped) output, in pixels; from the X-Full-Size header
         self.full_h = None  # height of the full (uncropped) output, in pixels; from the X-Full-Size header
+        self.display_scale = 1.0  # how much larger than the frame the avatar is drawn; see `set_display_scale`
         self.crop_bbox: Mapping[str, Any] = NO_CROP  # current crop bbox; updated per-frame from the X-Crop header. `NO_CROP` is a `frozendict`; per-frame values from the wire are plain dicts.
         self.first_frame_received = False  # set True once at least one frame of the current stream has been processed; reset by `start`. Gates overlay visibility (so the warmup state doesn't show a stale full-bbox outline), and answers whether there is a picture to show at all.
         self.avatar_x_center = avatar_x_center
@@ -395,22 +396,23 @@ class DPGAvatarRenderer:
                 panel_w, panel_h = guiutils.get_widget_size(self.gui_parent)
             panel = (parent_x0, parent_y0, parent_x0 + panel_w, parent_y0 + panel_h)
 
-            full_x_left = parent_x0 + self.avatar_x_center - (self.full_w // 2)
-            full_y_top = parent_y0 + self.avatar_y_bottom - self.full_h
+            shown_full_w, shown_full_h = self._shown_full_size()
+            full_x_left = parent_x0 + self.avatar_x_center - (shown_full_w // 2)
+            full_y_top = parent_y0 + self.avatar_y_bottom - shown_full_h
 
             left, top, right, bottom = (effective["left"], effective["top"],
                                         effective["right"], effective["bottom"])
-            x1 = int(full_x_left + left * self.full_w)
-            x2 = int(full_x_left + right * self.full_w)
-            y1 = int(full_y_top + top * self.full_h)
-            y2 = int(full_y_top + bottom * self.full_h)
+            x1 = int(full_x_left + left * shown_full_w)
+            x2 = int(full_x_left + right * shown_full_w)
+            y1 = int(full_y_top + top * shown_full_h)
+            y2 = int(full_y_top + bottom * shown_full_h)
 
             drawlist = self.crop_overlay_drawlist_gui_widget
             mask_color = (0, 0, 0, 96)  # dark, ~38% alpha
             transparent = (0, 0, 0, 0)
             outline_color = (255, 220, 60, 220)
-            full_x_right = full_x_left + self.full_w
-            full_y_bottom = full_y_top + self.full_h
+            full_x_right = full_x_left + shown_full_w
+            full_y_bottom = full_y_top + shown_full_h
 
             def draw_clipped_rect(rx1, ry1, rx2, ry2):
                 """Intersect a filled mask rect with the panel and draw. Skips empty intersections."""
@@ -649,6 +651,8 @@ class DPGAvatarRenderer:
         first_time = (self.live_image_widget is None)
         logger.info(f"DPGAvatarRenderer.configure_live_texture: Creating new GUI item avatar_live_image_{new_texture_id}")
         self.live_image_widget = dpg.add_image(f"avatar_live_texture_{new_texture_id}",  # tag
+                                               width=round(new_w * self.display_scale),
+                                               height=round(new_h * self.display_scale),
                                                show=self.animator_running,  # if paused, leave it hidden (note that we're initially paused when the `DPGAvatarRenderer` instance is created!)
                                                tag=f"avatar_live_image_{new_texture_id}",
                                                parent=self.gui_parent,
@@ -677,6 +681,30 @@ class DPGAvatarRenderer:
                     self.crop_bbox["right"], self.crop_bbox["bottom"])
         return (0.0, 0.0, 1.0, 1.0)
 
+    def _shown_full_size(self) -> Tuple[int, int]:
+        """The full (uncropped) frame's size as drawn on screen: `(full_w, full_h)` times `display_scale`."""
+        return round(self.full_w * self.display_scale), round(self.full_h * self.display_scale)
+
+    def set_display_scale(self, scale: float) -> None:
+        """Draw the avatar `scale` times the size of the frames it receives. `1.0` draws them 1:1.
+
+        For a panel larger than the frames the server is asked for: DPG enlarges the texture bilinearly
+        on the GPU, which costs nothing per frame, where a larger server-side upscale costs network bandwidth
+        and postprocessing time. Everything placed by the frame's size — the avatar itself, the crop overlay,
+        the paused text — follows.
+        """
+        if scale == self.display_scale:
+            return
+        logger.info(f"DPGAvatarRenderer.set_display_scale: {self.display_scale} -> {scale}")
+        self.display_scale = scale
+        if self.live_image_widget is None or self.image_w is None:  # nothing drawn yet; `configure_live_texture` applies it
+            return
+        with guiutils.nonexistent_ok():
+            dpg.configure_item(self.live_image_widget,
+                               width=round(self.image_w * scale),
+                               height=round(self.image_h * scale))
+        self.reposition()
+
     def _reposition_paused_text(self) -> None:
         """Center the paused text on the backdrop if it exists, otherwise center it on the avatar video."""
         if self.backdrop_last_configured_image is not None:
@@ -684,7 +712,7 @@ class DPGAvatarRenderer:
             y_center = self.backdrop_height // 2
         else:
             x_center = self.avatar_x_center
-            y_center = self.avatar_y_bottom - (self.full_h // 2)  # center of the full (uncropped) square, where the avatar would be
+            y_center = self.avatar_y_bottom - (self._shown_full_size()[1] // 2)  # center of the full (uncropped) square, where the avatar would be
         logger.info(f"DPGAvatarRenderer._reposition_paused_text: Updating paused text position to x_center = {x_center}, y_center = {y_center}")
         w_text, h_text = guiutils.get_widget_size(self.paused_text_gui_widget)
         dpg.set_item_pos(self.paused_text_gui_widget,
@@ -723,15 +751,17 @@ class DPGAvatarRenderer:
         w, h = guiutils.get_widget_size(self.gui_parent)
         logger.info(f"DPGAvatarRenderer.reposition: Gui parent is at ({x0}, {y0}), and has size {w}x{h}")
 
-        # The avatar video widget occupies a rectangle of size (image_w, image_h), positioned so that its
-        # bbox maps onto the region the full (uncropped) square would have occupied. With the full bbox
+        # The avatar video widget occupies a rectangle of size (image_w, image_h) times `display_scale`,
+        # positioned so that its bbox maps onto the region the full (uncropped) square would have occupied,
+        # at the same scale. With the full bbox
         # (no crop), this simplifies to: widget centered horizontally at avatar_x_center, bottom aligned
         # with avatar_y_bottom.
         left, top, _, _ = self._effective_bbox()
-        full_x_left = self.avatar_x_center - (self.full_w // 2)
-        full_y_top = self.avatar_y_bottom - self.full_h
-        x_left = int(full_x_left + left * self.full_w)
-        y_top = int(full_y_top + top * self.full_h)
+        shown_full_w, shown_full_h = self._shown_full_size()
+        full_x_left = self.avatar_x_center - (shown_full_w // 2)
+        full_y_top = self.avatar_y_bottom - shown_full_h
+        x_left = int(full_x_left + left * shown_full_w)
+        y_top = int(full_y_top + top * shown_full_h)
         with guiutils.nonexistent_ok() as nok:
             dpg.set_item_pos(self.live_image_widget, (x_left, y_top))
 

@@ -717,10 +717,20 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
                     emotion_blacklist=["desire", "love"],  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
                     emotion_autoreset_interval=3.0,  # seconds, or `None` to disable; if the avatar is not speaking, and has been idle for at least this long since the last time the emotion was updated, emotion returns to "neutral".
                     idle_off_timeout=15.0,  # seconds, or `None` to disable; how long of no activity before the avatar video shuts off (until it is needed again).
+                    # The avatar is drawn at 98% of its panel's height, whatever the panel's size. Up to the
+                    # "upscale" ceiling below, the server makes frames that size; past it, frames stay at the
+                    # ceiling, and this says how the client enlarges them to fill the panel. DPG enlarges
+                    # bilinearly, which costs nothing per frame, where raising "upscale" would cost network
+                    # bandwidth and postprocessing time on every frame.
+                    #   "fit": to the full size, by whatever factor that takes.
+                    #   "integer": by a whole factor only (2x, 3x, ...), which looks sharper; so a panel
+                    #              somewhat taller than the ceiling leaves the avatar at the ceiling.
+                    #   "off": never; the avatar stays at the ceiling however large the panel.
+                    display_scaling="fit",
                     # Since we're running also other stuff simultaneously, these settings have been optimized to be slightly friendlier on a laptop's internal dGPU than the defaults of `raven-avatar-settings-editor`.
                     animator_settings_overrides={"format": "QOI",
                                                  "target_fps": 20,
-                                                 "upscale": 1.5,
+                                                 "upscale": 1.5,  # a ceiling: the most the server upscales, times `source_image_size`. A smaller panel gets a smaller upscale.
                                                  "upscale_preset": "C",  # "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
                                                  # `UPSCALE_QUALITIES` in `raven/common/video/upscaler.py` is the definitive list; this summary is here so the file reads on its own.
                                                  "upscale_quality": "bicubic",  # "low": anime4k fast, acceptable image quality; "high": anime4k slow, good image quality; "bilinear": lightning-fast, bad quality; "bicubic": very fast, often acceptable quality; "lanczos": fast, sharper than bicubic.

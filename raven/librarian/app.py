@@ -40,6 +40,7 @@ with timer() as tim:
     import atexit
     import concurrent.futures
     import json
+    import math
     import os
     import pathlib
     import platform
@@ -348,17 +349,42 @@ print()
 # constellation keeps them; `_is_busy` below is what reads the second, and the render loop the first.
 
 
-def _fitted_avatar_upscale(avatar_panel_h: int) -> float:
-    """The avatar's upscale factor for a panel `avatar_panel_h` pixels tall: the configured one, or less where that would not fit.
+# How much of the avatar panel's height the avatar takes, whatever the panel's size. At the window's design
+# size this is within a pixel of what the avatar has always been drawn at there.
+_AVATAR_PANEL_FILL = 0.98
 
-    The image is anchored 8 px above the panel's bottom, and the panel has 8 px of border at the top, so it fits
-    in `avatar_panel_h - 16`. The factor is a whole number of pixels over the source size: the server makes the
-    frame `int(upscale * source_image_size)` pixels, and a pixel count over 512 is exact in floating point, so the
+def _avatar_target_size(avatar_panel_h: int) -> int:
+    """The height, in pixels, the avatar should be drawn at in a panel `avatar_panel_h` pixels tall."""
+    return int(_AVATAR_PANEL_FILL * avatar_panel_h)
+
+def _fitted_avatar_upscale(avatar_panel_h: int) -> float:
+    """The avatar's upscale factor for a panel `avatar_panel_h` pixels tall: the one that fills it, up to the configured ceiling.
+
+    The factor is a whole number of pixels over the source size: the server makes the frame
+    `int(upscale * source_image_size)` pixels, and a pixel count over 512 is exact in floating point, so the
     texture is exactly that size.
     """
     source = librarian_config.avatar_config.source_image_size
-    configured = int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * source)
-    return min(configured, avatar_panel_h - 16) / source
+    ceiling = int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * source)
+    return min(ceiling, _avatar_target_size(avatar_panel_h)) / source
+
+def _avatar_display_scale(avatar_panel_h: int) -> float:
+    """How much larger than its frames the avatar is drawn in a panel `avatar_panel_h` pixels tall. `1.0` is 1:1.
+
+    Above 1 only where the panel wants the avatar larger than the configured ceiling lets the server make
+    it, and then as `avatar_config.display_scaling` says: to the full size ("fit"), by a whole factor only
+    ("integer"), or not at all ("off").
+    """
+    frame_size = int(_fitted_avatar_upscale(avatar_panel_h) * librarian_config.avatar_config.source_image_size)
+    wanted = _avatar_target_size(avatar_panel_h) / frame_size
+    mode = librarian_config.avatar_config.display_scaling
+    if mode == "fit":
+        return max(1.0, wanted)
+    if mode == "integer":
+        return float(max(1, math.floor(wanted)))
+    if mode == "off":
+        return 1.0
+    raise ValueError(f"_avatar_display_scale: unknown `avatar_config.display_scaling` {mode!r}; expected 'fit', 'integer' or 'off'")
 
 # The search field's width before the row has been laid out, when the controls beside it cannot be measured yet.
 # Chosen rather than measured: `_resize_search_row` replaces it with the width that fills the row.
@@ -1741,6 +1767,7 @@ with timer() as tim:
                                                             executor=bg)
                     # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
                     _initial_image_size = int(_fitted_avatar_upscale(avatar_panel_h) * librarian_config.avatar_config.source_image_size)
+                    dpg_avatar_renderer.set_display_scale(_avatar_display_scale(avatar_panel_h))
                     dpg_avatar_renderer.configure_live_texture(_initial_image_size, _initial_image_size)
 
                     # Status indicators stack top-down via a vertical parent group anchored at (16, 16).
@@ -2730,8 +2757,10 @@ def _resize_panels() -> None:
                                            new_height=avatar_panel_h - 16,
                                            new_blur_state=blur_state)
 
-    # The avatar's size follows the panel's height: the configured upscale where it fits, and less where it would
-    # not. Sent only when it changes, since a new size reconfigures the server's upscaler.
+    # The avatar's size follows the panel's height: the server makes it that size up to the configured ceiling,
+    # and the client draws the ceiling's frames larger past it. The upscale is sent only when it changes, since
+    # a new size reconfigures the server's upscaler; the display scale costs nothing to set.
+    dpg_avatar_renderer.set_display_scale(_avatar_display_scale(avatar_panel_h))
     upscale = _fitted_avatar_upscale(avatar_panel_h)
     if _animator_settings is not None and upscale != _animator_settings["upscale"]:
         logger.info(f"_resize_panels: avatar upscale {_animator_settings['upscale']} -> {upscale}, to fit a panel {avatar_panel_h} px tall.")

@@ -710,6 +710,8 @@ Furthermore, we provide a realtime video postprocessor implemented in Torch, whi
 
 *Raven-avatar* also comes with an Anime4K upscaler, and a realtime [QOI](https://qoiformat.org/) encoder that is 30× faster than PNG. These together allow modern output resolutions to work in realtime.
 
+The avatar fills its panel's height, however large the window. The server makes it at most the size its `upscale` setting allows (768 pixels, by default); in a larger panel, *Raven-librarian* draws those frames larger itself, which costs no extra network bandwidth or server time. `display_scaling` in `raven.librarian.config` says how: to fill the panel exactly (`"fit"`, the default), by whole factors only, which looks sharper (`"integer"`), or not at all (`"off"`). For more detail at a large size, raise `upscale` instead, at the cost of both.
+
 The default character (Aria) comes with a full set of extra cels, for documentation. For more details on the avatar subsystem, see [Raven-avatar user manual](../avatar/README.md).
 
 

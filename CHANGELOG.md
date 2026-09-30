@@ -45,6 +45,8 @@
 #### Raven-librarian
 
 - **A window wider than its default size gives the extra width to the chat graph**, or to the avatar panel when it is showing. The chat log stays at its default width, and a narrower window still takes the difference from it. In v0.2.9 all the extra width went to the chat log.
+- **The avatar grows with a large window.** It fills its panel's height, as it did at the default size; past the size the server makes it at, Librarian enlarges the frames itself, at no extra cost in network bandwidth or server time. In v0.2.9 it stopped growing at that size.
+  - `display_scaling` in `raven.librarian.config` chooses how: to fit the panel exactly (`"fit"`, the default), by whole factors only, which looks sharper (`"integer"`), or not at all (`"off"`).
 - **The avatar panel's DOCS and WEB indicators now read DOCUMENTS and INTERNET**, as the toggles below them are called.
 - **In those indicators, only the icon pulsates now.** The names hold still, in their row's colour. In v0.2.9 some rows pulsated their name as well and some did not.
 - **Sending an empty message answers your own last message**, when the chat ends on one — whatever `llm_allow_empty_send` says. It is how to ask a question again after deleting its replies, which v0.2.9 had no way to do with the setting off. The same holds when the chat ends on a tool result: the AI goes on from the results it has. With the chat ending on an AI reply, the setting still decides. In `raven-minichat` too.

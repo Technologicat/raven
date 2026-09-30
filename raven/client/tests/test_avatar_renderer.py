@@ -63,7 +63,9 @@ def renderer(dpg_context, monkeypatch):
     # `_reposition_paused_text` centres on the backdrop when there is one and on the video otherwise; no
     # backdrop here, so it takes the second branch and wants the video's own geometry.
     instance.backdrop_last_configured_image = None
+    instance.full_w = 8
     instance.full_h = 8
+    instance.display_scale = 1.0
     instance.first_frame_received = True  # a stream that is past its warmup, which is the ordinary case
 
     yield instance, calls, live_image
