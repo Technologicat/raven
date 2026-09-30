@@ -4,25 +4,21 @@
 
 The heavy lifting is done by `raven.common.docextract` (PDF text extraction) and an OpenAI compatible LLM.
 
-USAGE:
+The command line is `raven-pdf2bib`, in `raven.papers.pdf2bib_cli`, which calls `run`.
 
-    python pdf_abstracts_to_bibtex.py -o done 1>entries.bib
-
-This will write `entries.bib`, and move the input PDFs into the `done` subdirectory as they are processed.
-This allows easily continuing later, if there are lots of input files. A file is moved if and only if it was
-successfully processed, AFTER printing its bibtex entry.
+With `-o done`, each input PDF is moved into `done` as it is processed, which allows easily continuing later
+if there are lots of input files. A file is moved if and only if it was successfully processed, AFTER
+printing its BibTeX entry.
 """
 
 __all__ = ["full_output_trace", "extract", "setup_prompts",
 
            "listpdf", "process_one", "process_abstracts",
 
-           "main"]
+           "run"]
 
 import logging
 logger = logging.getLogger(__name__)
-
-from .. import __version__
 
 import argparse
 import collections
@@ -47,7 +43,6 @@ from ..common import utils as common_utils
 
 from ..librarian import agent
 from ..librarian import chatutil
-from ..librarian import config as librarian_config
 from ..librarian import llmclient
 
 from .utils import bibtex_escape
@@ -1045,38 +1040,10 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
 # --------------------------------------------------------------------------------
 # Main program
 
-def main():
-    parser = argparse.ArgumentParser(description="""Convert PDF conference abstracts into a BibTeX database. Extracts the PDF text and processes it with an OpenAI compatible LLM.""",
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-
-    parser.add_argument("--backend-url", dest="backend_url", default=librarian_config.llm_backend_url, type=str, metavar="url", help=f"LLM backend to talk to, overriding the configured one (default: '{librarian_config.llm_backend_url}').")
-    parser.add_argument("--server-url", dest="server_url", default=None, type=str, metavar="url", help=f"Raven server to talk to, overriding the configured one (default: '{client_config.raven_server_url}'). Used for dehyphenating extracted abstracts.")
-
-    conf = parser.add_argument_group("conference info", "Metadata for the conference; injected into all generated BibTeX entries.")
-    conf.add_argument("--slug", dest="conference_slug", required=True, type=str, metavar="SLUG", help="Short conference identifier for BibTeX entry keys (e.g. ECCOMAS2024).")
-    conf.add_argument("--year", dest="conference_year", required=True, type=str, metavar="YEAR", help="Conference year (e.g. 2024).")
-    conf.add_argument("--booktitle", dest="conference_booktitle", default=None, type=str, metavar="TITLE", help="Full conference title for the BibTeX booktitle field (optional).")
-    conf.add_argument("--note", dest="conference_note", default=None, type=str, metavar="NOTE", help="Conference note, e.g. dates and location (optional).")
-    conf.add_argument("--url", dest="conference_url", default=None, type=str, metavar="URL", help="Conference URL (optional).")
-
-    parser.add_argument("-s", "--success", dest="success_filename", type=str, metavar="success.bib", help="Output BibTeX file for successful entries (default stdout). Will be appended to.")
-    parser.add_argument("-f", "--failed", dest="failed_filename", type=str, metavar="failed.bib", help="Output BibTeX file for failed entries (default: send these too to the success output). Will be appended to. As detected by heuristics, requiring manual verification/fixes.")
-    parser.add_argument("-r", "--retries", dest="retries", default=3, type=int, metavar="x", help="Up to this many attempts (default: 3) will be made at the various processing steps for author extraction, when the processing fails. The number set here includes the initial attempt, so '-r 3' means 'try, and then retry up to twice if needed'. Attempts are counted separately for each processing step; each step gets this many retries if needed. This often helps get the LLM unstuck, especially if it starts overthinking and fails to produce a final response within the maximum token limit for a reply.")
-    parser.add_argument("-l", "--log", metavar="log.txt", default=None, help="Output logfile, for a copy of the console log (overwritten each run). Useful for seeing what went wrong in each specific failed entry.")
-    parser.add_argument('--log-level', default='INFO',
-                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-                        help='root logger level (default: INFO)')
-    parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="dir", help="directory to move done files into (optional; allows easily continuing later). If also `-of` is specified, then only successful files will be moved to the `-o` directory; failed files will be moved to the `-of` directory.")
-    parser.add_argument("-of", "--failed-output-dir", dest="failed_output_dir", default=None, type=str, metavar="dir", help="directory to move failed done files into (optional; allows easily continuing later)")
-    parser.add_argument("-i", "--input-dir", dest="input_dir", default=None, type=str, metavar="input_dir", help="Input directory containing PDF file(s) to import (will be scanned recursively, skipping output dirs)")
-    parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
-    opts = parser.parse_args()
-
-    from ..common import logsetup
-    logsetup.configure(level=getattr(logging, opts.log_level),
-                       logfile=opts.log,
-                       allow=[__name__])  # match the original "module-only" filter intent
-
+def run(opts: argparse.Namespace) -> None:
+    """Run the conversion, as `raven-pdf2bib` does. `opts` is its parsed command line; see `pdf2bib_cli`."""
+    # The parser lives in `pdf2bib_cli`, so that `--help` does not wait for this module's imports. It also
+    # configures logging before importing this module.
     raven_server_url = opts.server_url if opts.server_url is not None else client_config.raven_server_url
     if opts.server_url is not None:
         logger.info(f"Using Raven server '{raven_server_url}' from --server-url, overriding the configured '{client_config.raven_server_url}'.")
@@ -1130,6 +1097,3 @@ def main():
         paths = [p for p in paths if not p.startswith(opts.failed_output_dir)]
 
     process_abstracts(sorted(paths), opts)
-
-if __name__ == '__main__':
-    main()

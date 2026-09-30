@@ -932,11 +932,10 @@ to print a usage message — and a mistyped command line is the commonest reason
 - **The CLI tools are where nothing enforces it**: measured 2026-09-23, three of them took 8.5–9.3 s to
   answer `--help`, against a median of 0.40 s across all 26 console scripts and 0.05–0.08 s for the GUI
   apps, because they imported `..client.api` and friends at module scope and parsed inside `main()`.
-  - **`raven-indexer` and `raven-dehyphenate` now import those after parsing** (2026-09-30), and answer
-    in about 1.4 s. The rest is the config modules their help text reads defaults from, which import
-    torch for a dtype.
-  - **`raven-pdf2bib` still takes the full time.** Its heavy modules are used throughout an 1100-line
-    library, signatures included, so the same move there is a larger change.
+  - **All three now import those after parsing** (2026-09-30), and answer in about 1.4 s. The rest is the
+    config modules their help text reads defaults from, which import torch for a dtype.
+  - `raven-pdf2bib`'s library uses its heavy modules throughout, so its parser moved out instead, to
+    `raven.papers.pdf2bib_cli`, the shape `raven.visualizer.importer_cli` already had.
 - Where a tool genuinely needs a heavy import to *build* its parser — a default read from config — import
   that one lazily inside the function that needs it, as `librarian.gguftokenizer` does.
 

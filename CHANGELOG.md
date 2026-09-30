@@ -132,6 +132,8 @@
   - A click on the empty space below a short listing does not.
 - **A tile's tooltip in the file dialog's thumbnail view no longer wears the blue keyboard-mark border.**
 - **A click on a thumbnail tile sometimes did nothing**, wherever on the tile it landed — in the file dialog's thumbnail view and in Raven-cherrypick's grid. Intermittent, which is why it seemed to come and go.
+- **`raven-indexer`, `raven-pdf2bib` and `raven-dehyphenate` answer `--help`, or reject a mistyped option, in about a second.**
+  - In v0.2.9 each loaded its machine-learning libraries first, several seconds before any message appeared.
 
 ## 0.2.9 (24 September 2026) — *["Pleiades"](https://en.wikipedia.org/wiki/Pleiades)* edition
 

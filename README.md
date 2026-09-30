@@ -554,7 +554,7 @@ raven-dehyphenate                 →    python -m raven.tools.dehyphenate
 raven-qoi2png                     →    python -m raven.tools.qoi2png
 raven-csv2bib                     →    python -m raven.papers.csv2bib
 raven-wos2bib                     →    python -m raven.papers.wos2bib
-raven-pdf2bib                     →    python -m raven.papers.pdf2bib
+raven-pdf2bib                     →    python -m raven.papers.pdf2bib_cli
 raven-server                      →    python -m raven.server.app
 raven-avatar-settings-editor      →    python -m raven.avatar.settings_editor.app
 raven-avatar-pose-editor          →    python -m raven.avatar.pose_editor.app

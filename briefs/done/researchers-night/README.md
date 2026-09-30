@@ -88,7 +88,7 @@ rather than in `TODO_DEFERRED.md` because that list buries work rather than sche
 
 - **Fixed at the close, each in its own commit**: `dpg_markdown.shutdown` made restartable, so the test
   fixtures can call `guiutils.teardown`; the three CLI tools that took about nine seconds to answer
-  `--help`.
+  `--help` (`raven-pdf2bib`'s parser moved to a module of its own, `pdf2bib_cli`).
 - **Already done, and never marked here**: cross-file anchors in `check_doc_links.py`, on 2026-09-23
   (`cf617961`). The close corrected the module docstring, which still said only in-document anchors were
   checked.
