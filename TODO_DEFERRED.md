@@ -1450,7 +1450,7 @@ Do at the same time, since they are the same decision: the sibling item recordin
 
 ## Find a UI font that renders subscripts *and* has symbol coverage
 
-*Cluster: ? · Cost: M · Gate: ? · Filed: 2026-08-14 · See also: `briefs/reference/font-glyph-coverage.md`*
+*Cluster: markdown-renderer · Cost: M · Gate: ? · Filed: 2026-08-14 · See also: `briefs/reference/font-glyph-coverage.md`*
 
 Neither shipped font is satisfactory, and the measurements make the tradeoff exact (2026-08-14, tables and
 script in the reference doc):
