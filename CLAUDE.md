@@ -929,10 +929,14 @@ to print a usage message — and a mistyped command line is the commonest reason
 - **Every GUI app does this, and four of them had no choice.** Where the module body *is* the program, a
   parser placed below the imports would build the whole GUI before printing its help. The three with a
   real `main()` are not forced and do it anyway.
-- **The CLI tools are where nothing enforces it**, and three of them pay for it: measured 2026-09-23,
-  `raven-indexer`, `raven-pdf2bib` and `raven-dehyphenate` take 8.5–9.3 s to answer `--help`, against a
-  median of 0.40 s across all 26 console scripts and 0.05–0.08 s for the GUI apps. They import
-  `..client.api` and friends at module scope and parse inside `main()`.
+- **The CLI tools are where nothing enforces it**: measured 2026-09-23, three of them took 8.5–9.3 s to
+  answer `--help`, against a median of 0.40 s across all 26 console scripts and 0.05–0.08 s for the GUI
+  apps, because they imported `..client.api` and friends at module scope and parsed inside `main()`.
+  - **`raven-indexer` and `raven-dehyphenate` now import those after parsing** (2026-09-30), and answer
+    in about 1.4 s. The rest is the config modules their help text reads defaults from, which import
+    torch for a dtype.
+  - **`raven-pdf2bib` still takes the full time.** Its heavy modules are used throughout an 1100-line
+    library, signatures included, so the same move there is a larger change.
 - Where a tool genuinely needs a heavy import to *build* its parser — a default read from config — import
   that one lazily inside the function that needs it, as `librarian.gguftokenizer` does.
 

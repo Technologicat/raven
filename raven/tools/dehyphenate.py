@@ -13,9 +13,10 @@ import sys
 
 from unpythonic import maybe_open
 
-from ..client import api
-from ..client import config as client_config
-from ..client import mayberemote
+from ..client import config as client_config  # the parser's help text shows its defaults
+
+# `..client.api` and `..client.mayberemote` are imported in `main`, after parsing: they reach the NLP stack,
+# and at module scope they cost several seconds before `--help` could print.
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="""Dehyphenate text bro-ken by hyp-he-na-tion. (You can configure the model in `raven/visualizer/config.py`.)""",
@@ -27,6 +28,9 @@ def main() -> None:
     parser.add_argument("-V", "--verbose", dest="verbose", action="store_true", default=False, help="Print progress messages (to stderr).")
     parser.add_argument("--server-url", dest="server_url", default=None, type=str, metavar="url", help=f"Raven server to talk to, overriding the configured one (default: '{client_config.raven_server_url}').")
     opts = parser.parse_args()
+
+    from ..client import api  # noqa: PLC0415 -- heavy, and not needed to parse
+    from ..client import mayberemote  # noqa: PLC0415 -- heavy, and not needed to parse
 
     if not opts.filenames:
         opts.filenames = [None]  # `None` -> `maybe_open` will open stdin instead.

@@ -15,9 +15,9 @@ import types
 
 import pytest
 
-pytest.importorskip("raven.librarian.indexer", reason="full dependency stack not installed")
+hybridir = pytest.importorskip("raven.librarian.hybridir", reason="full dependency stack not installed")
 
-from raven.librarian import indexer
+from raven.librarian import indexer  # noqa: E402 -- after importorskip by design
 
 
 def _fake_retriever(busy_sequence, progress_sequence=()):
@@ -60,7 +60,7 @@ def pending_work(monkeypatch):
     def has_pending_work():
         return next(sequence, False)
 
-    monkeypatch.setattr(indexer.hybridir, "has_pending_work", has_pending_work)
+    monkeypatch.setattr(hybridir, "has_pending_work", has_pending_work)
 
     def script(values):
         nonlocal sequence

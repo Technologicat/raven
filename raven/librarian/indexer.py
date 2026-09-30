@@ -27,12 +27,15 @@ from .. import __version__
 import argparse
 import sys
 import time
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
-from ..client import api as client_api
-from ..client import config as client_config
-from . import config as librarian_config
-from . import hybridir
+from ..client import config as client_config  # the parser's help text shows its defaults
+from . import config as librarian_config  # likewise
+
+# `..client.api` and `.hybridir` are imported where they are used rather than here: they reach the NLP
+# stack, and at module scope they cost several seconds before `--help` could print.
+if TYPE_CHECKING:
+    from . import hybridir
 
 # How often to sample indexing state while waiting. Fast enough that the progress line looks live, slow
 # enough that the poll costs nothing next to the embedding work it is watching.
@@ -44,7 +47,7 @@ POLL_SECONDS = 0.5
 SETTLED_POLLS = 6
 
 
-def wait_for_indexing(retriever: hybridir.HybridIR,
+def wait_for_indexing(retriever: "hybridir.HybridIR",
                       on_progress: Optional[Callable[[str], None]] = None) -> None:
     """Block until `retriever` has been quiet for `SETTLED_POLLS` consecutive samples.
 
@@ -62,6 +65,7 @@ def wait_for_indexing(retriever: hybridir.HybridIR,
     hundreds of documents are still queued, and leaving them to die against a shut-down executor. Hence
     also `has_pending_work`, which covers the ingest queue.
     """
+    from . import hybridir  # noqa: PLC0415 -- heavy, and not needed to parse
     last = ""
     settled = 0
     while settled < SETTLED_POLLS:
@@ -85,6 +89,9 @@ def main() -> None:
     parser.add_argument("-q", "--quiet", dest="quiet", action="store_true", default=False, help="Print only the final summary, not per-document progress.")
     parser.add_argument("--server-url", dest="server_url", default=None, type=str, metavar="url", help=f"Raven server to talk to, overriding the configured one (default: '{client_config.raven_server_url}'). Indexing computes embeddings, so this is where that happens.")
     opts = parser.parse_args()
+
+    from ..client import api as client_api  # noqa: PLC0415 -- heavy, and not needed to parse
+    from . import hybridir  # noqa: PLC0415 -- heavy, and not needed to parse
 
     raven_server_url = opts.server_url if opts.server_url is not None else client_config.raven_server_url
     client_api.initialize(raven_server_url=raven_server_url,
