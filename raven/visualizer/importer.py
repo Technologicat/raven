@@ -42,6 +42,8 @@ import torch
 
 from sklearn.cluster import HDBSCAN
 
+from bibtexparser.model import DuplicateFieldKeyBlock
+
 from ..client import config as client_config
 from ..client import mayberemote
 
@@ -302,9 +304,10 @@ def _recover_failed_block(failed_block):
     """Try to rescue one record `bibtexparser` refused. Returns the recovered entry, or `None`.
 
     Only ever runs on a record that has *already* failed, so nothing that currently parses can be affected
-    by it. `bibtex.repair_record`, which see, does the work and explains why a guess is safe to make here.
+    by it. `bibtex.repair_failed_block`, which see, does the work: it escapes stray braces or merges a
+    field the record names twice, the same repairs `raven-fixbib` makes.
     """
-    maybe_repaired = bibtex.repair_record(failed_block.raw)
+    maybe_repaired = bibtex.repair_failed_block(failed_block)
     if maybe_repaired is None:
         return None
     library = bibtex.parse_string(maybe_repaired)
@@ -321,8 +324,9 @@ def _report_unparseable_records(filename, library):
     The usual cause is field content that is not valid BibTeX rather than anything structural: unbalanced
     braces inside an `Abstract` abort the parse of the whole record, title and all. Where those braces are
     stray literals - mathematics that reached the file through a PDF extractor, most often - escaping them
-    recovers the record whole, and it is added to `library.entries` as though it had parsed. What cannot be
-    recovered is reported as before, pointing at the offending line, which is where a fix has to happen.
+    recovers the record whole, and it is added to `library.entries` as though it had parsed. A record that
+    names a field twice is recovered the same way, by merging the repeats. What cannot be recovered is
+    reported as before, pointing at the offending line, which is where a fix has to happen.
 
     Raven repairs its own reading of the file and never the file: a user's bibliography is theirs, and
     fixing it is `raven-fixbib`'s job, which they run deliberately.
@@ -337,9 +341,10 @@ def _report_unparseable_records(filename, library):
 
     for failed_block, entry in recovered:
         library.add(entry)
+        how = ("by merging a field it names more than once" if isinstance(failed_block, DuplicateFieldKeyBlock)
+               else "by escaping unbalanced braces in a field value")
         logger.warning(f"_parse_input_files: recovered record '{entry.key}' at line {failed_block.start_line} "
-                       f"of {filename} by escaping unbalanced braces in a field value. The file itself is "
-                       f"unchanged; `raven-fixbib` writes the repair back.")
+                       f"of {filename} {how}. The file itself is unchanged; `raven-fixbib` writes the repair back.")
 
     if not lost:
         return

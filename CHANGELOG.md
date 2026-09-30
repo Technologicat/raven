@@ -117,6 +117,10 @@
   - On a *Raven-server* with no web browser installed, a page that needs one to render is reported as that, where it used to be reported as a site that cannot be fetched as text.
 - **Resizing the window no longer makes the avatar flicker.** Each change of size briefly showed a stretched copy of the last frame, then the old size again, before the new one.
 
+#### Raven-visualizer
+
+- **The importer keeps a record that names a field twice**, merging the repeated values as `raven-fixbib` does. In v0.2.9 such a record was left out of the dataset, with a warning blaming unbalanced braces.
+
 #### Raven-avatar
 
 - **In the settings editor, the speech field's blue mark shows while you type in it.** In v0.2.9 it was dark while the field had the cursor and came on after Esc.

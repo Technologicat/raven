@@ -389,6 +389,15 @@ STRAY_BRACE = """@article{stray2024,
 }
 """
 
+REPEATED_FIELD = """@article{twice2024,
+  author = {Delta, Dana},
+  year = {2024},
+  title = {A paper with two notes},
+  annote = {First note.},
+  annote = {Second note.}
+}
+"""
+
 # Not a brace fault at all: the field has no `=`, so there is nothing for the brace repair to propose.
 BEYOND_REPAIR = """@article{hopeless2024,
   author {Beta, Bob},
@@ -442,6 +451,20 @@ class TestRecordsBibtexparserRefused:
         messages = [record.message for record in caplog.records]
         assert any("stray2024" in message and "mybib.bib" in message for message in messages), messages
         assert any("raven-fixbib" in message for message in messages), messages
+
+    def test_a_record_naming_a_field_twice_is_recovered_with_both_values(self, caplog):
+        # `bibtexparser` refuses a record with a repeated field outright. Merging the repeats keeps every
+        # character, so the record arrives whole -- and the report says which repair was made.
+        library = parse_bib(REPEATED_FIELD + "\n" + GOOD_RECORD)
+        assert [entry.key for entry in library.entries] == ["fine2024"], \
+            "the repeated-field record parsed on its own, so this fixture cannot tell a recovery from a no-op"
+
+        with caplog.at_level("WARNING"):
+            importer._report_unparseable_records("mybib.bib", library)
+        recovered = next(entry for entry in library.entries if entry.key == "twice2024")
+        assert "First note." in recovered["annote"] and "Second note." in recovered["annote"]
+        messages = [record.message for record in caplog.records]
+        assert any("twice2024" in message and "more than once" in message for message in messages), messages
 
     def test_a_record_that_cannot_be_recovered_is_reported_rather_than_vanishing(self, caplog):
         # The asymmetry this removes: a record that parses but lacks `author`, `year` or `title` is skipped

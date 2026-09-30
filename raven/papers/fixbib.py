@@ -124,13 +124,6 @@ def _diagnose(failed_block, key: str, line: int) -> RepairReport:
     return RepairReport(key, line, KIND_UNREADABLE, str(failed_block.error).replace("\n", " "))
 
 
-def _repair(failed_block) -> str | None:
-    """Repair one record, choosing the repair by what is wrong with it. `None` if it stays unreadable."""
-    if isinstance(failed_block, DuplicateFieldKeyBlock):
-        return bibtex.repair_duplicate_field_keys(failed_block.raw, failed_block.duplicate_keys)
-    return bibtex.repair_record(failed_block.raw)
-
-
 def _residual_fault(repaired: str):
     """What `bibtexparser` still refuses in a repaired record, or `None` if it now reads cleanly.
 
@@ -186,7 +179,7 @@ def repair_bibtex(source: str) -> tuple[str, list[RepairReport], list[RepairRepo
         raw = failed_block.raw
         key = bibtex.header_key(raw.lstrip().split("\n", 1)[0]) or "?"
         line = source.count("\n", 0, start) + 1
-        maybe_repaired = _repair(failed_block)
+        maybe_repaired = bibtex.repair_failed_block(failed_block)
 
         pieces.append(source[cursor:start])
         pieces.append(raw if maybe_repaired is None else maybe_repaired)

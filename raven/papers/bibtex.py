@@ -27,7 +27,7 @@ __all__ = ["parse_file", "parse_string", "write_string",
 
            "header_key", "field_value", "unbalanced_field_names", "brace_repair_candidates",
 
-           "repair_record", "repair_duplicate_field_keys", "decode_html_entities",
+           "repair_record", "repair_duplicate_field_keys", "repair_failed_block", "decode_html_entities",
            "relocate_rights_notices",
 
            "entries_to_bibtex"]
@@ -41,7 +41,7 @@ import unicodedata
 from typing import NamedTuple
 
 import bibtexparser
-from bibtexparser.model import Entry, Field
+from bibtexparser.model import DuplicateFieldKeyBlock, Entry, Field
 from bibtexparser import Library
 
 from unpythonic import box, unbox
@@ -519,6 +519,20 @@ def repair_duplicate_field_keys(raw: str, maybe_duplicate_keys: set[str] | None 
     except Exception:  # noqa: BLE001 -- a repair that breaks the parser is just a failed repair
         return None
     return candidate if library.entries else None
+
+
+def repair_failed_block(failed_block) -> str | None:
+    """Repair one record `bibtexparser` refused, choosing the repair by what is wrong with it.
+
+    `failed_block`: one of a parsed library's `failed_blocks`. A `DuplicateFieldKeyBlock` gets
+                    `repair_duplicate_field_keys`, told which field names the parser saw repeated; any
+                    other block gets `repair_record`.
+
+    Returns the repaired text, or `None` if the record stays unreadable.
+    """
+    if isinstance(failed_block, DuplicateFieldKeyBlock):
+        return repair_duplicate_field_keys(failed_block.raw, failed_block.duplicate_keys)
+    return repair_record(failed_block.raw)
 
 
 # An HTML character entity, together with whatever backslashes precede it. The backslash run is captured
