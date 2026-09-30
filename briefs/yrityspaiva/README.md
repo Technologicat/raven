@@ -8,6 +8,9 @@ because it produced no diff and would otherwise be re-decided from scratch.*
 audience. Opened 2026-09-28, from the maintainer's post-event list and the issues flagged
 live on the Night.
 
+**The event itself** (maintainer, 2026-09-30): an open house, run in English. No rehearsal is needed — only a
+systems check on 7 October that everything works as it should.
+
 ## Done
 
 - **Librarian's attach dialog closed itself on the first Ctrl+Shift+O after launch** (flagged live on the
@@ -270,3 +273,6 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
    - **Prioritization is a session with the maintainer against that page**, which also schedules
      `librarian-extension/`'s 04–06.
    - The longer-term version is the backlog as a Visualizer dataset, in brief 13.
+   - **Written 2026-09-30.** Its `TODO.md` citations are line numbers pinned to commit `d15a1c78`, there being
+     no headings to cite, so it is a dated snapshot: into `done/` once the prioritization session has used it,
+     and before the triage edits `TODO.md`. Next: that session, then the triage.
