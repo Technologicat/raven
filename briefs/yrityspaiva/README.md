@@ -191,7 +191,7 @@ live on the Night.
 
 ## Queue, in order
 
-1. **Make the tools cancellable, and the web tools fail in prose** — filed on the Night, 2026-09-25, in
+1. **Done 2026-09-30.** **Make the tools cancellable, and the web tools fail in prose** — filed on the Night, 2026-09-25, in
    `TODO_DEFERRED.md` (`investigations/abort-inflight-request/`). Designed 2026-09-29 with the maintainer.
    - **Survey.** Only `websearch` and `webfetch` can wait long (Raven-server; `webfetch`'s headless tier the
      slowest). `search_documents` may make server round-trips through its `MaybeRemote` embedder and
