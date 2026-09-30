@@ -1665,7 +1665,7 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_E:
             guiutils.focus_item(gui_instance.emotion_choice)
         elif key == dpg.mvKey_Spacebar:  # as Raven-librarian focuses its composer
-            guiutils.focus_item("speak_input_text")  # tag
+            gui_animation.give_caret("speak_input_text")  # tag
         elif key == dpg.mvKey_S:
             if not gui_instance.speaking:
                 gui_instance.on_start_speaking(sender, app_data, "speak")  # emulate clicking the "Speak / Stop speaking" button (as opposed to the record/stop button)
