@@ -1236,6 +1236,19 @@ Finding it took three failed reproductions and one that worked, and the differen
 
 Recorded as an open question rather than a theory, because three plausible mechanisms have already been falsified here and a fourth written down as fact would be worth less than nothing.
 
+One observation bears on it (the maintainer, 2026-09-30, in the pose editor): parking the focus from the output index chooser flashed the emotion preset chooser only after the other choosers in that window had been visited first, and never on a first visit. Which suggests — a hypothesis, not tested — that the transit lands on what the window last had focus on, which ImGui remembers per window, rather than on its first item.
+
+**A keyboard mark follows the transit unless told where the focus is going.** `raven.common.gui.keyboardmark`
+has two followers, and which one a widget belongs to is not a matter of taste: **`install_focus_follower`
+for a combo or a listing, `install_caret_follower` for a text field**, whose focus says nothing about where
+the keys go. And a programmatic move the followers could see — onto a followed widget, or off one to park
+the focus on a button — goes through **`keyboardmark.focus(widget)`** rather than `dpg.focus_item`: while
+the move is in flight only its target may light, and it lights the frame it arrives. Without that, the control the focus passes through wears the mark for a frame or two —
+seen 2026-09-30 in the pose editor, where Ctrl+B flashed the emotion preset combo on its way to the eyebrow
+one. The same day, a text field put on the focus follower lit on Esc instead of while typed into, and was
+fixed first by teaching the focus follower about text fields, duplicating the caret follower that already
+existed. Check both followers before adding a third behaviour to either.
+
 The practical consequence is that a programmatic focus is never neutral: returning the caret to a field the user was editing arms a replacement of what they typed. `FileDialog` accepts that on Tab-back and tells the user to press End first. It also explains a puzzling intermittency — whether the selection happens tracks whether the focus request *succeeded*, so a refused window-to-child request (see above) leaves the text alone and looks like inconsistent behaviour from the same key.
 
 **Enter de-activates without de-focusing**, which is worth separating because the two are easy to run together. Re-measured 2026-08-18 on DPG 2.3.1: after Enter a single-line field reports `focused=True, active=False`, and the text it held survives. Focus does not move; only the edit ends.

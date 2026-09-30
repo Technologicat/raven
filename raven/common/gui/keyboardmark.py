@@ -32,13 +32,14 @@ __all__ = ["COLOR", "PULSE_SECONDS",  # the vocabulary
            "join_pulse", "leave_pulse", "pulse_is_running",  # the one rhythm, for a widget that paints itself
            "DOT_GLYPH", "DOT_SLOT_W", "add_dot",  # the glyph a DOT mark lights
            "shield_tooltip",  # for a tooltip under a marked panel
-           "MarkKind", "Mark", "install_caret_follower", "install_focus_follower"]  # the mark as a component
+           "MarkKind", "Mark", "focus", "install_caret_follower", "install_focus_follower"]  # the mark as a component
 
 import logging
 logger = logging.getLogger(__name__)
 
 import enum
 import threading
+import time
 from collections.abc import Sequence
 
 from unpythonic import sym
@@ -472,6 +473,60 @@ class Mark:
         guiutils.maybe_delete_item(self._theme)
 
 
+# The programmatic focus change in flight, if any: `(identifiers of its target, deadline)`, the deadline as
+# `time.monotonic_ns()`. Set by `focus`, read by both followers through `_may_light`. One for the process,
+# there being one keyboard.
+_expected_focus: tuple[tuple, int] | None = None
+_expected_focus_lock = threading.Lock()
+_EXPECTED_FOCUS_WINDOW_NS = 150_000_000  # the transits measured in `dpg-notes.md` lasted 25-100 ms
+
+def focus(widget: str | int) -> None:
+    """`dpg.focus_item(widget)`, telling the followers where the focus is going. Callable from any thread.
+
+    Use it in place of `dpg.focus_item` for any move the followers could see: onto a widget a follower
+    marks, and just as much off one, parking the focus on a button. While the change is in flight, only
+    `widget` may light, and it lights the moment it has the focus; a widget the focus merely passes through
+    on the way stays dark. That lasts until `widget` has the focus, or for at most 150 ms — which is how a
+    park ends, a button wearing no mark to say it has arrived.
+    """
+    global _expected_focus
+    expectation = (guiutils.item_identifiers(widget), time.monotonic_ns() + _EXPECTED_FOCUS_WINDOW_NS)
+    with _expected_focus_lock:
+        _expected_focus = expectation
+    dpg.focus_item(widget)  # after the expectation is in place, so that no frame sees the move without it
+
+def _may_light(identifiers: tuple, holds: bool, t: int) -> bool:
+    """Whether a follower's mark on the widget known by `identifiers` is lit this frame, when `holds` says it has the keyboard.
+
+    `t`: the frame's time, as `time.monotonic_ns()`.
+    """
+    # A programmatic focus change is not instantaneous, and for a frame or two something else holds the
+    # focus — measured in `FileDialog`, mechanism not established (`dpg-notes.md`, "A focus change is not
+    # instantaneous"). A mark following the focus lights that something for as long, which reads as a
+    # flash on a control nobody touched. So while a change `focus` made is in flight, only its target may
+    # light; and the moment the target has the focus, the expectation ends, so that nothing the user does
+    # afterwards is held back by it.
+    #
+    # Locked, because `focus` writes this slot from whichever thread handles a key while the followers read
+    # and clear it here, on the render thread. Unlocked, a new expectation set between the read and the
+    # clear would be erased, and that move's transit would flash. A lock taken per frame in the render loop
+    # is safe here only because of what it guards: reading and replacing one tuple, with no DPG call and no
+    # waiting inside, so the render thread can be held up by nothing longer than that.
+    global _expected_focus
+    with _expected_focus_lock:
+        expected = _expected_focus
+        if expected is None:
+            return holds
+        expected_identifiers, deadline = expected
+        if t >= deadline:
+            _expected_focus = None
+            return holds
+        if set(identifiers).isdisjoint(expected_identifiers):
+            return False
+        if holds:
+            _expected_focus = None
+        return holds
+
 def install_caret_follower(widgets: Sequence[str | int],
                            kind: MarkKind = MarkKind.FRAME,
                            thickness: int = 2) -> gui_animation.Animation:
@@ -495,7 +550,7 @@ def install_caret_follower(widgets: Sequence[str | int],
     Returns the animation driving it, for `gui_animation.animator.cancel` if it should ever stop. The marks
     it holds are detached when it is cancelled.
     """
-    marks = [(widget, Mark(widget, kind=kind, thickness=thickness)) for widget in widgets]
+    marks = [(widget, guiutils.item_identifiers(widget), Mark(widget, kind=kind, thickness=thickness)) for widget in widgets]
 
     class _CaretFollower(gui_animation.Animation):
         def __init__(self):
@@ -503,13 +558,13 @@ def install_caret_follower(widgets: Sequence[str | int],
             super().__init__(ambient=True)
 
         def render_frame(self, t: int) -> sym:
-            for widget, mark in marks:
+            for widget, identifiers, mark in marks:
                 with guiutils.nonexistent_ok():
-                    mark.lit = dpg.is_item_active(widget)
+                    mark.lit = _may_light(identifiers, dpg.is_item_active(widget), t)
             return gui_animation.action_continue
 
         def finish(self) -> None:
-            for _widget_, mark in marks:
+            for _widget, _identifiers, mark in marks:
                 mark.detach()
 
     return gui_animation.animator.add(_CaretFollower())
@@ -518,15 +573,15 @@ def install_caret_follower(widgets: Sequence[str | int],
 def install_focus_follower(widgets: Sequence[str | int],
                            kind: MarkKind = MarkKind.FRAME,
                            thickness: int = 2) -> gui_animation.Animation:
-    """Mark whichever of `widgets` currently has the keyboard. One call per app.
+    """Mark whichever of `widgets` currently holds DPG's focus. One call per app.
 
     For the keyboard-browsable combos: an app that routes the arrow keys by asking `dpg.get_focused_item`
     already knows which control has them, and DPG draws nothing on a focused combo of its own — so the
-    marking rule is the routing rule, and neither needs restating at the call site.
+    marking rule is the routing rule, and neither needs restating at the call site. A text field wants
+    `install_caret_follower` instead.
 
-    A text field among `widgets` is marked while it holds the caret instead, which for a text field is
-    what having the keyboard means: it is not what DPG reports as focused while it is being typed into,
-    and it still is once the caret has left it.
+    Move the focus onto one of `widgets` with `focus` rather than `dpg.focus_item`, so that a control the
+    focus passes through on the way is not marked for a frame or two.
 
     `widgets`: DPG tags or IDs. A widget carrying a theme of its own wants a `Mark` on its enclosing group
                instead — see `Mark` — which this cannot express, since the widget that takes the focus and
@@ -537,11 +592,7 @@ def install_focus_follower(widgets: Sequence[str | int],
     """
     # Compared against *both* names DPG may answer with, since `get_focused_item` gives a tagged widget's
     # alias and an untagged one's ID. See `guiutils.item_identifiers`.
-    marks = [(widget,
-              guiutils.item_identifiers(widget),
-              dpg.get_item_type(widget) == "mvAppItemType::mvInputText",
-              Mark(widget, kind=kind, thickness=thickness))
-             for widget in widgets]
+    marks = [(guiutils.item_identifiers(widget), Mark(widget, kind=kind, thickness=thickness)) for widget in widgets]
 
     class _FocusFollower(gui_animation.Animation):
         def __init__(self):
@@ -551,12 +602,12 @@ def install_focus_follower(widgets: Sequence[str | int],
 
         def render_frame(self, t: int) -> sym:
             focused = dpg.get_focused_item()
-            for widget, identifiers, is_text_field, mark in marks:
-                mark.lit = dpg.is_item_active(widget) if is_text_field else (focused in identifiers)
+            for identifiers, mark in marks:
+                mark.lit = _may_light(identifiers, focused in identifiers, t)
             return gui_animation.action_continue
 
         def finish(self) -> None:
-            for _widget, _identifiers, _is_text_field, mark in marks:
+            for _identifiers, mark in marks:
                 mark.detach()
 
     return gui_animation.animator.add(_FocusFollower())

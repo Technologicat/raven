@@ -103,6 +103,11 @@ def targets(widget, kind):
     return [target for k, target, _value in theme_items(widget) if k == kind]
 
 
+def lit(widget):
+    """Whether the mark on `widget` is lit this frame. A lit mark pulses between alpha 64 and 255; a dark one is 0."""
+    return colors(widget)[0][3] > 0.0
+
+
 # --------------------------------------------------------------------------------
 # What a mark puts on a widget
 
@@ -445,30 +450,6 @@ class TestFocusFollower:
         gui_animation.animator.cancel(follower)
         assert all(dpg.get_item_theme(widget) is None for widget in widgets)
 
-    def test_a_text_field_is_marked_while_it_holds_the_caret_not_while_it_is_focused(self, make_widget, quiet_pulse,
-                                                                                      monkeypatch):
-        """A text field being typed into is not what DPG reports as focused, and one the caret has just left
-        still is — so marking it by focus lit it exactly when it did not have the keyboard.
-
-        Headless DPG cannot give a field the caret, so DPG's two answers are stood in for, one at a time.
-        """
-        field = make_widget("input_text")
-        follower = keyboardmark.install_focus_follower([field])
-        try:
-            # Focused, no caret: what Esc leaves behind.
-            monkeypatch.setattr(keyboardmark.dpg, "get_focused_item", lambda: field)
-            monkeypatch.setattr(keyboardmark.dpg, "is_item_active", lambda item: False)
-            gui_animation.animator.render_frame()
-            assert colors(field)[0][3] == 0.0, "a text field the caret has left is still marked"
-
-            # The caret, and DPG naming something else as focused: what Ctrl+Space gives.
-            monkeypatch.setattr(keyboardmark.dpg, "get_focused_item", lambda: 0)
-            monkeypatch.setattr(keyboardmark.dpg, "is_item_active", lambda item: item == field)
-            gui_animation.animator.render_frame()
-            assert keyboardmark.pulse_is_running(), "a text field holding the caret is not marked"
-        finally:
-            gui_animation.animator.cancel(follower)
-
     def test_nothing_is_marked_while_nothing_is_focused(self, make_widget, quiet_pulse):
         """`get_focused_item` answers 0 here, and 0 must not match a widget by accident."""
         widgets = [make_widget("button", "1"), make_widget("button", "2")]
@@ -477,5 +458,89 @@ class TestFocusFollower:
             gui_animation.animator.render_frame()
             assert not keyboardmark.pulse_is_running()
             assert all(colors(widget)[0][3] == 0.0 for widget in widgets)
+        finally:
+            gui_animation.animator.cancel(follower)
+
+
+# --------------------------------------------------------------------------------
+# A programmatic focus change in flight
+
+class TestExpectedFocus:
+    """While a change `keyboardmark.focus` made is in flight, only its target may light.
+
+    Headless DPG cannot move the focus, so what it would report is stood in for: `get_focused_item` for a
+    focus follower, `is_item_active` for a caret follower.
+    """
+
+    @pytest.fixture(autouse=True)
+    def no_expectation_left_over(self, monkeypatch):
+        monkeypatch.setattr(keyboardmark, "_expected_focus", None)
+
+    @staticmethod
+    def _focused(monkeypatch, widget):
+        monkeypatch.setattr(keyboardmark.dpg, "get_focused_item", lambda: widget)
+
+    def test_a_widget_the_focus_passes_through_stays_dark(self, make_widget, quiet_pulse, monkeypatch):
+        target, passed_through = make_widget("button", "target"), make_widget("button", "transit")
+        follower = keyboardmark.install_focus_follower([target, passed_through])
+        try:
+            keyboardmark.focus(target)
+            self._focused(monkeypatch, passed_through)  # where the focus is while the change is in flight
+            gui_animation.animator.render_frame()
+            assert not lit(passed_through), "a control the focus only passed through was marked"
+
+            self._focused(monkeypatch, target)
+            gui_animation.animator.render_frame()
+            assert lit(target), "the target was not marked the frame it had the focus"
+        finally:
+            gui_animation.animator.cancel(follower)
+
+    def test_without_an_expectation_the_focus_is_marked_at_once(self, make_widget, quiet_pulse, monkeypatch):
+        # The control for the one above: the same focus, with nothing expected, lights.
+        widget = make_widget("button")
+        follower = keyboardmark.install_focus_follower([widget])
+        try:
+            self._focused(monkeypatch, widget)
+            gui_animation.animator.render_frame()
+            assert lit(widget)
+        finally:
+            gui_animation.animator.cancel(follower)
+
+    def test_once_the_target_has_the_focus_the_next_move_lights_at_once(self, make_widget, quiet_pulse,
+                                                                          monkeypatch):
+        """The expectation ends when it is met, so it cannot hold back what the user does next."""
+        target, other = make_widget("button", "target"), make_widget("button", "other")
+        follower = keyboardmark.install_focus_follower([target, other])
+        try:
+            keyboardmark.focus(target)
+            self._focused(monkeypatch, target)
+            gui_animation.animator.render_frame()
+            self._focused(monkeypatch, other)  # a click, say
+            gui_animation.animator.render_frame()
+            assert lit(other)
+        finally:
+            gui_animation.animator.cancel(follower)
+
+    def test_an_expectation_that_is_never_met_expires(self, make_widget, quiet_pulse, monkeypatch):
+        target, other = make_widget("button", "target"), make_widget("button", "other")
+        follower = keyboardmark.install_focus_follower([target, other])
+        try:
+            keyboardmark.focus(target)
+            identifiers, _deadline = keyboardmark._expected_focus
+            monkeypatch.setattr(keyboardmark, "_expected_focus", (identifiers, 0))  # already past its deadline
+            self._focused(monkeypatch, other)
+            gui_animation.animator.render_frame()
+            assert lit(other), "a focus change that never landed held a mark dark past its window"
+        finally:
+            gui_animation.animator.cancel(follower)
+
+    def test_the_caret_follower_honours_it_too(self, make_widget, quiet_pulse, monkeypatch):
+        target, passed_through = make_widget("input_text", "target"), make_widget("input_text", "transit")
+        follower = keyboardmark.install_caret_follower([target, passed_through])
+        try:
+            keyboardmark.focus(target)
+            monkeypatch.setattr(keyboardmark.dpg, "is_item_active", lambda item: item == passed_through)
+            gui_animation.animator.render_frame()
+            assert not lit(passed_through), "a field the caret only passed through was marked"
         finally:
             gui_animation.animator.cancel(follower)

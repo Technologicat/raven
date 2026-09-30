@@ -113,6 +113,11 @@
   - A search that finds nothing, or fewer results than asked for, no longer waits a long time for more to load.
   - On a *Raven-server* with no web browser installed, a page that needs one to render is reported as that, where it used to be reported as a site that cannot be fetched as text.
 
+#### Raven-avatar
+
+- **In the settings editor, the speech field's blue mark shows while you type in it.** In v0.2.9 it was dark while the field had the cursor and came on after Esc.
+- **In both avatar editors, a key that moves to a chooser no longer flashes the mark on another one for a moment** on the way.
+
 #### Constellation-wide
 
 - **Tab in the file dialog no longer lights up the path field for a moment.**

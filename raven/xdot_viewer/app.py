@@ -622,7 +622,7 @@ def _on_key(sender, app_data) -> None:
         elif key == dpg.mvKey_F:
             gui_animation.give_caret("search_input")  # tag
         elif key == dpg.mvKey_E:
-            dpg.focus_item("filter_combo")
+            keyboardmark.focus("filter_combo")  # tag
     # *Active*, not *focused*: the caret really being in the search field is what must silence the bare
     # keys, or an `f` typed into a search would zoom the graph to fit instead of reaching the field.
     elif not dpg.is_item_active("search_input"):  # tag  # BARE KEYS - BE VERY CAREFUL HERE

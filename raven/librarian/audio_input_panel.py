@@ -292,7 +292,7 @@ class DPGAudioInputPanel:
         elif key == dpg.mvKey_S:
             guiutils.toggle_checkbox("audio_input_autostop_checkbox")  # tag
         elif key == dpg.mvKey_D:
-            dpg.focus_item("audio_input_device_combo")  # tag
+            keyboardmark.focus("audio_input_device_combo")  # tag
         elif key in (dpg.mvKey_Up, dpg.mvKey_Down, dpg.mvKey_Home, dpg.mvKey_End):
             return self._browse_devices(key)
         else:
