@@ -66,3 +66,11 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
 5. **Where the outputs go, and what they are called.** The prototype writes a filtered `.bib`, a
    dropped-with-reasons TSV, a held-for-review TSV, and JSONL answers — the extractor's named after
    its instrument fingerprint. How much of that the per-document primitive owns is decided by that brief, not this one.
+   - **Decided (Juha, 2026-09-30): reports are named to be read as a sequence, numbered by stage.** A
+     user should be able to list the output directory and see the pipeline in order — which file each
+     stage wrote, and which one is current. The prototype's directory is the case against: twelve TSVs
+     with nothing in their names saying which stage wrote them or in what order, and
+     `dropped-before-escalating-titles.tsv` sitting beside `dropped.tsv` with nothing to mark it
+     superseded. That was fine while prototyping, and it is what a user of the tool must not meet.
+   - **A superseded report is either removed or visibly marked** — in its name, or by moving it aside.
+     Which of the two is open; what is not open is leaving it looking like a peer of the current one.
