@@ -1177,27 +1177,27 @@ Cost is one frame (~16 ms) of latency on the deferred action — imperceptible, 
 ## A chord the desktop claims never reaches the app
 
 Not a DPG property, but it presents as one: a hotkey that fires sometimes, or never, while the handler's code
-is plainly right. **The input method takes some Ctrl+Shift chords before GLFW sees them.** IBus, running
-under most Linux desktops, claims two by default: **Ctrl+Shift+Space**, its input-method toggle, and
-**Ctrl+Shift+U**, its Unicode entry. Found 2026-09-30, when the settings editor's record key was first bound
-to Ctrl+Shift+Space: a key-logging handler added through `--repl` saw Space arrive twice in several presses,
-and `ibus-daemon --xim` was running with `<Control><Shift>space` among its triggers.
+is plainly right. **The input method takes two Ctrl+Shift chords before GLFW sees them.** IBus, running
+under most Linux desktops, claims **Ctrl+Shift+Space**, its input-method toggle, and **Ctrl+Shift+U**, its
+Unicode entry. Found 2026-09-30, when the settings editor's record key was first bound to Ctrl+Shift+Space:
+a key-logging handler added through `--repl` saw Space arrive twice in several presses, and `ibus-daemon
+--xim` was running with `<Control><Shift>space` among its triggers.
 
-**Before binding a Ctrl+Shift chord, ask the desktop what it already holds:**
+**Otherwise Ctrl+Shift is generally free for apps; Ctrl+Alt is the family to beware** (the maintainer,
+2026-09-30). Ctrl+Alt, beside Super, is what Linux desktops commonly map their global hotkeys to — a
+terminal on Ctrl+Alt+T, say — so an app binding one can find it taken on the next machine. To see what a
+given desktop holds:
 
 ```bash
 gsettings get org.freedesktop.ibus.general.hotkey triggers
-gsettings list-recursively | grep -i '<Control><Shift>'
+gsettings list-recursively | grep -i '<Control><Shift>\|<Control><Alt>\|<Primary><Alt>'
 ```
-
-A binding on a machine without IBus proves nothing about the ones with it, and those are most of them.
 
 **Who answers first depends on the app, not only the desktop.** `kitty` gets Ctrl+Shift+U before IBus does,
 for a Unicode entry of its own that searches by name (the maintainer's observation), so the input method
-does not hold these chords globally: it is offered them
-through each app's input path, and an app that handles its own shortcuts first keeps them. That reading of
-the mechanism is inferred rather than read in IBus or GLFW. What was measured is only DPG's side: there the
-input method wins.
+does not hold these chords globally: it is offered them through each app's input path, and an app that
+handles its own shortcuts first keeps them. That reading of the mechanism is inferred rather than read in
+IBus or GLFW. What was measured is only DPG's side: there the input method wins.
 
 ## Focus is not the same as the caret: gate hotkeys on `is_item_active`
 
