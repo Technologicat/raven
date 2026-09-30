@@ -1,5 +1,11 @@
 # Importer Rework Plan
 
+**Status, 2026-09-30:** after Yrityspäivä, and near-term (maintainer). **Item 5, clustering in high-D, goes
+first**: the Visualizer is waiting on it for nearly every dataset, it exists only as the manual prototype in
+`investigations/highdim-clustering/`, which is its specification, and it is sized at 1–2 days (2026-09-08).
+Items 2 and 3 are measured harmful and must not be built as written. Item 1 carries a fork that needs
+deciding, and the decision reaches brief 12.
+
 Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
 
 1. **Nomic-embed migration**: Replace snowflake-arctic + mpnet with Nomic-embed-text (unified text embeddings) and, for future image search, a vision encoder. VRAM savings + a unified embedding space.
@@ -81,7 +87,7 @@ Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
    Added 2026-08-05.
 
    > **Settled and measured, 2026-09-01. Read
-   > [`investigations/highdim-clustering/README.md`](../../investigations/highdim-clustering/README.md)
+   > [`investigations/highdim-clustering/README.md`](../investigations/highdim-clustering/README.md)
    > before implementing this — it is the specification, and this item is the reasoning that led to it.**
    > The defect is confirmed (the shipped 2D labelling scores −0.143 against a random floor of −0.248,
    > and its clusters are closer to each other than their own members are to their centres). What

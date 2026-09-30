@@ -9,8 +9,8 @@ what stops "done" from being applied to something that was never going to be fin
   one as a brief would freeze decisions nobody has made yet. A sketch graduates by producing a brief, not by
   becoming one. Each carries a status line saying which parts are decided. See `design/README.md`.
 
-- **One folder per sprint**, named for its scope — currently `librarian-extension/`,
-  `researchers-night/` and `yrityspaiva/`. Implementation briefs for work that has been decided on, each folder with
+- **One folder per sprint**, named for its scope — currently `librarian-extension/` and
+  `yrityspaiva/`. Implementation briefs for work that has been decided on, each folder with
   its own `README.md` for ordering and its own `done/` for the ones that have closed. A sprint folder is a
   working set, so it also holds unnumbered briefs and its session records.
 
@@ -23,7 +23,7 @@ what stops "done" from being applied to something that was never going to be fin
 
   **Numbering is discontinued.** The 01–16 run is historical and keeps its numbers; new briefs are named for
   what they are. The numbers recorded the order briefs were *written*, which is not the order they are read,
-  built or closed in — `researchers-night/` inherited 11–16 from that run and its own contents are ordered by
+  built or closed in — `researchers-night/` (closed, in `done/`) inherited 11–16 from that run and its own contents are ordered by
   the README's table, not by the filenames. A name that says what a brief covers survives being reordered,
   rescheduled, or moved between sprint folders; a number has to be defended against all three.
 
@@ -123,7 +123,7 @@ a docstring is laundered: it arrives looking like something that was checked, an
 treats it as settled. Where the reasoning turns out to be wrong, correct it *in the brief too* — these are
 single-use documents, but they are read once more by whoever closes them out.
 
-Live case, `researchers-night/done/crt-display.md`, 2026-08-31. Three of its rationales were wrong, all three
+Live case, `done/researchers-night/done/crt-display.md`, 2026-08-31. Three of its rationales were wrong, all three
 plausible, and one of them was a rendering bug that every contract test passed: "modulate alpha as well as
 luma" squares the modulation in a straight-alpha frame; `"luma"` was said to be for bright backdrops, which
 does not survive one question; and "emission is free — the capture bloom glows the scanlines" was

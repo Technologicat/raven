@@ -5,7 +5,7 @@
 
 > **Previously "brief 17".** Scoped out of brief 15 on 2026-08-04, given a reserved number, and never
 > written. The reservation is now retired: refer to this by name. The dangling reference in
-> `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (`:362`, `:946`) stays as it stands —
+> `briefs/done/researchers-night/done/15_headless-agent-driver-brief.md` (`:362`, `:946`) stays as it stands —
 > `done/` is a historical record and is not retconned — but the live content is here.
 
 > **Line numbers are as of 2026-08-12** and want verifying.

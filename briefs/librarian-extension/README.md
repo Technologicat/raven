@@ -5,6 +5,10 @@ order, what was cut and on what argument, what was learned while building each i
 because it produced no diff and would otherwise be re-decided from scratch. Read it when taking stock or
 picking the next item; it is not a document anyone reads through.*
 
+**Open, and complete as a set** (maintainer, 2026-09-30): 04, 05 and 06 are the tail of a set that forms a
+coherent whole, unscheduled for now and planned for scheduling in autumn 2026. No new briefs go in here;
+the folder closes into `done/` once these three are completed.
+
 Implementation briefs for the Librarian work of summer 2026. Completed briefs move to `done/`; live
 probes shared across briefs live in `manual_tests/`.
 
@@ -308,7 +312,7 @@ open house needs":
   open-house-critical. They go in if the Researchers' Night work lands with room to spare, which is not the
   way to bet.
 
-So all three of these are now *behind* `../researchers-night/`, and this sprint's remaining briefs are not
+So all three of these are now *behind* `../done/researchers-night/`, and this sprint's remaining briefs are not
 what to pick up next. Read that folder's README instead.
 
 **Amended 2026-08-05, and it bends the closure-first rule rather than fitting it.** A deferred-TODO triage
@@ -363,7 +367,7 @@ amendment above. Listed so the folder's contents are legible from its README rat
   mechanism for everything computed *from* a source artifact — extracted text, OCR, thumbnails, burst `.bib`
   records, embeddings — with separate stores for the chat and document-DB lifecycles. **v0.2.9 work; it does
   not gate v0.2.8**, and the webfetch attachment work deliberately lands ahead of it rather than waiting.
-- **14 — search within the chat log** (`researchers-night/done/14_chat-search-brief.md`). **v0.2.9**, and the freeze is why: it is a
+- **14 — search within the chat log** (`done/researchers-night/done/14_chat-search-brief.md`). **v0.2.9**, and the freeze is why: it is a
   feature, and unlike the webfetch attachment work it is not half of anything 0.2.8 already ships. The match
   unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer
   implementation rebuilds the whole panel and therefore does not transfer to an incrementally-built chat log.
@@ -374,7 +378,7 @@ amendment above. Listed so the folder's contents are legible from its README rat
   intact, so a later reader can tell settled from proposed. Prerequisite for the corpus TOC and for most of
   what the corpus-interrogation sketch wants. Brief 12 deliberately does not depend on it.
 - **15 — scripting surface over the scaffold** (`15_headless-agent-driver-brief.md`). **Landed 2026-08-12**;
-  closed into `researchers-night/done/`. Was first in that queue, ahead of 05 — see the amendment above for
+  closed into `done/researchers-night/done/`. Was first in that queue, ahead of 05 — see the amendment above for
   why it ranked on timing rather than closure. Two
   entry points, not one: build the turn's prompt and hand it back (no backend), and run the turn and report
   what happened (a result record, not a node id). Part 0 is lazy `api.initialize`, which is what makes

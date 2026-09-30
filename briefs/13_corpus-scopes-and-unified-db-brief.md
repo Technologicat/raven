@@ -5,6 +5,12 @@ it, so that the design session has somewhere to start and the decisions already 
 re-derived. The design itself is expected to come back from a claude.ai session as a filled-in version of
 this brief.
 
+**Status, 2026-09-30:** unscheduled, but needed this year (maintainer). **Scope it before starting**: this
+is the kind of item that expands to fill whatever schedule it is given, so the design session should fix
+what v1 is and what waits (maintainer's worry, 2026-09-30). **It precedes
+`visualizer-keyword-pools-brief.md`'s corpus-level display** (2026-09-10): §2 keeps the corpus frequency
+stats that window reads.
+
 **Priority raised 2026-08-07 (Juha): "the symlink dance is becoming unbearable."** Switching corpora means
 repointing `documents` and `rag_index` by hand, and the retrieval work has been doing it several times a day
 across five collections. Brief 12 then added a third directory to the dance (`document_sidecars`), and every
@@ -16,9 +22,11 @@ Three things now wait on it explicitly, and each is queued rather than designed 
 - **Cross-corpus sidecar GC** (brief 12). Content-addressed derived text would dedup across corpora, but
   then "is this file orphaned?" is a union query over every index that exists. A scope-aware index supplies
   that answer instead of reconstructing it.
-- **"Autosearch off, tools still on"** — the middle setting for the Documents toggle. Incoherent until a
-  scope can inject a topic TOC, because a model cannot sensibly decide to search a corpus it knows nothing
-  about. See §4, which already says the TOC is blocked on the same work.
+- **Retiring the automatic search.** Once a scope publishes a topic TOC to the model, the model can decide
+  for itself when to search, and the plan is to remove the automatic search (§4a). Until then it cannot: a
+  model cannot sensibly decide to search a corpus it knows nothing about. A middle setting for the
+  Documents toggle ("autosearch off, tools still on") is at most a transition step, if §4a's measurement
+  asks for one.
 - **Large-corpus retrieval.** Adaptive `k` was measured to pay below ~1.3k documents and to be dead at
   ~12k, where a broad question's relevant set outruns any conversational `k`. The answer there is stratified
   sampling, which needs the clustering this brief covers.
@@ -253,8 +261,8 @@ when it runs. Everything in this section is [P] and wants arguing with.
 
 ### 4a. With a TOC, the automatic search goes away
 
-Worked out 2026-09-29, from the display side (Yrityspäivä sprint). The preamble's "autosearch off, tools
-still on" middle setting is the weak form of this; the conclusion reached is the strong form.
+Worked out 2026-09-29, from the display side (Yrityspäivä sprint). This replaces the "autosearch off, tools
+still on" middle setting as the plan, and leaves that setting as a possible transition step.
 
 - **[N] Why the automatic search exists at all** (Juha): classical RAG searched automatically because models
   could not call tools. Raven searches automatically for a different reason — without it, the model does not

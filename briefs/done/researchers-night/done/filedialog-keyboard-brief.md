@@ -1177,7 +1177,7 @@ Suggested order, with what each actually costs:
    worse than never having completed at all.
 
    **And without completion, typing a path by hand is useless** (Juha) — nobody hand-types
-   `…/briefs/researchers-night/`. Which raises the right question: whether this key should exist at all,
+   `…/briefs/done/researchers-night/`. Which raises the right question: whether this key should exist at all,
    given that **the dialog already completes paths, better, through the find field.** Type a fragment,
    the cursor lands on the first match, Enter descends, repeat. That is incremental completion, and being
    fragment-based and smart-case it beats prefix-based Tab completion at its own job.

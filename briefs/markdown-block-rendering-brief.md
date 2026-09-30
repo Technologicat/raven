@@ -1,7 +1,9 @@
 # Brief: block-level Markdown in the chat view
 
-**Researchers' Night work.** Unnumbered pending your call on where it sits relative to 16 — both are
-exhibit-critical, and this one is smaller than 16 by some margin.
+**Status, 2026-09-30:** unscheduled, and next to be looked at after Yrityspäivä (maintainer). Steps 1 and 5
+landed 2026-08-25; what remains is behind the single-newline split, which is also what fenced code and
+multi-line lists are waiting on. Written for the Researchers' Night sprint, where it was the slack and was
+cut (2026-09-15); the section below records why.
 
 > **Line numbers are as of 2026-08-10** and want verifying; `chat_controller.py` has been moving daily.
 > Treat every `file.py:NNN` as a pointer to a thing that exists, not as a coordinate.

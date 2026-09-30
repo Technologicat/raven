@@ -13,7 +13,7 @@ file and the *selection* would otherwise not survive anywhere. Delete this block
 where the work is — it is an entry point, not a plan.
 
 **The triage ran on 2026-08-25, and its result outranks this block.** Build order, cuts, the accepted risk
-and the two premises that stopped binding are in `briefs/researchers-night/README.md` → "Four weeks out,
+and the two premises that stopped binding are in `briefs/done/researchers-night/README.md` → "Four weeks out,
 2026-08-25" → *The pass, run 2026-08-25*, which also supersedes the concrete Autumn 2026 list below where
 the two disagree. Of the six here, **only item 2 is on the exhibit path**; the rest keep their worth and
 lose their claim on the next four weeks.
@@ -52,7 +52,7 @@ after publishing — without that gate being on any release path.
 **Start on brief 16's transition animation** (*Animating a change of topology*, design settled 2026-09-02),
 then the look check (item 10). Search moved past Researchers' Night on 2026-09-15. Everything from the
 2026-09-15 session is committed and pushed, and the tree is clean; what it closed and settled is in
-`briefs/researchers-night/README.md` → *Decided 2026-09-15*.
+`briefs/done/researchers-night/README.md` → *Decided 2026-09-15*.
 
 ## Previous session, from 2026-09-10
 
@@ -73,11 +73,11 @@ can be tested.
 the exhibit:
 
 - ~~**Band-2 item 11, the avatar's expression following the spoken words**~~ — **done 2026-09-15**
-  (`5ce3e114`). Today's remaining queue is in `briefs/researchers-night/README.md` → *Decided 2026-09-15*.
+  (`5ce3e114`). Today's remaining queue is in `briefs/done/researchers-night/README.md` → *Decided 2026-09-15*.
 - **The chat graph's transition animation** (brief 16), which must precede search.
 - ~~**Brief 16 item 8, search in both halves**~~ — **moved past Researchers' Night on 2026-09-15**, a
   first draft before the day being welcome if time remains. The slack items (message editing, the
-  Markdown remainder) are after the event too. `briefs/researchers-night/README.md` → *Decided 2026-09-15*.
+  Markdown remainder) are after the event too. `briefs/done/researchers-night/README.md` → *Decided 2026-09-15*.
 
 **The quick wins, if a session wants one before the large item**: the two-column sweep for the seven cards
 that have not had it. Small, in `TODO_DEFERRED.md`, and wants the maintainer at the keyboard — a card is a
@@ -132,18 +132,18 @@ leaves the one large item a safe margin rather than a hopeful one.
 2. ~~**Per-character role icons for stored messages.**~~ **Done 2026-09-08**, and wider than filed — see
    above. What is left of that item is the design decision it uncovered, which is now its whole content.
 3. **Band-2 item 11, the avatar's expression following the spoken words** — open, and at this point it is a
-   *prototype and a decision* rather than a build. See the gate in `briefs/researchers-night/README.md`.
+   *prototype and a decision* rather than a build. See the gate in `briefs/done/researchers-night/README.md`.
 4. **The chat graph's transition animation** — brief 16, "Animating a change of topology", whose design was
    settled 2026-09-02. **Brief 16 cannot close without it**, and it was missing from the plan until
    2026-09-09 because it was filed inside the brief under the things v1 does not do. Runs **before** search:
    search filters the node selection, which is itself a topology change, so it is a consumer of this rather
-   than merely a disturbance to it. The brief argues the opposite order and `briefs/researchers-night/README.md`
+   than merely a disturbance to it. The brief argues the opposite order and `briefs/done/researchers-night/README.md`
    settles why it does not hold.
 5. **Brief 16 item 8, search in both halves.** The large one: nontrivial GUI and UX work, probably at least
    a week. Everything above is sized to leave room for it.
 6. **Message editing — slack**, ahead of the Markdown remainder. Promised in the user-facing manual since
    Librarian's first version, and the backend has always supported it: `chattree` is revisioned and
-   nothing in the GUI has ever created a second revision. `briefs/researchers-night/README.md` gathers the
+   nothing in the GUI has ever created a second revision. `briefs/done/researchers-night/README.md` gathers the
    material, which was scattered across four files, and records the three decisions taken 2026-09-09 — an
    edit adds a revision, old revisions keep their attachments alive, and the user needs a way to delete
    one permanently — a button beside the revision picker, not a sweep and not automatic. The reading side
@@ -151,7 +151,7 @@ leaves the one large item a safe margin rather than a hopeful one.
    eight `TODO: ... revision` markers actually need a change, which is a design question rather than a
    sweep.
 7. **The Markdown renderer's remaining steps — slack**, if time is left over. The reasoning is in
-   `briefs/researchers-night/markdown-block-rendering-brief.md`.
+   `briefs/markdown-block-rendering-brief.md`.
 
 Then item 10 of brief 16, the look check, once the thumbnails and role glyphs are all in place.
 
@@ -169,12 +169,12 @@ leaves live is that ooba is excluded from the seed and wants re-testing, which t
 ## Superseded: next session, from 2026-08-31
 
 **Band-2 item 10 is done** — designed, built, live-tested and closed on 2026-08-28, as
-`briefs/researchers-night/done/stt-audio-input-panel.md`.
+`briefs/done/researchers-night/done/stt-audio-input-panel.md`.
 
 **Monday starts on item 11 — the avatar's expression follows the spoken words** (Juha, 2026-08-28).
 Exhibit-facing in a way the rest of the band is not: TTS is on whenever the avatar speaks, so a face
 reacting to a sentence the voice has not reached is live all evening. The design is already written, in
-`briefs/researchers-night/README.md` — take the updates from `on_start_sentence` as each sentence is
+`briefs/done/researchers-night/README.md` — take the updates from `on_start_sentence` as each sentence is
 spoken, settle neutral while the reply streams, and extract the streaming path's deque-and-overlap
 stabilization as the shared piece rather than writing a second copy of it.
 
@@ -185,7 +185,7 @@ The rest of this block is the leftover selection from 2026-08-27. Same purpose a
 Delete once it stops describing where the work is.
 
 1. ~~**The `continue_` fix.**~~ **Done 2026-08-28**, with band-2 item 9, which is now closed and its brief
-   filed in `briefs/researchers-night/done/`. The accumulators are seeded from the message being continued,
+   filed in `briefs/done/researchers-night/done/`. The accumulators are seeded from the message being continued,
    held apart from them so every count and reset stays about the current call. Verified live in both shapes,
    with the stored revisions read back off disk.
    - **ooba is deliberately excluded and wants re-testing with item 2's brief.** It continues through a
@@ -258,7 +258,7 @@ already decided.
   - **Headings render as of 2026-08-25**, the brief's step 1: the colour goes to the renderer as an
     argument, so nothing wraps a paragraph in `<font>` any more and a block construct can form. The other
     two are behind the second barrier, the single-newline split, and are the brief's step 3.
-  - **Briefed as one job**, `briefs/researchers-night/markdown-block-rendering-brief.md`, and much
+  - **Briefed as one job**, `briefs/markdown-block-rendering-brief.md`, and much
     smaller than these three read: the barriers are in Raven's own code rather than the vendored renderer.
     That brief is the tracker.
 - **Markdown renderer: text goes missing** — a character, or most of a section. **Moved onto the demo path
@@ -297,7 +297,7 @@ already decided.
   ("it thought for 8 s and 1400 tokens"), not required.
 
 **Phase 2 — impressiveness.** ~~`crt` and `atmospheric_dust`~~ — both landed 2026-08-31; see
-`briefs/researchers-night/done/`. **The VRAM re-measurement they were the trigger for is still owed**:
+`briefs/done/researchers-night/done/`. **The VRAM re-measurement they were the trigger for is still owed**:
 `imagefx` measures 0.00 GiB in `investigations/vram/avatar_footprint.py` only because its filter chain is
 empty at construction, and `crt` is now in the default chain. Re-run it.
 
@@ -866,7 +866,7 @@ every tier, chosen on measurements rather than reputation.
 
 ### STT / voice
 
-- ~~**[High]** STT: configurable silence level, autostop timeout, VU peak hold time.~~ **Done 2026-08-28**, as Raven-librarian's *Audio input* panel (F9): the level, the automatic stop, the meter's peak hold and the microphone itself, all live controls, remembered between runs. `briefs/researchers-night/done/stt-audio-input-panel.md`.
+- ~~**[High]** STT: configurable silence level, autostop timeout, VU peak hold time.~~ **Done 2026-08-28**, as Raven-librarian's *Audio input* panel (F9): the level, the automatic stop, the meter's peak hold and the microphone itself, all live controls, remembered between runs. `briefs/done/researchers-night/done/stt-audio-input-panel.md`.
   - **What it changed about the other two STT items**: the GUI surface they were to share now exists, and it has room below the peak-hold slider. The recorder's VU readout is a listener list rather than one slot, which is the piece the wake word's "one capture fanned out to three consumers" needs.
   - **Confirmed on the exhibit path in the 2026-08-25 triage** (Juha), and the reason is worth keeping: **speech input is new this year.** Last year the operator typed the visitors' questions in, so this is the first outing in a room whose noise floor nobody can predict — which is the case this item was filed for, rather than a refinement of something already proven there.
 
@@ -1002,7 +1002,7 @@ every tier, chosen on measurements rather than reputation.
 
 - **[Medium]** Avatar on/off toggle: auto-off is implemented; add explicit disable so Librarian won't try to load or run the avatar at all (for low-VRAM setups). What to show in the right panel when avatar is off? (Recent chats list, once that exists?)
 
-- ~~**[Medium]** Avatar: digital glitch effect when switching chat branches.~~ **Shipped 2026-08-25**, over the four points where the conversation on screen is replaced: a sibling switch, jumping to where a branch continues, starting a new chat, and a reroll. The user's own chain is overlaid rather than replaced, and restored from `DPGAvatarController.load_animator_settings`. What remains is tuning the look by eye; the parameters and the reason the ceiling wants re-checking are in `briefs/researchers-night/README.md`.
+- ~~**[Medium]** Avatar: digital glitch effect when switching chat branches.~~ **Shipped 2026-08-25**, over the four points where the conversation on screen is replaced: a sibling switch, jumping to where a branch continues, starting a new chat, and a reroll. The user's own chain is overlaid rather than replaced, and restored from `DPGAvatarController.load_animator_settings`. What remains is tuning the look by eye; the parameters and the reason the ceiling wants re-checking are in `briefs/done/researchers-night/README.md`.
 
 - **[Medium]** Avatar: do more to eliminate stutter while receiving LLM response. Happens especially at first avatar speech in a session and while TTS is rendering in the background. Pushing limits of 3070Ti. Investigate audio buffer size (see `raven.client.util`) and rendering smoothness under high system load.
 

@@ -68,7 +68,7 @@ live on the Night.
 - **Message editing v1** (2026-09-28). Ctrl+E or the pencil edits a user message or an AI reply in place, as
   a new revision; a message with more than one revision draws its `R` number as a link and says how many it
   has, and the link or Ctrl+Shift+E opens `DPGRevisionPanel` to show or delete each. The background was in
-  `briefs/researchers-night/README.md`, "Message editing joins the slack".
+  `briefs/done/researchers-night/README.md`, "Message editing joins the slack".
   - Found on the way, and fixed: a keyboard mark moved onto a widget another thread had just deleted took
     the render loop down (`keyboardmark.Mark._set_target`), which is how Librarian died once at startup.
   - New in the shared layer: `gui_animation.give_focus`, `give_caret`'s sibling for widgets that hold focus
@@ -237,9 +237,12 @@ live on the Night.
        its first occupant; `raven/server/modules/webcommon.py` holds what the two web modules share (driver
        factory, user agent, the `WebToolException` family, `lock_unless_cancelled`). Nothing else in `app.py`
        or the modules was found to belong in either.
-2. **Sprint cleanup**: `researchers-night/` still holds four open briefs (11, 12, 13 and
-   `markdown-block-rendering`), none of which shipped for the Night. Rehome them — here if anything is for the
-   8th, otherwise to `design/` or the top level — and close that folder into `done/`. The fifth, the AOKK
+2. **Done 2026-09-30.** **Sprint cleanup**: `researchers-night/` still held four open briefs (11, 12, 13 and
+   `markdown-block-rendering`), none of which shipped for the Night. All four went to the top level of
+   `briefs/`, none being for the 8th (maintainer), each with a status line; the folder is closed into
+   `briefs/done/researchers-night/`, its README ending on a postmortem. The items that sprint's notes held and
+   nothing else did went to `TODO_DEFERRED.md`, to dotclaude, or were fixed at the close.
+   `librarian-extension/` stays open on purpose: 04–06 are a complete set, to be scheduled this autumn. The fifth, the AOKK
    investigation's, was closed by a separate session, its remaining generalization written up as two new
    briefs (maintainer, 2026-09-30).
 3. **Focus parks and `give_caret` tell the keyboard marks where the focus is going** — the deferred item of

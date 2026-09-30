@@ -500,7 +500,7 @@ tree sizes with windowed siblings. Revisit only if measurement says otherwise.
   2026-09-02, and put back on the Researchers' Night plan on 2026-09-09: **this brief cannot close without
   it**, and it runs *before* the search machinery. Being filed here, under a heading of things this
   version does not do, is how it stayed out of the plan this brief is tracked by. See below, and the
-  dated section in `briefs/researchers-night/README.md` for the ordering and why it survives the caution
+  dated section in `briefs/done/researchers-night/README.md` for the ordering and why it survives the caution
   this item itself records.
 
 ### Animating a change of topology (scheduled 2026-09-09; design settled 2026-09-02)
@@ -1470,7 +1470,7 @@ same day; see the subsections below.)*
 **Item 8, search, moved past Researchers' Night** (Juha, 2026-09-15): it is edge-case-by-edge-case GUI work
 whose real size is the two weeks of finding those, so it cannot be scheduled into what is left. A first
 working draft before the day is still welcome if time remains. The brief therefore stays open past the
-event, on item 8 alone. `briefs/researchers-night/README.md` → *Decided 2026-09-15* has the rest.
+event, on item 8 alone. `briefs/done/researchers-night/README.md` → *Decided 2026-09-15* has the rest.
 *(Revised 2026-09-16: seven workdays remain and a v1 of search fits in them, so item 8's v1 is back on the
 exhibit path. README → *Decided 2026-09-16*.)*
 

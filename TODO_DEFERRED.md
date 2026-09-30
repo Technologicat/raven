@@ -11,6 +11,64 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## Documented command lines are unchecked
+
+*Cluster: doc-checkers · Cost: M · Gate: none · Filed: 2026-09-21 · See also: `scripts/check_usage_paths.py`, `briefs/done/researchers-night/README.md` → "Documented command lines are unchecked"*
+
+`check_usage_paths.py` verifies that every `python -m raven...` names a real module, and nothing checks the
+*options* in a documented command line. A `raven-pdf2bib` line in the Visualizer manual had gone stale — a
+positional backend URL that became `--backend-url`, and two now-required options missing — and a check that
+the script exists would have passed it. Worth building (maintainer, 2026-09-21).
+
+**Run each tool with `--help` in a subprocess; do not import them** (maintainer, 2026-09-23). Importing an
+`app.py` runs the app. From the help text, check that every documented option exists and every required one
+is present. That is looser than consulting the parser and much safer, and needs no import whitelist.
+
+Cost, measured 2026-09-23: all 26 console scripts take 36.5 s in total, median 0.40 s — nearly all of it
+three CLI tools that parse argv below their heavy imports (the root `CLAUDE.md` names them). Affordable as it
+is, and cheaper once those three are fixed.
+
+## The dev-facing file dialog manual
+
+*Cluster: docs · Cost: M · Gate: none · Filed: 2026-09-21 · See also: `raven/vendor/file_dialog/file-dialog-manual.md`*
+
+The file dialog wants two manuals (maintainer, 2026-09-21). The user-facing one landed 2026-09-22 and is
+linked from the main README. The dev-facing one is not written: how to embed the dialog in an app, its
+constructor parameters (`themes_and_fonts` among them), its callbacks. The vendored
+`raven/vendor/file_dialog/README.md` is upstream's, 51 lines about installing the widget, and may be what
+it grows from.
+
+## A full README pass, reading for stale claims
+
+*Cluster: docs · Cost: M · Gate: none · Filed: 2026-09-22 · See also: "The main README is becoming a god document"*
+
+Decided while fixing three status claims that had gone stale in place: Raven advertised on PyPI where it is
+not published, Librarian marked `:construction:` after it was ready, the Visualizer "in beta" in its own
+manual while the main README called it operational. Those three are fixed. The pass is for the rest of that
+kind, which only a person reading finds: nothing checks a claim about a feature's status. Covers the main
+README and the per-app manuals.
+
+## The main README is becoming a god document
+
+*Cluster: docs · Cost: L · Gate: none · Filed: 2026-09-23 · See also: "A full README pass, reading for stale claims"*
+
+It carries seven app summaries, three shared-behaviour sections, a five-part command-line index, a
+per-platform install guide, configuration, privacy and the rest (maintainer, 2026-09-23 — *"or given how
+disorganized it's also becoming, perhaps a goddess document"*). The material is right and the container is
+wrong. Deferred until the manuals stopped being written, so nothing moves twice; they have now stopped.
+
+## Screenshots and clips left over from the 0.2.9 pass
+
+*Cluster: docs · Cost: M · Gate: a session where taking the keyboard is expected · Filed: 2026-09-24 · See also: the `live-gui-testing` skill, *Capturing motion**
+
+The pass of 2026-09-24 refreshed Librarian, the Visualizer, Raven-cherrypick and the XDot viewer. Left:
+
+- **The avatar shots want retaking for a proper manual version.** The CRT look does not scale well in them
+  (maintainer); likely with a postprocessor chain suited to screenshots.
+- **Skipped for 0.2.9**: the conference timer, the two avatar editors and the server. Their screenshots are
+  from 0.2.4–0.2.7, the oldest in the tree.
+- **Motion not yet captured**: the keyboard mark's breathing, smooth scrolling and the end-of-list arrows.
+
 ## Focus parks and `give_caret` do not tell the keyboard marks where the focus is going
 
 *Cluster: keyboardmark · Cost: M · Gate: none · Filed: 2026-09-30 · See also: `dpg-notes.md` → "Focus is not the same as the caret", the paragraph "A keyboard mark follows the transit"*
@@ -667,7 +725,7 @@ not present there.
 Raised by Juha (2026-08-26) as one of three items about what the avatar, the emotion detector and the TTS
 each do *during* a reply. The third — the avatar's expression following the spoken words rather than the
 streaming ones — was scheduled instead, as the sprint's band-2 item 11. Filed here 2026-09-02, the write-up
-in `briefs/researchers-night/README.md` ("Raised 2026-08-26 — what the avatar does while a reply is being
+in `briefs/done/researchers-night/README.md` ("Raised 2026-08-26 — what the avatar does while a reply is being
 generated") having been its only record, and that file moves to `briefs/done/` when the sprint closes.
 
 ## Start synthesizing speech while the reply is still streaming
@@ -1004,7 +1062,7 @@ background prefill, which the two-stage readout was already shaped for. The unde
 the moment before the exact figure lands.
 
 **What remains is the durable fix, and it is designed elsewhere — this item must not become a second copy
-of it.** `briefs/researchers-night/12_derived-artifact-store-brief.md` persists derived text, and its
+of it.** `briefs/12_derived-artifact-store-brief.md` persists derived text, and its
 motivating table names this very case ("not persisted, extracts on demand, memoized on the
 content-addressed filename"). A note recording the 3038 ms and the thread it happened on has been added
 there. Until it lands, the extraction still happens once per process — just no longer where a keystroke is
@@ -1422,7 +1480,7 @@ which is what the FontAwesome path already is in miniature.
 
 ## A file-type icon set of our own, covering the formats Raven actually opens
 
-*Cluster: filedialog · Cost: M · Gate: RN2026 · Filed: 2026-08-14 · See also: `briefs/researchers-night/filedialog-thumbnails-brief.md`*
+*Cluster: filedialog · Cost: M · Gate: RN2026 · Filed: 2026-08-14 · See also: `briefs/done/researchers-night/done/filedialog-thumbnails-brief.md`*
 
 `raven/vendor/file_dialog/images/` is the upstream set, and it has no icon for a **presentation**
 (`.pptx`, `.odp`) or a **spreadsheet** (`.xlsx`, `.ods` — support planned, see "Spreadsheets in the docs DB
@@ -1634,7 +1692,7 @@ which is a real cost, and also stops the escape route depending on a package tha
 
 ## Batch tools: LLM reconnect mid-run
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-08-12 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-08-12 · See also: `briefs/per-document-llm-pass-brief.md`*
 
 The model-loaded work made `raven-pdf2bib` and `raven-importer` stop at *start time* on both failure states
 — unreachable, and reachable-with-no-model. The second was the one that most needed it: the backend answers,
@@ -3111,7 +3169,7 @@ clusters, as of 2026-07-27:
   support in the Markdown renderer". Adjacent: "Super/subscript font
   coverage in the GUI" is an *atlas* problem rather than a renderer one (`fontsetup` serves both plain DPG
   text and `dpg_markdown`), but it shares the font-survey work with the emoji item's monochrome-font route.
-  **These point at `briefs/researchers-night/markdown-block-rendering-brief.md`**, which found
+  **These point at `briefs/markdown-block-rendering-brief.md`**, which found
   the shared cause and turned out to be much smaller than the items assumed. Its step 1 landed 2026-08-25
   and closed "Markdown ATX headings don't render", which is why that one is no longer in the list.
 - **Document ingestion** — "Same file formats in the docs DB and in chat attachments", "Spreadsheets",
@@ -3217,7 +3275,7 @@ from the other direction.
 
 ## Modernize the Librarian system prompt / character card
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10 · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/done/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
 
 The default system prompt (`raven.librarian.config`) reads as dated for current instruction-tuned models —
 "take a deep breath and think step by step", "believe in your abilities and strive for excellence", "you are
@@ -3883,7 +3941,7 @@ Discovered during the brief-01 GUI override session (2026-06-04).
 
 *Cluster: markdown-renderer · Cost: ? · Gate: superseded · Filed: 2026-07-17*
 
-**Superseded by `briefs/researchers-night/markdown-block-rendering-brief.md`.** Same cause as the heading
+**Superseded by `briefs/markdown-block-rendering-brief.md`.** Same cause as the heading
 item, plus the second barrier: `_render_text_paragraphs` splits on single newlines, so a construct spanning
 lines cannot form at all. The brief's step 3 removes the split. The renderer has `MessageEntityPre` already,
 which is the part the original diagnosis missed.
@@ -3931,7 +3989,7 @@ Found by Juha (2026-08-04), reading the reasoning trace on a websearch turn.
 
 *Cluster: markdown-renderer · Cost: ? · Gate: superseded · Filed: 2026-08-04*
 
-**Superseded by `briefs/researchers-night/markdown-block-rendering-brief.md`, step 7** — and it is the one
+**Superseded by `briefs/markdown-block-rendering-brief.md`, step 7** — and it is the one
 genuine renderer gap of the three: `table` is the only block construct with no `case`. That also makes it
 the only one of the three that stays *optional* once the two barriers are removed, rather than falling out
 of them.
@@ -3967,7 +4025,7 @@ Not a content-parts (brief 03) regression: the reasoning-bubble rendering is unc
 (`add_paragraph(reasoning_content, is_thought=True)`); the model's indented output simply meets standard
 Markdown. A reroll whose reasoning used `1.`/`2.` numbers at column 0 rendered cleanly.
 
-**Superseded by `briefs/researchers-night/markdown-block-rendering-brief.md`, step 4**, which takes the
+**Superseded by `briefs/markdown-block-rendering-brief.md`, step 4**, which takes the
 cause above as correct — this is the one item of the four whose diagnosis survived — and works out the fix:
 step 1 removes the leaked `</font>` for free, and the indentation collision needs a dedent **by common
 prefix, never per line**, so that a trace carrying real code keeps its relative indentation. Note that the
@@ -4811,7 +4869,7 @@ Discovered during cherrypick preload adaptive-cap work (2026-06-09).
 
 *Cluster: markdown-renderer · Cost: ? · Gate: superseded · Filed: 2026-07-16*
 
-**Superseded by `briefs/researchers-night/markdown-block-rendering-brief.md`, step 2**, which absorbs it
+**Superseded by `briefs/markdown-block-rendering-brief.md`, step 2**, which absorbs it
 because step 3 depends on it: this dead path is the *only* reason `_render_text_paragraphs` splits on single
 newlines at all, and that split is the second barrier in front of every multi-line Markdown construct. So
 removing it is not tidying alongside that work — it is the thing that unblocks it.
@@ -5544,7 +5602,7 @@ reason to have a version number rather than just a migration marker.
 
 ## A no-avatar mode, with the chat tree in the panel the avatar vacates
 
-*Cluster: panel occupancy · Cost: L · Gate: the post-RN2026 triage · Filed: 2026-07-29 · See also: `briefs/researchers-night/done/16_chat-graph-view-brief.md`*
+*Cluster: panel occupancy · Cost: L · Gate: the post-RN2026 triage · Filed: 2026-07-29 · See also: `briefs/done/researchers-night/done/16_chat-graph-view-brief.md`*
 
 **Timing, stated so this is not read as near-term work** (Juha, 2026-09-04): everything here is post-
 Researchers' Night, and the realistic slot is autumn 2026 or spring 2027 — an academic year has no
@@ -5956,7 +6014,7 @@ Raised while adding HTML support (2026-07-29, Juha's example).
 
 ## Rendering LaTeX equations in the chat log
 
-*Cluster: markdown-renderer · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-29 · See also: `briefs/researchers-night/markdown-block-rendering-brief.md`*
+*Cluster: markdown-renderer · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-29 · See also: `briefs/markdown-block-rendering-brief.md`*
 
 Models emit LaTeX — `$...$`, `$$...$$`, `\begin{equation}` — whenever the subject is mathematical, and Librarian
 currently shows it as source. For a research assistant aimed at scientific work this is the wrong way round: the
@@ -6325,7 +6383,7 @@ for an attachment, which is a hole for user-attached documents as much as for fe
 - **Its other half is making a chat's attachments searchable**, and the two are a pair rather than competing
   designs: search locates a match and says where it sits, the reader fetches the span around it — which is
   exactly the contract `search_documents` and `fetch_document` already have. Humans Ctrl+F, then read around
-  the hit. Design sketch in `briefs/researchers-night/13_corpus-scopes-and-unified-db-brief.md`,
+  the hit. Design sketch in `briefs/13_corpus-scopes-and-unified-db-brief.md`,
   which also notes the consequence for the tool surface: once attachments are searchable, an attachment and a
   knowledge-base document are the same kind of thing at query time, so one `read_document` covers both.
 
@@ -6360,7 +6418,7 @@ Raised by Juha (2026-08-04), asking whether the fetched-page chip should open on
 
 ## A crash during ingest loses the whole run, however long it was
 
-*Cluster: ? · Cost: ? · Gate: post-0.2.10, with the per-document LLM pass · Filed: 2026-08-06 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
+*Cluster: ? · Cost: ? · Gate: post-0.2.10, with the per-document LLM pass · Filed: 2026-08-06 · See also: `briefs/per-document-llm-pass-brief.md`*
 
 The delayed-commit coalescer defers a commit for one second after each finished document read, so on a
 large corpus it never fires until the reads stop arriving. Measured on the 1268-PDF fulltext corpus
@@ -6697,7 +6755,7 @@ effect *is*, and the second one would want the filters audited for whether they 
 
 ## Bookmarks in the chat graph
 
-*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-04 · See also: briefs/researchers-night/done/16_chat-graph-view-brief.md*
+*Cluster: chat-graph · Cost: M · Gate: none · Filed: 2026-09-04 · See also: briefs/done/researchers-night/done/16_chat-graph-view-brief.md*
 
 Mark chat nodes worth coming back to, drawn with the pill mechanism the graph already has for pointers, in
 a colour of their own. Design first — what a bookmark *is* (a per-node flag in the datastore, or view

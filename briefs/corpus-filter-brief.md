@@ -40,7 +40,7 @@ Juha, 2026-09-29: *"scope questions are good enough for v1. RQs are for later."*
 
 A **scope question** is what the search actually asked — for the prototype, *studies on different aspects
 of the use of AI agents in higher education*. A research question is narrower, and the 2026-09-01
-decision in `researchers-night/done/aokk-corpus-scope-classification-brief.md` already put those in a
+decision in `done/researchers-night/done/aokk-corpus-scope-classification-brief.md` already put those in a
 separate, later pass, after the corpus has been ingested into Librarian. So the filter is the coarse cut
 that makes a corpus worth ingesting, and nothing in v1 asks about research questions.
 

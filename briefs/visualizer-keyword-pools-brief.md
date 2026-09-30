@@ -4,8 +4,7 @@
 corpus-level keyword data the importer already saves is not shown anywhere. These are the same problem
 seen from two ends, and the mechanism below covers both.
 
-Not sprint-scheduled. Pull it into `researchers-night/` if the map's labels turn out to matter for the
-exhibit.
+Not sprint-scheduled.
 
 ## The problem
 
@@ -193,7 +192,7 @@ The ordering is what changes: distinctive first.
 subtract / intersect algebra in `selection.py` composes into boolean queries over keywords, and no query
 language has to be invented. Select the clusters carrying `AI`, add `chatbot`, add `generative`, then
 invert, and what remains is the candidate out-of-scope material. That is how the four AI-less clusters
-recorded in `briefs/researchers-night/done/aokk-corpus-scope-classification-brief.md` were found, and it
+recorded in `briefs/done/researchers-night/done/aokk-corpus-scope-classification-brief.md` were found, and it
 wants to be a feature rather than a script somebody ran once.
 
 ### Raise the extraction count to 12, then split
@@ -369,7 +368,7 @@ never join the common pool.*
   a claim on the phrase *what this dataset is about*. Cheap to show both, and a judgement that wants a
   GUI in front of it rather than a table in a brief.
   - **Where the numbers would come from is settled elsewhere**, and the two halves had no link between
-    them until 2026-09-10: `researchers-night/13_corpus-scopes-and-unified-db-brief.md` §2 files corpus
+    them until 2026-09-10: `13_corpus-scopes-and-unified-db-brief.md` §2 files corpus
     frequency stats as a Tier-1 derived artifact, computed per scope and globally and stored with the
     dataset. So that brief answers *what is kept*, and this one answers *what it is for* — neither is
     findable from the other by searching for the feature, which is how it went missing twice.

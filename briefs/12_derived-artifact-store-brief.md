@@ -1,5 +1,7 @@
 # Brief: one mechanism for derived artifacts, two stores
 
+**Status, 2026-09-30:** scheduled for v0.2.10. Does not depend on brief 13.
+
 **What:** unify how Raven stores things it *computed from* a source artifact — extracted text, OCR text,
 rescaled images, burst `.bib` records, and eventually embeddings — behind one keying and regeneration
 mechanism, with separate stores for the chat and document-DB lifecycles. Today the same class of object has

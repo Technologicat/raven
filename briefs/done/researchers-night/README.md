@@ -13,14 +13,86 @@ Split out of `librarian-extension/` on 2026-08-07, at the 10/11 boundary. Worth 
 chronological rather than topical: the numbers ran in the order the briefs were *written*, so 14 and 15 are
 Librarian features and 11 is Visualizer, sitting side by side here because of when they were conceived.
 
-## What's here
+## Postmortem, written at the close (2026-09-30)
 
-| Brief | What | Status |
-|---|---|---|
-| `markdown-block-rendering-brief.md` | Band-2 item 12: block-level Markdown in the chat view | **After Researchers' Night** — it was the sprint's slack, and the slack is gone (2026-09-15). Steps 1 and 5 landed 2026-08-25; what remains is behind the single-newline split, which is also what fenced code and multi-line lists are waiting on |
-| `12_derived-artifact-store-brief.md` | One keying and regeneration mechanism for everything computed *from* a source artifact | v0.2.10. Does not depend on 13 |
-| `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night. **It precedes `visualizer-keyword-pools-brief.md`'s corpus-level display** (Juha, 2026-09-10): its §2 keeps the corpus frequency stats that window reads, so it is the foundation and goes first |
-| `11_visualizer-importer-rework-brief.md` | Nomic migration, ~~PCA preprocessing~~, ~~cosine-to-medoid outlier assignment~~, Procrustes alignment, and **clustering in high-D**. **Items 2, 3 and 5 were measured on 2026-09-01 and the brief now points at `investigations/highdim-clustering/README.md`, which is the specification** — 2 and 3 are measured harmful and must not be built as written, 5 is settled and ready to implement (agglomerative, not HDBSCAN) | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12. **Item 5 is near-term** (Juha, 2026-09-29): the Visualizer is waiting on it, being useful for nearly every dataset — the filtered AOKK corpus is only the first in line — and so far it exists only as the manual prototype in `investigations/highdim-clustering/` — 1–2 days (Juha, 2026-09-08) |
+**The sprint closed on 2026-09-30**, five days after the event, and moved to `briefs/done/`. 0.2.9,
+*"Pleiades"*, was released on 2026-09-24, the day before the event, and its changelog is the full record
+of what shipped. This section is the other half, which the changelog cannot show: what was planned, and
+what happened to the plan. It is written from the dated sections below.
+
+### What the event needed, and got
+
+Everything on the exhibit path landed, and it was clear by 2026-09-16, nine days out:
+
+- **The chat graph view** (brief 16), the item the sprint existed for. Estimated on 2026-08-31 at *one week,
+  perhaps two*; closed 2026-09-18, with search, which had been off the plan for a day. Step zero had been
+  done on 2026-08-25.
+- **`crt-display` and `atmospheric-dust`**, estimated at 1–3 days together, done in one session on
+  2026-08-31.
+- **The avatar's expression following the spoken words** (band-2 item 11), sized as small and landed in a
+  day on 2026-09-15. The risk that made it a spike, an uncanny neutral pause before speech, did not
+  materialize.
+- **Search in both views** (brief 14 and brief 16 item 8): the chat log half on 2026-09-17, the graph half
+  on 2026-09-18.
+
+Two items were cut as slack, and both went to the next sprint: **message editing**, built on 2026-09-28 in
+the Yrityspäivä sprint, and **the block-level Markdown remainder**, still open (below).
+
+### Plan against outcome
+
+- **Self-contained items came in under their estimates; open-ended GUI work at the top of its range or past
+  it.** `crt` and the dust took one session of an estimated one to three days. The graph view took about
+  two and a half weeks from its 2026-08-31 estimate of one to two, though the sprint ran other work
+  alongside it.
+- **Search's first estimate held, and the revisions were wrong.** 1–2 days including the UX (Juha,
+  2026-09-07); "at least a week" (2026-09-09); bumped past the event on that argument (2026-09-15); back on
+  the next day; then built in two days. The edge-case tail that argued for the bump was real, and arrived
+  as same-day polish rather than as a second week.
+- **Items filed inside a brief dropped out of the plan for a while, twice, and both were caught and
+  finished.** Band-2 item 11, the avatar's expression following the spoken words rather than the streaming
+  text, was "Monday's" on 2026-08-28, found still unstarted on 2026-09-07, and landed 2026-09-15. The
+  transition animation was a v2 note inside brief 16 until it was put on the plan on 2026-09-09, and landed
+  2026-09-16. The plan was tracked by brief, so an item living inside one had nothing to surface it.
+- **Two unplanned weeks, both kept.** The week of 2026-09-10 went on hammerspace: the idle frame rate,
+  machine-local config, the help cards. What that produced and what the plan would have produced both
+  strictly improve on the product as it was, and neither dominates the other: a different point on the
+  same Pareto front (Juha, 2026-09-30). The week of 2026-09-21 became a documentation pass: the changelog reformatted, three new
+  manuals, fourteen fleet-wide changelog rules, and the screenshots and clips on 2026-09-24.
+- **Parallel sessions collided in a test file** that the division by module did not cover (2026-09-01).
+- **A decision with no diff was nearly lost**: the dev-facing file dialog manual survived only because
+  Juha repeated it from memory (2026-09-22).
+
+### What the close did not do
+
+**The stock-take planned on 2026-09-23 was not run** (a triage of both TODO files, then placing what
+remains into sprints). The Yrityspäivä sprint opened on 2026-09-28 from the maintainer's post-event list
+instead. The items this file held that were recorded nowhere else were carried out at the close; see
+*Carried out at the close* below.
+
+## Moved out at the close
+
+The four briefs still open here were rehomed to the top level of `briefs/` on 2026-09-30. None of them is
+for Yrityspäivä. Each now carries its own status line.
+
+| Brief | Where it stands |
+|---|---|
+| `briefs/11_visualizer-importer-rework-brief.md` | After Yrityspäivä, near-term; item 5 (clustering in high-D) first |
+| `briefs/12_derived-artifact-store-brief.md` | v0.2.10 |
+| `briefs/13_corpus-scopes-and-unified-db-brief.md` | Needed this year; wants scoping before it starts |
+| `briefs/markdown-block-rendering-brief.md` | Next to be looked at after Yrityspäivä |
+
+## Carried out at the close
+
+Open items that were recorded only in this file, and where each went on 2026-09-30. They had been kept here
+rather than in `TODO_DEFERRED.md` because that list buries work rather than scheduling it (maintainer).
+
+- **Fixed at the close, each in its own commit**: `dpg_markdown.shutdown` made restartable, so the test
+  fixtures can call `guiutils.teardown`; cross-file anchors in `check_doc_links.py`; the three CLI tools
+  that took about nine seconds to answer `--help`.
+- **Filed in `TODO_DEFERRED.md`**: documented command lines are unchecked; the dev-facing file dialog
+  manual; a full README pass; the main README becoming a god document; the screenshots and clips left over
+  from the 0.2.9 pass. The stock-take's TODO triage was already there, in that file's header.
+- **Moved to dotclaude's `TODO_DEFERRED.md`**: which shell edits the Claude Code harness renders as diffs.
 
 ## Closed
 
@@ -345,7 +417,7 @@ Its shape:
    priority guessed now is worth more than no ordering at all, and less than one decided when the work is
    picked up.
 
-Then this folder moves to `briefs/done/`, as `librarian-extension/` did. That last step is cheap and can
+Then this folder moves to `briefs/done/`. That last step is cheap and can
 happen whenever; the three above are the several-day part.
 
 **A postmortem is available cheaply, and is worth having rather than important** (Juha). Two sources, and
@@ -1852,11 +1924,11 @@ They multiply different people, which is why both are wanted:
   belong to this same category** and were wanted for the same reason: smart-case find, thumbnail previews,
   the multi-extension filter, the per-use-site boilerplate, and keyboard access. They are not user-facing
   polish so much as throughput for whoever is driving the apps all day. Whatever remains of that list is in
-  `TODO_DEFERRED.md` and in the re-homed `../filedialog-navigation-history-brief.md`.
+  `TODO_DEFERRED.md` and in the re-homed `../../filedialog-navigation-history-brief.md`.
 - **15 is for Claude, and specifically for writing probes**, not for GUI testing — that is a separate
   problem which a scripting surface does nothing about, and which still needs a live session.
 
-  The evidence is already in the tree: `../librarian-extension/manual_tests/` holds six scripts —
+  The evidence is already in the tree: `../../librarian-extension/manual_tests/` holds six scripts —
   `rag_live_corpus.py`, `rag_tool_rescue.py`, `webfetch_live_extractors.py`,
   `webfetch_tier2_escalation.py`, `gemma4_reasoning_roundtrip.py`, `vision_check.py` — each of which
   reaches into Librarian's agent machinery to exercise one feature, and each of which had to arrange that
@@ -1870,11 +1942,11 @@ They multiply different people, which is why both are wanted:
 **Not in the Researchers' Night run**, decided the same day: Hindsight memory (06) waits until after it —
 because a visitor who talks to the system once cannot observe a feature that pays off over a long-running
 relationship, at any level of completeness — and the MCP client (04) and lorebook (05) are question marks,
-useful but not open-house-critical. See `../librarian-extension/README.md`, "After those three", which
+useful but not open-house-critical. See `../../librarian-extension/README.md`, "After those three", which
 carries the generalizable form of the memory argument: **a feature whose value accrues over time cannot be
 demonstrated in an encounter that does not.**
 
-**Ligature repair** (`../ligature-repair-brief.md`) also waits, *unless* the `raven-fixbib` half turns out
+**Ligature repair** (`../../ligature-repair-brief.md`) also waits, *unless* the `raven-fixbib` half turns out
 small enough to sneak in — which the brief argues it is, being the function plus a flag plus a report. The
 indexer half is not a candidate under any reading.
 
@@ -1885,5 +1957,5 @@ chasing.
 
 ## Where the other sprint is
 
-`../librarian-extension/` — the 01–10 run, mostly closed. Its `README.md` carries the ordering rationale for
+`../../librarian-extension/` — the 01–10 run, mostly closed. Its `README.md` carries the ordering rationale for
 what remains there (04, 05, 06) and the record of what 0.2.8 shipped.

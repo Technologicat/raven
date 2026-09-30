@@ -6,7 +6,7 @@ projection, what that costs, and which algorithm to use once the fit moves there
 Measured 2026-08-31, against five corpora — of which **four count**; see the next section. No Visualizer
 code was changed; this is the measurement that says what to change.
 
-The question comes from `briefs/researchers-night/11_visualizer-importer-rework-brief.md` item 5, which
+The question comes from `briefs/11_visualizer-importer-rework-brief.md` item 5, which
 argued on principle that clustering the projection measures the projection. It does, and by how much is
 now a number. Two of the same brief's other items — 2 (PCA preprocessing) and 3 (cosine-to-medoid
 outlier assignment) — do **not** survive contact with the data, which is the part worth reading before
