@@ -112,6 +112,7 @@
   - A failed search is no longer remembered for the rest of the session, so asking again once the engine is back works.
   - A search that finds nothing, or fewer results than asked for, no longer waits a long time for more to load.
   - On a *Raven-server* with no web browser installed, a page that needs one to render is reported as that, where it used to be reported as a site that cannot be fetched as text.
+- **Resizing the window no longer makes the avatar flicker.** Each change of size briefly showed a stretched copy of the last frame, then the old size again, before the new one.
 
 #### Raven-avatar
 

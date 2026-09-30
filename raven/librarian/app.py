@@ -2766,8 +2766,10 @@ def _resize_panels() -> None:
         logger.info(f"_resize_panels: avatar upscale {_animator_settings['upscale']} -> {upscale}, to fit a panel {avatar_panel_h} px tall.")
         _animator_settings["upscale"] = upscale
         avatar_controller.load_animator_settings(avatar_record, _animator_settings)
-        image_size = int(upscale * librarian_config.avatar_config.source_image_size)
-        dpg_avatar_renderer.configure_live_texture(image_size, image_size)
+        # No `configure_live_texture` here: the renderer resizes its texture to the first frame of the new
+        # size, crop included. Configuring it ahead of that, as a square of the uncropped size, cost three
+        # swaps per change — a stretched copy of the last frame, then back to the old size for the frames
+        # still arriving, then the new one — which showed as a flicker while the window was dragged.
 
 def _resize_gui_task(task_env: env) -> None:
     """We run this in the background. Expensive parts of the GUI update benefit from the "there can be only one" mechanism."""
