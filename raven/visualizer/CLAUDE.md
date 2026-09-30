@@ -70,7 +70,7 @@ geometry back — scroll positions, "which item is at the top of the panel", the
 rebuild. Those need rendered frames, so they need a running app rather than a DPG context.
 `config.py` needs no tests (configuration-as-code, carrying local overrides), and `app.py` is out of
 scope: it lays out the GUI, wires events and animations, and boots up, so anything in there worth
-testing is a sign it belongs in another module. `briefs/visualizer-test-coverage-brief.md` is the plan
+testing is a sign it belongs in another module. `briefs/done/visualizer-test-coverage-brief.md` is the plan
 and records both decisions.
 
 The original rationale was to catch regressions *during* the refactor; that refactor landed without them,
@@ -139,7 +139,7 @@ Uses `unpythonic.dyn` for injecting status update callbacks. Progress tracked vi
 
 ## Importer Rework
 
-Planned changes to the import pipeline (Nomic-embed migration, PCA preprocessing, outlier assignment, Procrustes alignment). See `briefs/11_visualizer-importer-rework-brief.md` for details — note its item 1 now carries an undecided fork between `nomic-embed-text-v1.5` (shared image-text space) and `v2-moe` (multilingual).
+Planned changes to the import pipeline (Nomic-embed migration, PCA preprocessing, outlier assignment, Procrustes alignment). See `briefs/11_visualizer-importer-rework-brief.md` for details — note its item 1's fork between `nomic-embed-text-v1.5` (shared image-text space) and `v2-moe` (multilingual) was decided on 2026-09-30 for v1.5, unless a current model offers both.
 
 ## Refactoring
 

@@ -91,6 +91,10 @@ Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
 5. **Cluster once, in high-D — the clusters the user sees are currently computed in 2D, and that is a defect.**
    Added 2026-08-05.
 
+   **Write the clustering stage's tests with it**, into `raven/visualizer/tests/test_importer.py`. The
+   Visualizer's test plan (`briefs/done/visualizer-test-coverage-brief.md`) left the importer's clustering
+   for this item rather than pinning a stage about to be replaced (maintainer, 2026-09-30).
+
    > **Settled and measured, 2026-09-01. Read
    > [`investigations/highdim-clustering/README.md`](../investigations/highdim-clustering/README.md)
    > before implementing this — it is the specification, and this item is the reasoning that led to it.**

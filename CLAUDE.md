@@ -1036,7 +1036,7 @@ What is **not** covered:
   `info_panel._update_info_panel`, `annotation._render_worker`, and the scroll/anchoring machinery need
   *rendered frames* — so a running app, not just a context. This is a genuinely different problem from
   the rest of the package, which as of 2026-09-01 is covered: 177 tests over seven modules, everything
-  `briefs/visualizer-test-coverage-brief.md` plans for. See `raven/visualizer/CLAUDE.md` for what each
+  `briefs/done/visualizer-test-coverage-brief.md` plans for. See `raven/visualizer/CLAUDE.md` for what each
   module's tests pin, and the brief for why `app.py` and `app_state.py` are out of scope rather than
   pending.
 - **The DPG frontends**: librarian `app` and `cleanup_dialog`, and every Visualizer GUI module. **Not

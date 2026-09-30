@@ -61,7 +61,7 @@ case it was written for says so.
 
 The one-off probes that produced the design's figures — how many records carry a DOI, what the entity
 census was, whether `bibtexparser`'s writer round-trips. Those discovered an answer rather than asserting
-one, the answers are in `briefs/bibliography-dedup-brief.md`, and the ones that turned out to be
+one, the answers are in `briefs/done/bibliography-dedup-brief.md`, and the ones that turned out to be
 invariants are in the test suite (`raven/papers/tests/test_deduplicate.py`) where they run on every push.
 
 The write-up is the brief rather than a document here, because the measurements were made *while*

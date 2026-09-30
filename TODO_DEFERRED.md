@@ -24,6 +24,20 @@ enough (maintainer, 2026-09-30).
 **Before a triage pass, read `briefs/reference/backlog-triage-notes.md`**: how to read an old priority label,
 and why hygiene items rank higher than they used to.
 
+## Report `bibtexparser`'s writer dropping split names, with a patch
+
+*Cluster: papers · Cost: S to report, ? to land · Gate: none · Filed: 2026-08-28, moved here 2026-09-30 · See also: `briefs/done/bibliography-dedup-brief.md`*
+
+`bibtexparser.write_string` renders a value it does not recognize with `repr()`, so a library read through
+the name-splitting middleware comes back out carrying `author = {[NameParts(first=['Jane'], ...)]}` — valid
+BibTeX with every author gone, and nothing logged. `raven.papers.bibtex.write_string` works around it and
+a test pins the workaround.
+
+The maintainers are responsive (Juha's read), so this wants a minimal reproduction and a PR rather than a
+permanent local workaround. Two fixes to offer: raise on a value the writer cannot serialize, or apply the
+inverse middleware automatically. The first is the smaller ask and fixes the silence, which is the actual
+harm. Once it lands upstream, the local workaround can go.
+
 ## A `discard()` hook, so a dropped animation cannot orphan its registry entry
 
 *Cluster: ? · Cost: S · Gate: none — belt-and-braces, revisit if the shape recurs · Filed: 2026-09-10 · See also: the root cause, fixed the same day, in `Animator.render_frame`*
