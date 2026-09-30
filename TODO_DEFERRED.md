@@ -24,6 +24,22 @@ enough (maintainer, 2026-09-30).
 **Before a triage pass, read `briefs/reference/backlog-triage-notes.md`**: how to read an old priority label,
 and why hygiene items rank higher than they used to.
 
+## Help cards: say what each app accepts by drag-and-drop
+
+*Cluster: discoverability · Cost: S, and a look at each card, which is fixed-height · Gate: none · Filed: 2026-08-13, reshaped 2026-09-30*
+
+OS file drag-and-drop works in all six GUI apps and the manuals document it (the root `README.md`'s
+*Dragging files in*), but nothing in the apps says so. **A line on each app's help card is the cue**
+(maintainer, 2026-09-30), accurate per app: each `filedrop.install` carries its own `DropRule` list, so a
+generic "drop files here" would be wrong about most of them.
+
+**An overlay would be nicer and is blocked**: the whole window tinting to a glowing shade with "drop files
+here" (or "drop a folder here"), worded for what the app accepts. `filedrop` rides on GLFW's
+`glfwSetDropCallback`, which fires only on release — no drag-enter, drag-over or drag-leave — so nothing
+can react while a drag hovers. Going under GLFW means each platform's own protocol (XDND on X11,
+`IDropTarget` on Windows, `draggingEntered:` on macOS), which is the per-platform code `filedrop` exists to
+avoid. Not checked: whether upstream GLFW has gained drag-enter events, which would make it cheap.
+
 ## Brief: block-level Markdown in the chat view
 
 *Cluster: markdown-renderer · Cost: ~M · Gate: none — next to be looked at after Yrityspäivä · Filed: 2026-09-30 · See also: `briefs/markdown-block-rendering-brief.md`*
@@ -6686,11 +6702,6 @@ has no live item to point at, it does not belong here yet.
   is that `arrow-down-to-bracket` does not exist in this version, which is why the tool-call navigation uses
   the symmetric `ARROW_UP_LONG` / `ARROW_DOWN_LONG` pair — a two-line change in `add_tool_call_invocation`
   and `build_buttons` if it is ever revisited. (Declined 2026-08-12.)
-
-- **An in-app cue advertising OS file drag-and-drop** — the manuals document it as of v0.2.9 (the root
-  `README.md`'s *Dragging files in* says what each app accepts), which is enough (maintainer). The candidates
-  had been a help-card line, a hint beside the file dialog, or an overlay while a drag hovers, each having
-  to be accurate per app since every app accepts different files. (Declined 2026-09-30.)
 
 ## Waiting on upstream
 
