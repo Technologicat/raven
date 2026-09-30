@@ -98,10 +98,12 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
      user-supplied list here. Cheap if the new schema keeps a per-test boolean-or-unknown plus a reason;
      costly if it diverges, so the schema should be chosen with this import in view.
    - **The same holds for the dedup stage's LLM judge**, whose answers sit in `dedup_judge.jsonl` beside
-     the corpus. The rest of the dedup is deterministic and simply re-runs, but its numbers have moved
-     since the prototype's run (1296 clusters and 1767 removed on 2026-08-31, 1295 and 1763 on
-     2026-09-30, cause not yet traced) — so the methodology numbers come from one run of one named
-     version, not from mixing the two.
+     the corpus. The rest of the dedup is deterministic and simply re-runs: checked 2026-09-30,
+     today's `raven-deduplicate --judge`, reusing a copy of that file, reproduces the 2026-08-31 run group
+     for group — 1296 clusters, 1767 records removed, and every row's recorded differences unchanged. (A run
+     without `--judge` merges fewer, which is the difference to watch for, not drift.) The output `.bib`
+     differs only in how `month` is written, `{apr}` then and the bare macro `apr` now, cause not traced
+     — no code in `raven/papers` writes it, so the parser library is the likeliest suspect.
 7. **A `sample` option on every model-driven tool** (Juha, 2026-09-30): run a stage over a seeded random
    sample of its input instead of all of it. Three uses, and the first is why it exists:
    - **Test-retest reliability.** Run the final judge twice over the same sample — a few hundred records —
