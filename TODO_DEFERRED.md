@@ -6807,8 +6807,9 @@ Not tasks. There is no action available on our side; what is recorded is the tri
   The two directions available on our side were both rejected as the immediate fix: inserting real newlines as
   the user types changes the text being composed, breaks re-editing and sends hard line breaks to the model;
   replacing the widget means reimplementing selection, the caret and the clipboard, everything ImGui gives for
-  free. **The second is acceptable as the long-term fix**, DPG being unlikely ever to add wrapping (maintainer,
-  2026-09-30) — see "A multiline text control of our own".
+  free. **The second is acceptable as the long-term fix** — see "A multiline text control of our own" — since
+  limits like this one have tended to persist from version to version (maintainer, 2026-09-30). The re-check
+  below still stands: if upstream does add wrapping, that is the cheaper fix.
 
   **The trigger to look again: has a current ImGui grown word-wrap, with DPG merely not exposing it yet?**
   Last checked the week of 2026-08-11 against **DPG 2.3.1** — still not there. So this is a re-check when DPG
