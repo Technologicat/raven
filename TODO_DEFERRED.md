@@ -24,6 +24,36 @@ enough (maintainer, 2026-09-30).
 **Before a triage pass, read `briefs/reference/backlog-triage-notes.md`**: how to read an old priority label,
 and why hygiene items rank higher than they used to.
 
+## Brief: block-level Markdown in the chat view
+
+*Cluster: markdown-renderer · Cost: ~M · Gate: none — next to be looked at after Yrityspäivä · Filed: 2026-09-30 · See also: `briefs/markdown-block-rendering-brief.md`*
+
+Fenced code, multi-line lists, paragraph gaps and later tables, by removing the per-line splitter. Steps 1,
+5 and 6 done. The rest of the `markdown-renderer` cluster in this file wants folding into it, or into a
+second brief — the cluster was asked to become one on 2026-08-20, and this brief covers only part of it.
+
+## Brief: ligature repair
+
+*Cluster: document-ingestion · Cost: ~S for the recommended half · Gate: none · Filed: 2026-09-30 · See also: `briefs/ligature-repair-brief.md`*
+
+Rebuild the `fi`/`fl`/`ff` ligatures PDF extraction lost. The recommendation is the `raven-fixbib` half
+only; its details are also under "Ligature mojibake in PDF-extracted text" below.
+
+## Brief: spreadsheets in the docs DB and attachments
+
+*Cluster: document-ingestion · Cost: ~S–M · Gate: none · Filed: 2026-09-30 · See also: `briefs/spreadsheet-ingestion-brief.md`*
+
+`.xlsx` and `.ods` as Markdown tables, one per detected region. Designed, not started; also listed as
+"Spreadsheets in the docs DB and attachments" below.
+
+## Sketch to write: containing the OpenAI wire shape
+
+*Cluster: llm-backends · Cost: ~S to write · Gate: none · Filed: 2026-08-27, moved here from `TODO.md` 2026-09-30*
+
+`llmclient` both speaks the protocol and defines the shape everything else stores, so the wire format has
+become Raven's internal format by default rather than by decision. Wanted *before* the autumn work rather
+than during it (Juha, 2026-08-27, "written or forgotten"); `briefs/design/` is its home.
+
 ## Brief: the per-document LLM pass
 
 *Cluster: corpus-pipeline · Cost: ~M–L; step 0 "moderate" · Gate: none — `next` · Filed: 2026-09-30 · See also: `briefs/per-document-llm-pass-brief.md`*
@@ -4763,7 +4793,12 @@ Discovered during brief-03 Half-2 doc pass (2026-07-16); the renderer comments a
 
 ## Upgrade oobabooga and re-check Raven's ooba support
 
-*Cluster: ? · Cost: ? · Gate: — until after RN, possibly after 0.2.10 too · Filed: 2026-07-16*
+*Cluster: ooba · Cost: ? · Gate: not worth doing at the moment; can safely wait (maintainer, 2026-09-30) · Filed: 2026-07-16*
+
+**This heads the `ooba` cluster**, and a recognized cluster wants a brief when it is scheduled: the
+upgrade gates re-testing ooba's `continue_` (the seed is excluded there by `backend_supports_continue`),
+the streaming-thinking remainder, Gemma's inline tool-call spelling, and whether `chatutil.scrub`'s
+`<think>` repair is dead code. Write the brief when the upgrade is picked up, not before.
 
 text-generation-webui (oobabooga) hasn't been pulled in a long time; its OpenAI-compat API may have drifted from what Raven's `llmclient` assumes. Upgrade the local ooba install, then re-validate the ooba code paths against the current version: backend-flavor detection (`detect_backend_flavor`), model-info resolution (`_resolve_model_info` — the `/v1/internal/model/info` shape, and whether ooba now exposes a VLM-capability field so `model_is_vlm` can be better than `None`), the `mode: "instruct"` request field, the explicit `continue_` flag, the reasoning/tool-call streaming shape, and the exact token-count endpoint. Live-test a real generation + a tool call + (if supported) an image attach through ooba.
 

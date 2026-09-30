@@ -11,9 +11,17 @@ one model per hardware tier.
 | 24 GB eGPU, at the desk | **Qwen3.6-27B** (dense) or **Qwen3.6-35B-A3B** (MoE) | 18.54 / 20.40 GB | Serious single-workstation use, whenever the external card is attached. |
 
 The eGPU travels to the Researchers' Night demo (2026-09-25), so the demo runs on the top tier rather than on a
-laptop-class model. See `../TODO.md` for the demo plan; the hardware shape recorded there — LLM alone on the
-larger card, all nine raven-server modules on the internal one, the `config_dual_midvram` variant — is what this
-lineup assumes.
+laptop-class model. The hardware shape this lineup assumes is the LLM alone on the larger card and all nine
+raven-server modules on the internal one — the variant `TODO.md`'s server config item proposes to name
+`config_dual_midvram`. Reducing context to buy headroom is a weak lever there: Qwen 3.6 is gated-deltanet at
+3:1, so only about a quarter of the layers carry a KV cache that grows with context. What the server side
+costs is in `investigations/vram/`.
+
+**At the top tier, the MoE is the demo model.** Measured 2026-07-28 on the eGPU: ~110 tok/s for 35B-A3B
+against ~40 tok/s for 27B dense, so 2.75× — *below* the 3–9× band an active-parameter ratio (3B vs 27B)
+predicts, so the fixed per-token overhead compresses it harder than expected. Worth remembering the next time
+that ratio is used to predict a speedup. 40 tok/s is usable but sluggish for a thinking model in front of an
+audience, so the 27B is the fallback for a problem the MoE cannot solve rather than the default.
 
 ## Why Qwen at every tier
 
