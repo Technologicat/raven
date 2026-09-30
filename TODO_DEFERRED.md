@@ -4776,7 +4776,7 @@ Discovered during brief-03 Half-2 doc pass (2026-07-16); the renderer comments a
 **This heads the `ooba` cluster**, and a recognized cluster wants a brief when it is scheduled: the
 upgrade gates re-testing ooba's `continue_` (the seed is excluded there by `backend_supports_continue`),
 the streaming-thinking remainder, Gemma's inline tool-call spelling, and whether anything still reaches
-`chatutil.scrub`'s `<think>` repair, a backstop that never fires on LM Studio. Write the brief when the upgrade is picked up, not before.
+`chatutil.scrub`'s `<think>` repair on ooba — a backstop that may still be reached on LM Studio too (`TODO.md`). Write the brief when the upgrade is picked up, not before.
 
 text-generation-webui (oobabooga) hasn't been pulled in a long time; its OpenAI-compat API may have drifted from what Raven's `llmclient` assumes. Upgrade the local ooba install, then re-validate the ooba code paths against the current version: backend-flavor detection (`detect_backend_flavor`), model-info resolution (`_resolve_model_info` — the `/v1/internal/model/info` shape, and whether ooba now exposes a VLM-capability field so `model_is_vlm` can be better than `None`), the `mode: "instruct"` request field, the explicit `continue_` flag, the reasoning/tool-call streaming shape, and the exact token-count endpoint. Live-test a real generation + a tool call + (if supported) an image attach through ooba.
 

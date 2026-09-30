@@ -274,5 +274,20 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      `librarian-extension/`'s 04–06.
    - The longer-term version is the backlog as a Visualizer dataset, in brief 13.
    - **Written 2026-09-30.** Its `TODO.md` citations are line numbers pinned to commit `d15a1c78`, there being
-     no headings to cite, so it is a dated snapshot: into `done/` once the prioritization session has used it,
-     and before the triage edits `TODO.md`. Next: that session, then the triage.
+     no headings to cite, so it is a dated snapshot: into `done/` once the prioritization session has used it.
+     The triage ran first after all, since the page leaves out everything the triage touches; read the
+     `TODO.md` numbers with `git show d15a1c78:TODO.md`.
+   - **The TODO triage, same day, passes 1–4 done** (each its own commit): items verified done removed; a
+     `Brief:`/`Sketch:` pointer entry in `TODO_DEFERRED.md` for every open brief, so one grep lists them —
+     **an item superseded by a brief stays, as its pointer** (maintainer; recorded in that file's header);
+     `TODO.md`'s dated session-plan blocks retired, their live parts moved out; duplicates merged; the
+     thinking-toggle probe record moved to `investigations/thinking-toggle/`. Two small bugs the triage
+     turned up were fixed on the way (the importer's duplicate-field-key recovery, the entity decoder).
+   - **Pass 5, re-gating and re-tiering, is next and needs the maintainer.** Proposed, not yet answered:
+     the ten `TODO_DEFERRED.md` gates naming RN2026 go to `none`, except sibling flick (`0.2.10`), the
+     drag-and-drop cue (the decision on its shape) and Markdown decorations (with the renderer work). Two
+     open questions: **whether the Yrityspäivä demo runs the curated webfetch allowlist** or allow-all as
+     shipped; and whether the [High] tiers in `TODO.md` get re-read in the prioritization session or as a
+     quick keep-or-demote list first. The sixty `0.2.10` gates are a release-scope question for that
+     session. Also due in pass 5, no decision needed: three stale headings or premises ("Librarian's help
+     card…", "Datastore scaling…", "Documented command lines…").
