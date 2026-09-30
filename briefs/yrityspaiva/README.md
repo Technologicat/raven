@@ -185,9 +185,9 @@ live on the Night.
   - `keyboardmark.focus` keeps a focus move's transit from lighting a mark on the way.
   - **Rejected:** a settle time before a mark lights, which would have delayed the feedback a fast typist
     steers by (maintainer); Ctrl+Shift+Space for record, which IBus claims.
-  - **Open, not filed:** the parks in Librarian, the Visualizer and the XDot viewer still use
-    `dpg.focus_item`. Moving them to `keyboardmark.focus` needs `gui_animation.give_caret` to set the
-    expectation too, or a park would hold back the next move's mark. No flash has been seen there.
+  - **Open:** the parks in Librarian, the Visualizer and the XDot viewer still use `dpg.focus_item`.
+    Filed in `TODO_DEFERRED.md` ("Focus parks and `give_caret` do not tell the keyboard marks where the focus
+    is going"), and queued below.
 
 ## Queue, in order
 
@@ -242,3 +242,6 @@ live on the Night.
    8th, otherwise to `design/` or the top level — and close that folder into `done/`. The fifth, the AOKK
    investigation's, was closed by a separate session, its remaining generalization written up as two new
    briefs (maintainer, 2026-09-30).
+3. **Focus parks and `give_caret` tell the keyboard marks where the focus is going** — the deferred item of
+   that name. A restructure of the shared layer (the expectation state moves below `keyboardmark`) and seven
+   park sites. Either this or the cleanup can go first (maintainer, 2026-09-30).

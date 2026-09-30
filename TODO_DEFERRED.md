@@ -11,6 +11,31 @@ obstacle to reading it. Expect a meaningful fraction to be already done or alrea
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+## Focus parks and `give_caret` do not tell the keyboard marks where the focus is going
+
+*Cluster: keyboardmark · Cost: M · Gate: none · Filed: 2026-09-30 · See also: `dpg-notes.md` → "Focus is not the same as the caret", the paragraph "A keyboard mark follows the transit"*
+
+A programmatic focus change is in flight for a frame or two, and a control the focus passes through wears
+the keyboard mark meanwhile. `keyboardmark.focus(widget)` stops that: it records the target, and while the
+move is in flight only the target may light. The avatar editors route every move through it — onto their
+choosers, and the Esc parks off them — and a transit flash seen there on 2026-09-30 is gone.
+
+Librarian (four sites), the Visualizer (two) and the XDot viewer (one) still park focus on a button with
+plain `dpg.focus_item`, so a park there can flash a followed widget in transit. No flash has been seen in
+those apps yet.
+
+**Why the parks cannot simply switch.** In those apps the moves *onto* text fields go through
+`gui_animation.give_caret`, which sets no expectation. A park through `keyboardmark.focus` followed within
+150 ms by, say, Tab to Librarian's composer would hold the composer's mark dark for the rest of the window —
+the delay a settle time would have caused, which was rejected for delaying the feedback a fast typist steers
+by. So `give_caret` (and `give_focus`, its sibling) must set the expectation too, and every move then says
+where it is going.
+
+That means moving the expectation state below `keyboardmark`, which imports `gui_animation`: into
+`gui_animation` itself or `guiutils`, with `keyboardmark`'s followers reading it from there. Then the seven
+park sites switch to `keyboardmark.focus`. A restructure of the shared layer rather than a patch at the
+call sites, which is where the M comes from.
+
 ## An override cannot set a setting to `None` unless it ships as `None`
 
 *Cluster: configoverrides · Cost: M · Gate: none · Filed: 2026-09-25*

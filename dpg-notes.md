@@ -1178,7 +1178,7 @@ Cost is one frame (~16 ms) of latency on the deferred action — imperceptible, 
 
 Not a DPG property, but it presents as one: a hotkey that fires sometimes, or never, while the handler's code
 is plainly right. **The input method takes two Ctrl+Shift chords before GLFW sees them.** IBus, running
-under most Linux desktops, claims **Ctrl+Shift+Space**, its input-method toggle, and **Ctrl+Shift+U**, its
+under many Linux desktops, claims **Ctrl+Shift+Space**, its input-method toggle, and **Ctrl+Shift+U**, its
 Unicode entry. Found 2026-09-30, when the settings editor's record key was first bound to Ctrl+Shift+Space:
 a key-logging handler added through `--repl` saw Space arrive twice in several presses, and `ibus-daemon
 --xim` was running with `<Control><Shift>space` among its triggers.
