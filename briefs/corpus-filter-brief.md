@@ -74,3 +74,15 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
      superseded. That was fine while prototyping, and it is what a user of the tool must not meet.
    - **A superseded report is either removed or visibly marked** — in its name, or by moving it aside.
      Which of the two is open; what is not open is leaving it looking like a peer of the current one.
+   - **Reports can optionally be written as a spreadsheet, `.ods` or `.xlsx`** (Juha, 2026-09-30).
+     A TSV opened in LibreOffice loses a row for each field containing a `"`: the import treats it as
+     a string delimiter and the field runs on into the next line. The dedup audit showed 1264 rows
+     there against its 1296, and exactly 32 of its rows contain a `"`.
+     - `.ods` costs no new dependency: `odfpy` is already one, backing `docextract`'s `.odt`/`.odp`.
+       `.xlsx` needs `openpyxl`, which `briefs/spreadsheet-ingestion-brief.md` would add anyway, for
+       reading.
+     - The TSV should stay safe too, as the default. A writer that quotes fields containing `"` (the
+       `csv` module's `QUOTE_MINIMAL`) should open correctly in LibreOffice — not yet checked there.
+     - **This is every `raven.papers` report, not only this tool's.** `raven-deduplicate` and
+       `raven-siftbib` write their audit TSVs by joining fields with a tab, so they have the same
+       fault as shipped, and the writer is shared rather than per tool.
