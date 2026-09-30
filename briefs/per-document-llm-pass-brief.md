@@ -211,14 +211,18 @@ spamming the log.
   run of small batches does not spam the log.
 - **Every failed item is logged individually, and never rate-limited** — a failed document is what a
   watcher of the run wants to see when it happens.
-- **Cancellation reaches into the running batch.** A batch typically takes ~30 s, too long to wait for.
-  So the run has a thread-safe `cancel()`, and the pass wraps the caller's `on_progress`: while the flag
-  is set, every streamed chunk answers `llmclient.action_stop`, which interrupts generation and lets the
-  turn finalize with what it had. The pass then drops that batch unwritten and stops; earlier batches are
-  already in the ledger, so a resume starts from the one that did not finish.
-  - Latency is one chunk, except while the backend is still reading the prompt and emitting nothing —
-    then the cancel waits for the first chunk. Not measured; probably seconds for batched abstracts.
-  - The same flag is checked between batches, which covers a cancel that lands between turns.
+- **Cancellation reaches into the running batch, prompt processing included.** A batch typically takes
+  ~30 s and can be much longer, too long to wait for — and with a large batch, much of that time is the
+  backend reading the prompt, before any chunk arrives. So the mechanism is Librarian's:
+  `raven.common.netutil.Abort`, which `llmclient.invoke` takes as `maybe_abort`. The run's thread-safe
+  `cancel()` calls `abort()` on the current turn's handle, and the call raises `netutil.Aborted`
+  promptly, in either phase (Juha, 2026-09-30). The pass catches it, drops that batch unwritten and
+  stops; earlier batches are already in the ledger, so a resume starts from the one that did not finish.
+  - `agent.turn` does not yet take `maybe_abort`, though `scaffold`'s turn already passes it through, so
+    exposing it on `agent.turn` is part of this build.
+  - An `on_progress` answering `llmclient.action_stop` would not do: it is not called until the backend
+    emits something, so it cannot reach prompt processing.
+  - A cancel flag is also checked between batches, for a cancel that lands between turns.
 
 ## What this brief must settle before implementation
 
