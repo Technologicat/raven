@@ -208,7 +208,8 @@ spamming the log.
     which makes `_summarize` the natural second user after `extract_fields.py`.
 - **The console default is a log line per batch**, not a progress bar: runs are long and often
   unattended, and a line leaves a history where a bar keeps only its latest state. **Rate-limited**, so a
-  run of small batches does not spam the log.
+  run of small batches does not spam the log: at most one line per 10 s by default (Juha, 2026-09-30),
+  with the final line always written.
 - **Every failed item is logged individually, and never rate-limited** — a failed document is what a
   watcher of the run wants to see when it happens.
 - **Cancellation reaches into the running batch, prompt processing included.** A batch typically takes
