@@ -87,8 +87,11 @@ Open items that were recorded only in this file, and where each went on 2026-09-
 rather than in `TODO_DEFERRED.md` because that list buries work rather than scheduling it (maintainer).
 
 - **Fixed at the close, each in its own commit**: `dpg_markdown.shutdown` made restartable, so the test
-  fixtures can call `guiutils.teardown`; cross-file anchors in `check_doc_links.py`; the three CLI tools
-  that took about nine seconds to answer `--help`.
+  fixtures can call `guiutils.teardown`; the three CLI tools that took about nine seconds to answer
+  `--help`.
+- **Already done, and never marked here**: cross-file anchors in `check_doc_links.py`, on 2026-09-23
+  (`cf617961`). The close corrected the module docstring, which still said only in-document anchors were
+  checked.
 - **Filed in `TODO_DEFERRED.md`**: documented command lines are unchecked; the dev-facing file dialog
   manual; a full README pass; the main README becoming a god document; the screenshots and clips left over
   from the 0.2.9 pass. The stock-take's TODO triage was already there, in that file's header.

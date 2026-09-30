@@ -9,10 +9,10 @@ at a heading long after the heading has been renamed.
 This is the docs-side sibling of `check_usage_paths.py`, which asks whether a `python -m raven...` line
 still names a module. Same rot, same reason nothing else catches it: no import, no lint, no test.
 
-**Scope is deliberately one document at a time.** Only in-document anchors (`](#target)`) are checked,
-against that same file's headings. A link into *another* file's anchor is a different problem — it needs
-the other file parsed and its path resolved — and is tracked fleet-wide in `~/.claude`'s
-`TODO_DEFERRED.md` under the internal-reference-check item.
+**Anchors into other documents are checked too** (`](other.md#target)`), by resolving the path from the
+linking document and reading the target's headings; see `cross_file_problems`. That half is Raven's own —
+generalizing link checks fleet-wide is tracked in `~/.claude`'s `TODO_DEFERRED.md` under the
+internal-reference-check item.
 
 **The anchor rule is GitHub's, and its one surprising case is worth knowing**: punctuation is dropped
 *before* spaces become hyphens, so `Install & run` yields `install--run` with two hyphens, the removed
