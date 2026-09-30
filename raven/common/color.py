@@ -23,7 +23,7 @@ __all__ = ["BT709_WEIGHTS",
 
            "mix",
 
-           "srgb_to_linear", "relative_luminance", "luma", "contrast_ratio",
+           "srgb_to_linear", "linear_to_srgb", "relative_luminance", "luma", "contrast_ratio",
 
            "scale_saturation",
            "invert_lightness", "uninvert_lightness",
@@ -121,6 +121,12 @@ def srgb_to_linear(value: float) -> float:
     if value <= SRGB_ENCODED_CUTOFF:
         return value / SRGB_LINEAR_SLOPE
     return ((value + SRGB_ALPHA) / (1.0 + SRGB_ALPHA)) ** SRGB_GAMMA
+
+def linear_to_srgb(value: float) -> float:
+    """Inverse of `srgb_to_linear`, which see: one linear-light channel in [0, 1] to sRGB-encoded."""
+    if value <= SRGB_LINEAR_CUTOFF:
+        return value * SRGB_LINEAR_SLOPE
+    return (1.0 + SRGB_ALPHA) * value ** (1.0 / SRGB_GAMMA) - SRGB_ALPHA
 
 def relative_luminance(color: Sequence[float]) -> float:
     """Relative luminance of an sRGB-encoded colour, as WCAG defines it: linearized, then BT.709-weighted."""

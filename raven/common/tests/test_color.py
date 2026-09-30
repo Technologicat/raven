@@ -76,6 +76,10 @@ class TestLuminanceAndContrast:
         above = ((color.SRGB_ENCODED_CUTOFF + color.SRGB_ALPHA) / (1.0 + color.SRGB_ALPHA)) ** color.SRGB_GAMMA
         assert abs(below - above) < 1e-6
 
+    @pytest.mark.parametrize("value", [0.0, 0.002, 0.0031308, 0.01, 0.2, 0.5, 1.0])  # both sides of the joint
+    def test_linear_to_srgb_undoes_srgb_to_linear(self, value):
+        assert color.srgb_to_linear(color.linear_to_srgb(value)) == pytest.approx(value, abs=1e-9)
+
     def test_relative_luminance_ends(self):
         assert color.relative_luminance((0.0, 0.0, 0.0)) == 0.0
         assert color.relative_luminance((1.0, 1.0, 1.0, 0.5)) == pytest.approx(1.0)

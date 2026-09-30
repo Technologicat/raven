@@ -135,6 +135,12 @@ class TestAgreesWithScalarModule:
         for value, got in zip(values, tensor.tolist()):
             assert abs(got - color.srgb_to_linear(value)) < 1e-6, value
 
+    def test_linear_to_srgb_matches_per_channel(self):
+        values = [0.0, 0.002, 0.0031308, 0.01, 0.2, 0.5, 1.0]  # both sides of the linear segment's end
+        tensor = linear_to_srgb(torch.tensor(values))
+        for value, got in zip(values, tensor.tolist()):
+            assert abs(got - color.linear_to_srgb(value)) < 1e-6, value
+
     def test_luminance_of_a_linear_colour_matches_luma_of_the_same_numbers(self):
         """On linear input the tensor function is relative luminance; the weights are the shared fact."""
         rgb = (0.3, 0.6, 0.1)
