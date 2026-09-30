@@ -3361,14 +3361,6 @@ Remaining: audit other Raven apps (Librarian, Visualizer, Server) if desired.
 
 Discovered during raven-cherrypick imageview review.
 
-## Triage CLAUDE.md style conventions: global vs project-specific
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-18*
-
-Many code style conventions currently in Raven's `CLAUDE.md` apply to all of Juha's projects (import style, naming, docstrings, log format, license DRY, sentence spacing). These should be moved to `~/.claude/CLAUDE.md` so they're picked up everywhere. Review each entry and split accordingly.
-
-Discovered during raven-cherrypick development.
-
 ## Robust public API auditing tool
 
 *Cluster: ? · Cost: ? · Gate: — · Filed: 2026-03-18*
