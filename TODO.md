@@ -913,6 +913,8 @@ every tier, chosen on measurements rather than reputation.
 - **[Medium]** A separate toggle for MCP tools, once brief 04 lands. Different trust surface from either **Internet** or **Documents**, so it wants its own group in `llmclient` (a third alongside `NETWORK_TOOL_NAMES` and `DOCUMENT_TOOL_NAMES`) rather than being folded into one of theirs. The grouping mechanism is in place and takes one more entry; what needs deciding is whether one switch covers every MCP server or each server gets its own, which is a question about how many the user is expected to run.
 
 - **[Medium]** Weather tool, via open-meteo (https://open-meteo.com/en/docs) — makes Librarian more humanlike as a "voice with internet access" (HCI is a major Raven goal). Parked in brief 01 §6. Its sibling, the calculator, shipped as `llmtools.calculate` on `simpleeval`.
+  - **The shape wanted** (maintainer, 2026-09-30): answer *"What's the weather like in Tampere, Finland today?"*, plus possibly a 24-hour or a week's forecast as a table. So one place-name-in tool with a horizon, not a set of fine-grained endpoints.
+  - **Undecided: a built-in, or `open-meteo-mcp` once brief 04 lands.** The MCP server publishes many narrow tools, which is the wrong grain for that question — each would sit in the tool list every turn, and the model would have to chain geocoding and forecast itself. A built-in is small: open-meteo's geocoding and forecast endpoints are free JSON with no key. Open for the built-in: client-side, or through Raven-server as the web tools are.
 
 - **[Medium]** Calendar tool: get one- or three-month calendar, like the `cal` command-line utility. See Python's `calendar` module.
 
