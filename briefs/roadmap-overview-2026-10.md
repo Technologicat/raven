@@ -160,8 +160,9 @@ Stated in the briefs unless marked *(inferred)*.
   tool calls, re-testing ooba's continue (`T:191`), whether `chatutil.scrub`'s `<think>` repair is dead code
   (`T:687`). `T:158` wants this written up as a brief; it has not been.
 
-Four decisions each unblock several of the above: **the Nomic fork**, **brief 13's design session**, **brief
-12's O1–O6**, and **whether to do the ooba upgrade**.
+Three decisions each unblock several of the above: **the Nomic fork**, **brief 13's design session**, and
+**brief 12's O1–O6**. A fourth is taken: **the ooba upgrade is not worth doing at the moment**, and it and
+the four items behind it can safely wait (maintainer, 2026-09-30).
 
 
 ## 2. Open items by theme
@@ -232,8 +233,8 @@ Four decisions each unblock several of the above: **the Nomic fork**, **brief 13
 ### 2.2 Librarian: backends, tools and context
 
 *Backends and reasoning*
-- **Upgrade oobabooga and re-check support** — gates four items (part 1) · ? · `TD "Upgrade oobabooga…"`; the
-  cluster brief is `T:158`
+- **Upgrade oobabooga and re-check support** — gates four items (part 1) · ? · **decided: later** ·
+  `TD "Upgrade oobabooga…"`; the cluster brief is `T:158`
 - **Anthropic-style backends** [High] — top-level system field, tool blocks, SSE dialect · L · `T:936` (+`T:693`)
 - **Containing the OpenAI wire shape** — a design sketch to write · ~S · `T:158`
 - **Exact token count where neither tier reaches** · ~M · `T:205`
