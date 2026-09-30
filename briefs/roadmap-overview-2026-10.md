@@ -644,7 +644,8 @@ confirmed items never ranked, which this triage would answer).
 file-type icon set; the webfetch allowlist's demo half; the clickable chip; Markdown decorations; the glyph
 drop; the optional greeting; the no-avatar mode's "post-RN triage".
 
-*Superseded by a brief* — delete in favour of it: `TD "Fenced code block…"`, `TD "Markdown tables don't
+*Superseded by a brief* — **keep, as pointers**: a TODO scan is how open briefs get found (maintainer,
+2026-09-30). At most trim each to a line naming its brief: `TD "Fenced code block…"`, `TD "Markdown tables don't
 render…"`, `TD "Reasoning traces with indented bullets…"`, `TD "Remove the dead inline-`<think>`…"` (all
 `markdown-block-rendering`); `TD "Ligature mojibake…"` (ligature repair); `TD "Batch tools: LLM reconnect
 mid-run"` (per-document pass).

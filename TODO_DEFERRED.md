@@ -17,6 +17,10 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+**An item superseded by a brief stays, as a pointer to it.** A scan of this file is how open briefs get found:
+outside `briefs/done/`, anything in `briefs/` is open and effectively unscheduled, so the brief alone is not
+enough (maintainer, 2026-09-30).
+
 **Before a triage pass, read `briefs/reference/backlog-triage-notes.md`**: how to read an old priority label,
 and why hygiene items rank higher than they used to.
 
@@ -346,74 +350,6 @@ line break survives into the stored text as-is. Worth keeping that way if anchor
 
 Raised by Juha while reviewing a pypdf bump whose security fix turned out to be in the page-label code
 (2026-09-20); the text-anchor fallback is his (2026-09-20).
-
-## Read the chat graph's changelog block back before it ships
-
-*Cluster: chat-graph-view · Cost: S · Gate: none · Filed: 2026-09-18*
-
-`CHANGELOG.md` → 0.2.9 → *Added* → *Raven-librarian* → *a chat graph view*: the eight sub-bullets covering
-clicking, the three marks, the gap boxes, the keyboard, the toolbar and the graph's half of search were
-written in one pass on 2026-09-18, filling a placeholder that had stood since the view landed on
-2026-09-01. Three weeks of features described from one afternoon's memory of them, by someone who had just
-spent that afternoon inside the code — which is the condition under which a sentence reads as obviously
-true to its author and as unverifiable to everybody else.
-
-Four claims were checked against the source while writing (the three-result fold threshold, the `N (M)`
-caption, what the trace colour actually covers, and the toolbar's buttons); the rest were not. So the pass
-wanted is a reader's rather than an author's: open the app beside it and try each sentence.
-
-Asked for by Juha the same day, and deliberately *not* done the same day: it was a long one spent building
-the thing being described, and a review of one's own afternoon is the one kind that cannot be done tired.
-Fresh eyes are the whole point of deferring it rather than the excuse for it.
-
-**Substantially done, and probably closeable.** The source-checking half, 2026-09-21, found three wrong
-claims and they are fixed: a gap box's second line attributed to the wrong kind, `Tab` still described as
-cycling three panes a release after the search row made it four, and two animation settings described as
-a pair when one rate now drives both.
-
-**Juha then read the block through while doing the example reformattings, and it sounded right** (his
-account, 2026-09-22) — which is a fresh-eyes reading by the person who built the feature, and is most of
-what this item asked for. What it literally asked for, opening the app beside it and trying each
-sentence, has not been done and at this point is unlikely to repay the setup.
-
-So this is a candidate to close at the next triage rather than work to schedule. The remaining risk is
-narrow: a sentence that reads plausibly to somebody who knows the feature is exactly the kind a reading
-cannot catch, which is why the item was written — but two passes have now found three faults and then
-none, and the second pass is the one whose result counts.
-
-## Widening the window feeds the chat log, which is the pane that wants it least
-
-*Cluster: chat-graph-view · Cost: M · Gate: none · Filed: 2026-09-18*
-
-Confirmed in use, 2026-09-18: made larger, the window spends its new width on the chat log, which becomes
-too wide to read comfortably — past the measure the eye can track from the end of one line to the start of
-the next. The graph would use that width better, having a picture that grows rather than prose that does not.
-
-Written out in full here rather than cited, because the design lives in the chat graph brief and search is
-that brief's last open item — so it is archived about when this is picked up.
-
-The obstacle was that the graph shares its rect with the avatar, and the avatar cannot simply grow: its
-cost is O(pixels), so a bigger panel is a bigger per-frame bill for the same character. Three directions,
-the first two compatible with each other and the third **already true**:
-
-- **Cap the chat log's width.** Worth doing on its own merits rather than as a way to feed the graph: a
-  chat log 1800 px wide is harder to read than one at 900, which is why typography has a measure at all.
-  Surplus width then goes right by default.
-- **Let the rect's two occupants be different sizes.** They are alternatives, never both on screen, so
-  nothing forces the graph to inherit the avatar's dimensions; the split could move when the graph is shown.
-- **Cap what the avatar renders and letterbox it**, which is how it already works — checked 2026-09-01:
-  `DPGAvatarRenderer` positions the character bottom-centred in whatever rect it is handed, and the
-  character's pixel size follows `avatar_config`'s `upscale` rather than the rect. So panel size and avatar
-  cost are already decoupled and a growable panel costs nothing to adopt. The backdrop too:
-  `configure_backdrop` rescales with Lanczos and crops to the aspect ratio, so widening re-crops rather
-  than stretches — but it waits for a frame, so wire it from the debounced resize task rather than the
-  render thread, as `app.py` already does.
-
-What is left is choosing among them and settling the numbers, which is test-and-tune against real windows
-rather than a decision anyone can make on paper.
-
-Raised again while live-testing the chat graph's search (2026-09-18); Juha asked for it early the following
-week.
 
 ## The chat graph shows a couple of blank frames before its first picture
 
@@ -1120,33 +1056,6 @@ there. Until it lands, the extraction still happens once per process — just no
 waiting behind it. The remaining user-visible cost is the first *wire build* of a chat with a big PDF, which
 is a wait during a request rather than a frozen GUI.
 
-## The pose editor's list browsing does nothing, and one of its three lists cannot even be reached
-
-*Cluster: ? · Cost: S to diagnose, ? to fix · Gate: none · Filed: 2026-08-21*
-
-Found by driving the app on 2026-08-21, while checking that the new keyboard mark lights there. It does —
-and what it revealed is that the feature it marks does not work:
-
-- **Ctrl+P focuses the emotion preset list and the mark appears on it. Up / Down / Home / End then do
-  nothing** — four presses, no change, and nothing in the log. Whether `browse` is not reached or is
-  reached and fails is not established. One candidate worth checking first: the value at rest is
-  `[custom]`, and `browse` starts with `choices.index(dpg.get_value(...))`, which raises if `[custom]` is
-  not one of `emotion_names`.
-- **Ctrl+I does not move the focus at all.** After pressing it, the mark was still on the emotion list —
-  which is the cheapest possible evidence, and only available now that there *is* a mark.
-- **The morph panels' lists have no way to be focused.** `PoseEditorGUI.focus_editor` exists, is bound to
-  nothing, and carries a TODO above it saying hotkeys for the morph groups are still to be added. So the
-  three-line entry each of them has in `combobox_choice_map` has never been reachable.
-
-Their map entries additionally could not have matched even with focus, because those lists are built
-without a tag and the dispatch recognized a focused item by alias only — fixed the same day, since a mark
-saying "the arrows are here" over a list that cannot receive them is worse than no mark. That fix is
-therefore **unexercised**: it is correct by construction and by `guiutils.item_identifiers`' tests, and
-nothing can drive it until a focus route exists.
-
-Whether the missing hotkey is worth adding is a separate question from why the two that exist misbehave,
-and the second is the one to answer first.
-
 ## The test suite hung once on Windows CI, in `cherrypick/tests/test_grid.py`
 
 *Cluster: ? · Cost: ? · Gate: a second occurrence — there is nothing to debug from one · Filed: 2026-08-21*
@@ -1835,8 +1744,8 @@ enforced:
 Read-only is also the cheaper path — no autosave, no persisted HEAD moves, no attachment writes — so the
 safer default is the smaller implementation, which is not usually how that goes.
 
-**Interacts with autosave.** Once periodic autosave exists it will write to whatever is open, so it has to
-know whether the current datastore is writable. Cheaper to design that in than to retrofit it.
+**Interacts with autosave.** Periodic autosave (`appstate.start_autosave`, since 2026-09-15) writes to
+whatever is open, so it has to know whether the current datastore is writable.
 
 **A new use site for `FileDialog`**, so it inherits whatever comes of *FileDialog: reduce per-use-site
 boilerplate*. A recent-datastores list follows naturally once swapping works, and both the graph view and
@@ -2020,33 +1929,9 @@ The segfault these measurements were taken during is fixed (2026-08-24, one sess
 see `dpg-notes.md`, "Context recreation is not reliably safe once real widgets have rendered"). What
 remains is the limit itself, which applies to any core a full run produces.
 
-## Two loose ends on what the data eyes mean
-
-*Cluster: ? · Cost: S each · Gate: none · Filed: 2026-08-25*
-
-The effect says *the system is consulting an external source*. Attachment extraction was added on
-2026-08-25, joining the automatic RAG search and every tool call. Two questions were raised while doing it
-and deliberately not answered, because both are about what the signal should *mean* rather than about
-plumbing:
-
-- ~~**Should RAG indexing light them?**~~ **No** (Juha, 2026-08-25). Indexing is the system reading external
-  documents and has its own INDEXING indicator, but it **can run for an hour** on a corpus of long
-  documents — so the eyes would be on, unexplained, for the whole of it, which reads as broken rather than
-  as consulting. That settles the general question too: the effect means *reaching outside on your behalf*,
-  within a turn, not *reaching outside at all*.
-
-- **`get_current_time` lights them today, and consults nothing.** It goes through `on_tools_start` like any
-  tool, so a clock read gets the same signal as a web fetch. Harmless, and it dilutes the signal a little.
-  Fixing it means the trigger stops being "a tool ran" and becomes a property of *which* tool, which is a
-  small table to maintain — probably a set beside `DOCUMENT_TOOL_NAMES` and `NETWORK_TOOL_NAMES` in
-  `llmtools`, since that is already where "which tools are what" lives.
-
-Both are cheap. Neither is worth guessing at, since the answer is a judgement about what the audience should
-read the effect as meaning.
-
 ## The data eyes are nearly invisible after the postprocessor
 
-*Cluster: avatar · Cost: ? · Gate: none · Filed: 2026-09-24 · See also: "Two loose ends on what the data eyes mean"*
+*Cluster: avatar · Cost: ? · Gate: none · Filed: 2026-09-24 · See also: `llmtools.EXTERNAL_SOURCE_TOOL_NAMES`, which decides when the eyes light*
 
 The effect — green, scrolling terminal-text lines in the character's eyes while a tool runs — is there in a
 recording of a web-search turn, but the postprocessor all but hides it: noticeable at full size only when
@@ -2943,9 +2828,9 @@ The AGPL parts come from *SillyTavern-extras*, whose licence they preserve.
 
 - `LICENSE.md` is 20 lines of bare BSD with no indication that anything differs.
 - `README.md`'s licence section is one line: *"[2-clause BSD](LICENSE.md)."*
-- **`pyproject.toml` declares `license = "BSD-2-Clause"` and `license-files = ["LICENSE.md"]` for the whole
-  distribution** — so the package metadata, which is what tooling and downstream packagers read, states BSD
-  for an artifact that also contains AGPL and MIT code. This is the one with actual teeth.
+- ~~`pyproject.toml` declared `BSD-2-Clause` for the whole distribution~~ — **done**: it now carries the
+  compound expression below and lists every licence text in `license-files` (checked 2026-09-30). **What
+  remains is the two above, and the import rule below.**
 
 So the accurate statement exists in exactly one place, `raven/avatar/README.md`, which is the least likely
 file anyone checks before vendoring a piece. Someone deciding whether they may take a module would get it
@@ -2961,7 +2846,7 @@ contributor will meet it before writing the import, not after.
 Headline wording is fine as *"Everything in Raven is open source"*, but it has to be followed by the
 breakdown rather than standing alone (Juha, 2026-08-03).
 
-### Proposed shape for the `pyproject.toml` fix
+### The `pyproject.toml` fix, as decided (shipped; kept for the reasoning behind its elections)
 
 PEP 639 covers this directly, and the `license` field is already in its string form, so the backend accepts
 a compound SPDX *expression*:
@@ -3080,51 +2965,6 @@ PEP 639 deprecates those, and this project is already clean on that axis.
   Attribution has been added to `__init__.py`, `parser.py`, `constants.py` and `graph.py`, and `CLAUDE.md`
   corrected — it described `raven/common/` as BSD-licensed. What remains for this item is the `pyproject.toml`
   expression, which needs `LGPL-3.0-or-later`.
-
-## Two adopted directories ship without their licence text
-
-*Cluster: ? · Cost: ? · Gate: 0.2.10, soon · Filed: 2026-08-03*
-
-Found while enumerating the adopted licences for the sibling item on Raven's own licensing docs, and filed
-separately because it is a different kind of problem with a different urgency: shipping someone else's code
-without their licence is a plain compliance failure, where that item is about metadata and documentation
-being incomplete. This one wants fixing on its own, ahead of and independently of the `pyproject.toml` work.
-
-- **`raven/vendor/DearPyGui_Markdown/`** — no `LICENSE` file, and no copyright or licence notice in any of
-  its modules. Upstream (`IvanNazaruk/DearPyGui-Markdown`) is **MIT**, confirmed via the GitHub API. MIT
-  requires the copyright notice and permission notice to travel with the code, so the text needs adding.
-- **`raven/vendor/IconsFontAwesome6.py`** — no licence header. **Resolved 2026-08-03**: Font Awesome's own
-  `LICENSE.txt` splits its terms three ways — icons (SVG/JS) **CC-BY-4.0**, fonts **OFL-1.1**, and *"all
-  non-font and non-icon files"* **MIT**. A generated codepoint table derived from `icons.yml` is neither font
-  nor icon, so it falls under the MIT clause. The generator, `juliettef/IconFontCppHeaders`, is **zlib**. So
-  the header wants a notice citing Font Awesome under MIT, and the generator under zlib for whatever
-  boilerplate it contributed.
-
-- **`raven/fonts/` ships ten `.ttf` files and nothing else** — no licence, no attribution, not even a README.
-  This is the largest instance of the problem and was found last, by asking whether the Font Awesome *fonts*
-  ship as well as its codepoints. They do:
-  - `fa-regular-400.ttf`, `fa-solid-900.ttf` — Font Awesome, **OFL-1.1** (confirmed from their `LICENSE.txt`,
-    which puts "all icons packaged as web and desktop font files" under the SIL Open Font License).
-  - `InterTight-{Regular,Bold,Italic,BoldItalic}.ttf` and `OpenSans-{Regular,Bold,Italic,BoldItalic}.ttf` —
-    both families are distributed under **OFL-1.1** as far as I know, but that is recall rather than a check,
-    and Open Sans in particular was relicensed from Apache-2.0 at some point, so *which build was downloaded*
-    decides it. Verify against the source each file actually came from before writing a notice.
-
-  **OFL-1.1 requires the copyright notice and the licence text to travel with the font**, so redistributing
-  these bare is a licence violation regardless of how the rest of the metadata question lands. The fix is a
-  licence text plus per-family attribution in `raven/fonts/`, and `license-files` globs that reach it.
-
-`LICENSE.md` and `README.md` should carry the same breakdown as the table above, since those are what a human
-reads before deciding anything.
-
-**Establish what is actually left before scheduling this.** A round of missing-`LICENSE` fixes landed in the
-weeks after filing, so some of the above may be done. And a filename-matching audit will report Font Awesome
-as a false positive: all its fonts ship in one folder whose licence file is not named exactly `LICENSE`.
-
-Raised during the vision-document discussion with claude.ai, 2026-08-03. Note the claim as relayed was that
-"the server and parts of the avatar are AGPL" — accurate, but checking the tree also turned up the MIT
-component, which nobody had mentioned, and cleared `raven/common/video/postprocessor.py`, which mentions AGPL
-only to record that its author relicensed it to BSD. A grep for "AGPL" therefore over-reports; read the file.
 
 ## Librarian's help card: the room exists now, and is not all spent
 
@@ -3490,7 +3330,6 @@ Limitations: x86-only (no ARM/Mac M-series), may lag behind Pillow releases. Nee
 
 Discovered during raven-cherrypick loader pipeline design.
 
-
 ## Consolidate remaining numpy/tensor/DPG image conversions
 
 *Cluster: ? · Cost: ? · Gate: 0.2.10 if it fits · Filed: 2026-03-20 · See also: "Move the avatar backdrop onto `image.utils.fit_cover`"*
@@ -3743,21 +3582,6 @@ erases the raster — so the Scene-band reading of it is now the one reachable *
 The settings editor currently presents filters in a fixed priority order, with at most one copy of each filter. With the desaturate/monochrome_display and noise/analog_vhs_noise splits, the signal pipeline model is becoming richer — users may want to reorder filters or have multiple instances. The GUI needs drag-and-drop chain building: add/remove filters, reorder freely, support multiple instances of the same filter (with independent `name` keys). Currently, `strip_postprocessor_chain_for_gui` enforces fixed ordering and single instances.
 
 Discovered during postprocessor chain ordering redesign (2026-04-09).
-
-## raven.papers user manual
-
-*Cluster: discoverability · Cost: ? · Gate: 0.2.10, with the README correctness sweep · Filed: 2026-04-13*
-
-The `raven.papers` tool collection has grown to the point where it deserves its own user manual, like Visualizer, Librarian and Server already have.
-
-There are existing usage instructions for `raven-arxiv-search` in the README of the separate `arxiv-api-search` project, which the tool was created from. These should be included in the manual.
-
-For the others, some instructions are scattered in Raven's main `README.md`.
-
-Some instructions don't yet exist, and need to be written.
-
-Small enough to start from a draft. **Schedule it with the README correctness sweep** — the argument is not
-completeness but that out-of-date docs scare away potential users, and both jobs are the same reading pass.
 
 ## Easy install with a chosen CUDA version (and a sensible CPU default)
 
@@ -4796,7 +4620,6 @@ Two prerequisites are already done as of the 2026-06-07 doc sweep, so this item 
 Remaining work is the *per-key* audit: for every bound key in each of the seven apps, confirm it is (a) listed in that app's help card and (b) named (bracketed) in the tooltip of the control it triggers, then fill the gaps. Note that filling a missing tooltip is a behavior change, not a doc edit — keep it as its own focused pass.
 
 Discovered during cherrypick WASD navigation work (2026-06-07).
-
 
 ## Cherrypick: zoom-in doesn't upgrade already-cached preload neighbors
 
@@ -6140,43 +5963,6 @@ symptom today, so it does not gate a release.
 
 Noticed 2026-08-04 while bumping the `dearpygui` floor and finding `pdm lock` produced no diff to review.
 
-## Librarian has no periodic autosave: an abnormal exit loses the whole session's chat
-
-*Cluster: abnormal-exit · Cost: ? · Gate: RN2026 · Filed: 2026-08-04*
-
-`PersistentForest`'s `autosave=True` registers `self.save` with `atexit` and nothing else — verified in
-`chattree.py`, there is no timer and no save-on-mutation. So the datastore is written **once per session,
-at clean exit**. Any exit that skips `atexit` — a crash, a segfault, an OOM kill, a power loss — loses
-every message since the app started, and orphans the server-side avatar instance as well (see "Librarian
-leaks its server-side avatar instance when it doesn't exit normally", which shares the premise and whose
-SIGTERM behaviour is itself now in question).
-
-Raised by Juha (2026-08-04) as needing thought rather than a patch, and it does — though one edge it used
-to have is gone. **The atomicity prerequisite is already met** (checked 2026-09-03): `save` writes to a
-temp file in the destination's own directory, `flush`es, `os.fsync`s, `os.replace`s, and unlinks the temp
-file on any `BaseException`. So a death mid-write no longer truncates the history, and raising the save
-frequency no longer multiplies a window in which everything can be lost. What is left is the cadence
-itself.
-
-Axes to settle, roughly in order of how much they constrain the rest:
-
-- **Trigger.** Per completed node (each user message and each finished AI turn) is the natural unit —
-  it matches what a user would expect to survive, and there are only a handful per minute even in fast
-  conversation. A wall-clock timer is simpler but saves when nothing has changed and misses the moment
-  that matters. Debounced-after-mutation splits the difference.
-- **Cost, which couples this to the datastore-scaling item.** A whole-file rewrite per turn is nothing at
-  today's size — **measured 2026-09-03: 42 ms and 50 ms for a 3.3 MB store**, read off two shutdowns'
-  own log lines, against a turn that takes seconds — and is exactly the thing "Datastore scaling: a single
-  `chat.json` … won't hold years of chats" says gets linearly worse. If that item's incremental/SQLite direction is taken, autosave becomes
-  nearly free and this design question dissolves; if it is not taken for a long while, a per-turn rewrite
-  is the thing that will make it hurt first. **Decide these two together, or at least decide this one
-  knowing the other exists.**
-- **Scope.** `state.json` (HEAD, toggles) is small and separately saved; it probably wants the same
-  treatment, and losing it is much cheaper to recover from than losing the messages.
-
-Cheap and safe to do *now*, independent of the above: make `save` atomic. It reduces the blast radius of
-the current once-per-session write, and every later design needs it anyway.
-
 ## The docs DB stores each document's full text *and* its chunks, both in the JSON
 
 *Cluster: ? · Cost: ? · Gate: 0.2.10, resolve soon · Filed: 2026-08-04 · See also: "Version the chat datastore file …", "Datastore scaling …"*
@@ -6513,28 +6299,23 @@ grounds that an honest "code is not supported" beats a feature that half-works w
 
 Raised by Juha (2026-08-07), reviewing the supported-format list.
 
-## OS file drag-and-drop is not advertised anywhere
+## OS file drag-and-drop is not advertised in the apps
 
 *Cluster: discoverability · Cost: S · Gate: RN2026 · Filed: 2026-08-13 · See also: `briefs/done/os-drag-and-drop.md`*
 
 `raven.common.gui.filedrop` shipped 2026-08-10 and `filedrop.install` runs in all six GUI apps —
-Visualizer, Librarian, Cherrypick, both Avatar editors, and the XDot viewer. Nothing tells the user it is
-there. Checked 2026-08-13: no in-app string mentions it, and neither the root `README.md` nor the per-app
-READMEs do. The nearest miss is Librarian's "drop files in this folder for the AI to search" tooltip, which
+Visualizer, Librarian, Cherrypick, both Avatar editors, and the XDot viewer. The documentation half is done:
+the root `README.md` has a *Dragging files in* section saying what each app accepts. **Nothing in the apps
+says so.** The nearest miss is Librarian's "drop files in this folder for the AI to search" tooltip, which
 is about the documents *directory* for RAG rather than about dropping onto the window — close enough in
 wording to be read as covering this, and it does not.
 
-So the only way to find the feature is to guess that it exists and try it.
+The shape of the affordance is undecided — a line in each app's help window, a hint in or beside the file
+dialog, an overlay while a drag hovers, or some combination. Whatever is chosen has to be accurate per app:
+each `filedrop.install` call carries its own `DropRule` list, so what an app accepts differs, and a generic
+"drop files here" would be wrong about most of them.
 
-Two halves, separable:
-
-- **In-app.** The shape of the affordance is undecided — a line in each app's help window, a hint in or
-  beside the file dialog, an overlay while a drag hovers, or some combination. Whatever is chosen has to be
-  accurate per app: each `filedrop.install` call carries its own `DropRule` list, so what an app accepts
-  differs, and a generic "drop files here" would be wrong about most of them.
-- **Docs.** The root `README.md`, plus the per-app READMEs that have a matching section.
-
-Raised by Juha (2026-08-13), for discussion before building — the in-app cue is the open question.
+Raised by Juha (2026-08-13), for discussion before building.
 
 ## Markdown decorations are placed by measuring the text, and the measurement can be premature
 
