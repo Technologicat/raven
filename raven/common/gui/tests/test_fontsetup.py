@@ -30,6 +30,7 @@ def dpg_context():
     dpg.create_viewport(width=100, height=100)  # never shown: tests must not steal focus
     dpg.setup_dearpygui()
     yield
+    guiutils.teardown()  # the tests call `bootup`; safe where Markdown was never rendered
     dpg.destroy_context()
 
 

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # The setup functions are re-exported from the submodules further down, so that a caller configures the
 # renderer through the package it imported rather than having to know which module owns which setter.
-__all__ = ["get_text_size", "shutdown",
+__all__ = ["get_text_size", "shutdown", "restart",
            "CallInNextFrame", "WaitUntilShown", "CallWhenDPGStarted",
 
            "set_font_registry", "set_add_font_function", "set_font", "set_url_secondary_action",
@@ -110,10 +110,24 @@ def get_text_size(text: str, *, wrap_width: float = -1.0, font: int | str = 0, *
     raise fail(f"the font has not reached the atlas after {_TEXT_SIZE_WAIT_FRAMES} frames.")
 
 
-# Set once, by `shutdown`, and never cleared: teardown happens once and there is nothing to come back from.
-# Both worker threads below check it, because both otherwise sit in a poll loop that calls into DPG — and
-# after `destroy_context` such a call is a *segfault* rather than an exception.
+# Set by `shutdown`, and cleared only by `restart`, for a new context. Both worker threads below check it,
+# because both otherwise sit in a poll loop that calls into DPG — and after `destroy_context` such a call is
+# a *segfault* rather than an exception. So it must stay set for the rest of the old context's life, which
+# is why clearing it is a separate call made for the new one rather than the last step of `shutdown`: work
+# queued between `shutdown` and `destroy_context` would otherwise start a fresh worker against the context
+# on its way out.
 _stopping = threading.Event()
+
+# Bumped by `restart`. Each worker remembers the generation it was started in and exits once that is no
+# longer current, so a worker that outlived its `shutdown` cannot serve the next context. The case is real:
+# in a context whose render loop never runs — every unmapped test context — `dpg.split_frame` waits
+# forever, and a worker parked there cannot be joined.
+_generation = 0
+
+
+def _retired(generation: int) -> bool:
+    return _stopping.is_set() or generation != _generation
+
 
 # Pulsed when work is queued, so the idle wait is a wait rather than a poll — and so `shutdown` can end it
 # immediately instead of leaving up to one sleep interval of exposure.
@@ -143,6 +157,35 @@ def shutdown(timeout: float = 1.0) -> None:
                                "inside a DPG call, which `dpg.destroy_context()` would pull out from under it.")
 
 
+def restart() -> None:
+    """Undo `shutdown`, so the renderer works again in a new DPG context.
+
+    Call after `dpg.create_context()` for the new context. `raven.common.gui.utils.setup_markdown` does, so
+    an app or a test that goes through `bootup` needs nothing more.
+
+    Idempotent, and a no-op while the workers are running normally. Otherwise, work queued for the old
+    context is dropped, its widgets having gone with that context. That includes a worker that stood down on
+    its own because no render loop was running: it is started again on next use.
+
+    A worker from before the `shutdown` that is still running is logged and left behind. It is retired: it
+    exits the next time it wakes, without touching DPG again.
+    """
+    global _generation
+    live = [thread for thread in (CallInNextFrame.worker_thread, CallWhenDPGStarted.worker_thread)
+            if thread is not None and thread.is_alive()]
+    if live and not _stopping.is_set():
+        return  # running normally: nothing to restart
+    for thread in live:
+        logger.warning(f"restart: {thread.name} is still running after `shutdown`, most likely waiting for a "
+                       "frame that never came; retiring it.")
+    _generation += 1
+    _stopping.clear()
+    _work_ready.clear()
+    CallInNextFrame._reset()
+    WaitUntilShown._reset()
+    CallWhenDPGStarted._reset()
+
+
 class CallInNextFrame:
     __started = False
     worker_thread = None
@@ -158,13 +201,20 @@ class CallInNextFrame:
         return decorator
 
     @classmethod
+    def _reset(cls):
+        cls.__started = False
+        cls.worker_thread = None
+        with cls._queue_lock:
+            cls.now_frame_queue.clear()
+
+    @classmethod
     def append(cls, func, *args, **kwargs):
         if _stopping.is_set():
             # Tearing down. Queueing more work would queue calls into a context that is about to go away.
             return
         if cls.__started is False:
             cls.__started = True
-            cls.worker_thread = threading.Thread(target=cls._worker, daemon=True,
+            cls.worker_thread = threading.Thread(target=cls._worker, args=(_generation,), daemon=True,
                                                  name="DearPyGui_Markdown.CallInNextFrame")
             cls.worker_thread.start()
         with cls._queue_lock:
@@ -172,8 +222,8 @@ class CallInNextFrame:
         _work_ready.set()
 
     @classmethod
-    def _worker(cls):
-        while not _stopping.is_set():
+    def _worker(cls, generation):
+        while not _retired(generation):
             if len(cls.now_frame_queue) == 0 and not WaitUntilShown.is_waiting():
                 # Waited on rather than slept through, so `shutdown` gets this thread out of the way at
                 # once instead of after up to one interval.
@@ -197,11 +247,13 @@ class CallInNextFrame:
                 # exception escaped, and the thread died with a traceback. Same outcome, on purpose and
                 # quietly, with `split_frame` naming the reason in the log.
                 return
+            if _retired(generation):  # the frame wait is where a retired worker is likely to have been
+                return
             WaitUntilShown.release_shown()  # queues what the frame just rendered has revealed, for the next pass
             for func, args, kwargs in next_frame_queue:
-                if _stopping.is_set():
+                if _retired(generation):
                     # Teardown began while this thread was waiting for its frame. Every remaining call in
-                    # the batch would land in a context on its way out.
+                    # the batch would land in a context on its way out, or already gone.
                     return
                 try:
                     func(*args, **kwargs)
@@ -223,6 +275,11 @@ class WaitUntilShown:
     """
     _lock = threading.Lock()
     _by_blocker = {}  # blocker (DPG ID) -> [(func, args, kwargs), ...]
+
+    @classmethod
+    def _reset(cls) -> None:
+        with cls._lock:
+            cls._by_blocker.clear()
 
     @classmethod
     def call_when_shown(cls, item, func, *args, **kwargs) -> None:
@@ -270,12 +327,19 @@ class CallWhenDPGStarted:
     functions_queue = []
 
     @classmethod
+    def _reset(cls):
+        cls.__thread = None
+        cls.worker_thread = None
+        cls.STARTUP_DONE = False
+        cls.functions_queue = []  # the worker deletes it once served
+
+    @classmethod
     def append(cls, func, *args, **kwargs):
         if _stopping.is_set():
             return
         if cls.__thread is None:
             cls.__thread = True
-            cls.worker_thread = threading.Thread(target=cls._worker, daemon=True,
+            cls.worker_thread = threading.Thread(target=cls._worker, args=(_generation,), daemon=True,
                                                  name="DearPyGui_Markdown.CallWhenDPGStarted")
             cls.worker_thread.start()
         if not cls.STARTUP_DONE:
@@ -289,14 +353,14 @@ class CallWhenDPGStarted:
             traceback.print_exc()
 
     @classmethod
-    def _worker(cls):
+    def _worker(cls, generation):
         # `get_frame_count` is a DPG call, so this poll must stop the moment teardown begins: after
         # `destroy_context` it would be a call into freed memory.
         while dpg.get_frame_count() <= 1:
-            if _stopping.is_set():
+            if _retired(generation):
                 return
             time.sleep(0.01)
-        if _stopping.is_set():
+        if _retired(generation):
             return
         # Same reasoning as in `CallInNextFrame._worker`: a bare `dpg.split_frame()` raises where no render
         # loop is running, and the exception would kill this thread rather than delay it. Standing down
@@ -305,6 +369,8 @@ class CallWhenDPGStarted:
         from ...common.gui import utils as guiutils  # local import: see the note beside the imports
         if not guiutils.split_frame(operation="DearPyGui_Markdown: waiting for the GUI to start",
                                     required=False):
+            return
+        if _retired(generation):
             return
         cls.STARTUP_DONE = True
         for func, args, kwargs in cls.functions_queue:

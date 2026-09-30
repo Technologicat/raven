@@ -38,8 +38,8 @@ def dpg_context():
     yield
     # Building Markdown starts the renderer's worker threads, and they call into DPG. Destroying the
     # context under them segfaults the interpreter — which is how this module found the bug that
-    # `dpg_markdown.shutdown` now fixes, so the call is load-bearing rather than tidy.
-    dpg_markdown.shutdown()
+    # `dpg_markdown.shutdown`, which `teardown` calls, now fixes. So the call is load-bearing rather than tidy.
+    guiutils.teardown()
     dpg.destroy_context()
 
 

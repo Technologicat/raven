@@ -59,6 +59,7 @@ def dpg_context():
     dpg.setup_dearpygui()
     themes_and_fonts = guiutils.bootup(font_size=14)
     yield themes_and_fonts
+    guiutils.teardown()
     dpg.destroy_context()
 
 

@@ -132,7 +132,8 @@ def dpg_context():
 
 @pytest.fixture(scope="module")
 def themes_and_fonts(dpg_context):
-    return guiutils.bootup(font_size=20)
+    yield guiutils.bootup(font_size=20)
+    guiutils.teardown()
 
 
 @pytest.fixture

@@ -55,7 +55,8 @@ def png_bytes(width, height, rgb):
 def themes_and_fonts(mapped_gui_context):
     """One `bootup` for the module. It builds themes and font atlases into the context, and doing that per
     test leaves DPG's container stack in a state the next call cannot pop."""
-    return guiutils.bootup(font_size=14)
+    yield guiutils.bootup(font_size=14)
+    guiutils.teardown()
 
 
 @pytest.fixture

@@ -360,6 +360,7 @@ def setup_markdown(font_registry: int,
     See `raven.visualizer.app` for an example.
     """
     # https://github.com/IvanNazaruk/DearPyGui-Markdown
+    dpg_markdown.restart()  # in case an earlier context in this process was torn down
     dpg_markdown.set_font_registry(font_registry)
     dpg_markdown.set_add_font_function(fontsetup.markdown_add_font_callback)
     dpg_markdown.set_font(font_size=font_size,
