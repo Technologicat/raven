@@ -1254,8 +1254,18 @@ with timer() as tim:
             h = gui_config.main_window_h - (gui_config.ai_warning_h + 16) - (gui_config.chat_controls_h + 16) + 8
             h -= gui_config.search_row_h + 4  # the search row across the top, and the item spacing below it
             return w, h
-        def _get_chat_panel_size(main_window_w: int, main_window_h: int) -> tuple[int, int]:  # at current window size
+        def _split_extra_width(main_window_w: int) -> tuple[int, int]:
+            """How the window's width beyond its design size divides between the columns: `(chat, avatar)`.
+
+            The chat log is at most its design width, which is a comfortable reading width, and everything
+            wider goes to the right column, where the chat graph has use for it. A window narrower than its
+            design size takes the difference from the chat log, as it always has: the right column's design
+            width is what the avatar and the toolbars beside it were laid out for.
+            """
             extra_w = main_window_w - gui_config.main_window_w
+            return min(extra_w, 0), max(extra_w, 0)
+        def _get_chat_panel_size(main_window_w: int, main_window_h: int) -> tuple[int, int]:  # at current window size
+            extra_w, _ = _split_extra_width(main_window_w)
             extra_h = main_window_h - gui_config.main_window_h
             base_w, base_h = _get_chat_panel_base_size()
             w = base_w + extra_w
@@ -1267,7 +1277,7 @@ with timer() as tim:
             h = chat_panel_base_h
             return w, h
         def _get_avatar_panel_size(main_window_w: int, main_window_h: int) -> tuple[int, int]:
-            extra_w = 0  # avatar panel keeps the same width
+            _, extra_w = _split_extra_width(main_window_w)
             extra_h = main_window_h - gui_config.main_window_h
             base_w, base_h = _get_avatar_panel_base_size()
             w = base_w + extra_w
@@ -1278,7 +1288,7 @@ with timer() as tim:
         def _get_chat_field_base_width() -> int:  # full width; the toolbar (send/mic/VU) sits below the field now, not beside it
             return gui_config.chat_panel_w  # `chat_controls` has `no_scrollbar=True`, so full width can't trip a horizontal scrollbar
         def _get_chat_field_width(main_window_w: int) -> int:
-            extra_w = main_window_w - gui_config.main_window_w
+            extra_w, _ = _split_extra_width(main_window_w)
             base_w = _get_chat_field_base_width()
             w = base_w + extra_w
             return w
@@ -1288,7 +1298,7 @@ with timer() as tim:
             h = gui_config.chat_controls_h
             return w, h
         def _get_chat_controls_size(main_window_w: int, main_window_h: int) -> tuple[int, int]:
-            extra_w = main_window_w - gui_config.main_window_w
+            extra_w, _ = _split_extra_width(main_window_w)
             extra_h = 0
             base_w, base_h = _get_chat_controls_base_size()
             w = base_w + extra_w

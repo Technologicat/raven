@@ -33,6 +33,7 @@
 - **Stop works while the AI is using its tools.**
   - The reply ends at once, where in v0.2.9 Stop waited for the tool calls to finish — for a web search or page fetch, as long as the site took.
   - The results that had arrived are kept, and each unfinished call is recorded as cancelled. An empty send lets the AI go on from what it has.
+  - A web search or page fetch that was stopped also stops on *Raven-server*, where it used to run to its end.
 
 #### Raven-avatar
 
@@ -42,6 +43,7 @@
 
 #### Raven-librarian
 
+- **A window wider than its default size gives the extra width to the chat graph**, or to the avatar panel when it is showing. The chat log stays at its default width, and a narrower window still takes the difference from it. In v0.2.9 all the extra width went to the chat log.
 - **The avatar panel's DOCS and WEB indicators now read DOCUMENTS and INTERNET**, as the toggles below them are called.
 - **In those indicators, only the icon pulsates now.** The names hold still, in their row's colour. In v0.2.9 some rows pulsated their name as well and some did not.
 - **Sending an empty message answers your own last message**, when the chat ends on one — whatever `llm_allow_empty_send` says. It is how to ask a question again after deleting its replies, which v0.2.9 had no way to do with the setting off. The same holds when the chat ends on a tool result: the AI goes on from the results it has. With the chat ending on an AI reply, the setting still decides. In `raven-minichat` too.
@@ -100,6 +102,7 @@
   - A search engine that has stopped answering is noticed within seconds, where each search used to wait a long time before failing. Librarian gives up on a web tool after a minute, set by `web_tool_timeout`, where it used to wait five.
   - A failed search is no longer remembered for the rest of the session, so asking again once the engine is back works.
   - A search that finds nothing, or fewer results than asked for, no longer waits a long time for more to load.
+  - On a *Raven-server* with no web browser installed, a page that needs one to render is reported as that, where it used to be reported as a site that cannot be fetched as text.
 
 #### Constellation-wide
 
