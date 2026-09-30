@@ -247,4 +247,16 @@ live on the Night.
    briefs (maintainer, 2026-09-30).
 3. **Focus parks and `give_caret` tell the keyboard marks where the focus is going** — the deferred item of
    that name. A restructure of the shared layer (the expectation state moves below `keyboardmark`) and seven
-   park sites. Either this or the cleanup can go first (maintainer, 2026-09-30).
+   park sites. **Next, in a fresh session.** The last of the hammerspace this sprint has been working
+   through (maintainer, 2026-09-30).
+4. **A roadmap overview, as input for prioritizing the autumn** (decided 2026-09-30, after item 3). The
+   backlog is several hundred items across `TODO.md`, `TODO_DEFERRED.md` and the briefs, and the maintainer
+   knows roughly what the autumn holds but cannot see how to order it without an overview. So:
+   - **`briefs/roadmap-overview-2026-10.md`**, read-only with respect to the TODO files: theme → subsystem →
+     one line per item, with its cost, its gate and where it lives. Plus a separate list of items that look
+     done, stale or duplicated, as input to the TODO triage, which is still owed from the Night.
+   - **Built by about five parallel subagents**, each reading a slice and returning one-line entries with a
+     theme tag, then one merge pass done by hand, since the merge is where the judgement is.
+   - **Prioritization is a session with the maintainer against that page**, which also schedules
+     `librarian-extension/`'s 04–06.
+   - The longer-term version is the backlog as a Visualizer dataset, in brief 13.

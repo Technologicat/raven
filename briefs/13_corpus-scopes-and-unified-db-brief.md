@@ -31,6 +31,13 @@ Three things now wait on it explicitly, and each is queued rather than designed 
   ~12k, where a broad question's relevant set outruns any conversational `k`. The answer there is stratified
   sampling, which needs the clustering this brief covers.
 
+**And one motivating use of the generalization to other inputs**, not waiting on it but wanting it (Juha,
+2026-09-30): **Raven's own TODO lists as a Visualizer dataset.** The backlog has outgrown reading — several
+hundred items across `TODO.md`, `TODO_DEFERRED.md` and the briefs — and seeing its clusters would help
+prioritize. Probably best built once the unified DB takes inputs other than BibTeX, rather than as a
+one-off converter. Until then a hierarchical list stands in for it, `briefs/roadmap-overview-2026-10.md`
+(queued in `briefs/yrityspaiva/README.md`).
+
 **Provenance markers** are carried over from the 2026-08-01 design session and are load-bearing — the point
 of this document is that a later reader can tell what is settled from what is merely proposed:
 
