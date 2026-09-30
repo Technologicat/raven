@@ -74,15 +74,31 @@ that makes a corpus worth ingesting, and nothing in v1 asks about research quest
      superseded. That was fine while prototyping, and it is what a user of the tool must not meet.
    - **A superseded report is either removed or visibly marked** — in its name, or by moving it aside.
      Which of the two is open; what is not open is leaving it looking like a peer of the current one.
-   - **Reports can optionally be written as a spreadsheet, `.ods` or `.xlsx`** (Juha, 2026-09-30).
-     A TSV opened in LibreOffice loses a row for each field containing a `"`: the import treats it as
-     a string delimiter and the field runs on into the next line. The dedup audit showed 1264 rows
-     there against its 1296, and exactly 32 of its rows contain a `"`.
-     - `.ods` costs no new dependency: `odfpy` is already one, backing `docextract`'s `.odt`/`.odp`.
-       `.xlsx` needs `openpyxl`, which `briefs/spreadsheet-ingestion-brief.md` would add anyway, for
-       reading.
-     - The TSV should stay safe too, as the default. A writer that quotes fields containing `"` (the
-       `csv` module's `QUOTE_MINIMAL`) should open correctly in LibreOffice — not yet checked there.
-     - **This is every `raven.papers` report, not only this tool's.** `raven-deduplicate` and
-       `raven-siftbib` write their audit TSVs by joining fields with a tab, so they have the same
-       fault as shipped, and the writer is shared rather than per tool.
+   - **Reports can optionally be written as a spreadsheet, `.ods` or `.xlsx`** (Juha, 2026-09-30), so
+     that opening one does not depend on the import dialog's settings. `.ods` costs no new dependency:
+     `odfpy` is already one, backing `docextract`'s `.odt`/`.odp`. `.xlsx` needs `openpyxl`, to be
+     installed when this is built.
+   - **The TSV default is already safe**: `raven.papers.utils.write_tsv` (2026-09-30) quotes a cell
+     containing a `"`, and the dedup and sift audits use it. Use it here too. Unquoted, the dedup audit
+     lost rows in LibreOffice when space was ticked as a separator alongside tab — the import dialog's
+     setting, which has to be unticked by hand; quoted, it kept every row either way (checked headless).
+6. **Replaying existing decisions** (Juha, 2026-09-30). The prototype's judgements should be loadable
+   into the new tools, so that the finished toolset can be run over the prototype's corpus and produce
+   clean, stage-numbered reports without paying for the LLM passes again. The motive is the methodology
+   section, which needs exact numbers from a pipeline that can be named.
+   - **Replayed answers carry the prototype's instrument, not the new tool's.** A report built from them
+     must say which instrument made each decision; stamping them with the new tool's fingerprint would
+     present the prototype's judge as the new one. So the import names the source instrument, and the
+     ledger key (id plus fingerprint, per the per-document brief) keeps the two apart for free.
+   - **The prototype stamped only the extractor.** `judged.jsonl` carries no fingerprint, so the import
+     assigns one — a hash of `judge_scope.py`'s prompts at the commit that produced the file is the honest
+     choice, since that is what decided the answers.
+   - **The field names differ**, and the mapping from the prototype's JSON to the new schema is the real
+     work: the three named tests are `no_ai`, `not_education` and `wrong_level` there, and become a
+     user-supplied list here. Cheap if the new schema keeps a per-test boolean-or-unknown plus a reason;
+     costly if it diverges, so the schema should be chosen with this import in view.
+   - **The same holds for the dedup stage's LLM judge**, whose answers sit in `dedup_judge.jsonl` beside
+     the corpus. The rest of the dedup is deterministic and simply re-runs, but its numbers have moved
+     since the prototype's run (1296 clusters and 1767 removed on 2026-08-31, 1295 and 1763 on
+     2026-09-30, cause not yet traced) — so the methodology numbers come from one run of one named
+     version, not from mixing the two.

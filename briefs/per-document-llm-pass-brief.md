@@ -122,6 +122,13 @@ Six of the seven questions below, settled in discussion with Juha. Question 5 is
   caller has — citekey, path, content hash. The fingerprint hashes the prompt and anything else that
   decides what an answer means, and goes into the filename as well as into each line
   (`extract_fields.py`, `instrument_fingerprint`).
+  - **A ledger can be seeded from answers made elsewhere** (Juha, 2026-09-30), under the fingerprint of
+    the instrument that actually made them. The corpus filter needs this to replay the prototype's
+    judgements through the finished tools; see `corpus-filter-brief.md`, question 6. With the
+    fingerprint in the key, seeded answers never pass for the new instrument's. So the caller needs two
+    things: to build its outputs from a *named* instrument's answers without asking anything (the replay),
+    and to have a run under a new instrument re-ask rather than reuse them, since they are different
+    measurements.
 - **The backend policy (4): on any failure, probe the backend once, and stop if it is the backend.**
   `llmclient.reconnect(settings)` re-probes and returns a `backend_status`. Anything other than
   `backend_ready` stops the run, with `describe_backend_status`'s message, which is the wording batch
