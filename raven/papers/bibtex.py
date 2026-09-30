@@ -33,11 +33,9 @@ __all__ = ["parse_file", "parse_string", "write_string",
            "entries_to_bibtex"]
 
 import collections
-import html.entities
 import itertools
 import pathlib
 import re
-import unicodedata
 from typing import NamedTuple
 
 import bibtexparser
@@ -47,6 +45,7 @@ from bibtexparser import Library
 from unpythonic import box, unbox
 
 from ..common.text import boilerplate
+from ..common.text import entities
 
 from . import identifiers
 from .utils import bibtex_escape
@@ -538,35 +537,9 @@ def repair_failed_block(failed_block) -> str | None:
 # An HTML character entity, together with whatever backslashes precede it. The backslash run is captured
 # because a `.bib` file carrying HTML almost always carries it *escaped* — `Q\&amp;A`, not `Q&amp;A` —
 # since the `&` was escaped for BibTeX on the way in, and the replacement has to know whether the `&` it
-# is consuming was already spoken for.
-#
-# The name is bounded and must carry its semicolon. HTML5 also defines about sixty entities *without* one
-# — `&copy`, `&sect`, `&times`, `&not` — and honouring those would decode any `&` that happens to be
-# followed by one of those words, including where it is the start of a longer word. In this module's own
-# subject matter that reads `see the &copyright notice` as `see the ©right notice`, and `&section 5` as
-# `§ion 5`. With the semicolon required there is nothing to guess about.
-_HTML_ENTITY_PATTERN = re.compile(r"(\\*)&(\#\d{1,7}|\#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});")
-
-# Unicode categories whose characters must not be written into a `.bib` as themselves. HTML5 names a
-# good number of these — `&zwj;`, `&lrm;`, `&NoBreak;`, `&#10;`.
-#
-#   - **Format characters (Cf)** are dropped. A zero-width joiner or a directional mark carries no
-#     information a bibliography record needs, and leaves nothing on screen to explain the file.
-#   - **Controls and the line and paragraph separators (Cc, Zl, Zp)** become an ordinary space, and that
-#     is a correctness rule rather than a tidiness one: a newline arriving mid-record moves every line
-#     after it, and `raven.papers.fixbib` reports faults by line number in the user's own file.
-#
-# **Space separators (Zs) are kept as themselves**, which is the interesting case and the one worth
-# stating. A no-break space looks like a space, and the temptation is to call that a trap and normalize
-# it — but not breaking the line there is the entire point of the character, and the source asked for it.
-# Same for the narrow and figure spaces, which are real typography. Emacs renders these visibly, so they
-# are at least not invisible the way a format character is everywhere.
-#
-# Analysis is a different question with a different answer, and it is already handled elsewhere:
-# `common.utils.unicodize_basic_markup` folds `&nbsp;` to a plain space on the way into the Visualizer,
-# because a tokenizer *should* see a word boundary there. Faithful in the file, normalized for the NLP.
-_DROPPED_CATEGORIES = frozenset(["Cf"])
-_SPACED_CATEGORIES = frozenset(["Cc", "Zl", "Zp"])
+# is consuming was already spoken for. The entity itself is `entities.ENTITY_PATTERN`, which see for why
+# the semicolon is required.
+_HTML_ENTITY_PATTERN = re.compile(r"(\\*)" + entities.ENTITY_PATTERN.pattern)
 
 
 def _decode_one_entity(match: re.Match, counter: box) -> str:
@@ -576,28 +549,16 @@ def _decode_one_entity(match: re.Match, counter: box) -> str:
                report other than by mutating something it was handed.
     """
     backslashes, name = match.group(1), match.group(2)
-    if name.startswith("#"):
-        try:
-            code = int(name[2:], 16) if name[1:2].lower() == "x" else int(name[1:])
-        except ValueError:
-            return match.group(0)
-        character = chr(code) if 0 < code < 0x110000 else None
-    else:
-        character = html.entities.html5.get(name + ";")
-    if character is None:
+    # Space separators stay as themselves in a file: a no-break space is typography the source asked for.
+    maybe_text = entities.resolve(name, fold_spaces=False)
+    if maybe_text is None:
         return match.group(0)
-
-    category = unicodedata.category(character)
-    if category in _DROPPED_CATEGORIES:
-        character = ""
-    elif category in _SPACED_CATEGORIES:
-        character = " "
 
     # An odd run means the last backslash was escaping the entity's own `&`, which is syntax rather than
     # content and goes with it. An even run is literal escaped backslashes, which stay.
     kept = backslashes[:-1] if len(backslashes) % 2 else backslashes
     counter << unbox(counter) + 1
-    return kept + bibtex_escape(character)
+    return kept + bibtex_escape(maybe_text)
 
 
 def decode_html_entities(source: str) -> tuple[str, int]:

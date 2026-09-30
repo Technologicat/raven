@@ -425,11 +425,34 @@ class TestUnicodizeBasicMarkup:
     def test_an_escaped_entity_decodes_only_once(self):
         """`&amp;lt;` is how a source writes a literal `&lt;`, and it must stay one.
 
-        The property this pins is the ordering: `&amp;` is decoded after every other entity, so the `&`
-        it produces cannot combine with what follows into a second entity. Decoding it first would turn
-        this into `<` — the text made to say something the author did not write, silently.
+        The property this pins is that each entity is decoded once: the `&` that `&amp;` produces must not
+        combine with what follows into a second entity. Decoding it that way would turn this into `<` —
+        the text made to say something the author did not write, silently.
         """
         assert utils.unicodize_basic_markup("&amp;lt;") == "&lt;"
+
+    def test_a_numeric_ampersand_decodes_only_once_too(self):
+        # The same property by the other spelling, which the two-stage decode has to spare in its first
+        # stage: `&#38;` is an ampersand as surely as `&amp;` is.
+        assert utils.unicodize_basic_markup("&#38;lt;") == "&lt;"
+
+    def test_any_named_html5_entity_is_decoded(self):
+        assert utils.unicodize_basic_markup("caf&eacute; &mdash; na&iuml;ve") == "café — naïve"
+
+    def test_numeric_entities_are_decoded(self):
+        # The commonest in a database export: a typographic apostrophe, in either base.
+        assert utils.unicodize_basic_markup("Smith&#8217;s and Jones&#x2019;s") == "Smith’s and Jones’s"
+
+    def test_an_entity_inside_a_subscript_is_decoded_before_the_subscript_pass(self):
+        # Otherwise the pass maps the entity's letters one by one, and `&alpha;` comes out as `&ₐₗₚₕₐ;`.
+        assert utils.unicodize_basic_markup("H<sub>&alpha;</sub>") == "Hα"
+
+    def test_an_entity_naming_nothing_is_left_alone(self):
+        assert utils.unicodize_basic_markup("a &foo; b") == "a &foo; b"
+
+    def test_an_entity_without_its_semicolon_is_left_alone(self):
+        # HTML5 decodes `&copy` bare, which would turn "&copyright" into "©right".
+        assert utils.unicodize_basic_markup("the &copyright notice") == "the &copyright notice"
 
     def test_html_entity_ouml(self):
         assert utils.unicodize_basic_markup("&Ouml;") == "Ö"

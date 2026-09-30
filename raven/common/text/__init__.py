@@ -18,9 +18,13 @@ Currently:
   - `window`, the recent text to detect an emotion from while text arrives a
     piece at a time. Used for the avatar's expression, both while a reply
     streams in and while it is spoken.
+  - `entities`, decoding HTML character entities. Used by the BibTeX tools and
+    by `common.utils.unicodize_basic_markup`.
 
 Submodules are independently importable; this package also re-exports the public
 API, so callers can `from raven.common import text` and use `text.normalize(...)`.
+`entities` is the exception: `decode` and `resolve` say what they do only beside
+the module name, so it is imported as a module.
 """
 
 from .normalize import normalize  # noqa: F401 -- re-export submodule public API

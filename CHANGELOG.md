@@ -120,11 +120,16 @@
 #### Raven-visualizer
 
 - **The importer keeps a record that names a field twice**, merging the repeated values as `raven-fixbib` does. In v0.2.9 such a record was left out of the dataset, with a warning blaming unbalanced braces.
+- **Every HTML entity in a title or abstract is decoded**, numeric ones included. In v0.2.9 only a handful were, so a typographic apostrophe exported as `&#8217;` showed as that code.
 
 #### Raven-avatar
 
 - **In the settings editor, the speech field's blue mark shows while you type in it.** In v0.2.9 it was dark while the field had the cursor and came on after Esc.
 - **In both avatar editors, a key that moves to a chooser no longer flashes the mark on another one for a moment** on the way.
+
+#### Raven-fixbib
+
+- **A few rare HTML entities no longer stop the run with an error**, with `raven-deduplicate`, which reads through the same repair. About ninety entities stand for two characters, such as `&NotEqualTilde;`, and any of them in a file stopped both tools in v0.2.9.
 
 #### Raven-deduplicate
 

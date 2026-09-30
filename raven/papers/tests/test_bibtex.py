@@ -324,6 +324,10 @@ class TestDecodeHtmlEntities:
         assert decode_html_entities("Students&#8217; views") == ("Students’ views", 1)
         assert decode_html_entities("&#x2014;dash") == ("—dash", 1)
 
+    def test_an_entity_standing_for_two_code_points_is_decoded(self):
+        # `&NotEqualTilde;` is a symbol plus a combining mark, and used to raise `TypeError` here.
+        assert decode_html_entities("a &NotEqualTilde; b") == ("a ≂̸ b", 1)  # ≂ + combining long solidus
+
     def test_an_entity_naming_nothing_is_left_alone_and_not_counted(self):
         """The count is what a caller reports to a user, so it must be decodes and not matches.
 
