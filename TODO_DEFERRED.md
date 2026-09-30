@@ -26,7 +26,7 @@ and why hygiene items rank higher than they used to.
 
 ## `huggingface-hub` 2.x: waiting on upstream caps, our side already audited
 
-*Cluster: ? · Cost: S · Gate: transformers, sentence-transformers and tokenizers allowing hub 2.x · Filed: 2026-09-30*
+*Cluster: dependencies · Cost: S · Gate: transformers, sentence-transformers and tokenizers allowing hub 2.x · Filed: 2026-09-30*
 
 `huggingface-hub` 2.0.0 is out (2026-09-24), and the lock stays on 1.x because three packages in the tree
 cap it `<2.0` in their latest releases, checked 2026-09-30: `transformers` 5.17.0, `sentence-transformers`
@@ -1745,7 +1745,7 @@ applied to tooling.
 
 ## Replace `torchaudio.functional.resample`, and drop torchaudio
 
-*Cluster: ? · Cost: S · Gate: 0.2.10 · Filed: 2026-08-10 · See also: "Easy install with a chosen CUDA version"*
+*Cluster: dependencies · Cost: S · Gate: 0.2.10 · Filed: 2026-08-10 · See also: "Easy install with a chosen CUDA version"*
 
 **Higher priority than it looks**, because torchaudio is already a hard dependency rather than a future one,
 and it is silently pinning torch.
@@ -3778,7 +3778,7 @@ Discovered during postprocessor chain ordering redesign (2026-04-09).
 
 ## Easy install with a chosen CUDA version (and a sensible CPU default)
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10, re-scope first · Filed: 2026-04-29 · See also: "Replace `torchaudio.functional.resample`, and drop torchaudio", "`pdm.lock` is gitignored"*
+*Cluster: dependencies · Cost: ? · Gate: 0.2.10, re-scope first · Filed: 2026-04-29 · See also: "Replace `torchaudio.functional.resample`, and drop torchaudio", "`pdm.lock` is gitignored"*
 
 Raven's `[cuda]` extra currently pulls a torch / torchaudio / torchvision combo pinned to one CUDA toolchain (currently `+cu128`). The PyTorch project ships these via `--index-url https://download.pytorch.org/whl/cuXXX`, and the matching `nvidia-cuda-runtime-cuYY` runtime is also installable as a Python package — so a Raven install could in principle bundle a complete CUDA stack from PyPI without touching the host's toolchain.
 
@@ -6046,7 +6046,7 @@ Discovered during brief 07 GUI testing (2026-07-29, raised by Juha).
 
 ## `pdm.lock` is gitignored, against the fleet policy for applications
 
-*Cluster: ? · Cost: M — the lock cannot be committed as-is; what remains is choosing between lock targets, a documented re-lock step, or leaving it · Gate: next; measured 2026-09-20 and it does not resolve cleanly · Filed: 2026-08-04 · See also: "Easy install with a chosen CUDA version"*
+*Cluster: dependencies · Cost: M — the lock cannot be committed as-is; what remains is choosing between lock targets, a documented re-lock step, or leaving it · Gate: next; measured 2026-09-20 and it does not resolve cleanly · Filed: 2026-08-04 · See also: "Easy install with a chosen CUDA version"*
 
 Fleet policy is that libraries don't commit `pdm.lock` and applications do — a lockfile is what makes a
 deployment reproducible, and Raven is an application. Raven's `.gitignore` has ignored it since early on
