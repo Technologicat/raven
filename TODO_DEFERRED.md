@@ -1747,6 +1747,25 @@ applied to tooling.
 
 *Cluster: dependencies · Cost: S · Gate: 0.2.10 · Filed: 2026-08-10 · See also: "Easy install with a chosen CUDA version"*
 
+**Upstream has changed the premise — the priority argument below may no longer hold** (checked 2026-09-30).
+torchaudio's README now says 2.11 "works with `torch` 2.11 and with every future `torch` release … and
+installing TorchAudio does not pin `torch` to a specific version", and that the project is in a maintenance
+phase. The repo is alive in that sense: commits through 2026-09-23 build a single abi3 wheel, set the
+dependency to `torch>=2.11` and stop erroring on minor CUDA mismatches — one release meant to outlive torch
+versions, rather than a paired release per torch. Separately, `resample` and its two kernel helpers in
+`torchaudio/functional/functional.py` are pure torch ops and never reach the compiled extension, so our one
+call does not depend on that promise holding for the C parts.
+
+**Not yet measured: whether it actually runs.** The README is a claim, and the missing-symbol failure
+described below was reasoned from the ABI rather than observed. The check: a scratch venv with CPU torch
+2.14.1 beside torchaudio 2.11.0, running `raven/common/audio/tests/test_resample.py` — which also covers
+whether `import torchaudio.functional` loads the extension eagerly. Scheduled for 2026-10-01. If it passes,
+torchaudio stops pinning torch, the "what it buys" paragraph below collapses, and this item drops to "replace
+a maintenance-mode dependency when convenient". **The project `CLAUDE.md`'s 3.12-cap section repeats the
+old premise** ("`torchaudio` caps the *torch* version") and wants correcting in the same change.
+
+*The analysis below predates that, and is kept until the measurement settles it.*
+
 **Higher priority than it looks**, because torchaudio is already a hard dependency rather than a future one,
 and it is silently pinning torch.
 
