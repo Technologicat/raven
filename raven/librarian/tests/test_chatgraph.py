@@ -919,7 +919,7 @@ class TestRoleGlyphs:
     def test_it_scales_with_the_node_and_stops_at_the_asset(self, conversation):
         """A fraction of node height, so it shrinks with everything else when the reader zooms out — a
         constant screen size is wider than the node in exactly the wide-fan view it was chosen to serve.
-        Capped at native, because DPG samples nearest-neighbour and past 64 px these turn into squares."""
+        Capped at native, because DPG enlarges bilinearly and past 64 px these go soft."""
         forest, system, greeting, user, reply = conversation
         config = chatgraph.LayoutConfig()
         built = chatgraph.build(forest, chatgraph.ViewState(head_node_id=reply), config,

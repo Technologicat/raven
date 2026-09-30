@@ -647,9 +647,9 @@ class LayoutConfig:
     # wholly inside would take -- and the right edge is left to the attachment thumbnails, so no node is
     # asked to hold three things in a space that fits one.
     role_icon_fraction: float = 0.5
-    # ...and never drawn larger than the asset, which the shipped icons are 64x64 of. DPG samples
-    # nearest-neighbour, so past native size the glyph turns into visible squares; downsampling from 64 is
-    # the path the chat log already takes with the same files.
+    # ...and never drawn larger than the asset, which the shipped icons are 64x64 of. DPG enlarges a
+    # texture bilinearly, so past native size the glyph goes soft; downsampling from 64 is the path the
+    # chat log already takes with the same files.
     role_icon_native_size: float = 64.0
     # Attachment thumbnails, straddling the box's *right* edge as the role glyph straddles its left --
     # the two decorations at opposite ends, each in the margin rather than in the text.
@@ -690,9 +690,10 @@ class LayoutConfig:
     # the reader a count. Seven is where it starts hiding.
     attachment_max_shown: int = 5
     # The *finest* level the panel prepares a thumbnail at, in pixels, and therefore the size past which
-    # drawing one upsamples -- DPG samples nearest-neighbour, so past this a card goes visibly blocky.
+    # drawing one upsamples -- DPG enlarges a texture bilinearly, so past this a card goes visibly soft.
     # Coarser levels are prepared alongside it as a mip chain, and the renderer draws whichever suits the
-    # card's size on screen, so this being far larger than a card at 1:1 costs nothing in sharpness.
+    # card's size on screen, since DPG does not average when it shrinks one; so this being far larger than
+    # a card at 1:1 costs nothing in sharpness.
     #
     # The finest level an attachment thumbnail is prepared at. A user-facing setting, because it trades
     # how far a card can be zoomed into against how much memory the session holds -- the table of what

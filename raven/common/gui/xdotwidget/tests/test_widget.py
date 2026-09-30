@@ -662,7 +662,7 @@ class TestImageShapesAreDrawn:
         assert width(at_2to1) == pytest.approx(120.0)
 
     def test_the_screen_size_cap_stops_it_growing(self, widget, texture):
-        """An asset prepared at its display size upsamples badly, and DPG samples nearest-neighbour.
+        """An asset prepared at its display size goes soft when drawn past it, DPG enlarging bilinearly.
 
         The negative control is the assertion at 1:1: below the cap the shape is untouched, so a renderer
         that clamped unconditionally — or one that ignored the cap entirely — fails one of the two.

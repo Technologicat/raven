@@ -639,7 +639,7 @@ gui_config = env(  # ----------------------------------------
                  # The largest size, in pixels, an attachment thumbnail is prepared at for the chat graph.
                  # Coarser levels are prepared alongside it as a mip chain and the renderer draws whichever
                  # suits the card's size on screen, so this is not the size a card is *drawn* at -- it is
-                 # the size past which zooming in stops getting sharper and the picture goes blocky.
+                 # the size past which zooming in stops getting sharper and the picture goes soft.
                  #
                  # A card is about 55 graph units across, so this buys sharpness up to a zoom of roughly
                  # `size / 55`. Against that, each prepared image is held in memory for the session, at

@@ -1453,8 +1453,9 @@ runs to ~110 extensions in sixteen groups, plus the two missing ones above. Wort
 those groups should split while drawing them — model weights currently share the shared-library icon, which
 was a judgement call rather than an obvious grouping.
 
-**Generate at 512 and downscale.** DPG scales textures nearest-neighbor, so every size below the source has
-to be resampled with Lanczos rather than handed to DPG; the brief covers the mechanics.
+**Generate at 512 and downscale.** DPG does not average when it draws a texture smaller (bilinear, no
+mipmaps: `investigations/dpg-texture-filtering/`), so every size below the source has to be resampled with
+Lanczos rather than handed to DPG; the brief covers the mechanics.
 
 **The grid view makes the size gap visible right now** (Juha, 2026-08-14, from a folder of mixed documents).
 Only three of the 34 assets are 94×94 — `folder`, `document`, `big_picture` — and the rest are 16×16, so at

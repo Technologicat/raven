@@ -99,7 +99,7 @@ def matrix_to_pixels(matrix: List[List[bool]],
     padded = np.pad(modules, quiet_zone, constant_values=False)
     # Nearest-neighbour upscale. A QR module is a hard-edged square, so this is exact rather than an
     # approximation - and doing it here means DPG is handed the texture at its final size and never
-    # resamples it, which it would do nearest-neighbour anyway.
+    # resamples it, which it would do bilinearly, blurring the modules' edges.
     pixels = np.repeat(np.repeat(padded, module_size, axis=0), module_size, axis=1)
 
     colors = np.array([background, foreground], dtype=np.float32) / 255.0

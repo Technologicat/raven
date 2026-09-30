@@ -672,9 +672,9 @@ class XDotAttrParser:
                 # texture and owning its lifetime -- none of which this parser has any machinery for, and
                 # all of which a caller building `Graph` objects by hand does for itself.
                 #
-                # The resampling is the part not to skip. DPG samples nearest-neighbour, so a texture
-                # uploaded at the file's own size and drawn at any other one aliases visibly, and a graph
-                # zooms continuously -- there is no size to prepare it at once and be done. The answer is
+                # The resampling is the part not to skip. DPG builds no mipmaps, so a texture uploaded at
+                # the file's own size and drawn much smaller aliases visibly (and drawn larger, goes soft),
+                # and a graph zooms continuously -- there is no size to prepare it at once and be done. The answer is
                 # a Lanczos mip chain on the GPU, which `raven.common.image.lanczos.mipchain` builds;
                 # `ImageShape` takes the whole chain and the renderer picks a level by drawn size.
                 # TODO (briefs/xdot-image-shapes-brief.md): load the named image, resample it through

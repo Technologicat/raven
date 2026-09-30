@@ -1,8 +1,8 @@
 """Icon assets resampled to a thumbnail grid's tile size, as DPG textures.
 
 A grid tile is square and much larger than a toolbar icon, so an icon shown in one has to be enlarged.
-**DPG scales textures nearest-neighbor**, so handing it a 16×16 icon and asking for 128 gives visible
-blocking — next to Lanczos-resampled photographs, which is where these icons appear, the difference reads
+**DPG enlarges a texture bilinearly**, so handing it a 16×16 icon and asking for 128 gives a visible
+blur — next to Lanczos-resampled photographs, which is where these icons appear, the difference reads
 as a bug rather than as a small picture. So the resampling happens here, once per (icon, tile size), and
 the result is a texture the grid can draw at 1:1.
 

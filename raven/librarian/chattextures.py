@@ -287,9 +287,9 @@ class AttachmentTextures:
     def _prepare_graph_thumbnail(self, key: tuple, filename: str, size: float, task_env: env) -> None:
         """Turn one attachment into a mip chain of graph textures. Runs on a background thread.
 
-        A chain rather than one texture because the graph zooms continuously and DPG samples
-        nearest-neighbour, so the size a card is drawn at is not known here: the finest level is prepared
-        at `size` and the renderer draws whichever level suits the card on screen.
+        A chain rather than one texture because the graph zooms continuously, and DPG does not average
+        when it draws a texture smaller (no mipmaps), so the size a card is drawn at is not known here: the
+        finest level is prepared at `size` and the renderer draws whichever level suits the card on screen.
 
         Uploading the whole chain before publishing any of it is what keeps the graph from drawing a
         half-arrived picture — the shape reads its levels without a lock, one rebuild at a time.
