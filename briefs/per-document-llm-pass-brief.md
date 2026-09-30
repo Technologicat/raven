@@ -201,8 +201,9 @@ spamming the log.
   the estimator the remaining count as its total, counting this session's items from zero. Counting the
   resumed items as done would make the ETA wildly optimistic.
 - **Pull: the latest progress is queryable** from the run while it runs — a status line for a GUI label,
-  as the Visualizer importer's window shows, and the numbers for a progress bar. A GUI polls; the
-  callback is for pushing to a console or a log.
+  as the Visualizer importer's window shows, and the numbers for a progress bar. Both mechanisms serve a
+  GUI: a push through the callback works anywhere, and in DPG, whose idiom is partly immediate-mode,
+  pulling the state in an animation frame update is the natural fit (Juha, 2026-09-30).
   - The importer maps onto it directly: `progress.set_micro_count(total)` once, then `tick()` per item,
     which makes `_summarize` the natural second user after `extract_fields.py`.
 - **The console default is a log line per batch**, not a progress bar: runs are long and often
