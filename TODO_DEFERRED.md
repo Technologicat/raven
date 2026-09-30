@@ -24,6 +24,26 @@ enough (maintainer, 2026-09-30).
 **Before a triage pass, read `briefs/reference/backlog-triage-notes.md`**: how to read an old priority label,
 and why hygiene items rank higher than they used to.
 
+## `huggingface-hub` 2.x: waiting on upstream caps, our side already audited
+
+*Cluster: ? · Cost: S · Gate: transformers, sentence-transformers and tokenizers allowing hub 2.x · Filed: 2026-09-30*
+
+`huggingface-hub` 2.0.0 is out (2026-09-24), and the lock stays on 1.x because three packages in the tree
+cap it `<2.0` in their latest releases, checked 2026-09-30: `transformers` 5.17.0, `sentence-transformers`
+6.1.0, `tokenizers` 0.23.2. `transformers`' `main` already says `<3.0`, so it lifts with their next release;
+the other two have to follow.
+
+**Raven's own exposure was checked against the v2.0.0 release notes, and is nil.** Our only direct use is
+`raven/common/hfutil.py` — `snapshot_download` and four exception classes from `huggingface_hub.errors`. What
+2.0 breaks is the HTTP stack (`httpx` → `httpx2`, which matters to code catching transport exceptions or
+installing a client factory) and the APIs deprecated in 1.x, none of which we touch; the removed
+`huggingface-cli` appears nowhere in the repo. So the bump should be the ordinary dependency loop, with no
+porting — re-check `hfutil.py` against the migration guide if it has grown since.
+
+**Nothing will announce it.** Dependabot watches only `requirements-ci.txt`, where `huggingface-hub` is not
+pinned, so the first sign will be a `pdm update` resolving to 2.x and `scripts/check_dependency_versions.py`
+then reporting the floor behind. **Delete this item in the same change that takes the bump.**
+
 ## Help cards: say what each app accepts by drag-and-drop
 
 *Cluster: discoverability · Cost: S, and a look at each card, which is fixed-height · Gate: none · Filed: 2026-08-13, reshaped 2026-09-30*
