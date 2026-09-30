@@ -518,11 +518,15 @@ def install_caret_follower(widgets: Sequence[str | int],
 def install_focus_follower(widgets: Sequence[str | int],
                            kind: MarkKind = MarkKind.FRAME,
                            thickness: int = 2) -> gui_animation.Animation:
-    """Mark whichever of `widgets` currently holds DPG's focus. One call per app.
+    """Mark whichever of `widgets` currently has the keyboard. One call per app.
 
     For the keyboard-browsable combos: an app that routes the arrow keys by asking `dpg.get_focused_item`
     already knows which control has them, and DPG draws nothing on a focused combo of its own — so the
     marking rule is the routing rule, and neither needs restating at the call site.
+
+    A text field among `widgets` is marked while it holds the caret instead, which for a text field is
+    what having the keyboard means: it is not what DPG reports as focused while it is being typed into,
+    and it still is once the caret has left it.
 
     `widgets`: DPG tags or IDs. A widget carrying a theme of its own wants a `Mark` on its enclosing group
                instead — see `Mark` — which this cannot express, since the widget that takes the focus and
@@ -533,7 +537,11 @@ def install_focus_follower(widgets: Sequence[str | int],
     """
     # Compared against *both* names DPG may answer with, since `get_focused_item` gives a tagged widget's
     # alias and an untagged one's ID. See `guiutils.item_identifiers`.
-    marks = [(guiutils.item_identifiers(widget), Mark(widget, kind=kind, thickness=thickness)) for widget in widgets]
+    marks = [(widget,
+              guiutils.item_identifiers(widget),
+              dpg.get_item_type(widget) == "mvAppItemType::mvInputText",
+              Mark(widget, kind=kind, thickness=thickness))
+             for widget in widgets]
 
     class _FocusFollower(gui_animation.Animation):
         def __init__(self):
@@ -543,12 +551,12 @@ def install_focus_follower(widgets: Sequence[str | int],
 
         def render_frame(self, t: int) -> sym:
             focused = dpg.get_focused_item()
-            for identifiers, mark in marks:
-                mark.lit = (focused in identifiers)
+            for widget, identifiers, is_text_field, mark in marks:
+                mark.lit = dpg.is_item_active(widget) if is_text_field else (focused in identifiers)
             return gui_animation.action_continue
 
         def finish(self) -> None:
-            for _identifiers_, mark in marks:
+            for _widget, _identifiers, _is_text_field, mark in marks:
                 mark.detach()
 
     return gui_animation.animator.add(_FocusFollower())

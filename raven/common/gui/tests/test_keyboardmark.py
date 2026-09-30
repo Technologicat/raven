@@ -63,6 +63,8 @@ def make_widget(dpg_context, request):
             widget = dpg.add_child_window(tag=tag, parent="kbmark_test_window", width=50, height=50)
         elif kind == "text":
             widget = dpg.add_text("*", tag=tag, parent="kbmark_test_window")
+        elif kind == "input_text":
+            widget = dpg.add_input_text(tag=tag, parent="kbmark_test_window")
         else:
             widget = dpg.add_button(tag=tag, parent="kbmark_test_window")
         created.append(widget)
@@ -442,6 +444,30 @@ class TestFocusFollower:
         follower = keyboardmark.install_focus_follower(widgets)
         gui_animation.animator.cancel(follower)
         assert all(dpg.get_item_theme(widget) is None for widget in widgets)
+
+    def test_a_text_field_is_marked_while_it_holds_the_caret_not_while_it_is_focused(self, make_widget, quiet_pulse,
+                                                                                      monkeypatch):
+        """A text field being typed into is not what DPG reports as focused, and one the caret has just left
+        still is — so marking it by focus lit it exactly when it did not have the keyboard.
+
+        Headless DPG cannot give a field the caret, so DPG's two answers are stood in for, one at a time.
+        """
+        field = make_widget("input_text")
+        follower = keyboardmark.install_focus_follower([field])
+        try:
+            # Focused, no caret: what Esc leaves behind.
+            monkeypatch.setattr(keyboardmark.dpg, "get_focused_item", lambda: field)
+            monkeypatch.setattr(keyboardmark.dpg, "is_item_active", lambda item: False)
+            gui_animation.animator.render_frame()
+            assert colors(field)[0][3] == 0.0, "a text field the caret has left is still marked"
+
+            # The caret, and DPG naming something else as focused: what Ctrl+Space gives.
+            monkeypatch.setattr(keyboardmark.dpg, "get_focused_item", lambda: 0)
+            monkeypatch.setattr(keyboardmark.dpg, "is_item_active", lambda item: item == field)
+            gui_animation.animator.render_frame()
+            assert keyboardmark.pulse_is_running(), "a text field holding the caret is not marked"
+        finally:
+            gui_animation.animator.cancel(follower)
 
     def test_nothing_is_marked_while_nothing_is_focused(self, make_widget, quiet_pulse):
         """`get_focused_item` answers 0 here, and 0 must not match a widget by accident."""
