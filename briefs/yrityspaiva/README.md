@@ -328,3 +328,28 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      perhaps L. Everything else is of reasonable size each.
    - **LaTeX is wanted.** Whether it goes into the Markdown renderer's feature build or comes as a separate
      extension later is a separate question, still open.
+6. **Working through 0.2.10's list** (2026-10-01, same day). Each item is its own commit; what follows is what
+   the commits do not say.
+   - **Done**: the status indicators, now under the mode toggles, with the folder and cleanup buttons moved to
+     the bottom toolbar (fullscreen and Help kept together, as in the other apps) and the Raven-server pill
+     right-aligned; `quitsignal` in every GUI app; slider grabs rounded (the other two unset rounding vars
+     written out at ImGui's values, measured identical); the upscaler's Preset below Quality and disabled
+     when Quality is not Anime4K; the subtitle splitter; the root-list memo; the Intel Mac section, the
+     `## Declined` sweep's one find; the HF Hub docs, in the server README; the licences, in the README and
+     `LICENSE.md`; the pycodestyle step and the lint canary; coverage leaving out the `app.py` entry modules.
+   - **Decided along the way**:
+     - The indicators sit at the top left of the panel under the toggles. At most three can be lit together,
+       INDEXING, READING and one of DOCUMENTS or INTERNET, since a round's tool calls run one at a time.
+       Running different-kind calls in parallel was filed rather than done.
+     - Subtitle cards are measured in rendered lines, two at most. A translation is cut *after* translating
+       the whole sentence and timed by position, so the cut costs the translator no context. Full-reply
+       translation waits for a context-aware translator (noted under the parked translator upgrade).
+     - `get_all_root_nodes` remembers its answer against `Forest.generation` rather than keeping an index of
+       roots: good enough for now, with the caution and the way out written into *Datastore scaling*.
+     - Ruff's preview E11x rules stay off. The continuation-line work is wanted fleet-wide, tracked in the
+       dotclaude deferred list.
+   - **Re-gated to 0.2.11**: `chat_controller` without the ML stack, measured as an M sweep across five or six
+     modules rather than one import.
+   - **Still to do for 0.2.10**, needing the GUI or the maintainer: the "approve denied host" button, the
+     backdrop onto `fit_cover`, Cherrypick's crown-in-compare, the thumbnail grid's textures, the
+     `reasoning_effort` re-test and the tool-call budget probe.
