@@ -58,6 +58,7 @@ Not all data is private, and for the public part, cloud services can do the heav
    right shape for the matching.
 3. **How a user sees a job that runs for a day elsewhere.** `TODO_DEFERRED.md`'s *Web status panel* item is
    the same question for a local job.
-4. **Whether derived artifacts inherit the tag.** A summary of a private document is as private as the
-   document; a router that checks only the source's tag would get this right, but only if every artifact
-   remembers its source.
+4. **Derived artifacts inherit the tag — decided for v1** (maintainer, 2026-10-01): private material stays
+   private after any automatic processing. Every artifact therefore has to remember its source. Whether a
+   user may override the tag is for later: *"redact the PII from this"* arguably makes a private item
+   publishable, in theory.

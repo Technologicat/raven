@@ -296,3 +296,7 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      objects, the MCP client, and the `cu130` move it dates (`briefs/design/lab-assistant-hci-sketch.md`).
      Brief 13 is a drydock build of several weeks, with a release cut just before it and the multimodal
      embedder built during it. Which of the two comes first is open.
+   - **0.2.10 is cut on 7 October**, the day of the systems check, so that the demo runs a released version
+     (maintainer, 2026-10-01). **Whatever still carries a `0.2.10` gate then is re-gated to `0.2.11`**, at
+     that point. When 0.2.11 comes, and so where the drydock falls, waits on the prioritization session —
+     which in turn waits on the triage. So the worksheet goes first.
