@@ -1697,7 +1697,7 @@ def api_webfetch():
     # comes back is content and is not logged.
     logger.debug(f"api_webfetch: '{url}' as {output_format}")
     return serverutil.stream_job(lambda is_cancelled: webfetch.fetch(url, output_format=output_format,
-                                                                    is_cancelled=is_cancelled))
+                                                                     is_cancelled=is_cancelled))
 
 
 # --------------------------------------------------------------------------------
