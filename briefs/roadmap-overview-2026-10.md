@@ -273,8 +273,8 @@ move. **Brief 13 is a drydock build** with a release cut just before it. Which o
 *Tools*
 - **`fetch_document` inlines up to 11× webfetch's threshold** — needs an addressing scheme · M · `TD "`fetch_document`
   inlines…"` (+`T:29`)
-- **A fetched page is budgeted as a user attachment** — v1 was scoped for 0.2.8, unverified whether it shipped;
-  v2 is a partial-read tool · ? · 0.2.10 · `TD "A fetched web page is budgeted…"`
+- **Read part of an attachment, and search a chat's attachments** — v1 of the fetched-page budget shipped in
+  0.2.8 (verified 2026-10-01); this is its v2 · ? · brief 13 · `TD "Let the model read part of an attachment…"`
 - **Tool-call budget for a multi-document read** [High] — re-run the phase F probe after 5 → 20 · ~S · `T:604`
 - **webfetch allowlist: ship deny-by-default?** — a security-posture decision · 0.2.10 · `TD "Reconsider the
   webfetch allowlist default…"`
@@ -536,8 +536,9 @@ Briefs in part 1 (server availability, autostart).
 - **Replace torchaudio's resample, drop torchaudio** — low priority: torchaudio no longer pins torch (measured
   2026-10-01) · S · `TD "Replace
   `torchaudio.functional.resample`…"`
-- **Easy install with a chosen CUDA, and a CPU default** · re-scope against the `cu130` move, which may settle
-  the CUDA half · the lab installation · `TD "Easy install with a chosen CUDA version…"`
+- **GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`** (CPU only as the fallback for
+  a machine with no compatible GPU; renamed 2026-10-01) · re-scope against the `cu130` move, which may settle
+  the CUDA half · the lab installation · `TD "GPU-accelerated install on any OS and GPU…"`
 - **`pdm.lock` is gitignored, against fleet policy** · M · `next`; the lab installation is the first install
   where it would pay · `TD "`pdm.lock` is gitignored…"`
 - **Audit the wheel's contents** · S · `TD "Audit what the built wheel actually contains"`

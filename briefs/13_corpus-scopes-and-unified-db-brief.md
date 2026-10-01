@@ -117,8 +117,8 @@ anyway (a saved Visualizer selection is the same idea with a different generator
     attachments are a searchable scope, an attachment and a knowledge-base document are the *same kind of
     thing* at query time. Two tool pairs would then be two spellings of one operation, differing only in
     which handle they accept.
-  - The reader half is scoped in `TODO_DEFERRED.md`, "A fetched web page is budgeted as a user attachment,
-    not as a speculative fetch", under v2.
+  - The reader half is scoped in `TODO_DEFERRED.md`, "Let the model read part of an attachment, and search a
+    chat's attachments".
 - **Open:** whether an attachment scope is *visible* as a scope in the UI or only reachable by the AI; and
   whether indexing every attachment globally wants a retention policy, since the index then outlives the
   chats whose attachments produced it.

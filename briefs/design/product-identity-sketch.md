@@ -257,7 +257,7 @@ From the channels, where the effect is a reclassification rather than a new task
 a list, filed as maintenance:
 
 - **Extract `raven.common` into an upstream library** (`TODO_DEFERRED.md`, "corvid"). Channel 2.
-- **Easy install with a chosen CUDA version** (`TODO_DEFERRED.md`), and the hardware floor generally. Channel 3.
+- **GPU-accelerated install on any OS and GPU** (`TODO_DEFERRED.md`), and the hardware floor generally. Channel 3.
 - **The public-name decision** (`TODO_DEFERRED.md`, *"Decide the public name"*). Both channels — a name is how
   an idea is referred to as much as how a product is found — so decide it with this document in view rather
   than on availability alone.

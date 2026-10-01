@@ -26,7 +26,7 @@ and why hygiene items rank higher than they used to.
 
 ## Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14
 
-*Cluster: dependencies · Cost: M · Gate: before the lab installation, after 0.2.10 · Filed: 2026-10-01 · See also: "Easy install with a chosen CUDA version", "Replace `torchaudio.functional.resample`, and drop torchaudio", `briefs/design/lab-assistant-hci-sketch.md`*
+*Cluster: dependencies · Cost: M · Gate: before the lab installation, after 0.2.10 · Filed: 2026-10-01 · See also: "GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`", "Replace `torchaudio.functional.resample`, and drop torchaudio", `briefs/design/lab-assistant-hci-sketch.md`*
 
 **The trigger is the lab installation planned for later this autumn**, after 0.2.10 and gated on features rather than a date (maintainer, 2026-10-01; what it needs is in `briefs/design/lab-assistant-hci-sketch.md`). That machine
 is built from zero and will have CUDA 13 at least, so doing this first means it installs on the stack it
@@ -55,8 +55,7 @@ What the move involves:
 - **Both development machines, on GPU.** Both already run driver 580 and report CUDA 13.0 (checked
   2026-10-01), so neither needs a driver upgrade first.
 
-Much of this is what "Easy install with a chosen CUDA version" wants anyway; doing it may settle that item's
-CUDA-selection half, leaving the CPU-default path.
+Much of this is what "GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`" wants anyway; doing it may settle that item's CUDA half, on Linux and Windows.
 
 ## `huggingface-hub` 2.x: waiting on upstream caps, our side already audited
 
@@ -1788,7 +1787,7 @@ applied to tooling.
 
 ## Replace `torchaudio.functional.resample`, and drop torchaudio
 
-*Cluster: dependencies · Cost: S · Gate: none; low priority since 2026-10-01 · Filed: 2026-08-10 · See also: "Easy install with a chosen CUDA version"*
+*Cluster: dependencies · Cost: S · Gate: none; low priority since 2026-10-01 · Filed: 2026-08-10 · See also: "GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`"*
 
 **torchaudio no longer holds torch back — measured 2026-10-01.** In a scratch venv with CPU torch 2.14.1
 beside torchaudio 2.11.0, `raven/common/audio/tests/test_resample.py` passed 16 of 16 with none skipped (the
@@ -1852,6 +1851,11 @@ batch runs with no durability, and one resume mechanism answers both.
 
 *Cluster: ? · Cost: S · Gate: 0.2.10 · Filed: 2026-08-12*
 
+**The chain, traced 2026-10-01:** `chat_controller` → `raven.client.api`, which imports spaCy at module
+level for one return annotation and `nlptools` (spaCy again) for one call, `deserialize_spacy_docs`. Both
+can move inside the function. `mayberemote` and `hybridir` also import `nlptools` at module level, so there
+may be one or two more links behind the first; still S.
+
 Same anti-pattern as the just-completed *Lazy `api.initialize` in `llmclient` and `hybridir`*, one layer up:
 `chat_controller` reaches the full ML stack through the avatar client, so `test_chat_controller.py` has to
 skip on the module under test and its pure datastore helpers can only run on a dev machine.
@@ -1905,7 +1909,13 @@ compare wheel size against the previous release and flag a large jump.
 
 ## `chattree.get_all_root_nodes` is an O(n) scan
 
-*Cluster: ? · Cost: S · Gate: — while the graph view does not show roots; 0.2.10 if it does · Filed: 2026-08-12 · See also: "Datastore scaling: a single `chat.json` …"*
+*Cluster: ? · Cost: S · Gate: 0.2.10, since the graph view shows the other roots · Filed: 2026-08-12 · See also: "Datastore scaling: a single `chat.json` …"*
+
+**Decided 2026-10-01: an index of roots, in 0.2.10** (maintainer). The graph view does show the other roots
+— the system prompts, behind an "N more…" box — and finding them needs this scan. Considered and rejected: a
+sentinel root linking every system prompt, which turns the forest into a tree. It is cleaner on paper, but it
+changes the data model: a datastore migration, and a node that is not a message which every walker
+(linearizing, search order, GC, export, the graph build, minichat) would have to learn to skip.
 
 `get_all_root_nodes` scans the whole forest for nodes whose parent is `None`. Deliberate, and the docstring
 says so.
@@ -2272,7 +2282,7 @@ them separately risks three answers to one question.
 
 ## The vendored Markdown renderer has no way to say it has finished
 
-*Cluster: markdown-renderer · Cost: S · Gate: 0.2.10 · Filed: 2026-08-12*
+*Cluster: markdown-renderer · Cost: S · Gate: with the Markdown renderer work, 0.2.11 · Filed: 2026-08-12*
 
 `raven/vendor/DearPyGui_Markdown` lays a message out in pieces from its own worker thread
 (`CallInNextFrame._worker`), and nothing tells a caller when the last piece has landed. Anything that needs
@@ -2906,7 +2916,10 @@ Raised by Juha (2026-07-29), right after the cleanup dialog landed.
 
 ## Move the avatar backdrop onto `image.utils.fit_cover`
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10, early · Filed: 2026-07-29 · See also: "Consolidate remaining numpy/tensor/DPG image conversions"*
+*Cluster: ? · Cost: S for the port · Gate: 0.2.10 for the port; the speedup later · Filed: 2026-07-29 · See also: "Consolidate remaining numpy/tensor/DPG image conversions"*
+
+**Decided 2026-10-01: do the port, for 0.2.10** (maintainer). One resampler fewer is a maintainability gain
+in its own right, whatever the speed. The speedup half below stays open, for later.
 
 `DPGAvatarRenderer.configure_backdrop` (`raven/client/avatar_renderer.py`) scales its backdrop with PIL —
 `scale = max(...)`, resize, crop — which is exactly what `raven.common.image.utils.fit_cover` now does. Porting
@@ -3721,9 +3734,17 @@ The settings editor currently presents filters in a fixed priority order, with a
 
 Discovered during postprocessor chain ordering redesign (2026-04-09).
 
-## Easy install with a chosen CUDA version (and a sensible CPU default)
+## GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`
 
 *Cluster: dependencies · Cost: ? · Gate: the lab installation; re-scope against the `cu130` move first · Filed: 2026-04-29 · See also: "Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14", "Replace `torchaudio.functional.resample`, and drop torchaudio", "`pdm.lock` is gitignored"*
+
+**The aim** (maintainer, 2026-10-01): a user installs GPU-accelerated Raven **without editing `pyproject.toml`**,
+whatever their OS and whichever brand of GPU they run. **A CPU build is the fallback for a machine with no
+compatible GPU, and never what a machine that has one gets by default** — on CPU, Raven is uselessly slow.
+This is the install-side half of the root `CLAUDE.md`'s *a supported platform needs no configuration*, which
+`deviceinfo`'s `"gpu"` autodetection already keeps at run time. CUDA exists only on Linux and Windows;
+macOS gets MPS from PyPI's own wheels, and today a Mac user must remove the `pytorch-cu128` source by hand.
+Whether PDM can choose the torch index per platform is unknown and is the first thing to probe.
 
 Raven's `[cuda]` extra currently pulls a torch / torchaudio / torchvision combo pinned to one CUDA toolchain (currently `+cu128`). The PyTorch project ships these via `--index-url https://download.pytorch.org/whl/cuXXX`, and the matching `nvidia-cuda-runtime-cuYY` runtime is also installable as a Python package — so a Raven install could in principle bundle a complete CUDA stack from PyPI without touching the host's toolchain.
 
@@ -3746,12 +3767,11 @@ README, and to check whether PDM honours PyTorch's index-url convention via `[[t
 **Re-scope before doing any of it.** Every symptom recorded here and there is torchaudio's, so if
 torchaudio goes (see "Replace `torchaudio.functional.resample`, and drop torchaudio"), the stated remedy —
 pin torchaudio into the CUDA dep set rather than letting it float — becomes moot, and what survives is the
-genuinely separate half: **the CPU-default path**, where a bare `pdm install` must still yield a working
-`import torch`, with `-G cuda12` / `-G cuda13` overriding the base pins. That is the real content.
+CPU path — now the fallback for a machine with no compatible GPU, per the aim above, rather than the default.
 
 **Since 2026-10-01 torchaudio is no longer the obstacle** (it is forward-compatible with later torch), and
 the `cu130` move rewrites the CUDA dep set anyway. Re-scope against that item: it may settle the
-CUDA-selection half outright, leaving the CPU default. Wanted before the lab installation, which installs a
+CUDA half outright, leaving the per-platform choice of index. Wanted before the lab installation, which installs a
 machine from zero (maintainer, 2026-10-01).
 
 ## Convert startup `print()`s to `logger.info()` where appropriate
@@ -3800,7 +3820,7 @@ Discovered during cancellable-commit work (2026-04-27).
 
 ## webfetch "approve denied host" button relocates in brief 03
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-06-04*
+*Cluster: ? · Cost: S, estimated · Gate: 0.2.10 · Filed: 2026-06-04*
 
 The brief-01 override affordance (approve a denied host for the session, then re-run the fetch on
 a new branch — `scaffold.retry_tool_calls`) is wired to a button in `chat_controller.build_buttons`,
@@ -5918,7 +5938,7 @@ Discovered during brief 07 GUI testing (2026-07-29, raised by Juha).
 
 ## `pdm.lock` is gitignored, against the fleet policy for applications
 
-*Cluster: dependencies · Cost: M — the lock cannot be committed as-is; what remains is choosing between lock targets, a documented re-lock step, or leaving it · Gate: next; measured 2026-09-20 and it does not resolve cleanly · Filed: 2026-08-04 · See also: "Easy install with a chosen CUDA version", "Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14"*
+*Cluster: dependencies · Cost: M — the lock cannot be committed as-is; what remains is choosing between lock targets, a documented re-lock step, or leaving it · Gate: next; measured 2026-09-20 and it does not resolve cleanly · Filed: 2026-08-04 · See also: "GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`", "Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14"*
 
 **Wanted before the lab installation** (after 0.2.10, see the `cu130` item; maintainer, 2026-10-01): moving
 what has been tested over to the lab beats a resolve lottery at install time, and a lock also saves the
@@ -6005,7 +6025,7 @@ Commit the lock if it resolves; if it doesn't, the outcome is a decided-and-writ
 `.gitignore` and in `project-setup`'s fleet classification, which is worth as much as the lock would have
 been.
 
-**Do it in one session with "Easy install with a chosen CUDA version"** — same blocker, the lock/index
+**Do it in one session with "GPU-accelerated install on any OS and GPU, without editing `pyproject.toml`"** — same blocker, the lock/index
 interaction, asked from two directions. Dropping torchaudio simplifies both. **And do not let it become a
 large must-resolve item inside 0.2.10**: if the interaction turns out thorny, move it to `next` rather than
 expanding the cycle around it.
@@ -6092,69 +6112,17 @@ Raised by Juha (2026-08-04); the measurement was taken while filing it. Cross-re
 `investigations/retrieval/README.md`, under the arXiv fulltext corpus state, which is where the second
 measurement was taken.
 
-## A fetched web page is budgeted as a user attachment, not as a speculative fetch
+## Let the model read part of an attachment, and search a chat's attachments
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-08-04*
+*Cluster: ? · Cost: ? · Gate: brief 13, with the addressing scheme for attachments and DB items · Filed: 2026-08-04*
 
-0.2.8 stores a long `webfetch` result as an attachment sidecar, which put it under
-`fit_attachments_to_context` — the *user attachment* budget, bounded only by `context_reserve_fraction`
-and deliberately carrying **no** per-document ceiling, on the reasoning that an attachment is the user
-saying read this.
+What is left of *"A fetched web page is budgeted as a user attachment"*, whose v1 shipped in 0.2.8 (verified
+2026-10-01): every `text_file` part carries a `source`, the datastore upgrade fills it in from the sidecar
+metadata, `llmclient.attachment_budget_kind` is the one classifier, and `fit_attachments_to_context` applies
+the per-fetch ceiling to a fetched page. This was its deferred v2. **Gated on brief 13** (maintainer,
+2026-10-01): once the unified DB exists, an attachment and a document in the DB are read the same way.
 
-A fetched page is the opposite case, and `docs_fetch_max_fraction_of_context`'s own comment says so:
-the ceiling is "for text the *model* reaches for on a hunch, having seen a search result". That is a
-webfetch exactly. So it should be ceilinged like `fetch_document` is, and currently is not.
-
-Not a regression — before 0.2.8 a webfetch result had no budget at all and could overflow the window
-outright — but the policy is now stated in one place and contradicted in another, which is the kind of
-thing that reads as a bug to whoever finds it next.
-
-The fix is more than a one-liner because **the two readers of the budget can see different things**, and
-they must agree exactly or the context-fill readout drifts away from what is actually sent:
-
-- `count_branch_tokens` walks stored *payloads*, so it can read `general_metadata["sidecars"][f]["source"]`
-  and tell a `"tool_result"` attachment from a `"user_attachment"` one.
-- `serialize_history_for_wire` receives bare messages from `chatutil.linearize_chat`, which carry no
-  `general_metadata` at all — so it cannot.
-
-So the discriminator has to live in the `text_file` content part itself: a `source` field alongside `url`
-and `name`, carrying the same vocabulary `sidecarstore.base_provenance` already documents. Additive and
-backward-compatible, but it is a content-part schema change, which is why it was not done inline.
-
-**Decided 2026-08-05, and scoped into a v1 that ships in 0.2.8 and a v2 that does not.**
-
-v1 — bound what is *sent*, not what is *stored*:
-
-- The sidecar keeps the **full page**, unchanged. Storage and wire-fold are separate steps, and nothing
-  forces them to agree. Truncating at fetch time was considered and rejected: the archival copy is a hedge
-  against the URL 404ing later, and after that it is the only copy there is.
-- `source` is emitted **explicitly on every `text_file` part**, user attachments included — no "absent means
-  user attachment" default. The migration is then exact rather than a guess: `chatutil.upgrade_datastore`
-  has the whole payload, so for each part it reads the true value out of
-  `general_metadata["sidecars"][f]["source"]` and copies it onto the part. Old datastores come out correct,
-  including webfetch results already stored during 0.2.8 development.
-- The policy must be a **classification**, not `if source == "tool_result"`. The vocabulary is already open
-  — `"paste_url"` and `"mcp:<server>"` are reserved for pathways that do not exist yet — so the mapping
-  wants somewhere obvious for them to land. Note the two axes hiding in those four values: *where the bytes
-  came from* (local file / network) and *who asked for them* (user / tool), which is why `"paste_url"` is a
-  user attachment that was downloaded and `"mcp:<server>"` is a tool result from a non-builtin tool. Whether
-  to split the field along those axes or keep it flat is open; flat is fine while the budget is the only
-  reader.
-- **Why not unify the two walks instead?** Asked 2026-08-05, and it points at something real: the boundary
-  where a payload is flattened to a bare message is drawn one step too early. `chatutil.linearize_chat` drops
-  `general_metadata`, and `serialize_history_for_wire` is the last place that could still have used it. But
-  unifying is not the v1 move — `perform_throwaway_task` builds a synthetic history with no datastore behind
-  it at all, so the wire builder must keep accepting bare messages, and a function taking either shape is
-  worse than the duplication. The part-level `source` is not a workaround for that refactor: a message's
-  wire form should not depend on out-of-band metadata anyway, so it is the right fix independently, and it
-  makes the refactor less urgent rather than more.
-- Fold the shared decision out of both readers while doing it: **one classifier** (part → budget kind), and
-  `fit_attachments_to_context` takes `(text, kind)` pairs instead of bare texts. Then neither caller decides
-  anything — they only collect and hand over — and "the two must agree exactly" stops being a property to
-  maintain. Pre-clamp a fetched attachment's *want* to the per-fetch ceiling before `_share_characters` does
-  the fair split, and the existing water-filling handles the rest.
-
-v2, deferred and worth its own brief — **let the model read *part* of an attachment**, so truncation stops
+**Let the model read *part* of an attachment**, so truncation stops
 being the mechanism. `fetch_document` takes `offset`/`length` for a docs-DB document; there is no equivalent
 for an attachment, which is a hole for user-attached documents as much as for fetched pages. Notes toward it:
 
@@ -6432,7 +6400,14 @@ The URL *underline*, on the other hand, is one of the six sites above and belong
 
 ## Nothing remembers which sibling the reader was on
 
-*Cluster: chat-navigation · Cost: M · Gate: 0.2.10 or `next` · Filed: 2026-08-27*
+*Cluster: chat-navigation · Cost: M · Gate: 0.2.11; wants a live-tested prototype · Filed: 2026-08-27*
+
+**A design to try first, 2026-10-01** (maintainer): the chat graph already keeps a Back/Forward history of
+*views* (`navhistory`, Alt+Left / Alt+Right), which deliberately never moves HEAD. Record HEAD moves in that
+same stack, as entries of their own interleaved with the view moves, so there is still one pair of history
+buttons — two separate undo histories felt over-engineered, while "where was I previously?" is a button the
+maintainer keeps reaching for and does not have. Probably what a user wants, but it needs a live-tested
+prototype to be sure.
 
 HEAD is the whole of the app's memory of where it is in the chat tree, and it names a *node*, not a path
 taken to it. So any operation that has to put the reader back somewhere can only guess, and guesses by
