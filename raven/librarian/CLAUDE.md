@@ -36,8 +36,7 @@ time anyone noticed. Re-measure before quoting one.
 
 ```
 Layer 5 - Applications:     app.py (~3.8k), minichat.py (~750, minimal reference client),
-                            indexer.py (~150, the `raven-indexer` CLI; also where the frontends get their
-                            shared `open_document_store`)
+                            indexer.py (~150, the `raven-indexer` CLI)
 Layer 4 - Controller/GUI:   chat_controller.py (~5.2k), cleanup_dialog.py (~420), audio_input_panel.py (~750),
                             chatgraph_panel.py (~2.1k), revision_panel.py (~380), chattextures.py (~370),
                             chatlog_search.py (~390)
@@ -107,7 +106,7 @@ Each layer only imports from layers below it. No circular dependencies.
 
 - **`app.py`** — Main GUI entry point. Two-column layout: left = chat panel + input controls, right = avatar panel + mode toggles. Bottom toolbar for global actions. Help card (F1). Startup sequence: DPG init → server/LLM connection → state load → RAG load → GUI build → event loop. Hotkeys (Enter, Ctrl+N/G/S/R/U, F1/F8/F11). Animations: pulsating indicators, button flashes. Dynamic resize handler.
 
-- **`indexer.py`** — `raven-indexer`: build or refresh the RAG index over a documents directory, with no GUI. The indexing itself is `hybridir`'s — `setup` already reconciles the index against the directory on construction, and `commit` already reports progress — so what this adds is the part a library used only by long-lived apps never needed: a way to *wait* for the work and then exit. Two things follow from that. Indexing stops being coupled to a runnable desktop frontend, so a GUI-side breakage cannot block a batch run; and `-d/--db-dir` makes swapping corpora a command rather than a ritual, which is what makes measuring against a second corpus thinkable. `open_document_store` is the reusable half and is public for exactly that reason: the frontends each carried their own copy of the same six-argument `hybridir.setup` call, and a third copy is how three call sites drift. Note "refresh" reconciles rather than rebuilds — a corrupt index is fixed by deleting the index directory, not by running this again.
+- **`indexer.py`** — `raven-indexer`: build or refresh the RAG index over a documents directory, with no GUI. The indexing itself is `hybridir`'s — `setup` already reconciles the index against the directory on construction, and `commit` already reports progress — so what this adds is the part a library used only by long-lived apps never needed: a way to *wait* for the work and then exit. Two things follow from that. Indexing stops being coupled to a runnable desktop frontend, so a GUI-side breakage cannot block a batch run; and `-d/--db-dir` makes swapping corpora a command rather than a ritual, which is what makes measuring against a second corpus thinkable. The frontends open the configured store through `hybridir.open_document_store`, as this does with its own arguments: each frontend had carried its own copy of the same six-argument `hybridir.setup` call, and a third copy is how three call sites drift. Note "refresh" reconciles rather than rebuilds — a corrupt index is fixed by deleting the index directory, not by running this again.
 
 - **`minichat.py`** — Minimal CLI REPL. Same backend as GUI (reuses scaffold, llmclient). GNU readline, special commands (`!clear`, `!docs`, `!reroll`, etc.). Serves as a reference client for the backend API layers and works over bare SSH terminals.
 
