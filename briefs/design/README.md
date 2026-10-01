@@ -38,6 +38,10 @@ anything in one as settled.
   per-document work at import time, run offline on Raven-server or remotely on a cloud service or a batch
   queue, with a privacy tag on every record deciding which services may see it.
 
+- **[`install-and-first-run-sketch.md`](install-and-first-run-sketch.md)** — installing with one command and
+  starting from a launcher, with Raven-server and the LLM backend coming up by themselves. Mostly existing
+  items seen as one piece, plus three things to probe.
+
 The first three are not independent: two of them converge (the interrogation flow *is* a view-control problem,
 and the avatar's HCI is how you address a view), and both need the architecture sketch before parts of them can
 be built. The fourth sits across all of them — it describes no mechanism, and is what the others are designed

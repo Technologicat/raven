@@ -233,6 +233,14 @@ An avatar-only mode for someone across the room: ambient notifications, QR codes
 errors. A discussion sketch with five open questions. The lab installation (after 0.2.10) waits on its
 avatar-only toggle and file-object polish; the sketch's status line lists what else it needs.
 
+## Sketch: installing and starting Raven without a terminal ritual
+
+*Cluster: dependencies · Cost: ? · Gate: three probes first (uv's torch backend choice, `lms` headless, LM Studio's JIT loading) · Filed: 2026-10-01 · See also: `briefs/design/install-and-first-run-sketch.md`, `briefs/server-autostart-brief.md`*
+
+One install command, then launchers — one per app, and one for Raven-server alone in a terminal, for
+background import processing — with the server and the LLM backend starting themselves. Gathers the
+autostart brief, the PyPI items and the GPU install item into one picture.
+
 ## Sketch: offline and remote processing at import
 
 *Cluster: corpus-pipeline · Cost: ~L · Gate: a design session; lands with brief 13 · Filed: 2026-10-01 · See also: `briefs/design/offline-and-remote-processing-sketch.md`*
