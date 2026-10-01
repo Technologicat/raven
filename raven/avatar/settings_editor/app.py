@@ -620,16 +620,6 @@ class PostprocessorSettingsEditorGUI:
                                          callback=self.on_upscaler_settings_change, tag="upscale_slider")
                     dpg.add_tooltip("upscale_slider", tag="upscale_tooltip")  # tag
                     dpg.add_text("Set upscale factor for avatar video stream", parent="upscale_tooltip")  # tag
-                    self.upscale_presets = ["A", "B", "C"]
-                    with dpg.group(horizontal=True):
-                        dpg.add_combo(items=self.upscale_presets,
-                                      default_value=self.upscale_preset,
-                                      width=self.button_width - 64,
-                                      callback=self.on_upscaler_settings_change,
-                                      tag="upscale_preset_choice")
-                        dpg.add_tooltip("upscale_preset_choice", tag="upscale_preset_tooltip")  # tag
-                        dpg.add_text("Choose Anime4K preset\n    A = optimized to remove blur, resampling artifacts, smearing\n    B = optimized to remove ringing/aliasing\n    C = optimized for images with no degradation\nAnime4K is used when quality is 'low' or 'high'.", parent="upscale_preset_tooltip")  # tag
-                        dpg.add_text("Preset")
                     with dpg.group(horizontal=True):
                         # Both the choices and their explanations come from the upscaler itself, so a
                         # quality it gains cannot go unoffered here, and one offered here cannot be
@@ -650,6 +640,17 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_tooltip("upscale_quality_choice", tag="upscale_quality_tooltip")  # tag
                         dpg.add_text(quality_help, parent="upscale_quality_tooltip")  # tag
                         dpg.add_text("Quality")
+                    # Below the quality, since a preset means something only for the Anime4K qualities.
+                    self.upscale_presets = ["A", "B", "C"]
+                    with dpg.group(horizontal=True):
+                        dpg.add_combo(items=self.upscale_presets,
+                                      default_value=self.upscale_preset,
+                                      width=self.button_width - 64,
+                                      callback=self.on_upscaler_settings_change,
+                                      tag="upscale_preset_choice")
+                        dpg.add_tooltip("upscale_preset_choice", tag="upscale_preset_tooltip")  # tag
+                        dpg.add_text("Choose Anime4K preset\n    A = optimized to remove blur, resampling artifacts, smearing\n    B = optimized to remove ringing/aliasing\n    C = optimized for images with no degradation\nAnime4K is used when quality is 'low' or 'high'.", parent="upscale_preset_tooltip")  # tag
+                        dpg.add_text("Preset")
                     dpg.add_slider_float(label="x drawn", default_value=1.0, min_value=1.0, max_value=3.0, format="%.2f", clamped=True, width=self.button_width - 64,
                                          callback=self.on_display_scale_change, tag="display_scale_slider")
                     dpg.add_tooltip("display_scale_slider", tag="display_scale_tooltip")  # tag
