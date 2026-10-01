@@ -457,6 +457,10 @@ test name costs a re-investigation every time somebody checks, and nothing ever 
 ruff check <changed .py files>   # primary linter (config in pyproject.toml)
 ```
 
+CI also runs `pycodestyle` for continuation-line indentation (E12), which ruff does not implement, with the
+codes the house keeps; the exact command is in `.github/workflows/ci.yml`. `python scripts/check_lint_canary.py`
+checks that both linters, run as CI runs them, still report what we rely on.
+
 Legacy `flake8rc` also present (used by Emacs flycheck, not by CI or CC).
 
 ### Workflow Rules

@@ -347,9 +347,16 @@ exclude = [
     "raven/vendor/anime4k",
     "raven/vendor/IconsFontAwesome6.py",
     "briefs",
+    # Deliberate violations, linted on purpose by `scripts/check_lint_canary.py` instead.
+    "scripts/lint_canary_fixture.py",
 ]
 
 [tool.ruff.lint]
+# "E" does not include indentation. Ruff's E11x rules are preview-only, and are not enabled: tried
+# 2026-10-01, they found nothing in code, and their only hits (E114, E116) were trailing comments continued
+# and aligned under one another, which is house style. Its E12x continuation-line rules are not implemented
+# at all; CI runs `pycodestyle` for those, enforcing the subset of E12 the house keeps (E126 and E127 are
+# allowed). `scripts/check_lint_canary.py` checks that both linters still report what we rely on.
 select = ["E", "W", "F", "SIM"]
 ignore = [
     # pycodestyle
