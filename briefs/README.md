@@ -153,6 +153,17 @@ that were wrong.
 - **`dpg-notes.md`** (repo root) is the DearPyGui reference, kept at the root because it is consulted
   constantly rather than occasionally.
 
+## Size a brief so that it can close
+
+**An XL brief lies around forever undone** (maintainer, 2026-10-01). Several briefs this summer stayed open
+long past their welcome, because there was always one more large item left in them. So when a piece of work
+outgrows a brief, split it into several, each small enough to finish and close on its own, rather than
+writing one document that covers everything.
+
+- **A sketch may span the whole subject; the briefs it produces should not.** The sketch is where the
+  overview lives, and it names the briefs it splits into.
+- **Being able to close parts as they are done is the point** (maintainer, 2026-10-01).
+
 ## Housekeeping
 
 The loose `tools_*.py` scripts at this level are one-off helpers kept with the work that produced them;
