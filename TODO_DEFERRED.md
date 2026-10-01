@@ -24,6 +24,36 @@ enough (maintainer, 2026-09-30).
 **Before a triage pass, read `briefs/reference/backlog-triage-notes.md`**: how to read an old priority label,
 and why hygiene items rank higher than they used to.
 
+## Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14
+
+*Cluster: dependencies · Cost: M · Gate: none; no immediate need · Filed: 2026-10-01 · See also: "Easy install with a chosen CUDA version", "Replace `torchaudio.functional.resample`, and drop torchaudio"*
+
+The `torch==2.11.0` pin has had no reason since torchaudio turned out to be forward-compatible (measured
+2026-10-01, see that item), but **a torch bump is a CUDA bump**: PyTorch's `cu128` index stops at torch 2.11,
+with nothing for 2.12–2.14. Checked 2026-10-01 for the trio torch 2.14.1 / torchvision 0.29.1 / torchaudio
+2.11.0: all three exist on `cu126` and `cu130`; `cu132` lacks torchaudio 2.11; `cu128` and `cu129` lack torch.
+
+**Decided: `cu130`** (maintainer, 2026-10-01). `cu126` would be the cheap route — no change to the `[cuda]`
+extra or the driver floor — but it steps back down the CUDA 12 line to buy one torch version, and CUDA 12.6
+builds very likely lack Blackwell (`sm_120`) kernels, which would drop RTX 50-series users (unverified; check
+with `torch.cuda.get_arch_list()` if the question ever reopens).
+
+What the move involves:
+- **The trio**: the three pins in `pyproject.toml`, and the `pytorch-cu128` source renamed and pointed at
+  `cu130`. Its comment and the pins' comment both describe the CUDA 12.8 build set.
+- **The `[cuda]` extra**, which is CUDA 12 throughout: `cupy-cuda12x` → `cupy-cuda13x`, every `nvidia-*-cu12`
+  to its `-cu13` counterpart, and a check that the `tensorrt` it pulls in matches. The header comment says
+  "configured for CUDA 12.x".
+- **The README's CUDA section**: the wheels-run-on-both-stacks paragraph, and the driver floor rising from
+  about R570 to R580+. Plus a CHANGELOG entry, since this is the line users will hit.
+- **Re-lock, the full local suite, and `env.sh`** — which adds the nvidia `lib/` directories by glob, so it
+  should follow, but confirm that spaCy's `require_gpu()` still finds cupy.
+- **Both development machines, on GPU.** Both already run driver 580 and report CUDA 13.0 (checked
+  2026-10-01), so neither needs a driver upgrade first.
+
+Much of this is what "Easy install with a chosen CUDA version" wants anyway; doing it may settle that item's
+CUDA-selection half, leaving the CPU-default path.
+
 ## `huggingface-hub` 2.x: waiting on upstream caps, our side already audited
 
 *Cluster: dependencies · Cost: S · Gate: transformers, sentence-transformers and tokenizers allowing hub 2.x · Filed: 2026-09-30*
