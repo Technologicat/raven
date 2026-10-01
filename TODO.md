@@ -8,11 +8,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ## Cross-cutting
 
-- **[High]** HF hub: document the env vars that prevent hub checks on Raven startup (for privacy and faster startup). Add recommendation to server docs. Currently not written down anywhere in the project.
-  - **Scheduled: 0.2.10, as a docs change** (maintainer, 2026-10-01).
-  - `HF_HUB_OFFLINE=1` — forces huggingface_hub to use only locally cached models, no network requests at all.
-  - `HF_HUB_DISABLE_TELEMETRY=1` — stops telemetry pings only.
-
 - **[High]** Revisit logging system: library modules should not reconfigure the logger (verify exact behavior against Python `logging` stdlib docs, but currently each module sets the log level, which is the entrypoint's responsibility). Move logging configuration to entrypoints only. Add a "detailed debug" level at that time for particularly spammy-but-useful log lines (e.g. `SmoothScrolling.render_frame`, `_managed_task`, `binary_search_item`).
   - **Verify against the code first**, before deciding anything (maintainer, 2026-10-01): part of this may have been done by the fleet-wide logsetup work (`briefs/done/logsetup-fleet-wide.md`).
 

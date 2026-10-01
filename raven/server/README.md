@@ -19,6 +19,7 @@
 - [Server configuration](#server-configuration)
     - [Low VRAM config (8 GB)](#low-vram-config-8-gb)
     - [Choosing which GPU to use (optional)](#choosing-which-gpu-to-use-optional)
+    - [Starting without contacting HuggingFace (optional)](#starting-without-contacting-huggingface-optional)
 - [SillyTavern compatibility](#sillytavern-compatibility)
     - [Important differences to SillyTavern-extras](#important-differences-to-sillytavern-extras)
         - [Overhauled command-line options](#overhauled-command-line-options)
@@ -303,6 +304,20 @@ source run-on-internal-gpu.sh
 ```
 
 Then for the rest of the command prompt session, any Raven commands (such as `raven-server`) will only see the internal GPU, and `"cuda:0"` in the device settings will point to the only visible GPU.
+
+## Starting without contacting HuggingFace (optional)
+
+Most server modules load their AI models from HuggingFace, and by default each load checks the HuggingFace Hub for a newer version. To use the installed models without contacting the Hub at all, for faster startup and for privacy, run this before starting the server:
+
+```bash
+source no-hammer-hf.sh
+```
+
+This sets `HF_HUB_OFFLINE=1`, under which no request goes to the Hub. It also turns off the usage telemetry that some libraries send through `huggingface_hub`.
+
+**A model that is not installed yet cannot be downloaded in this mode.** Start the server without it the first time, and again after changing a model in the server config, so that the new model can be fetched.
+
+To keep the version checks and turn off only the telemetry, set `HF_HUB_DISABLE_TELEMETRY=1` instead.
 
 
 # SillyTavern compatibility
