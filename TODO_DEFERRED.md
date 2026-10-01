@@ -3224,13 +3224,14 @@ marker, which `raven/visualizer/CLAUDE.md` records as deliberate.
    Runs in CI. S, about +130.
 3. **`common/audio/recorder.py`** (29%): everything goes through `pvrecorder.PvRecorder`, imported inside
    `__init__`, so a stand-in module makes it testable — autostop through `silencegate`, monitor mode, a
-   refused second start. S–M, about +160. *Contrary to the note at the end of this item*, which has the
-   recorder staying excluded as hardware-bound; that note predates this reading, and which stands is open.
+   refused second start. S–M, about +160. **A stand-in is the move** (maintainer, 2026-10-01),
+   which retires the note at the end of this item that had the recorder staying excluded as hardware-bound.
 4. **Cherrypick**: `imageview.py`'s zoom and pan state through the `__new__` stand-in pattern (S, about +90);
    `grid.py`'s bookkeeping on the existing `triage_grid` fixture (S, about +75); `preload.py`'s
    `_preload_one` on a tiny PNG and its two schedulers (S, about +85). Leave `_render` and the `_bg_*` tasks.
 5. **`importer.py`'s `_summarize`** now, faked as the keyword tests fake `llmclient`. `import_bibtex` and
-   `_reduce_dimension` wait for brief 11's item 5, which reorders the stages they would pin.
+   `_reduce_dimension` wait for brief 11's item 5, which reorders the stages they would pin. Otherwise the
+   importer's coverage is fine as it is (maintainer, 2026-10-01).
 6. **`chat_controller.py`**: a slice of about +100 through the existing stand-ins — `find_tool_call_origin`,
    `get_chatlog_as_markdown`, `refresh_system_injects_if_stale`, `delete_revision`, the prefill bail-outs.
    Local only until its import chain is cleared (its own item, 0.2.11). The rest is widget building, and
@@ -3265,7 +3266,8 @@ Still uncovered from this item's original 2026-04-17 list, which has otherwise b
 - `raven/common/hfutil.py` — HuggingFace model installer. The path computation and repo-name parsing are
   testable with a tmpdir and a monkeypatched `snapshot_download`.
 - `raven/common/gui/widgetfinder.py`.
-- `raven/common/audio/{player,recorder}.py` stay excluded: genuinely hardware-bound.
+- `raven/common/audio/player.py` stays excluded: genuinely hardware-bound. The recorder no longer does; see the
+  ranked list above.
 
 **What to select for**, which is the durable half of this item: behaviour a human cannot reliably eyeball —
 state machines, restore-what-you-borrowed contracts, teardown ordering, anything with a lock. What does not
@@ -6320,6 +6322,79 @@ needed."* So top-alignment is **not rejected**, merely not needed yet, and this 
 and chose centring" is recoverable rather than being rediscovered as an oversight.
 
 Moved out of brief 16 on 2026-09-04, where it sat as an unnumbered settled-by-looking note.
+
+## What the app entry modules hold beyond wiring
+
+*Cluster: app-structure · Cost: M overall; S–M per finding · Gate: after 0.2.10 · Filed: 2026-10-01 · See also: "Modules worth testing that are not app entry points"*
+
+An `app.py` is meant to hold wiring and nothing else: command line, GUI build, callbacks, render loop. Since
+2026-10-01 coverage leaves them out of the measurement on exactly that understanding, so logic left in one
+is untested *and* uncounted. Audited the same day, one reader per file, source only. No file was pure wiring.
+**Read each finding against the code before moving it**: some are probably there for a reason nobody has
+written down (maintainer), and a reason found belongs in a comment at the code so the next audit does not
+flag it again. Line ranges are from 2026-10-01.
+
+**A category that may belong at the app level after all** (maintainer): which pane has the keyboard, Tab
+cycling, and key dispatch for the main window. Each app has its own panes, so these may be legitimately
+per-app; decide per case.
+
+- **Librarian** (`raven/librarian/app.py`):
+  - The attachment-staging state machine and send gate, 531–547 and 902–1210: EXTRACTING → READY/FAILED,
+    and whether a send is allowed and what the refusal says. To a new `staging` (or `composer`) module,
+    widgets staying in the app. M.
+  - `_request_send`, 1162–1208: drops a second send within one frame of the first finishing. Has been wrong
+    once and is untested. A pure predicate beside the staging logic. S.
+  - Layout arithmetic nested inside the GUI build, 1304–1358 (`_split_extra_width`, `_get_*_panel_size`), and
+    the avatar sizing, 354–389. Pure maths. S–M.
+  - Backend and server status, 596–874: two `_describe_*_status` functions and two edge-triggered poll
+    tasks, carrying **two identical `keep_waiting` closures**, which is an asymmetry to remove in any case. M.
+  - `_apply_panel_occupancy`, 3738–3812: the graph-or-avatar decision as a pure function, the DPG swap
+    staying. S.
+  - Smaller: attachment routing (1210–1282), `_decode_staged_thumbnail`'s scale-and-flatten (555–585),
+    `switch_to_chat_node` (1816–1840, wants to be a controller method), `_load_initial_animator_settings`'s
+    load-and-overlay (3659–3704), `_apply_stored_audio_capture_settings`' device fallback (467–497).
+  - The keyboard-home model, 2862–3025, is the category above.
+- **Visualizer** (`raven/visualizer/app.py`):
+  - **The arrow-key scrolling goes** (maintainer): `hotkeys_callback` (~1383–1395) computes ±10% of the
+    panel height inline, where `info_panel.page_up`/`page_down` do the same with 0.7 in `info_panel`. To
+    `info_panel`, beside its siblings. S.
+  - The right-click jump target in `mouse_click_callback` (~1115–1145), reaching into `annotation`'s and
+    `info_panel`'s internals under two locks. M.
+  - `PlotterPulsatingGlow` (405–442) and its highlight themes, to `plotter`, which already holds the tested
+    `compute_highlight_alpha`. S–M.
+  - `_handled_by_a_subwindow` (1220–1240), the subwindow key-dispatch order, is the category above.
+- **Server** (`raven/server/app.py`):
+  - The API-key file handling (1735–1747). Where it belongs is open (maintainer). Found with it: a bare
+    `except Exception` that would turn a permissions error into silently overwriting the key file, and
+    `server_userdata_dir` computed and never used.
+  - **API keys should be per client, not per server** (maintainer, 2026-10-01): when one Raven-server
+    serves several clients, an individual key can then be revoked. Mostly a localhost question, but it
+    matters in a lab. Decides the shape of the module the key handling moves to.
+  - Borderline: the allowed-value lists duplicated from `websearch` and `webfetch`, and the
+    string-or-list validation repeated in four handlers.
+- **Avatar editors** — meaningful extractable pieces (maintainer):
+  - Pose editor: the emotion-template file format spread over four places (`load_json` 1003–1040,
+    `save_numpy_image` 1275–1316, `save_all_emotions` 1213–1273, and the factory reset copied twice at
+    1489–1513), to `raven/server/modules/avatarutil.py` beside `load_emotion_presets`. M. `_render`
+    (1071–1102), the THA3 pipeline as a pure tensor function. S–M. The pose↔slider mapping and the
+    active-morph rule (426–717). M.
+  - Settings editor: the postprocessor-chain transforms (1056–1146), pure apart from one attribute. S–M.
+    The animator-settings dict, **built by hand three times** (1283–1325, 1327–1411, 1923–1943) with no
+    single definition. M. `AvatarVideoRecorder` (411–453) and the timing-report writer, DPG-free. S–M.
+- **Cherrypick** — these move (maintainer): the triage command layer and its undo bookkeeping (510–651) to
+  `history`/`triage` with the GUI refresh as a callback, M; `_load_current_image`'s loading policy
+  (363–450) to `preload`, which already took `donate_outgoing_image` for this reason, M;
+  `_approx_aspect_ratio` and `_detect_preload_budget`, pure, S; `_update_status`'s formatting, S–M.
+- **XDot viewer** — these move (maintainer): `_run_graphviz` and `_load_file` (148–215) to `dot_utils`,
+  raising or returning in place of `_show_error`, M; `_format_load_status` and the engine choice duplicated
+  in `_apply_filter`, S.
+- **Conference timer**: `_parse_duration` (83–98) and the colour-threshold rule in the render loop
+  (~465–482). Splitting an app this small is more Bach than it is worth, **except that it is the minimal
+  style example**, and an example has to be right (maintainer). Lean towards moving both. S.
+- **Across apps, to `raven.common.gui`** (maintainer): keyboard browsing of a combo box, written three
+  times — `xdot_viewer._browse_combo` (499–533), the pose editor (1390–1408), the settings editor
+  (1703–1720) — and already drifting apart. S–M. Also noticed: the Librarian and Visualizer `_is_busy` idle
+  predicates may want one helper.
 
 ## Run a round's tool calls in parallel when they are of different kinds
 
