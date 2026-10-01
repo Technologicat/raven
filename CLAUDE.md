@@ -470,6 +470,12 @@ rules below rather than replacing them — running one locally still saves a red
 docs-only push to Raven can fail CI: watch it like a code push.** `check_dependency_versions.py` is the one
 left out, as it reads the uncommitted `pdm.lock`.
 
+**A plain local `pytest` runs the same checks** (since 2026-10-01, `scripts/tests/test_repository_checks.py`,
+about 9 s), reading the list from the workflow so the two cannot drift. So a push preceded by a full test run
+has passed them. CI's own test job runs `pytest raven/`, which leaves them to the lint job. **A push that
+skips the full local run still skips the checks**, so a docs-only or one-file push wants
+`pytest scripts/tests/` at least.
+
 1. **Lint after every code change**: `ruff check <changed .py files>`. Do this before review, testing, or committing. Catches unused imports and dead names early.
 2. **Run `python scripts/check_ci_imports.py` before pushing anything that adds an import or removes an `importorskip`.** CI installs a hand-picked dependency subset rather than the full tree, so a module-level import of something outside that list passes locally and fails only on push — as `sseclient` did, turning main red on a docs-only commit from a change two commits back. The script answers, in a second, which test modules would fail to *collect* in CI. A green local `pytest` cannot tell you this. Note it asks whether each `importorskip` would actually *fire* there: a guard naming something CI installs protects nothing, and treating one as a guard is how this script itself once returned green on a push that went red.
 3. **Run `python scripts/check_dependency_versions.py` after touching any dependency list.** Same shape as the above, one level up: it asks whether `pyproject.toml`, `pdm.lock` and `requirements-ci.txt` still agree about *versions*. See the next section for the loop it belongs to.
