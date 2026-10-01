@@ -300,6 +300,7 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      Brief 13 is a drydock build of several weeks, with a release cut just before it and the multimodal
      embedder built during it. Which of the two comes first is open.
    - **0.2.10 is cut on 7 October**, the day of the systems check, so that the demo runs a released version
-     (maintainer, 2026-10-01). **Whatever still carries a `0.2.10` gate then is re-gated to `0.2.11`**, at
+     (maintainer, 2026-10-01). **Its name is *"Algol"***, the Demon Star, which blinks — for a release that
+     spent much of itself on things that flickered: `## 0.2.10 (7 October 2026) — *["Algol"](https://en.wikipedia.org/wiki/Algol)* edition`. **Whatever still carries a `0.2.10` gate then is re-gated to `0.2.11`**, at
      that point. When 0.2.11 comes, and so where the drydock falls, waits on the prioritization session —
      which in turn waits on the triage. So the worksheet goes first.

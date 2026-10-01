@@ -5475,7 +5475,7 @@ reason to have a version number rather than just a migration marker.
 
 ## Librarian's status indicators live on the avatar, and vanish with it
 
-*Cluster: ? · Cost: ? · Gate: a decision on where they go · Filed: 2026-10-01 · See also: "A no-avatar mode, with the chat tree in the panel the avatar vacates"*
+*Cluster: ? · Cost: ? · Gate: 0.2.10; a decision on where they go first · Filed: 2026-10-01 · See also: "A no-avatar mode, with the chat tree in the panel the avatar vacates"*
 
 INDEXING, DOCUMENTS, INTERNET and their siblings are drawn over the avatar's panel, so they are hidden
 whenever something else occupies the right pane — the chat graph, or nothing once the avatar's idle timeout
@@ -5483,6 +5483,10 @@ switches it off. Seen live on 2026-10-01: an index migration's progress line dis
 to sleep. They need a home that does not depend on the pane's occupant (maintainer, 2026-10-01). Candidates:
 a status strip of their own above the right pane; the bottom toolbar, beside the context-fill readout; or
 the pane's header row.
+
+**Several can show at once** (maintainer, 2026-10-01), so the new home needs room for more than one line —
+INDEXING with its progress text, say, while DOCUMENTS and INTERNET are lit. A single status line is not
+enough.
 
 ## A no-avatar mode, with the chat tree in the panel the avatar vacates
 
