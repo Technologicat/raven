@@ -81,13 +81,16 @@ SIGNED_OFF: Dict[str, Dict[str, str]] = {
         "F1": "as Space",
         "F11": "as Space",
     },
-    # Every key it binds is on a button whose label carries the bracketed hint, so there is nothing to
-    # exempt — the empty map is the sign-off itself, and what it buys is that a newly bound key with no
-    # caption fails the run. The four `Ctrl+Shift+` debug keys (M/R/T/L, DPG's own developer windows) are
+    # Every key it binds is on a button whose label carries the bracketed hint, except the chooser's Esc.
+    # What the sign-off buys is that a newly bound key with no caption fails the run. The four `Ctrl+Shift+` debug keys (M/R/T/L, DPG's own developer windows) are
     # deliberately absent from the card and from `hotkey_info`, so they never reach this checker.
-    "raven/avatar/pose_editor": {},
-    # Same shape as its sibling above: every key is on a button or a heading carrying the bracketed hint.
-    "raven/avatar/settings_editor": {},
+    "raven/avatar/pose_editor": {
+        "Esc": "leaves a chooser, handing the keyboard back; no widget does that",
+    },
+    # Same shape as its sibling above: every key but Esc is on a button or a heading carrying the bracketed hint.
+    "raven/avatar/settings_editor": {
+        "Esc": "leaves a chooser, handing the keyboard back; no widget does that",
+    },
     # Its toolbar opens, zooms, marks, undoes and compares — and has no selection controls whatsoever, so
     # the four selection keys below have nothing to be named on. Buttons for them would be a feature, and
     # this table is the record that somebody looked rather than that a caption was forgotten.
