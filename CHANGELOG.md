@@ -152,6 +152,7 @@
 - **A click on a thumbnail tile sometimes did nothing**, wherever on the tile it landed — in the file dialog's thumbnail view and in Raven-cherrypick's grid. Intermittent, which is why it seemed to come and go.
 - **`raven-indexer`, `raven-pdf2bib` and `raven-dehyphenate` answer `--help`, or reject a mistyped option, at once.**
   - In v0.2.9 each loaded its machine-learning libraries first, several seconds before any message appeared.
+- **Every GUI app shuts down properly when asked to by a `SIGTERM`** — a plain `kill`, a logout, a session manager closing it — as when its window is closed. In v0.2.9 only Raven-librarian did, and the others ended on the spot, without running their own shutdown.
 - **A `<font color=...>` in Markdown takes the short hex forms, `#f80` and `#f80c`.**
   - In v0.2.9 `#f80` was drawn in a wrong colour, magenta rather than orange, and a six-digit hex without its `#` that happened to be all digits, such as `123456`, raised an error.
 

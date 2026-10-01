@@ -59,6 +59,7 @@ with timer() as tim:
 
     from unpythonic.env import env
 
+    from ..common import quitsignal
     from ..common import utils as common_utils
     from ..common.gui.xdotwidget import XDotWidget
     from ..common.gui import utils as guiutils
@@ -941,6 +942,10 @@ def main() -> int:
         if widget is not None and _app_state["current_file"] is not None:
             widget.zoom_to_fit(animate=False)
     dpg.set_frame_callback(10, _initial_startup)
+
+    # A `SIGTERM` (a plain `kill`, a logout) leaves the render loop the way the close button does, so the
+    # teardown runs.
+    quitsignal.install(dpg.stop_dearpygui)
 
     # This app builds its state in `main`, so a session is handed the locals as well as the globals —
     # without them it would open onto a namespace holding almost nothing this app is made of.

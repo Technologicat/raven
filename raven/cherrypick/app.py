@@ -70,6 +70,7 @@ from ..common.gui import messagebox
 from ..common.gui import filedrop
 from ..common.gui import qroverlay
 from ..common.gui import animation as gui_animation
+from ..common import quitsignal
 from ..common import utils as common_utils
 from ..vendor.file_dialog.fdialog import FileDialog
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
@@ -1913,6 +1914,10 @@ def main() -> int:
         if iv is not None and iv.has_image:
             iv.zoom_to_fit()
     dpg.set_frame_callback(10, _initial_resize)
+
+    # A `SIGTERM` (a plain `kill`, a logout) leaves the render loop the way the close button does, so the
+    # teardown runs.
+    quitsignal.install(dpg.stop_dearpygui)
 
     # This app builds its state in `main`, so a session is handed the locals as well as the globals —
     # without them it would open onto a namespace holding almost nothing this app is made of.

@@ -64,6 +64,7 @@ logsetup.configure(level=getattr(logging, opts.log_level),
                           "raven.common.gui.fontsetup",
                           "raven.common.gui.utils",
                           "raven.common.gui.widgetfinder",
+                          "raven.common.quitsignal",
                           "raven.common.utils",
                           "raven.librarian.llmclient",
                           "raven.vendor.file_dialog.fdialog"])
@@ -102,6 +103,7 @@ with timer() as tim:
     from ..client import config as client_config
 
     from ..common import bgtask
+    from ..common import quitsignal
     from ..common import utils as common_utils
 
     from ..common.gui import animation as gui_animation
@@ -1514,6 +1516,10 @@ initialize_filedialogs(_default_path)
 # HACK: Create the dimmer as soon as possible (some time after the first frame so that other GUI elements initialize their sizes).
 # The window for the "scroll ends here" animation is also created at frame 10, but via another mechanism (trying to create it each frame, but the implementation blocks it until frame 10).
 dpg.set_frame_callback(10, info_panel.create_dimmer_overlay)
+
+# A `SIGTERM` (a plain `kill`, a logout) leaves the render loop the way the close button does, so the
+# teardown runs.
+quitsignal.install(dpg.stop_dearpygui)
 
 # Last, so a session opens onto a fully built app; this module's globals are what it gets.
 replserver.maybe_start(opts.repl, globals(), f"Raven-visualizer {__version__}")

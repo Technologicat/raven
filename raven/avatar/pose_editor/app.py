@@ -104,6 +104,7 @@ with timer() as tim:
 
     from ... import config as global_config
 
+    from ...common import quitsignal
     from ...common import utils as common_utils
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
     from ...common.gui import helpcard
@@ -1576,6 +1577,10 @@ dpg.set_frame_callback(10, tune_viewport)
 
 def update_animations():
     gui_animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
+
+# A `SIGTERM` (a plain `kill`, a logout) leaves the render loop the way the close button does, so the
+# teardown runs.
+quitsignal.install(dpg.stop_dearpygui)
 
 # Last, so a session opens onto a fully built app; this module's globals are what it gets.
 replserver.maybe_start(args.repl, globals(), f"Raven-avatar-pose-editor {__version__}")

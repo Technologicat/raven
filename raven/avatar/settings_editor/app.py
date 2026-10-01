@@ -85,6 +85,7 @@ with timer() as tim:
     from ...common.video import upscaler  # for the list of upscale qualities it accepts
     from ...common import bgtask
     from ...common import docstring_utils
+    from ...common import quitsignal
     from ...common import utils as common_utils
 
     from ... import config as global_config
@@ -1947,6 +1948,10 @@ def update_animations():
     #     else:
     #         dpg.disable_item(gui_instance.voice_choice)
     #         dpg.disable_item("speak_button")
+
+# A `SIGTERM` (a plain `kill`, a logout) leaves the render loop the way the close button does, so the
+# teardown runs. After `audio.initialize`, since SDL would replace it: see `raven.common.quitsignal`.
+quitsignal.install(dpg.stop_dearpygui)
 
 # Last, so a session opens onto a fully built app; this module's globals are what it gets.
 replserver.maybe_start(opts.repl, globals(), f"Raven-avatar-settings-editor {__version__}")

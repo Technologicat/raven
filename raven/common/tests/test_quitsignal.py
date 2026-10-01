@@ -149,6 +149,22 @@ def test_sigterm_leaves_the_render_loop_and_runs_the_teardown():
     assert result.returncode == 0, f"exited {result.returncode}; stderr:\n{result.stderr}"
 
 
+class TestEveryAppInstallsIt:
+    """Every GUI app's render loop is paired with an install, so a `kill` reaches its teardown."""
+
+    def test_every_app_with_a_render_loop_installs_the_handler(self):
+        # Read as source: importing an app's entry module runs the app. Found by searching rather than
+        # listed, so an app added later is checked without anyone remembering to add it here.
+        raven_root = pathlib.Path(quitsignal.__file__).parent.parent
+        apps = sorted(path for path in raven_root.rglob("app.py")
+                      if "while dpg.is_dearpygui_running():" in path.read_text(encoding="utf-8"))
+        assert len(apps) >= 7, (f"found only {[str(path.relative_to(raven_root)) for path in apps]}; the search "
+                                f"has stopped finding the apps, and would pass vacuously")
+        missing = [str(path.relative_to(raven_root)) for path in apps
+                   if "quitsignal.install(" not in path.read_text(encoding="utf-8")]
+        assert not missing, f"render loops that a SIGTERM would kill without their teardown: {missing}"
+
+
 @pytest.mark.ml  # pygame comes with the audio stack rather than with the test subset
 class TestWhatSDLDoesToOurSignals:
     """Characterizing pygame/SDL, because the fix in `player` is shaped entirely by it."""

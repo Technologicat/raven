@@ -57,6 +57,7 @@ with timer() as tim:
 
     from unpythonic.env import env
 
+    from ..common import quitsignal
     from ..common import utils as common_utils
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
@@ -419,6 +420,10 @@ def main() -> int:
         themes_and_fonts=env(font_size=config.GUI_FONT_SIZE),
         gui_font=gui_font,
     )
+
+    # A `SIGTERM` (a plain `kill`, a logout) leaves the render loop the way the close button does, so the
+    # teardown runs.
+    quitsignal.install(dpg.stop_dearpygui)
 
     # This app builds its state in `main`, so a session is handed the locals as well as the globals —
     # without them it would open onto a namespace holding almost nothing this app is made of.

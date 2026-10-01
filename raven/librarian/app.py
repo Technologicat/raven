@@ -3853,8 +3853,8 @@ def _finish_startup(sender, app_data) -> None:
 dpg.set_frame_callback(2, _finish_startup)
 
 # A `SIGTERM` — a plain `kill`, a session manager logging out, a supervisor stopping the app — now leaves
-# the loop the way the window's close button does, so the teardown below runs and the chat is saved. The
-# datastore is written once, at exit, so the alternative is losing the whole session's messages.
+# the loop the way the window's close button does, so the teardown below runs: the chat is saved, and the
+# server-side avatar instance is released rather than orphaned.
 #
 # Installed here, after everything that initializes SDL: see `raven.common.quitsignal` for why that
 # matters and what was swallowing the signal before.

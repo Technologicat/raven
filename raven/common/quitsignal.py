@@ -1,9 +1,8 @@
 """Make a `SIGTERM` ask the app to shut down, instead of killing it where it stands.
 
 An app that persists at exit — through `atexit`, or through the teardown at the end of its render loop —
-gets nothing from a signal that terminates it at the C level. Raven's Librarian writes its chat datastore
-once, at clean exit, so a plain `kill` loses the whole session; the same signal orphans the server-side
-avatar instance it would otherwise have released.
+gets nothing from a signal that terminates it at the C level. Raven's Librarian would lose whatever it has
+not yet autosaved, and orphan the server-side avatar instance it would otherwise have released.
 
 **The signal was not even reaching the process, and the reason is worth knowing before touching this.**
 SDL installs its own `SIGINT` and `SIGTERM` handlers when it initializes, and Raven initializes SDL
