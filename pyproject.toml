@@ -322,6 +322,10 @@ markers = [
 source = ["raven"]
 omit = [
     "*/tests/*",
+    # The GUI apps' entry modules, every one a console script. They hold the GUI wiring and the command
+    # line, which is not what wants testing, and importing one runs the app, so a test cannot reach them.
+    # Logic found in one belongs in another module, where it can be tested.
+    "*/app.py",
     "*/vendor/tha3/*",
     "*/vendor/kokoro_fastapi/*",
     "*/vendor/anime4k/*",
