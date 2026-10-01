@@ -188,8 +188,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 - **[Medium]** Resolve remaining hotkey conflicts with macOS builtins. Gather empirical data via live video session with pilot user. (Cmd+Shift+M for debug window is working; check others.)
 - **[Medium]** Right-click and right-drag features on one-button mouse/trackpad.
 - **[Medium]** F-key support on macOS.
-- **[Low]** OS X 10.x: ChromaDB/onnxruntime won't install; `av`/TTS won't install (add `try`/`except`, disable `tts` module gracefully). TTS is irrelevant for Visualizer-only use. Superseded in practice — `TODO_DEFERRED.md`, "Drop the Intel Mac / macOS 10.x install workaround", records the platform as effectively dead (new Macs are Apple Silicon) and proposes removing the README section rather than supporting it. Resolve the two together.
-
 
 ### Robustness and bug fixing
 

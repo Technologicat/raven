@@ -83,6 +83,7 @@
 
 #### Constellation-wide
 
+- **The install instructions no longer cover Intel Macs on macOS 10.x**, which Raven does not support.
 - **Slider grabs are rounded**, as the sliders they move in already were. In v0.2.9 they were square.
 - **The `--qr` overlay's label reads "Raven on GitHub"**, where it said "Get Raven".
 - **A fault in one GUI animation no longer closes the app.** The animation is dropped and the error logged with its traceback; everything else carries on.

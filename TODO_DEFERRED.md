@@ -1528,25 +1528,6 @@ A middle option if the measurement bites: re-export only the dependency-light mo
 ones to dotted imports. That is a defensible split, but it is an asymmetry a future reader will trip over,
 so it needs the reason written at the site.
 
-## Sweep `## Declined` for decisions whose follow-through was never filed
-
-*Cluster: hygiene-sweep · Cost: S · Gate: 0.2.10 · Filed: 2026-08-14*
-
-`## Declined` was originally built — by claude.ai, at the start of the project — as a section for
-*completed or already-decided* items, and only later corrected to its stated meaning of *considered and
-rejected*. Entries filed under the looser reading may still be there. Two were caught on 2026-08-12 and
-removed as finished work; the naming entry was caught on 2026-08-14 and was a third kind, a decision that
-chose something and left work behind that nobody had queued.
-
-**Read for the chosen-not-rejected shape specifically.** A rejected idea is genuinely closed. A *decision*
-closes only the argument: it settles what to do, and then something has to do it. The naming entry did not
-look different from its neighbours — it argued a position at length and ended "(Declined 2026-08-12.)" like
-the rest — so this needs reading each entry and asking "does this imply an action, and is that action filed
-anywhere?", not scanning for a marker.
-
-The section preamble now states the rule, so new entries should be fine; this is about the backlog of old
-ones.
-
 ## Rename the distribution to `raven-lab` — before the first PyPI upload, not after
 
 *Cluster: ? · Cost: S · Gate: 0.2.11, and hard-blocking the first PyPI upload · Filed: 2026-08-14*
@@ -6577,8 +6558,9 @@ has no live item to point at, it does not belong here yet.
   hung in the server. A finding rather than a task; the write-up is
   `investigations/tha3-performance/tha3-performance-audit.md`, with `debug_torch_compile.py` beside it.
   (Declined 2026-08-10.)
-- **Drop the Intel Mac / macOS 10.x install workaround** — that platform is being dropped rather than
-  supported; the one Mac user is on Apple Silicon. (Declined 2026-08-10.)
+- **Support Intel Macs on macOS 10.x** — the platform is dropped rather than supported; the one Mac user is
+  on Apple Silicon. Its README install section, a torch 2.2 workaround, went on 2026-10-01. (Declined
+  2026-08-10.)
 - **RAG: rerank retrieved chunks and inject only the best few** — measured and rejected 2026-08-06, and the
   textbook case for this section: two cross-encoders, three placements, three corpora, and no configuration
   beat plain fusion. Reranking the *fused* list is the worst option on all three, which generalizes. The

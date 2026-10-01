@@ -40,7 +40,6 @@
             - [Install with GPU compute support](#install-with-gpu-compute-support)
                 - [CUDA version and the `torch` wheels](#cuda-version-and-the-torch-wheels)
             - [Install on an Apple Silicon Mac (M series)](#install-on-an-apple-silicon-mac-m-series)
-            - [Install on an Intel Mac with MacOSX 10.x](#install-on-an-intel-mac-with-macosx-10x)
             - [Install on Windows (if Windows Defender gets angry)](#install-on-windows-if-windows-defender-gets-angry)
         - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
         - [Activate the Raven venv (to run Raven commands such as `raven-visualizer` or `raven-server`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer-or-raven-server)
@@ -464,40 +463,6 @@ Apple Silicon is a supported target. Install as above, with the `pytorch-cu128` 
 Removing it is not a downgrade — it is how you get the right wheels. There is no CUDA on Apple Silicon; PyTorch reaches the M series' GPU through **MPS** (Metal Performance Shaders), over the same unified memory the CPU uses, and the MPS builds are the ones on PyPI.
 
 Nothing needs configuring afterwards: Raven's device settings ship set to detect, and on an M-series Mac that finds MPS on its own. See [Choose which GPU to use](#choose-which-gpu-to-use-optional), below, for what it reports and how to pin a backend instead.
-
-#### Install on an Intel Mac with MacOSX 10.x
-
-Installing Raven may fail, if Torch cannot be installed.
-
-On MacOSX, installing torch 2.3.0 or later requires an ARM64 processor and MacOSX 11.0 or later.
-
-If you have an Intel Mac (x86_64) with MacOSX 10.x, to work around this, you can use Torch 2.2.x.
-
-To do this, modify Raven's [`pyproject.toml`](pyproject.toml) in a text editor, so that the lines
-
-```
-    "torch==2.11.0",
-    "torchvision==0.26.0",
-    "torchaudio==2.11.0",
-```
-
-become
-
-```
-    "torch>=2.2.0,<2.3.0",
-    "torchvision>=0.17.2",
-    "torchaudio>=2.2.0,<2.3.0",
-```
-
-Also remove the `pytorch-cu128` `[[tool.pdm.source]]` block from [`pyproject.toml`](pyproject.toml) (as noted in the CUDA section above) — that index has Linux/Windows wheels only, so on macOS `torch` must resolve from PyPI instead.
-
-Also, ChromaDB requires `onnxruntime`, which doesn't seem to be installable on this version of OS X. This means *Raven-librarian* and *Raven-server* won't work (as the RAG backend and the server's `embeddings` module require ChromaDB), but you can still get *Raven-visualizer* to work, by removing ChromaDB. Run this command in the terminal:
-
-```bash
-pdm remove chromadb
-```
-
-Then run `pdm install` again.
 
 :exclamation: *In general, if a package fails to install, but is not explicitly listed in the dependencies, you can try to find out which package pulls it in, by issuing the command `pdm list --tree`. This shows a tree-structured summary of the dependencies.* :exclamation:
 
