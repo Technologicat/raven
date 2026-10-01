@@ -5821,7 +5821,20 @@ Raised while adding HTML support (2026-07-29, Juha's example).
 *Cluster: markdown-renderer · Cost: ? · Gate: with the Markdown renderer work, likely 0.2.11 · Filed: 2026-07-29 · See also: `briefs/markdown-block-rendering-brief.md`*
 
 **Important for discussing scientific topics** (maintainer, 2026-10-01): Qwen often writes numbers in scientific
-notation as inline dollar-sign LaTeX, so this is not only about equations.
+notation as inline dollar-sign LaTeX, so this is not only about equations. **Single-dollar inline math is
+therefore a requirement**, not an option to weigh against `\(...\)`.
+
+The delimiter rule to use is Pandoc's `tex_math_dollars`, verified in its manual: the opening `$` has a
+non-space character immediately to its right, the closing `$` has one immediately to its left and is not
+followed by a digit — which is what keeps `$20,000 and $30,000` from parsing as math. A backslash-escaped `$`
+is literal. As a regex, checked against those cases plus `$a$ and $b$`, `$ a + b $` and `$$...$$` (a greedy
+middle swallows `a$ and $b`, so the `+?` is load-bearing):
+
+```python
+INLINE_MATH = re.compile(r"(?<![\\$])\$(?=[^\s$])(.+?)(?<=[^\s\\])\$(?![\d$])")
+```
+
+It knows nothing about code spans, so it has to run where the parser has already set those aside.
 
 Models emit LaTeX — `$...$`, `$$...$$`, `\begin{equation}` — whenever the subject is mathematical, and Librarian
 currently shows it as source. For a research assistant aimed at scientific work this is the wrong way round: the
