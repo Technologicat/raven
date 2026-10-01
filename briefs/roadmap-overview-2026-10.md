@@ -213,7 +213,7 @@ move. **Brief 13 is a drydock build** with a release cut just before it. Which o
 - **Document-level questions** ("which document is about X") · L · design · `T:718` — one mechanism with 13 and
   the per-document pass
 
-*Formats (the `document-ingestion` cluster, gated post-0.2.10 together)*
+*Formats (the `document-ingestion` cluster — since 2026-10-01 one picture in `briefs/design/document-ingestion-sketch.md`, split into seven briefs)*
 - **Same formats in the docs DB and in attachments** — office done; images remain, Nomic-gated · `TD "Same file
   formats in the docs DB…"`
 - **Text out of images** — SVG `<text>` first, raster via VLM · `TD "Text out of images…"`

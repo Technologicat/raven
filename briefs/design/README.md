@@ -38,6 +38,10 @@ anything in one as settled.
   per-document work at import time, run offline on Raven-server or remotely on a cloud service or a batch
   queue, with a privacy tag on every record deciding which services may see it.
 
+- **[`document-ingestion-sketch.md`](document-ingestion-sketch.md)** — what an ingestible document is: the
+  formats and representations the docs DB and chat attachments should share, split into seven briefs each
+  small enough to close.
+
 - **[`install-and-first-run-sketch.md`](install-and-first-run-sketch.md)** — installing with one command and
   starting from a launcher, with Raven-server and the LLM backend coming up by themselves. Mostly existing
   items seen as one piece, plus three things to probe.

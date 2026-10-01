@@ -233,6 +233,13 @@ An avatar-only mode for someone across the room: ambient notifications, QR codes
 errors. A discussion sketch with five open questions. The lab installation (after 0.2.10) waits on its
 avatar-only toggle and file-object polish; the sketch's status line lists what else it needs.
 
+## Sketch: what an ingestible document is
+
+*Cluster: document-ingestion · Cost: ? · Gate: none for its briefs 1–3; see the sketch for the rest · Filed: 2026-10-01 · See also: `briefs/design/document-ingestion-sketch.md`*
+
+The `document-ingestion` cluster as one picture — spreadsheets, SVG, self-contained HTML, page-anchored text,
+page images, text out of images, images as DB documents — split into seven briefs sized to close.
+
 ## Sketch: installing and starting Raven without a terminal ritual
 
 *Cluster: dependencies · Cost: ? · Gate: three probes first (uv's torch backend choice, `lms` headless, LM Studio at login) · Filed: 2026-10-01 · See also: `briefs/design/install-and-first-run-sketch.md`, `briefs/server-autostart-brief.md`*
@@ -536,7 +543,7 @@ Raised by Juha (2026-09-20) on noticing that `scripts/` had no tests at all.
 
 ## Cite a retrieved passage by the page number printed on the page
 
-*Cluster: document-ingestion · Cost: M — the PDF half is S, the rest is `extract_text`'s return shape and the chunker · Gate: a decision on what `extract_text` returns · Filed: 2026-09-20*
+*Cluster: document-ingestion · Cost: M — the PDF half is S, the rest is `extract_text`'s return shape and the chunker · Gate: a decision on what `extract_text` returns · Filed: 2026-09-20 · See also: `briefs/design/document-ingestion-sketch.md`, brief 4*
 
 A PDF carries a `/PageLabels` tree mapping each physical page index to the number *printed* on that page, with
 a style (arabic, upper or lower roman, upper or lower letters), an optional prefix and a start value. Front
@@ -4998,15 +5005,16 @@ Discovered during the plain-text/PDF interlude (2026-07-18, raised by Juha).
 
 ## Same file formats in the docs DB and in chat attachments
 
-*Cluster: document-ingestion · Cost: ? · Gate: the document-ingestion sketch (to be written) · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: `briefs/design/document-ingestion-sketch.md` — office formats done; images are its brief 7 · Filed: 2026-07-29*
 
 The docs database and chat attachments should accept the *same* set of formats. A user who can attach a file
 to a message reasonably expects to be able to drop it in the documents folder, and vice versa; a split between
 the two is arbitrary from outside.
 
-**This item heads the `document-ingestion` cluster, which wants one brief rather than five**: it,
-"Spreadsheets", "Text out of images", "Vector figures (`.svg`)" and "Read documents as page images" are five
-faces of one question — what an ingestible document *is* — and the answers constrain each other. Page images
+**This item heads the `document-ingestion` cluster**: it, "Spreadsheets", "Text out of images", "Vector
+figures (`.svg`)" and "Read documents as page images" are faces of one question — what an ingestible
+document *is* — and the answers constrain each other. `briefs/design/document-ingestion-sketch.md` holds the
+whole picture and splits it into briefs small enough to close (2026-10-01). Page images
 is the one that bites on this project's own terms: figure- and equation-heavy literature extracts to prose
 that omits the argument, in exactly the corpus Raven exists to read.
 
@@ -5035,7 +5043,7 @@ Raised during the 0.2.8 release scoping (2026-07-29, Juha).
 
 ## Spreadsheets in the docs DB and attachments (`.xlsx`, `.ods`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: the document-ingestion sketch (to be written) · Filed: 2026-07-29 · See also: `briefs/spreadsheet-ingestion-brief.md`*
+*Cluster: document-ingestion · Cost: ? · Gate: `briefs/design/document-ingestion-sketch.md`, brief 1 · Filed: 2026-07-29 · See also: `briefs/spreadsheet-ingestion-brief.md`*
 
 **Probably M** (maintainer, 2026-10-01): a reasonable extraction from most spreadsheets looks within reach.
 
@@ -5052,7 +5060,7 @@ Raised while scoping office-format support (2026-07-29, Juha).
 
 ## Text out of images, so figures work without a vision model (OCR, and SVG `<text>`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: the document-ingestion sketch (to be written) · Filed: 2026-07-30*
+*Cluster: document-ingestion · Cost: ? · Gate: `briefs/design/document-ingestion-sketch.md`: the SVG half is brief 2, the raster half brief 6 · Filed: 2026-07-30*
 
 The image → text cell of the 2×2 in the SVG item below: given an image, produce its plain text. Wanted for
 three distinct reasons, which is what makes it worth building rather than a nice-to-have:
@@ -5138,7 +5146,7 @@ Raised by Juha (2026-07-30), from the `imageextract` question.
 
 ## Vector figures in the docs DB and attachments (`.svg`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: the document-ingestion sketch (to be written) · Filed: 2026-07-30*
+*Cluster: document-ingestion · Cost: ? · Gate: `briefs/design/document-ingestion-sketch.md`, brief 2 · Filed: 2026-07-30*
 
 Hand-authored figures — problem setups, schematics, diagrams — are commonly SVG, because that is what you get
 when you draw them yourself for a manuscript rather than exporting them from a plotting library. So this is not
@@ -5229,7 +5237,7 @@ Raised by Juha (2026-07-30).
 
 ## Read documents as page images, for figure- and math-heavy sources
 
-*Cluster: document-ingestion · Cost: ? · Gate: the document-ingestion sketch (to be written) · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: `briefs/design/document-ingestion-sketch.md`, brief 5, after brief 4 · Filed: 2026-07-29*
 
 Current extraction is **text-layer only**, for PDFs and (as of 0.2.8) office formats alike. That loses exactly
 what matters in the sources this project exists to read: equations, plots, diagrams, tables-as-figures. A paper
@@ -5797,7 +5805,7 @@ Raised while implementing brief 03 D (2026-07-29, Juha's idea, and Juha's placem
 
 ## HTML pages whose content is produced by running them
 
-*Cluster: document-ingestion · Cost: ? · Gate: the document-ingestion sketch (to be written) · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: `briefs/design/document-ingestion-sketch.md`, brief 3 · Filed: 2026-07-29*
 
 `raven.common.docextract` reads HTML through `trafilatura`'s readability extraction, which looks at markup. A
 page that has no text in its markup — because a script writes it at load — therefore extracts as empty, and the
