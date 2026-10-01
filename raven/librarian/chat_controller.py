@@ -172,6 +172,9 @@ role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back":
                   "user": {"front": gui_config.chat_color_user_front, "back": gui_config.chat_color_user_back},
                   }
 
+# How long a status indicator stays up once shown, in seconds, however soon its work is over.
+_INDICATOR_MIN_SHOW_TIME = 0.5
+
 # Built-in tools that reach out over the network -> light up the INTERNET (globe) indicator while they run.
 # The set `llmtools.perform_tool_calls` runs one at a time, which is what keeps that light truthful.
 web_access_tool_names = llmclient.NETWORK_TOOL_NAMES
@@ -3885,6 +3888,8 @@ class DPGChatController:
         self.docs_indexing_indicator_widget = docs_indexing_indicator_widget
         self.docs_indexing_progress_text_widget = docs_indexing_progress_text_widget
         self.docs_search_indicator_widget = docs_search_indicator_widget
+        # The indicators go up and down through this, so that a search over in a frame still reads as a signal.
+        self.indicator_hold = guiutils.MinimumShowTime(_INDICATOR_MIN_SHOW_TIME)
         self.docs_search_progress_text_widget = docs_search_progress_text_widget
         self.web_indicator_widget = web_indicator_widget
 
@@ -4099,7 +4104,7 @@ class DPGChatController:
         if self.gui_updates_safe:
             if self.docs_indexing_glow_animation is not None:
                 self.docs_indexing_glow_animation.reset()  # crisp phase on appear
-            dpg.show_item(self.docs_indexing_indicator_widget)
+            self.indicator_hold.show(self.docs_indexing_indicator_widget)
             logger.info(f"DPGChatController._on_indexing_start: INSTR after show: visible={dpg.is_item_shown(self.docs_indexing_indicator_widget)}")
 
     def _on_indexing_done(self) -> None:
@@ -4107,7 +4112,7 @@ class DPGChatController:
         # TEMP INSTRUMENTATION: INDEXING indicator debugging (2026-04-28)
         logger.info(f"DPGChatController._on_indexing_done: INSTR entered: gui_updates_safe={self.gui_updates_safe}, widget={self.docs_indexing_indicator_widget!r}, exists={dpg.does_item_exist(self.docs_indexing_indicator_widget)}")
         if self.gui_updates_safe:
-            dpg.hide_item(self.docs_indexing_indicator_widget)
+            self.indicator_hold.hide(self.docs_indexing_indicator_widget)
 
     def update_docs_indicator_progress_text(self) -> None:
         """Poll the retriever's two progress-text channels; mirror changes to the DPG widgets.
@@ -4131,8 +4136,15 @@ class DPGChatController:
 
         query_progress = self.retriever.get_query_progress_text()
         if query_progress != self._docs_search_progress_last:
-            dpg.set_value(self.docs_search_progress_text_widget, query_progress)
+            # A query that has just ended says so, for as long as DOCUMENTS' minimum show time holds it up. The
+            # retriever's own text is empty outside a query, and a row already hidden shows nothing either way.
+            dpg.set_value(self.docs_search_progress_text_widget, query_progress or "Done")
             self._docs_search_progress_last = query_progress
+
+    def _show_docs_search_indicator(self) -> None:
+        """Show DOCUMENTS, with its progress text cleared, so the previous query's "Done" does not flash first."""
+        dpg.set_value(self.docs_search_progress_text_widget, "")
+        self.indicator_hold.show(self.docs_search_indicator_widget)
 
     def is_generating(self) -> bool:
         """Return whether an AI turn is currently in flight (LLM streaming or tool calls), or a send has been
@@ -4559,7 +4571,7 @@ class DPGChatController:
         if reading_something and self.gui_updates_safe:
             if self.indicator_glow_animation is not None:
                 self.indicator_glow_animation.reset()  # start a new pulsation cycle
-            dpg.show_item(self.attachment_read_indicator_widget)  # tag
+            self.indicator_hold.show(self.attachment_read_indicator_widget)  # tag
             # Reading an attached document is the system consulting an external source, the same as a web
             # fetch or a document search - so the avatar shows it the same way. The effect nests, which
             # matters here specifically: this runs on a background task and can overlap a turn's tool call.
@@ -4568,7 +4580,7 @@ class DPGChatController:
             estimate, estimate_is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, task_env.head_node_id)
         finally:
             if reading_something and self.gui_updates_safe:
-                dpg.hide_item(self.attachment_read_indicator_widget)  # tag
+                self.indicator_hold.hide(self.attachment_read_indicator_widget)  # tag
                 self.avatar_controller.stop_data_eyes(config=self.avatar_record)
 
         if task_env.cancelled or not self.gui_updates_safe:
@@ -4592,7 +4604,7 @@ class DPGChatController:
         if self.gui_updates_safe:
             if self.indicator_glow_animation is not None:
                 self.indicator_glow_animation.reset()  # start a new pulsation cycle
-            dpg.show_item(self.llm_indicator_widget)  # tag
+            self.indicator_hold.show(self.llm_indicator_widget)  # tag
         try:
             out = llmclient.prefill(self.llm_settings,
                                     history,
@@ -4609,7 +4621,7 @@ class DPGChatController:
             # Not if a turn started while we were waiting: it raised the same indicator for its own prompt,
             # and dropping it here would report that turn as further along than it is.
             if self.gui_updates_safe and not self.is_generating():
-                dpg.hide_item(self.llm_indicator_widget)  # tag
+                self.indicator_hold.hide(self.llm_indicator_widget)  # tag
 
         if task_env.cancelled or not self.gui_updates_safe:
             return
@@ -4858,11 +4870,11 @@ class DPGChatController:
                         start_turn_data_eyes()
                         if self.indicator_glow_animation is not None:
                             self.indicator_glow_animation.reset()  # crisp phase on appear
-                        dpg.show_item(self.docs_search_indicator_widget)
+                        self._show_docs_search_indicator()
 
                 def on_docs_done(matches: list[dict]) -> None:
                     if self.gui_updates_safe:
-                        dpg.hide_item(self.docs_search_indicator_widget)
+                        self.indicator_hold.hide(self.docs_search_indicator_widget)
                         stop_turn_data_eyes()
 
                 def on_llm_start(node_id: str) -> None:
@@ -4909,7 +4921,7 @@ class DPGChatController:
 
                         if self.indicator_glow_animation is not None:
                             self.indicator_glow_animation.reset()  # start new pulsation cycle
-                        dpg.show_item(self.llm_indicator_widget)  # show prompt processing indicator
+                        self.indicator_hold.show(self.llm_indicator_widget)  # show prompt processing indicator
 
                 task_env.text = io.StringIO()  # incoming, in-progress paragraph
                 task_env.t0 = time.monotonic()  # timestamp of last GUI update
@@ -5007,7 +5019,7 @@ class DPGChatController:
                     follow_sample = self.view.sample_tail_follow()
 
                     if self.gui_updates_safe and chunk_text:  # avoid triggering on an empty event
-                        dpg.hide_item(self.llm_indicator_widget)  # hide prompt processing indicator
+                        self.indicator_hold.hide(self.llm_indicator_widget)  # hide prompt processing indicator
 
                     if chunk_text and task_env.first_chunk_t is None:
                         task_env.first_chunk_t = time.monotonic()
@@ -5178,18 +5190,18 @@ class DPGChatController:
                         if function_name in web_access_tool_names:
                             if self.indicator_glow_animation is not None:
                                 self.indicator_glow_animation.reset()  # start new pulsation cycle
-                            dpg.show_item(self.web_indicator_widget)
+                            self.indicator_hold.show(self.web_indicator_widget)
                         elif function_name in document_search_tool_names:
                             if self.indicator_glow_animation is not None:
                                 self.indicator_glow_animation.reset()
-                            dpg.show_item(self.docs_search_indicator_widget)
+                            self._show_docs_search_indicator()
 
                 def on_call_lowlevel_done(tool_call_id: str, function_name: str, status: str, text: str) -> None:
                     if self.gui_updates_safe:
                         if function_name in web_access_tool_names:
-                            dpg.hide_item(self.web_indicator_widget)
+                            self.indicator_hold.hide(self.web_indicator_widget)
                         elif function_name in document_search_tool_names:
-                            dpg.hide_item(self.docs_search_indicator_widget)
+                            self.indicator_hold.hide(self.docs_search_indicator_widget)
 
                 def on_tool_done(node_id: str) -> None:
                     task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
@@ -5326,9 +5338,9 @@ class DPGChatController:
                     # Also make sure that the AI-turn-scoped processing indicators hide. The INDEXING
                     # indicator is intentionally *not* touched here — it has its own polling-driven
                     # lifecycle (background commits run independent of any AI turn).
-                    dpg.hide_item(self.docs_search_indicator_widget)
-                    dpg.hide_item(self.web_indicator_widget)
-                    dpg.hide_item(self.llm_indicator_widget)
+                    self.indicator_hold.hide(self.docs_search_indicator_widget)
+                    self.indicator_hold.hide(self.web_indicator_widget)
+                    self.indicator_hold.hide(self.llm_indicator_widget)
         def abort_if_nothing_to_lose(task_env: env) -> None:
             """`on_cancel` hook: end a backend read that co-operative cancellation cannot reach.
 

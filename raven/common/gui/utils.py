@@ -38,6 +38,8 @@ __all__ = ["screen_to_content", "content_to_screen", "zoom_keep_point",  # re-ex
            "release_caret", "set_input_text",
            "add_section_separator", "add_toolbar_separator",
 
+           "MinimumShowTime",  # a status light that stays up long enough to be seen
+
            "get_pixels_per_plotter_data_unit"]
 
 import logging
@@ -1314,6 +1316,61 @@ def add_toolbar_separator(*,
             return dpg.add_spacer(width=size, height=toolbar_extent, **kwargs)
         else:
             return dpg.add_spacer(width=toolbar_extent, height=size, **kwargs)
+
+# ---------------------------------------------------------------------------
+# Status lights
+# ---------------------------------------------------------------------------
+
+class MinimumShowTime:
+    """Show widgets at once, and hide each only after it has been shown for at least `min_duration` seconds.
+
+    For status lights whose work can be over in a frame or two: shown and hidden as the work goes, such a
+    light reads as a glitch rather than as a signal. `show(widget)` shows it, `hide(widget)` hides it — at
+    once if it has been up long enough, otherwise when it has. A `show` while a hide is pending cancels the
+    hide, so a light switched off and straight back on stays lit.
+
+    Any number of widgets; each is tracked separately. Callable from any thread, as DPG allows. A widget that
+    no longer exists when its delayed hide comes due is ignored.
+    """
+
+    def __init__(self, min_duration: float) -> None:
+        self.min_duration = min_duration
+        self._lock = threading.Lock()
+        self._shown_at: dict[str | int, float] = {}  # widget -> when it was shown, while shown
+        self._generation: dict[str | int, int] = {}  # widget -> counter a pending hide checks it still owns
+
+    def show(self, widget: str | int) -> None:
+        """Show `widget`, cancelling any hide pending for it."""
+        with self._lock:
+            self._generation[widget] = self._generation.get(widget, 0) + 1
+            if widget in self._shown_at:  # still up: keep the time it went up
+                return
+            self._shown_at[widget] = time.monotonic()
+        with nonexistent_ok():
+            dpg.show_item(widget)
+
+    def hide(self, widget: str | int) -> None:
+        """Hide `widget`, once it has been shown for at least the minimum."""
+        with self._lock:
+            if widget not in self._shown_at:
+                return
+            generation = self._generation.get(widget, 0)
+            remaining = self.min_duration - (time.monotonic() - self._shown_at[widget])
+        if remaining <= 0:
+            self._hide_if_still_wanted(widget, generation)
+        else:
+            timer = threading.Timer(remaining, self._hide_if_still_wanted, args=(widget, generation))
+            timer.daemon = True  # a pending hide must not hold the app open at exit
+            timer.start()
+
+    def _hide_if_still_wanted(self, widget: str | int, generation: int) -> None:
+        with self._lock:
+            if self._generation.get(widget, 0) != generation or widget not in self._shown_at:
+                return  # shown again since this hide was asked for
+            del self._shown_at[widget]
+        with nonexistent_ok():
+            dpg.hide_item(widget)
+
 
 # ---------------------------------------------------------------------------
 # Plotter utilities

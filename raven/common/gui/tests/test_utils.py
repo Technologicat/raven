@@ -598,3 +598,58 @@ class TestToggleCheckbox:
             guiutils.toggle_checkbox("test_toggle_checkbox_tagged")  # tag
             assert calls == [widget_id], "the callback was handed the tag rather than the numeric ID"
             dpg.delete_item(window)
+
+
+class TestMinimumShowTime:
+    """A status light stays up for the minimum, however soon its hide is asked for."""
+
+    MIN = 0.3
+
+    @pytest.fixture
+    def calls(self, monkeypatch):
+        """Record `show_item`/`hide_item` in place of drawing anything, so no DPG context is needed."""
+        calls = []
+        monkeypatch.setattr(guiutils.dpg, "show_item", lambda widget: calls.append(("show", widget)))
+        monkeypatch.setattr(guiutils.dpg, "hide_item", lambda widget: calls.append(("hide", widget)))
+        return calls
+
+    @staticmethod
+    def _wait_until(predicate, deadline: float) -> bool:
+        end = time.monotonic() + deadline
+        while time.monotonic() < end:
+            if predicate():
+                return True
+            time.sleep(0.01)
+        return predicate()
+
+    def test_an_early_hide_waits_out_the_minimum(self, calls):
+        hold = guiutils.MinimumShowTime(self.MIN)
+        t0 = time.monotonic()
+        hold.show("light")
+        hold.hide("light")
+        assert calls == [("show", "light")], "hidden at once, before the minimum"
+        assert self._wait_until(lambda: ("hide", "light") in calls, deadline=5.0), "never hidden"
+        assert time.monotonic() - t0 >= self.MIN
+
+    def test_a_late_hide_is_immediate(self, calls):
+        hold = guiutils.MinimumShowTime(0.0)
+        hold.show("light")
+        hold.hide("light")
+        assert calls == [("show", "light"), ("hide", "light")]
+
+    def test_showing_again_cancels_a_pending_hide(self, calls):
+        hold = guiutils.MinimumShowTime(self.MIN)
+        hold.show("light")
+        hold.hide("light")
+        hold.show("light")
+        time.sleep(self.MIN + 0.3)  # past when the cancelled hide would have fired
+        assert calls == [("show", "light")], "the cancelled hide fired, or the light was shown twice"
+
+    def test_lights_are_independent(self, calls):
+        hold = guiutils.MinimumShowTime(self.MIN)
+        hold.show("a")
+        hold.show("b")
+        hold.hide("a")
+        hold.show("b")  # must not cancel `a`'s pending hide
+        assert self._wait_until(lambda: ("hide", "a") in calls, deadline=5.0)
+        assert ("hide", "b") not in calls
