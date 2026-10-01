@@ -379,7 +379,10 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        datastore's `generation_metadata`. Tomorrow: run the same prompts on Qwen 3.6 27B (dense) to tell
        dense from MoE apart from 3.6 against 3.8; see whether prefill speed can be tuned in LM Studio or is
        fixed by the model; and check whether the backend's `usage` reports a prompt token count, which may be
-       worth saving per node.
+       worth saving per node. The count is a property of the generation, so the chat tree's branching does
+       not argue against it. The full prompt is not worth storing, since the conversation part rebuilds from
+       the node's path; what does not rebuild is what was injected (RAG matches, already stored) and which
+       tools were enabled (a runtime flag, not part of the system prompt), so see what can be done there.
    - **Costed: stage reporting for the web tools**, as DOCUMENTS has (maintainer's idea). M,
      about half a day. `server.util.stream_job` sends one JSON result after a leading space; it would send
      newline-separated records, progress lines and then the result, the job reporting through a callback;
