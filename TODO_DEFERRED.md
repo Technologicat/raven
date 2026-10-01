@@ -1530,7 +1530,7 @@ ones.
 
 ## Rename the distribution to `raven-lab` — before the first PyPI upload, not after
 
-*Cluster: ? · Cost: S · Gate: 0.2.10, and hard-blocking the first PyPI upload · Filed: 2026-08-14*
+*Cluster: ? · Cost: S · Gate: 0.2.11, and hard-blocking the first PyPI upload · Filed: 2026-08-14*
 
 `pyproject.toml` still says `name = "raven-visualizer"`. The name was **settled on 2026-08-12** — the
 distribution is `raven-lab`, the import package stays `raven` — but that decision was recorded in
@@ -1862,7 +1862,7 @@ shape: move the side-effecting import behind the seam that already exists.
 
 ## Audit what the built wheel actually contains
 
-*Cluster: ? · Cost: S · Gate: 0.2.10, with the first PyPI upload · Filed: 2026-08-12*
+*Cluster: ? · Cost: S · Gate: 0.2.11, with the first PyPI upload · Filed: 2026-08-12*
 
 **The 83% case is fixed** (2026-08-12): `**/00_workfiles` is excluded, taking the wheel from **107 MB to
 14.4 MB**, 7.5× smaller. Those were editing masters — GIMP `.xcf`, source SVG, camera originals — which
@@ -2309,7 +2309,7 @@ add a finish event").
 
 ## Holding the chat view's scrollbar does not hold your place while a reply streams
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-08-03*
+*Cluster: ? · Cost: ? · Gate: 0.2.11 at the earliest; not serious · Filed: 2026-08-03*
 
 `raven/librarian/chat_controller.py` plus a new per-frame hook, probably in
 `raven/common/gui/animation.py`. Grab the scrollbar mid-reply and hold it: the view creeps downward, roughly
@@ -3058,7 +3058,7 @@ Discovered while fixing the zero-segment TTS crash (2026-07-28, reported by Juha
 
 ## The licensing story is accurate only in a subdirectory README
 
-*Cluster: discoverability · Cost: ? · Gate: 0.2.10, with the first PyPI upload · Filed: 2026-08-03 · See also: "Rename the distribution to `raven-lab`" (which carries the naming decision)*
+*Cluster: discoverability · Cost: ? · Gate: 0.2.10 if it fits, else 0.2.11; resolve soon, upload or not · Filed: 2026-08-03 · See also: "Rename the distribution to `raven-lab`" (which carries the naming decision)*
 
 Raven ships under **three** licences, and none of the three places a reader would look says so. Verified in
 the tree 2026-08-03:
@@ -3478,7 +3478,7 @@ Discovered during raven-cherrypick loader pipeline design.
 
 ## Consolidate remaining numpy/tensor/DPG image conversions
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10 if it fits · Filed: 2026-03-20 · See also: "Move the avatar backdrop onto `image.utils.fit_cover`"*
+*Cluster: ? · Cost: ? · Gate: 0.2.11 at the earliest · Filed: 2026-03-20 · See also: "Move the avatar backdrop onto `image.utils.fit_cover`"*
 
 `raven/common/image/utils.py` provides canonical `np_to_tensor`, `tensor_to_np`, `tensor_to_dpg_flat`. The `imagefx.py` conversions have been migrated. Remaining sites have intentional differences that make direct replacement impractical:
 
@@ -3536,7 +3536,7 @@ Discovered during raven-cherrypick test drive.
 
 ## Preload cache: 16MP image optimization
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10, if it measurably helps · Filed: 2026-03-19*
+*Cluster: ? · Cost: ? · Gate: later; Cherrypick works fine for now · Filed: 2026-03-19*
 
 With 16MP images (4624×3472), each cached mipchain is ~342MB as flat arrays. The current 1500MB budget fits only ~4 images, causing most preloads to be dropped after doing the full GPU work (wasted ~530ms each, with GPU contention degrading frame times to ~90ms).
 
@@ -3562,7 +3562,7 @@ Discovered during raven-cherrypick preload performance session.
 
 ## raven-cherrypick: further reduce idle CPU/GPU load
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-03-19*
+*Cluster: ? · Cost: ? · Gate: later; Cherrypick works fine for now · Filed: 2026-03-19*
 
 Idle throttle (2026-04-05) reduced CPU load from ~80% to ~20% of one core by sleeping ~80ms between frames when nothing needs updating. The remaining ~20% is the floor cost of `render_dearpygui_frame()` at ~12fps — ImGui resubmits the entire UI each call. Further reduction options: adaptive sleep ramp (80ms → 500ms over ~5s idle, snap back on input), or skipping `render_dearpygui_frame()` entirely (risky — event processing is tied to the render call).
 
@@ -3602,7 +3602,7 @@ Adjacent but distinct: "raven-cherrypick: low FPS with large images" is about th
 
 ## raven-cherrypick: low FPS with large images
 
-*Cluster: ? · Cost: ? · Gate: investigate in 0.2.10 · Filed: 2026-03-28*
+*Cluster: ? · Cost: ? · Gate: later; Cherrypick works fine for now · Filed: 2026-03-28*
 
 With large images (e.g. 4247×891, 5203×1313), steady-state FPS drops to 10–15 (66ms/frame) compared to ~30 FPS for 1MP images. DPG metrics show the bottleneck is in presentation/rendering, not input routing. Likely causes:
 
@@ -4660,7 +4660,7 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 ## Cherrypick: zoom-in doesn't upgrade already-cached preload neighbors
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10 if time, else next · Filed: 2026-06-09*
+*Cluster: ? · Cost: ? · Gate: later; Cherrypick works fine for now · Filed: 2026-06-09*
 
 The preload cap is adaptive to the current zoom (`raven.common.image.lanczos.mip_scale_for_zoom`): `schedule_neighbors` prefetches each neighbor at the smallest mip that displays crisply at the zoom in effect when it runs. But an already-cached neighbor is skipped (`if idx in self._cache: continue`), so if the user zooms *in* after a neighbor was cached at a smaller scale, that entry keeps its now-too-small mips. The first navigation to it then triggers the on-arrival augment (a one-time re-sharpen); take/donate cycles heal it thereafter.
 
@@ -4767,7 +4767,7 @@ data folder" button making the single-store design visible).
 
 ## Colorblind-safe status signaling (ok/error flashes distinguished by color alone)
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-17*
+*Cluster: ? · Cost: ? · Gate: 0.2.11 · Filed: 2026-07-17*
 
 `animation.flash_button(ok=...)` (and, more broadly, Raven's flash/highlight vocabulary) conveys success vs.
 failure by *color alone* — green for ok, red for error. That's invisible to the ~8% of men with red–green
@@ -5302,7 +5302,7 @@ those tracks, which will otherwise each build half of it differently.
 
 ## No way for the user to attach a document from a URL
 
-*Cluster: document-ingestion · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: 0.2.11 · Filed: 2026-07-29*
 
 The attach button takes a local file. There is no affordance for "attach *this URL* as a document to my
 message", even though the storage layer was designed expecting one: `sidecarstore.base_provenance` names
@@ -5818,7 +5818,10 @@ Raised while adding HTML support (2026-07-29, Juha's example).
 
 ## Rendering LaTeX equations in the chat log
 
-*Cluster: markdown-renderer · Cost: ? · Gate: 0.2.10 · Filed: 2026-07-29 · See also: `briefs/markdown-block-rendering-brief.md`*
+*Cluster: markdown-renderer · Cost: ? · Gate: with the Markdown renderer work, likely 0.2.11 · Filed: 2026-07-29 · See also: `briefs/markdown-block-rendering-brief.md`*
+
+**Important for discussing scientific topics** (maintainer, 2026-10-01): Qwen often writes numbers in scientific
+notation as inline dollar-sign LaTeX, so this is not only about equations.
 
 Models emit LaTeX — `$...$`, `$$...$$`, `\begin{equation}` — whenever the subject is mathematical, and Librarian
 currently shows it as source. For a research assistant aimed at scientific work this is the wrong way round: the
@@ -6001,7 +6004,7 @@ Noticed 2026-08-04 while bumping the `dearpygui` floor and finding `pdm lock` pr
 
 ## The docs DB stores each document's full text *and* its chunks, both in the JSON
 
-*Cluster: ? · Cost: ? · Gate: 0.2.10, resolve soon · Filed: 2026-08-04 · See also: "Version the chat datastore file …", "Datastore scaling …"*
+*Cluster: ? · Cost: ? · Gate: brief 12 and the DB work · Filed: 2026-08-04 · See also: "Version the chat datastore file …", "Datastore scaling …"*
 
 `HybridIR`'s `fulldocs/data.json` holds, per document, a `"text"` field (`# copy of original text as-is`,
 `hybridir.py`) and a `"chunks"` list whose entries each carry their own `"text"`. The chunks are slices of the
@@ -6453,7 +6456,7 @@ Discovered while fixing the cancelled-reroll case (2026-08-27).
 
 ## Re-test whether `reasoning_effort` makes Qwen 3.8 usable interactively
 
-*Cluster: llm-backends · Cost: S · Gate: 0.2.10 or `next` — needs the maintainer at the keyboard · Filed: 2026-08-27*
+*Cluster: llm-backends · Cost: S · Gate: 0.2.10 — needs the maintainer at the keyboard · Filed: 2026-08-27*
 
 Qwen 3.8 thinks for so long that it is unusable for interactive chat, and `reasoning_effort: "none"` is the
 lever meant to fix that. Whether it works is still unknown, because the test that said it did not was itself
