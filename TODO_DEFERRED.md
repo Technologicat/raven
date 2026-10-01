@@ -1848,14 +1848,29 @@ crash at document 2400 restarts from zero. Building reconnect on its own would p
 beside the one that brief exists to unify. Same class as *A crash during ingest loses the whole run*: long
 batch runs with no durability, and one resume mechanism answers both.
 
-## `chat_controller` is not importable without spaCy
+## `chat_controller` is not importable without the ML stack
 
-*Cluster: ? · Cost: S · Gate: 0.2.10 · Filed: 2026-08-12*
+*Cluster: dependency-hygiene · Cost: M, possibly L · Gate: 0.2.11, moved off 0.2.10 once measured (maintainer, 2026-10-01) · Filed: 2026-08-12*
 
-**The chain, traced 2026-10-01:** `chat_controller` → `raven.client.api`, which imports spaCy at module
-level for one return annotation and `nlptools` (spaCy again) for one call, `deserialize_spacy_docs`. Both
-can move inside the function. `mayberemote` and `hybridir` also import `nlptools` at module level, so there
-may be one or two more links behind the first; still S.
+**Measured 2026-10-01, and spaCy is one link of many.** Importing `chat_controller` with every package CI
+lacks replaced by a stand-in module recorded which Raven modules import each one at module level:
+
+| Raven module | packages CI does not install |
+|---|---|
+| `librarian/hybridir.py` | `bm25s`, `chromadb`, `watchdog` |
+| `common/nlptools.py` | `spacy`, `flair`, `transformers`, `sentence_transformers`, `emoji` |
+| `client/api.py` | `spacy` (one return annotation; `nlptools` for `deserialize_spacy_docs`) |
+| `common/audio/speech/tts.py` | `kokoro` |
+| `common/audio/codec.py` | `av` |
+| `common/audio/player.py` | `pygame` |
+| `common/hfutil.py` | `huggingface_hub` |
+| `vendor/tha3/util.py` | `matplotlib` |
+
+**A lower bound**: the probe stopped at an annotation its stand-ins could not evaluate, so links further
+down are unseen. Without stand-ins the first failure is `hybridir`'s `watchdog`. Each fix is an import moved
+behind the function that uses it, and each such move risks breaking something that relied on the import
+having happened, which is what makes this a sweep rather than one change. The gain is CI coverage for
+`test_chat_controller.py`; nothing user-visible.
 
 Same anti-pattern as the just-completed *Lazy `api.initialize` in `llmclient` and `hybridir`*, one layer up:
 `chat_controller` reaches the full ML stack through the avatar client, so `test_chat_controller.py` has to
