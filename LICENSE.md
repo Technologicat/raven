@@ -1,3 +1,6 @@
+This license covers Raven except where a file or directory says otherwise. The parts under other
+licenses are listed in the README's [License](README.md#license) section.
+
 Copyright (c) 2024, Juha Jeronen and Jamk University of Applied Sciences. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

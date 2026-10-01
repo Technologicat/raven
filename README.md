@@ -897,7 +897,16 @@ However, at your choice, Raven should be able to connect to an OpenAI-compatible
 
 # License
 
-[2-clause BSD](LICENSE.md).
+Everything in Raven is open source, under several licenses:
+
+- **2-clause BSD** ([`LICENSE.md`](LICENSE.md)): everything not listed below.
+- **AGPL-3.0-only**: `raven.server`, which is all server-side code including the avatar service ([`raven/server/LICENSE`](raven/server/LICENSE)), and `raven.avatar.pose_editor` ([`raven/avatar/pose_editor/LICENSE`](raven/avatar/pose_editor/LICENSE)). These derive from *SillyTavern-extras*, and keep its license.
+- **MIT**: `raven.common.video.upscaler`, matching the Anime4K engine it uses.
+- **LGPL-3.0-or-later** ([`raven/common/gui/xdotwidget/LICENSE`](raven/common/gui/xdotwidget/LICENSE)): `raven.common.gui.xdotwidget`, which derives from *xdottir* and through it from Jose Fonseca's `xdot.py`. Its ColorBrewer color schemes carry [their own license](raven/common/gui/xdotwidget/LICENSE_colorbrewer_color_schemes).
+- **CC-BY-SA 4.0**: the image assets original to *Raven-avatar*, in [`raven/avatar/assets/`](raven/avatar/assets/).
+- **Code adopted from other projects**, in [`raven/vendor/`](raven/vendor/), keeps the licenses it arrived under. See [`raven/vendor/README.md`](raven/vendor/README.md).
+
+**For contributors**: a BSD-licensed module must not import anything from an AGPL-licensed one. The reverse is allowed, the AGPL module then using the BSD code under the BSD license. This is why some avatar-related code lives in `raven.common`.
 
 
 # Acknowledgements
