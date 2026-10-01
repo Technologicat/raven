@@ -4,6 +4,10 @@
 notes. Decided: the direction — a user installs once and then starts Raven from a launcher. Open: most of
 the mechanism, and three things to probe before anything is designed on top of them.
 
+**What forces it is the pilot users** (maintainer, 2026-10-01): today each one who wants to pilot Raven
+costs an on-site support visit, to install it and again to upgrade it. The lab installation benefits too,
+but it is not the driver.
+
 ## What it takes today
 
 Installing:
