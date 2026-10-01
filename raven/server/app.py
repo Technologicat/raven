@@ -1334,7 +1334,9 @@ def api_translate():
         abort(400, 'api_translate: "target_lang" must be a string')
 
     try:
-        logger.debug(f"api_translate: {len(text)} characters, {source_lang} -> {target_lang}")
+        nitems = 1 if isinstance(text, str) else len(text)
+        nchars = len(text) if isinstance(text, str) else sum(len(item) for item in text)
+        logger.debug(f"api_translate: {nitems} item{'s' if nitems != 1 else ''}, {nchars} characters, {source_lang} -> {target_lang}")
         translation = translate.translate_text(text=text,
                                                source_lang=source_lang,
                                                target_lang=target_lang)
@@ -1771,7 +1773,7 @@ def init_server_modules():  # keep global namespace clean
             spacy_device_string = natlang_record["device_string"]
             print(f"Initializing {Fore.GREEN}{Style.BRIGHT}{module_name}{Style.RESET_ALL}: reusing {Fore.GREEN}{Style.BRIGHT}natlang{Style.RESET_ALL}'s already loaded spaCy on device '{Fore.GREEN}{Style.BRIGHT}{spacy_device_string}{Style.RESET_ALL}'")
         else:
-            print("Initializing: {Fore.GREEN}{Style.BRIGHT}{module_name}{Style.RESET_ALL}: natlang not enabled, loading spaCy on device '{Fore.GREEN}{Style.BRIGHT}cpu{Style.RESET_ALL}'")
+            print(f"Initializing {Fore.GREEN}{Style.BRIGHT}{module_name}{Style.RESET_ALL}: natlang not enabled, loading spaCy on device '{Fore.GREEN}{Style.BRIGHT}cpu{Style.RESET_ALL}'")
             spacy_device_string = "cpu"
         return spacy_device_string
 
