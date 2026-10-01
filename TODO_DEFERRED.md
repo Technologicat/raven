@@ -5473,6 +5473,17 @@ no way to know it is looking at a format it does not understand, and will happil
 data with the newer fields dropped. Refusing to open — or opening read-only with a clear message — is the whole
 reason to have a version number rather than just a migration marker.
 
+## Librarian's status indicators live on the avatar, and vanish with it
+
+*Cluster: ? · Cost: ? · Gate: a decision on where they go · Filed: 2026-10-01 · See also: "A no-avatar mode, with the chat tree in the panel the avatar vacates"*
+
+INDEXING, DOCUMENTS, INTERNET and their siblings are drawn over the avatar's panel, so they are hidden
+whenever something else occupies the right pane — the chat graph, or nothing once the avatar's idle timeout
+switches it off. Seen live on 2026-10-01: an index migration's progress line disappeared when the avatar went
+to sleep. They need a home that does not depend on the pane's occupant (maintainer, 2026-10-01). Candidates:
+a status strip of their own above the right pane; the bottom toolbar, beside the context-fill readout; or
+the pane's header row.
+
 ## A no-avatar mode, with the chat tree in the panel the avatar vacates
 
 *Cluster: panel occupancy · Cost: L · Gate: how the setup of Librarian as a virtual coworker in the lab proceeds — that is the actual use case (maintainer, 2026-09-30) · Filed: 2026-07-29 · See also: `briefs/done/researchers-night/done/16_chat-graph-view-brief.md`*
