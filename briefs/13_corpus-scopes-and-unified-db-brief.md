@@ -356,7 +356,8 @@ now each want the DB behind Raven-server:
 - the DB lock, so several apps can share it (above);
 - offline processing at import, which needs something that outlives the apps (below);
 - the web status panel for long jobs (`TODO_DEFERRED.md`, "Web status panel"), whose natural home is the
-  server, since that is where the jobs would run;
+  server, since that is where the jobs would run — and the server already serves HTML to a browser: `GET /`
+  renders its README as the index page;
 - a launcher that starts Raven-server alone for background import processing
   (`briefs/design/install-and-first-run-sketch.md`).
 
