@@ -15,7 +15,8 @@ laptops have enough RAM for this not to be an issue with the dataset sizes neede
 QwQ-32B wrote a very first initial rough draft outline, from which this was then manually coded.
 """
 
-__all__ = ["format_chunk_full_id",
+__all__ = ["keyword_tokens",
+           "format_chunk_full_id",
            "split_into_subqueries",
            "score_sharpness",
            "reciprocal_rank_fusion",
@@ -42,7 +43,7 @@ import os
 import pathlib
 import re
 import threading
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Container, Dict, List, Optional, Tuple, Union
 import uuid
 
 import watchdog.events
@@ -93,6 +94,34 @@ from . import config as librarian_config
 # `_prepare_document_for_indexing`) while keeping the per-document progress report updating a few times
 # a second on a large document. At ~10 ms/chunk batched, 64 chunks is roughly 0.6 s per update.
 TOKENIZE_BATCH_SIZE = 64
+
+# Which `_tokenize_many` produced a datastore's stored tokens. Bump it whenever that function changes what it
+# emits: the query side and the index side must tokenize alike, or keyword search stops matching while still
+# returning results, so a datastore stamped with another version is re-tokenized when it is opened. A
+# datastore saved before the stamp existed counts as version 1.
+TOKENIZER_VERSION = 2
+
+
+def keyword_tokens(doc: Any, stopwords: Container[str]) -> List[str]:
+    """The keyword-search tokens of one analyzed text: each word's lemma, plus its surface form where they differ.
+
+    `doc`: a spaCy `Doc` of the text, lowercased.
+    `stopwords`: words to drop, compared against the surface form.
+
+    A word counts if it is alphabetic, numeric, or alphanumeric with a digit in it — so "2024", "3.5", "qwen3"
+    and "h2o" are kept, while punctuation and symbols are not. See `HybridIR._tokenize` for why both forms.
+    """
+    tokens = []
+    for token in doc:
+        text = token.text
+        if text in stopwords:
+            continue
+        if not (token.is_alpha or token.like_num or (text.isalnum() and any(c.isdigit() for c in text))):
+            continue
+        tokens.append(token.lemma_)
+        if token.lemma_ != text:
+            tokens.append(text)
+    return tokens
 
 
 def format_chunk_full_id(document_id: str, chunk_id: str) -> str:
@@ -455,7 +484,7 @@ class HybridIR:
 
         # Load the main datastore. We use this to rebuild the BM25 index when documents are added/updated/deleted.
         # Note `self.documents` is technically part of the public API.
-        stored_embedding_model_name, stored_documents = self._load_datastore()
+        stored_embedding_model_name, stored_tokenizer_version, stored_documents = self._load_datastore()
         if stored_embedding_model_name is not None:  # load successful?
             if embedding_model_name != stored_embedding_model_name:
                 logger.warning(f"HybridIR.__init__: Existing datastore at '{str(self.fulldocs_path)}' was created with embedding model '{stored_embedding_model_name}', which is different from the requested '{embedding_model_name}'. Using the datastore's model.")
@@ -476,6 +505,11 @@ class HybridIR:
                                    device_string=client_config.devices["nlp"]["device_string"])
 
         self._stopwords = nlptools.default_stopwords
+
+        # Before the keyword index is loaded: it is built from the stored tokens, so it must not be read while
+        # they are stale.
+        if self.documents and stored_tokenizer_version != TOKENIZER_VERSION:
+            self._retokenize_all(stored_tokenizer_version)
 
         # Semantic search: ChromaDB vector storage
         # ChromaDB persists data automatically when we use the `PersistentClient`
@@ -626,9 +660,13 @@ class HybridIR:
         itself a guess: spaCy's tagger is a neural model reading context, and a name that lands where an
         adjective would fit gets treated as one. "Elsevier" at the end of a copyright line is tagged ADJ
         and lemmatized to "elsevi", as though it were the comparative of "elsevi" (spaCy 3.8.14,
-        en_core_web_sm 3.8.0; the lowercasing above makes no difference - it is the syntactic position that
-        decides). So an unusual proper noun may or may not survive tokenization, and a keyword search for
-        one is correspondingly a little lossy.
+        en_core_web_sm 3.8.0; lowercasing makes no difference - it is the syntactic position that decides).
+
+        So each word contributes its lemma, and also its surface form where the two differ. "Elsevier" gives
+        "elsevi" and "elsevier", and so does a query typed as "elsevier", so the name matches itself however
+        the lemmatizer reads it; "larger" gives "large" and "larger", so a search for "large" still finds it.
+        Numbers and alphanumeric words are kept too ("2024", "qwen3", "h2o"). Stopwords and punctuation are
+        dropped.
         """
         return self._tokenize_many([text])[0]
 
@@ -648,9 +686,39 @@ class HybridIR:
             return []
         docs = self.nlp.analyze([text.lower() for text in texts])
         assert len(docs) == len(texts)
-        return [[token.lemma_ for token in doc
-                 if token.is_alpha and token.text not in self._stopwords]
-                for doc in docs]
+        return [keyword_tokens(doc, self._stopwords) for doc in docs]
+
+    def _retokenize_all(self, stored_tokenizer_version: int) -> None:
+        """Tokenize every stored chunk again with the current tokenizer, and save the datastore.
+
+        For a datastore made by an older `_tokenize_many`. Costs a tokenization pass over the whole corpus —
+        the slow step of indexing — so a large corpus takes a while, once.
+        """
+        with self.datastore_lock:
+            n_docs = len(self.documents)
+            plural_s = "s" if n_docs != 1 else ""
+            logger.info(f"HybridIR._retokenize_all: datastore at '{str(self.fulldocs_path)}' was tokenized by "
+                        f"version {stored_tokenizer_version}, current is {TOKENIZER_VERSION}. Re-tokenizing "
+                        f"{n_docs} document{plural_s}; this may take a while.")
+            # Batched across documents, not per document: most documents are a few chunks long, and a
+            # per-document batch would pay the server round trip for every three or so chunks.
+            docs = list(self.documents.values())
+            texts = [chunk["text"] for doc in docs for chunk in doc["chunks"]]
+            tokens = []
+            for start in range(0, len(texts), TOKENIZE_BATCH_SIZE):
+                tokens.extend(self._tokenize_many(texts[start:start + TOKENIZE_BATCH_SIZE]))
+                done = min(start + TOKENIZE_BATCH_SIZE, len(texts))
+                if (start // TOKENIZE_BATCH_SIZE) % 20 == 0 or done == len(texts):
+                    logger.info(f"HybridIR._retokenize_all: {done} / {len(texts)} chunks")
+            position = 0
+            for doc in docs:
+                n_chunks = len(doc["chunks"])
+                doc["tokens"] = tokens[position:position + n_chunks]
+                position += n_chunks
+            self._save_datastore()
+            # The keyword index on disk was built from the old tokens. Rebuilding it here saves the new one,
+            # which `__init__` then loads.
+            self._rebuild_keyword_search_index()
 
     def _stat(self, path: Union[pathlib.Path, str]) -> Dict:  # size, mtime
         p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
@@ -917,6 +985,7 @@ class HybridIR:
                 embeddings.append(tempdoc.pop("embeddings"))
                 documents_without_embeddings[document_id] = tempdoc
             data = {"embedding_model_name": self.embedding_model_name,
+                    "tokenizer_version": TOKENIZER_VERSION,
                     "documents": documents_without_embeddings}
 
             logger.info("HybridIR._save_datastore: Saving...")
@@ -933,13 +1002,15 @@ class HybridIR:
 
         logger.info("HybridIR._save_datastore: exiting, all done.")
 
-    def _load_datastore(self) -> Tuple[Optional[str], Optional[str]]:
+    def _load_datastore(self) -> Tuple[Optional[str], Optional[int], Optional[Dict]]:
+        """Return `(embedding_model_name, tokenizer_version, documents)`, or three `None`s if there is no datastore."""
         logger.info("HybridIR._load_datastore: entered.")
         with self.datastore_lock:
             try:
                 with open(self.fulldocs_documents_file, "r", encoding="utf-8") as json_file:
                     data = json.load(json_file)
                 stored_embedding_model_name = data["embedding_model_name"]
+                stored_tokenizer_version = data.get("tokenizer_version", 1)  # absent before version 2
                 documents = data["documents"]
 
                 # documents: {"document_id0": {...}, },  arrs: {"arr_0": np.array, ...};
@@ -950,10 +1021,10 @@ class HybridIR:
 
                 plural_s = "s" if len(documents) != 1 else ""
                 logger.info(f"HybridIR._load_datastore: Loaded datastore with embedding model '{stored_embedding_model_name}' from '{str(self.fulldocs_path)}' ({len(documents)} document{plural_s}).")
-                return stored_embedding_model_name, documents
+                return stored_embedding_model_name, stored_tokenizer_version, documents
             except Exception:  # likely datastore not created yet
                 logger.warning(f"HybridIR._load_datastore: While loading datastore from '{str(self.fulldocs_path)}'", exc_info=True)
-                return None, None
+                return None, None, None
 
     # TODO: support other media such as images (semantic embedding via `clip-ViT-L-14`, available in `sentence_transformers`; and keyword extraction by CLIP/Deepbooru)
     def _prepare_document_for_indexing(self, doc: Dict, on_progress: Optional[Callable[[str], None]] = None) -> Dict:

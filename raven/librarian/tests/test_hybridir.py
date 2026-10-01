@@ -918,3 +918,109 @@ class TestIndexLock:
         with pytest.raises(hybridir.datastorelock.DatastoreBusyError):
             hybridir.setup(docs_dir=tmp_path / "docs", recursive=False, db_dir=tmp_path / "index")
         assert built == [], "the store was opened before the lock was checked, wasting the expensive load"
+
+
+# ---------------------------------------------------------------------------
+# Keyword tokens, and re-tokenizing a datastore made by an older tokenizer
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def nlp():
+    """spaCy's small English model, loaded in-process."""
+    spacy = pytest.importorskip("spacy")
+    try:
+        return spacy.load("en_core_web_sm")
+    except OSError:
+        pytest.skip("en_core_web_sm not installed")
+
+
+@pytest.mark.ml
+class TestKeywordTokens:
+    """On the real tagger, since its mistakes are the reason for the rule."""
+
+    def tokens(self, nlp, text):
+        from raven.common import nlptools
+        return hybridir.keyword_tokens(nlp(text.lower()), nlptools.default_stopwords)
+
+    def test_a_name_the_lemmatizer_mangles_still_matches_itself(self, nlp):
+        tokens = self.tokens(nlp, "Copyright © 2024 Elsevier")
+        assert "elsevi" in tokens, "the tagger no longer mangles this name, so this test cannot show the remedy"
+        assert "elsevier" in tokens
+        assert "elsevier" in self.tokens(nlp, "elsevier"), "a query for the name must carry the same token"
+
+    def test_an_inflected_word_matches_its_base_form(self, nlp):
+        tokens = self.tokens(nlp, "larger samples")
+        assert {"large", "larger", "sample", "samples"} <= set(tokens)
+        assert "large" in self.tokens(nlp, "large"), "a query for the base form must carry the lemma"
+
+    def test_numbers_and_alphanumeric_words_are_kept(self, nlp):
+        tokens = self.tokens(nlp, "We used Qwen3 with H2O at 300 K in 2024.")
+        assert {"qwen3", "h2o", "300", "2024"} <= set(tokens)
+
+    def test_stopwords_and_punctuation_are_dropped(self, nlp):
+        tokens = self.tokens(nlp, "We used it, with the effect.")
+        assert not {"we", "it", "with", "the", ",", "."} & set(tokens)
+        assert "effect" in tokens
+
+
+class TestRetokenizeOnOpen:
+    def _build(self, path):
+        ret = hybridir.HybridIR(datastore_base_dir=path,
+                                embedding_model_name="sentence-transformers/multi-qa-mpnet-base-cos-v1",
+                                local_model_loader_fallback=True)
+        return ret
+
+    def test_a_datastore_from_an_older_tokenizer_is_retokenized(self, tmp_path, client_api_initialized):
+        import json
+        ret = self._build(tmp_path)
+        ret.add(document_id="paper", path="<test>", text="Published by Elsevier in 2024, about Qwen3 and H2O.")
+        ret.commit()
+        data_file = ret.fulldocs_documents_file
+
+        # Make it look like a datastore saved before the stamp: no version, and the old tokens.
+        data = json.loads(data_file.read_text(encoding="utf-8"))
+        assert data["tokenizer_version"] == hybridir.TOKENIZER_VERSION, "a fresh save is stamped"
+        del data["tokenizer_version"]
+        data["documents"]["paper"]["tokens"] = [["stale"]]
+        data_file.write_text(json.dumps(data), encoding="utf-8")
+
+        reopened = self._build(tmp_path)
+
+        tokens = reopened.documents["paper"]["tokens"][0]
+        assert tokens != ["stale"], "the datastore was opened without being re-tokenized"
+        assert {"elsevier", "2024", "qwen3", "h2o"} <= set(tokens)
+        saved = json.loads(data_file.read_text(encoding="utf-8"))
+        assert saved["tokenizer_version"] == hybridir.TOKENIZER_VERSION, "the migration was not saved"
+        assert saved["documents"]["paper"]["tokens"][0] == tokens
+
+    def test_each_document_gets_its_own_tokens_back(self, tmp_path, client_api_initialized, monkeypatch):
+        """Re-tokenizing batches across documents, so the tokens have to be dealt back out per document."""
+        import json
+        ret = self._build(tmp_path)
+        texts = {"a": "Elsevier published it.", "b": "Photocatalysis splits water.", "c": "Qwen3 answered."}
+        for doc_id, text in texts.items():
+            ret.add(document_id=doc_id, path="<test>", text=text)
+        ret.commit()
+        data = json.loads(ret.fulldocs_documents_file.read_text(encoding="utf-8"))
+        del data["tokenizer_version"]
+        ret.fulldocs_documents_file.write_text(json.dumps(data), encoding="utf-8")
+
+        monkeypatch.setattr(hybridir, "TOKENIZE_BATCH_SIZE", 2)  # so that batches straddle documents
+        reopened = self._build(tmp_path)
+
+        expected = {"a": "elsevier", "b": "photocatalysis", "c": "qwen3"}
+        for doc_id, word in expected.items():
+            own = set(reopened.documents[doc_id]["tokens"][0])
+            others = {w for other, w in expected.items() if other != doc_id}
+            assert word in own, f"document {doc_id!r} lost its own tokens"
+            assert not (others & own), f"document {doc_id!r} was given another document's tokens"
+
+    def test_a_current_datastore_is_not_retokenized(self, tmp_path, client_api_initialized, monkeypatch):
+        ret = self._build(tmp_path)
+        ret.add(document_id="paper", path="<test>", text="Published by Elsevier.")
+        ret.commit()
+
+        calls = []
+        monkeypatch.setattr(hybridir.HybridIR, "_retokenize_all", lambda self, version: calls.append(version))
+        self._build(tmp_path)
+        assert calls == [], "a datastore already at the current version paid for a re-tokenization"
