@@ -352,6 +352,24 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        dotclaude deferred list.
    - **Re-gated to 0.2.11**: `chat_controller` without the ML stack, measured as an M sweep across five or six
      modules rather than one import.
-   - **Still to do for 0.2.10**, needing the GUI or the maintainer: the "approve denied host" button, the
-     backdrop onto `fit_cover`, Cherrypick's crown-in-compare, the thumbnail grid's textures, the
-     `reasoning_effort` re-test and the tool-call budget probe.
+   - **Later the same day**: the "approve denied host" button moved under the refused result (the place
+     brief 03 was to make for it never came, tool results having stayed messages of their own); the parallel
+     tool calls, checked headless and live; DOCUMENTS lighting for the model's own document searches, which
+     it never had; every indicator up for at least half a second, DOCUMENTS ending on *Done*; a local
+     `pytest` running the repository checks; the coverage omit for `app.py`. Filed: the `app.py` audit,
+     with the maintainer's calls per finding, and the re-measured coverage, ranked.
+     - **Live testing of parallel calls needs a prompt the automatic search cannot have answered.** Asked to
+       search the documents and the web in one message, Qwen 3.8 called only `websearch`, the automatic
+       search having already filled the prompt with matches; asked to search the documents *for papers by
+       authors from Finland*, it called both. For seeing the overlap, the document tool was slowed by 3 s
+       through the REPL.
+     - **Structured fields at import** (affiliations, for filtering) went into the per-document pass brief as
+       its ninth user, from Qwen 3.8 noticing that the search matches keywords and does no structured
+       affiliation filtering.
+   - **Open, from the end of the day**: whether to build the dotted-name reference checker (backquoted
+     `a.b.c` in docstrings, comments and Markdown resolving to real definitions, the maintainer's concern
+     being renames and moves) now or after 0.2.10, and where it is filed; and whether Qwen 3.8's prompt
+     processing, much slower than 3.6's (maintainer), wants recording beside the `reasoning_effort` re-test.
+   - **Still to do for 0.2.10**, needing the GUI or the maintainer: the backdrop onto `fit_cover`,
+     Cherrypick's crown-in-compare, the thumbnail grid's textures, the `reasoning_effort` re-test and the
+     tool-call budget probe.
