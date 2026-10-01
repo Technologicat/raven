@@ -118,7 +118,8 @@
 - **Resizing the window no longer makes the avatar flicker.** Each change of size briefly showed a stretched copy of the last frame, then the old size again, before the new one.
 - **Keyword search in the knowledge base now finds numbers, model names and some proper names it used to miss.**
   - In v0.2.9 numbers and words containing digits (`2024`, `Qwen3`, `H2O`) were left out of the keyword index altogether, and some names were indexed under a mangled form (`Elsevier` as `elsevi`), so searching for them found nothing through keywords. The semantic half of the search was not affected.
-  - Each knowledge base is re-indexed the first time it is opened after upgrading, which takes a while on a large one. Nothing in it is lost. To do it ahead of time, run `raven-indexer`. For a knowledge base other than the configured one, give it both that knowledge base's documents directory and, with `-d`, its index directory: the indexer makes the index match the documents directory it is given, so pairing an index with the wrong one removes documents from it.
+  - A number written as a subscript or superscript now matches its plain spelling, so a search for `H2O` finds `H₂O` and one for `m2` finds `m²`, as in the Visualizer's search.
+  - Each knowledge base is re-indexed the first time it is opened after upgrading, which takes seconds for a small one and can take tens of minutes for a large full-text one. Nothing in it is lost. To do it ahead of time, run `raven-indexer`. For a knowledge base other than the configured one, give it both that knowledge base's documents directory and, with `-d`, its index directory: the indexer makes the index match the documents directory it is given, so pairing an index with the wrong one removes documents from it.
 
 #### Raven-visualizer
 

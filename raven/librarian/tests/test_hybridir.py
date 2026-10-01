@@ -963,6 +963,13 @@ class TestKeywordTokens:
         assert "effect" in tokens
 
 
+class TestScriptDigits:
+    def test_a_subscript_reads_as_its_plain_digit(self, retriever):
+        """Through `_tokenize`, where the normalization is applied: a query "h2o" must find "H₂O"."""
+        assert "h2o" in retriever._tokenize("splitting H₂O into hydrogen")
+        assert "m2" in retriever._tokenize("an area of 3 m²")
+
+
 class TestRetokenizeOnOpen:
     def _build(self, path):
         ret = hybridir.HybridIR(datastore_base_dir=path,

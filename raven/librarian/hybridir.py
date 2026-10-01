@@ -665,8 +665,8 @@ class HybridIR:
         So each word contributes its lemma, and also its surface form where the two differ. "Elsevier" gives
         "elsevi" and "elsevier", and so does a query typed as "elsevier", so the name matches itself however
         the lemmatizer reads it; "larger" gives "large" and "larger", so a search for "large" still finds it.
-        Numbers and alphanumeric words are kept too ("2024", "qwen3", "h2o"). Stopwords and punctuation are
-        dropped.
+        Numbers and alphanumeric words are kept too ("2024", "qwen3", "h2o"), sub- and superscript digits read
+        as plain ones ("H₂O" as "h2o", "m²" as "m2"). Stopwords and punctuation are dropped.
         """
         return self._tokenize_many([text])[0]
 
@@ -684,7 +684,9 @@ class HybridIR:
         """
         if not texts:
             return []
-        docs = self.nlp.analyze([text.lower() for text in texts])
+        # `normalize_search_string` turns sub- and superscripts into plain digits, as the Visualizer's search
+        # does, so a query typed as "h2o" finds a paper that writes "H₂O".
+        docs = self.nlp.analyze([common_utils.normalize_search_string(text).lower() for text in texts])
         assert len(docs) == len(texts)
         return [keyword_tokens(doc, self._stopwords) for doc in docs]
 
