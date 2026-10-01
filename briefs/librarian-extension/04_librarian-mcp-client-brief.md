@@ -426,6 +426,30 @@ auth support available when that changes. This is also the concrete case for que
 - A dead or reloading MCP server degrades gracefully and does not crash the chat.
 - Hindsight reachable as a live test target.
 
+### A second test target: ComfyUI (maintainer, 2026-10-01)
+
+The weather tool became a built-in on 2026-09-30 (`TODO.md`, the open-meteo item), so it is not an MCP
+target any more. The replacement: **ComfyUI, so that Aria can draw pictures.** An MCP connector for ComfyUI
+already exists on GitHub, and the maintainer's own workflows can feed the models. Nowhere near what one can
+do in Comfy by hand (no inpainting and the like), but three modes:
+
+- **txt2img**;
+- **img2img**;
+- **edit mode**: several images and a prompt saying what to do with them — the spiritual successor of
+  instruct-pix2pix.
+
+Two things this target brings that Hindsight does not, neither checked yet:
+
+- **The tool's result is an image.** Whether a tool message in Librarian can carry an image part — for the
+  chat log to show it, and for a VLM to see it — is unverified; `chatutil.create_chat_message` builds
+  single-text tool messages and says multi-part content arrives "where a real caller needs it". This would
+  be that caller.
+- **The edit and img2img modes take images as input**, so the model needs a way to name an attachment
+  already in the chat as a tool argument.
+
+And one consequence for scheduling, a reader's inference: a ComfyUI target needs no Hindsight, so it may
+loosen this brief's gate on the Hindsight playground.
+
 ---
 
 ## Appendix: postproc annotation refactor (separate task, share this file for context)

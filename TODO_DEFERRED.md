@@ -5981,8 +5981,9 @@ Discovered during brief 07 GUI testing (2026-07-29, raised by Juha).
 
 *Cluster: dependencies · Cost: M — the lock cannot be committed as-is; what remains is choosing between lock targets, a documented re-lock step, or leaving it · Gate: next; measured 2026-09-20 and it does not resolve cleanly · Filed: 2026-08-04 · See also: "Easy install with a chosen CUDA version", "Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14"*
 
-The lab installation (after 0.2.10, see the `cu130` item) is the first install from zero where a lock would
-pay: a reason to settle this before it rather than after.
+**Wanted before the lab installation** (after 0.2.10, see the `cu130` item; maintainer, 2026-10-01): moving
+what has been tested over to the lab beats a resolve lottery at install time, and a lock also saves the
+resolve itself — about 8 minutes on Linux, longer on Windows.
 
 Fleet policy is that libraries don't commit `pdm.lock` and applications do — a lockfile is what makes a
 deployment reproducible, and Raven is an application. Raven's `.gitignore` has ignored it since early on

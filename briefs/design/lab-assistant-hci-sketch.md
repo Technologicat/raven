@@ -14,7 +14,9 @@ planned for this autumn, after 0.2.10, and is gated on features rather than on a
   Librarian GUI and back. That answers open question 1 for this deployment — a toggle with a hotkey.
 - **The sci-fi polish**, for instance file icons or thumbnails hovering around the avatar, translucent, *as it
   reads files* — so the objects of "A representation of what arrived" appear for what the AI reads, as well as
-  for what the user uploads.
+  for what the user uploads. **Each object carries a short human-readable name where one exists** —
+  *"Askell et al."* beside one PDF icon, *"Feynman et al."* beside another — since the icon alone does not
+  tell two documents of the same type apart.
 - **The MCP client** (`briefs/librarian-extension/`, brief 04).
 - **The `cu130` move**, since the machine is built from zero (`TODO_DEFERRED.md`, "Move the torch trio to
   CUDA 13").

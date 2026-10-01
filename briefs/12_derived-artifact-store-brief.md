@@ -311,6 +311,36 @@ is really *extract-or-generate*.
   size, which is what makes it viable at all — import-time summarization of 10k abstracts was measured as
   hours-to-days and rejected.
 
+### The summary mipmap chain (maintainer, 2026-10-01)
+
+With the unified DB (brief 13), the data is looked at from several distances, and each distance wants its own
+length of summary — like the mipmap levels of a texture:
+
+| looking at | each document as |
+|---|---|
+| *"Consider these 2k studies…"* | one sentence |
+| *"Let's look at this cluster of 200 studies…"* | one paragraph |
+| *"Let's compare these 20 studies…"* | one page |
+| *"Let's look at the details of the arguments in these two studies…"* | the full text |
+
+So `synopsis` is not one artifact but a chain of them, one per level, and `params` carries the level. The
+maintainer's proposal is to **generate them at import**.
+
+Open, for whoever designs this:
+
+- **Import-time generation was measured once and rejected**, above — hours to days for 10k abstracts. Whether
+  that verdict holds for every level is worth asking separately: the sentence level is short output, the page
+  level is long output from the full text, and they need not share a schedule. Generating the cheap levels at
+  import and the expensive ones lazily, or in a background pass that fills the chain over time, are both
+  shapes this registry already allows.
+- **The author has often written one level already.** By the extract-or-generate rule above, a paper's
+  abstract is its paragraph level.
+- **Whether a level is generated from the one below or from the source.** A texture's mip chain is built
+  downward, each level from the previous one; text could be too, which makes the coarse levels cheap once a
+  finer one exists, at the cost of compounding the finer level's omissions.
+- **The producer is the per-document LLM pass** (`briefs/per-document-llm-pass-brief.md`), which is what a
+  multi-hour run over a corpus needs: resumable, cancellable, and stopping on a backend failure.
+
 ## Deferred: measuring what the pivot costs
 
 Not part of this brief's implementation, but it determines how much weight the description pivot can carry, so
