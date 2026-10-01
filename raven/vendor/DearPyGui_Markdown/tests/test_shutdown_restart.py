@@ -11,6 +11,7 @@ rendering — and a worker left waiting like that is the case `restart` has to r
 """
 
 import threading
+import time
 
 import pytest
 
@@ -18,6 +19,28 @@ dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed
 
 from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
 from raven.vendor import DearPyGui_Markdown as dpg_markdown  # noqa: E402 -- after importorskip by design
+
+
+def _stand_in_worker(generation: int) -> None:
+    """Lives and retires as `CallInNextFrame._worker` does, without ever calling into DPG."""
+    while not dpg_markdown._retired(generation):
+        time.sleep(0.005)
+
+
+# Every worker these tests start is a stand-in, never the real `_worker`. The real one, with no render loop
+# running, enters `dpg.split_frame` and stays there: `shutdown` can retire it but not pull it out of that C
+# call, and the module's `dpg.destroy_context()` then frees the context under it. On the Windows CI runner
+# that is an access violation, now and then, killing the whole pytest process — so the suite went red on
+# pushes that had changed nothing near here. The tests ask whether a worker was *started* and what was
+# *queued*, never whether work ran, so a stand-in that keeps the retirement rule answers them just as well.
+#
+# Autouse and module-scoped, so it is in place before `dpg_context` boots anything. `setattr` raises if
+# `_worker` is renamed, rather than quietly patching nothing.
+@pytest.fixture(scope="module", autouse=True)
+def no_real_worker():
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(dpg_markdown.CallInNextFrame, "_worker", staticmethod(_stand_in_worker))
+        yield
 
 
 @pytest.fixture(scope="module")
