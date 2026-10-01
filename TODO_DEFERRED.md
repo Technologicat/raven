@@ -3344,17 +3344,6 @@ loading it to GPU per turn.
 
 Raised while scoping RAG reranking (2026-07-28, Juha).
 
-## Remaining server modules without a MaybeRemote
-
-*Cluster: ? · Cost: ? · Gate: post-0.2.10, scoped down · Filed: 2026-04-22*
-
-With `Classifier`, `Translator`, `Postprocessor`, `Upscaler` landed (2026-04-22), the following server modules still don't participate in the MaybeRemote pattern:
-
-- `avatar`, `avatarutil` — licensing-constrained (see "Client-local avatar animator" below). Also the rendering pipeline is tied to real-time animation driver state that's server-local; a client-local path would be effectively a parallel rewrite, not a wrapper.
-- `websearch` — AGPL-constrained (~90 % from SillyTavern-extras, rest ported from SillyTavern-selenium's JS version — see the licensing item below). Also heavy to run locally: Selenium + headless browser.
-
-These are both intentional omissions, not TODO gaps. Kept as a navigational note so future readers can see the coverage at a glance.
-
 ## Client-local avatar animator (licensing-bounded)
 
 *Cluster: ? · Cost: ? · Gate: postponed indefinitely · Filed: 2026-04-17*

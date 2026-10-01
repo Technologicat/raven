@@ -671,7 +671,7 @@ render…"`, `TD "Reasoning traces with indented bullets…"`, `TD "Remove the d
 `markdown-block-rendering`); `TD "Ligature mojibake…"` (ligature repair); `TD "Batch tools: LLM reconnect
 mid-run"` (per-document pass).
 
-*No longer a task* — `TD "Remaining server modules without a MaybeRemote"` (navigational note);
+*No longer a task* — `TD "Remaining server modules without a MaybeRemote"` (navigational note) — **removed 2026-10-01**, the note moved into `mayberemote`'s docstring;
 `TD "CLAUDE.md: rephrase DPG pitfall #5…"` (the numbering has moved); `TD "Two things a triage pass should
 know"` (guidance, not an item — belongs in the file's header); `TD "Whether a short chat graph should sit at the
 top…"` (a settled-by-looking note).

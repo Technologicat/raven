@@ -1,6 +1,15 @@
 """Transparent Raven-server support for some NLP and imagefx components, with local (client-side) fallback.
 
 NOTE: Before using this module, you must `raven.client.api.initialize` first.
+
+Three server modules have no local mode here, on purpose:
+
+  - `avatar` (with `avatarutil`): its code is AGPL, like the rest of Raven-server, and its rendering is tied
+    to the real-time animation state the server holds. A local path would be a parallel rewrite, not a wrapper.
+  - `websearch` and `webfetch`: AGPL as well, and they drive a headless browser. A local `webfetch` would need
+    a clean-room driver.
+
+Reach them through `raven.client.api`, with a Raven-server running.
 """
 
 __all__ = ["MaybeRemoteService",
