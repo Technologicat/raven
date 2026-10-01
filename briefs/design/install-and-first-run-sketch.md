@@ -64,6 +64,13 @@ Most of them exist as separate items already; this sketch is what they add up to
   installs per user as a single binary and fetches its own Python, so for a user it could replace both
   Miniconda and PDM; development would stay on PDM.
 
+## Upgrading
+
+Half of the support cost above, so it needs as much design as installing. Two parts are already in place:
+a user's own settings live outside the installed tree, in `~/.config/raven/overrides.json`, so an upgrade
+does not overwrite them; and Librarian's chat datastore migrates itself on load. What is missing is the
+upgrade itself — one command, once Raven installs as a tool rather than from a checkout.
+
 ## To probe first
 
 None of these has been checked; each decides how much of the above is cheap.
