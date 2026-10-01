@@ -1927,37 +1927,6 @@ README out of `site-packages`.
 looks exactly like one that did not, which is the linter-canary problem again. The release procedure could
 compare wheel size against the previous release and flag a large jump.
 
-## `chattree.get_all_root_nodes` is an O(n) scan
-
-*Cluster: ? · Cost: S · Gate: 0.2.10, since the graph view shows the other roots · Filed: 2026-08-12 · See also: "Datastore scaling: a single `chat.json` …"*
-
-**Decided 2026-10-01: an index of roots, in 0.2.10** (maintainer). The graph view does show the other roots
-— the system prompts, behind an "N more…" box — and finding them needs this scan. Considered and rejected: a
-sentinel root linking every system prompt, which turns the forest into a tree. It is cleaner on paper, but it
-changes the data model: a datastore migration, and a node that is not a message which every walker
-(linearizing, search order, GC, export, the graph build, minichat) would have to learn to skip.
-
-`get_all_root_nodes` scans the whole forest for nodes whose parent is `None`. Deliberate, and the docstring
-says so.
-
-**The path that mattered is already fixed.** `chat_controller._scan_for_root_nodes` memoizes it, and
-`_get_all_system_prompt_node_ids` filters the cached list against `datastore.nodes` before returning. Both
-halves of the reasoning are in the docstrings: safe to cache because roots are only ever *created* while app
-state loads, and the filter is required because a card that is not in use can be deleted from the GUI, after
-which `get_children` raises on a node that is gone. Without the memo it would run once per chat message
-widget created, over the whole datastore — that was the hot path, and it is closed.
-
-What remains is the underlying method, still O(n), called from `appstate` (×2, at startup), `minichat`,
-`app.py`, and `chattree.get_siblings`.
-
-**The `get_siblings` path is live.** Multi-root support landed 2026-08-12, and enumerating a root's siblings
-— the character cards — is its natural consequence. If the graph view shows the root level, every such
-lookup is a full-forest scan, and the `chat_controller` memo does not help because that lives one layer up.
-**Whether the graph view shows roots is what decides this item's gate**; see the chat-graph-view brief.
-
-Shape of the answer: an index of roots maintained by `create_node` / `delete_node`. Roots are few while the
-scan is over every node, so the index is small and the saving grows with the datastore.
-
 ## Librarian: open a chat datastore other than the configured default
 
 *Cluster: ? · Cost: ? · Gate: 0.2.11 · Filed: 2026-08-11*

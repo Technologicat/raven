@@ -672,6 +672,31 @@ class TestMaintenance:
         roots = set(f.get_all_root_nodes())
         assert roots == {a, b}
 
+    def test_get_all_root_nodes_follows_every_kind_of_change(self, chain):
+        f, a, b, _c = chain
+
+        def scanned():
+            return [node["id"] for node in f.nodes.values() if node["parent"] is None]
+
+        assert f.get_all_root_nodes() == scanned()  # read once, so that a stale answer is there to be served
+        r = f.create_node("another root", parent_id=None)
+        assert f.get_all_root_nodes() == scanned() == [a, r]
+        copied = f.copy_subtree(b, new_parent_id=None)
+        assert f.get_all_root_nodes() == scanned() == [a, r, copied]
+        f.reparent_subtree(r, new_parent_id=a)
+        assert f.get_all_root_nodes() == scanned() == [a, copied]
+        f.delete_subtree(copied)
+        assert f.get_all_root_nodes() == scanned() == [a]
+
+    def test_get_all_root_nodes_sees_a_raw_write_after_touch(self, chain):
+        f, a, b, _c = chain
+        assert f.get_all_root_nodes() == [a]
+        f.nodes[b]["parent"] = None  # the raw access the class permits, without telling it
+        assert f.get_all_root_nodes() == [a], \
+            "the answer was not remembered, so this cannot tell whether `touch` is needed"
+        f.touch()
+        assert f.get_all_root_nodes() == [a, b]
+
     def test_prune_unreachable_nodes(self, forest):
         r1 = forest.create_node("keep", parent_id=None)
         forest.create_node("keep_child", parent_id=r1)

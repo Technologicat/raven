@@ -150,6 +150,7 @@ class Forest:
         self.nodes = {}
         self.lock = threading.RLock()
         self._generation = 0
+        self._root_ids_memo: tuple[int, list[str]] | None = None  # (generation, root IDs); see `get_all_root_nodes`
         self._sidecar_extractor = sidecar_extractor
         self._sidecar_bytes: dict[str, bytes] = {}
         self._sidecar_descriptions: dict[str, dict[str, Any]] = {}
@@ -788,9 +789,18 @@ class Forest:
     def get_all_root_nodes(self) -> List[str]:
         """Return the IDs of all root nodes (i.e. nodes whose parent is `None`) currently in the forest.
 
-        We don't keep track of these separately; this is done by an O(n) linear scan over the whole forest.
+        In the order the forest holds them. An O(n) scan the first time after any change to the forest, and a
+        copy of the remembered answer until the next one. A change made by writing to `nodes` directly is seen
+        only after `touch`, as for `generation`.
         """
-        return [node["id"] for node in self.nodes.values() if node["parent"] is None]
+        # Remembered against `generation` rather than kept as an index of roots: every mutating method
+        # advances the counter, so this needs nothing from them, and the order comes out as the scan's.
+        # The price is a rescan after any change at all, a new revision included.
+        with self.lock:
+            if self._root_ids_memo is None or self._root_ids_memo[0] != self._generation:
+                self._root_ids_memo = (self._generation,
+                                       [node["id"] for node in self.nodes.values() if node["parent"] is None])
+            return list(self._root_ids_memo[1])
 
     def list_unreachable_nodes(self, *roots: str) -> List[str]:
         """Return the IDs of nodes not reachable from any of the `roots` (list of root node unique IDs).
