@@ -1071,7 +1071,7 @@ Discovered while adding keyboard access to the audio input panel (Juha, 2026-08-
 
 ## `fetch_document` inlines up to eleven times what `webfetch` would move out of the log
 
-*Cluster: librarian-context · Cost: M — the design is the work · Gate: none · Filed: 2026-08-25*
+*Cluster: librarian-context · Cost: M — the design is the work · Gate: none · Filed: 2026-08-25 · See also: `briefs/librarian-extension/04_librarian-mcp-client-brief.md` → "A second test target: ComfyUI", which needs the same addressing for images sent to a tool*
 
 `scaffold` moves a long tool result into a content-addressed attachment when the tool declares
 `fetched_document` in its metadata and the text passes `config.tool_result_attachment_threshold` (4000

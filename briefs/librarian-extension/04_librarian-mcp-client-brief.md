@@ -438,14 +438,18 @@ do in Comfy by hand (no inpainting and the like), but three modes:
 - **edit mode**: several images and a prompt saying what to do with them — the spiritual successor of
   instruct-pix2pix.
 
-Two things this target brings that Hindsight does not, neither checked yet:
+Two things this target needs that Hindsight does not (maintainer, 2026-10-01):
 
-- **The tool's result is an image.** Whether a tool message in Librarian can carry an image part — for the
-  chat log to show it, and for a VLM to see it — is unverified; `chatutil.create_chat_message` builds
-  single-text tool messages and says multi-part content arrives "where a real caller needs it". This would
-  be that caller.
-- **The edit and img2img modes take images as input**, so the model needs a way to name an attachment
-  already in the chat as a tool argument.
+- **A tool result can carry image parts.** For the chat log to show the picture, and for a VLM to see it.
+  `chatutil.create_chat_message` builds single-text tool messages and says multi-part content arrives "where
+  a real caller needs it"; this is that caller. The output image presumably goes to a sidecar through the
+  existing attachment mechanism (`imagestore` over `sidecarstore`), as an uploaded image does.
+- **A tool can be sent an image** — img2img and edit mode take images as input. Wanted as a general
+  mechanism: a tool argument naming **an attachment in the current chat, or an item in the document DB**.
+  - The DB half is the same missing piece as `TODO_DEFERRED.md`'s "`fetch_document` inlines up to eleven
+    times…", which is blocked on addressing: `sidecar:` URLs name a copy inside the datastore, and there is
+    no scheme for a document in the local database. One addressing scheme would serve both, so design them
+    together.
 
 And one consequence for scheduling, a reader's inference: a ComfyUI target needs no Hindsight, so it may
 loosen this brief's gate on the Hindsight playground.
