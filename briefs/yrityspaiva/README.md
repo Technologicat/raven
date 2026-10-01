@@ -376,7 +376,10 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
        (`guiutils.focus_item`) need per-file alias resolution: look first at whether pyan's name resolution
        can be borrowed, adding features to pyan if needed. If that comes out large, file it.
      - **Qwen 3.8's slow prompt processing is recorded** beside the `reasoning_effort` re-test, from the
-       datastore's `generation_metadata`.
+       datastore's `generation_metadata`. Tomorrow: run the same prompts on Qwen 3.6 27B (dense) to tell
+       dense from MoE apart from 3.6 against 3.8; see whether prefill speed can be tuned in LM Studio or is
+       fixed by the model; and check whether the backend's `usage` reports a prompt token count, which may be
+       worth saving per node.
    - **Costed: stage reporting for the web tools**, as DOCUMENTS has (maintainer's idea). M,
      about half a day. `server.util.stream_job` sends one JSON result after a leading space; it would send
      newline-separated records, progress lines and then the result, the job reporting through a callback;
