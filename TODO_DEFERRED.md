@@ -26,7 +26,11 @@ and why hygiene items rank higher than they used to.
 
 ## Move the torch trio to CUDA 13 (`cu130`), and with it to torch 2.14
 
-*Cluster: dependencies · Cost: M · Gate: none; no immediate need · Filed: 2026-10-01 · See also: "Easy install with a chosen CUDA version", "Replace `torchaudio.functional.resample`, and drop torchaudio"*
+*Cluster: dependencies · Cost: M · Gate: before the lab installation, autumn 2026 · Filed: 2026-10-01 · See also: "Easy install with a chosen CUDA version", "Replace `torchaudio.functional.resample`, and drop torchaudio"*
+
+**The trigger is the lab installation planned for later this autumn** (maintainer, 2026-10-01). That machine
+is built from zero and will have CUDA 13 at least, so doing this first means it installs on the stack it
+will stay on, instead of starting on `cu128` and being migrated afterwards.
 
 The `torch==2.11.0` pin has had no reason since torchaudio turned out to be forward-compatible (measured
 2026-10-01, see that item), but **a torch bump is a CUDA bump**: PyTorch's `cu128` index stops at torch 2.11,
