@@ -370,6 +370,13 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      `a.b.c` in docstrings, comments and Markdown resolving to real definitions, the maintainer's concern
      being renames and moves) now or after 0.2.10, and where it is filed; and whether Qwen 3.8's prompt
      processing, much slower than 3.6's (maintainer), wants recording beside the `reasoning_effort` re-test.
+   - **Costed for tomorrow: stage reporting for the web tools**, as DOCUMENTS has (maintainer's idea). M,
+     about half a day. `server.util.stream_job` sends one JSON result after a leading space; it would send
+     newline-separated records, progress lines and then the result, the job reporting through a callback;
+     `client.util.post_streamed_job` reads them as they come; `llmtools` exposes the text; `chat_controller`
+     mirrors it into INTERNET, *Done* included. **The catch is the timeout**: `post_streamed_job`'s read
+     timeout bounds the job only because the server is silent while it runs, and progress lines reset it, so
+     a client-side total deadline has to come with them.
    - **Still to do for 0.2.10**, needing the GUI or the maintainer: the backdrop onto `fit_cover`,
      Cherrypick's crown-in-compare, the thumbnail grid's textures, the `reasoning_effort` re-test and the
      tool-call budget probe.
