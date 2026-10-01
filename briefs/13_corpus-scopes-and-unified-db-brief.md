@@ -351,6 +351,15 @@ ends up running, needs designing rather than assuming. **Dropping server-optiona
 (Juha, 2026-09-28), if autostart makes it obsolete — then there is only one way to reach the DB, and the
 question goes away.
 
+**The evidence keeps pointing at the server** (maintainer, 2026-10-01). Several independent pieces of design
+now each want the DB behind Raven-server:
+- the DB lock, so several apps can share it (above);
+- offline processing at import, which needs something that outlives the apps (below);
+- the web status panel for long jobs (`TODO_DEFERRED.md`, "Web status panel"), whose natural home is the
+  server, since that is where the jobs would run;
+- a launcher that starts Raven-server alone for background import processing
+  (`briefs/design/install-and-first-run-sketch.md`).
+
 **Its companion is offline processing at import** (maintainer, 2026-10-01): once the server owns the DB, it
 can own the expensive per-document jobs that fill it, and no app has to stay open for them.
 `briefs/design/offline-and-remote-processing-sketch.md` carries that, along with remote processing for the
