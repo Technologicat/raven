@@ -489,6 +489,136 @@ class TestPerformToolCallsAbort:
         assert "broken" in chatutil.content_to_text(records[0].data["content"])
 
 
+class TestPerformToolCallsInParallel:
+    """Calls of different kinds run at once; calls of one kind in turn; results come back in request order.
+
+    The kinds are `NETWORK_TOOL_NAMES`, `DOCUMENT_TOOL_NAMES` and the rest, so the stand-in tools below borrow
+    real tool names to land in the kind under test. Overlap is detected rather than timed: each tool waits a
+    while for the other to have started, and reports whether it did.
+    """
+
+    _message = staticmethod(TestPerformToolCallsAbort._message)
+    _settings = staticmethod(TestPerformToolCallsAbort._settings)
+
+    @staticmethod
+    def _meeting(first: str, second: str, patience: float):
+        """Two tools that each wait up to `patience` seconds for the other to be running, and say whether it was.
+
+        *Running*, not *started*: run in turn, the second would find the first started — and finished.
+        """
+        running = {first: threading.Event(), second: threading.Event()}
+        def make(name, other):
+            def tool():
+                running[name].set()
+                try:
+                    return "met" if running[other].wait(timeout=patience) else "alone"
+                finally:
+                    running[name].clear()
+            return tool
+        return make(first, second), make(second, first)
+
+    @staticmethod
+    def _texts(records):
+        return [chatutil.content_to_text(record.data["content"]) for record in records]
+
+    def test_calls_of_different_kinds_overlap(self):
+        web, docs = self._meeting("websearch", "search_documents", patience=5.0)
+        t0 = time.monotonic()
+        records = llmclient.perform_tool_calls(self._settings(websearch=web, search_documents=docs),
+                                               self._message("websearch", "search_documents"),
+                                               on_call_start=None, on_call_done=None)
+        assert self._texts(records) == ["met", "met"], "the two kinds ran one after the other"
+        assert time.monotonic() - t0 < 3.0
+
+    def test_calls_of_one_kind_do_not(self):
+        # The negative control for the test above: without it, running *everything* in parallel would pass.
+        first, second = self._meeting("websearch", "webfetch", patience=0.5)
+        records = llmclient.perform_tool_calls(self._settings(websearch=first, webfetch=second),
+                                               self._message("websearch", "webfetch"),
+                                               on_call_start=None, on_call_done=None)
+        assert self._texts(records) == ["alone", "alone"], "two web calls ran at once, which their indicator cannot show"
+
+    def test_results_come_back_in_the_order_asked_for(self):
+        # The later calls finish first, so a list in completion order would come out reversed.
+        def slow():
+            time.sleep(0.4)
+            return "web"
+        def medium():
+            time.sleep(0.2)
+            return "docs"
+        def quick():
+            return "other"
+        records = llmclient.perform_tool_calls(self._settings(websearch=slow, search_documents=medium, calculate=quick),
+                                               self._message("websearch", "search_documents", "calculate"),
+                                               on_call_start=None, on_call_done=None)
+        assert [record.tool_call_id for record in records] == ["call_0", "call_1", "call_2"]
+        assert self._texts(records) == ["web", "docs", "other"]
+
+    def test_a_garbled_request_keeps_its_place(self):
+        message = self._message("websearch", "search_documents")
+        message["tool_calls"].insert(1, {"id": "garbled", "type": "function", "function": {"arguments": "{}"}})
+        records = llmclient.perform_tool_calls(self._settings(websearch=lambda: "web", search_documents=lambda: "docs"),
+                                               message, on_call_start=None, on_call_done=None)
+        assert [record.status for record in records] == ["success", "error", "success"]
+        assert self._texts(records)[0::2] == ["web", "docs"]
+
+    def test_a_stop_cancels_what_has_not_finished_in_every_kind(self):
+        release = threading.Event()  # never set before the abort: a slow site
+        def blocked():
+            release.wait(timeout=10.0)
+            return "too late"
+        called = []
+        def after():
+            called.append("after")
+            return "unreachable"
+        abort = netutil.Abort()
+        threading.Timer(0.3, abort.abort).start()
+        records = llmclient.perform_tool_calls(self._settings(websearch=blocked, webfetch=after,
+                                                              search_documents=lambda: "docs"),
+                                               self._message("websearch", "search_documents", "webfetch"),
+                                               on_call_start=None, on_call_done=None, maybe_abort=abort)
+        release.set()
+        assert [record.status for record in records] == ["cancelled", "success", "cancelled"]
+        assert called == [], "a web call queued behind the blocked one was started after the stop"
+
+    def test_every_kind_sees_the_turns_context(self):
+        # Without an abort handle each call runs on its kind's thread directly, so the context has to reach
+        # that thread. Dispatched from a background thread, as the turn does: from the main thread this would
+        # pass whether or not the context is handed across.
+        seen = {}
+        def reads_context():
+            return dyn.tool_context.marker
+        def dispatch():
+            with dyn.let(tool_context=env(marker="this turn's context")):
+                seen["records"] = llmclient.perform_tool_calls(self._settings(websearch=reads_context,
+                                                                              search_documents=reads_context),
+                                                               self._message("websearch", "search_documents"),
+                                                               on_call_start=None, on_call_done=None)
+        worker = threading.Thread(target=dispatch)
+        worker.start()
+        worker.join()
+        assert [record.status for record in seen["records"]] == ["success", "success"], self._texts(seen["records"])
+        assert self._texts(seen["records"]) == ["this turn's context"] * 2
+
+    def test_events_never_overlap(self):
+        inside = threading.Lock()
+        overlaps = []
+        def event(*_args):
+            if not inside.acquire(blocking=False):
+                overlaps.append(_args)
+                return
+            try:
+                time.sleep(0.05)  # long enough for a concurrent event to arrive while this one is inside
+            finally:
+                inside.release()
+        records = llmclient.perform_tool_calls(self._settings(websearch=lambda: "web", search_documents=lambda: "docs",
+                                                              calculate=lambda: "other"),
+                                               self._message("websearch", "search_documents", "calculate"),
+                                               on_call_start=event, on_call_done=event)
+        assert [record.status for record in records] == ["success"] * 3
+        assert overlaps == [], f"two events ran at once: {overlaps}"
+
+
 class TestWebsearchWrapper:
     """brief 03 §4: websearch returns one text content-part per result, with each field normalized."""
 

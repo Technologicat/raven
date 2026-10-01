@@ -338,9 +338,11 @@ them were done on 2026-09-30, item 3 last. The time left before the 8th goes to 
      `## Declined` sweep's one find; the HF Hub docs, in the server README; the licences, in the README and
      `LICENSE.md`; the pycodestyle step and the lint canary; coverage leaving out the `app.py` entry modules.
    - **Decided along the way**:
-     - The indicators sit at the top left of the panel under the toggles. At most three can be lit together,
-       INDEXING, READING and one of DOCUMENTS or INTERNET, since a round's tool calls run one at a time.
-       Running different-kind calls in parallel was filed rather than done.
+     - The indicators sit at the top left of the panel under the toggles, with room for all four that can be
+       lit together.
+     - A round's tool calls of different kinds run in parallel: network, documents, the rest, one thread
+       each, calls of one kind in turn so that an indicator lit per call stays truthful. Results go back in
+       request order. Filed first, then done the same day as small enough (maintainer).
      - Subtitle cards are measured in rendered lines, two at most. A translation is cut *after* translating
        the whole sentence and timed by position, so the cut costs the translator no context. Full-reply
        translation waits for a context-aware translator (noted under the parked translator upgrade).

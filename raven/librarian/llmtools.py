@@ -899,7 +899,11 @@ def perform_tool_calls(settings: env,
     """Perform tool calls as requested in `message["tool_calls"]`.
 
     Returns a list of chat payloads (where each message's `role="tool"`) containing the tool outputs,
-    one for each tool call.
+    one for each tool call, in the order the calls were requested.
+
+    Calls of different kinds — the network tools, the document tools, the rest — run in parallel, and calls
+    of one kind one after another. The events below can therefore arrive from several threads, though
+    never two at once.
 
     If the "tool_calls" field of `message` is missing or if it is empty, return the empty list.
 
@@ -910,7 +914,7 @@ def perform_tool_calls(settings: env,
                           uses it when the turn's tool-call budget is spent.
 
     `maybe_abort`: A `raven.common.netutil.Abort` handle, if the calls should be abandonable from another
-                   thread. Once it fires, the call in progress and every call after it are answered with
+                   thread. Once it fires, every call not yet finished is answered with
                    `CANONICAL_TOOL_CALL_CANCELLED` as a `status="cancelled"` result, and nothing further is
                    called; the results that had already arrived are kept.
 
@@ -975,14 +979,18 @@ def perform_tool_calls(settings: env,
     plural_s = "s" if len(tool_calls) != 1 else ""
     logger.info(f"perform_tool_calls: The LLM requested {len(tool_calls)} tool call{plural_s}.")
 
-    tool_response_records = []
-    def add_tool_response_record(output: str | list[dict], *,
+    # One slot per requested call, so the results come back in the order the calls were asked for, however
+    # the calls running in parallel interleave. `callback_lock` keeps the frontend's events one at a time.
+    slots: list[env | None] = [None] * len(tool_calls)
+    callback_lock = threading.Lock()
+    def add_tool_response_record(index: int,
+                                 output: str | list[dict], *,
                                  status: str,
                                  tool_call_id: str | None,
                                  function_name: str | None = None,  # unknown when the request was too malformed to name a tool
                                  dt: float | None = None,  # absent when nothing was called, so nothing was timed
                                  tool_metadata: dict | None = None) -> None:
-        """Add a tool response record to `tool_response_records`.
+        """Record the response to the call at `index` in `tool_calls`.
 
         `output` is the tool result: either a plain string (wrapped as a single text content-part) or an
         already-built content-parts list — e.g. `websearch`'s one-text-part-per-result output.
@@ -1023,59 +1031,50 @@ def perform_tool_calls(settings: env,
             record.dt = dt
         if tool_metadata is not None:
             record.tool_metadata = tool_metadata
-        tool_response_records.append(record)
-        if on_call_done is not None:
-            try:
-                on_call_done(tool_call_id, function_name, status, chatutil.content_to_text(content))
-            except Exception:
-                logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': ignoring exception from event handler `on_call_done`", exc_info=True)
+        with callback_lock:
+            slots[index] = record
+            if on_call_done is not None:
+                try:
+                    on_call_done(tool_call_id, function_name, status, chatutil.content_to_text(content))
+                except Exception:
+                    logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': ignoring exception from event handler `on_call_done`", exc_info=True)
 
     # Declining the whole round. Deliberately ahead of the per-request validation below: a malformed request
     # is not worth reporting when nothing was going to run anyway, and the model's next move is to answer,
     # not to fix its JSON.
     if maybe_refusal_text is not None:
         logger.info(f"perform_tool_calls: refusing {len(tool_calls)} tool call{plural_s} without calling anything: {maybe_refusal_text}")
-        for request_record in tool_calls:
-            add_tool_response_record(maybe_refusal_text,
+        for index, request_record in enumerate(tool_calls):
+            add_tool_response_record(index,
+                                     maybe_refusal_text,
                                      status="error",
                                      tool_call_id=request_record.get("id", None),
                                      function_name=request_record.get("function", {}).get("name", None))
-        return tool_response_records
+        return slots
 
-    def cancel_from(first_idx: int) -> None:
-        """Answer the call at `first_idx` and every call after it as cancelled."""
-        plural_s = "s" if len(tool_calls) - first_idx != 1 else ""
-        logger.info(f"perform_tool_calls: cancelled; answering the remaining {len(tool_calls) - first_idx} call{plural_s} as such.")
-        for record in tool_calls[first_idx:]:
-            add_tool_response_record(CANONICAL_TOOL_CALL_CANCELLED,
-                                     status="cancelled",
-                                     tool_call_id=record.get("id", None),
-                                     function_name=record.get("function", {}).get("name", None))
-
-    for idx, request_record in enumerate(tool_calls):
-        if maybe_abort is not None and maybe_abort.aborted:
-            cancel_from(idx)
-            break
+    # Validate every request before calling anything. A malformed one is answered here; the rest are planned.
+    planned = []  # (index, tool_call_id, function_name, function, kwargs)
+    for index, request_record in enumerate(tool_calls):
         tool_call_id = request_record.get("id", None)
 
         if "type" not in request_record:
             # The response message is intended for the LLM, whereas the log message (with all technical details) goes into the log.
             logger.warning(f"perform_tool_calls: {tool_call_id}: missing 'type' field in request. Data: {request_record}")
-            add_tool_response_record("Tool call failed. The request is missing the 'type' field.", status="error", tool_call_id=tool_call_id)
+            add_tool_response_record(index, "Tool call failed. The request is missing the 'type' field.", status="error", tool_call_id=tool_call_id)
             continue
         if request_record["type"] != "function":
             logger.warning(f"perform_tool_calls: {tool_call_id}: unknown type '{request_record['type']}' in request, expected 'function'. Data: {request_record}")
-            add_tool_response_record(f"Tool call failed. Unknown request type '{request_record['type']}'; expected 'function'.", status="error", tool_call_id=tool_call_id)
+            add_tool_response_record(index, f"Tool call failed. Unknown request type '{request_record['type']}'; expected 'function'.", status="error", tool_call_id=tool_call_id)
             continue
         if "function" not in request_record:
             logger.warning(f"perform_tool_calls: {tool_call_id}: missing 'function' field. Data: {request_record}")
-            add_tool_response_record("Tool call failed. The request is missing the 'function' field.", status="error", tool_call_id=tool_call_id)
+            add_tool_response_record(index, "Tool call failed. The request is missing the 'function' field.", status="error", tool_call_id=tool_call_id)
             continue
 
         function_record = request_record["function"]
         if "name" not in function_record:
             logger.warning(f"perform_tool_calls: {tool_call_id}: missing 'function.name' field in request. Data: {request_record}")
-            add_tool_response_record("Tool call failed. The request's function record is missing the 'name' field.", status="error", tool_call_id=tool_call_id)
+            add_tool_response_record(index, "Tool call failed. The request's function record is missing the 'name' field.", status="error", tool_call_id=tool_call_id)
             continue
 
         function_name = function_record["name"]
@@ -1083,7 +1082,7 @@ def perform_tool_calls(settings: env,
             function = settings.tool_entrypoints[function_name]
         except KeyError:
             logger.warning(f"perform_tool_calls: {tool_call_id}: unknown function '{function_name}'.")
-            add_tool_response_record(f"Tool call failed. Function not found: '{function_name}'.", status="error", tool_call_id=tool_call_id, function_name=function_name)
+            add_tool_response_record(index, f"Tool call failed. Function not found: '{function_name}'.", status="error", tool_call_id=tool_call_id, function_name=function_name)
             continue
 
         if "arguments" in function_record:
@@ -1091,7 +1090,7 @@ def perform_tool_calls(settings: env,
                 kwargs = json.loads(function_record["arguments"])
             except Exception:
                 logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': failed to parse JSON for arguments", exc_info=True)
-                add_tool_response_record(f"Tool call failed. When calling '{function_name}', failed to parse the request's JSON for the function arguments.", status="error", tool_call_id=tool_call_id, function_name=function_name)
+                add_tool_response_record(index, f"Tool call failed. When calling '{function_name}', failed to parse the request's JSON for the function arguments.", status="error", tool_call_id=tool_call_id, function_name=function_name)
                 continue
             else:
                 logger.debug(f"perform_tool_calls: {tool_call_id}: calling '{function_name}' with arguments {kwargs}.")
@@ -1099,32 +1098,92 @@ def perform_tool_calls(settings: env,
             logger.debug(f"perform_tool_calls: {tool_call_id}: for function '{function_name}: The request's function record is missing the 'arguments' field. Calling without arguments.")
             kwargs = {}
 
-        # TODO: websearch return format: for the chat history, need only the preformatted text, but for the eventual GUI, would be nice to have the links separately. Could use a new metadata field in the chat datastore for this.
-        try:
-            if on_call_start is not None:
-                on_call_start(tool_call_id, function_name, kwargs)
-        except Exception:
-            logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': ignoring exception from event handler `on_call_start`", exc_info=True)
-        try:
-            with timer() as tim:
-                tool_output = _call_abandonably(function_name, function, kwargs, maybe_abort)
-        except netutil.Aborted:
-            cancel_from(idx)
-            break
-        except Exception as exc:
-            logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': exited with exception", exc_info=True)
-            add_tool_response_record(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", tool_call_id=tool_call_id, function_name=function_name, dt=tim.dt)
-        else:  # success!
-            logger.debug(f"perform_tool_calls: {tool_call_id}: Function '{function_name}' returned successfully.")
-            # An entrypoint returns its output as either a plain string (wrapped downstream as a single text
-            # content-part) or a content-parts list (e.g. websearch's one-part-per-result output),
-            # optionally wrapped in an `(output, metadata_dict)` tuple to attach structured metadata to the
-            # tool-response node (e.g. webfetch records a denied host for the GUI override). `add_tool_response_record`
-            # normalizes the output to a parts list either way.
-            if isinstance(tool_output, tuple):
-                tool_output_value, tool_metadata = tool_output
-            else:
-                tool_output_value, tool_metadata = tool_output, None
-            add_tool_response_record(tool_output_value, status="success", tool_call_id=tool_call_id, function_name=function_name, dt=tim.dt, tool_metadata=tool_metadata)
+        planned.append((index, tool_call_id, function_name, function, kwargs))
 
-    return tool_response_records
+    def cancel(calls: list[tuple]) -> None:
+        """Answer each of the planned `calls` as cancelled."""
+        plural_s = "s" if len(calls) != 1 else ""
+        logger.info(f"perform_tool_calls: cancelled; answering {len(calls)} unfinished call{plural_s} as such.")
+        for index, tool_call_id, function_name, _function, _kwargs in calls:
+            add_tool_response_record(index, CANONICAL_TOOL_CALL_CANCELLED,
+                                     status="cancelled",
+                                     tool_call_id=tool_call_id,
+                                     function_name=function_name)
+
+    def run_in_order(calls: list[tuple]) -> None:
+        """Make the planned `calls`, one after another."""
+        for position, (index, tool_call_id, function_name, function, kwargs) in enumerate(calls):
+            if maybe_abort is not None and maybe_abort.aborted:
+                cancel(calls[position:])
+                return
+            # TODO: websearch return format: for the chat history, need only the preformatted text, but for the eventual GUI, would be nice to have the links separately. Could use a new metadata field in the chat datastore for this.
+            with callback_lock:
+                try:
+                    if on_call_start is not None:
+                        on_call_start(tool_call_id, function_name, kwargs)
+                except Exception:
+                    logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': ignoring exception from event handler `on_call_start`", exc_info=True)
+            try:
+                with timer() as tim:
+                    tool_output = _call_abandonably(function_name, function, kwargs, maybe_abort)
+            except netutil.Aborted:
+                cancel(calls[position:])
+                return
+            except Exception as exc:
+                logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': exited with exception", exc_info=True)
+                add_tool_response_record(index, f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", tool_call_id=tool_call_id, function_name=function_name, dt=tim.dt)
+            else:  # success!
+                logger.debug(f"perform_tool_calls: {tool_call_id}: Function '{function_name}' returned successfully.")
+                # An entrypoint returns its output as either a plain string (wrapped downstream as a single text
+                # content-part) or a content-parts list (e.g. websearch's one-part-per-result output),
+                # optionally wrapped in an `(output, metadata_dict)` tuple to attach structured metadata to the
+                # tool-response node (e.g. webfetch records a denied host for the GUI override). `add_tool_response_record`
+                # normalizes the output to a parts list either way.
+                if isinstance(tool_output, tuple):
+                    tool_output_value, tool_metadata = tool_output
+                else:
+                    tool_output_value, tool_metadata = tool_output, None
+                add_tool_response_record(index, tool_output_value, status="success", tool_call_id=tool_call_id, function_name=function_name, dt=tim.dt, tool_metadata=tool_metadata)
+
+    # Calls of different kinds run in parallel, and calls of one kind in turn. The kinds are the ones a
+    # frontend has an indicator for, since it lights one per call: two web calls overlapping would have the
+    # first to finish put the light out while the second still ran. Raven-server makes same-kind web calls
+    # queue anyway, so running them in turn costs little.
+    groups: dict[str, list[tuple]] = {}
+    for call in planned:
+        function_name = call[2]
+        kind = ("network" if function_name in NETWORK_TOOL_NAMES
+                else "documents" if function_name in DOCUMENT_TOOL_NAMES
+                else "other")
+        groups.setdefault(kind, []).append(call)
+
+    if len(groups) <= 1:
+        for calls in groups.values():
+            run_in_order(calls)
+    else:
+        # A new thread starts from the *main* thread's dynamic bindings (see `_call_abandonably`), so the
+        # turn's `tool_context` is handed across by hand.
+        maybe_tool_context = dyn.tool_context if "tool_context" in dyn else None
+        def run_group(calls: list[tuple]) -> None:
+            try:
+                if maybe_tool_context is not None:
+                    with dyn.let(tool_context=maybe_tool_context):
+                        run_in_order(calls)
+                else:
+                    run_in_order(calls)
+            except Exception:  # a bug here must not leave the turn waiting; the empty slots are answered below
+                logger.exception("perform_tool_calls: a group of calls failed unexpectedly")
+        logger.info(f"perform_tool_calls: running {len(groups)} kinds of call in parallel: {', '.join(groups)}.")
+        threads = [threading.Thread(target=run_group, args=(calls,), name=f"tool_calls_{kind}", daemon=True)
+                   for kind, calls in groups.items()]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+    # Every call gets a response, or the next request to the backend is malformed under the OpenAI schema.
+    for index, tool_call_id, function_name, _function, _kwargs in planned:
+        if slots[index] is None:
+            add_tool_response_record(index, "Tool call failed because of an internal error.", status="error",
+                                     tool_call_id=tool_call_id, function_name=function_name)
+    return slots

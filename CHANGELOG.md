@@ -49,6 +49,7 @@
 
 #### Raven-librarian
 
+- **Tool calls of different kinds run at once.** When the AI asks for a web search and a document search in the same step, the slower one no longer waits for the other to finish. Calls of one kind still run one after another, and the results reach the AI in the order it asked for them.
 - **A web fetch refused by the allowlist offers its approval under the result**, as a button with a line naming the host, rather than as an extra button at the end of the message's button row, where it pushed the sibling counter out of line.
 - **A long sentence is subtitled across several cards**, two lines each at most, rather than as one card covering much of the avatar.
   - With closed captions, each card goes up as its first word is spoken.

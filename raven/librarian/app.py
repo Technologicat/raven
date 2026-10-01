@@ -1990,10 +1990,10 @@ with timer() as tim:
                     # since indexing runs in the background (hence its own widget, rather than a state of
                     # DOCUMENTS). SYSTEM is prompt processing, so never alongside READING, DOCUMENTS or
                     # INTERNET, which all run between prompts rather than during one. DOCUMENTS is a database
-                    # search, automatic or by tool call; INTERNET is the web tools, so tool calls only. The two
-                    # are never lit together either, since `llmtools.perform_tool_calls` runs a round's calls
-                    # one at a time. READING runs on a background task and can overlap a tool call. So at most
-                    # three lines: INDEXING, READING, and one of DOCUMENTS or INTERNET.
+                    # search, automatic or by tool call; INTERNET is the web tools, so tool calls only. Those two
+                    # can be lit together, `llmtools.perform_tool_calls` running calls of different kinds in
+                    # parallel, and READING runs on a background task that can overlap a tool call. So at most
+                    # four lines: INDEXING, DOCUMENTS, READING and INTERNET.
                     with dpg.group():
                         with dpg.group(show=False, horizontal=True) as docs_indexing_indicator_group:
                             dpg.add_text(fa.ICON_DATABASE, tag="docs_indexing_symbol")
