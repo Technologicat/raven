@@ -6605,7 +6605,7 @@ What would need checking:
   several calls in flight it still has to do that per call, in call order.
 - **The status indicators.** DOCUMENTS and INTERNET can then be lit together, making four lines at most
   where the comment above the indicator group in `raven/librarian/app.py` (and the README's
-  *What the indicators say*) says three. The server status pill is offset sideways and needs nothing.
+  *What the indicators say*) says three. The server status pill sits at the right and needs nothing.
 - **Shared state between tools**, such as webfetch's per-session host approvals, if two calls could
   write it at once.
 

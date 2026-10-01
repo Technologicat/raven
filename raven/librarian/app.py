@@ -763,8 +763,25 @@ def _describe_server_status(available: bool) -> tuple[str, str, str]:
             "which is separate.\n\n"
             "Retrying automatically. Click to retry now.")
 
+_server_status_pill_w = 0  # as last measured; the pill is as wide as its caption
+
+def _place_server_status_pill(panel_w: int) -> None:
+    """Put the server status pill at the bottom right of the panel under the mode toggles.
+
+    `panel_w`: that panel's width, in pixels.
+    """
+    # Positioned rather than spaced, because the panel's *height* is the fixed `chat_controls_h`: bottom edge,
+    # less one row and the padding the child window keeps below it. The right edge likewise keeps its padding.
+    dpg.set_item_pos("server_status_pill",  # tag
+                     (panel_w - guiutils.DPG_WINDOW_PADDING - _server_status_pill_w,
+                      gui_config.chat_controls_h - gui_config.mode_toggle_row_h - 2 * guiutils.DPG_WINDOW_PADDING))
+
 def _refresh_server_status_pill(available: bool) -> None:
-    """Put the server's status into the utility panel's row, and show the row."""
+    """Put the server's status into the utility panel's row, and show the row.
+
+    Waits a frame, to measure the new caption, so must not be called from the render thread.
+    """
+    global _server_status_pill_w
     icon, label, caption = _describe_server_status(available)
     dpg.set_value("server_status_icon", icon)  # tag
     dpg.configure_item("server_status_button", label=label)  # tag
@@ -777,7 +794,16 @@ def _refresh_server_status_pill(available: bool) -> None:
     else:
         dpg.bind_item_theme("server_status_icon", "my_pulsating_caution_backend_theme")  # tag
         dpg.bind_item_theme("server_status_button", "my_steady_caution_backend_theme")  # tag
+    # The two captions differ in width, and a caption is laid out only by drawing it. So it is drawn once just
+    # past the panel's right edge, where the child window clips it, then measured and moved into place.
+    panel_w, _ = guiutils.get_widget_size("mode_toggle_controls")  # tag
+    dpg.set_item_pos("server_status_pill", (panel_w, dpg.get_item_pos("server_status_pill")[1]))  # tag
     dpg.show_item("server_status_pill")  # tag
+    guiutils.split_frame(operation="_refresh_server_status_pill: measuring the caption", required=False)
+    pill_w, _ = guiutils.get_widget_size("server_status_pill")  # tag
+    if pill_w:
+        _server_status_pill_w = pill_w
+    _place_server_status_pill(panel_w)
 
 def _hide_server_status_pill() -> None:
     """Take the utility panel's server row down."""
@@ -2019,14 +2045,9 @@ with timer() as tim:
                     #
                     # Shown only when something is wrong, plus a moment on the way back. A row that said
                     # "connected" all day would be teaching the user to stop reading it.
-                    # Parked at the bottom of the panel rather than following the status indicators, so that it
-                    # does not jump about as they come and go.
-                    #
-                    # Positioned rather than spaced, and set once rather than tracked, because this child
-                    # window's *height* is the fixed `chat_controls_h` while only its width follows the
-                    # window. Right-aligning would be the other story entirely — the width does move, and
-                    # the pill's own width differs between its two labels, so it would want measuring after
-                    # every status change.
+                    # Parked at the bottom right of the panel rather than following the status indicators, so
+                    # that it does not jump about as they come and go, and stays clear of them however many are
+                    # lit. Positioned by `_place_server_status_pill`.
                     with dpg.group(tag="server_status_pill", show=False):  # tag
                         with dpg.group(horizontal=True):
                             dpg.add_text(fa.ICON_PLUG_CIRCLE_XMARK, tag="server_status_icon")  # tag
@@ -2038,16 +2059,6 @@ with timer() as tim:
                             # rewritten on every status change and again by the click flash, and a
                             # `dpg.tooltip` would be drawn at its previous size each time that happened.
                             server_status_tooltip = gui_tooltip.Tooltip("server_status_button", "")  # tag
-                    # Bottom edge, less one row and the padding the child window keeps below it. Outside the
-                    # group's own `with`, so it applies to the group rather than to a member of it.
-                    #
-                    # Indented clear of the status indicators, which stack down the left edge of the same panel.
-                    # Three lines fit above this row, which is as many as can be lit at once, but the x offset
-                    # keeps the two apart without leaning on that count. The widest indicator, INDEXING with its
-                    # progress figure, measured 167 px.
-                    dpg.set_item_pos("server_status_pill",  # tag
-                                     (260,
-                                      gui_config.chat_controls_h - gui_config.mode_toggle_row_h - 2 * guiutils.DPG_WINDOW_PADDING))
 
         # The bottom row is split into two child windows that mirror the panels above them: the chat-side
         # buttons sit under the chat panel, the AI-disclosure label under the avatar panel. Splitting is what
@@ -2746,6 +2757,7 @@ def _resize_panels() -> None:
     dpg.set_item_width("ai_warning_panel", avatar_panel_w)  # tag
     dpg.set_item_width("graph_search_row", avatar_panel_w)  # tag
     _center_ai_warning(avatar_panel_w)
+    _place_server_status_pill(avatar_panel_w)  # the panel under the mode toggles is as wide as the avatar's
     avatar_controller.subtitle_bottom_y0 = _get_subtitle_bottom_y0(avatar_panel_h)  # takes effect from next subtitle shown
     avatar_controller.reposition_subtitle()  # apply new position to current subtitle, if any
     dpg.set_item_width("avatar_panel", avatar_panel_w)  # tag
