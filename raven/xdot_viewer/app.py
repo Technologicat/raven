@@ -304,7 +304,7 @@ def _do_search(*_args) -> None:
     else:
         if count:
             widget.highlight_search_results()  # highlights both nodes and edges
-            _set_status(f"Found {count} matches")
+            _set_status(f"Found {count} {'match' if count == 1 else 'matches'}")  # plural
             dpg.set_value(search_input_text_color, (180, 255, 180))  # found, green
         else:
             widget.clear_highlights()
