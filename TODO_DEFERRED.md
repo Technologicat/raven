@@ -400,6 +400,11 @@ The pass of 2026-09-24 refreshed Librarian, the Visualizer, Raven-cherrypick and
 - **Skipped for 0.2.9**: the conference timer, the two avatar editors and the server. Their screenshots are
   from 0.2.4–0.2.7, the oldest in the tree.
 - **Motion not yet captured**: the keyboard mark's breathing, smooth scrolling and the end-of-list arrows.
+- **Librarian's layout changed in 0.2.10**: the status indicators moved off the avatar to the panel under the
+  mode toggles, and the folder and cleanup buttons from labelled rows there to the bottom toolbar. Every
+  Librarian shot showing the lower right of the window predates that. One caption also says so in words and
+  wants rewording with its picture: `raven/librarian/README.md`, the chat graph standing in for a sleeping
+  avatar, which places INTERNET "at the top left" of the panel.
 
 ## An override cannot set a setting to `None` unless it ships as `None`
 
@@ -6579,6 +6584,30 @@ needed."* So top-alignment is **not rejected**, merely not needed yet, and this 
 and chose centring" is recoverable rather than being rediscovered as an oversight.
 
 Moved out of brief 16 on 2026-09-04, where it sat as an unnumbered settled-by-looking note.
+
+## Run a round's tool calls in parallel when they are of different kinds
+
+*Cluster: tool-surface · Cost: S–M · Gate: none · Filed: 2026-10-01*
+
+`llmtools.perform_tool_calls` runs a round's calls one after another. Each already runs on a worker thread
+of its own, with the turn waiting on the call or the abort, since the cancellable-tools work of 2026-09-29.
+So a round asking for a `websearch` and a `search_documents` pays for both in sequence, where it could pay
+for the slower one alone (maintainer, 2026-10-01). The results would go back in the order the calls were
+made, so the model and the chat log see what they see now.
+
+**Different kinds, because same-kind calls gain nothing from it.** Raven-server serializes each web tool on
+a lock of its own (`_search_lock` in `websearch`, `_driver_lock` in `webfetch`), so two fetches would queue
+there anyway. A websearch beside a webfetch, or either beside a document search, would overlap.
+
+What would need checking:
+
+- **The abort path.** A Stop mid-round gives each unfinished call a "cancelled by the user" result. With
+  several calls in flight it still has to do that per call, in call order.
+- **The status indicators.** DOCUMENTS and INTERNET can then be lit together, making four lines at most
+  where the comment above the indicator group in `raven/librarian/app.py` (and the README's
+  *What the indicators say*) says three. The server status pill is offset sideways and needs nothing.
+- **Shared state between tools**, such as webfetch's per-session host approvals, if two calls could
+  write it at once.
 
 ## Declined
 
