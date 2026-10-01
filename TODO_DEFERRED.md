@@ -6340,7 +6340,7 @@ per-app; decide per case.
 
 - **Librarian** (`raven/librarian/app.py`):
   - The attachment-staging state machine and send gate, 531–547 and 902–1210: EXTRACTING → READY/FAILED,
-    and whether a send is allowed and what the refusal says. To a new `staging` (or `composer`) module,
+    and whether a send is allowed and what the refusal says. To a new `staging` module (not `composer`, which names the text field),
     widgets staying in the app. M.
   - `_request_send`, 1162–1208: drops a second send within one frame of the first finishing. Has been wrong
     once and is untested. A pure predicate beside the staging logic. S.
